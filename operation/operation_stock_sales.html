@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
     <meta http-equiv="Pragma" content="no-cache"/>
     <meta http-equiv="Expires" content="0"/>
-    <title>Seedling Sales Management - MJM Nursery AI</title>
+    <title>Seedling Sales Control - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -368,9 +368,9 @@
 <div class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
     <div class="flex items-center gap-3">
         <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back
         </button>
-        <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Sales Management</span>
+        <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Sales Control</span>
     </div>
     <div class="flex items-center gap-2">
         <a href="operation_sales_analysis.html" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 uppercase tracking-widest bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded-full border border-pink-200 transition-colors no-underline" style="text-decoration:none;">📊 Sales Analysis</a>
@@ -957,7 +957,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=2"></script>
+<script src="operation_stock_sales.js?v=5"></script>
 <!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
 <div class="ci-modal" id="ci-upload-modal">
     <div class="ci-modal-card">
@@ -1027,9 +1027,31 @@
   try {
     const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     await MJMAccess.load(_gc);
-    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('stock')) {
-      alert('You do not have access to Stock & Sales.');
+    if (!MJMAccess.user()) return;
+    /* Seedling Sales Control is ONE "Open Page" switch now (key 'stock',
+       the page's long-standing key) with three ticks underneath —
+       Customer Monitoring, Update stock & sales and Inventory Map each
+       gate their own tab/function, but none of the three opens this page
+       on its own any more. A tab whose own tick is off is not offered;
+       Stock Allocation has no tick of its own for VIEW (only for its
+       write function), so its tab always shows once the page is open. */
+    if (!MJMAccess.canOpenOperationPage('stock')) {
+      alert('You do not have access to Seedling Sales Control.');
       location.replace('operation_dashboard.html');
+      return;
+    }
+    const can = {
+      customer: MJMAccess.canDoOperation('stock', 'customer'),
+      map:      MJMAccess.canDoOperation('stock', 'map')
+    };
+    const tabOf = { customer: 'ssm-tab-customer', map: 'ssm-tab-map' };
+    Object.keys(tabOf).forEach(k => {
+      if (!can[k]) { const t = document.getElementById(tabOf[k]); if (t) t.style.display = 'none'; }
+    });
+    // The page opens on Customer Monitoring; a user not allowed that tab
+    // lands on their first allowed one instead.
+    if (!can.customer && typeof switchSsmTab === 'function') {
+      switchSsmTab('stock');
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

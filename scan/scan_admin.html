@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- This page carries every line of its own code inline, so the PAGE is the
+     deploy: a cached copy is the old routing, for ever, and the first thing
+     that changed here was where the Audit Portal door goes. GitHub Pages has
+     no build step and nowhere to set a real header, so these three metas are
+     the only lever. One hard reload per machine picks them up; after that it
+     stays fresh by itself. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>555 MJM Team — Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -28,6 +37,23 @@
   .section-label { font-size:13px; font-weight:900; color:#1e293b; text-transform:uppercase;
                     letter-spacing:.1em; margin:30px 2px 14px; }
   .section-label:first-of-type { margin-top:0; }
+
+  /* The MJM Team heading carries the Demo Portal link on the same row, right
+     aligned, rather than giving the demo a whole section of its own below
+     System Setting — a demo is not a fourth thing to configure, it is a
+     look-at-this beside the real doors. .section-head takes over the
+     heading's own top/bottom margin so .section-label can sit flush inside
+     it without doubling the gap. */
+  .section-head { display:flex; align-items:center; justify-content:space-between;
+                   gap:12px; margin:30px 2px 14px; }
+  .section-head:first-of-type { margin-top:0; }
+  .section-head .section-label { margin:0; }
+  .pill-link { display:inline-flex; align-items:center; gap:3px; flex-shrink:0;
+               padding:6px 12px; border-radius:999px; background:#f1f5f9;
+               border:1px solid #e2e8f0; color:#475569; font-size:11.5px;
+               font-weight:800; text-transform:none; letter-spacing:0;
+               text-decoration:none; transition:background .15s,border-color .15s; }
+  .pill-link:hover { background:#e2e8f0; border-color:#cbd5e1; }
   .door-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; }
   .door { display:flex; flex-direction:column; align-items:center; text-align:center;
           gap:14px; padding:30px 20px; border-radius:24px;
@@ -44,6 +70,7 @@
      use. System Setting is a fixed three and stays put. */
   .door.card-dragging { opacity:.4; border-color:#34d399; box-shadow:0 0 24px rgba(52,211,153,.35); }
   .door.card-drag-over { border-color:#34d399; box-shadow:0 0 0 2px rgba(52,211,153,.4); }
+
 </style>
 </head>
 <body>
@@ -69,7 +96,17 @@
        in here so a person with more than one of these does not also need
        to remember more than one way to reach them. Draggable and in the
        order the office last left them — see the drag-order script below. -->
-  <div class="section-label">MJM Team</div>
+  <div class="section-head">
+    <div class="section-label">MJM Team</div>
+    <!-- Demo Portal: the four phone portals at phone size, on a desk — a
+         small link beside the heading rather than a card of its own, since
+         it opens a demo and not a fifth door. Gating is unchanged from when
+         this lived on the hub (index.html) as "555 Portal Demo": a "None"
+         answer on the demo555 module closes it, anything else — including
+         nobody having been asked yet — leaves it open. demo/demo_phone.html
+         checks for itself too, rather than trusting a hidden link. -->
+    <a class="pill-link" id="tool-demo" href="../demo/demo_phone.html">Demo Portal <span aria-hidden="true">›</span></a>
+  </div>
   <div class="door-grid" id="mjm-team-grid">
     <a class="door" id="fc-portal-link" data-card="fc" href="https://scan.mjmnursery.com" target="_blank" rel="noopener">
       <span class="door-ico" style="background:#ede9fe;color:#7c3aed;">
@@ -105,7 +142,10 @@
       <span class="door-name">Worker Portal</span>
       <span class="door-sub">PIN sign-in, no e-mail needed</span>
     </a>
-    <a class="door" id="audit-portal-link" data-card="audit" href="../audit/audit_admin.html">
+    <!-- The AUDITOR portal — the to-do list built for a phone in a nursery.
+         Never the manage page: that is its own hub module now, see the
+         script below. -->
+    <a class="door" id="audit-portal-link" data-card="audit" href="../audit/audit_home.html">
       <span class="door-ico" style="background:#ffedd5;color:#ea580c;">
         <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="4" width="16" height="22" rx="3"/>
@@ -135,7 +175,17 @@
       <span class="door-name">Worker Namelist</span>
       <span class="door-sub">The payroll register — PINs live here</span>
     </a>
-    <a class="door" id="tool-access" href="scan_settings_hub.html">
+    <!-- STRAIGHT TO THE PAGE, not to a list of one.
+         This used to open scan_settings_hub.html, a page of five sections
+         that were doors to doors: FC Portal Setting led to a page whose
+         only tile was User Access, which is already a tile RIGHT HERE;
+         Admin Portal Setting led to the Admin Portal, which is a door
+         right here too; Worker Portal Setting led into the phone app; and
+         Auditor Portal Setting led to the Audit back office, which is its
+         own module on the hub now. One real page under five headings, and
+         a press to reach each. The office asked for the four to go and for
+         this tile to open the page itself. -->
+    <a class="door" id="tool-access" href="scan_system_setting.html">
       <span class="door-ico" style="background:#f5f3ff;color:#7c3aed;">
         <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="17" cy="17" r="5"/>
@@ -143,7 +193,7 @@
         </svg>
       </span>
       <span class="door-name">Settings</span>
-      <span class="door-sub">FC, Worker, Admin &amp; Auditor setting</span>
+      <span class="door-sub">Location, what each portal offers &amp; the boundary</span>
     </a>
     <a class="door" id="tool-user-access" href="scan_user_access.html">
       <span class="door-ico" style="background:#fee2e2;color:#dc2626;">
@@ -155,7 +205,7 @@
         </svg>
       </span>
       <span class="door-name">User Access</span>
-      <span class="door-sub">Who may open the FC &amp; Worker Portals</span>
+      <span class="door-sub">Who may open each portal, and what inside it</span>
     </a>
   </div>
 </div>
@@ -268,21 +318,40 @@ $('worker-portal-link').addEventListener('click', (e) => {
       $('tool-access').classList.add('hidden');
       $('tool-user-access').classList.add('hidden');
     }
+    /* Settings opens scan_system_setting.html directly now, and that page
+       asks for scan ADMIN and bounces anybody else to the phone app. A
+       door that throws you somewhere else is worse than no door, so it
+       hides on the same test its destination applies, asked one step
+       earlier. The hub that used to carry this check is gone; the check is
+       not. Nobody gains anything by it — the page still decides.
+       Asked of the EXPLICIT module level, like every other routing
+       decision on this page, rather than the profile-level role. */
+    if (!MJMAccess.isAdminOf('scan')) $('tool-access').classList.add('hidden');
     if (!MJMAccess.canScanArea('workers')) $('tool-workers').classList.add('hidden');
     if (!MJMAccess.canScanArea('fc')) $('fc-portal-link').classList.add('hidden');
     if (!MJMAccess.canScanArea('worker')) $('worker-portal-link').classList.add('hidden');
     if (!hasAdminPortal) $('admin-portal-link').classList.add('hidden');
     if (!hasAuditPortal) $('audit-portal-link').classList.add('hidden');
 
-    /* Audit tile is split the same way it was on the hub: an admin lands on
-       the back-end page, everyone else goes straight to the to-do list
-       that is the screen built for a phone in a nursery. Routed on the
-       EXPLICIT audit module level so this agrees with the audit guards
-       (isAuditAdmin / requireAdmin), not the profile-level role fallback —
-       see index.html's own former copy of this comment. */
-    if (hasAuditPortal && !MJMAccess.isAdminOf('audit')) {
-      $('audit-portal-link').setAttribute('href', '../audit/audit_home.html');
-    }
+    // Demo Portal: a "None" answer on demo555 closes it, same as every
+    // other module card — see shared_access.js's normalize()/fail-open
+    // comment. Nobody having been asked yet leaves it open, which is why
+    // this is not a canScanArea() entry (those default closed).
+    const mods = (MJMAccess.permissions() || {}).modules || {};
+    if (mods.demo555 === 'none') $('tool-demo').classList.add('hidden');
+
+    /* THE AUDIT PORTAL DOOR GOES TO THE AUDITOR PORTAL, for everybody.
+       It used to split on the audit module level, so an admin pressing it
+       landed on the MANAGE page — the back office, with the schedule, the
+       alerts and Settings on it. That is the wrong half of the module for a
+       door called Audit Portal and labelled "Plot audits & sign-off": an
+       admin who wanted their own to-do list got a desk screen and had to
+       navigate out of it.
+       The manage page is a module of its own on the hub now ("Nursery Audit
+       System"), so the split has nothing left to decide and the href in the
+       markup is the whole answer. Nobody is stranded — the manage tile is
+       gated on the same `audit` module, so anybody who used to be sent here
+       has it, and audit_home.html's own back arrow reaches the hub. */
 
     $('loading').classList.add('hidden');
     $('main').classList.remove('hidden');

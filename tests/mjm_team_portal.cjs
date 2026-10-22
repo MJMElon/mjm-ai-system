@@ -106,9 +106,14 @@ function mockSupabase(page, permissions) {
     checkTrue('Settings tool is visible', await page.locator('#tool-access').isVisible());
     checkTrue('User Access tool is visible', await page.locator('#tool-user-access').isVisible());
     check('User Access tool points at the FC/Worker access page', await page.locator('#tool-user-access').getAttribute('href'), 'scan_user_access.html');
-    check('Settings tool points at the combined hub, not the old FC-only page', await page.locator('#tool-access').getAttribute('href'), 'scan_settings_hub.html');
+    /* Straight to the page. It pointed at a hub, and the hub is gone. */
+    check('Settings tool opens the System Setting page itself', await page.locator('#tool-access').getAttribute('href'), 'scan_system_setting.html');
     check('Admin Portal door is a flat link to the Admin Portal', await page.locator('#admin-portal-link').getAttribute('href'), 'https://mobile.mjmnursery.com');
-    check('Audit Portal door goes to the back end for an audit ADMIN', await page.locator('#audit-portal-link').getAttribute('href'), '../audit/audit_admin.html');
+    /* It used to go to the back end for an admin and the to-do list for
+       everybody else. The back end is its own hub module now ("Nursery
+       Audit System"), so this door means one thing for everybody — see
+       tests/the_audit_system_is_its_own_module.cjs. */
+    check('Audit Portal door goes to the AUDITOR portal, admin or not', await page.locator('#audit-portal-link').getAttribute('href'), '../audit/audit_home.html');
 
     console.log('\n  -- drag-reordering the MJM Team cards persists across a reload --');
     const cardsBefore = await page.locator('#mjm-team-grid .door').evaluateAll(els => els.map(e => e.id));
@@ -165,23 +170,16 @@ function mockSupabase(page, permissions) {
     await page.close();
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  console.log('\nscan_settings_hub.html: four sections, Admin/Audit hidden without the module');
-  {
-    const page = await browser.newPage({ viewport: { width: 900, height: 1200 } });
-    page.on('pageerror', e => console.log('  [page error] ' + e.message));
-    mockSupabase(page, { modules: { scan: 'admin', mobile: 'none', audit: 'admin' }, manage_users: true });
-    await page.route('**/cdn.tailwindcss.com/**', r => r.fulfill({ status: 200, body: '' }));
-    await page.route('**://*.supabase.co/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-    await page.goto('http://localhost:8779/scan/scan_settings_hub.html', { waitUntil: 'load' }).catch(() => {});
-    await page.waitForTimeout(800);
-
-    checkTrue('FC Portal Setting section shows', await page.locator('#section-fc').isVisible());
-    checkTrue('Worker Portal Setting section shows', await page.locator('#section-worker').isVisible());
-    checkTrue('Admin Portal Setting section is HIDDEN (no mobile access)', !(await page.locator('#section-admin').isVisible()));
-    checkTrue('Auditor Portal Setting section shows (has audit access)', await page.locator('#section-audit').isVisible());
-    await page.close();
-  }
+  /* The settings-hub section that stood here is gone with the page.
+     scan_settings_hub.html was five sections of doors to doors — FC Portal
+     Setting led to a page whose only tile was User Access, which is a tile
+     on the Team page itself; Admin Portal Setting led to a door that is
+     also on the Team page; Auditor Portal Setting led to the Audit back
+     office, which is its own hub module now. The office asked for the four
+     to go and for Settings to open the one real page directly, so the hub
+     and scan_setting.html were both removed. What the Settings tile points
+     at is asserted above and in
+     tests/system_setting_is_not_the_fc_portals.cjs. */
 
   console.log(`\n${pass} passed, ${fail} failed`);
   await browser.close();

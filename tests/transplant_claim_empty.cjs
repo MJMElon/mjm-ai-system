@@ -39,10 +39,16 @@ const YM          = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStar
 const MONTH_KEY   = `${MONTHS_SHORT[_now.getMonth()]} ${_now.getFullYear()}`;
 const MONTH_LABEL = `${MONTHS_FULL[_now.getMonth()]} ${_now.getFullYear()}`;
 
+/* EVERY FIXTURE ROW IS CHECKED, because these cases are about which kind of
+   EMPTY a sheet is, and a row the office has not agreed is a sixth kind with
+   a section of its own at the end of this file. Only a checked row reaches
+   the claim -- see loadTransplantField -- so a fixture without the stamp
+   would make every case below pass for the wrong reason. */
 const rec = (o) => Object.assign({
   work_date: `${YM}-09`, nursery_name: 'UNN 2', plot_name: 'N4',
   batch_name: null, work_type: 'transplant', jenis: 'Memindah anak benih',
-  schedule_month: MONTH_KEY, source_qty: 1200, workers: [], total_qty: null
+  schedule_month: MONTH_KEY, source_qty: 1200, workers: [], total_qty: null,
+  checked_at: `${YM}-10T02:00:00Z`, checked_by: 'office@mjm'
 }, o);
 
 /* The register. A worker's own section is what a line is filed under, which
@@ -273,6 +279,69 @@ async function pick(page, label) {
     checkTrue('AND the crewless record is reported underneath, not hidden by '
             + 'the sheet no longer being empty', /name nobody/i.test(note));
     checkTrue('…naming the plot', /N4/.test(note));
+    await page.close();
+  }
+
+  console.log('\nA record the office has not Checked yet');
+  {
+    /* THE SIXTH KIND OF EMPTY, and the one that was not possible before the
+       claim was gated: the work is recorded, it is on this nursery, somebody
+       is named on it -- and the office has not been through it. It is on no
+       claim, and the sheet has to say so in money, because a sheet short by
+       RM 480 that does not say why reads as a quiet month. */
+    const page = await boot(browser, {
+      mjmnpayroll_workers: REGISTER,
+      mjmnpayroll_piece_rates: [{ id: 1, job_desc: 'Memindah anak sawit ke polibeg besar',
+        rate: 0.2, unit: 'Pokok', category: 'transplanting', active: true }],
+      nops_transplant_field_records: [
+        rec({ plot_name: 'N9', work_type: 'transplanting', source_qty: 1200,
+              workers: [{ name: 'Ali Bin Hassan', qty: null }] }),
+        rec({ plot_name: 'N4', work_type: 'transplanting', source_qty: 2400,
+              workers: [{ name: 'Ali Bin Hassan', qty: null }],
+              checked_at: null, checked_by: null })
+      ]
+    });
+    await pick(page, 'UNN2');
+    const txt = await cell(page);
+    checkTrue('the agreed row is paid', /Ali Bin Hassan/.test(txt));
+    checkFalse('and the sheet does not claim nothing was recorded',
+               /No transplanting was recorded/i.test(txt));
+    const note = await page.evaluate(() =>
+      (document.getElementById('transpl-note').textContent || '').replace(/\s+/g, ' ').trim());
+    checkTrue('the held row is named under it', /is NOT on this claim/i.test(note));
+    checkTrue('…in money — 2,400 at RM 0.20', /RM 480\.00/.test(note));
+    checkTrue('…saying what it is waiting on', /not been Checked/i.test(note));
+    checkTrue('…and which plot, so somebody can go and tick it', /N4/.test(note));
+    checkTrue('…and where the tick is', /Worker Record/i.test(note));
+    /* The by-plot table counts what the claim pays, so the held plot is off
+       it -- and a missing plot reads as a plot nothing happened in. */
+    const plots = await page.evaluate(() =>
+      (document.getElementById('transpl-plots-note').textContent || '').replace(/\s+/g, ' ').trim());
+    checkTrue('the by-plot table says which plot it left out', /N4/.test(plots)
+              && /not been Checked/i.test(plots));
+    await page.close();
+  }
+
+  console.log('\nEvery record held, and none Checked');
+  {
+    /* The worst version of it: the sheet is completely empty and the records
+       are all there. "Nothing was recorded" would be the office telling the
+       conductor his month never arrived -- which is the whole argument of
+       this file, asked of the new rule. */
+    const page = await boot(browser, {
+      mjmnpayroll_workers: REGISTER,
+      nops_transplant_field_records: [
+        rec({ plot_name: 'N9', workers: [{ name: 'Ali Bin Hassan', qty: null }],
+              checked_at: null, checked_by: null })
+      ]
+    });
+    await pick(page, 'UNN2');
+    const txt = await cell(page);
+    checkFalse('it does NOT say nothing was recorded', /No transplanting was recorded/i.test(txt));
+    checkTrue('it says a record reached the office', /reached the office/i.test(txt));
+    checkTrue('…and that it has not been Checked', /Checked/.test(txt));
+    checkTrue('…and that this is why nothing is on the claim',
+              /nothing is on this claim/i.test(txt));
     await page.close();
   }
 

@@ -159,6 +159,12 @@
   /* The options themselves are drawn by the OS and cannot be centred, so
      they are left as they come — legible beats half-styled. */
   .st-pick option { text-align:left; font-weight:700; }
+  /* ONE STAGE, SEVERAL OPEN ROWS. Not a plot doing two things — a log that
+     has picked up a duplicate. The pill says the stage; this says the log
+     needs tidying, which is a different fact and belongs in its own mark. */
+  .st-dup { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px;
+            background:#fffaf0; border:1.5px solid #c98a16; color:#7a4e06;
+            font-weight:900; font-size:10px; line-height:1.5; cursor:help; vertical-align:middle; }
   .cf-was { background:#f8fafc; border:1.5px solid #e2e8f0; }
   .cf-now { background:#ecfdf5; border:1.5px solid #a7f3d0; }
   .cf-box { border-radius:14px; padding:12px 14px; }
@@ -171,9 +177,15 @@
 </head>
 <body>
 
-<div id="mjm-ribbon" data-brand="MJM Nursery AI System" data-center="PALMS"
-     data-sub="Plot Age Logging &amp; Manage System" data-logo="off"></div>
-<script src="../shared/shared_ribbon.js"></script>
+<!-- The compact bar the other nursery-ops pages wear: Back pill, centred
+     module name, NO badge. nursery_ops_seeds.html is the original; the big
+     shared ribbon came off at the office's request, so Sign Out lives on
+     the portal the Back pill leads to. -->
+<div id="mjm-ribbon" class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-[1fr_auto_1fr] items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm px-3">PALMS</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
 
 
 <div id="loading" class="max-w-[1040px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
@@ -763,7 +775,17 @@ let CF = null;   // { unit, fromN, toN } awaiting confirmation
 
 function statusCell(unitKey, ln) {
   const cur = ln && ln.state !== 'none' ? MJMPalms.currentEntries(LOGS, unitKey) : [];
-  const curN = cur.length === 1 ? cur[0].actN : null;
+  /* THE COUNT HAS TO COUNT WHAT THE NAME NAMES.
+
+     `cur` is open ROWS; `ln.status` is open ACTIVITIES, deduped by
+     openActivities because two rows on one act_n are one activity logged
+     twice and not a plot doing anything twice. Counting the rows and naming
+     the activities read back as "2 running: Membesar" — one job, reported as
+     two, which is the office asking why a plot is doing the same work
+     twice. One rule, asked once: openActivities. */
+  const openActs = ln && ln.state !== 'none' ? MJMPalms.openActivities(LOGS, unitKey) : [];
+  const curN = openActs.length === 1 ? openActs[0].n : null;
+  const dupes = cur.length - openActs.length;   // extra rows on a stage already named
   if (!CAN_UPDATE) {
     return '<td>' + esc(ln && ln.status ? ln.status : '—') + '</td>';
   }
@@ -784,7 +806,7 @@ function statusCell(unitKey, ln) {
      running and selected, so it claims nothing it cannot show. Picking a
      stage closes EVERY open entry and opens the chosen one — which is what
      confirmChange has always done, since it loops over all of them. */
-  const many = cur.length > 1;
+  const many = openActs.length > 1;
   const opts = MJMPalms.ACTIVITIES.map((a) =>
     '<option value="' + a.n + '"' + (!many && a.n === curN ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('');
   /* The control IS the colour patch. A separate swatch beside it would be a
@@ -795,12 +817,20 @@ function statusCell(unitKey, ln) {
   const tint = entry
     ? ' style="background:' + esc(entry.fill) + ';border-color:' + esc(entry.stroke) + '"'
     : '';
+  /* The duplicate is not hidden by the dedupe — it is only kept out of the
+     count. A plot whose log carries it is the plot somebody has to tidy, and
+     picking any stage closes every open row, which is the tidying. */
+  const dupTag = dupes > 0
+    ? '<span class="st-dup" title="' + esc(cur.length + ' log entries are open on ' + ln.status +
+        '. That is one stage logged ' + cur.length + ' times, not ' + cur.length +
+        ' stages. Picking a stage closes every one of them.') + '">×' + cur.length + ' open</span>'
+    : '';
   return '<td><select class="st-pick" data-st="' + esc(unitKey) + '" data-cur="' +
     (curN == null ? '' : curN) + '"' + (many ? '' : tint) + '>' +
     (many
-      ? '<option value="" selected>' + esc(cur.length + ' running: ' + ln.status) + '</option>'
+      ? '<option value="" selected>' + esc(openActs.length + ' running: ' + ln.status) + '</option>'
       : (curN == null ? '<option value="" selected>— nothing running —</option>' : '')) +
-    opts + '</select></td>';
+    opts + '</select>' + dupTag + '</td>';
 }
 
 $('rows').addEventListener('click', (e) => {
@@ -830,12 +860,16 @@ function askChange(unit, fromN, toN) {
      are being closed, and a panel naming one of three would be describing a
      smaller change than the one about to happen. */
   const open = MJMPalms.currentEntries(LOGS, unit);
-  const names = open.map((e) => { const a = MJMPalms.actByN(e.actN); return a ? a.name : '?'; });
+  /* NAMED once each, COUNTED every row. The panel has to promise what the
+     save does — every open row closes — and "Membesar + Membesar" is not a
+     description of anything, so the count carries the duplicates and the
+     name does not. */
+  const names = MJMPalms.openActivities(LOGS, unit).map((a) => a.name);
 
   $('cf-plot').textContent = MJMPalms.keyLabel(unit);
   $('cf-was-v').textContent = names.length ? names.join(' + ') : 'Nothing running';
-  $('cf-was-s').textContent = names.length > 1
-    ? 'All ' + names.length + ' are closed today'
+  $('cf-was-s').textContent = open.length > 1
+    ? 'All ' + open.length + ' open entries are closed today'
     : (from && ln && ln.state !== 'none'
         ? 'Started ' + MJMPalms.prettyD(ln.start) + ' · due ' + MJMPalms.prettyD(ln.due) +
           ' · ' + (ln.left < 0 ? (-ln.left) + 'd over' : ln.left + 'd left')

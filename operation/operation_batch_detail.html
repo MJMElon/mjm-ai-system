@@ -82,7 +82,7 @@
     <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
     <script src="../shared/shared_tray_stock.js"></script>
     <!-- Month Lock Calendar — same lock DO/AL use, keyed to each row's own date. -->
-    <script src="../shared/shared_month_lock.js"></script>
+    <script src="../shared/shared_month_lock.js?v=1"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -175,6 +175,10 @@
         .toast.hiding { animation: toastOut 0.3s ease forwards; }
         .toast-success { background: #f0f8ec; border: 1.5px solid #4a7a2e; color: #2d5a1b; }
         .toast-error   { background: #fff5f5; border: 1.5px solid #a83020; color: #7f1d1d; }
+        /* SAVED, WITH SOMETHING STILL TO DO. Not red: red is "your work is not
+           in the database", and a day's counting that is safely stored must
+           never be dressed as one. See _trackTabSave. */
+        .toast-warn    { background: #fffaf0; border: 1.5px solid #c98a16; color: #7a4e06; }
         .toast-icon { font-size: 1.3rem; line-height: 1; flex-shrink: 0; }
         @keyframes toastIn  { 0% { opacity:0; transform: translateY(20px) scale(0.95); } 100% { opacity:1; transform: translateY(0) scale(1); } }
         @keyframes toastOut { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(10px) scale(0.95); } }
@@ -469,10 +473,10 @@
             <div class="flex items-center gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
                 <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Attachment</div>
                 <span id="doc-lightbox-rowacts" class="hidden ml-auto shrink-0 flex items-center gap-2" data-row="">
-                    <button type="button" onclick="replaceT6Doc(this.parentElement.dataset.row)"
+                    <button type="button" onclick="replaceT6Doc(this.parentElement.dataset.row, this.parentElement.dataset.idx === '' ? null : Number(this.parentElement.dataset.idx))"
                         class="px-3 py-1.5 rounded-lg border border-[#c07820] bg-white text-[#c07820]
                                text-[10px] font-black uppercase tracking-widest hover:bg-[#fdfaf4]">Replace</button>
-                    <button type="button" onclick="const r=this.parentElement.dataset.row; closeDocViewer(); removeT6Doc(r);"
+                    <button type="button" onclick="const p=this.parentElement, r=p.dataset.row, i=p.dataset.idx; closeDocViewer(); removeT6Doc(r, i === '' ? null : Number(i));"
                         class="px-3 py-1.5 rounded-lg border border-[#f8d7da] bg-white text-[#a83020]
                                text-[10px] font-black uppercase tracking-widest hover:bg-[#fff5f5]">Remove</button>
                 </span>
@@ -484,6 +488,28 @@
                            text-[10px] font-black uppercase tracking-widest hover:bg-[#f5efe4]">Close</button>
             </div>
             <div class="p-4" id="doc-lightbox-body"></div>
+        </div>
+    </div>
+
+    <!-- A PLOT'S DRONE MAPS, ALL OF THEM, each with the remark that tells
+         it from the others. Opened by the chip on the 3rd Culling row; the
+         viewer above is what one of them opens into. -->
+    <div id="t6-maps-panel" class="hidden fixed inset-0 z-[9150] bg-[rgba(26,21,13,0.8)] backdrop-blur-sm overflow-y-auto flex justify-center items-start p-4 md:p-8"
+         onclick="if (event.target === this) closeT6Gallery()">
+        <div class="bg-[#f8f4ec] border border-[#e8dcc8] rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.45)] w-full max-w-[720px] overflow-hidden">
+            <div class="flex items-center gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
+                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="t6-maps-title">Drone Maps</div>
+                <button type="button" id="t6-maps-add" onclick="addT6Doc(_t6GalleryRow)"
+                    class="ml-auto shrink-0 px-3 py-1.5 rounded-lg border border-[#c07820] bg-white text-[#c07820]
+                           text-[10px] font-black uppercase tracking-widest hover:bg-[#fdfaf4]">+ Add a map</button>
+                <button type="button" onclick="closeT6Gallery()" title="Close"
+                    class="shrink-0 px-3 py-1.5 rounded-lg border border-[#d8cbb4] bg-white text-[#5b4a33]
+                           text-[10px] font-black uppercase tracking-widest hover:bg-[#f5efe4]">Close</button>
+            </div>
+            <div class="p-4 space-y-3" id="t6-maps-body"></div>
+            <div class="px-5 py-3 border-t border-[#e8dcc8] bg-white text-[10px] font-bold text-[#8a7a68]">
+                A remark is saved with the report, the same as every other figure on this tab — press Save when you are done.
+            </div>
         </div>
     </div>
 
@@ -4436,7 +4462,22 @@
            reports failure through showToast(…, 'error'), so the wrapper below
            watches for one while the save runs and leaves the tab dirty if it
            sees one. Clearing on "the function returned" would drop the warning
-           on exactly the save that did not happen. */
+           on exactly the save that did not happen.
+
+           SO A WARNING MUST NOT BE AN ERROR, and three saves were raising one
+           that way. A 3rd Culling whose drone map does not tally is SAVED and
+           then says so — the plot goes on the To Do List until somebody
+           explains it — and that sentence went out as 'error', so the tab was
+           left dirty by its own success: the close dialog came up reading
+           "Not closing — 3rd Culling did not save. Nothing has been lost."
+           over a report that was in the database, every time, for as long as
+           one plot was unexplained. Saving again said the same thing. The only
+           way out was Don't save, which reads as throwing a day away.
+           Same shape for a drone map that failed to upload on Tabs 3, 5 and 6
+           ("rows saved without the map") and for the To Do flag.
+
+           Those go out as 'warn' — amber, ⚠️, and not a failure. 'error' means
+           ONE thing: what you keyed is not in the database. */
         const TAB_TITLES = {
             1: 'Seeds Received', 2: 'Seed Planting', 3: 'Transplanting',
             4: '1st Culling', 5: '2nd Culling', 6: '3rd Culling',
@@ -4680,7 +4721,8 @@
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
-            toast.innerHTML = `<span class="toast-icon">${type === 'success' ? '✅' : '❌'}</span><span>${message}</span>`;
+            const icon = type === 'success' ? '✅' : type === 'warn' ? '⚠️' : '❌';
+            toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
             container.appendChild(toast);
             setTimeout(() => {
                 toast.classList.add('hiding');
@@ -5527,7 +5569,7 @@
                     mapUrl = uploaded;
                     t3EditMaps[idx] = uploaded;
                 } else {
-                    showToast('⚠️ Drone map upload failed: ' + (window._mjmLastUploadError || 'storage error') + '. Edit saved without map — fix bucket and re-edit to attach.', 'error');
+                    showToast('Drone map upload failed: ' + (window._mjmLastUploadError || 'storage error') + '. The edit is saved without the map — fix the bucket and edit again to attach it.', 'warn');
                 }
             }
             const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
@@ -6563,7 +6605,7 @@
                 }
 
                 if (uploadFailures > 0) {
-                    showToast(`⚠️ ${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Those rows saved without the map. Fix the documents bucket and re-save.`, 'error');
+                    showToast(`${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Those rows saved without the map. Fix the documents bucket and save again.`, 'warn');
                 }
 
                 if (logsToInsert.length === 0) {
@@ -8670,7 +8712,7 @@
            shapes as before, an <iframe> for a PDF and an <img> for anything
            else. Download is still one press away for the rare case somebody
            needs the file itself. */
-        function _openDocViewer(url, name, rowId) {
+        function _openDocViewer(url, name, rowId, docIdx) {
             if (!url) return;
             const box  = document.getElementById('doc-lightbox');
             const body = document.getElementById('doc-lightbox-body');
@@ -8695,6 +8737,9 @@
             if (acts) {
                 acts.classList.toggle('hidden', !rowId);
                 acts.dataset.row = rowId || '';
+                // WHICH map of that row. Blank for every other caller, which
+                // has only ever had one thing to act on.
+                acts.dataset.idx = (docIdx == null ? '' : String(docIdx));
             }
             box.classList.remove('hidden');
             document.addEventListener('keydown', _docViewerKey);
@@ -9972,7 +10017,7 @@ Thank you.`;
                     <input type="hidden" class="cull-tray-name" value="${displayName}">
                     <div>
                         <label class="label-style md:hidden">Cull Date${rowLocked ? ' 🔒' : ''}</label>
-                        <input type="date" class="input-style cull-date" oninput="calcCulling()" value="${savedDate || ''}" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}">
+                        <input type="date" min="2000-01-01" max="2100-12-31" class="input-style cull-date" oninput="calcCulling()" value="${savedDate || ''}" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}">
                     </div>
                     <div>
                         <label class="label-style md:hidden !text-[#3d2610]">Tray No.</label>
@@ -10973,7 +11018,7 @@ Thank you.`;
                 setEditMetaUI(5, new Date().toISOString(), window.currentUserEmail);
 
                 if (uploadFailures > 0) {
-                    showToast(`⚠️ ${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without map. Fix bucket and re-save.`, 'error');
+                    showToast(`${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. The counting is saved; the map is not. Fix the bucket and save again.`, 'warn');
                 }
                 showToast(`2nd Culling report saved — ${logsToInsert.length} plot record(s) logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
@@ -10986,7 +11031,56 @@ Thank you.`;
         // ═══════════════════════════════════════════════════════
         // TAB 6 — 3rd Culling
         // ═══════════════════════════════════════════════════════
-        let t6_plotDocs = {};   // { rowId: { name, base64 } }
+        /* { rowId: [ { name, base64, note, isImg }, … ] } — A PLOT HAS AS
+           MANY DRONE MAPS AS IT TOOK TO FLY IT.
+
+           It was one. A plot flown in two passes, or re-flown because the
+           first run was cloudy, had the second picture REPLACE the first,
+           and the office kept the rest in a folder somewhere that the report
+           knows nothing about. Each one now carries its own remark, because
+           "north half, 21 Feb" is the thing that tells two pictures of the
+           same plot apart and it is not in the file name.
+
+           It is an ARRAY even when there is one, so no reader has to ask
+           which shape it is in. t6DocsOf() is the one way to read it and
+           copes with the single object a half-loaded older page might still
+           be holding. */
+        let t6_plotDocs = {};
+        function t6DocsOf(rowId) {
+            const v = t6_plotDocs[rowId];
+            if (!v) return [];
+            return Array.isArray(v) ? v : [v];
+        }
+        function t6SetDocs(rowId, list) {
+            if (list && list.length) t6_plotDocs[rowId] = list;
+            else delete t6_plotDocs[rowId];
+        }
+
+        /* HOW A PLOT'S MAPS ARE WRITTEN INTO THE REMARK.
+
+           `DocList:` carries all of them; every field is percent-encoded, so
+           neither separator can turn up inside one. The FIRST map is also
+           written as `DocUrl:` / `DocName:` exactly as it always was, so
+           every reader of a remark that predates this — and every remark
+           that predates this — goes on working without knowing. */
+        const T6_DOC_SEP = ';', T6_FIELD_SEP = '|';
+        function t6EncodeDocs(list) {
+            return (list || []).filter(d => d && d.base64).map(d =>
+                [d.base64, d.name || '', d.note || '']
+                    .map(v => encodeURIComponent(String(v))).join(T6_FIELD_SEP)
+            ).join(T6_DOC_SEP);
+        }
+        function t6DecodeDocs(str) {
+            if (!str) return [];
+            return String(str).split(T6_DOC_SEP).map(part => {
+                const bits = part.split(T6_FIELD_SEP);
+                const dec = (v) => { try { return decodeURIComponent(v || ''); } catch (_) { return v || ''; } };
+                const url = dec(bits[0]);
+                if (!url) return null;
+                return { base64: url, name: dec(bits[1]) || 'document', note: dec(bits[2]) || '',
+                         isImg: /\.(jpg|jpeg|png|webp|gif|heic|heif|avif|tif|tiff|bmp|svg)(\?|#|$)/i.test(url) };
+            }).filter(Boolean);
+        }
         let t6_plotData = [];   // [{ plot, qty, destType, salesDOs: [...] }]
 
         // Supabase caps one request at 1000 rows. shared_do_records is long
@@ -11094,6 +11188,12 @@ Thank you.`;
                     const nameMatch = log.remark ? log.remark.match(/DocName:(\S+)/) : null;
                     let docName = '';
                     if (nameMatch) { try { docName = decodeURIComponent(nameMatch[1]); } catch(_) { docName = nameMatch[1]; } }
+                    /* Every map of this plot, with its remark. A remark written
+                       before this existed has no DocList at all, so the single
+                       DocUrl stands in for a list of one — which is what it
+                       always was. */
+                    const listMatch = log.remark ? log.remark.match(/DocList:(\S+)/) : null;
+                    const docList = listMatch ? t6DecodeDocs(listMatch[1]) : [];
                     const mapQtyMatch = log.remark ? log.remark.match(/MapQty:\s*(\d+)/) : null;
                     // Why the drone map and the culled qty disagree, written by
                     // whoever reconciled them. Kept so the mismatch panel comes
@@ -11123,6 +11223,7 @@ Thank you.`;
                         balance: balMatch  ? parseInt(balMatch[1]) : null,
                         docUrl:  docMatch  ? docMatch[1]           : null,
                         docName: docName || null,
+                        docList,
                         mapQty:  mapQtyMatch ? parseInt(mapQtyMatch[1]) : null,
                         mismatchNote: mismatchNote || null,
                         cullDate: cullDateMatch ? cullDateMatch[1] : null,
@@ -11406,6 +11507,7 @@ Thank you.`;
                         savedCulled:   saved.culled  ?? null,
                         savedDocUrl:   saved.docUrl  ?? null,
                         savedDocName:  saved.docName ?? null,
+                        savedDocList:  saved.docList || [],
                         savedMapQty:   saved.mapQty  ?? null,
                         savedMismatchNote: saved.mismatchNote ?? null,
                         savedCullDate: saved.cullDate ?? null,
@@ -11483,13 +11585,14 @@ Thank you.`;
                         // DestType keys + legacy queue) — merged rows carry the
                         // summed culled qty and the first doc/map values found.
                         let culled = null, balance = null, docUrl = null, docName = null, mapQty = null;
-                        let mismatchNote = null, cullDate = null, cullSessions = [];
+                        let mismatchNote = null, cullDate = null, cullSessions = [], docList = [];
                         ['main', 'doubletone'].forEach(d => {   // premium excluded from this report
                             const e = savedCull3Map[`${_t6PlotKey(v.plot)}|${d}`];
                             if (!e) return;
                             culled = (culled || 0) + (e.culled || 0);
                             if (balance == null) balance = e.balance;
                             if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
+                            if (!docList.length && (e.docList || []).length) docList = e.docList;
                             if (mapQty == null)  mapQty = e.mapQty ?? null;
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
                             if (!cullDate)       cullDate = e.cullDate || null;
@@ -11501,6 +11604,7 @@ Thank you.`;
                             culled = (culled || 0) + (e.culled || 0);
                             if (balance == null) balance = e.balance;
                             if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
+                            if (!docList.length && (e.docList || []).length) docList = e.docList;
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
                             if (!cullDate)       cullDate = e.cullDate || null;
                             if (!cullSessions.length && (e.cullSessions || []).length) cullSessions = e.cullSessions;
@@ -11517,6 +11621,7 @@ Thank you.`;
                             savedCulled:  culled,
                             savedDocUrl:  docUrl,
                             savedDocName: docName,
+                            savedDocList: docList,
                             savedMapQty:  mapQty,
                             savedMismatchNote: mismatchNote,
                             savedCullDate: cullDate,
@@ -11873,7 +11978,9 @@ Thank you.`;
                                      under the DATES is what made this column read as a
                                      list of nothing and the other as a list of both. -->
                                 <div id="${rowId}-mapparts" class="${nilCull ? 'hidden' : ''} w-full"></div>
-                                <input type="file" id="${rowId}-doc-input" class="hidden"
+                                <!-- multiple: a plot flown in two passes is two files, and
+                                     picking them one at a time used to REPLACE rather than add. -->
+                                <input type="file" id="${rowId}-doc-input" class="hidden" multiple
                                     accept="image/*,.pdf,.heic,.heif,.avif,.webp,.tif,.tiff,.bmp,.svg,.jfif,.jpe"
                                     onchange="handleT6DocUpload(this,'${rowId}')">
                             </div>
@@ -11894,9 +12001,16 @@ Thank you.`;
                                 <div class="t6-nil-dash ${nilCull ? '' : 'hidden'} text-base font-black text-[#c9bda8]">—</div>
                                 <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex flex-col items-center gap-0.5">
                                 <div class="flex justify-center w-full">
-                                <input type="date" class="input-style t6-cull-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
+                                <!-- min/max so the picker itself will not hand back a year
+                                     nobody could mean. 0026 got in through this box and then
+                                     locked its own row — see isKeyedWrong in
+                                     shared/shared_month_lock.js. -->
+                                <input type="date" min="2000-01-01" max="2100-12-31" class="input-style t6-cull-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
                                     onchange="onT6CullDateChange(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
-                                    title="Date this plot was culled">
+                                    title="${p.savedCullDate && MJMMonthLock.isKeyedWrong(p.savedCullDate) ? 'This year cannot be right — correct it and save' : 'Date this plot was culled'}">
+                                ${p.savedCullDate && MJMMonthLock.isKeyedWrong(p.savedCullDate)
+                                  ? `<div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest mt-0.5 whitespace-nowrap"
+                                          title="A year outside 2000-2100 is a keying slip. The row is left open so it can be put right.">⚠ Check the year</div>` : ''}
                                 </div>
                                 <div id="${rowId}-sessions" class="w-full"></div>   <!-- extra DATES only; their quantities are in the Drone Map column -->
                                 <!-- A plot is sometimes culled over two days or more.
@@ -12030,15 +12144,21 @@ Thank you.`;
                 renderCullSessions(i);
             });
 
-            // Restore previously-uploaded drone maps / docs.
+            /* Restore previously-uploaded drone maps. DocList is every one
+               of them with its remark; a remark written before DocList
+               existed has only the single DocUrl, which stands in for a list
+               of one. */
             t6_plotData.forEach((p, i) => {
-                if (!p.savedDocUrl) return;
                 const rowId = `t6-row-${i}`;
-                const url   = p.savedDocUrl;
-                const name  = p.savedDocName || 'document';
-                const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(url);
-                t6_plotDocs[rowId] = { name, base64: url, isImg };
-                t6ShowDoc(rowId, { name, url, isImg });
+                let list = (p.savedDocList || []).slice();
+                if (!list.length && p.savedDocUrl) {
+                    const url = p.savedDocUrl;
+                    list = [{ name: p.savedDocName || 'document', base64: url, note: '',
+                              isImg: /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(url) }];
+                }
+                if (!list.length) return;
+                t6SetDocs(rowId, list);
+                t6PaintDocChip(rowId);
             });
 
             // Recalculate per-row cull rates for any pre-filled saved values.
@@ -12320,19 +12440,27 @@ Thank you.`;
         function t6PaintDocChip(rowId) {
             const chip = document.getElementById(`${rowId}-doc-chip`);
             if (!chip) return;
-            const doc = t6_plotDocs[rowId];
+            const docs = t6DocsOf(rowId);
+            const doc = docs[0];
             if (doc) {
                 const isPdf = /\.pdf(\?|#|$)/i.test(doc.name || '') ||
                               String(doc.base64 || '').startsWith('data:application/pdf');
                 chip.style.backgroundImage = (doc.isImg && !isPdf) ? `url("${doc.base64}")` : '';
-                chip.innerText = (doc.isImg && !isPdf) ? '' : (isPdf ? '📋' : '📄');
+                /* The COUNT beats the thumbnail where there is more than one.
+                   A plot with four maps showing one picture reads as a plot
+                   with one map, which is the whole thing this had to stop
+                   saying. */
+                chip.innerText = docs.length > 1 ? String(docs.length)
+                               : (doc.isImg && !isPdf) ? '' : (isPdf ? '📋' : '📄');
                 // mjm-review-allow — viewing an already-attached map has to
                 // survive Month Lock same as it survives Reviewed/Verified;
                 // viewT6Doc() is what actually withholds Replace/Remove once
                 // the row is date-locked, by not opening them from the viewer.
                 chip.className = 't6-doc-chip mjm-review-allow shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
                                  'bg-white border-[#4a7a2e] text-[#4a7a2e] text-sm bg-cover bg-center hover:ring-2 hover:ring-[#c3e6cb]';
-                chip.title = `${doc.name || 'Drone map'} — press to view, replace or remove`;
+                chip.title = docs.length > 1
+                    ? `${docs.length} drone maps — press to open them`
+                    : `${doc.name || 'Drone map'} — press to view, replace or remove`;
             } else {
                 chip.style.backgroundImage = '';
                 chip.innerText = '＋';
@@ -12342,12 +12470,117 @@ Thank you.`;
             }
         }
 
+        /* THE PANEL. One plot, every map it was flown with, and the remark
+           that says which is which.
+
+           It is a list rather than a carousel because the question somebody
+           opens it with is "what have we got for this plot" — and a remark
+           box is something you type in, which a picture viewer is the wrong
+           shape for. Each map still opens full size from here.
+
+           A locked row opens it READ ONLY: no Add, no Remove, no Replace,
+           and the remarks are not editable. Same view-stays-open,
+           edit-does-not rule as everywhere else on this tab. */
+        let _t6GalleryRow = '';
+        function openT6Gallery(rowId) {
+            _t6GalleryRow = rowId;
+            renderT6Gallery();
+            document.getElementById('t6-maps-panel')?.classList.remove('hidden');
+            document.addEventListener('keydown', _t6GalleryKey);
+        }
+        function closeT6Gallery() {
+            document.getElementById('t6-maps-panel')?.classList.add('hidden');
+            document.removeEventListener('keydown', _t6GalleryKey);
+            _t6GalleryRow = '';
+        }
+        function _t6GalleryKey(e) { if (e.key === 'Escape') closeT6Gallery(); }
+
+        function t6GalleryLocked() {
+            return !!document.getElementById(_t6GalleryRow)?.classList.contains('mjm-locked');
+        }
+
+        /* The remark, as it is typed. It is kept on the DOC and written out
+           by saveTab6 with everything else — a box that saved itself would
+           be the one thing on this tab that does, and a locked report would
+           then have one live field in it. */
+        function onT6DocNote(rowId, idx, value) {
+            const list = t6DocsOf(rowId);
+            if (!list[idx]) return;
+            list[idx].note = String(value || '');
+        }
+
+        function renderT6Gallery() {
+            const body = document.getElementById('t6-maps-body');
+            const ttl  = document.getElementById('t6-maps-title');
+            const add  = document.getElementById('t6-maps-add');
+            if (!body) return;
+            const rowId = _t6GalleryRow;
+            const docs = t6DocsOf(rowId);
+            // `i` is the map inside the row below, so the ROW index needs its
+            // own name or the two collide in the same scope.
+            const rowIdx = parseInt(String(rowId).replace('t6-row-', ''), 10);
+            const p = t6_plotData[rowIdx];
+            const locked = t6GalleryLocked();
+            if (ttl) ttl.innerText = `${p ? p.plot : 'Plot'} — ${docs.length} drone map${docs.length === 1 ? '' : 's'}`;
+            if (add) add.classList.toggle('hidden', locked);
+            if (!docs.length) {
+                body.innerHTML = `<div class="text-center py-10 text-[#8a7a68] text-sm font-bold">
+                    No drone map for this plot yet.</div>`;
+                return;
+            }
+            const esc = (v) => String(v == null ? '' : v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            body.innerHTML = docs.map((d, i) => {
+                const isPdf = /\.pdf(\?|#|$)/i.test(d.name || '')
+                           || String(d.base64 || '').startsWith('data:application/pdf');
+                const thumb = (d.isImg && !isPdf)
+                    ? `<div class="shrink-0 w-20 h-20 rounded-xl border border-[#e8dcc8] bg-cover bg-center cursor-pointer"
+                            style="background-image:url(&quot;${esc(d.base64)}&quot;)"
+                            onclick="viewT6Doc('${rowId}', ${i})" title="Open full size"></div>`
+                    : `<div class="shrink-0 w-20 h-20 rounded-xl border border-[#e8dcc8] bg-white flex items-center justify-center text-2xl cursor-pointer"
+                            onclick="viewT6Doc('${rowId}', ${i})" title="Open full size">${isPdf ? '📋' : '📄'}</div>`;
+                return `
+                <div class="flex items-start gap-3 rounded-2xl border border-[#e8dcc8] bg-white p-3">
+                    ${thumb}
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[11px] font-black text-[#3d2610] truncate" title="${esc(d.name)}">${esc(d.name || 'Drone map')}</div>
+                        <!-- THE REMARK. "North half, flown 21 Feb" is what tells
+                             two pictures of one plot apart, and it is not in a
+                             file name. -->
+                        <input type="text" class="input-style !text-[12px] !py-1.5 mt-1.5 w-full t6-doc-note"
+                            placeholder="Remark — which part of the plot, which day, why it was re-flown"
+                            value="${esc(d.note)}" ${locked ? 'readonly' : ''}
+                            oninput="onT6DocNote('${rowId}', ${i}, this.value)">
+                        <div class="flex flex-wrap gap-1.5 mt-2">
+                            <button type="button" onclick="viewT6Doc('${rowId}', ${i})"
+                                class="px-2.5 py-1 rounded-lg border border-[#3a7ab4] bg-white text-[#3a7ab4]
+                                       text-[10px] font-black uppercase tracking-widest hover:bg-[#f4f8fc]">View</button>
+                            ${locked ? '' : `
+                            <button type="button" onclick="replaceT6Doc('${rowId}', ${i})"
+                                class="px-2.5 py-1 rounded-lg border border-[#c07820] bg-white text-[#c07820]
+                                       text-[10px] font-black uppercase tracking-widest hover:bg-[#fdfaf4]">Replace</button>
+                            <button type="button" onclick="removeT6Doc('${rowId}', ${i})"
+                                class="px-2.5 py-1 rounded-lg border border-[#f8d7da] bg-white text-[#a83020]
+                                       text-[10px] font-black uppercase tracking-widest hover:bg-[#fff5f5]">Remove</button>`}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
         /* Pressing the chip. With a file behind it that means "show me";
            without one it means "let me pick one", which is the only thing it
            could mean. */
         function onT6DocChip(rowId) {
-            if (t6_plotDocs[rowId]) { viewT6Doc(rowId); return; }
+            if (t6DocsOf(rowId).length) { openT6Gallery(rowId); return; }
             if (document.getElementById(rowId)?.classList.contains('mjm-locked')) return alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.');
+            addT6Doc(rowId);
+        }
+        /* Opening the picker to ADD rather than to replace. The flag has to be
+           cleared or the next file picked lands on whichever one Replace was
+           last pressed against. */
+        function addT6Doc(rowId) {
+            _t6ReplaceAt = null; _t6ReplaceRow = '';
             document.getElementById(`${rowId}-doc-input`)?.click();
         }
 
@@ -13800,7 +14033,7 @@ Thank you.`;
                        written against a plot with no saved 3rd Culling record
                        has nowhere to go until the report itself is saved. */
                     showToast(`${written} reason(s) saved. ${unplaced} plot(s) have no saved 3rd Culling record yet — ` +
-                              `save the report once and their reasons will keep.`, 'error');
+                              `save the report once and their reasons will keep.`, 'warn');
                 } else {
                     showToast(written ? `${written} reason(s) saved.` : 'Nothing to save — the reasons are unchanged.', 'success');
                 }
@@ -14023,56 +14256,92 @@ Thank you.`;
             else              { desc.innerText = 'Awaiting Data';           desc.className = 'text-base font-black uppercase text-[#3d2610] mt-1'; }
         }
 
+        /* EVERY file dropped or picked, not the first one. Dropping four
+           maps and getting one was the shape of the old fault said a second
+           way. A drop is always an ADD -- there is nothing on screen saying
+           which of four it would be replacing. */
         function handleT6DocDrop(event, rowId) {
-            const file = event.dataTransfer.files[0];
-            if (file) processT6Doc(file, rowId);
+            _t6ReplaceAt = null; _t6ReplaceRow = '';
+            const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
+            files.forEach(f => processT6Doc(f, rowId));
         }
 
         function handleT6DocUpload(input, rowId) {
-            if (input.files && input.files[0]) processT6Doc(input.files[0], rowId);
+            const files = Array.from(input.files || []);
+            /* A REPLACE takes the first file and nothing else: the person
+               named one map to swap, so four files would silently add three
+               they did not ask for. */
+            if (_t6ReplaceAt != null && _t6ReplaceRow === rowId) {
+                if (files[0]) processT6Doc(files[0], rowId);
+            } else {
+                files.forEach(f => processT6Doc(f, rowId));
+            }
+            input.value = '';
         }
 
-        /* Show an attached map as one tidy row: thumbnail, the word ATTACHED,
-           view and remove. One place, so the upload path and the reload path
-           cannot end up looking different from each other — which they did,
-           and it was the reload that looked wrong. */
         /* A file has arrived, or was already saved. Both end up in the same
            place — t6_plotDocs — and the chip is painted from that, so there
-           is one source of truth about whether a plot has a map. */
-        function t6ShowDoc(rowId, { name, url, isImg }) {
+           is one source of truth about how many maps a plot has. Kept as a
+           name because a page half-loaded from cache may still call it. */
+        function t6ShowDoc(rowId) {
             t6PaintDocChip(rowId);
         }
 
+        /* A map ARRIVES; it does not replace what is there. Replacing one
+           deliberately is what the Replace button in the panel is for. */
         function processT6Doc(file, rowId) {
             if (document.getElementById(rowId)?.classList.contains('mjm-locked')) { alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.'); return; }
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 const isImg = file.type.startsWith('image/');
-                t6_plotDocs[rowId] = { name: file.name, base64: e.target.result, isImg };
+                const list = t6DocsOf(rowId).slice();
+                if (_t6ReplaceAt != null && _t6ReplaceRow === rowId && list[_t6ReplaceAt]) {
+                    // Keep the remark: it describes the PLOT, not the file,
+                    // and somebody replacing a cloudy picture has not changed
+                    // what they wrote about where it was flown.
+                    list[_t6ReplaceAt] = { name: file.name, base64: e.target.result, isImg,
+                                           note: list[_t6ReplaceAt].note || '' };
+                    _t6ReplaceAt = null; _t6ReplaceRow = '';
+                } else {
+                    list.push({ name: file.name, base64: e.target.result, isImg, note: '' });
+                }
+                t6SetDocs(rowId, list);
                 t6PaintDocChip(rowId);
+                if (_t6GalleryRow === rowId) renderT6Gallery();
                 calcT6();
             };
             reader.readAsDataURL(file);
         }
 
-        function removeT6Doc(rowId) {
-            delete t6_plotDocs[rowId];
+        /* Which one the picker about to open is for. Null means "add". */
+        let _t6ReplaceAt = null, _t6ReplaceRow = '';
+
+        function removeT6Doc(rowId, idx) {
+            const list = t6DocsOf(rowId).slice();
+            if (idx == null) list.length = 0;            // every one of them
+            else list.splice(idx, 1);
+            t6SetDocs(rowId, list);
             const input = document.getElementById(`${rowId}-doc-input`);
             if (input) input.value = '';
             t6PaintDocChip(rowId);
+            if (_t6GalleryRow === rowId) renderT6Gallery();
             calcT6();
         }
 
         /* Replace: the picker, opened from the viewer. Closing it first, so
            the file dialog is not behind a panel showing the map it is about
            to replace. */
-        function replaceT6Doc(rowId) {
+        function replaceT6Doc(rowId, idx) {
             closeDocViewer();
+            _t6ReplaceRow = rowId;
+            _t6ReplaceAt = (idx == null ? 0 : Number(idx));
             document.getElementById(`${rowId}-doc-input`)?.click();
         }
 
-        function viewT6Doc(rowId) {
-            const doc = t6_plotDocs[rowId];
+        function viewT6Doc(rowId, idx) {
+            const docs = t6DocsOf(rowId);
+            const at = idx == null ? 0 : Number(idx);
+            const doc = docs[at];
             if (!doc) return;
             // The plot's name on the viewer, so a map opened from a list of
             // twenty rows says which row it came from — and the row itself, so
@@ -14084,10 +14353,18 @@ Thank you.`;
             // simply not passing one — same view-stays-open, edit-doesn't rule
             // as everywhere else, with no separate guard needed inside the
             // (shared, generic) viewer itself.
-            const idx = parseInt(String(rowId).replace('t6-row-', ''), 10);
-            const p   = t6_plotData[idx];
+            // `idx` is now the MAP being opened, so the row index takes its
+            // own name rather than shadowing the argument.
+            const rowIdx = parseInt(String(rowId).replace('t6-row-', ''), 10);
+            const p   = t6_plotData[rowIdx];
             const locked = document.getElementById(rowId)?.classList.contains('mjm-locked');
-            _openDocViewer(doc.base64, doc.name || (p ? `${p.plot} — Drone Map` : null), locked ? null : rowId);
+            /* The title says WHICH of them, and the remark if there is one --
+               four pictures of one plot opened under one heading is four
+               pictures nobody can tell apart. */
+            const which = docs.length > 1 ? ` (${at + 1} of ${docs.length})` : '';
+            const title = (doc.note ? doc.note + ' — ' : '')
+                        + (doc.name || (p ? `${p.plot} — Drone Map` : 'Drone Map')) + which;
+            _openDocViewer(doc.base64, title, locked ? null : rowId, locked ? null : at);
         }
 
         // Delete a transferred-plot row: removes its Cull3_Transfer record and
@@ -14330,22 +14607,44 @@ Thank you.`;
 
                     // Upload the drone map / proof doc (if any) so it survives a refresh.
                     let docUrl = '', docNamePart = '';
-                    const doc = t6_plotDocs[row.id];
-                    if (doc) {
-                        // doc.base64 may already be an https URL (loaded from a
+                    /* EVERY map of this plot, in the order they were added.
+                       Each one is uploaded on its own and keeps its place, so
+                       a single failure costs that picture and not the rest —
+                       and the one that failed is still on screen, with its
+                       remark, to be saved again. */
+                    const docs = t6DocsOf(row.id);
+                    const saved = [];
+                    for (let dI = 0; dI < docs.length; dI++) {
+                        const d = docs[dI];
+                        if (!d || !d.base64) continue;
+                        // d.base64 may already be an https URL (loaded from a
                         // previous save) — _uploadBatchDoc returns it as-is.
-                        const url = await _uploadBatchDoc('cull3_docs', batchId, `${plotName}-${row.id}`, doc.base64);
+                        // The index is in the label so two maps attached in the
+                        // same millisecond cannot land on one path.
+                        const url = await _uploadBatchDoc('cull3_docs', batchId,
+                                                          `${plotName}-${row.id}-${dI + 1}`, d.base64);
                         if (url) {
-                            docUrl = url;
-                            t6_plotDocs[row.id] = { ...doc, base64: url };
-                            if (doc.name) docNamePart = ` DocName:${encodeURIComponent(doc.name)}`;
+                            saved.push({ ...d, base64: url });
                             console.log('[saveTab6] doc uploaded for', plotName, '→', url);
                         } else {
                             uploadFailures++;
+                            saved.push(d);   // kept on screen, still unsent
                             console.warn('[saveTab6] doc upload FAILED for', plotName, ':', window._mjmLastUploadError);
                         }
                     }
-                    const docSuffix = docUrl ? `${docNamePart} DocUrl:${docUrl}` : '';
+                    if (saved.length) t6SetDocs(row.id, saved);
+                    const stored = saved.filter(d => /^https?:\/\//i.test(String(d.base64 || '')));
+                    /* The FIRST map is still written as DocUrl / DocName
+                       exactly as it always was, so every remark that predates
+                       this and every reader of one goes on working. DocList
+                       carries all of them, remarks included. */
+                    if (stored[0]) {
+                        docUrl = stored[0].base64;
+                        if (stored[0].name) docNamePart = ` DocName:${encodeURIComponent(stored[0].name)}`;
+                    }
+                    const docListPart = stored.length
+                        ? ` DocList:${t6EncodeDocs(stored)}` : '';
+                    const docSuffix = (docUrl ? `${docNamePart} DocUrl:${docUrl}` : '') + docListPart;
 
                     logsToInsert.push(withEditMeta({
                         transaction_type: '3rd_Culling',
@@ -14426,20 +14725,20 @@ Thank you.`;
                     if (flagIds.length) await _supabase.from('shared_inventory_logs').delete().in('id', flagIds);
                 } catch (flagErr) {
                     console.warn('[saveTab6] amendment flag not updated:', flagErr);
-                    showToast('Report saved, but the Amendment Needed flag could not be updated. Save again to retry.', 'error');
+                    showToast('Report saved, but the To Do List flag could not be updated. Save again to retry.', 'warn');
                 }
 
                 setEditMetaUI(6, new Date().toISOString(), window.currentUserEmail);
                 if (uploadFailures > 0) {
-                    showToast(`⚠️ ${uploadFailures} doc(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without doc. Fix bucket and re-save.`, 'error');
+                    showToast(`${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. The counting is saved; the map is not. Fix the bucket and save again — the map is still on the row.`, 'warn');
                 }
                 const savedMsg = `3rd Culling report saved — ${logsToInsert.length} plot record(s)${transferLogs.length ? `, ${transferLogs.length} transfer(s)` : ''} logged.`;
                 if (undatedMovements > 0) {
                     showToast(`${undatedMovements} transfer(s) had no date and were saved as of today. ` +
-                              `Key the day they actually happened and save again.`, 'error');
+                              `Key the day they actually happened and save again.`, 'warn');
                 }
                 if (unexplained > 0) {
-                    showToast(`${savedMsg} ${unexplained} plot(s) still need a drone map reason — this batch stays in Amendment Needed until they have one.`, 'error');
+                    showToast(`${savedMsg} ${unexplained} plot(s) still need a drone map reason — this batch stays on the To Do List until they have one.`, 'warn');
                 } else {
                     showToast(savedMsg, 'success');
                 }
