@@ -42,11 +42,25 @@
 --                         CHECK_which_batch_still_owes_the_round.sql is the
 --                         drill-down for that case and dates it.
 --
--- The last rows are a different question and are worth reading even when
--- the count is nought: an audit whose plot matches no plot the ledger has
--- anything standing on, AFTER the padding above. Those are invisible to
--- every list in the system, so the work was done and no board will ever
--- count it. On a healthy database there are none.
+-- The last two sections are a different question, and they were ONE until
+-- the first real run cried wolf over twenty-five pre-nursery trays:
+--
+--   NOTHING STANDING NOW   the ledger HAS placed a batch on this plot and
+--                          nothing is standing on it now. For a MAIN plot
+--                          that is a batch which has finished -- culled
+--                          out, transferred or sold -- so an audit dated
+--                          after it is somebody walking an empty plot. For
+--                          a PRE-NURSERY tray it means nothing at all: the
+--                          balance view is the MAIN nursery movement and
+--                          Planted takes no part in it, so EVERY PN plot
+--                          reads this way whatever anybody did. The note
+--                          says which of the two you are looking at.
+--
+--   PLOT NOT IN LEDGER     nothing has ever been placed on this plot and an
+--                          audit was filed against it anyway. THAT is the
+--                          one that is invisible to every list in the
+--                          system, and on a healthy database there are
+--                          none.
 
 WITH allplots AS (
   SELECT upper(btrim(plot_name)) AS raw FROM shared_plot_batch_balance
@@ -142,12 +156,17 @@ never AS (
   JOIN   plot_seen p ON p.modul = g.modul AND p.plot = g.plot
   WHERE  g.last_date IS NULL
 ),
+in_ledger AS (
+  SELECT DISTINCT plot FROM standing
+),
 orphan AS (
-  SELECT a.modul, a.plot, count(*)::INT AS n, max(a.last_date) AS last_date
+  SELECT a.modul, a.plot, count(*)::INT AS n, max(a.last_date) AS last_date,
+         (s.plot IS NOT NULL) AS known
   FROM   aud a
   LEFT JOIN work w ON w.plot = a.plot
+  LEFT JOIN in_ledger s ON s.plot = a.plot
   WHERE  w.plot IS NULL
-  GROUP BY 1, 2
+  GROUP BY 1, 2, 5
 )
 SELECT 1 AS ord, 'COUNT' AS section,
        ''::TEXT AS nursery, ''::TEXT AS plot, ''::TEXT AS batch, ''::TEXT AS modul,
@@ -169,8 +188,19 @@ SELECT 2, 'NEVER AUDITED',
        END
 FROM   never n
 UNION ALL
-SELECT 3, 'PLOT NOT IN LEDGER',
+SELECT 3, 'NOTHING STANDING NOW',
+       CASE left(o.plot, 1) WHEN 'P' THEN 'PN' WHEN 'B' THEN 'BNN'
+                            WHEN 'U' THEN 'UNN 1' WHEN 'N' THEN 'UNN 2'
+                            ELSE 'unknown' END,
+       o.plot, '', o.modul, COALESCE(o.last_date::TEXT, 'never'),
+       o.n::TEXT || ' audit(s), and '
+         || CASE WHEN left(o.plot, 1) = 'P'
+                 THEN 'this is a PRE-NURSERY tray -- the balance view does not carry those, so every PN plot reads this way and it says nothing about the work'
+                 ELSE 'the batch standing here has since finished -- culled out, transferred or sold, which drops its row from the balance view' END
+FROM   orphan o WHERE o.known
+UNION ALL
+SELECT 4, 'PLOT NOT IN LEDGER',
        '', o.plot, '', o.modul, COALESCE(o.last_date::TEXT, 'never'),
-       o.n::TEXT || ' audit(s) on a plot the ledger has nothing standing on'
-FROM   orphan o
+       o.n::TEXT || ' audit(s) on a plot NOTHING has ever been placed on -- invisible to every list in the system'
+FROM   orphan o WHERE NOT o.known
 ORDER  BY 1, 6, 4, 5;
