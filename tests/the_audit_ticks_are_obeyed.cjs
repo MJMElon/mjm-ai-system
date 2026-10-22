@@ -28,9 +28,9 @@
      the EDIT form asks `edit`       same
      the SAVE asks again             a form opened before a permission
                                      changed is still on the screen
-     DELETE asks `edit`              the tick reads "Edit & delete past
-                                     audits", and it is asked BESIDE the
-                                     admin test rather than instead of it
+     DELETE asks `delete`            its own tick since the office asked
+                                     for the two apart, and asked BESIDE
+                                     the admin test rather than instead
 
    Run: node tests/the_audit_ticks_are_obeyed.cjs
 */
@@ -140,16 +140,47 @@ console.log('\n── 2. An explicit no is a no, and only for what it names ─�
         [g.canAuditAction('edit'), g.canAuditAction('edit', 'height')], [false, true]);
 }
 
-console.log('\n── 3. A closed page closes everything inside it ──');
+console.log('\n── 3. Delete is its own tick, and the old answer still counts ──');
+{
+  /* The office asked for Edit and Delete apart, so `delete` is a key of its
+     own. A row saved under the OLD combined tick carries `edit` and no
+     `delete` at all, and there are only three things it can mean:
+
+       read it as OFF  -> takes a deletion away from somebody nobody closed
+       read it as ON   -> hands back one the office deliberately closed
+       read the OLD    -> what they actually answered
+
+     The third is the only one that is true, and it holds until somebody
+     saves that row again on either screen. */
+  let g = loadGate(user({ plot_audit: { view: true, record: true, edit: false } }), PLOT_PAGE);
+  check('a row saved before the split, with editing closed',
+        [g.canAuditAction('edit'), g.canAuditAction('delete')], [false, false]);
+
+  g = loadGate(user({ plot_audit: { view: true, record: true, edit: true } }), PLOT_PAGE);
+  check('and one with editing open', 
+        [g.canAuditAction('edit'), g.canAuditAction('delete')], [true, true]);
+
+  /* Once it HAS been answered the fallback is out of it, both ways round —
+     editing open and deleting closed is the whole point of the split. */
+  g = loadGate(user({ plot_audit: { view: true, edit: true, delete: false } }), PLOT_PAGE);
+  check('edit open, delete closed',
+        [g.canAuditAction('edit'), g.canAuditAction('delete')], [true, false]);
+  g = loadGate(user({ plot_audit: { view: true, edit: false, delete: true } }), PLOT_PAGE);
+  check('and the other way round',
+        [g.canAuditAction('edit'), g.canAuditAction('delete')], [false, true]);
+}
+
+console.log('\n── 4. A closed page closes everything inside it ──');
 {
   const g = loadGate(user({ plot_audit: { view: false, record: true, edit: true } }), PLOT_PAGE);
   check('there is nothing left to do on a page they may not open',
-        [g.canAuditAction('record'), g.canAuditAction('edit')], [false, false]);
+        [g.canAuditAction('record'), g.canAuditAction('edit'), g.canAuditAction('delete')],
+        [false, false, false]);
   check('which is the same answer the page guard gives',
         g.canOpenAuditPage('plot_audit'), false);
 }
 
-console.log('\n── 4. Every module asks, in all four places ──');
+console.log('\n── 5. Every module asks, in all five places ──');
 {
   /* The four shipped modules. `page` is the key in AUDIT_PAGE_KEYS, and the
      names are the functions each one actually uses -- they are not the same
@@ -198,33 +229,35 @@ console.log('\n── 4. Every module asks, in all four places ──');
        and asked beside the admin test, never instead of it. Both the confirm
        and the modal's own Delete button, which is reachable on its own. */
     const cd = body(src, 'confirmDelete') || '';
-    checkTrue(m.label + ': the delete confirm asks `edit`',
-              /requireAuditAction\('edit'/.test(cd));
+    checkTrue(m.label + ': the delete confirm asks `delete`, its own tick',
+              /requireAuditAction\('delete'/.test(cd));
+    checkTrue(m.label + ': and not the edit one it used to share',
+              !/requireAuditAction\('edit'/.test(cd));
     checkTrue(m.label + ': and still asks whether they are an admin',
               /isAuditAdmin\(\)/.test(cd));
 
     const dd = body(src, 'doDelete') || '';
     checkTrue(m.label + ': the Delete button itself asks too',
-              /canAuditAction\('edit'\)/.test(dd));
+              /canAuditAction\('delete'\)/.test(dd));
   }
 }
 
-console.log('\n── 5. The two refusals say where they are set ──');
+console.log('\n── 6. The three refusals say where they are set ──');
 {
   /* A button that does nothing is read as a broken app and reported as one,
      so the message has to name the screen that would switch it back on --
      and it has to exist in both languages, or an auditor working in Malay
      gets the key printed at them. */
   const lang = read('audit/audit_lang.js');
-  for (const key of ['err_no_record', 'err_no_edit']) {
+  for (const key of ['err_no_record', 'err_no_edit', 'err_no_delete']) {
     const hits = lang.split(key + ':').length - 1;
     check('`' + key + '` is written in both languages', hits, 2);
   }
-  checkTrue('and both say where the tick lives',
-            (lang.match(/User Access/g) || []).length >= 4);
+  checkTrue('and all of them say where the tick lives',
+            (lang.match(/User Access/g) || []).length >= 6);
 }
 
-console.log('\n── 6. The mirror follows, so the versions had to move ──');
+console.log('\n── 7. The mirror follows, so the versions had to move ──');
 {
   /* audit.mjmnursery.com is a machine-written MIRROR of audit/ -- its own
      README says so and says to bump the service worker when JS changes.
@@ -238,13 +271,64 @@ console.log('\n── 6. The mirror follows, so the versions had to move ──'
     if (!f.endsWith('.html')) continue;
     const html = read('audit/' + f);
     for (const name of CHANGED) {
-      const re = new RegExp(name.replace('.', '\\.') + '\\?v=(\\d+)', 'g');
+      /* [0-9a-z], not \\d: this module's numbers carry a revision letter
+         (20261012e), and a digits-only match reads 20261022a as 20261022 —
+         so two different versions compare equal and the check passes over a
+         page asking for yesterday's file. */
+      const re = new RegExp(name.replace('.', '\\.') + '\\?v=([0-9a-z]+)', 'g');
       let m;
       while ((m = re.exec(html))) vers.add(name + '@' + m[1]);
     }
   }
-  const stale = [...vers].filter((v) => !v.endsWith('@20261022'));
+  const stale = [...vers].filter((v) => !v.endsWith('@20261022e'));
   check('every page asks for the version these changes went out under', stale, []);
+}
+
+console.log('\n── 8. Three readers of one answer, and they must agree ──');
+{
+  /* The gate decides, but TWO SCREENS draw ticks from the same keys: the
+     Team page's User Access block and the audit module's own screen. A
+     screen that draws `delete` unticked over a gate that allows it is the
+     worst kind of wrong, because it looks configured.
+
+     modPage is liftable -- it is a top-level function in the page -- so it
+     is driven here against the gate on the same saved rows. */
+  const page = read('scan/scan_user_access.html');
+  const at = page.indexOf('function modPage(');
+  const end = page.indexOf('\n}\n', at);
+  // eslint-disable-next-line no-new-func
+  const modPage = new Function(page.slice(at, end + 2) + '; return modPage;')();
+  const PG = { key: 'plot_audit', actions: [
+    { key: 'record', label: 'r' }, { key: 'edit', label: 'e' },
+    { key: 'delete', label: 'd', fallbackTo: 'edit' }] };
+
+  const ROWS = [
+    ['saved before the split, editing closed', { view: true, record: true, edit: false }],
+    ['saved before the split, editing open',   { view: true, record: true, edit: true }],
+    ['answered since, edit open delete closed', { view: true, record: true, edit: true, delete: false }],
+    ['answered since, edit closed delete open', { view: true, record: true, edit: false, delete: true }],
+  ];
+  for (const [label, entry] of ROWS) {
+    const drawn = modPage({ audit_actions: { plot_audit: entry } }, 'audit', PG);
+    const g = loadGate(user({ plot_audit: entry }), PLOT_PAGE);
+    check('the Team page draws what the phone obeys — ' + label,
+          [drawn.record, drawn.edit, drawn.delete],
+          [g.canAuditAction('record'), g.canAuditAction('edit'), g.canAuditAction('delete')]);
+  }
+
+  /* The module's own screen reads through shared_module_access.js, whose
+     effectiveActions is inside a closure and cannot be lifted. The line is
+     asserted instead -- a copy that loses it draws the other answer. */
+  const shared = read('shared/shared_module_access.js');
+  checkTrue('and the module\u2019s own screen carries the same fallback',
+            /a\.fallbackTo && !\(a\.key in saved\)/.test(shared));
+  checkTrue('as does the Team page',
+            /a\.fallbackTo && !\(a\.key in saved\)/.test(page));
+  /* Both screens have to OFFER the tick, or one of them cannot set what the
+     other can. */
+  checkTrue('both screens offer a delete tick on every audit',
+            (read('audit/audit_user_access.html').match(/key:'delete'/g) || []).length === 4 &&
+            /key:'delete'/.test(page));
 }
 
 console.log('\n' + (fail ? 'FAILURES: ' + fail + ' (passed ' + pass + ')'
