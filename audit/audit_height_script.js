@@ -1850,7 +1850,7 @@ function closeLightbox(){document.getElementById('lightbox').classList.remove('o
 function confirmDelete(uid){
   /* BESIDE the admin test, never instead of it — the tick reads
      "Edit & delete past audits". */
-  if(!requireAuditAction('edit',()=>showToast(t('err_no_edit'))))return;
+  if(!requireAuditAction('delete',()=>showToast(t('err_no_delete'))))return;
   if(!isAuditAdmin()){showToast(t('err_delete_admin_only'));return;}
   deleteTarget=uid;document.getElementById('modal-overlay').classList.add('show');
 }
@@ -1858,10 +1858,10 @@ function cancelDelete(){deleteTarget=null;document.getElementById('modal-overlay
 async function doDelete(){
   if(!deleteTarget)return;
   /* Checked again here: the modal's Delete button is reachable on its own. */
-  if(!isAuditAdmin() || !canAuditAction('edit')){
+  if(!isAuditAdmin() || !canAuditAction('delete')){
     deleteTarget=null;
     document.getElementById('modal-overlay').classList.remove('show');
-    showToast(t(canAuditAction('edit')?'err_delete_admin_only':'err_no_edit'));return;
+    showToast(t(canAuditAction('delete')?'err_delete_admin_only':'err_no_delete'));return;
   }
   document.getElementById('modal-overlay').classList.remove('show');
   setLoading(true);

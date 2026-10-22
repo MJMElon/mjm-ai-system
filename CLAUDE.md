@@ -2702,12 +2702,30 @@ click-time guard. Four things in it:
   save asks **again**, because a form opened before a permission changed is
   still sitting on the screen. `editMode` is what decides which of the two
   ticks a save needs.
-- **Delete is part of EDIT**, because the tick reads "Edit & delete past
-  audits" — and it is asked **beside** the admin test rather than instead of
-  it, in both the confirm and the modal's own Delete button, which is
-  reachable on its own. On Papan Tanda, deleting a BATCH takes its linked
-  audit with it, so that one asks too; editing a batch row does not, because
-  a batch record is not an audit.
+- **Delete is its OWN tick**, and it was half of Edit for a day. Correcting a
+  figure somebody keyed and removing the morning it was recorded for are
+  different acts with different consequences — the same argument that gave
+  `delete` its own box on the FC Portal's Maintenance — and the office asked
+  for the two apart. It is asked **beside** the admin test rather than
+  instead of it, in both the confirm and the modal's own Delete button, which
+  is reachable on its own. On Papan Tanda, deleting a BATCH takes its linked
+  audit with it, so that one asks `delete` too; editing a batch row asks
+  nothing, because a batch record is not an audit.
+
+  **A ROW SAVED BEFORE THE SPLIT ANSWERED THE OLD TICK.** It carries `edit`
+  and no `delete`, and there are only three things that can mean: read the
+  absent key as OFF and a deletion is taken from somebody nobody closed; read
+  it as ON and one the office deliberately closed comes back; read the OLD
+  key and you have what they actually answered. Only the third is true, and
+  it holds until somebody saves that row again on either screen.
+  `fallbackTo:'edit'` on the action is the declaration, and **three readers
+  honour it** — `canAuditAction` on the phone, `modPage` in
+  `scan_user_access.html`, and `effectiveActions` in
+  `shared_module_access.js`, which is the audit module's own screen. A screen
+  drawing `delete` unticked over a gate that allows it is the worst kind of
+  wrong, because it looks configured; section 8 of the test drives two of
+  the three against each other on the same saved rows and asserts the third
+  still carries the line.
 - **It fails open.** No entry for the page is nobody having been asked, an
   absent action key is the same, and only an explicit `false` is a no. A page
   the office has closed closes every action inside it, there being nothing
@@ -2728,8 +2746,15 @@ Two traps found doing it, both worth keeping:
   gate written today reaches a phone next month.
 
 `tests/the_audit_ticks_are_obeyed.cjs` drives the rule through the SHIPPED
-`audit_supabase.js` and holds all four modules to the same four places — 32
-of its 37 checks fail on the previous code.
+`audit_supabase.js` and holds all four modules to the same five places.
+
+**And the `?v=` on this module carries a revision LETTER** — `20261012e`,
+`20261022a` — which a digits-only `(\d+)` reads as `20261012`, so two
+different versions compare equal and a check passes over a page asking for
+yesterday's file. The test matches `[0-9a-z]+`. Worth knowing before writing
+any other check against these numbers: **somebody else may have bumped them
+the same day**, so the next letter is the one above everything in use and
+not simply `a`.
 
 ## A permission that is saved but not obeyed is worse than no permission
 

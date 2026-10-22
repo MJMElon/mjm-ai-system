@@ -1,4 +1,4 @@
-/* BUILD: 2026-10-22a */
+/* BUILD: 2026-10-22b */
 /* ================================================================
    MJM NURSERY — SUPABASE SHARED CONFIG
    supabase.js
@@ -149,16 +149,33 @@ function canOpenAuditPage(page) {
    So the FORM refuses to open, and the save asks again because a
    button drawn before a permission changed is still on the screen.
 
-   DELETE IS PART OF EDIT. The tick reads "Edit & delete past audits",
-   so it governs both, and it is asked BESIDE the admin test rather
-   than instead of it — an admin the office has unticked cannot delete
+   DELETE IS ITS OWN TICK, and it used to be half of Edit. Correcting
+   a figure somebody keyed and removing the morning it was recorded for
+   are different acts with different consequences, and the office asked
+   for them apart. It is asked BESIDE the admin test rather than
+   instead of it — an admin the office has unticked cannot delete
    either, and a non-admin never could.
+
+   A ROW SAVED BEFORE THE SPLIT ANSWERED THE OLD TICK. It carries
+   `edit` and no `delete`, so ACTION_FALLBACK reads the old answer
+   rather than inventing one: an auditor the office had closed editing
+   for stays closed for deleting too, and one they had opened keeps
+   both until somebody saves that row again. Reading the absent key as
+   off would take away access nobody removed; reading it as on would
+   hand back a deletion the office had deliberately closed. The same
+   line is in shared_module_access.js and in scan_user_access.html, the
+   two screens that WRITE it — all three have to agree or a screen
+   draws one answer and the app obeys another.
 
    AND IT FAILS OPEN, like everything else here. No entry for the page
    is nobody having been asked; an action key that is absent is the
    same. Only an explicit false is a no. A revoked page closes every
    action inside it, because there is nothing left to do on it.
 ================================================================ */
+/* An action split out of an older one, and the key to read when a saved
+   row predates the split. */
+const ACTION_FALLBACK = { delete: 'edit' };
+
 function canAuditAction(action, page) {
   const key = page || currentAuditPageKey();
   if (!key) return true;                      // a page this map does not cover
@@ -168,7 +185,8 @@ function canAuditAction(action, page) {
     const acts = (u.permissions || {}).audit_actions;
     const entry = acts && acts[key];
     if (!entry || typeof entry !== 'object') return true;
-    return entry[action] !== false;
+    const asked = (!(action in entry) && ACTION_FALLBACK[action]) || action;
+    return entry[asked] !== false;
   } catch (e) { return true; }
 }
 

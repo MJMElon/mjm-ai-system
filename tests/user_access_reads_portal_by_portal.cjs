@@ -276,11 +276,16 @@ console.log('\n── 5. The Auditor Portal writes the keys the audit module rea
         ['plot_audit', 'height', 'papan', 'maintenance']);
   check('every one of them is a page the audit module knows',
         drawn.filter((k) => moduleKeys.indexOf(k) === -1), []);
-  check('each carries the two actions and no more',
+  /* THREE actions, since the office asked for Edit and Delete apart:
+     correcting a figure somebody keyed and removing the morning it was
+     recorded for are different acts with different consequences. */
+  check('each carries the three actions and no more',
         await audit.locator('[data-mact]')
           .evaluateAll((els) => els.map((e) => e.dataset.mactpage + ':' + e.dataset.mact)),
-        ['plot_audit:record', 'plot_audit:edit', 'height:record', 'height:edit',
-         'papan:record', 'papan:edit', 'maintenance:record', 'maintenance:edit']);
+        ['plot_audit:record', 'plot_audit:edit', 'plot_audit:delete',
+         'height:record', 'height:edit', 'height:delete',
+         'papan:record', 'papan:edit', 'papan:delete',
+         'maintenance:record', 'maintenance:edit', 'maintenance:delete']);
   check('stored under `audit`, which is where that module reads them',
         [...new Set(await audit.locator('[data-mpage]')
           .evaluateAll((els) => els.map((e) => e.dataset.mstore)))],
@@ -294,8 +299,12 @@ console.log('\n── 5. The Auditor Portal writes the keys the audit module rea
   await page.click('#save-btn');
   await page.waitForTimeout(400);
   const sent = await page.evaluate(() => window.__saved[window.__saved.length - 1].permissions);
+  /* `delete` stays TRUE while edit is unticked, which is the split doing
+     its job: this fixture holds no saved answer, so both drew on and only
+     the one that was pressed moved. */
   check('the touched page is written in full',
-        sent.audit_actions.plot_audit, { view: true, record: true, edit: false });
+        sent.audit_actions.plot_audit,
+        { view: true, record: true, edit: false, delete: true });
   check('and its mirror agrees with it', sent.audit_pages.plot_audit, 'normal');
   await page.close();
 }
