@@ -45,8 +45,8 @@ const server = http.createServer((req, res) => {
    batch 199 has no date anywhere but its save day. */
 const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
 (function(){
- const tx=(id,b,p,q,created,remarkDate,txDate)=>({id,transaction_type:'Transplanted',batch_name:b,plot_name:p,
-   breed_name:'UPB PREMIER HYBRID',quantity_change:q,created_at:created,
+ const tx=(id,b,p,q,created,remarkDate,txDate,breed)=>({id,transaction_type:'Transplanted',batch_name:b,plot_name:p,
+   breed_name:breed===undefined?'UPB PREMIER HYBRID':breed,quantity_change:q,created_at:created,
    transaction_date:txDate||null,
    remark:remarkDate?('Transplanted from tray [P46] to Main Plot ['+p+']. Date: '+remarkDate):''});
  const logs=[
@@ -56,7 +56,16 @@ const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
   tx(4,'264','U12',1800,'2026-09-19T03:13:00','2026-07-22'),
   tx(5,'264','U12',2293,'2026-09-19T03:14:00','2026-07-22'),
   tx(6,'262','U5', 2378,'2026-07-13T02:00:00',null,'2026-07-13'),
-  tx(7,'199','B9', 500, '2026-07-02T02:00:00',null,null)
+  tx(7,'199','B9', 500, '2026-07-02T02:00:00',null,null,null),
+  /* Batch 260: the transplant row was saved BEFORE the breed was keyed, so
+     it carries none — and keying the breed later on the batch report (Tab
+     1, which is the Seeds_Received row) rewrites no old transplant rows.
+     The page has to fall back to the batch's own breed; 199/B9 above has
+     no breed anywhere and must honestly stay a dash. */
+  tx(8,'260','U14',2518,'2026-07-10T02:00:00',null,'2026-07-10',null),
+  {id:100,transaction_type:'Seeds_Received',batch_name:'260',plot_name:'Pre-Nursery',
+   breed_name:'AA Hybrida 1S',quantity_change:12000,created_at:'2026-03-01T02:00:00',
+   transaction_date:'2026-03-01',remark:''}
  ];
  const T={
   shared_profiles:[{id:'u1',email:'o@m.t',full_name:'J',permissions:{manage_users:true,modules:{operation:'admin'}}}],
@@ -155,6 +164,27 @@ const check = (ok, m) => { console.log((ok ? '  ok  ' : ' FAIL ') + m); if (!ok)
 
   // The no-date-anywhere fallback: created_at 2 Jul 2026 + 9 months = Apr 2027.
   check(!!apr.rows.find(r => r.plot === 'B9' && r.batch === '199'), '199 / B9 (no date anywhere) still falls back to its save day');
+
+  /* Breed: the row's own first, else the batch's (Seeds_Received), else an
+     honest dash — batch 260 keyed its breed after the transplant was saved
+     and read "—" here for ever. Back on the Apr tab after the Jun click. */
+  const apr2 = await readTab('Apr 2027');
+  check(!apr2.missing, 'back on Apr 2027 for the breed checks');
+  const breeds = await page.evaluate(() => {
+    const out = {};
+    [...document.querySelectorAll('#maturity-rows tr')].forEach(tr => {
+      if (!tr.dataset.plotName) return;
+      const tds = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
+      out[tr.dataset.batchName + '/' + tr.dataset.plotName] = tds[4] || '';
+    });
+    return out;
+  });
+  check(breeds['260/U14'] === 'AA Hybrida 1S',
+        '260 / U14 reads the breed off the batch, not a dash (' + (breeds['260/U14'] || '') + ')');
+  check(breeds['199/B9'] === '—',
+        '199 / B9, with no breed anywhere, honestly stays a dash (' + (breeds['199/B9'] || '') + ')');
+  check(breeds['264/U13'] === 'UPB PREMIER HYBRID',
+        'a row carrying its own breed is untouched');
 
   await browser.close(); server.close();
   console.log(fails ? `\n${fails} FAILED` : '\nall checks passed');

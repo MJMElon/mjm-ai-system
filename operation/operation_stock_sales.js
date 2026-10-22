@@ -645,7 +645,7 @@
 
     async function loadMaturity() {
         try {
-            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes] = await Promise.all([
+            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes, seedsRes] = await Promise.all([
                 // 'Transplanted' only — Premium Care and D-Tone are holding
                 // trays, not plots (same distinction operation_batch_detail.html's
                 // own transplanted total and operation_reports.html's
@@ -688,8 +688,31 @@
                 fetchAllRows(() => _supabase.from('shared_do_records')
                     .select('do_number, total_qty, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
                     .order('id', { ascending: true }))
+                    .then(r => r, e => ({ data: [], error: e })),
+                // The batch's own breed, for rows saved without one. A
+                // Transplanted row is sometimes saved before the breed was
+                // keyed, and keying it later on the batch report (Tab 1's
+                // "Breed Variety" = the Seeds_Received row) rewrites no old
+                // transplant rows — so batch 260 read "—" here for ever,
+                // however many times the batch report was corrected and the
+                // page reloaded. Same fallback operation_reports.html uses;
+                // its own comment names batch 260/U4. This read failing must
+                // not take the table down — the breed column is worth losing,
+                // the stock is not.
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                    .select('batch_name,breed_name')
+                    .eq('transaction_type', 'Seeds_Received')
+                    .order('id', { ascending: true }))
                     .then(r => r, e => ({ data: [], error: e }))
             ]);
+
+            // Newest reception row wins — a batch is meant to have exactly
+            // one and some have many (see the duplicate receptions note in
+            // CLAUDE.md). Ordered by id, so the last write stands.
+            const batchBreed = {};
+            (seedsRes?.data || []).forEach(b => {
+                if (b.batch_name && b.breed_name) batchBreed[b.batch_name] = b.breed_name;
+            });
 
             const trans = transRes.data || [];
             const plots = plotsRes.data || [];
@@ -784,7 +807,9 @@
                         key: k,
                         batch: g.batch,
                         plot: g.plot,
-                        breed: g.breed || '—',
+                        // The row's own breed first, else the batch's — see
+                        // the Seeds_Received read above (batch 260).
+                        breed: g.breed || batchBreed[g.batch] || '—',
                         location: resolveLocation(g.plot),
                         qty: g.qty,
                         afterCulling,
@@ -3618,7 +3643,7 @@
     async function loadInventoryMap() {
         const tabBar = document.getElementById('invmap-nursery-tabs');
         try {
-            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res] = await Promise.all([
+            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res, seedsRes] = await Promise.all([
                 _supabase.from('operation_nurseries').select('*').order('name'),
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
@@ -3637,8 +3662,20 @@
                 // batch is untidy, hiding a live one is stock nobody can find.
                 _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,quantity_change,remark')
-                    .eq('transaction_type', '3rd_Culling')
+                    .eq('transaction_type', '3rd_Culling'),
+                // The batch's own breed for transplant rows saved without
+                // one — same fallback loadMaturity carries (batch 260), and
+                // it keeps a breedless batch out of the "—" bucket on the
+                // By Breed sidebar. Failing is fine: the tile just reads —.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,breed_name')
+                    .eq('transaction_type', 'Seeds_Received')
+                    .then(r => r, e => ({ data: [] }))
             ]);
+            const batchBreedMap = {};
+            ((seedsRes && seedsRes.data) || []).forEach(b => {
+                if (b.batch_name && b.breed_name) batchBreedMap[b.batch_name] = b.breed_name;
+            });
 
             _invmap.nurseries = nursRes.data || [];
             _invmap.plots     = plotsRes.data || [];
@@ -3684,7 +3721,7 @@
                 if (!plotBatches[plot]) plotBatches[plot] = [];
                 plotBatches[plot].push({
                     batch,
-                    breed: breedByPlotBatch[key] || '—',
+                    breed: breedByPlotBatch[key] || batchBreedMap[batch] || '—',
                     full: fullByPlotBatch[key] || 0,
                     collected: collectedByPlotBatch[key] || 0,
                     balance: 0
