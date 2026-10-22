@@ -1,4 +1,4 @@
-/* A WIDE SHEET IS SHRUNK TO FIT, NEVER TRUNCATED.
+/* A WIDE SHEET IS SHRUNK TO FIT, NEVER TRUNCATED — AND A NARROW ONE GROWS.
 
    The payroll sheet grows one column per crew member on the nursery — eight,
    ten, more — and every column in it carries a figure somebody is paid
@@ -6,12 +6,17 @@
    content area with the only way to read the rest a sideways drag, in a
    browser window the office was not going to resize to make room.
 
-   fitTableToWrap() shrinks the WHOLE table toward the wrapper's own width
-   with a CSS transform, so every column stays on screen at a smaller size
-   rather than one being dropped or scrolled out of sight. Below
-   TABLE_FIT_MIN_SCALE it backs off and leaves the wrapper's own
-   overflow-x:auto (every .tbl-wrap carries one) to take over, because type
-   too small to read is worse than a scrollbar.
+   fitTableToWrap() scales the WHOLE table to the wrapper's own width with a
+   CSS transform, so every column stays on screen at a smaller size rather
+   than one being dropped or scrolled out of sight. Below TABLE_FIT_MIN_SCALE
+   it backs off and leaves the wrapper's own overflow-x:auto (every .tbl-wrap
+   carries one) to take over, because type too small to read is worse than a
+   scrollbar.
+
+   Collapsing the side bar hands the content area back a couple hundred
+   pixels the other way, and a table left at its natural size over that
+   spare width read as unfinished — so the same function scales UP too, to
+   TABLE_FIT_MAX_SCALE at most.
 
    This lifts the real function out of the shipped file and drives it against
    fake DOM nodes whose layout numbers are set by hand, which is the only way
@@ -65,9 +70,9 @@ function run(fn, wrap) {
   f(wrap);
 }
 
-console.log('A table that already fits is left alone');
+console.log('A table that fits EXACTLY is left alone');
 {
-  const { wrap, table } = makeWrap({ availW: 1000, naturalW: 800, naturalH: 400 });
+  const { wrap, table } = makeWrap({ availW: 1000, naturalW: 1000, naturalH: 400 });
   run(null, wrap);
   is(table.style.transform, '', 'no transform applied');
   is(wrap.style.height, '', 'no height forced');
@@ -83,6 +88,24 @@ console.log('A table too wide for the wrapper is scaled down to fit it');
   is(table.style.transformOrigin, 'top left', 'scales from the top-left corner, not the centre');
   is(wrap.style.overflowX, 'hidden', 'no scrollbar once it is made to fit');
   close(parseFloat(wrap.style.height), 500 * 0.7, 0.5, 'wrapper height matches the SCALED table, not the natural one');
+}
+
+console.log('');
+console.log('A table narrower than the wrapper is scaled UP to fill it — collapsing the side bar');
+{
+  const { wrap, table } = makeWrap({ availW: 1000, naturalW: 800, naturalH: 400 });
+  run(null, wrap);
+  is(table.style.transform, 'scale(1.25)', 'scaled up to availW / naturalW');
+  is(wrap.style.overflowX, 'hidden', 'still hidden — the scaled table fills exactly what it was given, no more');
+  close(parseFloat(wrap.style.height), 400 * 1.25, 0.5, 'wrapper height grows to match the scaled-up table');
+}
+
+console.log('');
+console.log('Scaling up stops at TABLE_FIT_MAX_SCALE — a four-plot nursery on a wide monitor');
+{
+  const { wrap, table } = makeWrap({ availW: 1000, naturalW: 300, naturalH: 200 });
+  run(null, wrap);
+  is(table.style.transform, 'scale(1.4)', 'capped rather than the full 3.33x availW/naturalW would ask for');
 }
 
 console.log('');
@@ -107,12 +130,12 @@ console.log('A table on a tab that is not open is not measured at all');
 console.log('');
 console.log('A previous scale is cleared before a fresh measurement, not stacked on top of it');
 {
-  const { wrap, table } = makeWrap({ availW: 1000, naturalW: 800, naturalH: 400 });
+  const { wrap, table } = makeWrap({ availW: 1000, naturalW: 1000, naturalH: 400 });
   table.style.transform = 'scale(0.4)';           // left over from a narrower window
   wrap.style.height = '160px';
   wrap.style.overflowX = 'hidden';
   run(null, wrap);
-  is(table.style.transform, '', 'the stale scale is reset once the table fits again');
+  is(table.style.transform, '', 'the stale scale is reset once the table fits exactly again');
   is(wrap.style.height, '', 'and so is the forced height');
 }
 

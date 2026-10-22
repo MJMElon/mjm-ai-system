@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=97">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=98">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -615,12 +615,13 @@
 
 <!-- ═══ ONE WORK, ONE WEEK ═══ -->
 <div class="modal-overlay" id="we-modal">
-  <!-- The work editor is a TABLE — every plot down, every week across — so it
-       wants the screen, not a dialog's worth of it. 1600px wide and 94vh tall
-       means a nursery of fourteen plots over four weeks is read without
-       scrolling in either direction on an office monitor; the max-width and
-       max-height keep it inside a laptop. -->
-  <div class="modal" style="width:1600px;max-width:96vw;height:94vh;max-height:94vh;">
+  <!-- The work editor is a TABLE — every plot down, every week across — and
+       takes the WHOLE screen now (sizing is in plot_maintenance_styles.css,
+       #we-modal .modal), so a nursery of fourteen plots over four weeks is
+       read without scrolling in either direction, and Next below has room
+       to carry somebody straight through a nursery's four jobs without
+       closing and reopening this. -->
+  <div class="modal">
     <div class="modal-top">
       <div>
         <div class="modal-title" id="we-title">Work</div>
@@ -634,8 +635,24 @@
            set. The summary only counts them. -->
       <button class="btn schedule-edit-ctrl" id="we-add-week" onclick="weAddWeek()"
         style="margin-right:auto;">&#65291; Add Week</button>
-      <button class="btn" onclick="cancelWorkEditor()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveWorkEditor()">Reviewed &amp; Sync</button>
+      <button class="btn" onclick="cancelWorkEditor()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+        Cancel
+      </button>
+      <button class="btn btn-primary" onclick="saveWorkEditor()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        Reviewed &amp; Sync
+      </button>
+      <!-- Reviews this section the same way Reviewed & Sync does, then opens
+           the next one -- Manuring after P & D, Weeding after that, Interrow
+           last, and then the next nursery's own P & D. Greyed at the very
+           end of the whole list rather than hidden, the same choice every
+           other stepper on this page makes: a control that disappears is
+           one people stop trusting to be where it was. -->
+      <button class="btn btn-primary" id="we-next" onclick="weNext()">
+        <span id="we-next-label">Next</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </button>
     </div>
   </div>
 </div>
@@ -826,7 +843,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=139"></script>
+<script src="plot_maintenance_script.js?v=140"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

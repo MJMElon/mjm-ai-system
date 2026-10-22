@@ -4521,8 +4521,17 @@ function toggleNav() {
    columns — and so how much shrinking is needed — is different on every
    nursery's sheet. Below TABLE_FIT_MIN_SCALE it stops shrinking and the
    wrapper's own overflow-x:auto (already on every .tbl-wrap) takes back
-   over: type too small to read is worse than a scrollbar. */
+   over: type too small to read is worse than a scrollbar.
+
+   And the other direction: collapsing the side bar hands the content area
+   back a couple hundred pixels, and a table left at its natural size over
+   that spare width reads as unfinished — the office asked for it to use
+   the room rather than leave it blank. So a table NARROWER than its wrapper
+   is scaled UP too, capped at TABLE_FIT_MAX_SCALE so a four-plot nursery on
+   a wide monitor does not blow its type up past what is still a working
+   sheet. */
 const TABLE_FIT_MIN_SCALE = 0.62;
+const TABLE_FIT_MAX_SCALE = 1.4;
 
 function fitTableToWrap(wrap) {
   if (!wrap) return;
@@ -4536,15 +4545,21 @@ function fitTableToWrap(wrap) {
   if (wrap.offsetParent === null) return;
   const availW = wrap.clientWidth;
   const naturalW = table.scrollWidth;
-  if (!availW || naturalW <= availW) return;
-  const scale = availW / naturalW;
+  if (!availW || !naturalW) return;
+  let scale = availW / naturalW;
+  if (scale === 1) return;
+  // Too many columns to shrink to without losing legibility — the
+  // wrapper's own overflow-x:auto takes back over instead of this.
   if (scale < TABLE_FIT_MIN_SCALE) return;
+  if (scale > TABLE_FIT_MAX_SCALE) scale = TABLE_FIT_MAX_SCALE;
   const naturalH = table.scrollHeight;
   table.style.transformOrigin = 'top left';
   table.style.transform = `scale(${scale})`;
-  // The transform shrinks what is PAINTED, not the table's own layout box —
+  // The transform resizes what is PAINTED, not the table's own layout box —
   // without these two the wrapper would still reserve the untransformed
-  // width and height, which is the overflow this exists to get rid of.
+  // width and height, which on the way down is the overflow this exists to
+  // get rid of, and on the way up would leave the extra space clipped away
+  // rather than filled with the table it was just given to.
   wrap.style.overflowX = 'hidden';
   wrap.style.height = `${Math.ceil(naturalH * scale)}px`;
 }
@@ -9012,15 +9027,23 @@ function stockLabel(key) {
   return capNurseries().find(n => schedKey(n) === key) || key;
 }
 
+/* The nurseries this page knows, in the order the Work Schedule lists
+   them — the same list the Setting tab shows, for the same reason: the
+   nurseries this system has on record are the ones Seedling Stock has
+   plots for. Read once, by the summary AND by the Edit popup's own Next
+   button (see weNextTarget), so stepping through sections in the popup
+   visits nurseries in the same order a scroll down this tab would —
+   two readers of one list must not draw it in two different orders. */
+function scheduleNurseryNames() {
+  const names = capNurseries().filter(n => capPlots(n).length);
+  return names.length ? names : Object.keys(NURSERY_PLOTS);
+}
+
 function renderSchedSummary() {
   const box = document.getElementById('sched-summary');
   if (!box) return;
   const m = getMonth();
-  /* The same list the Setting tab shows, for the same reason: the nurseries
-     this system has on record are the ones Seedling Stock has plots for. */
-  const names = capNurseries().filter(n => capPlots(n).length);
-  const list = (names.length ? names : Object.keys(NURSERY_PLOTS))
-    .map(name => ({ label: name, key: schedKey(name) }));
+  const list = scheduleNurseryNames().map(name => ({ label: name, key: schedKey(name) }));
 
   if (!list.length) {
     box.innerHTML = '<div class="set-empty">No nurseries yet — they come from Seedling Stock.</div>';
@@ -9240,6 +9263,7 @@ function openWorkEditor(n, kind) {
   _we = { n, kind, before };
   document.getElementById('we-modal').classList.add('open');
   renderWorkEditor();
+  syncWeNextButton();
 }
 
 function closeWorkEditor() {
@@ -9250,20 +9274,86 @@ function closeWorkEditor() {
 /* Save is just "stop editing": every tick is already written. It publishes
    what is held rather than gathering it, so there is nothing here that could
    disagree with what the popup was showing. */
-/* Save both keeps the schedule and PUBLISHES it. The Schedule tab used to
-   carry a "Save Schedule" button whose only job was publishing the flat task
-   list the worker app reads (nops_maint_published); that button has gone, so
+/* Keeps the schedule and PUBLISHES it. The Schedule tab used to carry a
+   "Save Schedule" button whose only job was publishing the flat task list
+   the worker app reads (nops_maint_published); that button has gone, so
    this is where publishing happens — at the one moment somebody has said
    they are finished with a nursery's week. Without it the ticks would save
-   and the field would never be told. */
-function saveWorkEditor() {
-  if (_we) {
-    const n = _we.n, m = getMonth();
-    persistState(n, m);
-    try { saveSchedule(n, true); } catch (e) { console.warn('[maint] publish failed:', e); }
-  }
-  closeWorkEditor();
+   and the field would never be told.
+
+   Pulled out of saveWorkEditor so weNext() can do the same review-and-sync
+   on its way to the next section, rather than leaving every section but
+   the last one ticked but never published. */
+function syncCurrentWork() {
+  if (!_we) return;
+  const n = _we.n, m = getMonth();
+  persistState(n, m);
+  try { saveSchedule(n, true); } catch (e) { console.warn('[maint] publish failed:', e); }
   renderSchedSummary();
+}
+
+function saveWorkEditor() {
+  syncCurrentWork();
+  closeWorkEditor();
+}
+
+/* The nursery keys stepped through by Next — the same order the summary
+   lists them in, filtered to the ones actually on the schedule (a nursery
+   Seedling Stock knows and this page does not has nothing to open). */
+function weNurseryKeys() {
+  return scheduleNurseryNames().map(schedKey).filter(Boolean);
+}
+
+/* Where Next goes from here: the next work of this nursery, or — off the
+   end of WORKS — the first work of the next nursery. null off the end of
+   the whole list, which is what greys the button rather than wrapping
+   back to the start: looping silently back to a nursery already finished
+   reads as the list never ending. */
+function weNextTarget() {
+  if (!_we) return null;
+  const wi = WORK_KEYS.indexOf(_we.kind);
+  if (wi >= 0 && wi < WORK_KEYS.length - 1) return { n: _we.n, kind: WORK_KEYS[wi + 1] };
+  const keys = weNurseryKeys();
+  const ni = keys.indexOf(_we.n);
+  if (ni >= 0 && ni < keys.length - 1) return { n: keys[ni + 1], kind: WORK_KEYS[0] };
+  return null;
+}
+
+/* Says where Next is actually going, so the button reads "Next: Manuring"
+   rather than a bare "Next" that gives no hint it is about to leave the
+   nursery you are looking at. Greyed with a title saying why at the very
+   end, the same choice every other stepper on this page makes for the
+   same reason: a control that disappears is one people stop trusting to
+   be where it was. */
+function syncWeNextButton() {
+  const btn = document.getElementById('we-next');
+  const label = document.getElementById('we-next-label');
+  if (!btn || !label) return;
+  const target = weNextTarget();
+  if (!target) {
+    btn.disabled = true;
+    btn.title = 'This is the last section on the schedule';
+    label.textContent = 'Next';
+    return;
+  }
+  btn.disabled = false;
+  const work = WORKS.find(w => w.key === target.kind);
+  label.textContent = target.n === _we.n
+    ? `Next: ${work.label}`
+    : `Next: ${stockLabel(target.n)} · ${work.label}`;
+  btn.title = `Review and sync this section, then open ${label.textContent.replace(/^Next: /, '')}`;
+}
+
+/* Reviews and syncs the section on screen — same as Reviewed & Sync — then
+   opens the next one instead of closing, so a nursery's four jobs (and the
+   next nursery's) can be worked straight through without a close-and-reopen
+   between each. */
+function weNext() {
+  if (!_we) return;
+  const target = weNextTarget();
+  if (!target) return;
+  syncCurrentWork();
+  openWorkEditor(target.n, target.kind);
 }
 
 function cancelWorkEditor() {
