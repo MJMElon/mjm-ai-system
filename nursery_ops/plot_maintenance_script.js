@@ -306,6 +306,16 @@ const PENCIL_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" 
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
   'aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 
+/* The office's own "select all" mark — a stack of boxes behind the one
+   that is ticked — in place of the round "all" pill every column header
+   used to carry. The button stays icon-only (its title says what it
+   does); a caption under it would not fit a 132px column repeated twice a
+   week. */
+const WE_ALL_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+  'aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2" opacity=".4"/>' +
+  '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M11 14.5l2 2 4-4"/></svg>';
+
 /* Every one of these lists is typed in by a person, and every one of them is
    printed straight back into innerHTML. A plot called B<img onerror=…> is
    unlikely; a fertiliser name with an ampersand in it is not. Defined up
@@ -9830,18 +9840,24 @@ function renderWorkEditor() {
      answer. It is not: the answer differs between the two sprays and
      between rounds, and with no picker here the only place to change it
      was a sheet the Schedule tab no longer shows. */
+  /* The dose used to sit on a row of its own, under the chemical it
+     belongs to — a line the office never asked for, and one more thing to
+     scan down a column of twelve weeks to re-pair with its chemical. It is
+     beside the chemical now, on the one row, in .we-col-row. */
   const h3 = '<tr>' + weeks.map((w, i) => cols[i].map((c, k) =>
     `<th class="we-col${k === 0 && i ? ' grp' : ''}">` +
       `<div class="we-col-l">${esc(c.label)}</div>` +
-      (c.opts ? weSel(c.opts, c.val, c.onSel) : '') +
-      (c.opts ? `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
-                `<span class="we-cfg-u">${esc(c.unit || '')}</span></div>` : '') +
+      (c.opts ? `<div class="we-col-row">${weSel(c.opts, c.val, c.onSel)}` +
+                `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
+                `<span class="we-cfg-u">${esc(c.unit || '')}</span></div></div>` : '') +
       (c.opts2 ? `<div class="we-col-l we-col-l2">${esc(c.label2)}</div>` +
-                 weSel(c.opts2, c.val2, c.onSel2) +
+                 `<div class="we-col-row">${weSel(c.opts2, c.val2, c.onSel2)}` +
                  `<div class="we-col-d">${weNum(c.dose2, c.onDose2)}` +
-                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div>` : '') +
+                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div></div>` : '') +
       `<button type="button" class="we-all" onclick="weToggleAll('${kind}',${w.slot},${c.ci})" ` +
-      `title="Tick or clear every plot in this column">all</button>` +
+      `title="Tick or clear every plot in this column" aria-label="Select all plots in this column">` +
+      WE_ALL_ICON +
+      `</button>` +
     '</th>').join('')).join('') + '</tr>';
 
   const rows = plots.map(pl => '<tr><td class="we-plot">' + esc(pl) + '</td>' +

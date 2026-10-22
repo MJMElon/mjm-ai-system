@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=96">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=97">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -443,17 +443,11 @@
     <!-- CHEMICAL CALCULATOR -->
     <div id="tab-payroll" class="tab-panel">
       <div class="page-hdr"><div class="page-hdr-title" id="payroll-nursery-line"></div></div>
-      <div class="subtabs-bar">
-        <button class="subtab-btn active" id="subtab-pd"       onclick="switchPayrollView('pd')"       data-i18n="tab.pd">P &amp; D — Racun</button>
-        <button class="subtab-btn"        id="subtab-manuring" onclick="switchPayrollView('manuring')" data-i18n="tab.manuring">Manuring</button>
-        <button class="subtab-btn"        id="subtab-weeding"  onclick="switchPayrollView('weeding')"  data-i18n="tab.weeding">Weeding</button>
-        <button class="subtab-btn"        id="subtab-interrow" onclick="switchPayrollView('interrow')" data-i18n="tab.interrow">Interrow Spray</button>
-        <button class="subtab-btn"        id="subtab-loading_seedlings" onclick="switchPayrollView('loading_seedlings')" data-i18n="tab.loadingSeedlings">Loading Seedlings</button>
-        <!-- The FC Portal's own transplanting record, read here. Read-only:
-             the crew is the conductor's answer and his portal is the only
-             writer of that table. -->
-        <button class="subtab-btn"        id="subtab-transplanting" onclick="switchPayrollView('transplanting')" data-i18n="tab.transplanting">Transplanting</button>
-      </div>
+      <!-- The six job sheets live ONLY in the side bar's Worker Activity
+           entry now — the duplicate bar that sat here came off, the same
+           way Work Record's did. switchPayrollView already guards the
+           missing #subtab-* ids (_syncSubNav checks the element exists
+           before touching it), so nothing throws. -->
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--text-head);">Mega Jutamas Sdn Bhd</div>
@@ -832,7 +826,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=138"></script>
+<script src="plot_maintenance_script.js?v=139"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
