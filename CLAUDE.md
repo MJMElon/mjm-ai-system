@@ -4128,11 +4128,12 @@ Three things worth knowing:
 
 Automate Cases lists exactly the `nelos_categories` rows carrying an
 `auto_condition`. The office asked why **"From Culling Calculator - Request
-HQ Verification"** was not on it, and the answer was that **nothing raised
-it**: the category and its route to HQ Operation had been in the database
-since `RUN_ME_culling_inang.sql` was run, the table that rule needs was
-created with them, and the code was never written. One case had ever been
-filed under it, by hand, from the hub.
+HQ Verification"** was not on it, and the answer was that at that moment
+**nothing raised it**: the category and its route to HQ Operation had been in
+the database since `RUN_ME_culling_inang.sql` was run, the table that rule
+needs was created with them, and the code had never been written. One case
+had ever been filed under it, by hand, from the hub. The phone has the rule
+now — see below — and the row carries what raises it.
 
 `shared/CHECK_which_cases_the_system_raises.sql` is what answers this in one
 paste — every title, which system raises it, by hand or by itself, where its
@@ -4153,63 +4154,62 @@ aside, and the blank in the routing column is correct.
 
 ### Still over the limit after a SECOND selection is HQ, not the auditor again
 
-So the HQ rule was built, and the shape of it is the part worth keeping.
-
-The calculator had two answers — at or under ten percent the drone flight
-records a block that is ready, over the line the auditor goes and looks.
-Neither covers the block the auditor **has** looked at, which was selected
-again and is still over: asking for the same check twice is asking the same
-question twice.
+The phone had already learned it by the time the condition went on the row,
+and the shape of it is in `Barcode_Counter/src/modules/palms/cullingInang.js`
+and `cullingActions.js`. Worth knowing from this side, because the SQL is
+what makes any of it work:
 
 **The round is a fact about the GROUND, not about the phone.** The second
 round is usually keyed by somebody else, often on a different phone, so no
-phone can answer how many a block has had. It is a row per block in
-`fcportal_culling_inang`, replaced each round rather than added to, and
-`src/modules/palms/cullingInang.js` in `Barcode_Counter` is the one way in
-and out of it. Four things in it:
+phone can answer how many a block has had. It is a row per block of ground in
+`fcportal_culling_inang` — `attempt` is the round, one row updated each round
+rather than one per round, because the figure that matters is the one standing
+now. `shared/RUN_ME_culling_inang.sql` is the table and the route, and
+**without its unique index on (plot, batch) every save after the first round
+is a refused insert**, the upsert naming those two columns as its conflict
+target.
 
-- **UNKNOWN IS NOT NOUGHT.** No signal, or a read the database refused,
-  answers with the two buttons the screen has always had. Under-counting asks
-  the auditor again, which is the round that was going to happen anyway;
-  over-counting sends HQ to a plot nobody has finished looking at.
-  `priorRounds()` is one function for that and the test drives five shapes of
-  not knowing through it.
-- **The selection is read BESIDE the four gates and is not one of them.** A
-  block is on the calculator whether or not anybody has counted in it, so a
-  failed read must not empty the list — it costs the round count for that
-  load and nothing else.
-- **A ROUND IS A CASE.** A press the server deduped raised nothing, so it
-  counted nothing: otherwise two taps on one button spend the block's second
-  round and send the next real count to HQ. A refused case records nothing
-  either, because the Field Conductor will press it again. A QUEUED one does
-  count — the queue sends it, and a round the phone forgot while out of
-  signal is a round the next person cannot see.
-- **The sweep only ever runs against a SERVER list.** A block leaves the
-  calculator when its collecting status closes or its drone map lands, and
-  its selection goes with it or next season starts at round two. Swept
-  against a cached list it would delete every block somebody else has started
-  on — the same rule `closeCollectingStatus` follows for the same reason.
+Four things in the rule, each the shape of a way it goes quietly wrong:
 
-**The category is spelled in three places** — the row, the route, and
-`cullingActions.js` — because a case carries its category BY VALUE and
-`nelos_routes` matches on that string. One letter out and every HQ
-verification falls back to the Field Conductor who raised it. And **the
-specific rule goes first** in `CULLING_ACTIONS`: every block the HQ rule
-matches is also over the limit, so a list with `recheck` ahead of it would
-never reach HQ at all.
+- **HQ is NOT a band, so it is kept out of `CULLING_ACTIONS`.** The other two
+  answers are decided by where the figure lands; this one is decided by how
+  many times the plot has been round the loop. `HQ_ACTION` stands on its own
+  and the screen offers it as its own button.
+- **A figure loaded off the last round is not a new selection.** `sent_qty`
+  records what the figure was WHEN THE LAST ROUND WENT, beside the live one —
+  so still over with the SAME number is somebody looking at it again, and
+  still over with a different one is a second selection. Compared against the
+  live saved figure instead it would answer no every time, because the draft
+  is written as it is keyed, and the HQ button would never light.
+- **A DRAFT IS NOT A ROUND.** Every keystroke settles into the same row
+  within the second, so a walk is not lost to a flat battery — and that write
+  deliberately leaves `attempt` and `sent_qty` alone. Counting a draft as a
+  round would light the HQ button over a number nobody has sent anywhere.
+- **The clear only ever runs against a SERVER list.** A plot leaves the
+  calculator when its collecting status closes, and its selection goes with
+  it or next season starts at round two. Pruned against the list a phone
+  serves with no signal it would wipe the selections of every plot opened
+  since — the same rule `closeCollectingStatus` follows for the same reason.
 
-**The screen says why.** A third tone, and a line naming which selection this
-is — the button changing colour and wording on its own reads as the app
-deciding something nobody asked for, and the round is the whole of the
-reason. The CASE carries the round too, above one only: on a first selection
-that line would say nothing, because round 1 is every other case in the list.
+**The category is spelled in three places** — the `nelos_categories` row, the
+`nelos_routes` rule, and `cullingActions.js` — because a case carries its
+category BY VALUE and the routing matches on that string. One letter out and
+every HQ verification falls back to the Field Conductor who raised it.
 
-`shared/RUN_ME_culling_hq_is_automatic.sql` is the table, the condition and
-the route, and it **seeds no selection** — a round nobody counted is not a
-round, so every block starts where it stands and the first to be counted
-twice is the first that can reach HQ.
-`Barcode_Counter/tests/hq_is_the_third_way_out.cjs` holds all of it; 25 of
-its checks fail on the previous code.
+`shared/RUN_ME_culling_hq_is_automatic.sql` is the condition, with the table
+and the route re-asserted so it stands on its own, and it **seeds no
+selection**: a round nobody counted is not a round, so every block starts
+where it stands and the first to be counted twice after it is the first that
+can reach HQ. `Barcode_Counter/tests/the_plot_decides_not_one_batch.cjs` holds
+the phone half.
+
+**And this was built twice, in two sessions, on the same afternoon.** The
+second copy was thinner — one button changing wording instead of three, the
+selection written only when the button was pressed, the round read as a
+single number with no way to tell a second look from a second selection — and
+it was dropped rather than merged beside the first. Two copies of one rule is
+the fault this file has a heading about. What was genuinely missing was on the
+office side and is above: the condition on the row.
 
 ## Two repositories, one system
 
