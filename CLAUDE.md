@@ -2086,6 +2086,41 @@ code.
 inline, so the PAGE is the deploy, and this was the second print fix in a row
 that had to reach the office. One hard reload per machine.
 
+### The panel and its pictures are ONE thing
+
+*"这个移动去第三页 永远和照片在一起"* — the DAMAGE CONTROL panel printed on
+one sheet and the trays it was counted off on the next.
+
+The break was taken for the panel ALONE, and then the photos measured
+themselves against whatever was left and moved if it was under `MIN_USEFUL`.
+So a page with room for the panel and not for a picture split them: 3.11%
+over here, and the evidence for it over the page. **That figure is the one
+thing on the sheet nothing else on it can check** — which is why the
+pictures are on the sheet at all — so the reader doing the joining up is the
+whole value of the section gone.
+
+So the ask carries the pair: `_need(DMG_H + 6 + HEAD_H + MIN_USEFUL + tailH)`,
+and the photo section no longer moves itself. Same rule as the heading with
+its pictures, and the Worker Record with a plot — **the break goes before the
+run, never inside it**.
+
+Two things it cost:
+
+- **The photos are LOADED and measured before the panel is drawn**, because
+  the panel cannot ask for room it does not yet know the size of. The
+  `await`, the remark measurement and `_fitPhotos` all moved above it.
+- **The photo room can no longer go under `MIN_USEFUL`** by construction, so
+  the self-move is gone. A remark long enough to squeeze the pictures out
+  gives its own space back instead and rides on its own `_need` — one line
+  of text on a sheet by itself is a better fault than this one.
+
+**THE FIXTURE IS 38 TO 43 BAGS AND NOTHING ELSE.** That is the only window
+where the pair splits — few enough that the panel still fits at the foot of
+page two, many enough that a picture does not. The first version of this
+check used 44, which is one row past it, and passed over the broken page
+exactly as green as over the fixed one. The test sweeps that window rather
+than trusting the arithmetic.
+
 ## A lock in the stylesheet is a paint, not a gate
 
 The office verified a Seed Audit report and said *"verified 了我还是可以

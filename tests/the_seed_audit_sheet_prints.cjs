@@ -354,6 +354,13 @@ const BAGS = [
         headPage, printed.drawn[0].page);
   check('…and both pictures are on that page', printed.drawn[1].page, headPage);
 
+  /* AND THE PANEL GOES WITH THEM. The office asked for it in one line —
+     "这个移动去第三页 永远和照片在一起". 3.11% on one sheet and the trays it
+     was counted off on the next is the reader doing the joining up, over a
+     figure that exists to be checked against those very trays. */
+  const dmgPage = (printed.lines.find(l => /^DAMAGE CONTROL$/.test(l.t)) || {}).page;
+  check('the DAMAGE CONTROL panel is on that page too', dmgPage, headPage);
+
   const onScreen = await page.evaluate(() => ({
     rate: (document.getElementById('t2-dmg-pct').textContent || '').trim(),
     used: (document.getElementById('t2-dmg-used-pct').textContent || '').trim(),
@@ -428,7 +435,7 @@ const BAGS = [
   }, MANY);
   const big = await page.evaluate(() => {
     const d = window.__PDFS[0];
-    return { pages: d.pages, rows: d.tableRows, boxes: d.boxes,
+    return { pages: d.pages, rows: d.tableRows, boxes: d.boxes, drawn: d.drawn,
              lines: d.lines.map(l => ({ t: l.t, y: l.y, page: l.page })) };
   });
 
@@ -470,8 +477,52 @@ const BAGS = [
             at(/^TOTAL AUDITED QTY$/).y > 0 && at(/^TOTAL AUDITED QTY$/).y < FLOOR);
   checkTrue('the analysis heading too', at(/AUDIT ANALYSIS/).y < FLOOR);
   checkTrue('and DAMAGE CONTROL', at(/^DAMAGE CONTROL$/).y < FLOOR);
+  /* AND THE PAIR STAYS A PAIR ON A LONG SHEET TOO. This is the one that
+     put it on the office's desk: with the bag table running over, the panel
+     fitted where the first picture did not, so DAMAGE CONTROL printed alone
+     at the foot of page two and the trays followed on page three. */
+  const bigDmgPage = (big.lines.find(l => /^DAMAGE CONTROL$/.test(l.t)) || {}).page;
+  check('the damage panel and its first picture are on ONE page',
+        bigDmgPage, big.drawn[0] && big.drawn[0].page);
+  check('…and the heading between them is on it as well',
+        (big.lines.find(l => /DAMAGED SEED PHOTOS/.test(l.t)) || {}).page, bigDmgPage);
+
   const feetBig = big.lines.filter(l => /^Page \d+ of \d+$/.test(l.t));
   check('every page of the long sheet is numbered', feetBig.length, big.pages);
+
+  /* ── AND AT 40 BAGS THE PANEL USED TO BE LEFT BEHIND.
+
+        This is the shape the office printed: the bag table runs over, the
+        damage panel still fits at the foot of page two, and the pictures do
+        not — so DAMAGE CONTROL printed alone on one sheet and the trays it
+        was counted off on the next. Their words were "这个移动去第三页 永远
+        和照片在一起".
+
+        40 is not arbitrary: on the previous code the pair splits at 38 to
+        43 bags and nowhere else — few enough that the panel still fits at
+        the foot of page two, many enough that a picture does not. A count
+        outside that window passes whatever the code does, which is how the
+        first version of this check came back green on the broken page. */
+  console.log('\nThe damage panel never leaves its pictures');
+  await page.evaluate(() => {
+    document.querySelectorAll('.t8-bag-row').forEach(r => r.remove());
+    for (let i = 1; i <= 40; i++) window.addSeedAuditRow('MJ' + (100 + i), 250, 250, 250);
+    window.__PDFS = [];
+    return window.downloadSeedAuditPdf();
+  });
+  const pair = await page.evaluate(() => {
+    const d = window.__PDFS[0];
+    return { pages: d.pages, drawn: d.drawn,
+             lines: d.lines.map(l => ({ t: l.t, page: l.page })) };
+  });
+  const pg = re => (pair.lines.find(l => re.test(l.t)) || {}).page;
+  checkTrue('the sheet ran to three pages', pair.pages >= 3);
+  check('DAMAGE CONTROL is on the page its first picture is on',
+        pg(/^DAMAGE CONTROL$/), pair.drawn[0] && pair.drawn[0].page);
+  check('…and the heading between them with it',
+        pg(/DAMAGED SEED PHOTOS/), pg(/^DAMAGE CONTROL$/));
+  check('…and both pictures, not just the first',
+        pair.drawn.map(d => d.page), pair.drawn.map(() => pg(/^DAMAGE CONTROL$/)));
 
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
