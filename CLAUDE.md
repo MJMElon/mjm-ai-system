@@ -1892,6 +1892,95 @@ after it, in the same block.
 `shared_palms.js` and holds both pages to it — 26 of its checks fail on the
 previous code.
 
+## The photo IS the seed count, so the bag that agreed keeps it too
+
+A bag whose AI count tallied had its photo thrown away on the spot —
+`if (match) st.photoBase64 = null` — and the save wrote no `PhotoUrl` for
+it either. The office pressed Count Seeds, the row went green, and the
+picture the AI had just counted was gone before anybody could look at it.
+
+**"✓ Checked · AI counted 250" with nothing behind it is a claim, not a
+record**, and the bag somebody queries months later is exactly the one that
+agreed at the time. Every photo is kept and uploaded now, tally or not.
+
+It also closed a hole nobody had noticed: a row that tallied and was LATER
+edited — a corrected supplier figure, a re-keyed audit count — became a
+mismatch **with no photo**, because the photo had been dropped while it
+still agreed. The one state where the picture is most wanted was the one
+state that could not have it.
+
+**A matched row offers the BUTTON and not the picture.** This list is read
+by running down it for the row that disagrees, and a thumbnail against
+every bag is what stops that working. The mismatch keeps its picture open
+because it is the row to look at.
+
+### Recount asks WHICH, and it counts the CLEAN frame
+
+The button opened the camera, every time. So an AI count that came back
+wrong — 300 against a bag of 250, with a perfectly good photo of it on
+screen — could only be answered by walking back to the bag and laying the
+seeds out again. **The picture was never the problem; the count was.**
+
+Recount now offers *Count this photo again* or *Take a new photo*, and with
+no photo yet it goes straight to the camera, there being nothing to choose
+between. It is a dialog and not a `confirm` — two real options and a
+cancel cannot be an OK/Cancel box, and a prompt somebody dismisses out of
+habit is a cancel that looks like a save.
+
+**What is shown, and what is stored as `PhotoUrl`, carries a red dot on
+every seed the AI found.** Feeding that back would have it counting its own
+marks and agreeing with itself for ever. So the untouched frame is kept
+beside it — `sourceBase64`, uploaded as **`SrcUrl:`** — and that is what a
+recount is given. Without the upload the choice would work only until the
+page was reloaded. A row written before `SrcUrl` existed has none, and that
+row simply offers the camera the way it always did.
+
+`_uploadBagPhotos` is the ONE writer of both pictures, so the two cannot
+come to be uploaded by different rules; the save is still the fallback for
+one that failed on the day.
+
+`tests/seed_count_roundtrip.cjs` drives all of it through the real handler
+— the only stubs are the AI itself and the two canvas steps — and the one
+that matters asserts the AI was handed the clean frame and not the dotted
+one. **`seedAuditPhotoState` is a `const` at script scope and so is not on
+`window`**, which is as it should be: everything is read off the row the
+office is actually looking at.
+
+## The seed audit sheet prints, and it carries the damage
+
+The office asked for a Print button: bag numbers, the supplier figure, the
+audited figure, the totals and the variance — **and no photographs**, which
+is right, a sheet of bag pictures is not what somebody adding up a delivery
+wants in their hand.
+
+A PDF already did almost all of it, so the one thing Print must not be is a
+second drawing of the same report: two builders drift, and a printed sheet
+that disagrees with the file beside it is a difference nobody can explain
+afterwards. `_buildSeedAuditDoc()` is the document and the two buttons
+differ only in what they do with it — Download saves it, Print calls
+`autoPrint()` and loads the blob into a hidden iframe, because a popup
+blocker eating a print is a button that does nothing.
+`tests/the_seed_audit_sheet_prints.cjs` drives both and compares what each
+one drew, line for line.
+
+Three things that came out of it:
+
+- **TWO variances, where there was one.** The Variance COLUMN adds up to
+  audited − supplier; that figure was worked out and then never printed, so
+  somebody adding the column down got a number appearing nowhere in the
+  totals. It sits beside *vs expected*, which answers the other question.
+- **Damage Control is Seed Planting's figure, on the Seed Audit sheet.**
+  The audit says what arrived and the damage says how much of it was no
+  good — same delivery, and reading them off two screens is how a count
+  gets reconciled against the wrong thing. Every figure is `calcPlanting`'s
+  own, off the same three inputs, so the sheet cannot say one thing while
+  Tab 2 says another; the test asserts the two agree on the real numbers
+  (327 of 10,500 is 3.11%, 65.40% of a 500-seed FOC).
+- **The footer numbers EVERY page.** It was drawn once and said "Page 1 of
+  1", true only while the report could not run over. The damage block can
+  push it onto a second page, and a sheet whose second page has no footer
+  while the first claims to be the only one is worse than no numbering.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd
