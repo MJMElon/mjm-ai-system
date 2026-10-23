@@ -276,10 +276,34 @@ BEGIN
     SELECT 'seal', 'Seal Management', '🔖', '../seal/seal_dashboard.html', 60, true
      WHERE NOT EXISTS (SELECT 1 FROM public.nelos_modules WHERE key = 'seal');
   END IF;
+  -- The title carries its SYSTEM and the CONDITION that raises it, because
+  -- a title with neither is on no screen the office reads: both raise forms
+  -- scope the Work list on module_key, and Automate Cases lists exactly the
+  -- titles carrying an auto_condition. The first version of this insert set
+  -- neither, and the busiest automatic title in the database was invisible
+  -- on both -- RUN_ME_seal_case_category.sql repairs a database already
+  -- running. Through EXECUTE because an older nelos_categories may have
+  -- neither column, and a plain statement naming one fails at parse.
   IF to_regclass('public.nelos_categories') IS NOT NULL THEN
-    INSERT INTO public.nelos_categories (name, sort_order, default_priority)
-    SELECT 'Seal', 90, 'high'
-     WHERE NOT EXISTS (SELECT 1 FROM public.nelos_categories WHERE name = 'Seal');
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name='nelos_categories'
+                  AND column_name='module_key')
+       AND EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema='public' AND table_name='nelos_categories'
+                      AND column_name='auto_condition') THEN
+      EXECUTE $q$
+        INSERT INTO public.nelos_categories (name, module_key, sort_order, default_priority, auto_condition)
+        SELECT 'Seal', 'seal', 90, 'high',
+               'A seal check finds a problem: a range given twice, a range never received, '
+               'a range that could not be read, a range received twice, a seal collected '
+               'for another customer, or a seal collected on no consent'
+         WHERE NOT EXISTS (SELECT 1 FROM public.nelos_categories WHERE lower(name) = 'seal')
+      $q$;
+    ELSE
+      INSERT INTO public.nelos_categories (name, sort_order, default_priority)
+      SELECT 'Seal', 90, 'high'
+       WHERE NOT EXISTS (SELECT 1 FROM public.nelos_categories WHERE name = 'Seal');
+    END IF;
   END IF;
 END $cat$;
 
