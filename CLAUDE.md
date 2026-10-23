@@ -1994,6 +1994,18 @@ a picture with nothing saying so reads as a count nobody photographed.
 `_damagePhotosForPrint()` is the one accessor the sheet reads the gallery
 through, rather than reaching into another tab's state.
 
+**And the heading goes with the pictures.** The break was measured for the
+heading alone and then AGAIN, separately, for the first row of photos — so a
+page with room for the words and not for a photo printed *DAMAGED SEED
+PHOTOS* at the foot of one page and the pictures at the top of the next. **A
+heading with nothing under it reads as a section somebody forgot to fill
+in**, which on this sheet is the wrong thing to suggest. The rows are
+measured BEFORE the heading is drawn and the break is taken ahead of the
+pair — the same rule the Worker Record follows for a plot, where the break
+goes before the run and never inside it. Which page they land on after that
+is physics: a photo row is about 126pt tall, so a damage block ending within
+that of the foot takes the whole section over. The lever is `MAX_H`.
+
 ## A lock in the stylesheet is a paint, not a gate
 
 The office verified a Seed Audit report and said *"verified 了我还是可以

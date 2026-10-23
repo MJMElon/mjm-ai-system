@@ -9875,29 +9875,43 @@ Thank you.`;
             const shown = dmgPhotos.filter(Boolean);
             const missing = dmgPhotos.length - shown.length;
             if (dmgPhotos.length) {
-                if (y + 30 > pageH - 60) { doc.addPage(); y = margin + 20; }
-                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-                doc.text('DAMAGED SEED PHOTOS', margin, y); y += 14;
-
                 // Three across, each sized from its OWN shape so nothing is
                 // stretched, and a row is as tall as its tallest picture.
-                const GAP = 10, PER_ROW = 3;
+                const GAP = 10, PER_ROW = 3, HEAD_H = 14;
                 const cellW = (pageW - margin * 2 - GAP * (PER_ROW - 1)) / PER_ROW;
                 const MAX_H = 150;
+                const rows = [];
                 for (let i = 0; i < shown.length; i += PER_ROW) {
-                    const row = shown.slice(i, i + PER_ROW);
-                    const sized = row.map(p => {
+                    const sized = shown.slice(i, i + PER_ROW).map(p => {
                         const scale = Math.min(cellW / p.w, MAX_H / p.h);
                         return { p, w: p.w * scale, h: p.h * scale };
                     });
-                    const rowH = Math.max(...sized.map(s => s.h));
-                    if (y + rowH > pageH - 60) { doc.addPage(); y = margin + 20; }
-                    sized.forEach((s, j) => {
+                    rows.push({ sized, h: Math.max(...sized.map(s => s.h)) });
+                }
+
+                /* A HEADING GOES WITH THE THING UNDER IT.
+
+                   The break used to be measured for the heading alone and
+                   then again, separately, for the first row of pictures —
+                   so a sheet with room for the words and not for a photo
+                   printed DAMAGED SEED PHOTOS at the foot of one page and
+                   the pictures at the top of the next. A heading with
+                   nothing under it reads as a section somebody forgot to
+                   fill in, which on this sheet is exactly the wrong thing
+                   to suggest. Same rule the Worker Record follows for a
+                   plot: the break is taken BEFORE the run, not inside it. */
+                if (y + HEAD_H + rows[0].h > pageH - 60) { doc.addPage(); y = margin + 20; }
+                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+                doc.text('DAMAGED SEED PHOTOS', margin, y); y += HEAD_H;
+
+                rows.forEach(r => {
+                    if (y + r.h > pageH - 60) { doc.addPage(); y = margin + 20; }
+                    r.sized.forEach((s, j) => {
                         doc.addImage(s.p.dataUrl, 'JPEG',
                                      margin + j * (cellW + GAP), y, s.w, s.h);
                     });
-                    y += rowH + GAP;
-                }
+                    y += r.h + GAP;
+                });
                 if (missing > 0) {
                     doc.setFont('times', 'normal'); doc.setFontSize(8); setText(RED);
                     doc.text(missing + ' damaged seed photo(s) could not be loaded and are not on this sheet.',

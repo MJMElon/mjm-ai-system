@@ -217,7 +217,7 @@ const BAGS = [
     const d = window.__PDFS[0];
     return d && { head: d.head, body: d.body, images: d.images, printed: d.printed,
                   outputs: d.outputs, saved: d.saved, pages: d.pages, drawn: d.drawn,
-                  text: d.lines.map(l => l.t) };
+                  lines: d.lines, text: d.lines.map(l => l.t) };
   });
   checkTrue('a document was built', !!printed);
   checkTrue('…it asked to be printed', printed.printed);
@@ -285,6 +285,15 @@ const BAGS = [
      nobody photographed. */
   checkTrue('the one that would not load is SAID, not silently dropped',
             has(/1 damaged seed photo\(s\) could not be loaded/));
+
+  /* A HEADING WITH NOTHING UNDER IT reads as a section somebody forgot to
+     fill in — which on this sheet is the wrong thing to suggest. The break
+     was measured for the words and then again for the pictures, so a page
+     with room for one and not the other split them. */
+  const headPage = (printed.lines.find(l => /DAMAGED SEED PHOTOS/.test(l.t)) || {}).page;
+  check('the heading is on the same page as its first picture',
+        headPage, printed.drawn[0].page);
+  check('…and both pictures are on that page', printed.drawn[1].page, headPage);
 
   const onScreen = await page.evaluate(() => ({
     rate: (document.getElementById('t2-dmg-pct').textContent || '').trim(),
