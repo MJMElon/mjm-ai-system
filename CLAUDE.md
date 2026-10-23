@@ -3232,6 +3232,55 @@ any other check against these numbers: **somebody else may have bumped them
 the same day**, so the next letter is the one above everything in use and
 not simply `a`.
 
+## The Work list belongs to the system RAISING the case
+
+The office set "Request Transplanting Signboard" up under **FC Portal** on
+Case Routing, with a rule reading *solved by Admin Portal · Admin 2*. Then
+they opened the Nelos dock **on the FC Portal**, chose to give the case to
+Admin — and the title was nowhere in the Work list.
+
+Both raise forms filled Work from the **destination**: pick Admin and you
+were offered ADMIN's own titles. So a title filed under the system that
+raises it could not be raised from that system at all, and the one list that
+did contain it was the list for the system it was being sent to. The screen
+that files titles under the system that raises them, and a form that asked
+it the other way round, were two answers to one question.
+
+**And it was worse than a list in the wrong order.** Both forms write
+`assigned_module` themselves, and `nelos_route_case()` returns early on a
+case that already names its queue — so **every rule on Case Routing was dead
+for anything raised from a form**, which is nearly everything. The rules only
+ever reached the cases a module raises in code. A setting saved and not
+obeyed, in the one screen whose whole job is to say where work goes.
+
+So:
+
+- **The list is the raising system's** (`workList()` / `mine` in the Mobile
+  copy), falling back to the destination's only where the raising system has
+  no titles of its own — which keeps the hub working, since a case raised
+  from `index.html` has Nelos itself as its source.
+- **The destination falls OUT of the work.** Choosing it reads the rule the
+  way `nelos_route_case()` reads it — the category's own first, then the
+  section default — and fills in the system and the PIC. Changing either
+  afterwards still overrides it for that one case, which is the whole reason
+  those two selects are still there and not a line of text.
+- **WORK is asked first**, because the destination now follows from it.
+  Asked after, the form would move an answer the person had just given.
+- **The rule is applied on EVERY change of work**, not only the first:
+  picking the work is the later act, so it wins, and picking a different one
+  moves the destination again.
+
+**TWO COPIES, ONE DECISION** — `shared/shared_nelos_dock.js` and the Admin
+Portal's own `Mobile/src/components/NelosNewCase.jsx`. The dock already said
+so in its own comment ("one form on every surface, so keep the two in step")
+and the two had drifted into the same fault rather than apart, which is the
+only reason this was one fix. `tests/the_work_list_is_the_raising_system.cjs`
+lifts the real `routeFor` out of the shipped dock and holds both files to it.
+
+**The dock is loaded with no `?v=` on 49 pages**, the same exposure
+`shared_cf_select.js` has: a browser holding yesterday's copy keeps it until
+one hard reload.
+
 ## A case category is retired, never deleted — and adding it back revives it
 
 The office asked for a cross on each row of Case Routing: *"i want to delete
