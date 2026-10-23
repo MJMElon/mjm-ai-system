@@ -975,6 +975,9 @@
 
                             <!-- Save + Download PDF -->
                             <div class="flex flex-col sm:flex-row justify-end gap-3">
+                                <button type="button" id="print-t8-btn" class="px-8 py-3 bg-white border-2 border-[#3d2610] text-[#3d2610] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap" onclick="printSeedAuditPdf()">
+                                    🖨 Print
+                                </button>
                                 <button type="button" id="download-t8-pdf-btn" class="px-8 py-3 bg-white border-2 border-[#3d2610] text-[#3d2610] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap" onclick="downloadSeedAuditPdf()">
                                     📄 Download PDF
                                 </button>
@@ -8438,7 +8441,7 @@
             calcSeedAudit();
         }
 
-        function addSeedAuditRow(bagNo, supplierQty, receivedQty, aiCount, photoUrl) {
+        function addSeedAuditRow(bagNo, supplierQty, receivedQty, aiCount, photoUrl, sourceUrl) {
             seedAuditRowCount++;
             const container = document.getElementById('t8-bag-rows-container');
             const rowId = `t8-bag-row-${seedAuditRowCount}`;
@@ -8463,7 +8466,7 @@
                     <div>
                         <label class="label-style lg:hidden">AI Seed Count</label>
                         <input type="file" accept="image/*" capture="environment" class="hidden t8-photo-input" id="${rowId}-photo" onchange="handleBagPhoto(this,'${rowId}')">
-                        <button type="button" class="t8-photo-btn w-full h-[45px] rounded-lg border border-[#cdd9bd] bg-white text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8f5da] shadow-sm flex items-center justify-center gap-1" onclick="document.getElementById('${rowId}-photo').click()">📷 Count Seeds</button>
+                        <button type="button" class="t8-photo-btn w-full h-[45px] rounded-lg border border-[#cdd9bd] bg-white text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8f5da] shadow-sm flex items-center justify-center gap-1" onclick="onBagCountBtn('${rowId}')">📷 Count Seeds</button>
                         <div class="t8-verify-result hidden mt-1 text-[10px] font-black"></div>
                         <img class="t8-photo-thumb hidden mt-2 rounded-lg border border-[#e8dcc8] cursor-pointer w-full" style="max-height:160px;object-fit:contain;background:#fdfaf4" onclick="viewBagPhoto('${rowId}')" title="Tap to view full photo — red dots show each seed the AI counted" alt="bag seed photo with red dot per counted seed">
                         <div class="t8-photo-actions hidden mt-2 grid grid-cols-2 gap-2">
@@ -8476,7 +8479,11 @@
             `;
             container.insertAdjacentHTML('beforeend', html);
             if (aiCount != null && aiCount !== '' && !isNaN(Number(aiCount))) {
-                seedAuditPhotoState[rowId] = { aiCount: Number(aiCount), photoBase64: null, photoUrl: photoUrl || null };
+                seedAuditPhotoState[rowId] = {
+                    aiCount: Number(aiCount), photoBase64: null, photoUrl: photoUrl || null,
+                    // The clean picture, for a recount. See onBagCountBtn.
+                    sourceBase64: null, sourceUrl: sourceUrl || null
+                };
                 renderBagVerify(rowId);
             }
             calcSeedAudit();
@@ -8510,9 +8517,12 @@
         }
 
         // ── Per-bag AI seed count (browser-side Gemini) ───────────────────
-        // Tally rule (per spec): AI count must equal BOTH the supplier qty and
-        // the audited qty exactly → row is "Checked" and the photo is NOT kept.
-        // Any mismatch → the photo is uploaded to storage for future reference.
+        // Tally rule (per spec): the AI count must equal BOTH the supplier qty
+        // and the audited qty exactly → the row reads "Checked". Anything else
+        // is a mismatch and the row says so.
+        // EVERY photo is uploaded and kept, tally or not — it is the evidence
+        // of the count, and the bag that agreed is the one somebody queries
+        // later. renderBagVerify has the whole of that argument.
         const seedAuditPhotoState = {};
         let _seedAuditDirty = false;
         window.addEventListener('beforeunload', e => {
@@ -8784,21 +8794,42 @@
             const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
             const match = st.aiCount === supQty && st.aiCount === recQty;
             st.match = match;
-            if (match) st.photoBase64 = null; // tally → no need to keep the photo
 
+            /* THE PHOTO IS THE EVIDENCE, AND THE ROW THAT TALLIES NEEDS IT TOO.
+
+               A tally used to throw it away on the spot — the office pressed
+               Count Seeds, the row went green, and the picture the AI had just
+               counted was gone before anybody could look at it. "Checked, AI
+               counted 250" with nothing behind it is a claim and not a record,
+               and the bag somebody queries months later is exactly the one
+               that agreed at the time. Every photo is kept now.
+
+               It also closes a hole: a row that tallied and was LATER edited —
+               a corrected supplier figure, a re-keyed audit count — became a
+               mismatch with no photo, because the photo had been dropped while
+               it still agreed. */
             const src = st.photoBase64 || st.photoUrl;
+            const photoHint = () => {
+                if (st.uploadStatus === 'uploading') return ' · ⏳ saving photo…';
+                if (st.uploadStatus === 'failed')    return ' · ⚠ photo upload failed — will retry on Save';
+                if (st.photoUrl)                     return ' · 📷 photo saved';
+                if (src)                             return ' · photo will be saved on Save';
+                return '';
+            };
             if (match) {
                 el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#4a7a2e]';
-                el.innerHTML = `✓ Checked · AI counted ${st.aiCount.toLocaleString()}`;
-                hidePhotoUi();
+                el.innerHTML = `✓ Checked · AI counted ${st.aiCount.toLocaleString()}${photoHint()}`;
+                /* A MATCHED ROW OFFERS THE BUTTON AND NOT THE PICTURE. This
+                   list is read by running down it for the one row that
+                   disagrees, and a thumbnail against every bag is what stops
+                   that working — twenty open pictures to find the one that
+                   matters. The mismatch keeps its picture open BECAUSE it is
+                   the row to look at. */
+                if (thumb)   { thumb.classList.add('hidden'); thumb.removeAttribute('src'); }
+                if (actions) actions.classList.toggle('hidden', !src);
             } else {
                 el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]';
-                let hint = '';
-                if (st.uploadStatus === 'uploading')       hint = ' · ⏳ saving photo…';
-                else if (st.uploadStatus === 'failed')     hint = ' · ⚠ photo upload failed — will retry on Save';
-                else if (st.photoUrl)                      hint = ' · 📷 photo saved';
-                else                                       hint = ' · photo will be saved on Save';
-                el.innerHTML = `⚠️ Mismatch · AI counted ${st.aiCount.toLocaleString()}${hint}`;
+                el.innerHTML = `⚠️ Mismatch · AI counted ${st.aiCount.toLocaleString()}${photoHint()}`;
                 if (thumb && src) { thumb.src = src; thumb.classList.remove('hidden'); }
                 else if (thumb)   { thumb.classList.add('hidden'); thumb.removeAttribute('src'); }
                 if (actions) {
@@ -8808,6 +8839,9 @@
             }
             if (btn) btn.innerHTML = '📷 Recount';
         }
+
+        /* The chooser is opened by the BUTTON and not by this, so a page that
+           half-loaded still has a working camera. */
 
         function viewBagPhoto(rowId) {
             const st = seedAuditPhotoState[rowId];
@@ -8851,6 +8885,157 @@
             showToast('AI seed count cleared for this bag.', 'success');
         }
 
+        /* COUNTING AGAIN IS NOT THE SAME AS PHOTOGRAPHING AGAIN.
+
+           The button opened the camera, every time. So an AI count that came
+           back wrong — 300 against a bag of 250, with a perfectly good photo
+           of it on screen — could only be answered by walking back to the bag
+           and laying the seeds out a second time. The picture was never the
+           problem; the count was.
+
+           So where there is a photo to work from, Recount ASKS which:
+
+             · Count this photo again — the same picture, through the AI
+               again. Nothing is re-shot and nothing is re-laid.
+             · Take a new photo — what the button has always done.
+
+           With no photo yet there is nothing to choose between, so the button
+           goes straight to the camera as it always did.
+
+           IT COUNTS THE CLEAN PICTURE, NEVER THE DOTTED ONE. What is shown —
+           and what is uploaded as PhotoUrl — carries a red dot on every seed
+           the AI found, and feeding that back in would have it counting its
+           own marks. The untouched frame is kept beside it (`sourceBase64`,
+           uploaded as SrcUrl) and that is what a recount is given. */
+        function onBagCountBtn(rowId) {
+            const st = seedAuditPhotoState[rowId] || {};
+            const src = st.sourceBase64 || st.sourceUrl;
+            if (!src) { document.getElementById(`${rowId}-photo`).click(); return; }
+            _openRecountChooser(rowId);
+        }
+
+        let _recountChooserEl = null, _recountRowId = null;
+        function _openRecountChooser(rowId) {
+            _recountRowId = rowId;
+            if (!_recountChooserEl) {
+                const el = document.createElement('div');
+                el.id = 'recount-chooser';
+                el.style.cssText = 'position:fixed;inset:0;background:rgba(15,12,8,.55);backdrop-filter:blur(4px);z-index:9998;display:none;align-items:center;justify-content:center;padding:24px;';
+                el.innerHTML = ''
+                  + '<div style="background:#fdfaf4;border:1.5px solid #e8dcc8;border-radius:18px;padding:22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">'
+                  + '  <div style="font-size:13px;font-weight:900;color:#3d2610;letter-spacing:.04em">Recount this bag</div>'
+                  + '  <div id="recount-sub" style="font-size:11px;font-weight:700;color:#8a7a68;margin-top:4px"></div>'
+                  + '  <button type="button" id="recount-same" style="margin-top:16px;width:100%;padding:12px;border-radius:12px;border:1.5px solid #4a7a2e;background:#4a7a2e;color:#fff;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">🔁 Count this photo again</button>'
+                  + '  <div style="font-size:10px;font-weight:700;color:#8a7a68;margin-top:6px;line-height:1.5">The same picture, read by the AI again. Nothing to re-shoot.</div>'
+                  + '  <button type="button" id="recount-new" style="margin-top:14px;width:100%;padding:12px;border-radius:12px;border:1.5px solid #cdd9bd;background:#fff;color:#4a7a2e;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">📷 Take a new photo</button>'
+                  + '  <div style="font-size:10px;font-weight:700;color:#8a7a68;margin-top:6px;line-height:1.5">Replaces the picture on this row.</div>'
+                  + '  <button type="button" id="recount-cancel" style="margin-top:16px;width:100%;padding:10px;border-radius:12px;border:none;background:transparent;color:#8a7a68;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">Cancel</button>'
+                  + '</div>';
+                document.body.appendChild(el);
+                const close = () => { el.style.display = 'none'; _recountRowId = null; };
+                /* Cancel changes nothing, and so does pressing the backdrop —
+                   the one thing this dialog must not do is look like a choice
+                   when somebody dismissed it. */
+                el.addEventListener('click', e => { if (e.target === el) close(); });
+                el.querySelector('#recount-cancel').addEventListener('click', close);
+                el.querySelector('#recount-new').addEventListener('click', () => {
+                    const id = _recountRowId; close();
+                    if (id) document.getElementById(`${id}-photo`).click();
+                });
+                el.querySelector('#recount-same').addEventListener('click', () => {
+                    const id = _recountRowId; close();
+                    if (id) recountBagPhoto(id);
+                });
+                document.addEventListener('keydown', e => {
+                    if (e.key === 'Escape' && el.style.display === 'flex') close();
+                });
+                _recountChooserEl = el;
+            }
+            const st = seedAuditPhotoState[rowId] || {};
+            const sub = _recountChooserEl.querySelector('#recount-sub');
+            const bag = (document.getElementById(rowId)?.querySelector('.t8-bag-no')?.value || '').trim();
+            sub.textContent = (bag ? bag + ' · ' : '')
+                + (st.aiCount != null ? `the AI counted ${st.aiCount.toLocaleString()} last time` : 'already counted');
+            _recountChooserEl.style.display = 'flex';
+        }
+
+        /* Re-read the picture already on the row. The AI is not deterministic,
+           so a second pass on a photo it misread is a real answer and not a
+           cached one — which is the whole reason this is offered. */
+        async function recountBagPhoto(rowId) {
+            const row = document.getElementById(rowId);
+            const st = seedAuditPhotoState[rowId];
+            if (!row || !st) return;
+            const el = row.querySelector('.t8-verify-result');
+            const say = (cls, html) => { if (el) { el.className = 't8-verify-result mt-1 text-[10px] font-black ' + cls; el.innerHTML = html; } };
+            say('text-[#c07820]', '⏳ Counting the same photo again…');
+            try {
+                let source = st.sourceBase64;
+                if (!source && st.sourceUrl) source = await _seedUrlToDataUrl(st.sourceUrl);
+                if (!source) throw new Error('the original photo is not on this row any more — take a new one');
+
+                const result = await _seedCallGemini(source, SEED_COUNT_PROMPT);
+                const points = _parseSeedPoints(result.seeds);
+                const aiCount = points.length;
+                const annotated = points.length ? await _seedDrawDotsOnImage(source, points) : source;
+
+                /* A new count is a new picture of it, so the stored one has to
+                   go — leaving the old dots against a new figure is a row that
+                   disagrees with itself. The URL is dropped and re-uploaded. */
+                st.aiCount = aiCount;
+                st.confidence = result.confidence || null;
+                st.photoBase64 = annotated;
+                st.photoUrl = null;
+                st.sourceBase64 = source;
+                st.uploadStatus = 'idle';
+                _seedAuditDirty = true;
+                renderBagVerify(rowId);
+                await _uploadBagPhotos(rowId);
+            } catch (e) {
+                console.warn('Seed recount failed:', e);
+                say('text-[#a83020]', '⚠️ Recount failed: ' + (e.message || e));
+            }
+        }
+
+        // A stored photo read back as a data URL, so the AI can be given it.
+        async function _seedUrlToDataUrl(url) {
+            const blob = await fetch(url, { mode: 'cors' }).then(r => {
+                if (!r.ok) throw new Error('could not read the stored photo (' + r.status + ')');
+                return r.blob();
+            });
+            return await new Promise((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(String(fr.result));
+                fr.onerror = reject;
+                fr.readAsDataURL(blob);
+            });
+        }
+
+        /* Both pictures of a bag go up together: the dotted one people look
+           at, and the clean one a recount is given. One writer, so the two
+           cannot come to be uploaded by different rules. */
+        async function _uploadBagPhotos(rowId) {
+            const row = document.getElementById(rowId);
+            const st = seedAuditPhotoState[rowId];
+            if (!row || !st) return;
+            const bagNo  = (row.querySelector('.t8-bag-no').value || '').trim() || rowId;
+            const batchId = (document.getElementById('f-batchno').value || '').trim() || `unsaved-${Date.now()}`;
+            if (!st.photoBase64 && !st.sourceBase64) return;
+            st.uploadStatus = 'uploading';
+            renderBagVerify(rowId);
+            let ok = true;
+            if (st.photoBase64) {
+                const url = await _uploadSeedAuditPhoto(batchId, bagNo, st.photoBase64);
+                if (url) st.photoUrl = url; else ok = false;
+            }
+            if (st.sourceBase64) {
+                const url = await _uploadSeedAuditPhoto(batchId, bagNo + '-src', st.sourceBase64);
+                if (url) st.sourceUrl = url; else ok = false;
+            }
+            st.uploadStatus = ok ? 'saved' : 'failed';
+            renderBagVerify(rowId);
+        }
+
         async function handleBagPhoto(input, rowId) {
             const file = input && input.files && input.files[0];
             if (!file) return;
@@ -8872,30 +9057,20 @@
                     confidence: result.confidence || null,
                     photoBase64: annotated,
                     photoUrl: null,
+                    // The frame as the AI saw it, with no dots on it — what a
+                    // recount has to be given. See onBagCountBtn.
+                    sourceBase64: dataUrl,
+                    sourceUrl: null,
                     uploadStatus: 'idle'   // idle | uploading | saved | failed
                 };
                 _seedAuditDirty = true;
-                renderBagVerify(rowId); // computes match + discards the photo when it tallies
+                renderBagVerify(rowId); // computes match and draws the row
 
-                // Upload immediately on mismatch so the photo persists even if the
-                // user refreshes before clicking "Save Seed Audit Report". Save-time
-                // upload is still kept as a fallback (e.g. if this upload fails).
-                const supQty0 = readNumericInput(row.querySelector('.t8-supplier-qty'));
-                const recQty0 = readNumericInput(row.querySelector('.t8-received-qty'));
-                const willKeep = !(aiCount === supQty0 && aiCount === recQty0);
-                if (willKeep) {
-                    const st = seedAuditPhotoState[rowId];
-                    if (st && st.photoBase64) {
-                        st.uploadStatus = 'uploading';
-                        renderBagVerify(rowId);
-                        const bagNo  = (row.querySelector('.t8-bag-no').value || '').trim() || rowId;
-                        const batchId = (document.getElementById('f-batchno').value || '').trim() || `unsaved-${Date.now()}`;
-                        const url = await _uploadSeedAuditPhoto(batchId, bagNo, st.photoBase64);
-                        if (url) { st.photoUrl = url; st.uploadStatus = 'saved'; }
-                        else     { st.uploadStatus = 'failed'; }
-                        renderBagVerify(rowId);
-                    }
-                }
+                /* Uploaded straight away, whether it tallies or not, so the
+                   photo survives a refresh before anybody presses Save Seed
+                   Audit Report. The save-time upload is still the fallback
+                   for one that fails here. */
+                await _uploadBagPhotos(rowId);
             } catch (e) {
                 console.warn('Seed count failed:', e);
                 if (el) { el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]'; el.innerHTML = '⚠️ AI count failed: ' + (e.message || e); }
@@ -9273,22 +9448,23 @@ Thank you.`;
                     const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
                     if (!bagNo && supQty === 0 && recQty === 0) continue; // skip totally empty rows
 
-                    // Per-bag AI seed count: keep the count in the remark. When the
-                    // count does not tally with supplier + audited qty, upload the
-                    // photo to storage and keep its URL; a tally keeps no photo.
+                    /* Per-bag AI seed count: the count goes in the remark and
+                       the photo goes to storage, WHETHER OR NOT IT TALLIES.
+                       It used to be kept only on a mismatch, so a bag that
+                       agreed had its evidence thrown away — see
+                       renderBagVerify for why that is the wrong way round. */
                     let aiPart = '', photoPart = '';
                     const st = seedAuditPhotoState[row.id];
                     if (st && st.aiCount != null) {
                         aiPart = ` AiCount:${st.aiCount}.`;
-                        const tally = st.aiCount === supQty && st.aiCount === recQty;
-                        if (!tally) {
-                            let photoUrl = st.photoUrl;
-                            if (!photoUrl && st.photoBase64) {
-                                photoUrl = await _uploadSeedAuditPhoto(batchId, bagNo, st.photoBase64);
-                                if (photoUrl) { st.photoUrl = photoUrl; st.photoBase64 = null; renderBagVerify(row.id); }
-                            }
-                            if (photoUrl) photoPart = ` PhotoUrl:${photoUrl}`;
+                        if ((!st.photoUrl && st.photoBase64) || (!st.sourceUrl && st.sourceBase64)) {
+                            await _uploadBagPhotos(row.id);   // the fallback for one that failed on the day
                         }
+                        if (st.photoUrl)  photoPart += ` PhotoUrl:${st.photoUrl}`;
+                        /* SrcUrl is the clean frame, which is what Recount
+                           reads. Written last so an older reader scanning for
+                           PhotoUrl finds the same thing it always did. */
+                        if (st.sourceUrl) photoPart += ` SrcUrl:${st.sourceUrl}`;
                     }
 
                     logs.push(withEditMeta({
@@ -9338,11 +9514,20 @@ Thank you.`;
         }
 
         // ── Download Seed Audit Report as PDF ──────────────────────────────
-        function downloadSeedAuditPdf() {
+        /* ONE DOCUMENT, TWO BUTTONS — Download and Print.
+
+           Print was asked for after the PDF already existed, and the one
+           thing it must not be is a second drawing of the same report: two
+           builders go out of step, and a sheet that disagrees with the file
+           beside it is the kind of difference nobody can explain afterwards.
+           So the document is built here and the buttons differ only in what
+           they do with it. Same rule the audit board follows with its two
+           crosses — one writer, two ways in. */
+        function _buildSeedAuditDoc() {
             const jsPDFNS = window.jspdf || window;
             if (!jsPDFNS || !jsPDFNS.jsPDF) {
                 showToast('PDF library not loaded. Refresh and try again.', 'error');
-                return;
+                return null;
             }
             const doc = new jsPDFNS.jsPDF({ unit: 'pt', format: 'a4' });
             const pageW = doc.internal.pageSize.getWidth();
@@ -9462,15 +9647,27 @@ Thank you.`;
             const expectedVariance = totalAudited - expectedRaw;
             setFill([253, 250, 244]); setStroke(RULE_SOFT); doc.setLineWidth(0.8);
             doc.roundedRect(margin, y, pageW - margin * 2, 50, 6, 6, 'FD');
-            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(INK_SOFT);
-            doc.text('TOTAL SUPPLIER QTY', margin + 12, y + 16);
-            doc.text('TOTAL AUDITED QTY', margin + 180, y + 16);
-            doc.text('VARIANCE VS EXPECTED', margin + 360, y + 16);
-            doc.setFont('times', 'bold'); doc.setFontSize(14); setText(INK);
-            doc.text(totalSupplier.toLocaleString(), margin + 12, y + 38);
-            setText(GREEN); doc.text(totalAudited.toLocaleString(), margin + 180, y + 38);
+            /* FOUR cells, because there are two different variances and the
+               sheet used to print only one of them. The Variance COLUMN above
+               adds up to audited − supplier, and that figure was worked out
+               and then not shown — so somebody adding the column down got a
+               number that appeared nowhere in the totals. Vs expected is the
+               other question (what the D/O, the FOC and any replacement said
+               should arrive) and it stays. */
+            const cellW = (pageW - margin * 2) / 4;
+            const cx = i => margin + 12 + cellW * i;
+            doc.setFont('times', 'bold'); doc.setFontSize(8); setText(INK_SOFT);
+            doc.text('TOTAL SUPPLIER QTY', cx(0), y + 16);
+            doc.text('TOTAL AUDITED QTY',  cx(1), y + 16);
+            doc.text('VARIANCE (AUDIT − SUPPLIER)', cx(2), y + 16);
+            doc.text('VARIANCE VS EXPECTED', cx(3), y + 16);
+            doc.setFontSize(13); setText(INK);
+            doc.text(totalSupplier.toLocaleString(), cx(0), y + 38);
+            setText(GREEN); doc.text(totalAudited.toLocaleString(), cx(1), y + 38);
+            setText(totalVariance < 0 ? RED : GREEN);
+            doc.text((totalVariance >= 0 ? '+' : '') + totalVariance.toLocaleString(), cx(2), y + 38);
             setText(expectedVariance < 0 ? RED : GREEN);
-            doc.text((expectedVariance >= 0 ? '+' : '') + expectedVariance.toLocaleString(), margin + 360, y + 38);
+            doc.text((expectedVariance >= 0 ? '+' : '') + expectedVariance.toLocaleString(), cx(3), y + 38);
             y += 64;
 
             // ── ANALYSIS
@@ -9488,6 +9685,78 @@ Thank you.`;
             doc.text(shortage.toLocaleString() + ' (' + shortagePct.toFixed(2) + '%)', margin + 350, y);
             y += 18;
 
+            /* ── DAMAGE CONTROL, which is Seed Planting's figure and not this
+                  tab's.
+
+                  The office asked for it on the seed audit sheet, and it is
+                  the right place for it: the audit says what arrived, and the
+                  damage says how much of what arrived was no good. Both are
+                  about the same delivery, and reading them off two screens is
+                  how a bag count gets reconciled against the wrong month.
+
+                  EVERY FIGURE IS calcPlanting's OWN, worked out the same way
+                  on the same three inputs, so the sheet cannot say one thing
+                  and Tab 2 another. */
+            const focRaw = parseInt(document.getElementById('display-foc-qty')?.dataset.raw || 0);
+            const damagedQty = readNumericInput('t2-damaged');
+            const doRaw = expectedRaw - focRaw;
+            const focPct = doRaw > 0 ? (focRaw / doRaw) * 100 : 0;
+            const dmgRate = expectedRaw > 0 ? (damagedQty / expectedRaw) * 100 : 0;
+            const focUsed = focRaw > 0 ? (damagedQty / focRaw) * 100 : null;
+
+            // A block of its own, so it is never split across the fold.
+            const DMG_H = 96;
+            if (y + DMG_H > pageH - 60) { doc.addPage(); y = margin + 20; }
+
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+            doc.text('DAMAGE CONTROL', margin, y); y += 14;
+
+            const boxW = pageW - margin * 2;
+            setFill([253, 250, 244]); setStroke(RULE_SOFT); doc.setLineWidth(0.8);
+            doc.roundedRect(margin, y, boxW, DMG_H - 14, 6, 6, 'FD');
+
+            // The bar, on the same scale the screen uses.
+            const barX = margin + 12, barY = y + 14, barW = boxW - 24, barH = 22;
+            const chartMax = Math.max(focRaw, damagedQty) * 1.1 || 1;
+            setFill([232, 220, 200]);
+            doc.roundedRect(barX, barY, barW, barH, 4, 4, 'F');
+            const fillW = Math.min(barW, (damagedQty / chartMax) * barW);
+            if (fillW > 0) {
+                // Over the allowance is the one state that has to read as red.
+                setFill(damagedQty > focRaw ? RED : [106, 168, 60]);
+                doc.roundedRect(barX, barY, Math.max(fillW, 4), barH, 4, 4, 'F');
+            }
+            if (fillW > 60) {
+                doc.setFont('times', 'bold'); doc.setFontSize(10); setText([255, 255, 255]);
+                doc.text(dmgRate.toFixed(2) + '%', barX + 8, barY + 15);
+            }
+            // The FOC allowance, dashed, exactly as the screen draws it.
+            const focX = barX + Math.min(barW - 2, (focRaw / chartMax) * barW);
+            setStroke(RED); doc.setLineWidth(1);
+            doc.setLineDashPattern([2, 2], 0);
+            doc.line(focX, barY - 4, focX, barY + barH + 4);
+            doc.setLineDashPattern([], 0);
+            doc.setFont('times', 'bold'); doc.setFontSize(7); setText(RED);
+            doc.text('FOC ' + focPct.toFixed(2) + '% (' + focRaw.toLocaleString() + ' seeds)',
+                     Math.min(focX + 3, pageW - margin - 110), barY - 6);
+
+            let dy = barY + barH + 16;
+            doc.setFont('times', 'bold'); doc.setFontSize(8); setText(INK_SOFT);
+            doc.text('DAMAGED SEEDS', barX, dy);
+            doc.text('DAMAGE RATE', pageW - margin - 12, dy, { align: 'right' });
+            dy += 14;
+            doc.setFont('times', 'bold'); doc.setFontSize(13);
+            setText(RED); doc.text(damagedQty.toLocaleString(), barX, dy);
+            setText([192, 120, 32]);
+            doc.text(expectedRaw > 0 ? dmgRate.toFixed(2) + '%' : '—', pageW - margin - 12, dy, { align: 'right' });
+            dy += 14;
+            doc.setFont('times', 'normal'); doc.setFontSize(8); setText(INK_SOFT);
+            doc.text('FOC allowance used: ' + (focUsed == null ? '—' : focUsed.toFixed(2) + '% of FOC limit')
+                     + (damagedQty > focRaw && focRaw > 0
+                        ? '   ·   EXCESS: ' + (damagedQty - focRaw).toLocaleString() + ' seed(s) over the allowance'
+                        : ''), barX, dy);
+            y += DMG_H + 6;
+
             // ── REMARK
             const remarkText = (document.getElementById('t8-batch-remark').value || '').trim();
             if (remarkText) {
@@ -9498,17 +9767,72 @@ Thank you.`;
                 doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
             }
 
-            // ── FOOTER
-            const footerY = pageH - 30;
-            setStroke(RULE_SOFT); doc.setLineWidth(0.5);
-            doc.line(margin, footerY - 10, pageW - margin, footerY - 10);
-            doc.setFont('times', 'normal'); doc.setFontSize(8); setText(INK_FAINT);
-            doc.text('MJM Nursery · MEGA JUTAMAS SDN BHD · Confidential', margin, footerY);
-            doc.text('Page 1 of 1', pageW - margin, footerY, { align: 'right' });
+            /* ── FOOTER, on EVERY page.
+                  It used to be drawn once and say "Page 1 of 1", which was
+                  true for as long as the report could not run over — the
+                  damage block can push it onto a second page, and a sheet
+                  whose second page has no footer and whose first one claims
+                  to be the only one is worse than no numbering at all. */
+            const pages = doc.internal.getNumberOfPages();
+            for (let p = 1; p <= pages; p++) {
+                doc.setPage(p);
+                const footerY = pageH - 30;
+                setStroke(RULE_SOFT); doc.setLineWidth(0.5);
+                doc.line(margin, footerY - 10, pageW - margin, footerY - 10);
+                doc.setFont('times', 'normal'); doc.setFontSize(8); setText(INK_FAINT);
+                doc.text('MJM Nursery · MEGA JUTAMAS SDN BHD · Confidential', margin, footerY);
+                doc.text('Page ' + p + ' of ' + pages, pageW - margin, footerY, { align: 'right' });
+            }
 
             const filename = `Seed_Audit_${batchNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-            doc.save(filename);
-            return filename;
+            return { doc, filename };
+        }
+
+        /* An onclick that throws does nothing and says nothing — the lesson
+           the payroll claim form cost a week. Both buttons report what broke
+           in words somebody can read down the phone. */
+        function _seedAuditPdfGuard(what, fn) {
+            try { return fn(); }
+            catch (e) {
+                console.error('[seed audit ' + what + ']', e);
+                alert('The Seed Audit report could not be ' + what + '.\n\n' + (e && e.message ? e.message : e) +
+                      '\n\nTell the office exactly what this says — it names the fault.');
+            }
+        }
+
+        function downloadSeedAuditPdf() {
+            return _seedAuditPdfGuard('produced', () => {
+                const built = _buildSeedAuditDoc();
+                if (!built) return;
+                built.doc.save(built.filename);
+                return built.filename;
+            });
+        }
+
+        /* PRINT IS THE SAME DOCUMENT, SENT TO THE PRINTER.
+
+           Through a hidden iframe rather than window.open, because a popup
+           blocker silently eating a print is a button that does nothing —
+           and `autoPrint` is what raises the dialog once the viewer has it.
+           The frame is reused, so pressing Print twice does not leave a
+           second copy of the file behind. */
+        function printSeedAuditPdf() {
+            return _seedAuditPdfGuard('printed', () => {
+                const built = _buildSeedAuditDoc();
+                if (!built) return;
+                built.doc.autoPrint();
+                const url = built.doc.output('bloburl');
+                let frame = document.getElementById('seed-audit-print-frame');
+                if (!frame) {
+                    frame = document.createElement('iframe');
+                    frame.id = 'seed-audit-print-frame';
+                    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+                    document.body.appendChild(frame);
+                }
+                frame.src = url;
+                showToast('Opening the print dialog — if nothing appears, use Download PDF and print the file.', 'warn');
+                return built.filename;
+            });
         }
 
         async function loadSeedAuditData(batchId) {
@@ -9546,7 +9870,12 @@ Thank you.`;
                         const aiCount = aiMatch ? parseInt(aiMatch[1], 10) : null;
                         const photoMatch = rmk.match(/PhotoUrl:(\S+)/);
                         const photoUrl = photoMatch ? photoMatch[1] : null;
-                        addSeedAuditRow(log.plot_name || '', supQty, log.quantity_change || 0, aiCount, photoUrl);
+                        // The clean frame, for Recount. Rows written before it
+                        // existed have none, and that row simply offers the
+                        // camera the way it always did.
+                        const srcMatch = rmk.match(/SrcUrl:(\S+)/);
+                        const sourceUrl = srcMatch ? srcMatch[1] : null;
+                        addSeedAuditRow(log.plot_name || '', supQty, log.quantity_change || 0, aiCount, photoUrl, sourceUrl);
                     });
                 } else {
                     addSeedAuditRow();
