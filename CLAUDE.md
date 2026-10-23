@@ -3957,6 +3957,93 @@ Three things worth knowing:
 
 `tests/seal_dashboard.cjs` holds the office page.
 
+## A category nothing raises is a feature somebody stopped halfway
+
+Automate Cases lists exactly the `nelos_categories` rows carrying an
+`auto_condition`. The office asked why **"From Culling Calculator - Request
+HQ Verification"** was not on it, and the answer was that **nothing raised
+it**: the category and its route to HQ Operation had been in the database
+since `RUN_ME_culling_inang.sql` was run, the table that rule needs was
+created with them, and the code was never written. One case had ever been
+filed under it, by hand, from the hub.
+
+`shared/CHECK_which_cases_the_system_raises.sql` is what answers this in one
+paste — every title, which system raises it, by hand or by itself, where its
+rule sends it, and how many cases carry that exact wording. **Run it before
+adding a condition to anything**: a condition on a title nothing raises puts
+a promise on that page the system does not keep, which is the same fault one
+level along.
+
+It found a second one in the same run. The **Seal** title read `(no system)`
+— `RUN_ME_seal_management.sql` inserted it with neither a `module_key` nor an
+`auto_condition`, so the busiest automatic title in the database was on
+neither screen: both raise forms scope the Work list on the module, and
+Automate Cases needs the condition. `seal_raise_case()` opens a case by
+itself on six conditions. `RUN_ME_seal_case_category.sql` repairs it and that
+file now sets both. **Where a seal case goes still needs no rule** — the
+function names the queue on the case itself, so `nelos_route_case()` steps
+aside, and the blank in the routing column is correct.
+
+### Still over the limit after a SECOND selection is HQ, not the auditor again
+
+So the HQ rule was built, and the shape of it is the part worth keeping.
+
+The calculator had two answers — at or under ten percent the drone flight
+records a block that is ready, over the line the auditor goes and looks.
+Neither covers the block the auditor **has** looked at, which was selected
+again and is still over: asking for the same check twice is asking the same
+question twice.
+
+**The round is a fact about the GROUND, not about the phone.** The second
+round is usually keyed by somebody else, often on a different phone, so no
+phone can answer how many a block has had. It is a row per block in
+`fcportal_culling_inang`, replaced each round rather than added to, and
+`src/modules/palms/cullingInang.js` in `Barcode_Counter` is the one way in
+and out of it. Four things in it:
+
+- **UNKNOWN IS NOT NOUGHT.** No signal, or a read the database refused,
+  answers with the two buttons the screen has always had. Under-counting asks
+  the auditor again, which is the round that was going to happen anyway;
+  over-counting sends HQ to a plot nobody has finished looking at.
+  `priorRounds()` is one function for that and the test drives five shapes of
+  not knowing through it.
+- **The selection is read BESIDE the four gates and is not one of them.** A
+  block is on the calculator whether or not anybody has counted in it, so a
+  failed read must not empty the list — it costs the round count for that
+  load and nothing else.
+- **A ROUND IS A CASE.** A press the server deduped raised nothing, so it
+  counted nothing: otherwise two taps on one button spend the block's second
+  round and send the next real count to HQ. A refused case records nothing
+  either, because the Field Conductor will press it again. A QUEUED one does
+  count — the queue sends it, and a round the phone forgot while out of
+  signal is a round the next person cannot see.
+- **The sweep only ever runs against a SERVER list.** A block leaves the
+  calculator when its collecting status closes or its drone map lands, and
+  its selection goes with it or next season starts at round two. Swept
+  against a cached list it would delete every block somebody else has started
+  on — the same rule `closeCollectingStatus` follows for the same reason.
+
+**The category is spelled in three places** — the row, the route, and
+`cullingActions.js` — because a case carries its category BY VALUE and
+`nelos_routes` matches on that string. One letter out and every HQ
+verification falls back to the Field Conductor who raised it. And **the
+specific rule goes first** in `CULLING_ACTIONS`: every block the HQ rule
+matches is also over the limit, so a list with `recheck` ahead of it would
+never reach HQ at all.
+
+**The screen says why.** A third tone, and a line naming which selection this
+is — the button changing colour and wording on its own reads as the app
+deciding something nobody asked for, and the round is the whole of the
+reason. The CASE carries the round too, above one only: on a first selection
+that line would say nothing, because round 1 is every other case in the list.
+
+`shared/RUN_ME_culling_hq_is_automatic.sql` is the table, the condition and
+the route, and it **seeds no selection** — a round nobody counted is not a
+round, so every block starts where it stands and the first to be counted
+twice is the first that can reach HQ.
+`Barcode_Counter/tests/hq_is_the_third_way_out.cjs` holds all of it; 25 of
+its checks fail on the previous code.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
