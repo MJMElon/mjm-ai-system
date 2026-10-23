@@ -1635,25 +1635,26 @@
 
                                     <!-- Saved records table -->
                                     <div id="t3-saved-rows-table" class="hidden mb-4">
-                                        <div class="hidden md:grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
-                                            <span class="text-[#3a7ab4]">Plot / Destination</span>
-                                            <span>Date</span>
-                                            <span class="text-[#c07820]">Source Tray</span>
-                                            <span class="text-[#4a7a2e]">Qty</span>
-                                            <!-- WHAT AN APPROVED ADJUSTMENT TAKES OFF THIS ROW.
-                                                 An adjustment on Transplanting is raised against a
-                                                 plot and split across the trays that filled it, so
-                                                 a row here — one tray into one plot — is exactly
-                                                 what one of those shares is about. Showing it only
-                                                 in the strip at the top of the tab meant the list
-                                                 underneath still read the pre-adjustment figure,
-                                                 and the two disagreed on the same screen. -->
-                                            <span class="text-[#a83020]">Adjustment</span>
-                                            <span class="text-[#4a7a2e]">Final Qty</span>
-                                            <span>Map</span>
-                                            <span></span>
-                                        </div>
-                                        <div id="t3-saved-rows-list" class="space-y-1"></div>
+                                        <!-- THE COLUMN HEADS MOVED INSIDE THE CARDS.
+
+                                             The list used to be one flat row per TRAY, with the
+                                             plot and the date repeated down the left of every one
+                                             of them, so this header could sit above the lot. It is
+                                             one card per plot per day now — the plot and the day
+                                             are said once, in the card head, and the columns under
+                                             them are the card own: tray, qty, adjustment, final.
+                                             A header at this level would be a header for columns
+                                             that are no longer at this level.
+
+                                             WHAT AN APPROVED ADJUSTMENT TAKES OFF A ROW is still a
+                                             column, and still per TRAY: an adjustment on
+                                             Transplanting is raised against a plot and split
+                                             across the trays that filled it, so a tray row is
+                                             exactly what one of those shares is about. Showing it
+                                             only in the strip at the top of the tab meant the list
+                                             underneath still read the pre-adjustment figure, and
+                                             the two disagreed on the same screen. -->
+                                        <div id="t3-saved-rows-list" class="space-y-3"></div>
                                         <!-- What the rows above add up to. The Qty column is
                                              the one figure on this list anybody adds in their
                                              head, and the allocation percentage on the Save
@@ -1661,15 +1662,16 @@
                                              is worked out FROM belongs on the screen, under
                                              its own column, not left to be summed by eye.
                                              Same grid as the rows, so it lines up with them. -->
-                                        <div class="hidden md:grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 items-center px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8] t-tidy">
+                                        <!-- A flex row rather than the cards grid: the columns
+                                             belong to a card now, so a total laid out on their
+                                             tracks would be lining up with nothing. -->
+                                        <div class="hidden md:flex flex-wrap items-baseline gap-4 px-3 pt-3 mt-2 border-t-2 border-[#e8dcc8] t-tidy">
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
-                                            <span></span>
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" id="t3-saved-total-count">—</span>
+                                            <span class="flex-1"></span>
+                                            <span class="text-[9px] font-black text-[#a83020] uppercase tracking-widest" id="t3-saved-total-adj">—</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty">0</span>
-                                            <span class="text-base font-black text-[#8a7a68] tabular-nums" id="t3-saved-total-adj">—</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-final">0</span>
-                                            <span></span>
-                                            <span></span>
                                         </div>
                                         <!-- Phone: the same two figures, without the columns. -->
                                         <div class="md:hidden flex items-baseline justify-between px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8]">
@@ -5207,6 +5209,209 @@
                         const tableDiv  = document.getElementById('t3-saved-rows-table');
                         const tableList = document.getElementById('t3-saved-rows-list');
                         tableList.innerHTML = '';
+
+                        /* ══ ONE CARD PER PLOT PER DAY ═══════════════════════
+
+                           The list was one flat row per TRAY, so two trays into
+                           N15 on the 17th read as two unrelated records with the
+                           plot and the date repeated down the side of both. The
+                           office asked for them merged, and the reason is a
+                           figure that was nowhere on the screen: a plot has ONE
+                           drone map, its count is the whole plot, and nothing
+                           here added the trays up to compare against it. "N15 的
+                           drone map 是 1057 但是我看不到 N15 总数."
+
+                           THE CARD IS A VIEW, NOT A ROW. Every tray keeps its
+                           own ledger row, because the tray is what the D-Tone
+                           split, the tray stock and every adjustment read. The
+                           card groups them and nothing else.
+
+                           AND THE SIGNATURE WAS ALREADY PER PLOT. Life of
+                           Seedlings keys a transplanting sign-off on the PLOT
+                           alone — `_losLineRowKey` is `_losPlotKey(plot_name)`
+                           and `_losVerKey` cuts the stored key at its first bar
+                           — so signing one of N15 two tray rows already marked
+                           the whole of N15 signed on the report. Two buttons,
+                           one signature. The card carries `.t3-saved-row` and
+                           the review key now, which makes that true on the
+                           screen as well as underneath it. */
+                        const _t3DayOf = (log) => {
+                            const m = log.remark ? log.remark.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) : null;
+                            if (m) return m[1];
+                            if (log.transaction_date) return String(log.transaction_date).slice(0, 10);
+                            return log.created_at ? log.created_at.split('T')[0] : '—';
+                        };
+                        const _t3CardKeyOf = (log) => `${String(log.plot_name || '').trim()}|${_t3DayOf(log)}`;
+
+                        /* THE DRONE COUNT IS THE CHECKER OWN FIGURE, and it is
+                           a row of its own rather than a column on the tray
+                           rows: it belongs to the card, and a card-level figure
+                           written onto every tray row is a figure that drifts
+                           the first time one of them is edited. Newest wins,
+                           the same shape DTone_Nursery_Qty already uses.
+                           Read failing is not a reason to draw nothing — the
+                           card is still the point. */
+                        const t3CardData = {};
+                        try {
+                            const { data: cardRows } = await _supabase.from('shared_inventory_logs')
+                                .select('*').eq('batch_name', batch)
+                                .eq('transaction_type', 'Transplant_Card')
+                                .order('created_at', { ascending: true });
+                            (cardRows || []).forEach(r => {
+                                const dm = r.remark ? r.remark.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) : null;
+                                const day = dm ? dm[1] : (r.transaction_date ? String(r.transaction_date).slice(0, 10) : '—');
+                                const mm  = r.remark ? r.remark.match(/MapUrl:(\S+)/) : null;
+                                const by  = r.remark ? r.remark.match(/DroneBy:(\S+)/) : null;
+                                const at  = r.remark ? r.remark.match(/DroneAt:(\S+)/) : null;
+                                /* THE COUNT LIVES IN THE REMARK, and quantity_change is
+                                   nought on every one of these rows. Two reasons, and
+                                   the first is enough: the column may be NOT NULL, so a
+                                   card with no count yet could not be written at all.
+                                   The second is that a figure in quantity_change is a
+                                   figure some future reader sums — and this one is what
+                                   a drone saw, not seedlings that moved. */
+                                const dqm = r.remark ? r.remark.match(/DroneQty:(\d+)/) : null;
+                                t3CardData[`${String(r.plot_name || '').trim()}|${day}`] = {
+                                    id: r.id,
+                                    droneQty: dqm ? parseInt(dqm[1], 10) : null,
+                                    droneBy: by ? by[1] : '', droneAt: at ? at[1] : '',
+                                    mapUrl: mm ? mm[1] : ''
+                                };
+                            });
+                        } catch (e) {
+                            console.warn('[tab3] could not read the transplant cards:', e && e.message);
+                        }
+
+                        const t3Cards = [];
+                        const t3CardByKey = {};
+                        txLogs.forEach(log => {
+                            const key = _t3CardKeyOf(log);
+                            if (!t3CardByKey[key]) {
+                                t3CardByKey[key] = { key, plot: log.plot_name, day: _t3DayOf(log),
+                                                     qty: 0, trays: 0, rowMapUrl: '', i: t3Cards.length };
+                                t3Cards.push(t3CardByKey[key]);
+                            }
+                            const c = t3CardByKey[key];
+                            c.qty += (log.quantity_change || 0);
+                            c.trays++;
+                            // The INSERT time, not the day the work was done: the
+                            // question T3_DRONE_FROM asks is whether this record
+                            // existed before the rule, which is the same question
+                            // the census rule asks.
+                            if (log.created_at && log.created_at > (c.newest || '')) c.newest = log.created_at;
+                            /* A map attached to a TRAY row, from before the map
+                               belonged to the card. It is still the plot own
+                               picture, so it stands in for the card one rather
+                               than being left where only Edit could reach it. */
+                            if (!c.rowMapUrl && log.remark) {
+                                const mm = log.remark.match(/MapUrl:(\S+)/);
+                                if (mm) c.rowMapUrl = mm[1];
+                            }
+                        });
+
+                        t3Cards.forEach(c => {
+                            /* The destination type is IN the plot name — a
+                               premium or d-tone card is keyed on its tray name
+                               — so the icon the flat rows carried per row
+                               belongs to the card, said once. */
+                            const pn      = String(c.plot || '').toUpperCase();
+                            const cIcon   = pn === 'PREMIUM CARE' ? '⭐' : pn === 'DOUBLE-TONE' ? '🎯' : '🌿';
+                            const cTone   = pn === 'PREMIUM CARE' ? 'text-[#9333ea]' : pn === 'DOUBLE-TONE' ? 'text-[#0891b2]' : 'text-[#3a7ab4]';
+                            const saved   = t3CardData[c.key] || {};
+                            const mapUrl  = saved.mapUrl || c.rowMapUrl || '';
+                            /* ── A CARD FROM BEFORE THE RULE READS AS TALLYING ──
+
+                               An old card has the drone PICTURE and no NUMBER:
+                               the count only ever lived inside the map, and
+                               nobody ever typed it. Left alone it would read
+                               "not counted yet" on every record the nursery has
+                               ever made, which is a prompt nobody can act on
+                               against work that was checked at the time.
+
+                               The office settled it — 旧卡的 DRONE CHECK 就 =
+                               total transplant 就好 — and they are right that
+                               those totals were agreed against the map on the
+                               day. So an old card SHOWS the total as its drone
+                               count and reads as tallying.
+
+                               IT IS SHOWN AND NEVER STORED. Writing it would
+                               make a figure the page invented indistinguishable
+                               from one somebody read off a picture, for ever,
+                               and this system has a rule about that: a default
+                               written into a saved row turns a question nobody
+                               was asked into an answer. Key a real count and
+                               THAT is written, and takes over.
+
+                               The line is the deploy, the same one the census
+                               rule draws: a record that existed before the rule
+                               is not owed anything by it. A card made after it
+                               still has to be counted by a person. */
+                            const T3_DRONE_FROM = '2026-10-23T00:00:00Z';
+                            const fromBefore = !!c.newest && c.newest < T3_DRONE_FROM;
+                            const keyed   = !(saved.droneQty === null || saved.droneQty === undefined);
+                            const dq      = keyed ? saved.droneQty : (fromBefore ? c.qty : '');
+                            const counted = dq !== '';
+                            const gap     = counted ? (Number(dq) - c.qty) : 0;
+                            const tallies = counted && gap === 0;
+                            const verdict = !counted
+                                ? `<span class="text-[9px] font-bold text-[#8a7a68]">Not counted yet</span>`
+                                : tallies
+                                  ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest">✓ Tallies</span>`
+                                  : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white text-[9px] font-black text-[#a83020] uppercase tracking-widest">${gap > 0 ? '+' : ''}${gap.toLocaleString()} vs the trays</span>`;
+                            const paneTone = !counted ? 'bg-[#f0f6fb] border-[#bcd5e8]'
+                                           : tallies  ? 'bg-[#eef5e8] border-[#c3d9c0]'
+                                                      : 'bg-[#fbeae7] border-[#ecc7c0]';
+                            const mapCell = mapUrl
+                                ? `<button type="button" title="View drone map" onclick="_openDocViewer('${_escAttr(mapUrl)}', '${_escAttr('Drone Map — ' + (c.plot || ''))}')"
+                                        class="mjm-review-allow flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
+                                       <span class="w-9 h-9 rounded-lg border border-[#e8dcc8] bg-cover bg-center shrink-0 flex items-center justify-center text-sm bg-white group-hover:border-[#c07820] transition-colors"
+                                             ${/\.pdf(\?|$)/i.test(mapUrl) ? '' : `style="background-image:url('${mapUrl}')"`}>${/\.pdf(\?|$)/i.test(mapUrl) ? '📄' : ''}</span>
+                                       <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820]">Map</span>
+                                   </button>`
+                                : `<button type="button" onclick="document.getElementById('t3-cardmap-${c.i}').click()"
+                                        class="px-3 py-2 bg-white border border-[#e8dcc8] text-[#8a7a68] text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#f3efe6] transition-colors">+ Map</button>`;
+                            tableList.insertAdjacentHTML('beforeend', `
+                                <div class="t3-saved-row border border-[#e8dcc8] rounded-2xl" data-review-key="${_escAttr(c.key)}">
+                                    <div class="flex flex-wrap items-center gap-4 px-4 py-3 bg-[#f6f1e6] border-b border-[#e8dcc8] rounded-t-2xl">
+                                        <div class="font-black text-lg ${cTone}">${cIcon} ${_escAttr(c.plot || '—')}</div>
+                                        <div>
+                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Date</div>
+                                            <div class="text-sm font-bold text-[#3d2610]">${_escAttr(c.day)}</div>
+                                        </div>
+                                        <div class="flex-1 min-w-[1rem]"></div>
+                                        <div class="text-right">
+                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</div>
+                                            <div class="text-2xl font-black text-[#4a7a2e] tabular-nums leading-tight" id="t3-cardtotal-${c.i}">${c.qty.toLocaleString()}</div>
+                                        </div>
+                                        <div class="flex flex-col gap-1.5 px-3 py-2 border rounded-xl ${paneTone}">
+                                            <span class="text-[8px] font-black text-[#3a7ab4] uppercase tracking-widest">Drone Check</span>
+                                            <div class="flex items-center gap-2">
+                                                <label class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest" for="t3-droneqty-${c.i}">Drone Count</label>
+                                                <input id="t3-droneqty-${c.i}" type="number" min="0" placeholder="—" value="${dq}"
+                                                       class="input-style !w-24 !py-1.5 text-right font-black tabular-nums"
+                                                       onchange="saveT3DroneQty(${c.i})">
+                                                ${mapCell}
+                                            </div>
+                                            <div>${verdict}</div>
+                                            <input type="file" id="t3-cardmap-${c.i}" class="hidden" accept="image/*,.pdf" onchange="uploadT3CardMap(${c.i}, this)">
+                                        </div>
+                                    </div>
+                                    <div class="hidden md:grid grid-cols-[1.5fr_0.9fr_0.9fr_0.9fr_90px] gap-2 px-4 pt-2 pb-1 bg-[#fffdf8] text-[8px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy">
+                                        <span class="text-[#c07820]">Source Tray</span>
+                                        <span class="text-[#4a7a2e]">Qty</span>
+                                        <span class="text-[#a83020]">Adjustment</span>
+                                        <span class="text-[#4a7a2e]">Final Qty</span>
+                                        <span></span>
+                                    </div>
+                                    <div id="t3-cardbody-${c.i}"></div>
+                                </div>
+                            `);
+                            /* The key, the plot and the day, kept where the save
+                               handlers can read them without walking the DOM. */
+                            const el = tableList.lastElementChild;
+                            if (el) { el.dataset.cardPlot = c.plot || ''; el.dataset.cardDay = c.day; el.dataset.cardIndex = String(c.i); }
+                        });
+
                         txLogs.forEach((log, idx) => {
                             const destType = log.transaction_type === 'Transplanted_Premium' ? 'premium'
                                            : log.transaction_type === 'Transplanted_DoubleTone' ? 'doubletone' : 'main';
@@ -5282,13 +5487,17 @@
                                             <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
                                             <button type="button" onclick="deleteT3Row(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
                                         </div>`;
-                            tableList.insertAdjacentHTML('beforeend', `
-                                <div class="t3-saved-row${rowLocked ? ' mjm-locked' : ''}" data-review-key="${reviewKey}">
+                            /* INTO ITS CARD, not onto the end of the list. The
+                               card already says the plot and the day, so the
+                               row says what only IT knows: the tray, what came
+                               out of it, and what an adjustment took off. */
+                            const _cardFor = t3CardByKey[_t3CardKeyOf(log)];
+                            const _body = _cardFor ? document.getElementById(`t3-cardbody-${_cardFor.i}`) : null;
+                            (_body || tableList).insertAdjacentHTML('beforeend', `
+                                <div class="t3-tray-row${rowLocked ? ' mjm-locked' : ''}" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
-                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
-                                        <div class="font-black text-sm ${color}">${icon} ${log.plot_name}</div>
-                                        <div class="text-sm font-bold text-[#3d2610]">${dateStr}${rowLocked ? ' 🔒' : ''}</div>
-                                        <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}</div>
+                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[1.5fr_0.9fr_0.9fr_0.9fr_90px] gap-2 items-center px-4 py-2 border-t border-[#f0e7d6] hover:bg-[#fffdf8] transition-colors t-tidy">
+                                        <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}${rowLocked ? ' 🔒' : ''}</div>
                                         <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
                                         <!-- Filled in by paintT3Adjustments() rather than here:
                                              the adjustments are read after this list is drawn, so
@@ -5300,7 +5509,6 @@
                                              data-qty="${log.quantity_change || 0}"
                                              data-counted="${log.transaction_type === 'Transplanted' ? '1' : '0'}">—</div>
                                         <div class="t3-final-cell text-sm font-black text-[#4a7a2e] tabular-nums">${log.quantity_change.toLocaleString()}</div>
-                                        <div>${rowMapCell}</div>
                                         ${fromAdjCell}
                                     </div>
                                     ${fromAdjMatch ? `<!-- Fix Tray, for a row an adjustment wrote. cf-skip so the
@@ -5503,8 +5711,13 @@
         }
 
         async function deleteT3Row(idx) {
-            const rows = document.querySelectorAll('.t3-saved-row');
-            if (rows[idx] && rows[idx].classList.contains('mjm-locked')) return alert('This record is dated in a locked month (Month Lock Calendar, System Settings) and cannot be deleted.');
+            /* THE ROW OWN LOCK, not the list index. `.t3-saved-row` is the
+               CARD now, so `rows[idx]` asked a different record — or none at
+               all — whether this one is dated in a locked month, and a tray
+               row inside a locked month would have deleted without a word. */
+            const rowEl  = document.getElementById(`t3-row-view-${idx}`);
+            const wrap   = rowEl && rowEl.closest('.t3-tray-row');
+            if (wrap && wrap.classList.contains('mjm-locked')) return alert('This record is dated in a locked month (Month Lock Calendar, System Settings) and cannot be deleted.');
             if (!confirm('Delete this transplanting record? This cannot be undone.')) return;
             const batchId = document.getElementById('f-batchno').value.trim();
             try {
@@ -5517,6 +5730,122 @@
                 if (error) throw error;
                 await syncOnce(3, syncTab3);
             } catch(e) { alert('❌ Error deleting: ' + e.message); }
+        }
+
+        /* ══ THE CARD ROW: the checker own half of a transplanting record ══
+
+           The drone count and the drone map belong to the CARD — one plot on
+           one day — and not to a tray. They go into a row of their own,
+           `Transplant_Card`, one per plot per day, rather than onto the tray
+           rows, for two reasons and either is enough:
+
+             · saveTransplantTab REPLACES every Transplanted row of the batch
+               on each save, so anything written onto one is thrown away the
+               next time the recorder touches the form;
+             · a card-level figure copied onto each of its tray rows is a
+               figure that drifts the moment one of them is edited.
+
+           THE COUNT IS IN THE REMARK and quantity_change is nought. The
+           column may be NOT NULL, so a card with a map and no count yet
+           could not otherwise be written at all — and a figure sitting in
+           quantity_change is a figure some future reader sums, while this one
+           is what a drone saw rather than seedlings that moved. */
+        async function _t3WriteCard(batchId, plot, day, patch) {
+            const { data: rows, error: readErr } = await _supabase.from('shared_inventory_logs')
+                .select('*').eq('batch_name', batchId)
+                .eq('transaction_type', 'Transplant_Card')
+                .eq('plot_name', plot)
+                .order('created_at', { ascending: false });
+            if (readErr) throw readErr;
+            const dayOf = (r) => {
+                const m = r.remark ? r.remark.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) : null;
+                return m ? m[1] : (r.transaction_date ? String(r.transaction_date).slice(0, 10) : '');
+            };
+            const mine = (rows || []).find(r => dayOf(r) === day);
+            const curQty = mine && mine.remark && mine.remark.match(/DroneQty:(\d+)/)
+                         ? parseInt(mine.remark.match(/DroneQty:(\d+)/)[1], 10) : null;
+            const curMap = mine && mine.remark && mine.remark.match(/MapUrl:(\S+)/)
+                         ? mine.remark.match(/MapUrl:(\S+)/)[1] : '';
+            const next = {
+                droneQty: Object.prototype.hasOwnProperty.call(patch, 'droneQty') ? patch.droneQty : curQty,
+                mapUrl:   Object.prototype.hasOwnProperty.call(patch, 'mapUrl')   ? patch.mapUrl   : curMap
+            };
+            const hasQty = next.droneQty !== null && next.droneQty !== undefined;
+            const remark = `Transplant card. Date: ${day}`
+                + (next.mapUrl ? ` MapUrl:${next.mapUrl}` : '')
+                + (hasQty ? ` DroneQty:${next.droneQty} DroneBy:${window.currentUserEmail || 'unknown'} DroneAt:${new Date().toISOString()}` : '');
+            const row = withEditMeta({
+                transaction_type: 'Transplant_Card',
+                batch_name: batchId,
+                plot_name: plot,
+                quantity_change: 0,
+                transaction_date: (day && day !== '—') ? day : null,
+                remark
+            });
+            if (mine) {
+                const { error } = await _supabase.from('shared_inventory_logs').update(row).eq('id', mine.id);
+                if (error) throw error;
+            } else {
+                const { error } = await _supabase.from('shared_inventory_logs').insert([row]);
+                if (error) throw error;
+            }
+        }
+
+        function _t3CardEl(i) { return document.querySelector(`.t3-saved-row[data-card-index="${i}"]`); }
+
+        /* The drone count, keyed by the person who checks. It refuses nothing:
+           a count that does not tally is shown and signed off like any other —
+           the office asked for that in those words, 可以签 不用丢todo. */
+        async function saveT3DroneQty(i) {
+            const card = _t3CardEl(i);
+            const box  = document.getElementById(`t3-droneqty-${i}`);
+            if (!card || !box) return;
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) { showToast('Nothing saved — no batch number on this report.', 'error'); return; }
+            const raw = String(box.value || '').trim();
+            if (raw !== '' && !/^\d+$/.test(raw)) {
+                showToast('Nothing saved — the drone count has to be a whole number.', 'error');
+                return;
+            }
+            try {
+                await _t3WriteCard(batchId, card.dataset.cardPlot, card.dataset.cardDay,
+                                   { droneQty: raw === '' ? null : parseInt(raw, 10) });
+                showToast('Drone count saved.', 'success');
+                await syncOnce(3, syncTab3);
+            } catch (e) {
+                showToast('Nothing saved — the drone count could not be written: '
+                          + (e && e.message ? e.message : e), 'error');
+            }
+        }
+
+        /* The map goes with the count, on the card. A tray row that already
+           carries one from before keeps it — the card falls back to it — so
+           nothing has to be moved or re-uploaded. */
+        async function uploadT3CardMap(i, input) {
+            const card = _t3CardEl(i);
+            const file = input && input.files && input.files[0];
+            if (!card || !file) { if (input) input.value = ''; return; }
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) { showToast('Nothing saved — no batch number on this report.', 'error'); input.value = ''; return; }
+            try {
+                const dataUrl = await new Promise((res, rej) => {
+                    const fr = new FileReader();
+                    fr.onload = () => res(fr.result);
+                    fr.onerror = () => rej(new Error('the file could not be read'));
+                    fr.readAsDataURL(file);
+                });
+                const url = await _uploadBatchDoc('transplant_maps', batchId,
+                                                  `${card.dataset.cardPlot}-${card.dataset.cardDay}`, dataUrl);
+                if (!url) throw new Error(window._mjmLastUploadError || 'storage would not take the file');
+                await _t3WriteCard(batchId, card.dataset.cardPlot, card.dataset.cardDay, { mapUrl: url });
+                showToast('Drone map attached.', 'success');
+                await syncOnce(3, syncTab3);
+            } catch (e) {
+                showToast('Nothing saved — the drone map could not be attached: '
+                          + (e && e.message ? e.message : e), 'error');
+            } finally {
+                if (input) input.value = '';
+            }
         }
 
         function toggleT3EditPlot(editId) {
