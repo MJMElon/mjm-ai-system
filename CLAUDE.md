@@ -2308,6 +2308,61 @@ browser and holds all of it — a plot walked late drops off, a plot nobody
 walked stays on, an audit from before the window opened clears it and is
 recorded as missed, and nothing clears a window that has not closed yet.
 
+## An alert is per BATCH, because a Plot Condition audit is
+
+The back office alert board showed nothing but Papan Tanda, and the
+office asked why Plot Condition had gone quiet. It was not a clean month.
+Every reading but one was being thrown away before any filter ran.
+
+`latestPerPlot()` keeps the newest row per thing, which is right — only
+the latest reading of a thing is its current state. **The trap is what
+"a thing" means, and it is not the same for both tables.**
+`audit_script.js` says it in its own words: *"The main nursery tracks
+work batch by batch: a plot holds several, each with its own age and its
+own audit. Pre Nursery does not work that way."* So:
+
+- **Papan Tanda** is one sign per PLOT. The plot is the unit.
+- **Plot Condition** in the main nursery is one row per plot per BATCH.
+
+Collapsing plot condition on the plot alone kept ONE row of the seven a
+plot might carry, so a rat found on batch 253 in B01 vanished the moment
+batch 268 was saved and came back clean. **And it was not even the latest
+reading**: a plot's batches go up in ONE insert — the batch queue holds
+them until the last one — so `created_at` differs by milliseconds and
+whichever sorted highest is the one that survived. Which alert you got
+was effectively arbitrary.
+
+**Papan Tanda was unaffected, and that is exactly why it was the only
+thing left on the board.** Pre Nursery's plot condition was unaffected
+too, being audited plot by plot — it simply happened to be clean, which
+is why the fault read as "only papan tanda works" rather than "only the
+main nursery is broken".
+
+Four things in the fix:
+
+- **`keyOf` is PASSED, never guessed.** The next table to use this has to
+  say what its unit is, rather than inheriting an assumption that was
+  only ever true of one of them.
+- **The query has to ask for what the key reads.** `batch` was not in the
+  select at all, so keying on it without that would have made every key
+  end in an empty string and changed nothing — the quietest possible way
+  for this fix to look applied and do nothing.
+- **The card counts PLOTS and the pill names the BATCH.** "2 plots
+  affected" is what somebody walks to; the batch is what the reading was
+  taken of, and a plot flagged on one batch and clean on the next is not
+  a flagged plot.
+- **The notification fingerprint carries the batch**, or a second flagged
+  batch on an already-flagged plot raises nothing.
+
+`tests/an_alert_is_per_batch.cjs` lifts the shipped `latestPerPlot` out
+of the page and drives the office's own case — three batches on B01, the
+rat on 253, all saved in one insert. Eight of its checks fail on the
+previous code, and two of them drive the OLD behaviour directly to show
+what it cost.
+
+**`audit_sw.js` precaches `audit_admin.html`**, so `VER` is bumped in the
+same commit or the board reaches nobody.
+
 ## A round that has passed is not carried. Only maintenance is.
 
 The board used to rescue every overdue round from the last three months
