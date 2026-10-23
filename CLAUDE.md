@@ -4162,6 +4162,93 @@ Three things worth knowing:
 
 `tests/seal_dashboard.cjs` holds the office page.
 
+## A category nothing raises is a feature somebody stopped halfway
+
+Automate Cases lists exactly the `nelos_categories` rows carrying an
+`auto_condition`. The office asked why **"From Culling Calculator - Request
+HQ Verification"** was not on it, and the answer was that at that moment
+**nothing raised it**: the category and its route to HQ Operation had been in
+the database since `RUN_ME_culling_inang.sql` was run, the table that rule
+needs was created with them, and the code had never been written. One case
+had ever been filed under it, by hand, from the hub. The phone has the rule
+now — see below — and the row carries what raises it.
+
+`shared/CHECK_which_cases_the_system_raises.sql` is what answers this in one
+paste — every title, which system raises it, by hand or by itself, where its
+rule sends it, and how many cases carry that exact wording. **Run it before
+adding a condition to anything**: a condition on a title nothing raises puts
+a promise on that page the system does not keep, which is the same fault one
+level along.
+
+It found a second one in the same run. The **Seal** title read `(no system)`
+— `RUN_ME_seal_management.sql` inserted it with neither a `module_key` nor an
+`auto_condition`, so the busiest automatic title in the database was on
+neither screen: both raise forms scope the Work list on the module, and
+Automate Cases needs the condition. `seal_raise_case()` opens a case by
+itself on six conditions. `RUN_ME_seal_case_category.sql` repairs it and that
+file now sets both. **Where a seal case goes still needs no rule** — the
+function names the queue on the case itself, so `nelos_route_case()` steps
+aside, and the blank in the routing column is correct.
+
+### Still over the limit after a SECOND selection is HQ, not the auditor again
+
+The phone had already learned it by the time the condition went on the row,
+and the shape of it is in `Barcode_Counter/src/modules/palms/cullingInang.js`
+and `cullingActions.js`. Worth knowing from this side, because the SQL is
+what makes any of it work:
+
+**The round is a fact about the GROUND, not about the phone.** The second
+round is usually keyed by somebody else, often on a different phone, so no
+phone can answer how many a block has had. It is a row per block of ground in
+`fcportal_culling_inang` — `attempt` is the round, one row updated each round
+rather than one per round, because the figure that matters is the one standing
+now. `shared/RUN_ME_culling_inang.sql` is the table and the route, and
+**without its unique index on (plot, batch) every save after the first round
+is a refused insert**, the upsert naming those two columns as its conflict
+target.
+
+Four things in the rule, each the shape of a way it goes quietly wrong:
+
+- **HQ is NOT a band, so it is kept out of `CULLING_ACTIONS`.** The other two
+  answers are decided by where the figure lands; this one is decided by how
+  many times the plot has been round the loop. `HQ_ACTION` stands on its own
+  and the screen offers it as its own button.
+- **A figure loaded off the last round is not a new selection.** `sent_qty`
+  records what the figure was WHEN THE LAST ROUND WENT, beside the live one —
+  so still over with the SAME number is somebody looking at it again, and
+  still over with a different one is a second selection. Compared against the
+  live saved figure instead it would answer no every time, because the draft
+  is written as it is keyed, and the HQ button would never light.
+- **A DRAFT IS NOT A ROUND.** Every keystroke settles into the same row
+  within the second, so a walk is not lost to a flat battery — and that write
+  deliberately leaves `attempt` and `sent_qty` alone. Counting a draft as a
+  round would light the HQ button over a number nobody has sent anywhere.
+- **The clear only ever runs against a SERVER list.** A plot leaves the
+  calculator when its collecting status closes, and its selection goes with
+  it or next season starts at round two. Pruned against the list a phone
+  serves with no signal it would wipe the selections of every plot opened
+  since — the same rule `closeCollectingStatus` follows for the same reason.
+
+**The category is spelled in three places** — the `nelos_categories` row, the
+`nelos_routes` rule, and `cullingActions.js` — because a case carries its
+category BY VALUE and the routing matches on that string. One letter out and
+every HQ verification falls back to the Field Conductor who raised it.
+
+`shared/RUN_ME_culling_hq_is_automatic.sql` is the condition, with the table
+and the route re-asserted so it stands on its own, and it **seeds no
+selection**: a round nobody counted is not a round, so every block starts
+where it stands and the first to be counted twice after it is the first that
+can reach HQ. `Barcode_Counter/tests/the_plot_decides_not_one_batch.cjs` holds
+the phone half.
+
+**And this was built twice, in two sessions, on the same afternoon.** The
+second copy was thinner — one button changing wording instead of three, the
+selection written only when the button was pressed, the round read as a
+single number with no way to tell a second look from a second selection — and
+it was dropped rather than merged beside the first. Two copies of one rule is
+the fault this file has a heading about. What was genuinely missing was on the
+office side and is above: the condition on the row.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
