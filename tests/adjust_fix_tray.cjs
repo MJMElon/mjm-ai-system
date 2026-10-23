@@ -154,17 +154,27 @@ const CAL_ROWS = [
   await page.waitForSelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]',
                              { state: 'attached', timeout: 10000 });
 
-  const b8Index = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-adj-cell'))
-         .findIndex(c => c.getAttribute('data-plot') === 'B8'));
+  /* THE INDEX IS READ OFF THE ROW, NEVER COUNTED IN THE DOM. Every id on a
+     tray row -- the Fix Tray form among them -- carries the row's place in
+     the LEDGER list, and the two used to be the same number because the rows
+     were drawn in that order. The list is one card per plot per day now, so
+     the rows are grouped by plot and the DOM order is the cards' order. A
+     position counted here and spent on `t3-adjtray-form-<n>` opens some
+     other plot's form. */
+  const b8Index = await page.evaluate(() => {
+    const cell = document.querySelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]');
+    const view = cell && cell.closest('.t3-tray-row').querySelector('[id^="t3-row-view-"]');
+    return view ? Number(view.id.replace('t3-row-view-', '')) : -1;
+  });
+  check('B8 own row was found', b8Index >= 0, true);
 
   console.log('\nThe row is locked, except for the tray');
   const cell = await page.evaluate(i => {
-    const row = document.querySelectorAll('#t3-saved-rows-list .t3-saved-row')[i];
+    const view = document.getElementById('t3-row-view-' + i);
     /* innerHTML with the <br>s turned into spaces, not innerText: tab 3 is
        not the open tab here so innerText returns '' for it, and textContent
        runs the lines together across the <br>s. */
-    return row.querySelector('[id^="t3-row-view-"]').lastElementChild.innerHTML
+    return view.lastElementChild.innerHTML
               .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ')
               .replace(/\s+/g, ' ').trim();
   }, b8Index);
@@ -172,8 +182,8 @@ const CAL_ROWS = [
   checkTrue('and offers Fix Tray', /fix tray/i.test(cell));
   check('but no Edit or Del', /\bedit\b|\bdel\b/i.test(cell.replace(/fix tray/i, '')), false);
   check('the tray currently reads as it was mistyped',
-        await page.evaluate(i => document.querySelectorAll('#t3-saved-rows-list .t3-adj-cell')[i]
-                                        .getAttribute('data-tray'), b8Index), '4');
+        await page.evaluate(() => document.querySelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]')
+                                          .getAttribute('data-tray')), '4');
 
   console.log('\nOpening it starts on what the row says now');
   await page.evaluate(i => window.toggleT3AdjTray(i), b8Index);
@@ -254,6 +264,24 @@ const CAL_ROWS = [
   await page.waitForTimeout(250);
   check('a non-admin cannot change it',
         await page.evaluate(() => window.__UPDATES.length), 0);
+
+  console.log('\nThe tray it opens on is found by NAME, not by column number');
+  /* It read `children[2]`, which was the tray while every row carried the
+     plot and the day as well. The cards took those up onto the card head and
+     the third cell became the Adjustment, so Fix Tray opened on "+140" --
+     offering a quantity as the answer to "which tray". The next column that
+     moves must not be able to do it again. */
+  {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'operation',
+                                                               'operation_batch_detail.html'), 'utf8');
+    const fn = src.slice(src.indexOf('function toggleT3AdjTray'));
+    /* THE COMMENTS GO FIRST. The function explains in prose what it used to
+       read, so a plain search for `children[2]` finds the explanation and
+       reports the fault still there. */
+    const body = fn.slice(0, fn.indexOf('\n        }')).replace(/\/\/[^\n]*/g, '');
+    checkTrue('it asks for the tray cell by its class', /\.t3-tray-cell/.test(body));
+    check('…and indexes no cell by position', /children\[\d/.test(body), false);
+  }
 
   console.log('\nSaving the Transplanting tab does not threaten the row');
   /* The row an adjustment wrote is not one of the form's rows, and saving

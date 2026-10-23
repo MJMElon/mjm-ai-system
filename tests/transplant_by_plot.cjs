@@ -31,14 +31,34 @@ function checkFalse(name, got) { check(name, !!got, false); }
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const _now  = new Date();
 const YM    = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
+/* TWO CONSTANTS, ONE MONTH, and they are not interchangeable.
+   MONTH is the KEY: nops_transplant_field_records.schedule_month is stored
+   short, and loadTransplantField looks a record up with .eq() on it.
+   MONTH_LABEL is what a heading says, because the office asked for the
+   month written out on anything somebody signs. One constant doing both
+   jobs is the trap this file fell into -- four heading checks failed over
+   "Oct 2026" where the page now reads "October 2026", with the figures
+   underneath them all correct. */
 const MONTH = `${MONTHS[_now.getMonth()]} ${_now.getFullYear()}`;
+const MONTH_FULL = ['January','February','March','April','May','June','July',
+                    'August','September','October','November','December'][_now.getMonth()];
+const MONTH_LABEL = `${MONTH_FULL} ${_now.getFullYear()}`;
 const JOBS  = ['blanket_spray', 'lining', 'polybag_fill', 'transplanting'];
 
+/* `checked_at` is on every row by default, and it has to be: ONLY A CHECKED
+   ROW REACHES THE CLAIM, so a fixture without it answers "3 plots are
+   waiting to be Checked, so nothing is counted here yet" and every
+   assertion about the table below fails over the gate rather than over the
+   thing it is asking about. The gate has its own tests
+   (the_transplant_claim_asks_the_office.cjs, transplant_claim_empty.cjs);
+   this file is about the SHARE and the by-plot table, so its rows are
+   agreed. A row that is deliberately held passes `checked_at: null`. */
 const rec = (o) => Object.assign({
   work_date: `${YM}-09`, nursery_name: 'UNN 2', plot_name: 'N3',
   batch_name: '252', work_type: 'transplanting', jenis: 'Memindah anak sawit ke polibeg besar',
   schedule_month: MONTH, source_qty: 6685, workers: [{ name: 'Ali Bin Hassan', qty: null }],
-  total_qty: null
+  total_qty: null,
+  checked_at: `${YM}-20T02:00:00Z`, checked_by: 'office@mjmnursery.com'
 }, o);
 
 /* N3 — the whole plot, all four jobs, every one carrying the plot's 6,685.
@@ -220,7 +240,7 @@ const read = (page) => page.evaluate(() => {
     const t = await read(page);
 
     checkTrue('the section is headed with the nursery and the month',
-              t.head.includes('UNN2') && t.head.includes(MONTH));
+              t.head.includes('UNN2') && t.head.includes(MONTH_LABEL));
     check('the columns — the plot, its maps and the amount. No Batch column: '
         + 'the label under each thumbnail already says which batch that map is',
           t.cols, ['No.', 'Plot', 'Drone Map', 'Transplanted']);
@@ -237,7 +257,7 @@ const read = (page) => page.evaluate(() => {
 
     console.log('\nThe total under it');
     checkTrue('the footer is the nursery and the month',
-              t.foot[0][0].includes('UNN2') && t.foot[0][0].includes(MONTH));
+              t.foot[0][0].includes('UNN2') && t.foot[0][0].includes(MONTH_LABEL));
     check('IT IS THE PLOTS ADDED UP — 6,685 + 900 + 1,300', t.foot[0][1], '8,885');
     checkFalse('…not the four jobs added up, which would be four times the nursery',
                t.foot[0][1] === (6685 * 4 + 900 + 1300 * 2).toLocaleString());
@@ -264,7 +284,7 @@ const read = (page) => page.evaluate(() => {
     check('no rows', u.body.length, 1);
     checkTrue('…and it says which nursery and which month is empty',
               /Nothing transplanted/i.test(u.body[0][0])
-              && u.body[0][0].includes('UNN1') && u.body[0][0].includes(MONTH));
+              && u.body[0][0].includes('UNN1') && u.body[0][0].includes(MONTH_LABEL));
     await page.close();
   }
 
@@ -319,7 +339,7 @@ const read = (page) => page.evaluate(() => {
               /TRANSPLANTING BY PLOT/.test(txt));
     checkTrue('…headed with the nursery and the month',
               pdf.lines.some((l) => /TRANSPLANTING BY PLOT/.test(l)
-                                 && /UNN2/.test(l) && l.includes(MONTH)));
+                                 && /UNN2/.test(l) && l.includes(MONTH_LABEL)));
     check('…its columns are the plot and the amount',
           ['No.', 'Plot', 'Transplanted'].filter((c) => pdf.lines.includes(c)),
           ['No.', 'Plot', 'Transplanted']);

@@ -5497,7 +5497,7 @@
                                 <div class="t3-tray-row${rowLocked ? ' mjm-locked' : ''}" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
                                     <div id="t3-row-view-${idx}" class="grid grid-cols-[1.5fr_0.9fr_0.9fr_0.9fr_90px] gap-2 items-center px-4 py-2 border-t border-[#f0e7d6] hover:bg-[#fffdf8] transition-colors t-tidy">
-                                        <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}${rowLocked ? ' 🔒' : ''}</div>
+                                        <div class="t3-tray-cell text-sm font-bold text-[#c07820] truncate">${trayStr}${rowLocked ? ' 🔒' : ''}</div>
                                         <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
                                         <!-- Filled in by paintT3Adjustments() rather than here:
                                              the adjustments are read after this list is drawn, so
@@ -5889,8 +5889,18 @@
             if (!opening) return;
             // Start on what it says now, even if that tray is not in the list
             // any more — otherwise the picker silently proposes a different one.
+            //
+            // BY CLASS, NEVER BY COLUMN NUMBER. This read `children[2]`, which
+            // was the tray while the row carried the plot and the day as well.
+            // The cards took those two columns up onto the card head, so the
+            // third cell became the ADJUSTMENT and Fix Tray opened on "+140"
+            // — the figure, offered as the answer to "which tray".
             const row = form.previousElementSibling;
-            const shown = row ? (row.children[2]?.innerText || '').trim() : '';
+            // The padlock a locked month puts on that cell is not part of the
+            // tray name, and a value with it on matches no option.
+            const shown = row
+              ? ((row.querySelector('.t3-tray-cell') || {}).innerText || '').replace('🔒', '').trim()
+              : '';
             const sel = form.querySelector('.t3-adjtray-select');
             if (sel && shown && shown !== '—') setSelectValuePreserve(sel, shown, shown);
         }
@@ -5949,8 +5959,14 @@
             const editId = `t3-edit-form-${idx}`;
             const ef = document.getElementById(editId);
             if (!ef) return;
-            const rows = document.querySelectorAll('.t3-saved-row');
-            if (rows[idx] && rows[idx].classList.contains('mjm-locked')) return alert('This record is dated in a locked month (Month Lock Calendar, System Settings) and cannot be edited.');
+            /* THE ROW OWN LOCK, not the list index — the same correction
+               deleteT3Row carries, and for the same reason. `.t3-saved-row`
+               is the CARD now, and a card never wears `.mjm-locked`, so
+               `rows[idx]` asked the wrong element and the month lock on EDIT
+               answered no every time. */
+            const _rvEl = document.getElementById(`t3-row-view-${idx}`);
+            const _wrap = _rvEl && _rvEl.closest('.t3-tray-row');
+            if (_wrap && _wrap.classList.contains('mjm-locked')) return alert('This record is dated in a locked month (Month Lock Calendar, System Settings) and cannot be edited.');
             const batchId = document.getElementById('f-batchno').value.trim();
             const breed   = document.getElementById('f-brand').value;
             const dateVal = ef.querySelector('.t3e-date').value;
@@ -15874,6 +15890,59 @@ Thank you.`;
         return head + parts[0] + '|' + parts[parts.length - 1];
       }
 
+      /* ── A CARD IS SIGNED WHEN EVERY ONE OF ITS TRAYS IS ──────────────
+
+         The first version of the alias read a sign-off on ANY of a card
+         trays as the card own, on the argument that Life of Seedlings has
+         always concluded exactly that from the same rows. It is the right
+         reading of the REPORT and the wrong one here, because it moves a
+         tick: Tab 3 was one row per tray, and the tab tick only went green
+         when every one of them was signed.
+
+         `CHECK_does_a_card_turn_a_tick_green.sql` measured it rather than
+         leaving it to judgement, and the answer was ONE card in 213 —
+         batch 263, N4 on 22 July 2026, five trays with four signed. One
+         tick would have gone green that nobody had finished signing, and
+         the office had set the bar in a sentence: a tick that was green
+         must still be green, and nothing else may move.
+
+         So a card made of tray-keyed signatures asks for all of them, and
+         answers with the NEWEST, which is the one the chip should name.
+         A card with its own key needs none of this and never reaches here.
+
+         It reads the DOM because that is the only place the card and its
+         trays are known together — the review layer loads its signatures
+         without ever seeing the rows they belong to. No list, no card, or
+         a card with no tray rows all answer NOT SIGNED, which is the safe
+         direction and the same answer the page gave before cards. */
+      function _t3TraySig(stage, key) {
+        if (stage !== 'transplanting' || !key) return null;
+        const list = document.getElementById('t3-saved-rows-list');
+        if (!list) return null;
+        const card = Array.from(list.querySelectorAll('.t3-saved-row'))
+          .find(el => (el.dataset.reviewKey || '') === key);
+        if (!card) return null;
+        const trays = Array.from(card.querySelectorAll('.t3-tray-row[data-review-key]'));
+        if (!trays.length) return null;
+        let newest = null;
+        for (const t of trays) {
+          const v = rowVerifs['transplanting::' + (t.dataset.reviewKey || '')];
+          if (!v) return null;                 // one unsigned tray is an unsigned card
+          const at = (v.last_edited_at || v.created_at || '');
+          const best = newest ? (newest.last_edited_at || newest.created_at || '') : '';
+          if (!newest || at > best) newest = v;
+        }
+        return newest;
+      }
+
+      /* The ONE way to ask whether a row is signed: its own key first, then
+         the trays behind it. Every reader goes through this, or one of them
+         reads a card as signed while another reads it as not. */
+      function _rowSig(stage, key) {
+        if (!stage || !key) return null;
+        return rowVerifs[stage + '::' + key] || _t3TraySig(stage, key) || null;
+      }
+
       /* Every tray-level row behind a card, by id. A card signed or
          rejected before the cards existed carries that row under the TRAY
          key, which a delete naming the card key does not touch — so it
@@ -16206,7 +16275,7 @@ Thank you.`;
           if (!el || !key) return;
           const fullKey = stage + '::' + key;
           const rej = rejections[fullKey];
-          const ver = rowVerifs[fullKey];
+          const ver = _rowSig(stage, key);
           const sig = rej ? 'rej:' + (rej.remark || '') : ver ? 'ver:' + (ver.last_edited_by || ver.created_at || '1') : 'none';
           let box = el.querySelector(':scope > .mjm-row-review, :scope .mjm-row-review');
           if (box && box.dataset.sig === sig) return;
@@ -16284,7 +16353,7 @@ Thank you.`;
         let rows = [];
         try { rows = cfg().filter(r => r && r.key && !r.optional); } catch (e) { return false; }
         if (!rows.length) return false;
-        return rows.every(r => !!rowVerifs[stage + '::' + r.key]);
+        return rows.every(r => !!_rowSig(stage, r.key));
       }
 
       function syncTabTicks() {
@@ -16407,7 +16476,13 @@ Thank you.`;
                 const alias = _t3CardAliasOf(x.plot_name);
                 if (x.transaction_type === 'Row_Verification') {
                   rowVerifs[x.plot_name] = x;
-                  if (alias && !rowVerifs[alias]) rowVerifs[alias] = x;
+                  /* A VERIFICATION IS NOT ALIASED HERE, and a rejection is.
+                     The card asks for EVERY one of its trays before it calls
+                     itself signed — see _t3TraySig, and the batch that made
+                     that necessary — and that cannot be decided from one row
+                     on its own. A rejection is the other way round: one tray
+                     sent back is a question about the card, and surfacing it
+                     is the safe direction. */
                 } else {
                   rejections[x.plot_name] = x;
                   if (alias && !rejections[alias]) rejections[alias] = x;
@@ -16897,7 +16972,7 @@ Thank you.`;
                            rowVerified: (tabIdx, key) => {
                              const stage = STAGE_BY_TAB[tabIdx];
                              if (!stage || !key) return false;
-                             return !!verifications[stage] || !!rowVerifs[stage + '::' + key];
+                             return !!verifications[stage] || !!_rowSig(stage, key);
                            },
                            /* Has every ROW on a tab been verified?
 
@@ -16927,7 +17002,7 @@ Thank you.`;
                              let rows = [];
                              try { rows = cfg().filter(r => r && r.key && !r.optional); } catch (e) { return false; }
                              if (!rows.length) return false;
-                             return rows.every(r => !!rowVerifs[stage + '::' + r.key]);
+                             return rows.every(r => !!_rowSig(stage, r.key));
                            } };
     })();
     </script>
