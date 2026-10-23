@@ -4249,6 +4249,62 @@ it was dropped rather than merged beside the first. Two copies of one rule is
 the fault this file has a heading about. What was genuinely missing was on the
 office side and is above: the condition on the row.
 
+## 4.4 kg on the office screen and 4,4 kg on the phone
+
+The office read a dose off their own schedule and the Field Conductor read
+the same dose off his phone, in the same week, and the two did not match.
+Nothing was wrong with the arithmetic — `weekUsage` on the phone and
+`calcMaxChem` in the office agree to the millilitre, which is why that file
+is written twice and says so.
+
+**`n.toLocaleString()` with no locale reads the DEVICE's.** On a desk in the
+office that is English; on a handset set to a language that writes decimals
+with a comma it is 4,4. So the figure was correct and the separator was the
+reader's, and there is nothing on either screen that could say so.
+
+**A dose is the harmless end of it, and that is the part worth keeping.**
+The separator swaps BOTH ways: on that same phone a plot of 6,515 seedlings
+prints **6.515**, which somebody running down a column reads as six and a
+half. Every figure in the phone app went through that call — 51 of them.
+The dose was simply the one with a decimal in it, so it was the only one
+anybody could see was wrong.
+
+So the pin is **`en-MY`**, in both repositories and under the same name,
+because one rule in two repositories under two spellings is the drift this
+file keeps finding. It was already the spelling `moneyFig` uses on the
+salary claim — the one figure in this system that was always written
+deliberately.
+
+- **The phone has ONE formatter**, `src/lib/numberText.js`, and nothing else
+  formats a figure: `numText(n, opts)`, with a value that is not a finite
+  number coming back EMPTY rather than as `NaN`, because "NaN kg" on a dose
+  line reads as an amount.
+- **A DATE IS NOT A FIGURE** and must not be swept with them. A timestamp in
+  a console table, or the Sync pill's "last synced", SHOULD read in the
+  language of whoever is looking at it. The seven of those are deliberately
+  left on the device locale, and the test asserts they are still there —
+  a sweep that takes the dates with it is the easy way to do this wrong, and
+  the first attempt here did exactly that (`new numText(Date(x), loc)`,
+  which does not even parse).
+- **Four office formatters carried the same fault**: `fmtUsage` and the
+  fertiliser kg line in `plot_maintenance_script.js` (the dose itself),
+  `fmtMoney` in `operation_reports.html` and `capFmt` in
+  `npayroll_script.js`. Money was already safe, `moneyFig` having named its
+  locale from the start.
+
+**The office side is only half swept**, and the half that is left is the
+bare integers: **584 `toLocaleString()` calls** across the office pages that
+still read the machine's locale. They have never bitten, because the office
+machines are English — but every one of them prints a plot of 6,515 as
+6.515 on a phone, and these pages are opened on phones. That is its own
+sweep and it is owed.
+
+`Barcode_Counter/tests/a_figure_reads_the_same_on_every_phone.cjs` holds the
+phone half, reading the SHIPPED files so a file added later is in the check
+without anybody listing it: no figure left on the device locale, no second
+pin anywhere, every caller importing the one formatter, and the dates
+untouched. On the previous code it names all 51 sites.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
