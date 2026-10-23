@@ -122,7 +122,16 @@ const ROWS = {
       remark: 'Transplanted from tray [P7] to Main Plot [B01]. Date: 2026-10-18' },
     { id: 5, batch_name: '271', transaction_type: 'Transplanted', plot_name: 'U03',
       quantity_change: 500, transaction_date: '2026-11-02', created_at: '2026-11-02T01:00:00Z',
-      remark: 'Transplanted from tray [P9] to Main Plot [U03]. Date: 2026-11-02' }
+      remark: 'Transplanted from tray [P9] to Main Plot [U03]. Date: 2026-11-02' },
+    /* A SIGNATURE FROM BEFORE THE CARD. Tab 3 was one row per tray, so a
+       sign-off was keyed on the tray that filled the plot. Life of
+       Seedlings cuts that key at its first bar and has always read it as
+       the whole of N15 being signed; this page must agree, or a signature
+       reads one way on the report and the other on the record. */
+    { id: 6, batch_name: '271', transaction_type: 'Row_Verification',
+      plot_name: 'transplanting::N15|main|P24|2026-10-17', quantity_change: 0,
+      created_at: '2026-10-18T02:00:00Z', last_edited_at: '2026-10-18T02:00:00Z',
+      last_edited_by: 'checker@mjmnursery.com', remark: 'verified' }
   ],
   operation_trays: [], shared_do_records: [], operation_batch_verifications: [], nelos_cases: []
 };
@@ -206,6 +215,25 @@ const checkTrue = (name, got) => check(name, !!got, true);
   check('the drone count is empty', cards[2] && cards[2].drone, '');
   checkTrue('…and it says nobody has counted it', cards[2] && /Not counted yet/i.test(cards[2].pane));
   check('…and it claims no tally', !!(cards[2] && /Tallies/i.test(cards[2].pane)), false);
+
+  /* `MJMReview.rowVerified(tabIdx, key)` is the function the page own maths
+     reads -- calcT6 and the tab ticks ask it -- so it is the honest place to
+     ask whether a card counts as signed. */
+  console.log('\nA signature keyed on the TRAY still signs its card');
+  /* The review layer boots in the page own bootstrap chain; the harness
+     gives it the same push a slow network would need. */
+  await page.evaluate(async () => { try { await window.MJMReview.boot(); } catch (e) { window.__BOOTERR = String(e); } });
+  await page.waitForTimeout(1500);
+  const signed = await page.evaluate(() => ({
+    booterr: window.__BOOTERR || '',
+    n15: window.MJMReview.rowVerified(3, 'N15|2026-10-17'),
+    b01: window.MJMReview.rowVerified(3, 'B01|2026-10-18'),
+    u03: window.MJMReview.rowVerified(3, 'U03|2026-11-02'),
+    raw: window.MJMReview.rowVerified(3, 'N15|main|P24|2026-10-17')
+  }));
+  checkTrue('the N15 card reads verified, off the old tray key', signed.n15);
+  check('…and the cards nobody signed do not', [signed.b01, signed.u03], [false, false]);
+  checkTrue('…the tray key still answers for itself, so nothing that kept it breaks', signed.raw);
 
   console.log('\nShown, never stored');
   check('drawing the old cards wrote nothing',

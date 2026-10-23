@@ -15838,6 +15838,65 @@ Thank you.`;
       // per-row in the Stock Calibration history table instead.
       const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3', 8: 'seed_audit' };
 
+      /* ── A TRANSPLANTING SIGNATURE FROM BEFORE THE CARD ───────────────
+
+         Tab 3 was one row per TRAY, and a row sign-off was keyed on the
+         tray that filled the plot:
+
+             transplanting::N15|main|P24|2026-10-17
+
+         It is one card per plot per day now, and the card is keyed
+
+             transplanting::N15|2026-10-17
+
+         Life of Seedlings never saw the difference — `_losVerKey` cuts the
+         stored key at its first bar, so it only ever read the PLOT, and
+         signing one of N15 two tray rows already marked the whole of N15
+         signed on that report. THIS page did see it, and without an alias
+         every transplanting row anybody has ever verified would have come
+         back unsigned the day the cards shipped, with the report still
+         counting them as signed: two screens disagreeing about a signature,
+         which is the worst thing either of them can do.
+
+         So an old key is ALSO filed under its card, and the FIRST one wins
+         — which is exactly what the report has always concluded from the
+         same rows. Nothing is written: the alias lives for the length of
+         the page, and the next signature anybody makes is a card one.
+
+         Returns '' for a key that is already a card, for the D-Tone box,
+         and for every other tab, so this costs them nothing. */
+      function _t3CardAliasOf(mapKey) {
+        const head = 'transplanting::';
+        const s = String(mapKey || '');
+        if (s.indexOf(head) !== 0) return '';
+        const parts = s.slice(head.length).split('|');
+        if (parts.length < 3) return '';
+        return head + parts[0] + '|' + parts[parts.length - 1];
+      }
+
+      /* Every tray-level row behind a card, by id. A card signed or
+         rejected before the cards existed carries that row under the TRAY
+         key, which a delete naming the card key does not touch — so it
+         would come back on the next load, over a withdrawal somebody had
+         just made. That is the exact fault the checked delete below this
+         was written to stop, one key-shape along.
+
+         Found by READING and comparing, never by a LIKE: `_` is a
+         single-character wildcard, and a plot name carrying one would
+         quietly match its neighbours. */
+      async function _t3StaleRowKeys(batch, type, mapKey) {
+        if (!_t3CardAliasOf(mapKey + '|x|x')) return [];   // not a card key
+        try {
+          const { data, error } = await _supabase.from('shared_inventory_logs')
+            .select('id, plot_name').eq('batch_name', batch).eq('transaction_type', type);
+          if (error) throw error;
+          return (data || []).filter(r => _t3CardAliasOf(r.plot_name) === mapKey);
+        } catch (e) {
+          console.warn('[MJMReview] could not look for tray-level sign-offs:', e && e.message);
+          return null;                                     // could not tell
+        }
+      }
+
       /* WHY A SIGN-OFF WAS REFUSED, in words somebody can act on.
 
          operation_batch_verifications carries a CHECK listing the stages
@@ -16345,8 +16404,14 @@ Thank you.`;
             }
             if (!rejRes.error) {
               (rejRes.data || []).forEach(x => { // newest wins per key
-                if (x.transaction_type === 'Row_Verification') rowVerifs[x.plot_name] = x;
-                else rejections[x.plot_name] = x;
+                const alias = _t3CardAliasOf(x.plot_name);
+                if (x.transaction_type === 'Row_Verification') {
+                  rowVerifs[x.plot_name] = x;
+                  if (alias && !rowVerifs[alias]) rowVerifs[alias] = x;
+                } else {
+                  rejections[x.plot_name] = x;
+                  if (alias && !rejections[alias]) rejections[alias] = x;
+                }
               });
             } else {
               console.warn('[MJMReview] rejections unavailable:', rejRes.error.message);
@@ -16474,6 +16539,15 @@ Thank you.`;
             .eq('transaction_type', 'Review_Rejection')
             .eq('plot_name', key);
           delete rejections[key];
+          /* And the one written under the TRAY key, from before Tab 3 was
+             one card per plot per day. It is aliased onto this card at
+             load, so a rejection cleared here would be back on the next
+             one with nothing saying why. */
+          const stale = await _t3StaleRowKeys(batch, 'Review_Rejection', key);
+          if (stale && stale.length) {
+            await _supabase.from('shared_inventory_logs').delete().in('id', stale.map(r => r.id));
+            stale.forEach(r => { delete rejections[r.plot_name]; });
+          }
         } catch (e) { console.warn('[MJMReview] could not clear rejection:', e); }
       }
 
@@ -16540,6 +16614,13 @@ Thank you.`;
         const { error } = await safeInsertLogs([row]);
         if (error) { alert('Failed to save rejection: ' + error.message); return; }
         const oldIds = (olds || []).map(r => r.id).filter(v => v != null);
+        /* A rejection written under the TRAY key, from before Tab 3 was one
+           card per plot per day. It is aliased onto the card when the page
+           loads, so leaving it here would put the OLD remark back over the
+           one just written. A read that fails only costs that tidying, so
+           it warns rather than refusing a rejection somebody has typed. */
+        const staleRej = await _t3StaleRowKeys(batch, 'Review_Rejection', mapKey);
+        (staleRej || []).forEach(r => { if (r.id != null) oldIds.push(r.id); delete rejections[r.plot_name]; });
         if (oldIds.length) await _supabase.from('shared_inventory_logs').delete().in('id', oldIds);
 
         if (rowKey) {
@@ -16548,6 +16629,14 @@ Thank you.`;
             await _supabase.from('shared_inventory_logs').delete()
               .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
             delete rowVerifs[mapKey];
+          }
+          /* …and the tray-level sign-offs the card stands for, or a row sent
+             back for amendment keeps a verified chip it no longer deserves
+             the next time the page is opened. */
+          const staleVer = await _t3StaleRowKeys(batch, 'Row_Verification', mapKey);
+          if (staleVer && staleVer.length) {
+            await _supabase.from('shared_inventory_logs').delete().in('id', staleVer.map(r => r.id));
+            staleVer.forEach(r => { delete rowVerifs[r.plot_name]; });
           }
           // …and the tab's own signature, for the same reason an unverify
           // does: a row sent back for amendment is not a checked row, so the
@@ -16666,6 +16755,19 @@ Thank you.`;
         const { error: delErr } = await _supabase.from('shared_inventory_logs').delete()
           .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
         if (delErr) { alert('Could not remove the verification: ' + delErr.message); return; }
+        /* AND THE TRAY-LEVEL ROWS THIS CARD STANDS FOR. Checked the same
+           way and for the same reason as the delete above it: a withdrawal
+           that did not happen must not look as if it did. A read that
+           cannot run says so rather than leaving the person believing the
+           signature is gone. */
+        const stale = await _t3StaleRowKeys(batch, 'Row_Verification', mapKey);
+        if (stale === null) { alert('Could not check for older sign-offs on this row — nothing was removed. Try again.'); return; }
+        if (stale.length) {
+          const { error: oldErr } = await _supabase.from('shared_inventory_logs')
+            .delete().in('id', stale.map(r => r.id));
+          if (oldErr) { alert('Could not remove the verification: ' + oldErr.message); return; }
+          stale.forEach(r => { delete rowVerifs[r.plot_name]; });
+        }
         delete rowVerifs[mapKey];
         /* A STAGE signature says "I have checked this whole tab", and every
            row on it counts as signed by it. Withdrawing one row's sign-off
