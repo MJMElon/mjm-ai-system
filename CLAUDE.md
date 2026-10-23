@@ -2173,6 +2173,59 @@ browser and holds all of it — a plot walked late drops off, a plot nobody
 walked stays on, an audit from before the window opened clears it and is
 recorded as missed, and nothing clears a window that has not closed yet.
 
+## A round that has passed is not carried. Only maintenance is.
+
+The board used to rescue every overdue round from the last three months
+onto today's list. For a plot somebody simply had not got to yet that is
+right. For a plot nobody has EVER walked it stacks: N15 had never had a
+Seedling Height audit, so the board drew **AUG R-1, AUG R-2 and SEP R-1**
+one above the other, three rows asking the same question, above October's.
+The office said it in one line — *"remove all aug and sep audit to do"* —
+and the shape of that sentence is exactly what they had said of papan's
+two rows before: *"this 2 already passed, no need to show."*
+
+So `carriedOverdue()` carries **maintenance and nothing else**. Papan
+already left for a reason of its own — a two-month roster asks about
+September in October's row, so carrying September listed the same plots
+twice — and Plot Condition and Seedling Height now follow it on the plain
+judgement rather than on the window.
+
+**MAINTENANCE IS NOT A ROUND**, which is why it stays and why that is not
+an inconsistency. Its row exists because a deadline has pending work on
+it, so there is no window to be outside of, and dropping one would hide a
+task the maintenance module can still see. The one thing that retires it
+is an audit against its `task_id`, or an admin closing it with the ×,
+which writes a record carrying a name, a date and how overdue it was. An
+automatic drop would take that record away. The office was asked and said
+so: leave the × to do it. `MAINT_OCCURRENCES` also depends on this —
+`loadMaintTimeline` appends past-month buckets precisely so
+`carriedOverdue()` can bring an older deadline forward, and its own
+comment says that.
+
+**WHAT IT COSTS, and the office chose it with this in front of them.** A
+round nobody walks shows only while its window is actually OPEN — one day
+a month on the MN plot schedule. A plot never audited at all, N15 being
+the live one, is on no row between rounds, where before it stacked. That
+is the same trade already made for the late-work rule one section up, and
+it rests on the same thing: **the FACT is not lost.** `missedRounds()`
+walks the months itself and does not read `carriedOverdue()`, so every
+missed round is still filed in Audit History under the month that owed
+it. **That is now the only place a plot nobody walks accumulates**, which
+makes the monthly report the thing to read rather than the board.
+
+Two things to know before touching it:
+
+- **It is ONE line** — `if (o.mod !== 'maint') return;` — and the test
+  asserts that line, because a rule half-applied across three modules is
+  how one of them quietly goes on stacking.
+- **`audit_sw.js` precaches `audit_home.html`**, so a change to the board
+  reaches nobody until `VER` is bumped. It is a date plus a counter
+  (`mjm-26102301`); somebody may have bumped it already today, so take the
+  next one above everything in use.
+
+`tests/papan_list_spans_two_months.cjs` holds both halves: no round module
+carries a past month, and `carriedOverdue` says so in one line.
+
 ## Papan tanda is two months wide, because a sign goes up after the plot does
 
 The papan roster was the current calendar month: the plots the ledger
@@ -2240,13 +2293,15 @@ SEP 2026 one, above October's, and said of both: *"this 2 already
 passed, no need to show."* The two-month window IS the catching up,
 which is what it was asked for.
 
-`carriedOverdue()` skips `papan` and nothing else — the other three are
-still carried, on the office's own earlier rule that a round nobody has
-walked keeps showing. **What it costs:** a plot placed two months back
-or more and never audited is on no row at all, because it is outside the
-current window and there is nothing left on the board that could ask for
-it. A round done LATE is still filed in Audit History as a missed one:
-`missedRounds()` walks the months itself and does not read that list.
+`carriedOverdue()` skipped `papan` **and nothing else** when this was
+written. It now carries MAINTENANCE and nothing else — see the section
+below, where the office extended papan's outcome to the other two rounds
+on a reason of their own. **What it costs:** a plot placed two months
+back or more and never audited is on no row at all, because it is
+outside the current window and there is nothing left on the board that
+could ask for it. A round done LATE is still filed in Audit History as a
+missed one: `missedRounds()` walks the months itself and does not read
+that list.
 
 **And the strip has to SAY which month.** Two months of plots drawn as
 one run of identical circles answers a question nobody asked — the
