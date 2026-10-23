@@ -2033,6 +2033,94 @@ goes before the run and never inside it. Which page they land on after that
 is physics: a photo row is about 126pt tall, so a damage block ending within
 that of the foot takes the whole section over. The lever is `MAX_H`.
 
+### The footer owns the bottom of the page, and nothing above it knew
+
+The office printed the sheet and said *"第一页的24被吃掉了"* — the 24 on page
+one had been eaten. It is always the 24th, and that is the tell: everything
+above the bag table is a fixed height, so the table always starts at 190 and
+its rows are always 23.5 apart.
+
+**`margin: { left, right }` leaves autoTable to pick the other two, and it
+picks 40.** Which is `pageH - 40` — **the exact line the footer draws its
+rule on**. So the table was entitled to fill page one down to 802, put its
+24th row at 765.5–789, and the footer then drew its rule 12pt under it and
+its line of type 23pt under that. On paper the tray trims that strip and the
+row goes with it.
+
+**The blocks AFTER the table were worse off, having no floor at all.** Only
+the damage block ever checked. At 53 bags the totals box was drawn at 771 —
+across the footer — and the analysis under it at **835 on an 842pt page**, so
+the one figure on the sheet claiming to be the delivery and every percentage
+beside it were simply not on it. Nothing said so, because the rows above
+them were perfectly correct.
+
+So there is **one floor** — `FOOT_H` is 60, `floorY` is `pageH - FOOT_H` —
+and three things obey it:
+
+- **The table is told all four margins**, `bottom: FOOT_H`. Page one now
+  stops at 23 rows and the 24th opens page two.
+- **`_need(h)` is asked before every block that follows**: the totals box,
+  the analysis pair, the damage block (which had its own copy of this test
+  and now shares the one) and the remark. It takes the next page WHOLE
+  rather than drawing into the band, resuming at `margin + 20` — where the
+  damage block has always resumed, so a continuation page starts in one
+  place however it was reached.
+- **The photo room is measured off `floorY`** instead of its own `pageH -
+  60`, which was the same number written twice.
+
+**A STUB THAT DOES NOT PAGINATE CANNOT SEE ANY OF THIS.** The test's
+`autoTable` recorded the body and laid every row on one page, so a row in
+the footer band — or a totals box off the foot of the sheet — passed without
+comment. It paginates now, honouring the margin it is GIVEN and falling back
+to 40 the way the real library does, at the real head and row heights (35
+and 23.5, measured off jspdf-autotable 3.8.2). Six checks fail on the
+previous code and the first of them names the office's own row:
+`p1 #24 ends 789`.
+
+And the measure is the **FLOOR, never the rule.** A check against the rule
+at 802 passes over all of it — 789 is above 802 and still inside the band —
+which is how the first version of this test came back green on the broken
+code.
+
+**The page now carries the three no-cache metas.** Every line of its code is
+inline, so the PAGE is the deploy, and this was the second print fix in a row
+that had to reach the office. One hard reload per machine.
+
+### The panel and its pictures are ONE thing
+
+*"这个移动去第三页 永远和照片在一起"* — the DAMAGE CONTROL panel printed on
+one sheet and the trays it was counted off on the next.
+
+The break was taken for the panel ALONE, and then the photos measured
+themselves against whatever was left and moved if it was under `MIN_USEFUL`.
+So a page with room for the panel and not for a picture split them: 3.11%
+over here, and the evidence for it over the page. **That figure is the one
+thing on the sheet nothing else on it can check** — which is why the
+pictures are on the sheet at all — so the reader doing the joining up is the
+whole value of the section gone.
+
+So the ask carries the pair: `_need(DMG_H + 6 + HEAD_H + MIN_USEFUL + tailH)`,
+and the photo section no longer moves itself. Same rule as the heading with
+its pictures, and the Worker Record with a plot — **the break goes before the
+run, never inside it**.
+
+Two things it cost:
+
+- **The photos are LOADED and measured before the panel is drawn**, because
+  the panel cannot ask for room it does not yet know the size of. The
+  `await`, the remark measurement and `_fitPhotos` all moved above it.
+- **The photo room can no longer go under `MIN_USEFUL`** by construction, so
+  the self-move is gone. A remark long enough to squeeze the pictures out
+  gives its own space back instead and rides on its own `_need` — one line
+  of text on a sheet by itself is a better fault than this one.
+
+**THE FIXTURE IS 38 TO 43 BAGS AND NOTHING ELSE.** That is the only window
+where the pair splits — few enough that the panel still fits at the foot of
+page two, many enough that a picture does not. The first version of this
+check used 44, which is one row past it, and passed over the broken page
+exactly as green as over the fixed one. The test sweeps that window rather
+than trusting the arithmetic.
+
 ## A lock in the stylesheet is a paint, not a gate
 
 The office verified a Seed Audit report and said *"verified 了我还是可以
