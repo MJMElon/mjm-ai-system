@@ -1994,6 +1994,33 @@ a picture with nothing saying so reads as a count nobody photographed.
 `_damagePhotosForPrint()` is the one accessor the sheet reads the gallery
 through, rather than reaching into another tab's state.
 
+**AND THE PICTURES FILL THE ROOM THEY ARE GIVEN.** Three across at a fixed
+height meant two photos sat as thumbnails at the top of an otherwise empty
+page while the page before them ended early — the office looked at it and
+said *"不要一半一半 很丑"*. So the layout is CHOSEN rather than fixed: one,
+two or three across, whichever fills the most of the room actually left.
+A photo is only ever capped by the width of its column, so **fewer across
+is a bigger picture**, and two photos on a page of their own come out a
+half-page each instead of a pair of stamps.
+
+Four things hold it together:
+
+- **A layout taller than the room may be scaled down, but only to `MIN_K`.**
+  Past that the grid is being bent to fill a page rather than laid out, and
+  six photos would come back as one tall column of slivers.
+- **The fallback scales the SHORTEST grid to the room**, never a taller one
+  scaled further. The first version measured the fallback against ten times
+  the room, which chose one-across and ran a 1,448pt block off the foot of
+  an 842pt page.
+- **The remark is measured BEFORE the pictures**, or filling the page with
+  them pushes two lines of text onto a sheet of their own.
+- **A row narrower than the page is centred**, so it reads as laid out
+  rather than as pushed into the left margin.
+
+**The test measures against the ROOM, never a pinned width.** A threshold on
+the photo size passes or fails on how many bag rows the fixture happens to
+carry, which is the one thing this layout exists to adapt to.
+
 **And the heading goes with the pictures.** The break was measured for the
 heading alone and then AGAIN, separately, for the first row of photos — so a
 page with room for the words and not for a photo printed *DAMAGED SEED

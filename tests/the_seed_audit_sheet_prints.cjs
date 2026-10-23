@@ -278,9 +278,38 @@ const BAGS = [
   const shapeOf = d => (d.w / d.h).toFixed(2);
   check('the landscape one keeps 4:3', shapeOf(printed.drawn[0]), (400 / 300).toFixed(2));
   check('…and the tall one keeps 1:2', shapeOf(printed.drawn[1]), (300 / 600).toFixed(2));
-  check('they sit side by side on one row', printed.drawn[0].y, printed.drawn[1].y);
-  checkTrue('…and the second is to the right of the first',
-            printed.drawn[1].x > printed.drawn[0].x);
+
+  /* THEY FILL THE ROOM THEY ARE GIVEN. Three across at a fixed height meant
+     two photos sat as thumbnails at the top of an otherwise empty page
+     while the page before them ended early — half a sheet of nothing either
+     side of them, which is what the office said of it. */
+  const PAGE_H = 842, FOOT = 60, TOP = 36 + 20;
+  const bottomOf = d => d.y + d.h;
+  const lastBottom = Math.max(...printed.drawn.map(bottomOf));
+  const firstTop = Math.min(...printed.drawn.map(d => d.y));
+  const used = lastBottom - firstTop;
+  checkTrue('the pictures are not stamps on an empty page — they use the room (' +
+            Math.round(used) + 'pt)', used > 200);
+  checkTrue('…and they stay inside the foot', lastBottom <= PAGE_H - FOOT + 1);
+  /* THE MEASURE IS THE ROOM, never a number pinned here. A threshold on the
+     photo width would pass or fail on how many bag rows the fixture happens
+     to carry, which is exactly the thing the layout is supposed to adapt
+     to. So: the block is compared against the room it was actually given —
+     heading to foot, less what still has to go under it. */
+  const headY = (printed.lines.find(l => /DAMAGED SEED PHOTOS/.test(l.t)) || {}).y;
+  const TAIL = 12;                       // the could-not-be-loaded line
+  const roomGiven = (PAGE_H - FOOT) - (headY + 14) - TAIL;
+  checkTrue('they fill the room they were given (' + Math.round(used) + ' of ' +
+            Math.round(roomGiven) + 'pt)', used >= roomGiven * 0.8);
+  const availW = 595 - 36 * 2;
+  checkTrue('…and no wider than the page allows',
+            printed.drawn.every(d => d.w <= availW + 1));
+  // Centred, so a row narrower than the page reads as laid out rather than
+  // as pushed into the left margin.
+  const row0 = printed.drawn.filter(d => Math.abs(d.y - printed.drawn[0].y) < 1);
+  const rowW = row0.reduce((t, d) => t + d.w, 0) + 10 * (row0.length - 1);
+  check('the row is centred', Math.round(row0[0].x),
+        Math.round(36 + Math.max(0, (availW - rowW) / 2)));
   /* A sheet short of a picture with nothing saying so reads as a count
      nobody photographed. */
   checkTrue('the one that would not load is SAID, not silently dropped',
