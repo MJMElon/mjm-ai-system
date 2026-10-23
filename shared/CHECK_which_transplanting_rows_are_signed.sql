@@ -20,10 +20,15 @@
 --
 -- WHAT A GOOD RESULT LOOKS LIKE
 --
--- Row 0 counts them: how many cards are signed, how many of those were
--- keyed on the tray (the ones this rule is about) and how many were keyed
--- on the card. A nought in the middle column means nothing was ever signed
--- under the old shape and there is nothing to check.
+-- Row 0 counts them three ways: every transplanting sign-off, how many
+-- were keyed on the TRAY (the ones this rule is about), and how many on
+-- the card. A nought in the middle means nothing was ever signed under
+-- the old shape and there is nothing to check.
+--
+-- The three do not add up, and that is right: the Double Tone Quantity in
+-- Nursery box is signed under a key of its own, DTONE-NURSERY-QTY, with
+-- no bar in it at all. It is a setting rather than a record, it is not a
+-- card, and the alias leaves it alone. The rest is the difference.
 --
 -- Under it, ONE ROW PER SIGNATURE, newest first: the batch to open, the
 -- plot and day to look at, which shape the key is in, and who signed it.
@@ -49,8 +54,10 @@ shaped AS (
          CASE WHEN position('|' in s.rest) > 0
               THEN substr(s.rest, 1, position('|' in s.rest) - 1)
               ELSE s.rest END AS plot,
-         -- The day is the last ten characters, on both shapes of key.
-         right(s.rest, 10) AS day,
+         -- The day is the last ten characters of either shape of card key.
+         -- A key with no bar is the D-Tone box and has no day at all, so it
+         -- says so rather than printing ten characters of its own name.
+         CASE WHEN position('|' in s.rest) > 0 THEN right(s.rest, 10) ELSE '--' END AS day,
          -- Count the bars without a regular expression: how many characters
          -- vanish when they are all removed.
          length(s.rest) - length(replace(s.rest, '|', '')) AS bars
@@ -61,7 +68,7 @@ SELECT 0 AS n,
        (SELECT count(*) FROM shaped)::text                      AS plot,
        (SELECT count(*) FROM shaped WHERE bars >= 2)::text      AS day,
        (SELECT count(*) FROM shaped WHERE bars = 1)::text       AS key_shape,
-       'signed, of which keyed on the tray, and on the card'    AS signed_by,
+       'signed, of which on the tray, and on the card'          AS signed_by,
        ''::text                                                 AS signed_at
 UNION ALL
 SELECT 1,
@@ -69,7 +76,8 @@ SELECT 1,
        h.plot,
        h.day,
        CASE WHEN h.bars >= 2 THEN 'TRAY -- the shape this rule is about'
-            ELSE 'card' END,
+            WHEN h.bars = 1  THEN 'card'
+            ELSE 'the D-Tone box -- not a card, not affected' END,
        h.signed_by,
        left(h.signed_at::text, 16)
   FROM shaped h
