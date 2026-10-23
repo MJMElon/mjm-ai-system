@@ -3925,6 +3925,173 @@ Three parts to the fix, and the first is the one that matters:
 it — 12 of its checks fail on the previous code, and the dosage one fails
 with the office's own number: **0 pixels of room for a digit.**
 
+## One card per plot per day, and two people fill it in
+
+Tab 3 was one flat row per TRAY. Two trays into N15 on the 17th therefore
+read as two unrelated records with the plot and the date repeated down the
+side of both — and the one figure the screen never showed was the one the
+office needed: *"一个 plot 只会有一个 drone map，里面的 drone count 是 total
+要 check 对不对还要自己 manual 加起来 … N15 的 drone map 是 1057 但是我看不到
+N15 总数."*
+
+So a card is **one plot on one day**, the total is on it, and the drone count
+sits beside that total.
+
+**THE CARD IS A VIEW, NEVER A ROW.** Every tray keeps its own ledger row,
+because the tray is what the D-Tone split, the tray stock and every
+adjustment read. The office set the bar for the whole change in one sentence
+— *"完全不要影响其他 link 者的东西如何去 read data"* — and the cards obey it
+by construction: the grouping is in the renderer, and the form's tray lines
+are still `.action-row.transplant-row` carrying `.t3-date`, `.t3-dest-type`,
+`.t3-dest-plot`, `.t3-source-tray` and `.t3-qty`, mirrored in from the card's
+head as hidden inputs. The save, the allocation engine, the over-draw check
+and the silent rows a sync rebuilds all read exactly what they always read.
+
+**The DRONE COUNT and the MAP are the checker's, on the card.** Two people
+fill this in — *"一个负责填所有资料，一个负责算 drone count，和 system tally
+了 upload 图并且 verify"* — so the form asks neither, and the card asks both.
+The count lives in the REMARK of a `Transplant_Card` row with
+`quantity_change` at nought: the column may be NOT NULL, so a card with no
+count yet could not be written at all, and a figure in `quantity_change` is
+a figure some future reader sums — this one is what a drone saw, not
+seedlings that moved.
+
+**VERIFY IS NEVER LOCKED.** A count that does not tally is shown, signed and
+does NOT go on the To Do List — 可以签 不用丢 todo. Saying so is the point of
+the card; refusing the signature would make the figure unsayable.
+
+### A card from before the rule reads as tallying, and it is SHOWN, never stored
+
+An old card has the drone PICTURE and no NUMBER — the count only ever lived
+inside the map, and nobody ever typed it. Left alone every record the nursery
+has ever made would read "not counted yet", which is a prompt nobody can act
+on against work that was checked at the time. The office settled it: *旧卡的
+DRONE CHECK 就 = total transplant 就好.*
+
+**It is shown and never written.** A default written into a saved row turns a
+question nobody was asked into an answer, and it would make a figure the page
+invented indistinguishable, for ever, from one somebody read off a picture.
+`T3_DRONE_FROM` is the line, and it is the INSERT time rather than the day
+the work was done: the question is whether this record existed before the
+rule.
+
+### A card is signed when EVERY one of its trays is
+
+A sign-off used to be keyed on the tray — `transplanting::N15|main|P24|2026-10-17`
+— and a card is keyed `transplanting::N15|2026-10-17`. Life of Seedlings cuts
+that key at its first bar and has always read one tray's signature as the
+whole plot being signed, so reading it the same way here looked right.
+
+**It is the right reading of the REPORT and the wrong one here, because it
+moves a TICK.** Tab 3 was one row per tray and the tab tick only went green
+when every one of them was signed. The ledger was swept rather than argued
+about — `CHECK_does_a_card_turn_a_tick_green.sql` — and the answer was **ONE
+card in 213**: batch 263, N4 on 22 July, five trays with four signed. The
+office had set the bar in a sentence: *以前上面圈圈已经绿色打勾现在也要是绿色
+的，如果你弄到变掉那就错了.*
+
+So `_t3TraySig` asks for ALL of a card's trays and answers with the NEWEST,
+which is the one the chip should name. `_rowSig` is the ONE way any reader
+asks whether a row is signed, `rowsAllSigned` included — a card read as
+signed by the tick and unsigned by the strip is worse than either. A
+VERIFICATION is not aliased at load; a REJECTION is, because one tray sent
+back is a question about the card and surfacing it is the safe direction.
+
+### The census is the recorder's, and only for what is keyed from now on
+
+*"填资料的人在 part 1 要 upload census，检查的人在外面鼠标滑到 total
+transplanted 那里 census 就会浮现，按的话就会出现 census，这个 census 可以被
+download."* So the census hangs off the TOTAL and nowhere else: the checker is
+looking at that figure, comparing it against a drone count, and the census is
+the paper behind it. Photo or PDF, more than one file.
+
+**No census, no save** — *"c 一定要有才可以 save"* — and the refusal is the
+only thing said about it: *"只是没 census 的话按 save 会 pop out 不能 save 因为
+没 census."* No line on the form explaining the rule, no green tick saying it
+is satisfied.
+
+**IT REACHES ONLY WHAT IS KEYED NOW.** 以前填的就不需要 — every existing
+record, any batch, 271's N15 included, and a card already on the list whether
+or not anybody has verified it. The test is not a date and not a batch: it is
+whether the tray line sits inside a **draft card**. A line a sync rebuilt from
+the ledger is in no card, so the rule cannot reach back over it — and it
+cannot be got round either, since the only way to key a new line is to open a
+card. Zero backfill, by construction.
+
+Five things in it:
+
+- **Refused BEFORE anything is written.** A save that stored the rows and then
+  complained would leave the record in the ledger with no census and nothing
+  asking for one again.
+- **Uploaded AFTER the rows are stored.** Uploading first leaves files in
+  storage for a save that then refused, with nothing in the ledger naming
+  them.
+- **A failure at that point is a WARNING, never an error.** The report IS in
+  the database by then, and `error` on this page means one thing — what you
+  keyed is not in the database. Red over stored work is what leaves a tab
+  dirty by its own success, and the office keys the morning again. The warning
+  names the plot and the door: Add Census on that card.
+- **The codec is tab 6's own.** `CensusList:` is written with `t6EncodeDocs`,
+  so every field is percent-encoded and neither separator — nor a space, nor
+  the colon out of `MapUrl:` — can turn up inside one and split a file into
+  three. Two codecs for one job is two things to get subtly different.
+- **A card with no census says so and offers one.** `uploadT3CardCensus` is
+  the same door a record from before the rule uses, and the list is ADDED to,
+  never replaced: a second day keyed against the same plot brings its own.
+
+**And the map rule had to learn about the card.** `updateTransplantCompletion`
+asked each ROW for its map, which was the only place a map could be; it is the
+plot's now and the checker attaches it to the card. Asking the row alone would
+hold the ring under 100 for ever on everything keyed since, with the map on
+screen. `t3CardMaps` is rebuilt by every sync and only ever ADDS — a row
+carrying its own `MapUrl:` answered yes before and still does.
+
+### Three faults the cards left behind, and none was on a test
+
+Each was found by running a test that had never covered the thing it broke,
+which is the argument for running the neighbours rather than the ones you
+wrote:
+
+- **Fix Tray opened on the ADJUSTMENT.** It read `children[2]`, which was the
+  tray while every row carried the plot and the day as well; the cards took
+  those up onto the card head, so the third cell became the Adjustment and the
+  picker offered **"+140"** as the answer to "which tray". It asks for
+  `.t3-tray-cell` by name now, and the test forbids indexing a cell by
+  position — after stripping the comments, because the function explains in
+  prose what it used to read.
+- **The MONTH LOCK on edit and delete answered no every time.** Both handlers
+  asked `querySelectorAll('.t3-saved-row')[idx]` whether the record is in a
+  locked month. That class is the CARD now and a card never wears
+  `.mjm-locked`, so a settled month could be edited and deleted without a
+  word. Both read the lock off the tray row the id names.
+- **`addTransplantRow`'s drone-map handlers went dead with the field.** Four
+  functions nothing called any more — the half-removal this file has a rule
+  about. `rowMaps` STAYS and is not dead: a sync restores every existing row's
+  `MapUrl:` into it and the save writes it back out, which is the only thing
+  that stops a save dropping the map off every record keyed before the card
+  had one.
+
+`tests/one_card_per_plot_per_day.cjs` holds the grouping, the old-card tally,
+the all-trays signature (batch 263's shape) and the month lock;
+`tests/add_record_asks_for_the_census.cjs` holds the form, the census and the
+map rule. Two things that make these tests lie if they are written the easy
+way:
+
+- **A stub that swallows a write signs off whatever the page sent it.** The
+  card test's `insert` resolved silently, so "drawing the old cards wrote
+  nothing" would have passed over a page writing on every load. Every write is
+  recorded now.
+- **`_uploadBatchDoc` hands a URL back unchanged and that is not an upload.**
+  A save re-sends the drone map of every existing row, already a storage url,
+  so a stub that re-uploads it counts three uploads for two census files and
+  hands a plot a map it never had.
+
+**Nothing to run in the database.** `Transplant_Card` is an ordinary
+`shared_inventory_logs` row — there is no CHECK constraint on
+`transaction_type`, which was measured and not assumed — and the census files
+go into the `documents` bucket the drone maps already use, under
+`transplant_census/`.
+
 ## A seal is checked in the database, never only on the phone
 
 Seal stickers ("0009297") go through four states — **in stock** (received at
