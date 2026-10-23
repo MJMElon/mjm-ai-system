@@ -975,10 +975,17 @@
 
                             <!-- Save + Download PDF -->
                             <div class="flex flex-col sm:flex-row justify-end gap-3">
-                                <button type="button" id="print-t8-btn" class="px-8 py-3 bg-white border-2 border-[#3d2610] text-[#3d2610] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap" onclick="printSeedAuditPdf()">
+                                <!-- PRINT AND DOWNLOAD STAY LIVE ON A LOCKED REPORT.
+                                     They change nothing, and a verified sheet is the
+                                     one most worth having on paper — greying them out
+                                     means unverifying a report to print it, which is
+                                     the opposite of what the lock is for. SAVE is the
+                                     one that must refuse, and it does so in the code
+                                     now rather than in the stylesheet. -->
+                                <button type="button" id="print-t8-btn" class="mjm-review-allow px-8 py-3 bg-white border-2 border-[#3d2610] text-[#3d2610] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap" onclick="printSeedAuditPdf()">
                                     🖨 Print
                                 </button>
-                                <button type="button" id="download-t8-pdf-btn" class="px-8 py-3 bg-white border-2 border-[#3d2610] text-[#3d2610] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap" onclick="downloadSeedAuditPdf()">
+                                <button type="button" id="download-t8-pdf-btn" class="mjm-review-allow px-8 py-3 bg-white border-2 border-[#3d2610] text-[#3d2610] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap" onclick="downloadSeedAuditPdf()">
                                     📄 Download PDF
                                 </button>
                                 <button type="button" id="save-t8-btn" class="btn-earth px-12" onclick="saveSeedAudit()">Save Seed Audit Report (0% Complete)</button>
@@ -4512,10 +4519,47 @@
         /* Runs a tab's save and clears that tab only if nothing reported an
            error while it ran. Wrapped after the page has defined them all, so
            the order of declarations here does not matter. */
+        /* A LOCK IN THE STYLESHEET IS A PAINT, NOT A GATE.
+
+           A reviewed or verified tab takes `.mjm-locked`, and the CSS gives
+           every input and button on it `pointer-events:none`. That greys
+           them, and that is all it does. It does not stop the KEYBOARD —
+           a greyed button is still focusable and still fires on Enter — and
+           it cannot stop a call, which is exactly what the close dialog
+           makes: `confirmCloseBatchRecord` and `saveOneUnsaved` reach
+           `window[TAB_SAVE_FN[n]]()` directly. So verifying a report,
+           typing into it and pressing X and then Leave REWROTE it, with
+           nobody's signature moving.
+
+           The refusal lives in the one place every route goes through. The
+           CLASS is the test, not a second reading of the banner: it is set
+           by `setTabLock` for every reason a tab is not editable — reviewed,
+           verified, and a login without the Fill in report tick — and a
+           second copy of that list would be one more thing to get wrong.
+
+           It refuses as an ERROR, which here means one thing: what you keyed
+           is not in the database. So the close dialog goes on refusing to
+           close and offers Don't save, which is the right answer for a
+           change that must not be kept.
+
+           An explanation box is NOT affected: it carries `.mjm-always-open`
+           and its own Save, which is not one of these seven — see the CSS
+           above for why that is deliberate. */
+        function _tabSaveBlocked(tabIdx) {
+            const tab = document.getElementById('tab-' + tabIdx);
+            return !!(tab && tab.classList.contains('mjm-locked'));
+        }
+
         function _trackTabSave(name, tabIdx) {
             const orig = window[name];
             if (typeof orig !== 'function') return;
             window[name] = function () {
+                if (_tabSaveBlocked(tabIdx)) {
+                    showToast('Nothing saved — ' + (TAB_TITLES[tabIdx] || ('Tab ' + tabIdx)) +
+                              ' is signed off and locked. Unverify it on the banner at the top of ' +
+                              'the tab first, or you do not have the Fill in report tick.', 'error');
+                    return;
+                }
                 let sawError = false;
                 const realToast = window.showToast;
                 window.showToast = function (m, t) { if (t === 'error') sawError = true; return realToast.apply(this, arguments); };
@@ -4740,7 +4784,7 @@
                 document.getElementById('t2-date').valueAsDate = new Date();
                 generateWorkerIcons();
 
-                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes, transplantedRes, cull1Res] = await Promise.all([
+                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes, transplantedRes, cull1Res, trayCalRes, trayDoRes] = await Promise.all([
                     _supabase.from('shared_breeds').select('name').order('name'),
                     _supabase.from('operation_batches').select('name').order('name', { ascending: false }),
                     _supabase.from('operation_trays').select('*'),
@@ -4751,6 +4795,20 @@
                     _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change, remark').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
                     // 1st culling names its tray directly in plot_name.
                     _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', '1st_Culling'),
+                    /* The other two ways a tray empties — an approved
+                       correction to its count, and a small polybag sale that
+                       leaves straight out of it. The batch list's Tray Status
+                       tab reads the same two, because this is the same rule
+                       and a tray offering 1,200 holes here must offer 1,200
+                       there. Both tolerate a refusal: a tray figure that is
+                       merely stale is better than a page that does not load. */
+                    _supabase.from('shared_inventory_logs')
+                        .select('batch_name, plot_name, quantity_change, remark')
+                        .eq('transaction_type', 'Stock_Calibration')
+                        .then(r => r, () => ({ data: [] })),
+                    _supabase.from('shared_do_records')
+                        .select('status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+                        .then(r => r, () => ({ data: [] })),
                     // Month Lock Calendar — Transplanting/Culling rows lock the
                     // same way DO/AL do, keyed to each row's own saved date.
                     // Tolerates the table not existing yet, same as elsewhere.
@@ -4768,7 +4826,9 @@
                     trays:        globalTrays,
                     planted:      usedTrayRes.data || [],
                     transplanted: transplantedRes.data || [],
-                    cull1:        cull1Res.data || []
+                    cull1:        cull1Res.data || [],
+                    calibrations: (trayCalRes && trayCalRes.data) || [],
+                    sales:        MJMTrayStock.salesLinesOf((trayDoRes && trayDoRes.data) || [])
                 });
                 trayUsageMap    = trayStock.usage;
                 trayCapMap      = trayStock.capacity;
@@ -9523,7 +9583,44 @@ Thank you.`;
            So the document is built here and the buttons differ only in what
            they do with it. Same rule the audit board follows with its two
            crosses — one writer, two ways in. */
-        function _buildSeedAuditDoc() {
+        /* THE DAMAGED SEED PHOTOS, for the sheet.
+
+           `opsPhotos` is a `let` at script scope — the Operations Site Proof
+           gallery on Seed Planting, which is the physical count of the
+           damaged seed. This names the one thing the sheet wants out of it,
+           rather than the sheet reaching into another tab's state. */
+        function _damagePhotosForPrint() {
+            try { return (opsPhotos || []).filter(p => p && p.src); }
+            catch (e) { return []; }
+        }
+
+        /* A stored photo, read back with its own shape.
+
+           The SHAPE comes off the image and never off a number here: a
+           thumbnail stretched to a fixed box is a picture of a damaged seed
+           count that nobody can count anything in. Same rule the papan tanda
+           logo follows.
+
+           Every part of it is best effort — a photo that will not load must
+           not take the sheet down with it, because the figures are what
+           somebody is actually printing. */
+        async function _seedLoadPhoto(url) {
+            try {
+                const dataUrl = /^data:/i.test(url) ? url : await _seedUrlToDataUrl(url);
+                const size = await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+                    img.onerror = () => resolve(null);
+                    img.src = dataUrl;
+                });
+                return size ? { dataUrl, w: size.w, h: size.h } : null;
+            } catch (e) {
+                console.warn('[seed audit] a damaged seed photo could not be read:', url, e);
+                return null;
+            }
+        }
+
+        async function _buildSeedAuditDoc() {
             const jsPDFNS = window.jspdf || window;
             if (!jsPDFNS || !jsPDFNS.jsPDF) {
                 showToast('PDF library not loaded. Refresh and try again.', 'error');
@@ -9757,13 +9854,139 @@ Thank you.`;
                         : ''), barX, dy);
             y += DMG_H + 6;
 
-            // ── REMARK
-            const remarkText = (document.getElementById('t8-batch-remark').value || '').trim();
+            /* ── THE PHOTOS OF THAT COUNT.
+
+                  The office asked for them on this sheet, and the figure is
+                  the reason: 327 damaged seeds is somebody's word until the
+                  trays are in front of you. The bag photos are deliberately
+                  NOT here — a sheet of bag pictures is not what somebody
+                  adding up a delivery wants in their hand — and these are,
+                  because they are the evidence for the one figure on the
+                  page that nothing else on it can check.
+
+                  One that will not load is SKIPPED and SAID, never silently
+                  dropped: a sheet short of a picture with nothing saying so
+                  reads as a count nobody photographed. */
+            const dmgPhotos = [];
+            for (const p of _damagePhotosForPrint()) {
+                const got = await _seedLoadPhoto(p.src);
+                if (got) dmgPhotos.push(got); else dmgPhotos.push(null);
+            }
+            const shown = dmgPhotos.filter(Boolean);
+            const missing = dmgPhotos.length - shown.length;
+            /* The remark has to be measured BEFORE the pictures are, or
+               filling the page with them pushes two lines of text onto a
+               sheet of their own. */
+            const remarkText  = (document.getElementById('t8-batch-remark').value || '').trim();
+            const remarkLines = remarkText ? doc.splitTextToSize(remarkText, pageW - margin * 2) : [];
+            const tailH = (missing > 0 ? 12 : 0)
+                        + (remarkText ? 14 + remarkLines.length * 12 + 6 : 0);
+
+            if (dmgPhotos.length) {
+                /* THE PICTURES FILL THE ROOM THEY ARE GIVEN.
+
+                   Three across at a fixed height meant two photos sat as
+                   thumbnails at the top of an otherwise empty page while the
+                   page before them ended early — half a sheet of nothing
+                   either side of them, which is what the office said of it.
+
+                   So the layout is CHOSEN rather than fixed: one, two or
+                   three across, whichever fills the most of the room that is
+                   actually there. The photo is only ever capped by the width
+                   of its column, so fewer across is a bigger picture, and two
+                   photos on a page of their own come out a half-page each
+                   instead of a pair of stamps.
+
+                   A layout taller than the room may be scaled down, but only
+                   to MIN_K — past that the grid is being bent to fill a page
+                   rather than laid out, and six photos would come back as one
+                   tall column of slivers. Below MIN_K the next layout up
+                   wins on its own natural size.
+
+                   Each photo keeps ITS OWN shape throughout: the column caps
+                   the width and the height follows the image, here as on the
+                   papan tanda. */
+                const GAP = 10, HEAD_H = 14, MIN_USEFUL = 90, MIN_K = 0.8;
+                const availW = pageW - margin * 2;
+
+                function _fitPhotos(list, roomH) {
+                    const opts = [];
+                    for (let perRow = 1; perRow <= 3; perRow++) {
+                        const cellW = (availW - GAP * (perRow - 1)) / perRow;
+                        const rows = [];
+                        for (let i = 0; i < list.length; i += perRow) {
+                            const sized = list.slice(i, i + perRow).map(ph => {
+                                const sc = cellW / ph.w;
+                                return { ph, w: ph.w * sc, h: ph.h * sc };
+                            });
+                            rows.push({ sized, h: Math.max.apply(null, sized.map(z => z.h)) });
+                        }
+                        opts.push({ rows: rows,
+                                    natural: rows.reduce((t, r) => t + r.h, 0) + GAP * (rows.length - 1) });
+                    }
+                    let best = null;
+                    opts.forEach(o => {
+                        const k = o.natural > roomH ? roomH / o.natural : 1;
+                        if (k < MIN_K) return;                 // bent, not laid out
+                        const fills = o.natural * k;
+                        if (!best || fills > best.fills) best = { rows: o.rows, k: k, fills: fills };
+                    });
+                    if (best) return best;
+                    /* Nothing sits in this room without being bent. The
+                       SHORTEST grid is scaled down to it — never a taller one
+                       scaled further, and never past the foot of the page,
+                       which is what a fallback measured against a bigger room
+                       than the page has would do. */
+                    const short = opts.reduce((a, o) => (o.natural < a.natural ? o : a));
+                    return { rows: short.rows, k: roomH / short.natural };
+                }
+
+                let room = (pageH - 60) - (y + HEAD_H) - tailH;
+                /* Too little left to be worth printing in — take the whole
+                   section over and let it fill the page it lands on. */
+                if (room < MIN_USEFUL) {
+                    doc.addPage(); y = margin + 20;
+                    room = (pageH - 60) - (y + HEAD_H) - tailH;
+                }
+                const lay = _fitPhotos(shown, room);
+
+                /* A HEADING GOES WITH THE THING UNDER IT. The break used to
+                   be measured for the heading alone and then again for the
+                   pictures, so a page with room for the words and not for a
+                   photo printed DAMAGED SEED PHOTOS at the foot of one page
+                   and the pictures at the top of the next. A heading with
+                   nothing under it reads as a section somebody forgot to
+                   fill in. The room is worked out above, before a word is
+                   drawn, so the two cannot be separated. */
+                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+                doc.text('DAMAGED SEED PHOTOS', margin, y); y += HEAD_H;
+
+                if (lay) lay.rows.forEach(r => {
+                    const hs = r.sized.map(z => ({ z: z, w: z.w * lay.k, h: z.h * lay.k }));
+                    const rowH = Math.max.apply(null, hs.map(z => z.h));
+                    const rowW = hs.reduce((t, z) => t + z.w, 0) + GAP * (hs.length - 1);
+                    // Centred, so a row narrower than the page reads as laid
+                    // out rather than as pushed into the left margin.
+                    let x = margin + Math.max(0, (availW - rowW) / 2);
+                    hs.forEach(z => {
+                        doc.addImage(z.z.ph.dataUrl, 'JPEG', x, y, z.w, z.h);
+                        x += z.w + GAP;
+                    });
+                    y += rowH + GAP;
+                });
+                if (missing > 0) {
+                    doc.setFont('times', 'normal'); doc.setFontSize(8); setText(RED);
+                    doc.text(missing + ' damaged seed photo(s) could not be loaded and are not on this sheet.',
+                             margin, y); y += 12;
+                }
+                y += 4;
+            }
+
+            // ── REMARK, measured above so the pictures leave room for it
             if (remarkText) {
                 doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
                 doc.text('REMARK', margin, y); y += 14;
                 doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
-                const remarkLines = doc.splitTextToSize(remarkText, pageW - margin * 2);
                 doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
             }
 
@@ -9791,8 +10014,8 @@ Thank you.`;
         /* An onclick that throws does nothing and says nothing — the lesson
            the payroll claim form cost a week. Both buttons report what broke
            in words somebody can read down the phone. */
-        function _seedAuditPdfGuard(what, fn) {
-            try { return fn(); }
+        async function _seedAuditPdfGuard(what, fn) {
+            try { return await fn(); }
             catch (e) {
                 console.error('[seed audit ' + what + ']', e);
                 alert('The Seed Audit report could not be ' + what + '.\n\n' + (e && e.message ? e.message : e) +
@@ -9801,8 +10024,8 @@ Thank you.`;
         }
 
         function downloadSeedAuditPdf() {
-            return _seedAuditPdfGuard('produced', () => {
-                const built = _buildSeedAuditDoc();
+            return _seedAuditPdfGuard('produced', async () => {
+                const built = await _buildSeedAuditDoc();
                 if (!built) return;
                 built.doc.save(built.filename);
                 return built.filename;
@@ -9817,8 +10040,8 @@ Thank you.`;
            The frame is reused, so pressing Print twice does not leave a
            second copy of the file behind. */
         function printSeedAuditPdf() {
-            return _seedAuditPdfGuard('printed', () => {
-                const built = _buildSeedAuditDoc();
+            return _seedAuditPdfGuard('printed', async () => {
+                const built = await _buildSeedAuditDoc();
                 if (!built) return;
                 built.doc.autoPrint();
                 const url = built.doc.output('bloburl');

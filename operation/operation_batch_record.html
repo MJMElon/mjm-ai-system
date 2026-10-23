@@ -278,7 +278,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, trayRes, seedAuditRes, calRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, trayRes, seedAuditRes, calRes, doRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -350,6 +350,15 @@
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('batch_name, plot_name, quantity_change, remark')
                         .eq('transaction_type', 'Stock_Calibration')
+                        .order('id', { ascending: true })),
+                    /* Delivery orders, for the Tray Status tab: a small
+                       polybag sale leaves straight out of the tray and never
+                       reaches the field, so it is one of the four ways a tray
+                       empties. Only the columns that say which batch left
+                       which plot, and the two that say the order was
+                       cancelled. */
+                    fetchAllRows(() => _supabase.from('shared_do_records')
+                        .select('status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
                         .order('id', { ascending: true }))
                 ]);
                 if (recRes.error) throw recRes.error;
@@ -538,7 +547,13 @@
                     trays:        trayRes.data || [],
                     planted:      plantedRes.data || [],
                     transplanted: transplantRes.data || [],
-                    cull1:        cull1Res.data || []
+                    cull1:        cull1Res.data || [],
+                    /* The other two ways out of a tray — a sale straight out
+                       of it and an approved correction to its count. Without
+                       them a tray goes on holding seedlings the batch no
+                       longer has; see shared_tray_stock.js. */
+                    calibrations: calRes.data || [],
+                    sales:        MJMTrayStock.salesLinesOf(doRes.data || [])
                 }).rows;
 
                 // De-dupe Seeds_Received rows: keep only the most-recent log

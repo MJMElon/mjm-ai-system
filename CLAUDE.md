@@ -1981,6 +1981,149 @@ Three things that came out of it:
   push it onto a second page, and a sheet whose second page has no footer
   while the first claims to be the only one is worse than no numbering.
 
+**And the DAMAGED SEED PHOTOS are on it**, which the office asked for in the
+same breath as "no photographs". There is no contradiction: a sheet of BAG
+pictures is not what somebody adding up a delivery wants in their hand, and
+the Operations Site Proof gallery is the evidence for the one figure on the
+page that nothing else on it can check. Loading them made the builder
+`async`, so both buttons await it. Two rules in the drawing: each photo is
+sized from **its own shape**, never into a fixed box, because a damaged seed
+count stretched out of proportion is a picture nobody can count anything in;
+and one that will not load is **skipped and SAID**, because a sheet short of
+a picture with nothing saying so reads as a count nobody photographed.
+`_damagePhotosForPrint()` is the one accessor the sheet reads the gallery
+through, rather than reaching into another tab's state.
+
+**AND THE PICTURES FILL THE ROOM THEY ARE GIVEN.** Three across at a fixed
+height meant two photos sat as thumbnails at the top of an otherwise empty
+page while the page before them ended early — the office looked at it and
+said *"不要一半一半 很丑"*. So the layout is CHOSEN rather than fixed: one,
+two or three across, whichever fills the most of the room actually left.
+A photo is only ever capped by the width of its column, so **fewer across
+is a bigger picture**, and two photos on a page of their own come out a
+half-page each instead of a pair of stamps.
+
+Four things hold it together:
+
+- **A layout taller than the room may be scaled down, but only to `MIN_K`.**
+  Past that the grid is being bent to fill a page rather than laid out, and
+  six photos would come back as one tall column of slivers.
+- **The fallback scales the SHORTEST grid to the room**, never a taller one
+  scaled further. The first version measured the fallback against ten times
+  the room, which chose one-across and ran a 1,448pt block off the foot of
+  an 842pt page.
+- **The remark is measured BEFORE the pictures**, or filling the page with
+  them pushes two lines of text onto a sheet of their own.
+- **A row narrower than the page is centred**, so it reads as laid out
+  rather than as pushed into the left margin.
+
+**The test measures against the ROOM, never a pinned width.** A threshold on
+the photo size passes or fails on how many bag rows the fixture happens to
+carry, which is the one thing this layout exists to adapt to.
+
+**And the heading goes with the pictures.** The break was measured for the
+heading alone and then AGAIN, separately, for the first row of photos — so a
+page with room for the words and not for a photo printed *DAMAGED SEED
+PHOTOS* at the foot of one page and the pictures at the top of the next. **A
+heading with nothing under it reads as a section somebody forgot to fill
+in**, which on this sheet is the wrong thing to suggest. The rows are
+measured BEFORE the heading is drawn and the break is taken ahead of the
+pair — the same rule the Worker Record follows for a plot, where the break
+goes before the run and never inside it. Which page they land on after that
+is physics: a photo row is about 126pt tall, so a damage block ending within
+that of the foot takes the whole section over. The lever is `MAX_H`.
+
+## A lock in the stylesheet is a paint, not a gate
+
+The office verified a Seed Audit report and said *"verified 了我还是可以
+save and print"* — they could still save it.
+
+A reviewed or verified tab takes `.mjm-locked`, and the CSS gives every
+input and button on it `pointer-events:none`. That greys them, and that is
+all it does. It does not stop the **keyboard** — a greyed button is still
+focusable and still fires on Enter — and it cannot stop a **call**, which
+is exactly what the close dialog makes: `confirmCloseBatchRecord` and
+`saveOneUnsaved` reach `window[TAB_SAVE_FN[n]]()` directly. So verifying a
+report, typing into it and pressing X then Leave **rewrote it**, with
+nobody's signature moving.
+
+**The refusal belongs where every route goes through**, which is
+`_trackTabSave` — the one wrapper all seven tab saves already pass. Three
+things in it:
+
+- **The CLASS is the test, not a second reading of the banner.**
+  `setTabLock` sets it for every reason a tab is not editable: reviewed,
+  verified, and a login without the Fill in report tick. A second copy of
+  that list is one more thing to get wrong.
+- **It refuses as an ERROR**, which here means one thing — what you keyed
+  is not in the database. So the close dialog goes on refusing to close and
+  offers **Don't save**, which is the right answer for a change that must
+  not be kept.
+- **An explanation box is untouched.** It carries `.mjm-always-open` and
+  its own Save, which is not one of the seven — the CSS above it says at
+  length why that is deliberate.
+
+**PRINT AND DOWNLOAD STAY LIVE, and that is the half the office may not
+have meant.** They change nothing, and a verified sheet is the one most
+worth having on paper: greying them means unverifying a report in order to
+print it, which is the opposite of what the lock is for. They carry
+`.mjm-review-allow` now so they work AND look like they work. If a printout
+of a signed-off report is ever not wanted, that mark is the one line to
+take off — but Save is the one that had to stop, and the stylesheet was
+never going to be what stopped it.
+
+`tests/unsaved_close_guard.cjs` drives the real dialog against a locked
+tab: the save never runs, the tab stays unsaved, X and Leave does not
+rewrite it, and both read-only buttons are still live.
+
+## A tray empties every way the seedlings leave, not two of them
+
+Tray Status read **P3 · 230 (81)** over a batch with nothing standing in P3,
+and the office checked it before saying so.
+
+`shared/shared_tray_stock.js` knew two ways out of a tray: the 1st culling
+and the transplant. Life of Seedlings has known four since it was written —
+
+    preBalance = planted - cull1 - trans - salesPre + calibrationPre
+
+— and **the two missing ones are not rare.** A batch SOLD out of the tray,
+and a batch whose pre-nursery count was corrected by an approved
+calibration, both went on standing in a tray here. Its own arithmetic was
+then too big, so the cap below it took nothing off, and the phantom was
+parked on whichever tray happened to survive the trim.
+
+Batch 230 is the batch this file already names for exactly that: an approved
+**minus 1,000 against tray P30**, *"Sold out 1,000 Pre nursery seedlings (DO:
+01605)"*. Its standing read a thousand too high and the remainder had to land
+somewhere — P3, which was the only other tray it had ever been in.
+
+Three things in the fix:
+
+- **The tray the row NAMES is moved, not only the batch total.** The trim is
+  a fallback for a movement nothing can place, and its "largest tray first"
+  is a guess by construction — the file says so in its own words. A
+  calibration keyed against P30 is not a guess, so P30 gives its holes back
+  and nothing has to be apportioned.
+- **An unapproved calibration moves nothing**, here as everywhere, and a
+  calibration against a FIELD plot is not a tray's business — those
+  seedlings left as a transplant and taking them off again is one loss
+  twice. The same split `calibrationPre` makes.
+- **`salesLinesOf()` flattens a delivery order once.** Five lines per order
+  and a cancelled-order test (`'Cancelled'` with the capital, or
+  `[CANCELLED]` in the remark) are two rules that must not be written per
+  caller.
+
+**Both screens pass all four**, and the test reads the two call sites to say
+so: a caller short of an input is the thinner copy all over again.
+
+`shared/CHECK_what_is_standing_in_each_tray.sql` is the size of it — every
+batch that moves, term by term, with what each of its trays is left holding.
+A batch whose gap is NOT its sold plus its calibration is the interesting
+one, and the term columns say which of them is doing it.
+
+`tests/a_tray_loses_every_way_they_leave.cjs` drives the shipped file with
+230's own figures and holds the before and the after side by side.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd
