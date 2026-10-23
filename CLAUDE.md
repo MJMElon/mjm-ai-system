@@ -1981,6 +1981,67 @@ Three things that came out of it:
   push it onto a second page, and a sheet whose second page has no footer
   while the first claims to be the only one is worse than no numbering.
 
+**And the DAMAGED SEED PHOTOS are on it**, which the office asked for in the
+same breath as "no photographs". There is no contradiction: a sheet of BAG
+pictures is not what somebody adding up a delivery wants in their hand, and
+the Operations Site Proof gallery is the evidence for the one figure on the
+page that nothing else on it can check. Loading them made the builder
+`async`, so both buttons await it. Two rules in the drawing: each photo is
+sized from **its own shape**, never into a fixed box, because a damaged seed
+count stretched out of proportion is a picture nobody can count anything in;
+and one that will not load is **skipped and SAID**, because a sheet short of
+a picture with nothing saying so reads as a count nobody photographed.
+`_damagePhotosForPrint()` is the one accessor the sheet reads the gallery
+through, rather than reaching into another tab's state.
+
+## A tray empties every way the seedlings leave, not two of them
+
+Tray Status read **P3 · 230 (81)** over a batch with nothing standing in P3,
+and the office checked it before saying so.
+
+`shared/shared_tray_stock.js` knew two ways out of a tray: the 1st culling
+and the transplant. Life of Seedlings has known four since it was written —
+
+    preBalance = planted - cull1 - trans - salesPre + calibrationPre
+
+— and **the two missing ones are not rare.** A batch SOLD out of the tray,
+and a batch whose pre-nursery count was corrected by an approved
+calibration, both went on standing in a tray here. Its own arithmetic was
+then too big, so the cap below it took nothing off, and the phantom was
+parked on whichever tray happened to survive the trim.
+
+Batch 230 is the batch this file already names for exactly that: an approved
+**minus 1,000 against tray P30**, *"Sold out 1,000 Pre nursery seedlings (DO:
+01605)"*. Its standing read a thousand too high and the remainder had to land
+somewhere — P3, which was the only other tray it had ever been in.
+
+Three things in the fix:
+
+- **The tray the row NAMES is moved, not only the batch total.** The trim is
+  a fallback for a movement nothing can place, and its "largest tray first"
+  is a guess by construction — the file says so in its own words. A
+  calibration keyed against P30 is not a guess, so P30 gives its holes back
+  and nothing has to be apportioned.
+- **An unapproved calibration moves nothing**, here as everywhere, and a
+  calibration against a FIELD plot is not a tray's business — those
+  seedlings left as a transplant and taking them off again is one loss
+  twice. The same split `calibrationPre` makes.
+- **`salesLinesOf()` flattens a delivery order once.** Five lines per order
+  and a cancelled-order test (`'Cancelled'` with the capital, or
+  `[CANCELLED]` in the remark) are two rules that must not be written per
+  caller.
+
+**Both screens pass all four**, and the test reads the two call sites to say
+so: a caller short of an input is the thinner copy all over again.
+
+`shared/CHECK_what_is_standing_in_each_tray.sql` is the size of it — every
+batch that moves, term by term, with what each of its trays is left holding.
+A batch whose gap is NOT its sold plus its calibration is the interesting
+one, and the term columns say which of them is doing it.
+
+`tests/a_tray_loses_every_way_they_leave.cjs` drives the shipped file with
+230's own figures and holds the before and the after side by side.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd

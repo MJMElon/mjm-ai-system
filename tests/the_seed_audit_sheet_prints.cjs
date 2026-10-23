@@ -75,7 +75,7 @@ const BAGS = [
     }
     window.jspdf = { jsPDF: class {
       constructor() {
-        this.page = 1; this.pages = 1; this.lines = []; this.images = 0;
+        this.page = 1; this.pages = 1; this.lines = []; this.images = 0; this.drawn = [];
         this.saved = null; this.printed = false; this.outputs = [];
         this.internal = {
           pageSize: { getWidth: () => 595, getHeight: () => 842 },
@@ -93,7 +93,13 @@ const BAGS = [
       getTextWidth(t) { return String(t).length * (this._s || 9) * 0.5; }
       splitTextToSize(t) { return [String(t)]; }
       text(t, x, y) { guard('text', [x, y]); this.lines.push({ t: String(t), x, y, page: this.page }); }
-      addImage(im, fmt, x, y, w, h) { guard('addImage', [x, y, w, h]); this.images++; }
+      addImage(im, fmt, x, y, w, h) {
+        guard('addImage', [x, y, w, h]);
+        this.images++;
+        // Kept so the test can tell a damaged-seed photo from a bag photo —
+        // a bare count cannot, and "no photos" means only the bag ones.
+        this.drawn.push({ im: String(im).slice(0, 40), x, y, w, h, page: this.page });
+      }
       autoTable(opts) {
         this.head = (opts.head || [])[0] || [];
         this.body = opts.body || [];
@@ -187,12 +193,30 @@ const BAGS = [
     window.calcPlanting();
   }, { doQty: DO_QTY, focPct: 5, damaged: DAMAGED });
 
+  /* The damaged seed photos the office asked to see on the sheet. The
+     gallery is a `let` at script scope, so the one accessor the sheet reads
+     it through is what the fixture supplies — two tall, two wide and one
+     that will not load, so the shapes and the refusal are both driven. */
+  await page.evaluate(() => {
+    window._damagePhotosForPrint = () => ([
+      { name: 'site 1', src: 'https://files.test/dmg1.jpg' },
+      { name: 'site 2', src: 'https://files.test/dmg2.jpg' },
+      { name: 'site 3', src: 'https://files.test/gone.jpg' }
+    ]);
+    const SHAPES = { 'https://files.test/dmg1.jpg': { w: 400, h: 300 },
+                     'https://files.test/dmg2.jpg': { w: 300, h: 600 } };
+    window._seedLoadPhoto = async (url) => {
+      const s = SHAPES[url];
+      return s ? { dataUrl: 'data:image/jpeg;base64,' + url.slice(-8), w: s.w, h: s.h } : null;
+    };
+  });
+
   console.log('\nPrint sends the document to the printer');
-  await page.evaluate(() => { window.__PDFS = []; window.printSeedAuditPdf(); });
+  await page.evaluate(() => { window.__PDFS = []; return window.printSeedAuditPdf(); });
   const printed = await page.evaluate(() => {
     const d = window.__PDFS[0];
     return d && { head: d.head, body: d.body, images: d.images, printed: d.printed,
-                  outputs: d.outputs, saved: d.saved, pages: d.pages,
+                  outputs: d.outputs, saved: d.saved, pages: d.pages, drawn: d.drawn,
                   text: d.lines.map(l => l.t) };
   });
   checkTrue('a document was built', !!printed);
@@ -216,9 +240,11 @@ const BAGS = [
   check('…reading 250 against 250', [printed.body[0][2], printed.body[0][3]], ['250', '250']);
   check('…and the bag that disagrees carries its variance', printed.body[4][4], '+50');
 
-  /* THE OFFICE SAID NO PHOTOGRAPHS. A sheet of bag pictures is not what
-     somebody adding up a delivery wants in their hand. */
-  check('NO photo is drawn anywhere on it', printed.images, 0);
+  /* THE OFFICE SAID NO BAG PHOTOGRAPHS. A sheet of bag pictures is not what
+     somebody adding up a delivery wants in their hand — five bags here, and
+     one of them carries a PhotoUrl. The damaged seed photos ARE wanted, and
+     are counted separately below, so the test cannot pass on a bare count. */
+  check('no bag photo is drawn', printed.drawn.filter(d => /x\.jpg/.test(d.im)).length, 0);
 
   console.log('\nThe totals, and BOTH variances');
   const has = re => printed.text.some(t => re.test(t));
@@ -244,6 +270,22 @@ const BAGS = [
   check('nothing is called excess while it is inside the allowance',
         has(/EXCESS/i), false);
 
+  console.log('\nThe damaged seed photos are ON the sheet');
+  checkTrue('the section is headed', has(/DAMAGED SEED PHOTOS/));
+  check('the two that loaded are drawn', printed.drawn.length, 2);
+  /* SIZED FROM THEIR OWN SHAPE. A damaged seed count stretched into a fixed
+     box is a picture nobody can count anything in. */
+  const shapeOf = d => (d.w / d.h).toFixed(2);
+  check('the landscape one keeps 4:3', shapeOf(printed.drawn[0]), (400 / 300).toFixed(2));
+  check('…and the tall one keeps 1:2', shapeOf(printed.drawn[1]), (300 / 600).toFixed(2));
+  check('they sit side by side on one row', printed.drawn[0].y, printed.drawn[1].y);
+  checkTrue('…and the second is to the right of the first',
+            printed.drawn[1].x > printed.drawn[0].x);
+  /* A sheet short of a picture with nothing saying so reads as a count
+     nobody photographed. */
+  checkTrue('the one that would not load is SAID, not silently dropped',
+            has(/1 damaged seed photo\(s\) could not be loaded/));
+
   const onScreen = await page.evaluate(() => ({
     rate: (document.getElementById('t2-dmg-pct').textContent || '').trim(),
     used: (document.getElementById('t2-dmg-used-pct').textContent || '').trim(),
@@ -263,17 +305,17 @@ const BAGS = [
   console.log('\nDownload draws the SAME document');
   /* Two builders drift. Comparing what each drew is the only thing that
      says they have not. */
-  await page.evaluate(() => { window.__PDFS = []; window.downloadSeedAuditPdf(); });
+  await page.evaluate(() => { window.__PDFS = []; return window.downloadSeedAuditPdf(); });
   const saved = await page.evaluate(() => {
     const d = window.__PDFS[0];
     return d && { saved: d.saved, printed: d.printed, text: d.lines.map(l => l.t),
-                  head: d.head, body: d.body, images: d.images };
+                  head: d.head, body: d.body, drawn: d.drawn };
   });
   checkTrue('it saved a file', saved && /^Seed_Audit_278_/.test(saved.saved));
   check('…and did NOT send it to the printer', saved.printed, false);
   check('every line on the printed sheet is on the downloaded one', saved.text, printed.text);
   check('…the same table', [saved.head, saved.body], [printed.head, printed.body]);
-  check('…and no photo on that one either', saved.images, 0);
+  check('…and the same pictures, in the same places', saved.drawn, printed.drawn);
 
   console.log('\nExcess damage says so');
   await page.evaluate(() => {
@@ -282,7 +324,7 @@ const BAGS = [
     el.dispatchEvent(new Event('input', { bubbles: true }));
     window.calcPlanting();
     window.__PDFS = [];
-    window.downloadSeedAuditPdf();
+    return window.downloadSeedAuditPdf();
   });
   const over = await page.evaluate(() => window.__PDFS[0].lines.map(l => l.t));
   checkTrue('800 against a 500 allowance is named as excess',

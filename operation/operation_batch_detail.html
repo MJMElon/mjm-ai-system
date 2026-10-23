@@ -4740,7 +4740,7 @@
                 document.getElementById('t2-date').valueAsDate = new Date();
                 generateWorkerIcons();
 
-                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes, transplantedRes, cull1Res] = await Promise.all([
+                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes, transplantedRes, cull1Res, trayCalRes, trayDoRes] = await Promise.all([
                     _supabase.from('shared_breeds').select('name').order('name'),
                     _supabase.from('operation_batches').select('name').order('name', { ascending: false }),
                     _supabase.from('operation_trays').select('*'),
@@ -4751,6 +4751,20 @@
                     _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change, remark').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
                     // 1st culling names its tray directly in plot_name.
                     _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', '1st_Culling'),
+                    /* The other two ways a tray empties — an approved
+                       correction to its count, and a small polybag sale that
+                       leaves straight out of it. The batch list's Tray Status
+                       tab reads the same two, because this is the same rule
+                       and a tray offering 1,200 holes here must offer 1,200
+                       there. Both tolerate a refusal: a tray figure that is
+                       merely stale is better than a page that does not load. */
+                    _supabase.from('shared_inventory_logs')
+                        .select('batch_name, plot_name, quantity_change, remark')
+                        .eq('transaction_type', 'Stock_Calibration')
+                        .then(r => r, () => ({ data: [] })),
+                    _supabase.from('shared_do_records')
+                        .select('status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+                        .then(r => r, () => ({ data: [] })),
                     // Month Lock Calendar — Transplanting/Culling rows lock the
                     // same way DO/AL do, keyed to each row's own saved date.
                     // Tolerates the table not existing yet, same as elsewhere.
@@ -4768,7 +4782,9 @@
                     trays:        globalTrays,
                     planted:      usedTrayRes.data || [],
                     transplanted: transplantedRes.data || [],
-                    cull1:        cull1Res.data || []
+                    cull1:        cull1Res.data || [],
+                    calibrations: (trayCalRes && trayCalRes.data) || [],
+                    sales:        MJMTrayStock.salesLinesOf((trayDoRes && trayDoRes.data) || [])
                 });
                 trayUsageMap    = trayStock.usage;
                 trayCapMap      = trayStock.capacity;
@@ -9523,7 +9539,44 @@ Thank you.`;
            So the document is built here and the buttons differ only in what
            they do with it. Same rule the audit board follows with its two
            crosses — one writer, two ways in. */
-        function _buildSeedAuditDoc() {
+        /* THE DAMAGED SEED PHOTOS, for the sheet.
+
+           `opsPhotos` is a `let` at script scope — the Operations Site Proof
+           gallery on Seed Planting, which is the physical count of the
+           damaged seed. This names the one thing the sheet wants out of it,
+           rather than the sheet reaching into another tab's state. */
+        function _damagePhotosForPrint() {
+            try { return (opsPhotos || []).filter(p => p && p.src); }
+            catch (e) { return []; }
+        }
+
+        /* A stored photo, read back with its own shape.
+
+           The SHAPE comes off the image and never off a number here: a
+           thumbnail stretched to a fixed box is a picture of a damaged seed
+           count that nobody can count anything in. Same rule the papan tanda
+           logo follows.
+
+           Every part of it is best effort — a photo that will not load must
+           not take the sheet down with it, because the figures are what
+           somebody is actually printing. */
+        async function _seedLoadPhoto(url) {
+            try {
+                const dataUrl = /^data:/i.test(url) ? url : await _seedUrlToDataUrl(url);
+                const size = await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+                    img.onerror = () => resolve(null);
+                    img.src = dataUrl;
+                });
+                return size ? { dataUrl, w: size.w, h: size.h } : null;
+            } catch (e) {
+                console.warn('[seed audit] a damaged seed photo could not be read:', url, e);
+                return null;
+            }
+        }
+
+        async function _buildSeedAuditDoc() {
             const jsPDFNS = window.jspdf || window;
             if (!jsPDFNS || !jsPDFNS.jsPDF) {
                 showToast('PDF library not loaded. Refresh and try again.', 'error');
@@ -9757,6 +9810,58 @@ Thank you.`;
                         : ''), barX, dy);
             y += DMG_H + 6;
 
+            /* ── THE PHOTOS OF THAT COUNT.
+
+                  The office asked for them on this sheet, and the figure is
+                  the reason: 327 damaged seeds is somebody's word until the
+                  trays are in front of you. The bag photos are deliberately
+                  NOT here — a sheet of bag pictures is not what somebody
+                  adding up a delivery wants in their hand — and these are,
+                  because they are the evidence for the one figure on the
+                  page that nothing else on it can check.
+
+                  One that will not load is SKIPPED and SAID, never silently
+                  dropped: a sheet short of a picture with nothing saying so
+                  reads as a count nobody photographed. */
+            const dmgPhotos = [];
+            for (const p of _damagePhotosForPrint()) {
+                const got = await _seedLoadPhoto(p.src);
+                if (got) dmgPhotos.push(got); else dmgPhotos.push(null);
+            }
+            const shown = dmgPhotos.filter(Boolean);
+            const missing = dmgPhotos.length - shown.length;
+            if (dmgPhotos.length) {
+                if (y + 30 > pageH - 60) { doc.addPage(); y = margin + 20; }
+                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+                doc.text('DAMAGED SEED PHOTOS', margin, y); y += 14;
+
+                // Three across, each sized from its OWN shape so nothing is
+                // stretched, and a row is as tall as its tallest picture.
+                const GAP = 10, PER_ROW = 3;
+                const cellW = (pageW - margin * 2 - GAP * (PER_ROW - 1)) / PER_ROW;
+                const MAX_H = 150;
+                for (let i = 0; i < shown.length; i += PER_ROW) {
+                    const row = shown.slice(i, i + PER_ROW);
+                    const sized = row.map(p => {
+                        const scale = Math.min(cellW / p.w, MAX_H / p.h);
+                        return { p, w: p.w * scale, h: p.h * scale };
+                    });
+                    const rowH = Math.max(...sized.map(s => s.h));
+                    if (y + rowH > pageH - 60) { doc.addPage(); y = margin + 20; }
+                    sized.forEach((s, j) => {
+                        doc.addImage(s.p.dataUrl, 'JPEG',
+                                     margin + j * (cellW + GAP), y, s.w, s.h);
+                    });
+                    y += rowH + GAP;
+                }
+                if (missing > 0) {
+                    doc.setFont('times', 'normal'); doc.setFontSize(8); setText(RED);
+                    doc.text(missing + ' damaged seed photo(s) could not be loaded and are not on this sheet.',
+                             margin, y); y += 12;
+                }
+                y += 4;
+            }
+
             // ── REMARK
             const remarkText = (document.getElementById('t8-batch-remark').value || '').trim();
             if (remarkText) {
@@ -9791,8 +9896,8 @@ Thank you.`;
         /* An onclick that throws does nothing and says nothing — the lesson
            the payroll claim form cost a week. Both buttons report what broke
            in words somebody can read down the phone. */
-        function _seedAuditPdfGuard(what, fn) {
-            try { return fn(); }
+        async function _seedAuditPdfGuard(what, fn) {
+            try { return await fn(); }
             catch (e) {
                 console.error('[seed audit ' + what + ']', e);
                 alert('The Seed Audit report could not be ' + what + '.\n\n' + (e && e.message ? e.message : e) +
@@ -9801,8 +9906,8 @@ Thank you.`;
         }
 
         function downloadSeedAuditPdf() {
-            return _seedAuditPdfGuard('produced', () => {
-                const built = _buildSeedAuditDoc();
+            return _seedAuditPdfGuard('produced', async () => {
+                const built = await _buildSeedAuditDoc();
                 if (!built) return;
                 built.doc.save(built.filename);
                 return built.filename;
@@ -9817,8 +9922,8 @@ Thank you.`;
            The frame is reused, so pressing Print twice does not leave a
            second copy of the file behind. */
         function printSeedAuditPdf() {
-            return _seedAuditPdfGuard('printed', () => {
-                const built = _buildSeedAuditDoc();
+            return _seedAuditPdfGuard('printed', async () => {
+                const built = await _buildSeedAuditDoc();
                 if (!built) return;
                 built.doc.autoPrint();
                 const url = built.doc.output('bloburl');
