@@ -1892,6 +1892,326 @@ after it, in the same block.
 `shared_palms.js` and holds both pages to it — 26 of its checks fail on the
 previous code.
 
+## The photo IS the seed count, so the bag that agreed keeps it too
+
+A bag whose AI count tallied had its photo thrown away on the spot —
+`if (match) st.photoBase64 = null` — and the save wrote no `PhotoUrl` for
+it either. The office pressed Count Seeds, the row went green, and the
+picture the AI had just counted was gone before anybody could look at it.
+
+**"✓ Checked · AI counted 250" with nothing behind it is a claim, not a
+record**, and the bag somebody queries months later is exactly the one that
+agreed at the time. Every photo is kept and uploaded now, tally or not.
+
+It also closed a hole nobody had noticed: a row that tallied and was LATER
+edited — a corrected supplier figure, a re-keyed audit count — became a
+mismatch **with no photo**, because the photo had been dropped while it
+still agreed. The one state where the picture is most wanted was the one
+state that could not have it.
+
+**A matched row offers the BUTTON and not the picture.** This list is read
+by running down it for the row that disagrees, and a thumbnail against
+every bag is what stops that working. The mismatch keeps its picture open
+because it is the row to look at.
+
+### Recount asks WHICH, and it counts the CLEAN frame
+
+The button opened the camera, every time. So an AI count that came back
+wrong — 300 against a bag of 250, with a perfectly good photo of it on
+screen — could only be answered by walking back to the bag and laying the
+seeds out again. **The picture was never the problem; the count was.**
+
+Recount now offers *Count this photo again* or *Take a new photo*, and with
+no photo yet it goes straight to the camera, there being nothing to choose
+between. It is a dialog and not a `confirm` — two real options and a
+cancel cannot be an OK/Cancel box, and a prompt somebody dismisses out of
+habit is a cancel that looks like a save.
+
+**What is shown, and what is stored as `PhotoUrl`, carries a red dot on
+every seed the AI found.** Feeding that back would have it counting its own
+marks and agreeing with itself for ever. So the untouched frame is kept
+beside it — `sourceBase64`, uploaded as **`SrcUrl:`** — and that is what a
+recount is given. Without the upload the choice would work only until the
+page was reloaded. A row written before `SrcUrl` existed has none, and that
+row simply offers the camera the way it always did.
+
+`_uploadBagPhotos` is the ONE writer of both pictures, so the two cannot
+come to be uploaded by different rules; the save is still the fallback for
+one that failed on the day.
+
+`tests/seed_count_roundtrip.cjs` drives all of it through the real handler
+— the only stubs are the AI itself and the two canvas steps — and the one
+that matters asserts the AI was handed the clean frame and not the dotted
+one. **`seedAuditPhotoState` is a `const` at script scope and so is not on
+`window`**, which is as it should be: everything is read off the row the
+office is actually looking at.
+
+## The seed audit sheet prints, and it carries the damage
+
+The office asked for a Print button: bag numbers, the supplier figure, the
+audited figure, the totals and the variance — **and no photographs**, which
+is right, a sheet of bag pictures is not what somebody adding up a delivery
+wants in their hand.
+
+A PDF already did almost all of it, so the one thing Print must not be is a
+second drawing of the same report: two builders drift, and a printed sheet
+that disagrees with the file beside it is a difference nobody can explain
+afterwards. `_buildSeedAuditDoc()` is the document and the two buttons
+differ only in what they do with it — Download saves it, Print calls
+`autoPrint()` and loads the blob into a hidden iframe, because a popup
+blocker eating a print is a button that does nothing.
+`tests/the_seed_audit_sheet_prints.cjs` drives both and compares what each
+one drew, line for line.
+
+Three things that came out of it:
+
+- **TWO variances, where there was one.** The Variance COLUMN adds up to
+  audited − supplier; that figure was worked out and then never printed, so
+  somebody adding the column down got a number appearing nowhere in the
+  totals. It sits beside *vs expected*, which answers the other question.
+- **Damage Control is Seed Planting's figure, on the Seed Audit sheet.**
+  The audit says what arrived and the damage says how much of it was no
+  good — same delivery, and reading them off two screens is how a count
+  gets reconciled against the wrong thing. Every figure is `calcPlanting`'s
+  own, off the same three inputs, so the sheet cannot say one thing while
+  Tab 2 says another; the test asserts the two agree on the real numbers
+  (327 of 10,500 is 3.11%, 65.40% of a 500-seed FOC).
+- **The footer numbers EVERY page.** It was drawn once and said "Page 1 of
+  1", true only while the report could not run over. The damage block can
+  push it onto a second page, and a sheet whose second page has no footer
+  while the first claims to be the only one is worse than no numbering.
+
+**And the DAMAGED SEED PHOTOS are on it**, which the office asked for in the
+same breath as "no photographs". There is no contradiction: a sheet of BAG
+pictures is not what somebody adding up a delivery wants in their hand, and
+the Operations Site Proof gallery is the evidence for the one figure on the
+page that nothing else on it can check. Loading them made the builder
+`async`, so both buttons await it. Two rules in the drawing: each photo is
+sized from **its own shape**, never into a fixed box, because a damaged seed
+count stretched out of proportion is a picture nobody can count anything in;
+and one that will not load is **skipped and SAID**, because a sheet short of
+a picture with nothing saying so reads as a count nobody photographed.
+`_damagePhotosForPrint()` is the one accessor the sheet reads the gallery
+through, rather than reaching into another tab's state.
+
+**AND THE PICTURES FILL THE ROOM THEY ARE GIVEN.** Three across at a fixed
+height meant two photos sat as thumbnails at the top of an otherwise empty
+page while the page before them ended early — the office looked at it and
+said *"不要一半一半 很丑"*. So the layout is CHOSEN rather than fixed: one,
+two or three across, whichever fills the most of the room actually left.
+A photo is only ever capped by the width of its column, so **fewer across
+is a bigger picture**, and two photos on a page of their own come out a
+half-page each instead of a pair of stamps.
+
+Four things hold it together:
+
+- **A layout taller than the room may be scaled down, but only to `MIN_K`.**
+  Past that the grid is being bent to fill a page rather than laid out, and
+  six photos would come back as one tall column of slivers.
+- **The fallback scales the SHORTEST grid to the room**, never a taller one
+  scaled further. The first version measured the fallback against ten times
+  the room, which chose one-across and ran a 1,448pt block off the foot of
+  an 842pt page.
+- **The remark is measured BEFORE the pictures**, or filling the page with
+  them pushes two lines of text onto a sheet of their own.
+- **A row narrower than the page is centred**, so it reads as laid out
+  rather than as pushed into the left margin.
+
+**The test measures against the ROOM, never a pinned width.** A threshold on
+the photo size passes or fails on how many bag rows the fixture happens to
+carry, which is the one thing this layout exists to adapt to.
+
+**And the heading goes with the pictures.** The break was measured for the
+heading alone and then AGAIN, separately, for the first row of photos — so a
+page with room for the words and not for a photo printed *DAMAGED SEED
+PHOTOS* at the foot of one page and the pictures at the top of the next. **A
+heading with nothing under it reads as a section somebody forgot to fill
+in**, which on this sheet is the wrong thing to suggest. The rows are
+measured BEFORE the heading is drawn and the break is taken ahead of the
+pair — the same rule the Worker Record follows for a plot, where the break
+goes before the run and never inside it. Which page they land on after that
+is physics: a photo row is about 126pt tall, so a damage block ending within
+that of the foot takes the whole section over. The lever is `MAX_H`.
+
+### The footer owns the bottom of the page, and nothing above it knew
+
+The office printed the sheet and said *"第一页的24被吃掉了"* — the 24 on page
+one had been eaten. It is always the 24th, and that is the tell: everything
+above the bag table is a fixed height, so the table always starts at 190 and
+its rows are always 23.5 apart.
+
+**`margin: { left, right }` leaves autoTable to pick the other two, and it
+picks 40.** Which is `pageH - 40` — **the exact line the footer draws its
+rule on**. So the table was entitled to fill page one down to 802, put its
+24th row at 765.5–789, and the footer then drew its rule 12pt under it and
+its line of type 23pt under that. On paper the tray trims that strip and the
+row goes with it.
+
+**The blocks AFTER the table were worse off, having no floor at all.** Only
+the damage block ever checked. At 53 bags the totals box was drawn at 771 —
+across the footer — and the analysis under it at **835 on an 842pt page**, so
+the one figure on the sheet claiming to be the delivery and every percentage
+beside it were simply not on it. Nothing said so, because the rows above
+them were perfectly correct.
+
+So there is **one floor** — `FOOT_H` is 60, `floorY` is `pageH - FOOT_H` —
+and three things obey it:
+
+- **The table is told all four margins**, `bottom: FOOT_H`. Page one now
+  stops at 23 rows and the 24th opens page two.
+- **`_need(h)` is asked before every block that follows**: the totals box,
+  the analysis pair, the damage block (which had its own copy of this test
+  and now shares the one) and the remark. It takes the next page WHOLE
+  rather than drawing into the band, resuming at `margin + 20` — where the
+  damage block has always resumed, so a continuation page starts in one
+  place however it was reached.
+- **The photo room is measured off `floorY`** instead of its own `pageH -
+  60`, which was the same number written twice.
+
+**A STUB THAT DOES NOT PAGINATE CANNOT SEE ANY OF THIS.** The test's
+`autoTable` recorded the body and laid every row on one page, so a row in
+the footer band — or a totals box off the foot of the sheet — passed without
+comment. It paginates now, honouring the margin it is GIVEN and falling back
+to 40 the way the real library does, at the real head and row heights (35
+and 23.5, measured off jspdf-autotable 3.8.2). Six checks fail on the
+previous code and the first of them names the office's own row:
+`p1 #24 ends 789`.
+
+And the measure is the **FLOOR, never the rule.** A check against the rule
+at 802 passes over all of it — 789 is above 802 and still inside the band —
+which is how the first version of this test came back green on the broken
+code.
+
+**The page now carries the three no-cache metas.** Every line of its code is
+inline, so the PAGE is the deploy, and this was the second print fix in a row
+that had to reach the office. One hard reload per machine.
+
+### The panel and its pictures are ONE thing
+
+*"这个移动去第三页 永远和照片在一起"* — the DAMAGE CONTROL panel printed on
+one sheet and the trays it was counted off on the next.
+
+The break was taken for the panel ALONE, and then the photos measured
+themselves against whatever was left and moved if it was under `MIN_USEFUL`.
+So a page with room for the panel and not for a picture split them: 3.11%
+over here, and the evidence for it over the page. **That figure is the one
+thing on the sheet nothing else on it can check** — which is why the
+pictures are on the sheet at all — so the reader doing the joining up is the
+whole value of the section gone.
+
+So the ask carries the pair: `_need(DMG_H + 6 + HEAD_H + MIN_USEFUL + tailH)`,
+and the photo section no longer moves itself. Same rule as the heading with
+its pictures, and the Worker Record with a plot — **the break goes before the
+run, never inside it**.
+
+Two things it cost:
+
+- **The photos are LOADED and measured before the panel is drawn**, because
+  the panel cannot ask for room it does not yet know the size of. The
+  `await`, the remark measurement and `_fitPhotos` all moved above it.
+- **The photo room can no longer go under `MIN_USEFUL`** by construction, so
+  the self-move is gone. A remark long enough to squeeze the pictures out
+  gives its own space back instead and rides on its own `_need` — one line
+  of text on a sheet by itself is a better fault than this one.
+
+**THE FIXTURE IS 38 TO 43 BAGS AND NOTHING ELSE.** That is the only window
+where the pair splits — few enough that the panel still fits at the foot of
+page two, many enough that a picture does not. The first version of this
+check used 44, which is one row past it, and passed over the broken page
+exactly as green as over the fixed one. The test sweeps that window rather
+than trusting the arithmetic.
+
+## A lock in the stylesheet is a paint, not a gate
+
+The office verified a Seed Audit report and said *"verified 了我还是可以
+save and print"* — they could still save it.
+
+A reviewed or verified tab takes `.mjm-locked`, and the CSS gives every
+input and button on it `pointer-events:none`. That greys them, and that is
+all it does. It does not stop the **keyboard** — a greyed button is still
+focusable and still fires on Enter — and it cannot stop a **call**, which
+is exactly what the close dialog makes: `confirmCloseBatchRecord` and
+`saveOneUnsaved` reach `window[TAB_SAVE_FN[n]]()` directly. So verifying a
+report, typing into it and pressing X then Leave **rewrote it**, with
+nobody's signature moving.
+
+**The refusal belongs where every route goes through**, which is
+`_trackTabSave` — the one wrapper all seven tab saves already pass. Three
+things in it:
+
+- **The CLASS is the test, not a second reading of the banner.**
+  `setTabLock` sets it for every reason a tab is not editable: reviewed,
+  verified, and a login without the Fill in report tick. A second copy of
+  that list is one more thing to get wrong.
+- **It refuses as an ERROR**, which here means one thing — what you keyed
+  is not in the database. So the close dialog goes on refusing to close and
+  offers **Don't save**, which is the right answer for a change that must
+  not be kept.
+- **An explanation box is untouched.** It carries `.mjm-always-open` and
+  its own Save, which is not one of the seven — the CSS above it says at
+  length why that is deliberate.
+
+**PRINT AND DOWNLOAD STAY LIVE, and that is the half the office may not
+have meant.** They change nothing, and a verified sheet is the one most
+worth having on paper: greying them means unverifying a report in order to
+print it, which is the opposite of what the lock is for. They carry
+`.mjm-review-allow` now so they work AND look like they work. If a printout
+of a signed-off report is ever not wanted, that mark is the one line to
+take off — but Save is the one that had to stop, and the stylesheet was
+never going to be what stopped it.
+
+`tests/unsaved_close_guard.cjs` drives the real dialog against a locked
+tab: the save never runs, the tab stays unsaved, X and Leave does not
+rewrite it, and both read-only buttons are still live.
+
+## A tray empties every way the seedlings leave, not two of them
+
+Tray Status read **P3 · 230 (81)** over a batch with nothing standing in P3,
+and the office checked it before saying so.
+
+`shared/shared_tray_stock.js` knew two ways out of a tray: the 1st culling
+and the transplant. Life of Seedlings has known four since it was written —
+
+    preBalance = planted - cull1 - trans - salesPre + calibrationPre
+
+— and **the two missing ones are not rare.** A batch SOLD out of the tray,
+and a batch whose pre-nursery count was corrected by an approved
+calibration, both went on standing in a tray here. Its own arithmetic was
+then too big, so the cap below it took nothing off, and the phantom was
+parked on whichever tray happened to survive the trim.
+
+Batch 230 is the batch this file already names for exactly that: an approved
+**minus 1,000 against tray P30**, *"Sold out 1,000 Pre nursery seedlings (DO:
+01605)"*. Its standing read a thousand too high and the remainder had to land
+somewhere — P3, which was the only other tray it had ever been in.
+
+Three things in the fix:
+
+- **The tray the row NAMES is moved, not only the batch total.** The trim is
+  a fallback for a movement nothing can place, and its "largest tray first"
+  is a guess by construction — the file says so in its own words. A
+  calibration keyed against P30 is not a guess, so P30 gives its holes back
+  and nothing has to be apportioned.
+- **An unapproved calibration moves nothing**, here as everywhere, and a
+  calibration against a FIELD plot is not a tray's business — those
+  seedlings left as a transplant and taking them off again is one loss
+  twice. The same split `calibrationPre` makes.
+- **`salesLinesOf()` flattens a delivery order once.** Five lines per order
+  and a cancelled-order test (`'Cancelled'` with the capital, or
+  `[CANCELLED]` in the remark) are two rules that must not be written per
+  caller.
+
+**Both screens pass all four**, and the test reads the two call sites to say
+so: a caller short of an input is the thinner copy all over again.
+
+`shared/CHECK_what_is_standing_in_each_tray.sql` is the size of it — every
+batch that moves, term by term, with what each of its trays is left holding.
+A batch whose gap is NOT its sold plus its calibration is the interesting
+one, and the term columns say which of them is doing it.
+
+`tests/a_tray_loses_every_way_they_leave.cjs` drives the shipped file with
+230's own figures and holds the before and the after side by side.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd
@@ -2023,6 +2343,160 @@ browser and holds all of it — a plot walked late drops off, a plot nobody
 walked stays on, an audit from before the window opened clears it and is
 recorded as missed, and nothing clears a window that has not closed yet.
 
+## An alert is per BATCH, because a Plot Condition audit is
+
+The back office alert board showed nothing but Papan Tanda, and the
+office asked why Plot Condition had gone quiet. It was not a clean month.
+Every reading but one was being thrown away before any filter ran.
+
+`latestPerPlot()` keeps the newest row per thing, which is right — only
+the latest reading of a thing is its current state. **The trap is what
+"a thing" means, and it is not the same for both tables.**
+`audit_script.js` says it in its own words: *"The main nursery tracks
+work batch by batch: a plot holds several, each with its own age and its
+own audit. Pre Nursery does not work that way."* So:
+
+- **Papan Tanda** is one sign per PLOT. The plot is the unit.
+- **Plot Condition** in the main nursery is one row per plot per BATCH.
+
+Collapsing plot condition on the plot alone kept ONE row of the seven a
+plot might carry, so a rat found on batch 253 in B01 vanished the moment
+batch 268 was saved and came back clean. **And it was not even the latest
+reading**: a plot's batches go up in ONE insert — the batch queue holds
+them until the last one — so `created_at` differs by milliseconds and
+whichever sorted highest is the one that survived. Which alert you got
+was effectively arbitrary.
+
+**Papan Tanda was unaffected, and that is exactly why it was the only
+thing left on the board.** Pre Nursery's plot condition was unaffected
+too, being audited plot by plot — it simply happened to be clean, which
+is why the fault read as "only papan tanda works" rather than "only the
+main nursery is broken".
+
+Four things in the fix:
+
+- **`keyOf` is PASSED, never guessed.** The next table to use this has to
+  say what its unit is, rather than inheriting an assumption that was
+  only ever true of one of them.
+- **The query has to ask for what the key reads.** `batch` was not in the
+  select at all, so keying on it without that would have made every key
+  end in an empty string and changed nothing — the quietest possible way
+  for this fix to look applied and do nothing.
+- **The card counts PLOTS and the pill names the BATCH.** "2 plots
+  affected" is what somebody walks to; the batch is what the reading was
+  taken of, and a plot flagged on one batch and clean on the next is not
+  a flagged plot.
+- **The notification fingerprint carries the batch**, or a second flagged
+  batch on an already-flagged plot raises nothing.
+
+`tests/an_alert_is_per_batch.cjs` lifts the shipped `latestPerPlot` out
+of the page and drives the office's own case — three batches on B01, the
+rat on 253, all saved in one insert. Eight of its checks fail on the
+previous code, and two of them drive the OLD behaviour directly to show
+what it cost.
+
+**`audit_sw.js` precaches `audit_admin.html`**, so `VER` is bumped in the
+same commit or the board reaches nobody.
+
+### And the thing the auditors were actually finding was on no test at all
+
+The per-batch fix was right and changed nothing the office could see, so
+they asked again. Three checks, in the order the house rule says: the
+current month (`CHECK_why_no_plot_condition_alert.sql`) came back **107
+readings, 0 flagged**; every month ever (`CHECK_the_alert_board_every_month
+.sql`) came back **142 readings, 0 flagged, 0 hidden** — the board had
+never raised a Plot Condition card in its life, so the collapse fault had
+simply never bitten. Then the census
+(`CHECK_has_a_plot_ever_read_anything_but_clean.sql`) answered it:
+**140 of the 142 readings are not clean, and not one of them was on the
+board.**
+
+**The form asks four things and the board tested three.** The module card
+above it has always promised *"Pest, animal damage, disease and leaf
+colour"*, and `disease` was on no test and **not even in the select**. So
+**76 readings of Banyak bintik and 40 of Sedikit** — 116 of 142 — were
+walked to, tapped in, and shown to nobody. Rats and pests really are
+`Tidak Ada` everywhere and leaf colour never reaches 4, so disease was the
+*only* thing the auditors were finding, which is why an empty board looked
+exactly like a clean nursery.
+
+Three things in the fix:
+
+- **BANYAK ONLY, the same threshold as its sibling pest**, and the count is
+  the argument: Sedikit as well is 116 plots, which is the whole nursery,
+  and a board listing every plot is a board nobody reads. Sedikit is one
+  string away the day the office asks.
+- **The exact equality is what keeps the sentinel out.** A declined audit
+  stamps the whole `No Audit Required — Culling Plot` string into all four
+  columns, and that is not a reading of a disease. An `indexOf`, a `LIKE`
+  or a truthiness test would put five culling plots on the board as
+  diseased. **The first version of the census had exactly that bug** and
+  printed those five as the worst rows on the page — `declined` is counted
+  on its own now.
+- **The check and the board have to agree.** The census marks a value with
+  what the board does about it, so a threshold changed in one and not the
+  other is a check that lies about the screen. Section 6 of
+  `tests/an_alert_is_per_batch.cjs` holds the select, the test and the
+  sentinel.
+
+**And the select is now asserted by the BATCH alone, not by the whole
+column list.** Adding `disease` broke that check for the wrong reason —
+a column list typed out in a test is a list that will be wrong, which this
+file already says of a column list typed out in a row.
+
+## A round that has passed is not carried. Only maintenance is.
+
+The board used to rescue every overdue round from the last three months
+onto today's list. For a plot somebody simply had not got to yet that is
+right. For a plot nobody has EVER walked it stacks: N15 had never had a
+Seedling Height audit, so the board drew **AUG R-1, AUG R-2 and SEP R-1**
+one above the other, three rows asking the same question, above October's.
+The office said it in one line — *"remove all aug and sep audit to do"* —
+and the shape of that sentence is exactly what they had said of papan's
+two rows before: *"this 2 already passed, no need to show."*
+
+So `carriedOverdue()` carries **maintenance and nothing else**. Papan
+already left for a reason of its own — a two-month roster asks about
+September in October's row, so carrying September listed the same plots
+twice — and Plot Condition and Seedling Height now follow it on the plain
+judgement rather than on the window.
+
+**MAINTENANCE IS NOT A ROUND**, which is why it stays and why that is not
+an inconsistency. Its row exists because a deadline has pending work on
+it, so there is no window to be outside of, and dropping one would hide a
+task the maintenance module can still see. The one thing that retires it
+is an audit against its `task_id`, or an admin closing it with the ×,
+which writes a record carrying a name, a date and how overdue it was. An
+automatic drop would take that record away. The office was asked and said
+so: leave the × to do it. `MAINT_OCCURRENCES` also depends on this —
+`loadMaintTimeline` appends past-month buckets precisely so
+`carriedOverdue()` can bring an older deadline forward, and its own
+comment says that.
+
+**WHAT IT COSTS, and the office chose it with this in front of them.** A
+round nobody walks shows only while its window is actually OPEN — one day
+a month on the MN plot schedule. A plot never audited at all, N15 being
+the live one, is on no row between rounds, where before it stacked. That
+is the same trade already made for the late-work rule one section up, and
+it rests on the same thing: **the FACT is not lost.** `missedRounds()`
+walks the months itself and does not read `carriedOverdue()`, so every
+missed round is still filed in Audit History under the month that owed
+it. **That is now the only place a plot nobody walks accumulates**, which
+makes the monthly report the thing to read rather than the board.
+
+Two things to know before touching it:
+
+- **It is ONE line** — `if (o.mod !== 'maint') return;` — and the test
+  asserts that line, because a rule half-applied across three modules is
+  how one of them quietly goes on stacking.
+- **`audit_sw.js` precaches `audit_home.html`**, so a change to the board
+  reaches nobody until `VER` is bumped. It is a date plus a counter
+  (`mjm-26102301`); somebody may have bumped it already today, so take the
+  next one above everything in use.
+
+`tests/papan_list_spans_two_months.cjs` holds both halves: no round module
+carries a past month, and `carriedOverdue` says so in one line.
+
 ## Papan tanda is two months wide, because a sign goes up after the plot does
 
 The papan roster was the current calendar month: the plots the ledger
@@ -2090,13 +2564,15 @@ SEP 2026 one, above October's, and said of both: *"this 2 already
 passed, no need to show."* The two-month window IS the catching up,
 which is what it was asked for.
 
-`carriedOverdue()` skips `papan` and nothing else — the other three are
-still carried, on the office's own earlier rule that a round nobody has
-walked keeps showing. **What it costs:** a plot placed two months back
-or more and never audited is on no row at all, because it is outside the
-current window and there is nothing left on the board that could ask for
-it. A round done LATE is still filed in Audit History as a missed one:
-`missedRounds()` walks the months itself and does not read that list.
+`carriedOverdue()` skipped `papan` **and nothing else** when this was
+written. It now carries MAINTENANCE and nothing else — see the section
+below, where the office extended papan's outcome to the other two rounds
+on a reason of their own. **What it costs:** a plot placed two months
+back or more and never audited is on no row at all, because it is
+outside the current window and there is nothing left on the board that
+could ask for it. A round done LATE is still filed in Audit History as a
+missed one: `missedRounds()` walks the months itself and does not read
+that list.
 
 **And the strip has to SAY which month.** Two months of plots drawn as
 one run of identical circles answers a question nobody asked — the
