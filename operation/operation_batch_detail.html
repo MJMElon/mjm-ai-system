@@ -5410,12 +5410,31 @@
                                         onmouseenter="_t3CensusPop(${c.i}, true)" onmouseleave="_t3CensusPop(${c.i}, false)">
                                        <div class="text-[8px] font-black text-[#c07820] uppercase tracking-widest mb-2">Census · ${census.length} file${census.length > 1 ? 's' : ''}</div>
                                        ${census.map((d, k) => `
-                                         <button type="button" onclick="_openDocViewer('${_escAttr(d.base64)}', '${_escAttr(d.name || ('Census ' + (k + 1)))}')"
-                                                 class="mjm-review-allow t3-census-file w-full flex items-center gap-2 px-2 py-1.5 mb-1 bg-[#fdfaf4] border border-[#e8dcc8] rounded-lg hover:border-[#c07820] transition-colors cursor-pointer">
-                                           <span class="w-8 h-8 rounded border border-[#e8dcc8] bg-white bg-cover bg-center shrink-0 flex items-center justify-center text-sm"
-                                                 ${d.isImg ? `style="background-image:url('${d.base64}')"` : ''}>${d.isImg ? '' : '📄'}</span>
-                                           <span class="flex-1 text-[9px] font-bold text-[#3d2610] truncate text-left">${_escAttr(d.name || ('Census ' + (k + 1)))}</span>
-                                         </button>`).join('')}
+                                         <div class="t3-census-row flex items-center gap-1 mb-1">
+                                           <button type="button" onclick="_openDocViewer('${_escAttr(d.base64)}', '${_escAttr(d.name || ('Census ' + (k + 1)))}')"
+                                                   class="mjm-review-allow t3-census-file flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 bg-[#fdfaf4] border border-[#e8dcc8] rounded-lg hover:border-[#c07820] transition-colors cursor-pointer">
+                                             <span class="w-8 h-8 rounded border border-[#e8dcc8] bg-white bg-cover bg-center shrink-0 flex items-center justify-center text-sm"
+                                                   ${d.isImg ? `style="background-image:url('${d.base64}')"` : ''}>${d.isImg ? '' : '📄'}</span>
+                                             <span class="flex-1 text-[9px] font-bold text-[#3d2610] truncate text-left">${_escAttr(d.name || ('Census ' + (k + 1)))}</span>
+                                           </button>
+                                           <!-- THE CROSS IS A SIBLING OF THE FILE, never a child.
+                                                The file opens on a click, so a cross inside it fires
+                                                both — the office would remove a census and get it
+                                                opened over the top of the panel. Same rule the
+                                                rejected signup and the audit board follow, and a
+                                                button inside a button is not a thing a browser will
+                                                draw anyway. It carries no .mjm-review-allow, so a
+                                                verified report greys it with everything else. -->
+                                           <button type="button" title="Remove this census"
+                                                   onclick="removeT3CardCensus(${c.i}, '${_escAttr(d.base64)}', '${_escAttr(d.name || ('Census ' + (k + 1)))}')"
+                                                   class="t3-census-del w-7 h-7 shrink-0 rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center text-xs font-black hover:bg-[#f8d7da] transition-colors">✕</button>
+                                         </div>`).join('')}
+                                       <!-- ADD IS OFFERED ON A PANEL THAT ALREADY HAS FILES TOO.
+                                            It was on the empty panel only, so a record whose census
+                                            was short of a page could not be added to -- the office
+                                            said it in one line: 要删除全部才重新 upload. -->
+                                       <button type="button" onclick="document.getElementById('t3-cardcensus-${c.i}').click()"
+                                               class="t3-census-add w-full mt-1 px-3 py-1.5 bg-white border border-[#c07820] text-[#c07820] text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdf6ec] transition-colors">+ Add Census</button>
                                        <div class="text-[8px] font-bold text-[#8a7a68] mt-1">Press one to open it — the viewer has Download.</div>
                                    </div>`
                                 : `<div id="t3-census-pop-${c.i}" class="hidden absolute right-0 top-full mt-1 z-30 w-64 p-3 bg-white border border-[#e8dcc8] rounded-xl shadow-lg text-left"
@@ -5839,8 +5858,16 @@
                 mapUrl:   Object.prototype.hasOwnProperty.call(patch, 'mapUrl')   ? patch.mapUrl   : curMap,
                 /* ADDED TO, NEVER REPLACED. A second day of keying against the
                    same plot brings its own census, and a list that replaced
-                   would throw away the one the first person attached. */
-                census:   Object.prototype.hasOwnProperty.call(patch, 'census')
+                   would throw away the one the first person attached.
+
+                   REMOVING IS `censusDrop`, and it names the FILE rather than
+                   its position. The list is re-read here, so an index taken
+                   off the screen a moment ago could point at a different file
+                   by the time it arrives — somebody else attaching one in
+                   between is all it takes. A url cannot drift. */
+                census:   Object.prototype.hasOwnProperty.call(patch, 'censusDrop')
+                            ? curCensus.filter(d => d && d.base64 !== patch.censusDrop)
+                          : Object.prototype.hasOwnProperty.call(patch, 'census')
                             ? curCensus.concat(patch.census || []) : curCensus
             };
             const hasQty = next.droneQty !== null && next.droneQty !== undefined;
@@ -5934,12 +5961,63 @@
             else if (pop.dataset.pinned !== '1') pop.classList.add('hidden');
         }
 
-        /* ADD CENSUS on a card that has none: a record keyed before the rule,
-           or one somebody is still assembling. Every file is uploaded on its
-           own and only the ones that reached storage are written, the same rule
-           tab 6's drone maps follow — one failure costs that page of the census
-           and not the rest. */
+        /* A VERIFIED REPORT IS NOT EDITED, and the stylesheet is not what stops
+           it. `.mjm-locked` greys a button and takes its pointer away; it does
+           not stop the keyboard and it does not stop a call. The census writers
+           are not among the seven tab saves `_trackTabSave` guards, so they ask
+           here — and the answer is the CLASS, which `setTabLock` sets for every
+           reason a tab is not editable, rather than a second reading of the
+           banner. */
+        function _t3CardLocked() {
+            const tab = document.getElementById('tab-3');
+            return !!(tab && tab.classList.contains('mjm-locked'));
+        }
+
+        /* REMOVING ONE CENSUS, not all of them. The panel was open-only, so a
+           page attached twice — or the wrong one attached at all — could be put
+           right only by clearing the record and starting again: 添加了的 census
+           无法被删除 要删除全部才重新 upload.
+
+           THE FILE IS LEFT IN STORAGE. This takes it off the RECORD, which is
+           the decision somebody is making; the blob costs nothing where it is,
+           and a delete that cannot be undone over a mis-press is the worse
+           failure. Same reasoning as the rejected signup and the admin-closed
+           plot: it is a record, not a deletion. */
+        async function removeT3CardCensus(i, url, name) {
+            if (_t3CardLocked()) {
+                showToast('This report is signed off — unverify it first to change the census.', 'error');
+                return;
+            }
+            const card = _t3CardEl(i);
+            if (!card || !url) return;
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) { showToast('Nothing saved — no batch number on this report.', 'error'); return; }
+            /* The crosses are a row of small identical targets and the one under
+               the thumb is not necessarily the one that was aimed at, so the
+               confirm NAMES the file. */
+            if (!confirm(`Remove "${name || 'this census'}" from ${card.dataset.cardPlot} on ${card.dataset.cardDay}?\n\nThe transplant rows are not touched.`)) return;
+            try {
+                await _t3WriteCard(batchId, card.dataset.cardPlot, card.dataset.cardDay, { censusDrop: url });
+                showToast('Census removed.', 'success');
+                await syncOnce(3, syncTab3);
+            } catch (e) {
+                showToast('Nothing changed — the census could not be removed: '
+                          + (e && e.message ? e.message : e), 'error');
+            }
+        }
+
+        /* ADD CENSUS, on a card that has none and on one that already has some:
+           a record keyed before the rule, one somebody is still assembling, and
+           one a page was missing from. Every file is uploaded on its own and
+           only the ones that reached storage are written, the same rule tab 6's
+           drone maps follow — one failure costs that page of the census and not
+           the rest. */
         async function uploadT3CardCensus(i, input) {
+            if (_t3CardLocked()) {
+                showToast('This report is signed off — unverify it first to change the census.', 'error');
+                if (input) input.value = '';
+                return;
+            }
             const card  = _t3CardEl(i);
             const files = input && input.files ? Array.from(input.files) : [];
             if (!card || !files.length) { if (input) input.value = ''; return; }

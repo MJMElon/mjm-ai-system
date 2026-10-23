@@ -75,7 +75,14 @@ window.supabase = { createClient: function () {
     b._settle = function () {
       var rows = b._rows();
       if (b._deleted) (window.__DELETED = window.__DELETED || []).push({ table: table, eq: b._eq, n: rows.length });
-      if (b._patch)   (window.__UPDATED = window.__UPDATED || []).push({ table: table, eq: b._eq, patch: b._patch });
+      if (b._patch) {
+        (window.__UPDATED = window.__UPDATED || []).push({ table: table, eq: b._eq, patch: b._patch });
+        /* AND IT IS APPLIED. A stub that records an update and leaves the row
+           as it was cannot show what the screen does after one -- a census
+           removed would redraw exactly as it did before, and the check would
+           pass on a page that changed nothing. */
+        rows.forEach(function (r) { for (var k in b._patch) r[k] = b._patch[k]; });
+      }
       return { data: b._one ? (rows[0] || null) : rows, error: null, count: rows.length };
     };
     b.then = function (r, j) { return Promise.resolve(b._settle()).then(r, j); };
@@ -440,8 +447,11 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
     window.__ROWS.shared_inventory_logs.push({
       id: 902, batch_name: '280', transaction_type: 'Transplant_Card', plot_name: 'N15',
       quantity_change: 0, transaction_date: '2026-10-20', created_at: '2026-10-20T02:00:00Z',
+      /* TWO files, because that is the screen the office sent back: a page
+         attached twice, with no way to take one of them off. */
       remark: 'Transplant card. Date: 2026-10-20 CensusList:'
             + [enc('https://store/transplant_census/280/N15-0.jpg'), enc('census-N15.png'), enc('')].join('|')
+            + ';' + [enc('https://store/transplant_census/280/N15-1.pdf'), enc('census-N15.pdf'), enc('')].join('|')
     });
   });
   await page.evaluate(async () => { await window.syncOnce(3, window.syncTab3); });
@@ -464,7 +474,7 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   checkTrue('the card with a census is there', !!n15);
   check('…its total is the figure', n15 && n15.total, '1,057');
   checkTrue('…dotted, because a total with paper behind it has to say so', n15 && n15.dotted);
-  check('…and the panel lists the census file', n15 && n15.files, 1);
+  check('…and the panel lists BOTH census files', n15 && n15.files, 2);
   checkTrue('…closed until somebody asks', n15 && n15.popHidden);
 
   await page.evaluate(i => window._t3CensusPop(i, true), n15.i);
@@ -504,6 +514,119 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   checkTrue('…carrying the file by name', added.cards[0] && /b07-census\.pdf/.test(decodeURIComponent(added.cards[0].remark)));
   check('…and not one transplant row was touched', added.rows, 0);
   checkTrue('it says so', added.toasts.some(t => t.t === 'success' && /census attached/i.test(t.m)));
+
+  console.log('\n── 6b · ONE CENSUS COMES OFF WITHOUT TAKING THE REST ──');
+  /* The office attached the same page twice and found the panel open-only:
+     添加了的 census 无法被删除 要删除全部才重新 upload. Two faults in one
+     sentence — no cross on a file, and no Add on a panel that already had
+     files, so putting it right meant clearing the record and starting again. */
+  const panel = await page.evaluate(i => {
+    const pop = document.getElementById('t3-census-pop-' + i);
+    return {
+      files: pop.querySelectorAll('.t3-census-file').length,
+      dels: pop.querySelectorAll('.t3-census-del').length,
+      add: pop.querySelectorAll('.t3-census-add').length,
+      /* The cross must be a SIBLING: inside the file button, every press
+         would remove the census AND open it over the top of the panel. */
+      delInsideFile: pop.querySelectorAll('.t3-census-file .t3-census-del').length,
+      /* …and it must NOT carry mjm-review-allow, or a signed-off report
+         would grey everything on the tab except the one button that
+         destroys something. */
+      delAllowedWhenLocked: pop.querySelectorAll('.t3-census-del.mjm-review-allow').length
+    };
+  }, n15.i);
+  check('a cross on every file', [panel.files, panel.dels], [2, 2]);
+  checkTrue('…and an Add on a panel that already has some', panel.add === 1);
+  check('…the cross is beside the file, never inside it', panel.delInsideFile, 0);
+  check('…and it is not exempt from the verified-tab lock', panel.delAllowedWhenLocked, 0);
+
+  /* On the previous code the panel is open-only, so there is nothing to press
+     and the rest of this section would report a stack instead of a finding. */
+  if (!panel.dels) {
+    check('a census comes off one file at a time — on the previous code the panel was open-only',
+          'no .t3-census-del in the panel', 'a cross on each file');
+    await browser.close(); server.close();
+    console.log('\n' + pass + ' passed, ' + fail + ' failed');
+    process.exit(1);
+  }
+
+  console.log('\nCancelling the confirm writes nothing');
+  await page.evaluate(() => { window.__TOASTS = []; window.__UPDATED = []; window.confirm = () => false; });
+  await page.evaluate(i => document.querySelector('#t3-census-pop-' + i + ' .t3-census-del').click(), n15.i);
+  await page.waitForTimeout(700);
+  check('no write went out', await page.evaluate(() => (window.__UPDATED || []).length), 0);
+
+  console.log('\nRemoving one leaves the other, on the screen and in the ledger');
+  await page.evaluate(() => { window.__TOASTS = []; window.__UPDATED = []; window.__INSERTED = []; window.confirm = () => true; });
+  await page.evaluate(i => document.querySelector('#t3-census-pop-' + i + ' .t3-census-del').click(), n15.i);
+  await page.waitForTimeout(1500);
+  const afterOne = await page.evaluate(() => {
+    const el = Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-saved-row'))
+      .find(c => c.dataset.reviewKey === 'N15|2026-10-20');
+    const btn = el && el.querySelector('.t3-cardtotal-btn');
+    const pop = el && el.querySelector('[id^="t3-census-pop-"]');
+    return {
+      toasts: window.__TOASTS,
+      patch: (window.__UPDATED || []).map(u => String((u.patch || {}).remark || '')),
+      rows: (window.__INSERTED || []).filter(r => r && /^Transplanted/.test(String(r.transaction_type || ''))).length,
+      files: pop ? pop.querySelectorAll('.t3-census-file').length : null,
+      dotted: btn ? /dotted/.test(btn.getAttribute('style') || '') : null,
+      i: Number(((btn && btn.id) || '').replace('t3-cardtotal-', ''))
+    };
+  });
+  check('one file left on the panel', afterOne.files, 1);
+  checkTrue('…and the total is still dotted, because there is still paper behind it', afterOne.dotted);
+  check('…one write, and it is an update on the card row', afterOne.patch.length, 1);
+  checkTrue('…whose list keeps the pdf and drops the png',
+            afterOne.patch[0] && /census-N15\.pdf/.test(decodeURIComponent(afterOne.patch[0]))
+            && !/census-N15\.png/.test(decodeURIComponent(afterOne.patch[0])));
+  check('…and not one transplant row was touched', afterOne.rows, 0);
+  checkTrue('it says so', afterOne.toasts.some(t => t.t === 'success' && /census removed/i.test(t.m)));
+
+  console.log('\nTaking the LAST one off leaves a card that says it has none');
+  await page.evaluate(() => { window.__TOASTS = []; window.__UPDATED = []; });
+  await page.evaluate(i => document.querySelector('#t3-census-pop-' + i + ' .t3-census-del').click(), afterOne.i);
+  await page.waitForTimeout(1500);
+  const afterAll = await page.evaluate(() => {
+    const el = Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-saved-row'))
+      .find(c => c.dataset.reviewKey === 'N15|2026-10-20');
+    const btn = el && el.querySelector('.t3-cardtotal-btn');
+    const pop = el && el.querySelector('[id^="t3-census-pop-"]');
+    return {
+      patch: (window.__UPDATED || []).map(u => String((u.patch || {}).remark || '')),
+      files: pop ? pop.querySelectorAll('.t3-census-file').length : null,
+      addCensus: pop ? /Add Census/i.test(pop.textContent || '') : false,
+      dotted: btn ? /dotted/.test(btn.getAttribute('style') || '') : null,
+      total: btn ? btn.textContent.trim() : null,
+      i: Number(((btn && btn.id) || '').replace('t3-cardtotal-', ''))
+    };
+  });
+  check('no files left', afterAll.files, 0);
+  checkTrue('…the remark carries no CensusList at all, rather than an empty one',
+            afterAll.patch[0] && !/CensusList:/.test(afterAll.patch[0]));
+  check('…the total stops being dotted', afterAll.dotted, false);
+  check('…and the figure itself did not move', afterAll.total, '1,057');
+  checkTrue('…and the card offers Add Census again', afterAll.addCensus);
+
+  console.log('\nA SIGNED-OFF report refuses both, and the stylesheet is not what stops it');
+  /* .mjm-locked greys a button and takes its pointer away. It does not stop
+     the keyboard and it cannot stop a call, which is what an onclick is. */
+  await page.evaluate(() => {
+    window.__TOASTS = []; window.__UPDATED = []; window.__INSERTED = []; window.__UPLOADS = [];
+    document.getElementById('tab-3').classList.add('mjm-locked');
+  });
+  await page.evaluate(i => window.removeT3CardCensus(i, 'https://store/transplant_census/280/N15-1.pdf', 'census-N15.pdf'), afterAll.i);
+  await page.setInputFiles(`#t3-cardcensus-${afterAll.i}`, [{ name: 'sneaked-in.png', mimeType: 'image/png', buffer: PNG }]);
+  await page.waitForTimeout(1200);
+  const locked = await page.evaluate(() => ({
+    toasts: window.__TOASTS,
+    writes: (window.__UPDATED || []).length + (window.__INSERTED || []).length,
+    uploads: (window.__UPLOADS || []).length
+  }));
+  check('neither the remove nor the add wrote anything', [locked.writes, locked.uploads], [0, 0]);
+  check('…and both said why, rather than doing nothing',
+        locked.toasts.filter(t => t.t === 'error' && /signed off/i.test(t.m)).length, 2);
+  await page.evaluate(() => document.getElementById('tab-3').classList.remove('mjm-locked'));
 
   console.log('\n── 7 · THE DRONE MAP IS THE CARD OWN, AND THE RING KNOWS ──');
   /* The map left the form, so a ring that only ever looked at the ROW would

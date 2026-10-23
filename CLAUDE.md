@@ -4039,6 +4039,44 @@ Five things in it:
   the same door a record from before the rule uses, and the list is ADDED to,
   never replaced: a second day keyed against the same plot brings its own.
 
+#### And a panel you can only READ is a record you cannot correct
+
+The office attached the same page twice and found there was no way back:
+*添加了的 census 无法被删除 要删除全部才重新 upload.* Two faults in one
+sentence, and the second is the one that made the first unanswerable —
+**Add Census was on the EMPTY panel only**, so a record whose census was
+short of a page, or carried one too many, could be put right only by
+clearing it and starting again.
+
+So each file carries a **✕**, and a panel that already has files offers Add
+as well. Four things in it, three of them rules this file already has:
+
+- **The cross is a SIBLING of the file, never a child.** The file opens on a
+  click, so a cross inside it fires both — the office would remove a census
+  and get it opened over the top of the panel. Same rule the rejected signup
+  and the audit board's × follow, and a button inside a button is not a thing
+  a browser will draw anyway.
+- **It is removed BY URL, never by position.** `censusDrop` names the file;
+  `_t3WriteCard` re-reads the list before it writes, so an index taken off
+  the screen a moment ago can point at a different file by the time it
+  arrives — somebody else attaching one in between is all it takes.
+- **THE FILE IS LEFT IN STORAGE.** This takes it off the RECORD, which is the
+  decision somebody is making. The blob costs nothing where it is, and a
+  delete that cannot be undone over a mis-press is the worse failure — the
+  rejected signup and the admin-closed plot again.
+- **A signed-off report refuses both, in JavaScript.** `.mjm-locked` greys a
+  button and takes its pointer away; it does not stop the keyboard and it
+  cannot stop a call, which is what an `onclick` is — the lock-in-the-
+  stylesheet fault, one screen along. The census writers are not among the
+  seven tab saves `_trackTabSave` guards, so `_t3CardLocked()` asks the CLASS,
+  which `setTabLock` sets for every reason a tab is not editable. The cross
+  deliberately carries no `.mjm-review-allow`, so the paint and the gate agree.
+
+**The stub had to start APPLYING an update** before any of this could be
+tested. It recorded them and left the row as it was, so a census removed
+redrew exactly as it had before and every screen assertion would have passed
+over a page that changed nothing.
+
 **And the map rule had to learn about the card.** `updateTransplantCompletion`
 asked each ROW for its map, which was the only place a map could be; it is the
 plot's now and the checker attaches it to the card. Asking the row alone would
