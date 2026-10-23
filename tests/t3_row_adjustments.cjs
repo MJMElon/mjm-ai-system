@@ -311,14 +311,22 @@ const CAL_ROWS = [
   const fs = require('fs');
   const src = fs.readFileSync(require('path').join(__dirname, '..', 'operation',
                                                    'operation_batch_detail.html'), 'utf8');
-  // The saved list's own grid: the one whose last track is the 80px
-  // actions column AND whose first is a fraction (the others with an 80px
-  // in them are different tables).
+  /* The saved list's own grid: the one whose last track is the 90px actions
+     column AND whose first is a fraction (the others with a pixel track in
+     them are different tables).
+
+     It used to be eight columns wide with the plot, the day and the total
+     repeated down the side of every tray. They moved up onto the CARD head
+     when the list became one card per plot per day, so the tray grid is the
+     five that differ tray by tray -- see one_card_per_plot_per_day.cjs. The
+     TOTAL is no longer a track at all: it is one figure on the card, which
+     is the whole reason the cards exist. */
   const tracks = (src.match(/grid-cols-\[[^\]]+\]/g) || [])
-    .filter(t => /^grid-cols-\[[\d.]+fr_.*_80px\]$/.test(t));
-  check('header, rows and total all carry a track list', tracks.length >= 3, true);
-  check('and it is the same one everywhere', Array.from(new Set(tracks)).length, 1);
-  check('with eight columns', tracks[0].replace(/grid-cols-\[|\]/g, '').split('_').length, 8);
+    .filter(t => /^grid-cols-\[[\d.]+fr_.*_90px\]$/.test(t));
+  check('the header and the rows both carry a track list', tracks.length >= 2, true);
+  check('and it is the same one in both', Array.from(new Set(tracks)).length, 1);
+  check('with five columns', tracks[0].replace(/grid-cols-\[|\]/g, '').split('_').length, 5);
+  check('and the total is on the card instead', /id="t3-cardtotal-\$\{c\.i\}"/.test(src), true);
   check('the two new ones are Adjustment and Final Qty',
         /<span class="text-\[#a83020\]">Adjustment<\/span>/.test(src)
           && /<span class="text-\[#4a7a2e\]">Final Qty<\/span>/.test(src), true);
