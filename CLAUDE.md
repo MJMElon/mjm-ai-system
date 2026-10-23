@@ -3232,6 +3232,65 @@ any other check against these numbers: **somebody else may have bumped them
 the same day**, so the next letter is the one above everything in use and
 not simply `a`.
 
+## A case category is retired, never deleted — and adding it back revives it
+
+The office asked for a cross on each row of Case Routing: *"i want to delete
+request transplanting signboard category, i click x then this case category
+gone."* It is gone from everywhere it was offered — both raise forms ask
+`active=true` — and the row is marked **inactive**, never removed.
+
+**A case keeps its category as TEXT.** `nelos_cases.category` is the NAME and
+not a key, so retiring a title cannot orphan or rewrite one case ever raised
+under it. A DELETE would say the same thing to those cases and a different
+thing to the register, which is the one place recording that the title
+existed at all. Same rule as the rejected signup and the admin-closed plot.
+
+Four things in it:
+
+- **The confirm says what it MOVES.** It counts the cases already raised
+  under the title and says they are kept. A count that cannot be read says
+  so rather than reading as nought — "no case has ever been raised under it"
+  over a category with forty is the one sentence that would make this the
+  wrong decision.
+- **A category the SYSTEM raises by itself cannot go from here.** The words
+  on Automate Cases are the module code's and are read, never set, so taking
+  the row off this screen would not stop the case arriving — it would hide
+  the category it arrives under. The cross is disabled and its tooltip names
+  the condition. `auto_condition` is what says so, and a database that has
+  not run `migration_nelos_auto_conditions.sql` answers empty, which leaves
+  every cross live: the safe way round for a page whose job is to be edited.
+- **The routing rule is LEFT ALONE.** A rule for a category nobody can raise
+  matches nothing, so it costs nothing where it sits — and the day the title
+  comes back, its rule is still set the way the office left it.
+- **The permission is asked AGAIN at the write**, because a cross drawn
+  before somebody's access changed is still sitting on the screen.
+
+**And ADDING the same title brings it back.** The unique index is
+`(module_key, lower(name))` and takes no notice of `active`, so an insert
+over a retired row comes back 23505 — and the page cannot see the clash
+coming, because it only ever loads the ACTIVE ones. So the Add box looks for
+a retired row first and switches it back on, which also returns its old
+routing rule rather than leaving the office with a rule they cannot see and
+did not set today. It comes back under the spelling it FIRST had, not the one
+somebody happened to type the second time.
+
+Two things the test had to learn, both of which make a stub lie:
+
+- **`esc` on that page IS `MJMNelos.esc`.** A stub of `shared_nelos.js`
+  without it takes the whole render down with *esc is not a function* —
+  caught by the boot's own try, which then bounces to the portal, so the
+  symptom is a blank page and not an error. A thinner stub than the thing it
+  stands in for is the fault this file has a heading about.
+- **The eqs arrive AFTER the patch.** The page writes
+  `.update({…}).eq('name', …)`, so a stub that applies the write inside
+  `update()` has no idea which row it is for. It applies at read time — and
+  it has to apply at all, or a revive and a second insert read the same.
+
+`tests/a_case_category_can_be_retired.cjs` drives the real page and asserts
+no DELETE is ever sent. **`nelos_user_setting.html` now carries the three
+no-cache metas**, for the reason every settings page that is being changed
+needs them.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
