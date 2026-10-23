@@ -76,7 +76,7 @@ const BAGS = [
     window.jspdf = { jsPDF: class {
       constructor() {
         this.page = 1; this.pages = 1; this.lines = []; this.images = 0; this.drawn = [];
-        this.saved = null; this.printed = false; this.outputs = [];
+        this.saved = null; this.printed = false; this.outputs = []; this.boxes = [];
         this.internal = {
           pageSize: { getWidth: () => 595, getHeight: () => 842 },
           getNumberOfPages: () => this.pages
@@ -85,8 +85,11 @@ const BAGS = [
       }
       setFont() {} setFontSize(n) { this._s = n; } setTextColor() {}
       setFillColor() {} setDrawColor() {} setLineWidth() {} setLineDashPattern() {}
-      rect(x, y, w, h) { guard('rect', [x, y, w, h]); }
-      roundedRect(x, y, w, h, rx, ry) { guard('roundedRect', [x, y, w, h, rx, ry]); }
+      rect(x, y, w, h) { guard('rect', [x, y, w, h]); this.boxes.push({ x, y, w, h, page: this.page }); }
+      roundedRect(x, y, w, h, rx, ry) {
+        guard('roundedRect', [x, y, w, h, rx, ry]);
+        this.boxes.push({ x, y, w, h, page: this.page });
+      }
       line(a, b, c, d) { guard('line', [a, b, c, d]); }
       addPage() { this.pages++; this.page = this.pages; }
       setPage(p) { guard('setPage', [p]); this.page = p; }
@@ -100,10 +103,31 @@ const BAGS = [
         // a bare count cannot, and "no photos" means only the bag ones.
         this.drawn.push({ im: String(im).slice(0, 40), x, y, w, h, page: this.page });
       }
+      /* IT PAGINATES, and it honours the margin it is given.
+         A stub that lays every row on one page cannot see a row drawn into
+         the footer band, which is exactly the fault this sheet had: the
+         table was given `margin: {left, right}` only, autoTable fell back
+         to its own default of 40 for the other two, and page one's 24th row
+         landed at y=789 where the footer draws its rule at 802 — eaten by
+         the printer. The head and row heights are the real library's own
+         for this table (35 and 23.5 at fontSize 10, cellPadding 6, measured
+         off jspdf-autotable 3.8.2), so the break falls on the same row the
+         real one breaks on. */
       autoTable(opts) {
         this.head = (opts.head || [])[0] || [];
         this.body = opts.body || [];
-        this.lastAutoTable = { finalY: (opts.startY || 0) + 20 + this.body.length * 18 };
+        const m = opts.margin || {};
+        const mTop = m.top == null ? 40 : m.top;
+        const mBottom = m.bottom == null ? 40 : m.bottom;
+        const HEAD_H = 35, ROW_H = 23.5, floor = 842 - mBottom;
+        this.tableRows = [];
+        let ty = (opts.startY || 0) + HEAD_H;
+        this.body.forEach((r, i) => {
+          if (ty + ROW_H > floor) { this.addPage(); ty = mTop + HEAD_H; }
+          this.tableRows.push({ n: i + 1, page: this.page, top: ty, bottom: ty + ROW_H });
+          ty += ROW_H;
+        });
+        this.lastAutoTable = { finalY: ty };
       }
       get lastAutoTable() { return this._lat || { finalY: 300 }; }
       set lastAutoTable(v) { this._lat = v; }
@@ -288,8 +312,14 @@ const BAGS = [
   const lastBottom = Math.max(...printed.drawn.map(bottomOf));
   const firstTop = Math.min(...printed.drawn.map(d => d.y));
   const used = lastBottom - firstTop;
-  checkTrue('the pictures are not stamps on an empty page — they use the room (' +
-            Math.round(used) + 'pt)', used > 200);
+  /* MIN_USEFUL is the page's own floor — under that it moves the section to
+     a page of its own rather than printing in the gap. A number pinned
+     higher than it fails the day the block above grows by a line, which is
+     what a bag table that now stops short of the footer did to it. The
+     room-relative check below is the one that carries the weight. */
+  const MIN_USEFUL = 90;
+  checkTrue('the pictures are not stamps on an empty page (' +
+            Math.round(used) + 'pt)', used > MIN_USEFUL);
   checkTrue('…and they stay inside the foot', lastBottom <= PAGE_H - FOOT + 1);
   /* THE MEASURE IS THE ROOM, never a number pinned here. A threshold on the
      photo width would pass or fail on how many bag rows the fixture happens
@@ -367,6 +397,81 @@ const BAGS = [
   const over = await page.evaluate(() => window.__PDFS[0].lines.map(l => l.t));
   checkTrue('800 against a 500 allowance is named as excess',
             over.some(t => /EXCESS: 300 seed\(s\) over the allowance/.test(t)));
+
+  /* ── A DELIVERY OF MANY BAGS, WHICH IS WHERE THE SHEET BROKE.
+
+        The office printed one and said the 24 on page one had been eaten.
+        It is always the 24th, because everything above the table is a fixed
+        height: the table started at 190, the rows are 23.5 each, and
+        autoTable — given a left and a right margin and nothing else — fell
+        back to its own default of 40 for the bottom. So it filled page one
+        to y=802, which is the exact line the footer draws its rule on, and
+        the 24th row sat at 765.5–789 inside the band the footer owns and
+        the printer trims.
+
+        The blocks after the table were worse off, having no floor at all.
+        At 53 bags the totals box was drawn at 771 — straight over the
+        footer — and the analysis under it at 835, off the foot of the page
+        entirely: the one figure on the sheet claiming to be the delivery,
+        and the percentages beside it, both gone with nothing saying so.
+
+        53 bags is the count that shows all three at once: a 24th row in the
+        band on page one, and a second page whose rows end at 757 so the
+        totals box and the analysis fall into it behind them.             */
+  console.log('\nA sheet of 53 bags keeps every row and every figure off the footer');
+  const MANY = 53;
+  await page.evaluate((n) => {
+    document.querySelectorAll('.t8-bag-row').forEach(r => r.remove());
+    for (let i = 1; i <= n; i++) window.addSeedAuditRow('MJ' + (100 + i), 250, 250, 250);
+    window.__PDFS = [];
+    return window.downloadSeedAuditPdf();
+  }, MANY);
+  const big = await page.evaluate(() => {
+    const d = window.__PDFS[0];
+    return { pages: d.pages, rows: d.tableRows, boxes: d.boxes,
+             lines: d.lines.map(l => ({ t: l.t, y: l.y, page: l.page })) };
+  });
+
+  /* THE FLOOR, NOT THE RULE. The footer draws its rule at 802 and its type
+     at 812, so the band it owns opens at 842 − FOOT. Measuring against the
+     rule is what makes this fault look fine: the 24th row ended at 789,
+     which is above the rule and still inside the band — printed on paper
+     where the tray trims, and with no air between it and the footer. */
+  const FLOOR = 842 - 60;
+  check('the table ran onto more than one page', big.rows.length, MANY);
+  const numbers = big.rows.map(r => r.n);
+  check('…and not one bag was lost on the way',
+        numbers.join(','), Array.from({ length: MANY }, (_, i) => i + 1).join(','));
+
+  const inBand = big.rows.filter(r => r.bottom > FLOOR);
+  check('NO BAG ROW IS DRAWN INTO THE FOOTER BAND',
+        inBand.map(r => 'p' + r.page + ' #' + r.n + ' ends ' + Math.round(r.bottom)), []);
+  const p1 = big.rows.filter(r => r.page === 1);
+  checkTrue('…so page one stops short of it (' +
+            Math.round(p1[p1.length - 1].bottom) + ' of ' + FLOOR + ')',
+            p1[p1.length - 1].bottom <= FLOOR);
+
+  /* Nothing else may be down there either. The footer's own two lines are
+     the only things entitled to the band. */
+  const below = big.lines.filter(l => l.y > FLOOR
+                                 && !/^Page \d+ of \d+$/.test(l.t)
+                                 && !/MEGA JUTAMAS SDN BHD/.test(l.t));
+  check('nothing but the footer is printed in the footer band',
+        below.map(l => l.t + ' @ ' + Math.round(l.y)), []);
+  const boxesBelow = big.boxes.filter(b => b.y + b.h > FLOOR);
+  check('…and no box reaches into it either',
+        boxesBelow.map(b => Math.round(b.y) + '+' + Math.round(b.h)), []);
+
+  /* The blocks that had no floor at all, each named so a failure says which.
+     At 53 bags the totals box was drawn at 771 over the footer and the
+     analysis at 835 off the page. */
+  const at = re => (big.lines.find(l => re.test(l.t)) || {});
+  checkTrue('the TOTAL AUDITED QTY heading is above the floor',
+            at(/^TOTAL AUDITED QTY$/).y > 0 && at(/^TOTAL AUDITED QTY$/).y < FLOOR);
+  checkTrue('the analysis heading too', at(/AUDIT ANALYSIS/).y < FLOOR);
+  checkTrue('and DAMAGE CONTROL', at(/^DAMAGE CONTROL$/).y < FLOOR);
+  const feetBig = big.lines.filter(l => /^Page \d+ of \d+$/.test(l.t));
+  check('every page of the long sheet is numbered', feetBig.length, big.pages);
 
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

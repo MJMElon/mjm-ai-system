@@ -67,6 +67,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- THE PAGE IS THE DEPLOY. Every line of this screen's code is inline,
+         so a browser holding yesterday's copy holds yesterday's report
+         builders with it — and this is the second print fix in a row that
+         has to reach the office. These three metas are the only lever there
+         is: the site is GitHub Pages with no build step and nowhere to set a
+         real HTTP header. One hard reload per machine to pick them up, and
+         it stays fresh by itself after that. -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache"/>
+    <meta http-equiv="Expires" content="0"/>
     <title>Batch Detail - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -9631,6 +9641,26 @@ Thank you.`;
             const pageH = doc.internal.pageSize.getHeight();
             const margin = 36;
 
+            /* ── ONE FLOOR, AND THE FOOTER OWNS WHAT IS UNDER IT.
+                  The footer draws a rule at pageH-40 and its line of type at
+                  pageH-30, on every page. Nothing above it reserved that
+                  band: the bag table was given `margin: {left, right}` only,
+                  so autoTable fell back to its own default of 40 — which is
+                  pageH-40 to the point, the very line the footer draws. The
+                  table therefore filled page one down to y=790 and put its
+                  24th row inside the footer's own strip, where a printer's
+                  bottom margin eats it. It is ALWAYS the 24th, because
+                  everything above the table is a fixed height, which is how
+                  the office could report it by number.
+                  And the blocks after the table were worse off, having no
+                  floor at all: at 53 bags the totals box was drawn at 771
+                  straight over the footer, and the analysis under it at 835
+                  off the foot of the sheet entirely.
+                  So there is one floor, every block asks for its room before
+                  it draws a stroke, and the table is told where to stop. */
+            const FOOT_H = 60;
+            const floorY = pageH - FOOT_H;
+
             // Palette (matches the quotation PDF for visual consistency)
             const OLIVE = [122, 138, 87];
             const INK = [40, 40, 40];
@@ -9647,6 +9677,15 @@ Thank you.`;
             // ── HEADER: MJM Nursery wordmark + Mega Jutamas letterhead (LEFT)
             //           Seed Audit Report meta (RIGHT)
             let y = 56;
+
+            /* A block too tall for what is left takes the next page WHOLE.
+               `margin + 20` is where the damage block has always resumed, so
+               a continuation page starts in one place however it was reached. */
+            function _need(h) {
+                if (y + h > floorY) { doc.addPage(); y = margin + 20; return true; }
+                return false;
+            }
+
             doc.setFont('times', 'bold'); doc.setFontSize(28); setText(INK);
             doc.text('MJM Nursery', margin, y);
 
@@ -9720,7 +9759,10 @@ Thank you.`;
                 startY: y + 8,
                 head: [['#', 'Bag No / Seal No', 'Seed per Bag\n(Supplier)', 'Seed Received\n(Audit)', 'Variance']],
                 body: bagRows,
-                margin: { left: margin, right: margin },
+                /* ALL FOUR SIDES. Leave top or bottom out and autoTable uses
+                   40 for it, which puts the last row of a page inside the
+                   footer band — see the note on FOOT_H above. */
+                margin: { top: margin + 20, bottom: FOOT_H, left: margin, right: margin },
                 styles: { font: 'times', fontSize: 10, cellPadding: 6, textColor: INK },
                 headStyles: { fillColor: OLIVE, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
@@ -9742,6 +9784,9 @@ Thank you.`;
             y = doc.lastAutoTable.finalY + 14;
             const totalVariance = totalAudited - totalSupplier;
             const expectedVariance = totalAudited - expectedRaw;
+            // The one figure on the sheet that claims to be the delivery.
+            // It does not get drawn over the footer.
+            _need(50);
             setFill([253, 250, 244]); setStroke(RULE_SOFT); doc.setLineWidth(0.8);
             doc.roundedRect(margin, y, pageW - margin * 2, 50, 6, 6, 'FD');
             /* FOUR cells, because there are two different variances and the
@@ -9772,6 +9817,9 @@ Thank you.`;
             const shortage = Math.max(0, baseline - totalAudited);
             const shortagePct = baseline > 0 ? (shortage / baseline) * 100 : 0;
             const auditPct = expectedRaw > 0 ? (totalAudited / expectedRaw) * 100 : 0;
+            // Heading and the line under it, together — a heading with
+            // nothing beneath it reads as a section somebody forgot.
+            _need(32);
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
             doc.text('RECEIVE (D/O + FOC + REPLACEMENT) & AUDIT ANALYSIS', margin, y); y += 14;
             doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
@@ -9803,7 +9851,7 @@ Thank you.`;
 
             // A block of its own, so it is never split across the fold.
             const DMG_H = 96;
-            if (y + DMG_H > pageH - 60) { doc.addPage(); y = margin + 20; }
+            _need(DMG_H);
 
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
             doc.text('DAMAGE CONTROL', margin, y); y += 14;
@@ -9941,12 +9989,12 @@ Thank you.`;
                     return { rows: short.rows, k: roomH / short.natural };
                 }
 
-                let room = (pageH - 60) - (y + HEAD_H) - tailH;
+                let room = floorY - (y + HEAD_H) - tailH;
                 /* Too little left to be worth printing in — take the whole
                    section over and let it fill the page it lands on. */
                 if (room < MIN_USEFUL) {
                     doc.addPage(); y = margin + 20;
-                    room = (pageH - 60) - (y + HEAD_H) - tailH;
+                    room = floorY - (y + HEAD_H) - tailH;
                 }
                 const lay = _fitPhotos(shown, room);
 
@@ -9982,8 +10030,11 @@ Thank you.`;
                 y += 4;
             }
 
-            // ── REMARK, measured above so the pictures leave room for it
+            // ── REMARK, measured above so the pictures leave room for it.
+            //    The ask is a no-op when they did; it is what carries the
+            //    remark on a sheet that had no photos to reserve it.
             if (remarkText) {
+                _need(14 + remarkLines.length * 12 + 6);
                 doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
                 doc.text('REMARK', margin, y); y += 14;
                 doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
