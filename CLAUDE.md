@@ -1994,6 +1994,49 @@ a picture with nothing saying so reads as a count nobody photographed.
 `_damagePhotosForPrint()` is the one accessor the sheet reads the gallery
 through, rather than reaching into another tab's state.
 
+## A lock in the stylesheet is a paint, not a gate
+
+The office verified a Seed Audit report and said *"verified 了我还是可以
+save and print"* — they could still save it.
+
+A reviewed or verified tab takes `.mjm-locked`, and the CSS gives every
+input and button on it `pointer-events:none`. That greys them, and that is
+all it does. It does not stop the **keyboard** — a greyed button is still
+focusable and still fires on Enter — and it cannot stop a **call**, which
+is exactly what the close dialog makes: `confirmCloseBatchRecord` and
+`saveOneUnsaved` reach `window[TAB_SAVE_FN[n]]()` directly. So verifying a
+report, typing into it and pressing X then Leave **rewrote it**, with
+nobody's signature moving.
+
+**The refusal belongs where every route goes through**, which is
+`_trackTabSave` — the one wrapper all seven tab saves already pass. Three
+things in it:
+
+- **The CLASS is the test, not a second reading of the banner.**
+  `setTabLock` sets it for every reason a tab is not editable: reviewed,
+  verified, and a login without the Fill in report tick. A second copy of
+  that list is one more thing to get wrong.
+- **It refuses as an ERROR**, which here means one thing — what you keyed
+  is not in the database. So the close dialog goes on refusing to close and
+  offers **Don't save**, which is the right answer for a change that must
+  not be kept.
+- **An explanation box is untouched.** It carries `.mjm-always-open` and
+  its own Save, which is not one of the seven — the CSS above it says at
+  length why that is deliberate.
+
+**PRINT AND DOWNLOAD STAY LIVE, and that is the half the office may not
+have meant.** They change nothing, and a verified sheet is the one most
+worth having on paper: greying them means unverifying a report in order to
+print it, which is the opposite of what the lock is for. They carry
+`.mjm-review-allow` now so they work AND look like they work. If a printout
+of a signed-off report is ever not wanted, that mark is the one line to
+take off — but Save is the one that had to stop, and the stylesheet was
+never going to be what stopped it.
+
+`tests/unsaved_close_guard.cjs` drives the real dialog against a locked
+tab: the save never runs, the tab stays unsaved, X and Leave does not
+rewrite it, and both read-only buttons are still live.
+
 ## A tray empties every way the seedlings leave, not two of them
 
 Tray Status read **P3 · 230 (81)** over a batch with nothing standing in P3,
