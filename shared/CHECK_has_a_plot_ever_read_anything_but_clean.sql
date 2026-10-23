@@ -11,9 +11,17 @@
 --
 --   tikus       Banyak AND Sedikit     -- both raise a card
 --   pest        Banyak only            -- Sedikit raises nothing
+--   disease     Banyak only            -- Sedikit raises nothing
 --   warna_daun  5 only                 -- a 4, Yellowish, raises nothing
---   disease     nothing at all         -- it is on no test and the board
---                                         does not even read the column
+--
+-- Disease was on no test at all when this file was written, and the board
+-- did not even read the column -- which was the whole answer: 76 readings
+-- of Banyak and 40 of Sedikit, 116 of the 142 ever taken, walked to and
+-- tapped in and shown to nobody, while rats and pests were genuinely
+-- Tidak Ada everywhere. It raises a card on Banyak now. Sedikit as well
+-- would be 116 plots, which is the whole nursery and so a board nobody
+-- reads, so that one is still a decision for the office rather than a
+-- fault.
 --
 -- This counts every value that has ever been stored in the four, so a
 -- reading that is not clean cannot hide behind a test it falls short of.
@@ -24,6 +32,12 @@
 -- Section 1 is the count, over ALL history:
 --
 --   readings            every plot condition row with a date on it
+--   declined            a culling plot the auditor was not asked to audit.
+--                       The form stamps No Audit Required into all four,
+--                       which is not a reading of anything, so these are
+--                       out of the count below rather than reading as four
+--                       faults at once. The first version of this file had
+--                       them as the worst rows on the page.
 --   not clean on any    rows where at least one of the four is worse than
 --                       the best answer. NOUGHT MEANS EVERY READING EVER
 --                       TAKEN IS PERFECT ON ALL FOUR, which is the answer
@@ -50,13 +64,17 @@ WITH rows_all AS (
 ),
 graded AS (
   SELECT r.*,
-         CASE WHEN COALESCE(r.tikus,   'Tidak Ada') <> 'Tidak Ada' THEN 1 ELSE 0 END
-       + CASE WHEN COALESCE(r.pest,    'Tidak Ada') <> 'Tidak Ada' THEN 1 ELSE 0 END
-       + CASE WHEN COALESCE(r.disease, 'Tidak Ada') <> 'Tidak Ada' THEN 1 ELSE 0 END
-       + CASE WHEN COALESCE(r.warna_daun, '1')      <> '1'         THEN 1 ELSE 0 END
-         AS dirty,
+         CASE WHEN COALESCE(r.pest, '') LIKE 'No Audit Required%'
+                THEN 1 ELSE 0 END AS declined,
+         CASE WHEN COALESCE(r.pest, '') LIKE 'No Audit Required%' THEN 0 ELSE
+           CASE WHEN COALESCE(r.tikus,   'Tidak Ada') <> 'Tidak Ada' THEN 1 ELSE 0 END
+         + CASE WHEN COALESCE(r.pest,    'Tidak Ada') <> 'Tidak Ada' THEN 1 ELSE 0 END
+         + CASE WHEN COALESCE(r.disease, 'Tidak Ada') <> 'Tidak Ada' THEN 1 ELSE 0 END
+         + CASE WHEN COALESCE(r.warna_daun, '1')      <> '1'         THEN 1 ELSE 0 END
+         END AS dirty,
          CASE WHEN r.tikus IN ('Banyak', 'Sedikit')
                 OR r.pest = 'Banyak'
+                OR r.disease = 'Banyak'
                 OR r.warna_daun = '5' THEN 1 ELSE 0 END AS flag
   FROM   rows_all r
 ),
@@ -77,6 +95,10 @@ SELECT 1, 'COUNT', 'not clean on any of the four',
        (SELECT count(*) FROM graded WHERE dirty > 0)::INT,
        'nought means every reading ever taken is perfect on all four'
 UNION ALL
+SELECT 1, 'COUNT', 'declined, no audit required',
+       (SELECT count(*) FROM graded WHERE declined = 1)::INT,
+       'a culling plot nobody was asked to audit, which is not a reading'
+UNION ALL
 SELECT 1, 'COUNT', 'flagged by a test',
        (SELECT count(*) FROM graded WHERE flag = 1)::INT,
        'how many of them the board actually raises a card for'
@@ -88,8 +110,10 @@ UNION ALL
 SELECT 2, 'VALUES', c.col || ' = ' || c.val, c.n,
        CASE WHEN c.col = 'tikus'      AND c.val IN ('Banyak', 'Sedikit') THEN 'raises a card'
             WHEN c.col = 'pest'       AND c.val = 'Banyak'               THEN 'raises a card'
+            WHEN c.col = 'disease'    AND c.val = 'Banyak'               THEN 'raises a card'
             WHEN c.col = 'warna_daun' AND c.val = '5'                    THEN 'raises a card'
-            WHEN c.col = 'disease'    AND c.val <> 'Tidak Ada'           THEN 'IGNORED -- disease is on no test'
+            WHEN c.val LIKE 'No Audit Required%'                         THEN 'declined audit, not a reading'
+            WHEN c.col = 'disease'    AND c.val <> 'Tidak Ada'           THEN 'IGNORED -- disease flags Banyak only'
             WHEN c.col = 'tikus'      AND c.val <> 'Tidak Ada'           THEN 'IGNORED'
             WHEN c.col = 'pest'       AND c.val <> 'Tidak Ada'           THEN 'IGNORED -- pest flags Banyak only'
             WHEN c.col = 'warna_daun' AND c.val <> '1'                   THEN 'IGNORED -- warna flags 5 only'

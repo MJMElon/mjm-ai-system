@@ -817,7 +817,7 @@ async function loadAlerts(){
 
     const [plotRows, papanRows] = await Promise.all([
       sb.select('audit_plot_audits',
-        'select=plot,batch,nursery,pest,tikus,warna_daun,date,created_at&' + within),
+        'select=plot,batch,nursery,pest,tikus,disease,warna_daun,date,created_at&' + within),
       sb.select('audit_papan_audits',
         'select=plot,nursery,presence,info_correct,condition,date,created_at&' + within)
     ]);
@@ -839,6 +839,27 @@ async function loadAlerts(){
       { emoji:'🐛', title:'Pest Infestation', note:'Banyak only',
         bg:'#fff7ed', fg:'#c2410c',
         match: plots.filter(r => r.pest === 'Banyak') },
+      /* DISEASE WAS ASKED ON THE FORM AND TESTED BY NOTHING. The module
+         card above this one has always promised "pest, animal damage,
+         disease and leaf colour", and the board read three of the four --
+         the column was not even in the select. So 76 readings of Banyak
+         bintik and 40 of Sedikit, 116 of 142 ever taken, were walked to,
+         tapped in, and never shown to anybody. It is the whole reason
+         Plot Condition had never raised a card: rats and pests really are
+         Tidak Ada everywhere and leaf colour never reaches 4, so disease
+         was the only thing the auditors were finding.
+
+         BANYAK ONLY, the same threshold as its sibling pest, and for the
+         reason the count gives: Sedikit as well is 116 plots on the
+         board, which is the whole nursery and so is a board nobody reads.
+         Sedikit is one string away if the office asks for it.
+
+         The exact equality is also what keeps the NO_AUDIT_SENTINEL off
+         it -- a declined audit stores "No Audit Required — Culling Plot"
+         in this column, which is not a reading of anything. */
+      { emoji:'🦠', title:'Disease', note:'Banyak only',
+        bg:'#fdf2f8', fg:'#9d174d',
+        match: plots.filter(r => r.disease === 'Banyak') },
       { emoji:'🍂', title:'Yellow Leaves', note:'Warna Daun 5',
         bg:'#fefce8', fg:'#854d0e',
         match: plots.filter(r => r.warna_daun === '5') },

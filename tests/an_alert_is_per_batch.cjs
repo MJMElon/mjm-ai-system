@@ -91,7 +91,11 @@ is(latestPerPlot(PN, byBatch).length, 1, 'a PN plot with no batch still collapse
 is(latestPerPlot(PN, byBatch)[0].warna_daun, '3', 'and keeps the latest reading');
 
 /* ── 5. the wiring in the shipped page ──────────────────────────────── */
-if (/select=plot,batch,nursery,pest,tikus,warna_daun,date,created_at/.test(HOME)) {
+/* Asked of the batch alone, not of the whole column list: a new
+   column has to be addable without this failing for the wrong
+   reason -- adding disease broke it once. Section 6 asks for
+   disease by name. */
+if (/audit_plot_audits',\s*\n?\s*'select=[a-z_,]*\bbatch\b/.test(HOME)) {
   ok('the query asks for the batch it now keys on');
 } else {
   fail('the plot audit query does not select batch, so the key is always blank');
@@ -121,6 +125,45 @@ if (/r\.nursery \+ '\/' \+ r\.plot \+ \(r\.batch \? '\/' \+ r\.batch : ''\)/.tes
   ok('a newly flagged batch on an already-flagged plot still raises a notification');
 } else {
   fail('the fingerprint ignores the batch, so a second flagged batch is silent');
+}
+
+/* ── 6. disease is asked on the form and must be TESTED ─────────────── */
+/* The census over the whole ledger: 76 readings of Banyak bintik and 40
+   of Sedikit, 116 of the 142 ever taken, and the board tested none of
+   them -- the column was not in the select. Rats and pests really are
+   Tidak Ada everywhere and leaf colour never reaches 4, so disease was
+   the only thing the auditors were finding and the only reason Plot
+   Condition had never raised a card. */
+if (/select=plot,batch,nursery,pest,tikus,disease,warna_daun,/.test(HOME)) {
+  ok('the board asks the database for the disease column');
+} else {
+  fail('disease is not in the select, so nothing downstream can test it');
+}
+if (/match: plots\.filter\(r => r\.disease === 'Banyak'\)/.test(HOME)) {
+  ok('and raises a card on Banyak disease');
+} else {
+  fail('a plot with Banyak disease still raises nothing');
+}
+if (/title:'Disease', note:'Banyak only'/.test(HOME)) {
+  ok('the card says which threshold it is on, the same as pest');
+} else {
+  fail('the disease card does not name its threshold');
+}
+/* The sentinel must not reach it. A declined audit stores the whole
+   "No Audit Required — Culling Plot" string in this column, which is not
+   a reading of a disease. An EXACT equality is what keeps it out, so a
+   loosened test (indexOf, a LIKE, a truthiness check) would put five
+   culling plots on the board as diseased. */
+{
+  const diseaseTest = (rows) => rows.filter(r => r.disease === 'Banyak');
+  const rows = [
+    { plot:'U06', batch:'244', disease:'Banyak' },
+    { plot:'U04', batch:'259', disease:'Sedikit' },
+    { plot:'B02', batch:'242', disease:'Tidak Ada' },
+    { plot:'B14', batch:'234', disease:'No Audit Required — Culling Plot' },
+  ];
+  is(diseaseTest(rows).map(r => r.plot), ['U06'],
+     'Banyak is flagged, and Sedikit, Tidak Ada and a declined audit are not');
 }
 
 console.log('');

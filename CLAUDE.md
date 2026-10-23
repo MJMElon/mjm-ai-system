@@ -2398,6 +2398,52 @@ what it cost.
 **`audit_sw.js` precaches `audit_admin.html`**, so `VER` is bumped in the
 same commit or the board reaches nobody.
 
+### And the thing the auditors were actually finding was on no test at all
+
+The per-batch fix was right and changed nothing the office could see, so
+they asked again. Three checks, in the order the house rule says: the
+current month (`CHECK_why_no_plot_condition_alert.sql`) came back **107
+readings, 0 flagged**; every month ever (`CHECK_the_alert_board_every_month
+.sql`) came back **142 readings, 0 flagged, 0 hidden** — the board had
+never raised a Plot Condition card in its life, so the collapse fault had
+simply never bitten. Then the census
+(`CHECK_has_a_plot_ever_read_anything_but_clean.sql`) answered it:
+**140 of the 142 readings are not clean, and not one of them was on the
+board.**
+
+**The form asks four things and the board tested three.** The module card
+above it has always promised *"Pest, animal damage, disease and leaf
+colour"*, and `disease` was on no test and **not even in the select**. So
+**76 readings of Banyak bintik and 40 of Sedikit** — 116 of 142 — were
+walked to, tapped in, and shown to nobody. Rats and pests really are
+`Tidak Ada` everywhere and leaf colour never reaches 4, so disease was the
+*only* thing the auditors were finding, which is why an empty board looked
+exactly like a clean nursery.
+
+Three things in the fix:
+
+- **BANYAK ONLY, the same threshold as its sibling pest**, and the count is
+  the argument: Sedikit as well is 116 plots, which is the whole nursery,
+  and a board listing every plot is a board nobody reads. Sedikit is one
+  string away the day the office asks.
+- **The exact equality is what keeps the sentinel out.** A declined audit
+  stamps the whole `No Audit Required — Culling Plot` string into all four
+  columns, and that is not a reading of a disease. An `indexOf`, a `LIKE`
+  or a truthiness test would put five culling plots on the board as
+  diseased. **The first version of the census had exactly that bug** and
+  printed those five as the worst rows on the page — `declined` is counted
+  on its own now.
+- **The check and the board have to agree.** The census marks a value with
+  what the board does about it, so a threshold changed in one and not the
+  other is a check that lies about the screen. Section 6 of
+  `tests/an_alert_is_per_batch.cjs` holds the select, the test and the
+  sentinel.
+
+**And the select is now asserted by the BATCH alone, not by the whole
+column list.** Adding `disease` broke that check for the wrong reason —
+a column list typed out in a test is a list that will be wrong, which this
+file already says of a column list typed out in a row.
+
 ## A round that has passed is not carried. Only maintenance is.
 
 The board used to rescue every overdue round from the last three months
