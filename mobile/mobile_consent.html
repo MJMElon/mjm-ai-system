@@ -454,10 +454,15 @@ async function loadActiveALs() {
   // reaches a completed AL a different way: a live, server-side filtered
   // query for just what was typed, which cannot be capped out the same way
   // because the filter runs in the database, not after an unbounded fetch.
+  //
+  // Closed is excluded the same way Cancelled is — the office decided
+  // this order's business is done and nothing more should be signed
+  // against it, whatever balance_quantity still reads. See Close AL in
+  // operation_booking.html (the AI system).
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
-    .not('status', 'in', '("Cancelled","Collected")')
+    .not('status', 'in', '("Cancelled","Closed","Collected")')
     .gt('balance_quantity', 0)
     .order('created_at', { ascending: false });
 
@@ -675,7 +680,7 @@ async function liveSearchFallback(lower) {
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
-    .not('status', 'in', '("Cancelled","Collected")')
+    .not('status', 'in', '("Cancelled","Closed","Collected")')
     .or('al_number.ilike.%' + safe + '%,order_number.ilike.%' + safe + '%,customer_name.ilike.%' + safe + '%')
     .order('created_at', { ascending: false })
     .limit(50);

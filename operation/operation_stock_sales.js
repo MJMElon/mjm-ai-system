@@ -1512,6 +1512,15 @@
                     al.status === 'Cancelled' ||
                     /\[CANCELLED\]/i.test(String(al.remark || ''))
                 );
+                // A closed AL is a second, separate terminal state — the
+                // office decided this order's business is done, whatever
+                // the remaining balance said, rather than that it never
+                // happened. Same two-route detection as Cancelled, same
+                // "[CLOSED]" tag Close AL writes in operation_booking.html.
+                const alClosed = !alCancelled && !!al && (
+                    al.status === 'Closed' ||
+                    /\[CLOSED\]/i.test(String(al.remark || ''))
+                );
                 if (al) {
                     const alQty = Number(al.quantity_ordered);
                     if (!isNaN(alQty)) totalQty = alQty;
@@ -1531,11 +1540,22 @@
                 if (alCancelled) {
                     balance = 0;
                     totalCollected = 0;
+                } else if (alClosed) {
+                    // Closed only zeroes what's left to collect — the
+                    // collection HISTORY (totalCollected) is real and
+                    // stays, unlike Cancelled where the order never
+                    // happened at all. Balance at 0 is what pulls a
+                    // closed order out of "pending to collect", the
+                    // weekly booking chart and the Outstanding filter,
+                    // the same way Cancelled already does.
+                    balance = 0;
                 }
 
                 let derivedStatus = o.status;
                 if (alCancelled) {
                     derivedStatus = 'Cancelled';
+                } else if (alClosed) {
+                    derivedStatus = 'Closed';
                 } else if (o.status !== 'Cancelled' && o.status !== 'Pending Payment') {
                     if      (totalCollected === 0)         derivedStatus = 'Paid · Pending Pickup';
                     else if (totalCollected >= totalQty)   derivedStatus = 'Completed';
@@ -1552,6 +1572,7 @@
                     rawStatus: o.status,
                     derivedStatus,
                     alCancelled,
+                    alClosed,
                     paymentMethod: o.payment_terms || 'cash',
                     collectionsByMonth: colByMonth,
                     bookingsByMonth: bookByMonth,
@@ -2003,6 +2024,7 @@
     function pillFor(derived, paymentMethod) {
         if (!derived) return ['pill-pending', '—'];
         if (derived === 'Cancelled') return ['pill-cancelled', 'Cancelled'];
+        if (derived === 'Closed') return ['pill-closed', 'Closed'];
 
         // Credit-terms orders carry a "Credit" label regardless of pay status,
         // with the collection stage appended when partial / completed.
@@ -2048,7 +2070,7 @@
     // Order-status filter — a custom dropdown (see .cf-* in the HTML) in
     // place of the state a native <select> would otherwise hold.
     let _custFilter = 'all';
-    const CUST_FILTER_LABELS = { all: 'All Orders', outstanding: 'Outstanding Balance', cancelled: 'Cancelled Orders', completed: 'Completed Orders' };
+    const CUST_FILTER_LABELS = { all: 'All Orders', outstanding: 'Outstanding Balance', cancelled: 'Cancelled Orders', closed: 'Closed Orders', completed: 'Completed Orders' };
 
     function toggleCustFilterMenu(e) {
         e && e.stopPropagation();
@@ -2136,10 +2158,14 @@
             // A cancelled AL kills the order the same as a raw
             // `rawStatus === 'Cancelled'` row — both read as "cancelled".
             // All Orders excludes them too; Cancelled Orders is the only
-            // place they're visible.
+            // place they're visible. A closed AL is the same shape, one
+            // state over: nothing left to do against it, excluded from
+            // All/Outstanding/Completed, visible only under Closed Orders.
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
+            const isClosed = !isCancelled && (r.rawStatus === 'Closed' || r.alClosed);
             if (filter === 'cancelled')   return isCancelled;
-            if (isCancelled) return false;
+            if (filter === 'closed')      return isClosed;
+            if (isCancelled || isClosed) return false;
             // A typed search is a request for ONE specific order, not "show
             // me this bucket" — so a row that matched it is shown whatever
             // Outstanding/Completed/All happens to be set to. Without this,
@@ -2201,11 +2227,16 @@
             const idx = startIdx + pageIdx;
             const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
             const [pillCls, pillTxt] = pillFor(r.derivedStatus, r.paymentMethod);
-            // Row-level cancel marker: any strike-through / muted styling
-            // applies to both raw-cancelled and AL-cancelled rows.
+            // Row-level terminal marker: any strike-through / muted styling
+            // applies to Cancelled rows (raw or AL-cancelled) and Closed
+            // rows (raw or AL-closed) alike — both mean nothing is still
+            // outstanding against this order, just for different reasons.
+            // Closed is never struck through: the order DID happen, it is
+            // only finished, where Cancelled means it never did.
             const rowCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
-            const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
+            const rowClosed = !rowCancelled && (r.rawStatus === 'Closed' || r.alClosed);
+            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : rowClosed ? 'style="background:#f8fafc"' : '';
+            const doneMark = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : rowClosed ? 'style="color:#64748b"' : '';
             const cellsHtml = months.map(m => {
                 const booked = r.balance > 0 ? (r.bookingsByMonth[m.key] || 0) : 0;
                 const cls = ['t-mo', booked ? 'has-booked' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
@@ -2215,10 +2246,10 @@
             return `
                 <tr ${rowStyle}>
                     <td class="t-cust">${idx + 1}</td>
-                    <td class="t-cust"><span class="cust-plain" ${cancelStrike}>${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
-                    <td ${cancelStrike}>${orderMonth}</td>
+                    <td class="t-cust"><span class="cust-plain" ${doneMark}>${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${doneMark}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
+                    <td ${doneMark}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
-                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
+                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${doneMark}>${r.balance.toLocaleString()}</td>
                     ${cellsHtml}
                 </tr>`;
         }).join('');
@@ -2316,8 +2347,10 @@
                        && !(r.customer     || '').toLowerCase().includes(search)
                        && !(r.alNumber     || '').toLowerCase().includes(search)) return false;
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
+            const isClosed = !isCancelled && (r.rawStatus === 'Closed' || r.alClosed);
             if (filter === 'cancelled')   return isCancelled;
-            if (isCancelled) return false;
+            if (filter === 'closed')      return isClosed;
+            if (isCancelled || isClosed) return false;
             if (search) return true;
             if (filter === 'all')         return true;
             if (filter === 'outstanding') return r.balance > 0;
@@ -2404,8 +2437,9 @@
             const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
             const [pillCls, pillTxt] = pillFor(r.derivedStatus, r.paymentMethod);
             const rowCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
-            const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
+            const rowClosed = !rowCancelled && (r.rawStatus === 'Closed' || r.alClosed);
+            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : rowClosed ? 'style="background:#f8fafc"' : '';
+            const doneMark = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : rowClosed ? 'style="color:#64748b"' : '';
             const byMonth = doByAl[r.alNumber] || {};
             // Total Collected for this row sums every month it ever had a
             // DO in, same as totDoAll above — a hidden older month must
@@ -2423,14 +2457,14 @@
             return `
                 <tr ${rowStyle}>
                     <td class="t-cust">${idx + 1}</td>
-                    <td class="t-cust"><span class="cust-link" ${cancelStrike} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
-                    <td ${cancelStrike}>${orderMonth}</td>
+                    <td class="t-cust"><span class="cust-link" ${doneMark} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${doneMark}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
+                    <td ${doneMark}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
-                    <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
+                    <td class="font-black" ${doneMark}>${r.totalQty.toLocaleString()}</td>
                     ${cellsHtml}
-                    <td class="t-tot" ${cancelStrike}>${rowTotal.toLocaleString()}</td>
-                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
-                    <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
+                    <td class="t-tot" ${doneMark}>${rowTotal.toLocaleString()}</td>
+                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${doneMark}>${r.balance.toLocaleString()}</td>
+                    <td class="t-tot" ${doneMark}>${fmtRM(r.totalAmount)}</td>
                 </tr>`;
         }).join('');
 
