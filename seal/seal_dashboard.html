@@ -139,17 +139,14 @@
       <div class="block-card sel" id="nb-cust" data-nv="cust" style="background:#fffbeb;border-color:#fde68a;--on:#d97706">
         <div class="text-[11px] font-black uppercase tracking-widest text-amber-800 mb-[10px]">Seal with Customer</div>
         <div class="text-2xl font-black mono text-amber-900" id="nb-cust-qty">—</div>
-        <div class="text-[11px] font-bold text-amber-800 opacity-75" id="nb-cust-sub">consent signed, not collected yet</div>
       </div>
       <div class="block-card sel" id="nb-cab" data-nv="cab" style="--on:#0d9488">
         <div class="text-[11px] font-black uppercase tracking-widest text-teal-800 mb-[10px]">Seal in MJM Nursery Cabinet</div>
         <div class="text-2xl font-black mono text-teal-900" id="nb-cab-qty">—</div>
-        <div class="text-[11px] font-bold text-teal-800 opacity-75" id="nb-cab-sub">not yet given to a customer</div>
       </div>
       <div class="block-card sel" id="nb-used" data-nv="used" style="background:#ecfdf5;border-color:#a7f3d0;--on:#059669">
         <div class="text-[11px] font-black uppercase tracking-widest text-emerald-800 mb-[10px]">Seal used</div>
         <div class="text-2xl font-black mono text-emerald-900" id="nb-used-qty">—</div>
-        <div class="text-[11px] font-bold text-emerald-800 opacity-75" id="nb-used-sub">collected on a DO</div>
       </div>
     </div>
     <div class="card p-4 mb-4 flex flex-wrap gap-3 items-end">
@@ -157,7 +154,6 @@
         <label class="lbl">Search</label>
         <input id="q" class="inp" placeholder="Seal number, customer, AL or DO">
       </div>
-      <div class="text-[11px] font-bold text-slate-400 pb-2" id="list-note"></div>
     </div>
     <div class="card p-5">
       <div class="font-black text-slate-800 mb-3" id="nv-title"></div>
@@ -174,7 +170,6 @@
         <label class="lbl">Search</label>
         <input id="rp-q" class="inp" placeholder="Seal number, customer, AL or DO">
       </div>
-      <div class="text-[11px] font-bold text-slate-400 pb-2" id="rp-note"></div>
     </div>
     <div class="card p-5"><div id="rp-table" class="overflow-x-auto text-sm font-bold text-slate-400">Loading…</div></div>
   </section>
@@ -1059,16 +1054,21 @@ async function loadDoDates(list) {
 // The database splits a customer range wherever its status changes. Two
 // pieces that meet, with the same customer, status and DO, are one run and
 // read as one start and end.
-function mergeRuns(list) {
+// anyStatus joins pending and scanned too: on Seal with Customer both are a
+// consent signed and not yet collected, and one customer's run of numbers
+// broken only by which were scanned already reads as one range.
+function mergeRuns(list, anyStatus) {
   const out = [];
   list.slice().sort((a, b) => Number(a.start_no) - Number(b.start_no)).forEach((r) => {
     const last = out[out.length - 1];
-    if (last && last.al_number === r.al_number && last.seg_status === r.seg_status
+    if (last && last.al_number === r.al_number && (anyStatus || last.seg_status === r.seg_status)
         && (last.do_number || '') === (r.do_number || '') && Number(last.end_no) + 1 === Number(r.start_no)) {
       last.end_no = r.end_no; last.end_code = r.end_code;
       last.qty = Number(last.qty) + Number(r.qty);
       last.open_problems = Math.max(Number(last.open_problems) || 0, Number(r.open_problems) || 0);
-    } else out.push({ ...r });
+      (r.consent_ids || [r.consent_id]).forEach((c) => { if (c && !last.consent_ids.includes(String(c))) last.consent_ids.push(String(c)); });
+      if (r.consent_at && (!last.consent_at || r.consent_at > last.consent_at)) last.consent_at = r.consent_at;
+    } else out.push({ ...r, consent_ids: (r.consent_ids || [r.consent_id]).filter(Boolean).map(String) });
   });
   return out;
 }
@@ -1083,14 +1083,9 @@ const NURSERY_VIEW = {
 const sumQty = (list) => list.reduce((t, r) => t + (Number(r.qty) || 0), 0);
 function renderBlocks() {
   const of = (v) => allRows.filter((r) => NURSERY_VIEW[v].states.includes(r.seg_status));
-  const cust = of('cust'), cab = of('cab'), used = of('used');
-  const nAl = new Set(cust.map((r) => r.al_number)).size;
-  const nDo = new Set(used.map((r) => r.do_number).filter(Boolean)).size;
-  document.getElementById('nb-cust-qty').textContent = fmt(sumQty(cust));
-  document.getElementById('nb-cust-sub').textContent = nAl ? nAl + ' customer order' + (nAl === 1 ? '' : 's') + ' · consent signed, not collected yet' : 'consent signed, not collected yet';
-  document.getElementById('nb-cab-qty').textContent = fmt(sumQty(cab));
-  document.getElementById('nb-used-qty').textContent = fmt(sumQty(used));
-  document.getElementById('nb-used-sub').textContent = nDo ? 'on ' + nDo + ' DO' + (nDo === 1 ? '' : 's') : 'collected on a DO';
+  document.getElementById('nb-cust-qty').textContent = fmt(sumQty(of('cust')));
+  document.getElementById('nb-cab-qty').textContent = fmt(sumQty(of('cab')));
+  document.getElementById('nb-used-qty').textContent = fmt(sumQty(of('used')));
   ['cust', 'cab', 'used'].forEach((v) => document.getElementById('nb-' + v).classList.toggle('on', nurseryView === v));
 }
 document.querySelectorAll('[data-nv]').forEach((el) => el.addEventListener('click', () => {
@@ -1098,67 +1093,81 @@ document.querySelectorAll('[data-nv]').forEach((el) => el.addEventListener('clic
   renderBlocks(); renderList();
 }));
 
+// Every list is in seal-number order, whoever the seals went to; the Seal
+// range heading turns it round.
+let nurserySort = 'asc';
+function toggleNurserySort() { nurserySort = nurserySort === 'asc' ? 'desc' : 'asc'; renderList(); }
+function sortHead() {
+  return '<th><button type="button" id="nv-sort" onclick="toggleNurserySort()" class="uppercase tracking-[.12em] font-black" style="color:inherit" title="Sort by seal number">Seal range '
+    + (nurserySort === 'asc' ? '▲' : '▼') + '</button></th>';
+}
+const bySeal = (a, b) => (nurserySort === 'asc' ? 1 : -1) * (Number(a.start_no) - Number(b.start_no));
+const sealCell = (r) => '<td class="mono font-black text-slate-800">' + range(r.start_code, r.end_code) + '</td>';
+const custCell = (r) => '<td><div class="text-slate-800">' + esc(r.customer_name || '—')
+  + (Number(r.open_problems) > 0 ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'nelos\');return false;">⚠ ' + r.open_problems + '</a>' : '')
+  + '</div><div class="mono text-[10px] text-slate-400">' + esc(r.al_number || '') + '</div></td>';
+
 // The list of whichever block is pressed.
 function renderList() {
   const view = NURSERY_VIEW[nurseryView];
-  const list = rows.filter((r) => view.states.includes(r.seg_status));
+  let list = rows.filter((r) => view.states.includes(r.seg_status));
+  if (nurseryView === 'cust') list = mergeRuns(list, true);
+  list.sort(bySeal);
   const q = document.getElementById('q').value.trim();
   document.getElementById('nv-title').textContent = view.title;
   const box = document.getElementById('list-table');
-  const note = (n) => { document.getElementById('list-note').textContent = n + (q ? ' · matching "' + q + '"' : ''); };
   if (!list.length) {
-    note('');
     box.innerHTML = '<div class="py-6 text-center text-slate-400">' + (q ? 'Nothing here matches this search.'
       : nurseryView === 'cust' ? 'No seals with a customer waiting to be collected.'
       : nurseryView === 'cab' ? 'The MJM Nursery cabinet is empty.' : 'No seals used yet.') + '</div>';
     return;
   }
+  const head = (cols) => '<table class="t"><thead><tr>' + sortHead() + '<th class="text-right">Qty</th>' + cols + '</tr></thead><tbody>';
   if (nurseryView === 'cab') {
-    note(list.length + ' range' + (list.length === 1 ? '' : 's') + ' · ' + fmt(sumQty(list)) + ' seals');
-    box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Received</th></tr></thead><tbody>'
-      + list.map((r) => '<tr><td class="mono font-black text-slate-800">' + range(r.start_code, r.end_code) + '</td>'
-        + '<td class="text-right mono">' + fmt(r.qty) + '</td><td class="text-slate-500">' + fmtDate(r.consent_at) + '</td></tr>').join('')
+    box.innerHTML = head('<th>Received</th>')
+      + list.map((r) => '<tr>' + sealCell(r) + '<td class="text-right mono">' + fmt(r.qty) + '</td><td class="text-slate-500">' + fmtDate(r.consent_at) + '</td></tr>').join('')
       + '</tbody></table>';
     return;
   }
   if (nurseryView === 'used') {
-    const sorted = list.slice().sort((a, b) => String(doDates[b.do_number] || '').localeCompare(String(doDates[a.do_number] || '')) || Number(a.start_no) - Number(b.start_no));
-    const nDo = new Set(list.map((r) => r.do_number)).size;
-    note(nDo + ' DO' + (nDo === 1 ? '' : 's') + ' · ' + fmt(sumQty(list)) + ' seals');
-    box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Customer</th><th>DO number</th><th>DO date</th></tr></thead><tbody>'
-      + sorted.map((r) => '<tr><td class="mono font-black text-slate-800">' + range(r.start_code, r.end_code) + '</td>'
-        + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
-        + '<td><div class="text-slate-800">' + esc(r.customer_name || '—') + '</div><div class="mono text-[10px] text-slate-400">' + esc(r.al_number || '') + '</div></td>'
-        + '<td class="mono">' + esc(r.do_number || '—') + '</td>'
-        + '<td>' + fmtDate(doDates[r.do_number]) + '</td></tr>').join('')
+    box.innerHTML = head('<th>Customer</th><th>DO number</th><th>DO date</th>')
+      + list.map((r) => '<tr>' + sealCell(r) + '<td class="text-right mono">' + fmt(r.qty) + '</td>' + custCell(r)
+        + '<td class="mono">' + esc(r.do_number || '—') + '</td><td>' + fmtDate(doDates[r.do_number]) + '</td></tr>').join('')
       + '</tbody></table>';
     return;
   }
-  // With customer: one block per customer order, newest consent first.
-  const groups = new Map();
-  list.forEach((r) => {
-    const k = r.al_number || r.consent_id || '?';
-    if (!groups.has(k)) groups.set(k, { al: r.al_number, customer: r.customer_name, at: r.consent_at, rows: [] });
-    const g = groups.get(k);
-    g.rows.push(r);
-    if (r.consent_at && (!g.at || r.consent_at > g.at)) g.at = r.consent_at;
-  });
-  const gs = Array.from(groups.values()).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
-  note(gs.length + ' customer order' + (gs.length === 1 ? '' : 's') + ' · ' + fmt(sumQty(list)) + ' seals');
-  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th></tr></thead><tbody>'
-    + gs.map((g) => {
-      const probs = g.rows.reduce((t, r) => Math.max(t, Number(r.open_problems) || 0), 0);
-      const warn = probs > 0 ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'nelos\');return false;">⚠ ' + probs + '</a>' : '';
-      return '<tr class="cust-head"><td colspan="3"><span class="font-black text-slate-800">' + esc(g.customer || '—') + '</span>'
-        + ' <span class="mono text-slate-500">· ' + esc(g.al || '—') + '</span>' + warn
-        + '<span class="float-right text-[11px] text-slate-500">Consent ' + fmtDate(g.at) + ' · <b class="mono">' + fmt(sumQty(g.rows)) + '</b> seals</span></td></tr>'
-        + g.rows.map((r) => {
-          const st = STATUS[r.seg_status] || { label: r.seg_status, cls: '' };
-          return '<tr><td class="mono font-black text-slate-800 pl-6">' + range(r.start_code, r.end_code) + '</td>'
-            + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
-            + '<td><span class="badge ' + st.cls + '">' + st.label + '</span></td></tr>';
-        }).join('');
-    }).join('') + '</tbody></table>';
+  box.innerHTML = head('<th>Customer</th><th>Consent date</th><th></th>')
+    + list.map((r) => '<tr>' + sealCell(r) + '<td class="text-right mono">' + fmt(r.qty) + '</td>' + custCell(r)
+      + '<td>' + fmtDate(r.consent_at) + '</td>'
+      + '<td class="text-right">' + (r.consent_ids.length
+        ? '<button class="btn btn-soft btn-sm" data-consent="' + esc(r.consent_ids.join(',')) + '">View consent</button>' : '') + '</td></tr>').join('')
+    + '</tbody></table>';
+  box.querySelectorAll('[data-consent]').forEach((b) => b.addEventListener('click', () => openConsent(b.dataset.consent.split(','))));
+}
+
+// The signed consent, as the customer signed it: the seals given, the
+// signature, and the photos taken with it.
+async function openConsent(ids) {
+  openModal('Signed consent', '<div class="text-sm font-bold text-slate-400">Loading…</div>');
+  const { data, error } = await _supabase.from('mobile_consent_records').select('*').in('id', ids);
+  const body = document.getElementById('modal-body');
+  if (!body) return;
+  if (error) { body.innerHTML = '<span class="text-red-600 font-bold">' + esc(error.message) + '</span>'; return; }
+  const list = (data || []).filter((c) => ids.includes(String(c.id)));
+  if (!list.length) { body.innerHTML = '<div class="text-sm font-bold text-slate-400">This consent record could not be found.</div>'; return; }
+  const img = (u, label) => u ? '<div><div class="lbl">' + label + '</div><a href="' + esc(u) + '" target="_blank" rel="noopener">'
+    + '<img src="' + esc(u) + '" alt="' + label + '" class="max-h-56 rounded-xl border-[1.5px] border-slate-200 bg-white"></a></div>' : '';
+  body.innerHTML = list.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))).map((c) =>
+    '<div class="mb-5 last:mb-0">'
+    + '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">'
+    +   '<div><div class="lbl">Customer</div><div class="font-black text-slate-800">' + esc(c.customer_name || '—') + '</div></div>'
+    +   '<div><div class="lbl">AL</div><div class="font-black mono text-slate-800">' + esc(c.al_number || '—') + '</div></div>'
+    +   '<div><div class="lbl">Signed</div><div class="font-black text-slate-800">' + fmtDate(c.created_at) + '</div></div>'
+    +   '<div><div class="lbl">Seedlings</div><div class="font-black mono text-slate-800">' + fmt(c.consent_qty) + '</div></div>'
+    + '</div>'
+    + (Array.isArray(c.seal_ranges) && c.seal_ranges.length ? '<div class="mb-4"><div class="lbl">Seals given</div><div class="font-black mono text-slate-800">' + rangesHtml(c.seal_ranges, ', ') + '</div></div>' : '')
+    + '<div class="flex flex-wrap gap-4">' + img(c.signature_data, 'Signature') + img(c.photo_url, 'Photo') + img(c.seal_photo_url, 'Seal photo') + '</div>'
+    + '</div>').join('<hr class="my-4 border-slate-100">');
 }
 
 // ══════════════════════ REPORT ═══════════════════════════════════════════
@@ -1249,8 +1258,6 @@ function renderReport() {
   const list = reportRows.filter((r) => (!reportFilter || r.status === reportFilter)
     && (!q || (isNum ? n >= r.s && n <= r.e : (r.who + ' ' + r.doNo).toLowerCase().includes(ql))));
   const box = document.getElementById('rp-table');
-  document.getElementById('rp-note').textContent = reportRows.length
-    ? 'Seals ' + reportRows[0].start + ' – ' + reportRows[reportRows.length - 1].end + ' · ' + list.length + ' range' + (list.length === 1 ? '' : 's') + ' shown' : '';
   if (!list.length) { box.innerHTML = '<div class="py-6 text-center text-slate-400">' + (reportRows.length ? 'Nothing matches.' : 'No seals in the system yet.') + '</div>'; return; }
   box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th>Customer</th><th>DO number</th><th>DO date</th><th>Detail</th></tr></thead><tbody>'
     + list.map((r) => '<tr><td class="mono font-black ' + (r.status === 'none' ? 'text-slate-400' : 'text-slate-800') + '">' + range(r.start, r.end) + '</td>'

@@ -91,13 +91,15 @@ window.supabase = { createClient: function () {
 } };`;
 
 // What seal_list hands back: one in-stock range the Customer page must not
-// show, and AL-1240 split in two at 10500 -- the same status on both sides,
-// so it is one run and must read as one start and end.
+// show, and AL-1240 split three ways -- pending, then 100 already scanned,
+// then pending again. On Seal with Customer all three are one customer still
+// to collect, so it is one run and must read as one start and end.
 const SEGMENTS = [
   { seg_status: 'collected', start_code: '0009001', end_code: '0009600', start_no: 9001, end_no: 9600, qty: 600, al_number: 'AL-1234', customer_name: 'Ah Seng Farm', consent_at: '2026-10-03T02:00:00Z', do_number: 'DO-1234-01', open_problems: 0 },
   { seg_status: 'pending',   start_code: '0009601', end_code: '0010000', start_no: 9601, end_no: 10000, qty: 400, al_number: 'AL-1234', customer_name: 'Ah Seng Farm', consent_at: '2026-10-03T02:00:00Z', do_number: null, open_problems: 0 },
-  { seg_status: 'pending',   start_code: '0010001', end_code: '0010500', start_no: 10001, end_no: 10500, qty: 500, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
-  { seg_status: 'pending',   start_code: '0010501', end_code: '0012000', start_no: 10501, end_no: 12000, qty: 1500, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
+  { seg_status: 'pending',   start_code: '0010001', end_code: '0010500', start_no: 10001, end_no: 10500, qty: 500, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
+  { seg_status: 'scanned',   start_code: '0010501', end_code: '0010600', start_no: 10501, end_no: 10600, qty: 100, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
+  { seg_status: 'pending',   start_code: '0010601', end_code: '0012000', start_no: 10601, end_no: 12000, qty: 1400, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
   { seg_status: 'in_stock',  start_code: '0012001', end_code: '0020000', start_no: 12001, end_no: 20000, qty: 8000, al_number: null, customer_name: null, consent_at: '2026-10-01T00:00:00Z', do_number: null, open_problems: 0 },
 ];
 const PROBLEMS = [
@@ -158,7 +160,9 @@ async function open(browser, port, level, tab) {
     window.__RPCDATA = Object.assign({ seal_list: segs }, rpc);
     window.__ROWS = { seal_problems: probs, seal_settings: [{ id: 1, enforce_stock: false }], nelos_modules: [],
                       seal_deliveries: dels, seal_orders: ords, seal_hq_receipts: hqr, seal_receipts: [],
-                      shared_do_records: [{ do_number: 'DO-1234-01', delivery_date: '2026-10-12' }] };
+                      shared_do_records: [{ do_number: 'DO-1234-01', delivery_date: '2026-10-12' }],
+                      mobile_consent_records: [{ id: 41, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_qty: 2000, created_at: '2026-10-05T02:00:00Z',
+                        seal_ranges: [{ start: '0010001', end: '0012000' }], signature_data: 'data:image/png;base64,iVBORw0KGgo=', photo_url: null }] };
     window.alert = () => {};
     window.confirm = () => true;
   }, { level, segs: SEGMENTS, probs: PROBLEMS, dels: DELIVERIES, rpc: RPCDATA, ords: ORDERS, hqr: HQ_RECEIPTS });
@@ -193,12 +197,25 @@ async function open(browser, port, level, tab) {
     is(blocks, [['Seal with Customer', '2,400'], ['Seal in MJM Nursery Cabinet', '8,000'], ['Seal used', '600']],
       'three blocks: with customer (consent signed, not collected), the nursery cabinet, and used');
     is(await page.$eval('#nb-cust', (e) => e.classList.contains('on')), true, 'and the list under them opens on Seal with Customer');
-    const heads = await page.$$eval('#list-table tr.cust-head', (t) => t.map((r) => r.textContent.replace(/\s+/g, ' ').trim()));
-    is(heads.length === 2 && heads[0].startsWith('Kebun Maju · AL-1240') && heads[1].startsWith('Ah Seng Farm · AL-1234'), true,
-      'one block per customer order, newest consent first');
-    const lines = await page.$$eval('#list-table tbody tr:not(.cust-head)', (t) => t.map((r) => [...r.children].map((c) => c.textContent.trim())));
-    is(lines[0], ['0010001 – 0012000', '2,000', 'Pending collection'], 'a running range with nothing else in the middle reads as one start and end');
+    is(await page.$$eval('[data-nv] .text-2xl ~ div', (d) => d.length), 0, 'each block is its title and its qty, nothing under them');
+    is(await page.$$eval('#list-note, #rp-note', (d) => d.length), 0, 'and no line beside the search bar');
+    const rowsOf = () => page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim())));
+    is(await page.$$eval('#list-table thead th', (t) => t.map((h) => h.textContent.trim())), ['Seal range ▲', 'Qty', 'Customer', 'Consent date', ''],
+      'Seal with Customer reads like Seal used: range, qty, customer, consent date, and a button');
+    is(await rowsOf(), [['0009601 – 0010000', '400', 'Ah Seng FarmAL-1234', '03 Oct 2026', ''],
+      ['0010001 – 0012000', '2,000', 'Kebun Maju ⚠ 1AL-1240', '05 Oct 2026', 'View consent']],
+      'one flat list in seal-number order across customers, and a run part-scanned still reads as one start and end');
     is((await page.$eval('#list-table', (e) => e.textContent)).includes('0009001'), false, 'a used seal is not listed as with the customer');
+    await page.click('#nv-sort');
+    is((await rowsOf()).map((r) => r[0]), ['0010001 – 0012000', '0009601 – 0010000'], 'pressing Seal range turns it to descending');
+    await page.click('#nv-sort');
+    await page.click('#list-table [data-consent]');
+    await page.waitForFunction(() => /Signature/.test(document.getElementById('modal-body').textContent), null, { timeout: 3000 }).catch(() => {});
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Signed consent', 'View consent opens the signed consent');
+    const cm = await page.$eval('#modal-body', (e) => e.textContent.replace(/\s+/g, ' '));
+    is(cm.includes('Kebun Maju') && cm.includes('0010001 – 0012000') && cm.includes('Signature'), true, 'with the seals given and the signature');
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_consent.png', fullPage: true });
+    await page.evaluate(() => closeModal());
 
     await page.click('#nb-cab');
     is(await page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].slice(0, 2).map((c) => c.textContent.trim()))),
