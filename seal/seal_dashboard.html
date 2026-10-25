@@ -135,17 +135,20 @@
         <div class="text-[11px] font-bold text-teal-800 opacity-70" id="blk-last-sub"></div>
       </div>
       <div class="block-card click" id="blk-pending" style="background:#fffbeb;border-color:#fde68a">
-        <div class="text-[10px] font-black uppercase tracking-widest text-amber-800 opacity-80">Pending receive seal</div>
+        <div class="flex items-start justify-between gap-2">
+          <div class="text-[10px] font-black uppercase tracking-widest text-amber-800 opacity-80">Seal pending receive</div>
+          <button class="plus" id="btn-order2" title="Order new seals" style="background:#d97706">+</button>
+        </div>
         <div class="text-2xl font-black mono mt-1 text-amber-900" id="blk-pending-qty">—</div>
         <div class="text-[11px] font-bold text-amber-800 opacity-70" id="blk-pending-sub">ordered, not yet at HQ</div>
       </div>
       <div class="block-card click" id="blk-deliver" style="background:#eff6ff;border-color:#bfdbfe">
         <div class="flex items-start justify-between gap-2">
-          <div class="text-[10px] font-black uppercase tracking-widest text-blue-800 opacity-80">Delivering to site</div>
-          <button class="plus" id="btn-deliver" title="Deliver seals to site" style="background:#2563eb">+</button>
+          <div class="text-[10px] font-black uppercase tracking-widest text-blue-800 opacity-80">Seals delivery to MJM Nursery</div>
+          <button class="plus" id="btn-deliver" title="New delivery" style="background:#2563eb">+</button>
         </div>
         <div class="text-2xl font-black mono mt-1 text-blue-900" id="blk-deliver-qty">—</div>
-        <div class="text-[11px] font-bold text-blue-800 opacity-70" id="blk-deliver-sub">sent, not yet received at site</div>
+        <div class="text-[11px] font-bold text-blue-800 opacity-70" id="blk-deliver-sub">sent, not yet received at the nursery</div>
       </div>
     </div>
 
@@ -192,7 +195,7 @@
 <div id="modal" class="fixed inset-0 bg-black/50 hidden z-[70] flex items-start md:items-center justify-center p-3 md:p-6" onclick="if(event.target===this)closeModal()">
   <div class="bg-white rounded-[20px] w-full max-w-[760px] max-h-[90vh] flex flex-col shadow-2xl">
     <div class="flex items-center justify-between px-5 py-4 border-b-[1.5px] border-slate-100">
-      <div class="font-black text-slate-800" id="modal-title"></div>
+      <div class="flex items-center gap-2 min-w-0"><button class="hidden w-9 h-9 rounded-xl bg-slate-100 text-slate-600 font-black shrink-0" id="modal-back" title="Back" aria-label="Back">←</button><div class="font-black text-slate-800" id="modal-title"></div></div>
       <button class="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 font-black text-lg" onclick="closeModal()">×</button>
     </div>
     <div class="p-5 overflow-y-auto" id="modal-body"></div>
@@ -409,8 +412,13 @@ document.querySelectorAll('#tabs .tab').forEach((b) => b.addEventListener('click
 
 // ══════════════════════ SEAL AT HQ ═══════════════════════════════════════
 // One window at a time, opened from the three blocks.
-function openModal(title, html) {
+// A window opened from another one carries a Back to it, so a check list or
+// a history is a step in, not a window somebody has to close and reopen.
+function openModal(title, html, back) {
   document.getElementById('modal-title').textContent = title;
+  const b = document.getElementById('modal-back');
+  b.classList.toggle('hidden', !back);
+  b.onclick = back || null;
   document.getElementById('modal-body').innerHTML = html;
   document.getElementById('modal').classList.remove('hidden');
 }
@@ -457,7 +465,7 @@ async function loadHQSeals() {
   (p.data || []).forEach((x) => { (deliveryProbs[x.delivery_id] = deliveryProbs[x.delivery_id] || []).push(x); });
   const going = deliveryList.filter((x) => x.status !== 'received');
   document.getElementById('blk-deliver-sub').textContent = going.length
-    ? going.length + ' deliver' + (going.length === 1 ? 'y' : 'ies') + ' not yet received at site' : 'sent, not yet received at site';
+    ? going.length + ' deliver' + (going.length === 1 ? 'y' : 'ies') + ' not yet received at the nursery' : 'sent, not yet received at the nursery';
 
   const list = [];
   normRanges(hqStock.map((x) => ({ start: x.start_code, end: x.end_code }))).forEach((r) => {
@@ -544,120 +552,202 @@ async function saveOrder(e) {
   } finally { e.target.disabled = false; }
 }
 
-// ── PENDING RECEIVE (the block) ──
-// Every order, opened up into rows of a thousand. Each row is received on
-// its own, so a box of 10,000 can be checked and updated a thousand at a time.
+// ── SEAL PENDING RECEIVE (the block, and its +) ──
+// The orders still to come, one row each. An order opens into its own
+// receiving check list, cut in rows of a thousand from its first seal, so a
+// box of 10,000 is checked and received a thousand at a time -- or several
+// rows at once, by ticking the first and the last.
 document.getElementById('blk-pending').addEventListener('click', openPending);
-let pendingShowDone = false;
-const openOrders = new Set();
-async function openPending() {
-  modalKind = 'pending';
-  if (document.getElementById('modal').classList.contains('hidden')) openModal('Pending receive — ordered seals', 'Loading…');
+document.getElementById('btn-order2').addEventListener('click', (e) => { e.stopPropagation(); openOrder(); });
+let orderRows = [];     // seal_orders with a range, as last loaded
+async function loadOrdersAndReceipts() {
   const [o, r] = await Promise.all([
     _supabase.from('seal_orders').select('*').order('order_date', { ascending: false }).order('id', { ascending: false }).limit(300),
-    _supabase.from('seal_hq_receipts').select('id,order_id,ranges,received_by,received_date,created_at'),
+    _supabase.from('seal_hq_receipts').select('*').order('received_date', { ascending: false }).order('id', { ascending: false }),
   ]);
-  if (modalKind !== 'pending') return;
-  if (o.error) { document.getElementById('modal-body').innerHTML = missingSetup(o.error) ? 'Not set up yet.' : esc(o.error.message); return; }
+  if (o.error) { document.getElementById('modal-body').innerHTML = missingSetup(o.error) ? 'Not set up yet.' : esc(o.error.message); return false; }
   hqReceipts = r.data || [];
-  const got = normRanges(hqReceipts.flatMap((x) => x.ranges || []));
-  const orders = (o.data || []).filter((x) => x.start_code);
-  const rows = orders.map((x) => {
-    const want = [{ start: x.start_code, end: x.end_code }];
-    const left = minusRanges(want, got.map((g) => ({ start: sealCode(g.s, g.w), end: sealCode(g.e, g.w) })));
-    return { x, left: rangesQty(left) };
-  }).filter((r) => pendingShowDone || (r.left > 0 && r.x.status !== 'Closed'));
-  const body = document.getElementById('modal-body');
-  body.innerHTML = '<div class="flex justify-between items-center mb-3"><div class="text-[12px] font-bold text-slate-500">Press an order to open it in rows of 1,000.</div>'
-    + '<label class="text-[11px] font-black text-slate-500"><input type="checkbox" id="pend-done"' + (pendingShowDone ? ' checked' : '') + '> show fully received</label></div>'
-    + (rows.length ? rows.map((r) => orderBlock(r.x, r.left)).join('') : '<div class="py-6 text-center text-slate-400 font-bold">Nothing waiting to be received.</div>');
-  document.getElementById('pend-done').addEventListener('change', (e) => { pendingShowDone = e.target.checked; openPending(); });
+  orderRows = (o.data || []).filter((x) => x.start_code);
+  return true;
 }
-function orderBlock(x, left) {
-  const isOpen = openOrders.has(x.id);
-  const done = x.qty - left;
-  const st = x.status === 'Closed' ? 'Closed' : left === 0 ? 'Received' : done > 0 ? 'Partly received' : 'Ordered';
-  const cls = st === 'Received' || st === 'Closed' ? 's-collected' : st === 'Partly received' ? 's-pending' : 's-in_stock';
-  return '<div class="border-[1.5px] border-slate-200 rounded-2xl mb-3 overflow-hidden">'
-    + '<div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 cursor-pointer bg-slate-50" onclick="toggleOrder(' + x.id + ')">'
-    +   '<div><div class="font-black text-slate-800 mono">' + range(x.start_code, x.end_code) + '</div>'
-    +   '<div class="text-[11px] font-bold text-slate-500">Ordered ' + fmtDate(x.order_date) + (x.created_by ? ' by ' + esc(x.created_by) : '') + ' · ' + fmt(x.qty) + ' seals</div></div>'
-    +   '<div class="flex items-center gap-2"><span class="text-[11px] font-black text-slate-600 mono">' + fmt(done) + ' / ' + fmt(x.qty) + '</span>'
-    +   '<span class="badge ' + cls + '">' + st + '</span><span class="text-slate-400 font-black">' + (isOpen ? '▾' : '▸') + '</span></div>'
-    + '</div>'
-    + (isOpen ? chunkRows(x) : '')
-    + '</div>';
+// How many of an order are still to come, off every HQ receipt.
+function orderLeft(x) {
+  return rangesQty(minusRanges([{ start: x.start_code, end: x.end_code }], hqReceipts.flatMap((r) => r.ranges || [])));
 }
-// The order cut into thousands from its own first seal. A row is received
-// when every seal in it is on an HQ receipt, whichever receipt it was.
-function chunkRows(x) {
+async function openPending() {
+  modalKind = 'pending';
+  openModal('Seal pending receive list', 'Loading…');
+  if (!(await loadOrdersAndReceipts()) || modalKind !== 'pending') return;
+  const rows = orderRows.filter((x) => x.status !== 'Closed' && orderLeft(x) > 0);
+  document.getElementById('modal-body').innerHTML =
+    '<div class="flex justify-end mb-3"><button class="btn btn-soft btn-sm" onclick="openPendingHistory()">🕘 History</button></div>'
+    + (rows.length
+      ? '<table class="t"><thead><tr><th>Order date</th><th>Range</th><th>By</th><th></th></tr></thead><tbody>'
+        + rows.map((x) => {
+          const left = orderLeft(x);
+          return '<tr class="cursor-pointer hover:bg-slate-50" onclick="openOrderReceive(' + x.id + ')">'
+            + '<td>' + fmtDate(x.order_date) + '</td>'
+            + '<td><div class="mono font-black text-slate-800">' + range(x.start_code, x.end_code) + '</div>'
+            +   '<div class="text-[10px] text-slate-400">' + fmt(x.qty - left) + ' / ' + fmt(x.qty) + ' received</div></td>'
+            + '<td>' + esc(x.created_by || '—') + '</td>'
+            + '<td class="text-right"><button class="btn btn-soft btn-sm" title="Open" aria-label="Open">&gt;</button></td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<div class="py-6 text-center text-slate-400 font-bold">Nothing waiting to be received.</div>');
+}
+
+// The receiving check list of one order.
+let rcvOrder = null;
+let rcvTicked = new Set();   // row start numbers ticked
+let rcvAnchor = null;        // the first row ticked, for start-and-end
+function openOrderReceive(id) {
+  rcvOrder = orderRows.find((x) => x.id === id);
+  if (!rcvOrder) return;
+  rcvTicked = new Set();
+  rcvAnchor = null;
+  modalKind = 'receive';
+  drawOrderReceive();
+}
+function orderChunks(x) {
   const a = sealNo(x.start_code), b = sealNo(x.end_code), w = Math.max(sealWidth(x.start_code), sealWidth(x.end_code));
   const got = hqReceipts.flatMap((r) => r.ranges || []);
-  let html = '';
+  const out = [];
   for (let s = a; s <= b; s += 1000) {
     const e = Math.min(b, s + 999);
-    const chunk = [{ start: sealCode(s, w), end: sealCode(e, w) }];
-    const left = minusRanges(chunk, got);
-    const nLeft = rangesQty(left), n = e - s + 1;
-    let right;
-    if (!nLeft) {
-      const rc = hqReceipts.find((r) => normRanges(r.ranges).some((g) => g.s <= e && g.e >= s));
-      right = '<span class="text-emerald-700 font-black">✔ Received' + (rc ? ' by ' + esc(rc.received_by || '—') + ' · ' + fmtDate(rc.received_date) : '') + '</span>';
-    } else {
-      right = (nLeft < n ? '<span class="text-amber-700 mr-2">' + fmt(n - nLeft) + ' already in</span>' : '')
-        + (x.status === 'Closed' ? '<span class="text-slate-400">Order closed</span>'
-          : '<button class="btn btn-main btn-sm" onclick="receiveChunk(' + x.id + ',\'' + esc(JSON.stringify(left)).replace(/'/g, '') + '\', this)">Receive</button>');
-    }
-    html += '<div class="chunk"><div class="mono font-black text-slate-800">' + range(sealCode(s, w), sealCode(e, w)) + '</div>'
-      + '<div class="mono text-right text-slate-500">' + fmt(n) + '</div><div></div><div class="text-right">' + right + '</div></div>';
+    const left = minusRanges([{ start: sealCode(s, w), end: sealCode(e, w) }], got);
+    out.push({ s, e, w, left, n: e - s + 1, nLeft: rangesQty(left) });
   }
-  return html;
+  return out;
 }
-function toggleOrder(id) { openOrders.has(id) ? openOrders.delete(id) : openOrders.add(id); openPending(); }
-async function receiveChunk(orderId, rangesJson, btn) {
-  const rs = JSON.parse(rangesJson);
+function drawOrderReceive() {
+  const x = rcvOrder;
+  const chunks = orderChunks(x);
+  const open = chunks.filter((c) => c.nLeft > 0);
+  const picked = open.filter((c) => rcvTicked.has(c.s));
+  const pickedQty = picked.reduce((t, c) => t + c.nLeft, 0);
+  openModal('Order : ' + fmtDate(x.order_date) + ', ' + x.start_code + ' – ' + x.end_code + ' receiving check list',
+    '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">'
+    + '<div class="text-[12px] font-bold text-slate-500">Tick the first row and the last row — every row between is ticked for you.</div>'
+    + '<div class="flex gap-2"><button class="btn btn-soft btn-sm" onclick="rcvAll(true)">Tick all</button><button class="btn btn-soft btn-sm" onclick="rcvAll(false)">Clear</button></div></div>'
+    + '<div class="border-[1.5px] border-slate-200 rounded-2xl overflow-hidden">'
+    + chunks.map((c) => {
+      const code = range(sealCode(c.s, c.w), sealCode(c.e, c.w));
+      if (!c.nLeft) {
+        const rc = hqReceipts.find((r) => normRanges(r.ranges).some((g) => g.s <= c.e && g.e >= c.s));
+        return '<div class="chunk" style="background:#f8fafc"><div class="mono font-black text-slate-400">✔ ' + code + '</div>'
+          + '<div class="mono text-right text-slate-400">' + fmt(c.n) + '</div><div></div>'
+          + '<div class="text-right text-emerald-700 font-black">Received' + (rc ? ' by ' + esc(rc.received_by || '—') + ' · ' + fmtDate(rc.received_date) : '') + '</div></div>';
+      }
+      const on = rcvTicked.has(c.s);
+      return '<label class="chunk cursor-pointer' + (on ? ' bg-teal-50' : '') + '">'
+        + '<div class="mono font-black text-slate-800"><input type="checkbox" class="mr-2 align-middle" data-s="' + c.s + '"' + (on ? ' checked' : '') + '>' + code + '</div>'
+        + '<div class="mono text-right text-slate-500">' + fmt(c.n) + '</div><div></div>'
+        + '<div class="text-right text-amber-700">' + (c.nLeft < c.n ? fmt(c.n - c.nLeft) + ' already in' : 'Pending') + '</div></label>';
+    }).join('')
+    + '</div>'
+    + '<div class="flex justify-between items-center gap-2 mt-4">'
+    + '<div class="text-[12px] font-black text-slate-700">' + (picked.length ? picked.length + ' row' + (picked.length === 1 ? '' : 's') + ' ticked · ' + fmt(pickedQty) + ' seals' : 'Nothing ticked') + '</div>'
+    + '<button class="btn btn-main" id="rcv-save"' + (picked.length ? '' : ' disabled') + '>Receive ticked</button></div>',
+    openPending);
+  document.querySelectorAll('#modal-body input[data-s]').forEach((cb) => cb.addEventListener('change', () => rcvTick(Number(cb.dataset.s), cb.checked)));
+  document.getElementById('rcv-save').addEventListener('click', receiveTicked);
+}
+// Start and end: the second tick, with exactly one row ticked before it,
+// ticks every open row between the two.
+function rcvTick(s, on) {
+  if (!on) { rcvTicked.delete(s); if (rcvAnchor === s) rcvAnchor = null; drawOrderReceive(); return; }
+  const open = orderChunks(rcvOrder).filter((c) => c.nLeft > 0).map((c) => c.s);
+  if (rcvTicked.size === 1 && rcvAnchor != null && rcvAnchor !== s) {
+    const lo = Math.min(rcvAnchor, s), hi = Math.max(rcvAnchor, s);
+    open.filter((x) => x >= lo && x <= hi).forEach((x) => rcvTicked.add(x));
+    rcvAnchor = null;
+  } else {
+    rcvTicked.add(s);
+    rcvAnchor = rcvTicked.size === 1 ? s : null;
+  }
+  drawOrderReceive();
+}
+function rcvAll(on) {
+  rcvTicked = new Set(on ? orderChunks(rcvOrder).filter((c) => c.nLeft > 0).map((c) => c.s) : []);
+  rcvAnchor = null;
+  drawOrderReceive();
+}
+async function receiveTicked(e) {
+  const picked = orderChunks(rcvOrder).filter((c) => c.nLeft > 0 && rcvTicked.has(c.s));
+  if (!picked.length) return;
+  // One receipt for everything ticked, running numbers joined.
+  const rs = normRanges(picked.flatMap((c) => c.left)).map((r) => ({ start: sealCode(r.s, r.w), end: sealCode(r.e, r.w) }));
   const qty = rangesQty(rs);
   if (!confirm('Receive ' + rs.map((r) => r.start === r.end ? r.start : r.start + ' – ' + r.end).join(', ') + ' (' + fmt(qty) + ' seals) at HQ?')) return;
-  btn.disabled = true;
+  e.target.disabled = true;
   const { error } = await _supabase.from('seal_hq_receipts').insert([{
     client_ref: newRef(),
-    order_id: orderId,
+    order_id: rcvOrder.id,
     received_date: todayLocal(),
     ranges: rs,
     received_by: staffName,
     received_by_id: (MJMAccess.user() || {}).id || null,
   }]);
-  if (error) { btn.disabled = false; missingSetup(error); toast(error.message, true); return; }
+  if (error) { e.target.disabled = false; missingSetup(error); toast(error.message, true); return; }
   toast(fmt(qty) + ' seals received at HQ.');
-  // Marked Received on the order once nothing of it is left to come.
-  openPending(); loadSummary(); loadHQSeals();
+  loadSummary(); loadHQSeals();
+  const id = rcvOrder.id;
+  if (await loadOrdersAndReceipts()) openOrderReceive(id);
 }
 
-// ── DELIVERING TO SITE (the block, and its +) ──
+// What HQ has received, newest first.
+async function openPendingHistory() {
+  modalKind = 'pending-history';
+  openModal('Received at HQ — history', 'Loading…', openPending);
+  if (!(await loadOrdersAndReceipts()) || modalKind !== 'pending-history') return;
+  const orders = {}; orderRows.forEach((x) => { orders[x.id] = x; });
+  document.getElementById('modal-body').innerHTML = hqReceipts.length
+    ? '<table class="t"><thead><tr><th>Received</th><th>Seals</th><th class="text-right">Qty</th><th>By</th><th>Order</th></tr></thead><tbody>'
+      + hqReceipts.map((r) => {
+        const o = r.order_id && orders[r.order_id];
+        return '<tr><td>' + fmtDate(r.received_date) + (r.is_opening ? ' <span class="badge s-pending">Opening</span>' : '') + '</td>'
+          + '<td class="mono font-black text-slate-800">' + rangesHtml(r.ranges) + '</td>'
+          + '<td class="text-right mono">' + fmt(rangesQty(r.ranges)) + '</td>'
+          + '<td>' + esc(r.received_by || '—') + '</td>'
+          + '<td class="text-slate-500">' + (o ? fmtDate(o.order_date) + '<div class="mono text-[10px]">' + range(o.start_code, o.end_code) + '</div>' : '—') + '</td></tr>';
+      }).join('') + '</tbody></table>'
+    : '<div class="py-6 text-center text-slate-400 font-bold">Nothing received at HQ yet.</div>';
+}
+
+// ── SEALS DELIVERY TO MJM NURSERY (the block, and its +) ──
 document.getElementById('blk-deliver').addEventListener('click', openDeliveries);
 document.getElementById('btn-deliver').addEventListener('click', (e) => { e.stopPropagation(); openDeliver(); });
-let dvShowDone = false;
 const confirmBoxes = {};   // delivery id -> RangeBox while open
 async function openDeliveries() {
   modalKind = 'deliveries';
-  if (document.getElementById('modal').classList.contains('hidden')) openModal('Delivering to site', 'Loading…');
+  openModal('Seals delivery to MJM Nursery', 'Loading…');
   await loadHQSeals();
   if (modalKind !== 'deliveries') return;
-  const list = dvShowDone ? deliveryList : deliveryList.filter((x) => x.status !== 'received');
+  const list = deliveryList.filter((x) => x.status !== 'received');
   Object.keys(confirmBoxes).forEach((k) => delete confirmBoxes[k]);
   document.getElementById('modal-body').innerHTML =
-    '<div class="flex justify-between items-center mb-3"><button class="btn btn-main btn-sm" onclick="openDeliver()">+ Deliver seals to site</button>'
-    + '<label class="text-[11px] font-black text-slate-500"><input type="checkbox" id="dv-done"' + (dvShowDone ? ' checked' : '') + '> show received</label></div>'
+    '<div class="flex justify-between items-center mb-3"><button class="btn btn-soft btn-sm" onclick="openDeliveryHistory()">🕘 History</button>'
+    + '<button class="btn btn-main btn-sm" onclick="openDeliver()">+ New delivery</button></div>'
     + '<div class="space-y-3">' + (list.length ? list.map((x) => deliveryCard(x, deliveryProbs[x.id] || [])).join('') : '<div class="py-6 text-center text-slate-400 font-bold">No deliveries on the way.</div>') + '</div>';
-  document.getElementById('dv-done').addEventListener('change', (e) => { dvShowDone = e.target.checked; openDeliveries(); });
+}
+// What the nursery has received, newest first.
+async function openDeliveryHistory() {
+  modalKind = 'delivery-history';
+  openModal('Received at MJM Nursery — history', 'Loading…', openDeliveries);
+  await loadHQSeals();
+  if (modalKind !== 'delivery-history') return;
+  const list = deliveryList.filter((x) => x.status === 'received')
+    .sort((a, b) => String(b.received_at || '').localeCompare(String(a.received_at || '')));
+  document.getElementById('modal-body').innerHTML = '<div class="space-y-3">'
+    + (list.length ? list.map((x) => deliveryCard(x, deliveryProbs[x.id] || [])).join('') : '<div class="py-6 text-center text-slate-400 font-bold">Nothing received at MJM Nursery yet.</div>')
+    + '</div>';
 }
 
 let dvBlocked = false;
 let dvBox = null;
 function openDeliver() {
   modalKind = 'deliver';
-  openModal('Deliver seals to site (UNN 1)',
-    '<p class="text-[12px] font-bold text-slate-500 mb-3">Key the first and last seal of each range going to site. Saving marks the delivery <b>Packed</b>; site keys the start and end again to confirm it is received.</p>'
+  openModal('New delivery to MJM Nursery',
+    '<p class="text-[12px] font-bold text-slate-500 mb-3">Key the first and last seal of each range going to the nursery. Saving marks the delivery <b>Packed</b>; the nursery keys the start and end again to confirm it is received.</p>'
     + '<div id="dv-ranges"></div>'
     + '<div class="grid grid-cols-3 gap-3 mt-4">'
     +   '<div><label class="lbl">Fill from HQ stock</label><input id="dv-fill-qty" type="number" min="1" class="inp" placeholder="How many"></div>'
@@ -665,7 +755,8 @@ function openDeliver() {
     +   '<div><label class="lbl">Remark</label><input id="dv-remark" class="inp" placeholder="Optional"></div>'
     + '</div>'
     + '<div class="text-[11px] font-bold mt-3" id="dv-msg"></div>'
-    + '<div class="flex justify-end gap-2 mt-4"><button class="btn btn-soft" onclick="closeModal()">Cancel</button><button class="btn btn-main" id="dv-save">Save · Packed</button></div>');
+    + '<div class="flex justify-end gap-2 mt-4"><button class="btn btn-soft" onclick="openDeliveries()">Cancel</button><button class="btn btn-main" id="dv-save">Save · Packed</button></div>',
+    openDeliveries);
   dvBlocked = false;
   dvBox = RangeBox(document.getElementById('dv-ranges'), { onChange: checkDV });
   document.getElementById('dv-fill').addEventListener('click', fillDV);
