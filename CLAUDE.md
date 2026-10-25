@@ -4152,7 +4152,10 @@ Three things worth knowing:
 
 - **Seals are compared as numbers and shown at their width.** 0009297 and 9297
   are one seal. `sealRanges.js` is the rule and lives in mobile, fc-portal and
-  the Sales Web as the same file — change all of them.
+  the Sales Web as the same file — change all of them. **The office page
+  shows a seal at no fewer than six digits** (`SEAL_MIN_WIDTH`), so 1101 keyed
+  without its zeros reads 001101; only the showing pads, the number decides.
+  The phone copies of `sealRanges.js` do not pad yet.
 - **A DO says which seals it carried** (`shared_do_records.seal_ranges`), the
   ones scanned on that card since its last DO, so a consent collected over
   three trips gives three DOs with three different lists.
