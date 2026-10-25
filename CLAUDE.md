@@ -4220,6 +4220,22 @@ allowed, because a supplier may skip a run. `table.t .text-right` is set in
 the page itself, because `table.t th` said left for every heading and beat
 the Tailwind class, so Qty sat left over figures on the right.
 
+**Seal at MJM Nursery is three blocks the same way**: Seal with Customer
+(a consent signed and not yet on a DO -- pending or scanned), Seal in MJM
+Nursery Cabinet (in stock), and Seal used (on a DO, with the customer, the
+DO number and the DO date, which is read off `shared_do_records.
+delivery_date` because the seal does not carry it). The block totals are
+everything at the nursery; the search narrows only the list under them.
+
+**Report is every number from the first to the latest**, each run with
+where it is now, built in the page from what the other tabs already read.
+A seal is where its LATEST step put it, so the layers are laid in that
+order and each keeps only what no later one claimed: used, with a customer,
+nursery cabinet, delivering, HQ cabinet, ordered and not received. A gap
+between numbers is a **No record** row, never skipped -- a seal nobody has
+a record of is the thing to look at. Nothing in the database was added for
+it.
+
 `tests/seal_dashboard.cjs` holds the office page.
 
 ## Coming back to the portal is not signing in again
