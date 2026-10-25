@@ -4226,6 +4226,13 @@ Nursery Cabinet (in stock), and Seal used (on a DO, with the customer, the
 DO number and the DO date, which is read off `shared_do_records.
 delivery_date` because the seal does not carry it). The block totals are
 everything at the nursery; the search narrows only the list under them.
+The blocks carry a title and a figure and nothing else, and nothing sits
+beside the search bar -- the office asked for both lines to go. Every list
+is ONE list in seal-number order whoever the seals went to, and the Seal
+range heading turns it round. Seal with Customer joins a customer run
+across pending and scanned, so a range part-scanned still reads as one
+start and end, and its View consent opens the `mobile_consent_records`
+row (`select *`, so a column a database lacks cannot refuse the read).
 
 **Report is every number from the first to the latest**, each run with
 where it is now, built in the page from what the other tabs already read.
