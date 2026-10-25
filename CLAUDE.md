@@ -4160,7 +4160,35 @@ Three things worth knowing:
   opening stock. Turned on before that, every consent is a "never received"
   case.
 
+**Seals come to HQ first** (`shared/RUN_ME_seal_hq_delivery.sql`): HQ
+orders, HQ receives (`seal_hq_receipts`), HQ packs a delivery to site
+(`seal_deliveries`: packed, then delivered to the site office), and site
+keys the start and end AGAIN — on Receive Seals or on the office page —
+which is an ordinary `seal_receipts` row naming the delivery. The trigger
+closes the delivery and compares the two both ways round; a difference is a
+problem and a case, never a refused receipt. The confirm is not filled in
+from the delivery on purpose: the point is that somebody counted what
+arrived. `seal_raise_case` is in BOTH SQL files, word for word, so running
+either leaves the same titles — the test compares them.
+
+The office page is two pages, **HQ Order & Delivery** and **Customer
+Seals**, and the ribbon's [← Portal] is the only way back. A list joins
+running numbers into one start and end wherever nothing breaks the run.
+
 `tests/seal_dashboard.cjs` holds the office page.
+
+## Coming back to the portal is not signing in again
+
+`index.html` shows the sign-in screen until `onAuthStateChange` has read the
+profile, and that read goes over the network — so every module's [← Portal]
+put the login up for a second or two over somebody signed in the whole time,
+and the office read it as being thrown out. A device holding a session and
+the last profile this account was given (`mjm_perm_last__`) now opens on the
+hub straight away; the handler still reads the profile and redraws it, and
+still shows the sign-in when the session has gone. A session with nothing
+remembered shows neither screen rather than the login.
+`tests/portal_back_is_not_a_sign_in.cjs` holds it against a database that
+never answers.
 
 ## A category nothing raises is a feature somebody stopped halfway
 

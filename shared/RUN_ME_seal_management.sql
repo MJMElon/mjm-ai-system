@@ -172,6 +172,9 @@ CREATE TABLE IF NOT EXISTS public.seal_problems (
 );
 CREATE INDEX IF NOT EXISTS seal_problems_status_idx ON public.seal_problems (status, kind);
 CREATE INDEX IF NOT EXISTS seal_problems_al_idx ON public.seal_problems (al_number);
+-- The delivery from HQ to site a problem is about. RUN_ME_seal_hq_delivery.sql
+-- is what writes it, and seal_raise_case below groups on it.
+ALTER TABLE public.seal_problems ADD COLUMN IF NOT EXISTS delivery_id BIGINT;
 
 ALTER TABLE public.shared_do_records ADD COLUMN IF NOT EXISTS seal_ranges JSONB;
 ALTER TABLE public.shared_do_records ADD COLUMN IF NOT EXISTS seal_qty INT;
@@ -208,6 +211,7 @@ BEGIN
      AND q.kind = pr.kind
      AND q.al_number IS NOT DISTINCT FROM pr.al_number
      AND q.receipt_id IS NOT DISTINCT FROM pr.receipt_id
+     AND q.delivery_id IS NOT DISTINCT FROM pr.delivery_id
      AND c.status IN ('open', 'in_progress')
    ORDER BY c.id DESC
    LIMIT 1;
@@ -236,6 +240,10 @@ BEGIN
     WHEN 'receive_overlap'      THEN 'Seals ' || pr.seal_from || ' - ' || pr.seal_to || ' received twice'
     WHEN 'collect_other'        THEN 'Seal ' || pr.seal_from || ' of ' || COALESCE(pr.other_customer, '?') || ' (' || COALESCE(pr.other_al, '?') || ') collected for another customer'
     WHEN 'collect_not_issued'   THEN 'Seal ' || pr.seal_from || ' collected but on no consent'
+    WHEN 'hq_receive_overlap'   THEN 'Seals ' || pr.seal_from || ' - ' || pr.seal_to || ' received at HQ twice'
+    WHEN 'deliver_overlap'      THEN 'Seals ' || pr.seal_from || ' - ' || pr.seal_to || ' sent to site twice'
+    WHEN 'delivery_mismatch'    THEN 'Delivery #' || COALESCE(pr.delivery_id::TEXT, '?') || ' received at site does not match what HQ sent'
+    WHEN 'delivery_twice'       THEN 'Delivery #' || COALESCE(pr.delivery_id::TEXT, '?') || ' confirmed received twice'
     ELSE 'Seal problem' END;
   IF pr.al_number IS NOT NULL THEN
     v_title := v_title || ', for ' || COALESCE(pr.customer_name, '?') || ' (' || pr.al_number || ')';
@@ -273,7 +281,7 @@ DO $cat$
 BEGIN
   IF to_regclass('public.nelos_modules') IS NOT NULL THEN
     INSERT INTO public.nelos_modules (key, label, icon, href, sort_order, active)
-    SELECT 'seal', 'Seal Management', '🔖', '../seal/seal_dashboard.html', 60, true
+    SELECT 'seal', 'Seal Manage', '🔖', '../seal/seal_dashboard.html', 60, true
      WHERE NOT EXISTS (SELECT 1 FROM public.nelos_modules WHERE key = 'seal');
   END IF;
   -- The title carries its SYSTEM and the CONDITION that raises it, because
