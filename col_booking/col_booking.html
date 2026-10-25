@@ -317,7 +317,9 @@ function dayHasBookings(ds){
 // ═══════════════ LOAD ═══════════════
 async function loadMonth(){
   var f=new Date(currentYear,currentMonth,1),l=new Date(currentYear,currentMonth+1,0);
-  var {data}=await _supabase.from('shared_collection_bookings').select('booking_date,start_time,end_time,status,collection_qty').gte('booking_date',fmtDate(f)).lte('booking_date',fmtDate(l)).neq('status','cancelled');
+  // Taken slots only, and no names: the bookings table is closed to the
+  // public. Same door as collect.mjmnursery.com.
+  var {data}=await _supabase.rpc('booking_slots',{p_from:fmtDate(f),p_to:fmtDate(l)});
   monthBookings=data||[];
 }
 window.addEventListener('DOMContentLoaded',function(){loadMonth().then(function(){renderMonth();});loadWeather();});
@@ -331,9 +333,11 @@ async function searchMyBookings(){
   var q=String(raw||'').replace(/[%,*'"\\<>]/g,'').trim();
   if(q.length<4){showToast('Please enter your full order number (at least 4 characters)');return;}
 
-  var rpc=await _supabase.rpc('find_my_bookings',{_order_number:q,_customer_name:null});
+  // booking_find_mine, not the older find_my_bookings: that one answered
+  // with the customer's real name to anybody who typed an order number.
+  var rpc=await _supabase.rpc('booking_find_mine',{p_ref:q});
   if(rpc.error){showToast('Lookup failed: '+rpc.error.message);return;}
-  var data=rpc.data||[];
+  var data=(rpc.data||[]).map(function(r){ r.customer_name=r.customer_masked; return r; });
   var todayStr=fmtDate(new Date());
   data=data.filter(function(b){return(b.booking_date||'')>=todayStr;});
 
@@ -514,10 +518,9 @@ function validateIdentity(){
       // Sanitise — PostgREST .or() interpolates raw, so a `,` would let the
       // user inject extra filter clauses against other columns.
       var safeVal=String(val||'').replace(/[%,*'"\\<>]/g,'');
-      var {data}=await _supabase.from('shared_al_orders')
-        .select('al_number,customer_name,order_number')
-        .or('order_number.ilike.%'+safeVal+'%,al_number.ilike.%'+safeVal+'%')
-        .limit(1);
+      // One AL by its EXACT number; the AL table is closed to the public.
+      var lk=await _supabase.rpc('booking_lookup_al',{p_ref:safeVal});
+      var data=(lk.data||[]).filter(function(r){ return r.bookable; });
 
       identityChecking=false;
       if(data&&data.length>0){
@@ -557,8 +560,17 @@ async function submitBooking(){
   var identity=document.getElementById('bk-identity').value.trim();
   var remark=document.getElementById('bk-remark').value.trim();
   var startH=parseInt(selectedTime.split(':')[0]),hrs=hrsNeeded(selectedQty),endH=startH+hrs;
-  var payload={booking_date:selectedDate,start_time:selectedTime,end_time:String(endH).padStart(2,'0')+':00',al_number:'PENDING',customer_name:identity,order_number:identity,collection_qty:selectedQty,status:'pending',notes:remark||'Customer self-booking ('+hrs+' hr)'};
-  var {error}=await _supabase.from('shared_collection_bookings').insert([payload]);
+  // The database books it. An order number is found again and booked
+  // against its AL under the real customer name (it used to go in as a
+  // PENDING row named after the number); anything else is a walk-in under
+  // the name typed, which this page has always allowed.
+  var looksLikeOrder=/[-\/]/.test(identity)||/^[A-Z]{1,4}[\-\s]?\d/i.test(identity)||/\d{3,}/.test(identity);
+  var res=await _supabase.rpc('booking_create',{
+    p_ref:identity, p_walkin_name:looksLikeOrder?null:identity,
+    p_date:selectedDate, p_start:selectedTime, p_end:String(endH).padStart(2,'0')+':00',
+    p_qty:selectedQty, p_notes:remark||'Customer self-booking ('+hrs+' hr)'
+  });
+  var error=res.error;
   if(error){showToast('❌ '+error.message);btn.disabled=false;btn.textContent='📅 Confirm Booking';return;}
   btn.textContent='📅 Confirm Booking';closeBookingModal();
   var d=new Date(selectedDate+'T00:00:00');
