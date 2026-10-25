@@ -11,10 +11,12 @@
  *   - Seal at MJM Nursery comes FIRST: in stock at the nursery, then every
  *     customer order, a running range read as one start and end
  *   - Seal at HQ opens on three blocks. Last seal number has a + that orders
- *     a RANGE, its start filled in after the last seal. Pending receive opens
- *     the orders, each in rows of 1,000, each row with its own Receive.
- *     Delivering to site opens the deliveries, which move like a parcel, and
- *     its + packs a new one
+ *     a RANGE, its start filled in after the last seal. Seal pending receive
+ *     lists the orders; > opens one as its receiving check list in rows of
+ *     1,000, ticked start-and-end and received in one go. Seals delivery to
+ *     MJM Nursery opens the deliveries, which move like a parcel, with + New
+ *     delivery on the right. Both carry a History in place of a show-received
+ *     tick
  *   - site keys the start and end AGAIN, compared with what HQ sent
  *   - Problems names both customers and links the NELOS case
  *   - Settings is an admin only
@@ -218,28 +220,53 @@ async function open(browser, port, level, tab) {
     is(ord && [ord[0].start_code, ord[0].end_code, ord[0].qty, ord[0].created_by], ['0042501', '0052500', 10000, 'Office'], 'Save writes the order with its range');
     is(await page.isVisible('#modal'), false, 'and the window closes');
 
-    // Pending receive: rows of 1,000, each with its own Receive
+    // Seal pending receive: one row per order, > opens its check list
+    is(await page.$eval('#blk-pending', (e) => e.textContent.includes('Seal pending receive')), true, 'block 2 is called Seal pending receive');
+    await page.click('#btn-order2');
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order new seal?', 'and its + orders new seals too');
+    await page.click('#modal button[aria-label]:not(.hidden), #modal button:has-text("×")');
     await page.click('#blk-pending');
-    await page.waitForSelector('#modal-body .border-slate-200', { timeout: 3000 });
-    is((await page.$eval('#modal-body', (e) => e.textContent)).includes('1,000 / 2,500'), true, 'the order says how much of it has been received');
-    await page.click('#modal-body .cursor-pointer');
+    await page.waitForSelector('#modal-body table', { timeout: 3000 });
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Seal pending receive list', 'it opens the Seal pending receive list');
+    const prow = await page.$eval('#modal-body tbody tr', (r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
+    is([prow[0], prow[1].startsWith('0040001 – 0042500'), prow[2], prow[3]], ['20 Oct 2026', true, 'Amy', '>'], 'a row reads order date, range, by whom, and >');
+    is(await page.$$eval('#modal-body input[type=checkbox]', (x) => x.length), 0, 'no show-received tick on the list, History holds those');
+    await page.click('#modal-body tbody tr button');
     await page.waitForSelector('#modal-body .chunk', { timeout: 3000 });
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order : 20 Oct 2026, 0040001 – 0042500 receiving check list', 'the order opens as its receiving check list');
+    is(await page.isVisible('#modal-back'), true, 'with a Back to the list');
     const chunks = await page.$$eval('#modal-body .chunk', (cs) => cs.map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
-    is(chunks.length, 3, '2,500 seals open as three rows');
+    is(chunks.length, 3, '2,500 seals open as three rows of up to 1,000');
     is(chunks[0].includes('0040001 – 0041000') && chunks[0].includes('Received by Amy'), true, 'the first thousand reads as received, and by whom');
-    is(chunks[2].includes('0042001 – 0042500') && chunks[2].includes('500') && chunks[2].includes('Receive'), true, 'the last row is the 500 left over, with its own Receive');
-    await page.click('#modal-body .chunk:nth-child(3) button');
+    is(await page.$$eval('#modal-body .chunk input[type=checkbox]', (x) => x.length), 2, 'the two rows still to come each carry a tick');
+    // tick the first and the last: everything between is ticked
+    await page.check('#modal-body input[data-s="41001"]');
+    await page.check('#modal-body input[data-s="42001"]');
+    is(await page.$$eval('#modal-body input[data-s]:checked', (x) => x.length), 2, 'ticking a start and an end ticks the rows between');
+    is((await page.$eval('#modal-body', (e) => e.textContent)).includes('2 rows ticked · 1,500 seals'), true, 'and says how many seals that is');
+    await page.click('#rcv-save');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_hq_receipts'), null, { timeout: 2000 }).catch(() => {});
     const rcv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_hq_receipts') || {}).rows);
-    is(rcv && [rcv[0].order_id, rcv[0].ranges, rcv[0].received_by], [3, [{ start: '0041001', end: '0042000' }], 'Office'],
-      'Receive writes just that thousand to HQ, against its order');
+    is(rcv && [rcv[0].order_id, rcv[0].ranges, rcv[0].received_by], [3, [{ start: '0041001', end: '0042500' }], 'Office'],
+      'Receive ticked writes ONE receipt for the ticked rows, running numbers joined');
+    await page.click('#modal-back');
+    await page.waitForSelector('#modal-body table', { timeout: 3000 });
+    await page.click('#modal-body button:has-text("History")');
+    await page.waitForFunction(() => /history/.test(document.getElementById('modal-title').textContent), null, { timeout: 3000 }).catch(() => {});
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Received at HQ — history', 'History switches the window to what HQ received');
+    await page.waitForSelector('#modal-body table', { timeout: 3000 });
+    is((await page.$eval('#modal-body tbody tr', (r) => r.textContent)).includes('0040001 – 0041000'), true, 'listing each receipt');
     await page.click('#modal button:has-text("×")');
 
-    // Delivering to site: the deliveries, like a parcel
+    // Seals delivery to MJM Nursery: the deliveries, like a parcel
+    is(await page.$eval('#blk-deliver', (e) => e.textContent.includes('Seals delivery to MJM Nursery')), true, 'block 3 is called Seals delivery to MJM Nursery');
     await page.click('#blk-deliver');
     await page.waitForSelector('#modal-body .track', { timeout: 3000 });
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Seals delivery to MJM Nursery', 'and so is its window');
+    const top = await page.$$eval('#modal-body > div:first-child button', (b) => b.map((x) => x.textContent.trim()));
+    is(top, ['🕘 History', '+ New delivery'], 'History on the left, + New delivery on the right');
     const cards = await page.$$eval('#modal-body .track', (ts) => ts.map((t) => [...t.querySelectorAll('.stop')].map((s) => s.classList.contains('done') ? 'done' : s.classList.contains('now') ? 'now' : '-')));
-    is(cards, [['done', 'now', '-'], ['done', 'done', 'now']], 'a packed delivery waits to reach the site office, a delivered one waits for site');
+    is(cards, [['done', 'now', '-'], ['done', 'done', 'now']], 'a packed delivery waits to reach the site office, a delivered one waits for the nursery');
     await page.click('#modal-body button:has-text("Mark delivered")');
     await page.waitForFunction(() => window.__UPDATES.length > 0, null, { timeout: 2000 }).catch(() => {});
     const upd = await page.evaluate(() => window.__UPDATES[0]);
@@ -247,7 +274,7 @@ async function open(browser, port, level, tab) {
 
     // Site keys it again -- delivery #4 sent 0029001 - 0030000.
     await page.waitForSelector('#modal-body .track', { timeout: 3000 });
-    await page.click('#modal-body > div > div:nth-child(2) button:has-text("confirm receive")');
+    await page.click('#modal-body .space-y-3 > div:nth-child(2) button:has-text("confirm receive")');
     await page.fill('#cbox-4 [data-k="start"]', '0029001');
     await page.fill('#cbox-4 [data-k="end"]', '0029950');
     await page.waitForFunction(() => /Does not match/.test(document.getElementById('cmsg-4').textContent), null, { timeout: 2000 }).catch(() => {});
@@ -263,7 +290,7 @@ async function open(browser, port, level, tab) {
 
     // + on Delivering to site: pack a new delivery
     await page.click('#btn-deliver');
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Deliver seals to site (UNN 1)', 'the + opens a new delivery, not the list');
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'New delivery to MJM Nursery', 'the + opens a new delivery, not the list');
     await page.fill('#dv-fill-qty', '2500');
     await page.click('#dv-fill');
     is(await page.$$eval('#dv-ranges input', (i) => i.map((x) => x.value)), ['0031001', '0033500'], 'Fill takes the lowest seals at HQ, as one run');
@@ -271,6 +298,10 @@ async function open(browser, port, level, tab) {
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries'), null, { timeout: 2000 }).catch(() => {});
     const dv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_deliveries') || {}).rows);
     is(dv && [dv[0].status, dv[0].packed_by, dv[0].ranges], ['packed', 'Office', [{ start: '0031001', end: '0033500' }]], 'a new delivery is saved Packed, by whoever packed it');
+    await page.waitForFunction(() => document.getElementById('modal-title').textContent === 'Seals delivery to MJM Nursery', null, { timeout: 3000 }).catch(() => {});
+    await page.click('#modal-body button:has-text("History")');
+    await page.waitForFunction(() => /history/.test(document.getElementById('modal-title').textContent), null, { timeout: 3000 }).catch(() => {});
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Received at MJM Nursery — history', 'its History switches the window to what the nursery received');
 
     is(await page.isVisible('#tab-settings-btn'), false, 'Settings is not offered to a normal user');
 

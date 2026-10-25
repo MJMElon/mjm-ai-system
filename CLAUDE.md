@@ -4181,7 +4181,16 @@ trigger from the two codes); **Pending receive**, the orders opened up in
 rows of 1,000 cut from each order's own first seal, each row received on its
 own — so a box of 10,000 is checked a thousand at a time; and **Delivering to
 site** with a + that packs a delivery. Below them is every seal at HQ, In HQ
-or Delivering to site; a seal leaves it when site receives it. A list joins
+or Delivering to site; a seal leaves it when site receives it.
+
+The second and third are now **Seal pending receive** (one row per order:
+date, range, by whom, `>`) and **Seals delivery to MJM Nursery** (+ New
+delivery on the right). `>` opens the order's own *receiving check list*:
+tick the first row and the last and every row between is ticked, and
+Receive ticked writes ONE receipt with the running numbers joined. Neither
+list carries a show-received tick — a **History** button switches the same
+window to what HQ, or the nursery, has received, and a window opened from
+another carries a Back to it. A list joins
 running numbers into one start and end wherever nothing breaks the run.
 
 `tests/seal_dashboard.cjs` holds the office page.
