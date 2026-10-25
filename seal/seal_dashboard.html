@@ -97,7 +97,9 @@
   .chip { padding:6px 12px; border-radius:99px; font-size:10px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border:1.5px solid #e2e8f0; background:white; color:#475569; cursor:pointer; }
   .chip.on { background:#0f172a; color:white; border-color:#0f172a; }
   .s-hq { background:#ccfbf1; color:#115e59; }
-  .s-going { background:#dbeafe; color:#1e40af; }
+  .s-going { background:#e0e7ff; color:#3730a3; }
+  .s-ordered { background:#fef9c3; color:#854d0e; }
+  .s-none { background:white; color:#94a3b8; border:1px dashed #cbd5e1; }
 </style>
 </head>
 <body>
@@ -123,14 +125,33 @@
   <div class="tabbar mb-5" id="tabs">
     <button class="tab on" data-tab="nursery">Seal at MJM Nursery</button>
     <button class="tab" data-tab="hq">Seal at HQ</button>
+    <button class="tab" data-tab="report">Report</button>
     <button class="tab" data-tab="nelos">NELOS <span id="prob-count" class="count"></span></button>
     <span class="flex-1"></span>
     <button class="tab gear hidden" data-tab="settings" id="tab-settings-btn" title="Settings" aria-label="Settings">⚙</button>
   </div>
 
   <!-- ═══════════════ SEAL AT MJM NURSERY ═══════════════ -->
+  <!-- Three blocks, and under them the list of whichever is pressed, the way
+       Seal at HQ reads. The search narrows that list. -->
   <section data-pane="nursery">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="cs-stats"></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div class="block-card sel" id="nb-cust" data-nv="cust" style="background:#fffbeb;border-color:#fde68a;--on:#d97706">
+        <div class="text-[11px] font-black uppercase tracking-widest text-amber-800 mb-[10px]">Seal with Customer</div>
+        <div class="text-2xl font-black mono text-amber-900" id="nb-cust-qty">—</div>
+        <div class="text-[11px] font-bold text-amber-800 opacity-75" id="nb-cust-sub">consent signed, not collected yet</div>
+      </div>
+      <div class="block-card sel" id="nb-cab" data-nv="cab" style="--on:#0d9488">
+        <div class="text-[11px] font-black uppercase tracking-widest text-teal-800 mb-[10px]">Seal in MJM Nursery Cabinet</div>
+        <div class="text-2xl font-black mono text-teal-900" id="nb-cab-qty">—</div>
+        <div class="text-[11px] font-bold text-teal-800 opacity-75" id="nb-cab-sub">not yet given to a customer</div>
+      </div>
+      <div class="block-card sel" id="nb-used" data-nv="used" style="background:#ecfdf5;border-color:#a7f3d0;--on:#059669">
+        <div class="text-[11px] font-black uppercase tracking-widest text-emerald-800 mb-[10px]">Seal used</div>
+        <div class="text-2xl font-black mono text-emerald-900" id="nb-used-qty">—</div>
+        <div class="text-[11px] font-bold text-emerald-800 opacity-75" id="nb-used-sub">collected on a DO</div>
+      </div>
+    </div>
     <div class="card p-4 mb-4 flex flex-wrap gap-3 items-end">
       <div class="flex-1 min-w-[220px]">
         <label class="lbl">Search</label>
@@ -138,7 +159,24 @@
       </div>
       <div class="text-[11px] font-bold text-slate-400 pb-2" id="list-note"></div>
     </div>
-    <div class="card p-2 overflow-x-auto"><div id="list-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
+    <div class="card p-5">
+      <div class="font-black text-slate-800 mb-3" id="nv-title"></div>
+      <div id="list-table" class="overflow-x-auto text-sm font-bold text-slate-400">Loading…</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ REPORT ═══════════════ -->
+  <!-- Every seal number from the first to the latest, wherever it is now. -->
+  <section data-pane="report" class="hidden">
+    <div class="flex flex-wrap gap-2 mb-4" id="rp-stats"></div>
+    <div class="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <div class="flex-1 min-w-[220px]">
+        <label class="lbl">Search</label>
+        <input id="rp-q" class="inp" placeholder="Seal number, customer, AL or DO">
+      </div>
+      <div class="text-[11px] font-bold text-slate-400 pb-2" id="rp-note"></div>
+    </div>
+    <div class="card p-5"><div id="rp-table" class="overflow-x-auto text-sm font-bold text-slate-400">Loading…</div></div>
   </section>
 
   <!-- ═══════════════ SEAL AT HQ ═══════════════ -->
@@ -249,8 +287,10 @@ const PROBLEM_LABEL = {
   delivery_twice:       'Delivery confirmed twice',
 };
 
-let rows = [];          // seal_list, unfiltered by status
-let statusFilter = null;
+let rows = [];          // seal_list as last asked, the search applied
+let allRows = [];       // seal_list with no search, for the block totals
+let nurseryView = 'cust';
+let doDates = {};       // DO number -> delivery date
 let isAdmin = false;
 let staffName = '';
 let hqStock = [];       // seal_hq_stock: the cabinet, and what a delivery may take
@@ -418,7 +458,7 @@ async function checkRows(box, kind) {
 
 // ── TABS ─────────────────────────────────────────────────────────────────
 const loaded = {};
-const TAB_LOAD = { nursery: loadList, hq: loadHQ, nelos: loadNelos, settings: loadSettings };
+const TAB_LOAD = { nursery: loadList, hq: loadHQ, report: loadReport, nelos: loadNelos, settings: loadSettings };
 function switchTab(tab) {
   document.querySelectorAll('#tabs .tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
@@ -995,8 +1035,25 @@ async function loadList() {
     return;
   }
   rows = mergeRuns((data || []).filter((r) => CUSTOMER_STATES.includes(r.seg_status)));
-  renderStats();
+  // The blocks count everything at the nursery, whatever is typed in the
+  // search -- the search narrows the list under them, not the totals.
+  if (!q) allRows = rows;
+  else if (!allRows.length) {
+    const all = await _supabase.rpc('seal_list', { p_search: null, p_status: null });
+    allRows = mergeRuns((all.data || []).filter((r) => CUSTOMER_STATES.includes(r.seg_status)));
+  }
+  await loadDoDates(rows.concat(allRows));
+  renderBlocks();
   renderList();
+}
+
+// The DO date is on the DO, not on the seal: read once per DO number.
+async function loadDoDates(list) {
+  const want = Array.from(new Set(list.map((r) => r.do_number).filter((d) => d && !(d in doDates))));
+  if (!want.length) return;
+  const { data, error } = await _supabase.from('shared_do_records').select('do_number,delivery_date,created_at').in('do_number', want);
+  if (error) return;
+  (data || []).forEach((d) => { doDates[d.do_number] = d.delivery_date || d.created_at || null; });
 }
 
 // The database splits a customer range wherever its status changes. Two
@@ -1016,70 +1073,197 @@ function mergeRuns(list) {
   return out;
 }
 
-function renderStats() {
-  const tot = {};
-  CUSTOMER_STATES.forEach((k) => { tot[k] = { qty: 0, n: 0 }; });
-  rows.forEach((r) => { if (tot[r.seg_status]) { tot[r.seg_status].qty += Number(r.qty) || 0; tot[r.seg_status].n++; } });
-  document.getElementById('cs-stats').innerHTML = CUSTOMER_STATES.map((k) => {
-    const s = STATUS[k];
-    return '<div class="stat click ' + (statusFilter === k ? 'on' : '') + '" data-st="' + k + '" style="background:' + s.bg + ';color:' + s.ink + '">'
-      + '<div class="text-[10px] font-black uppercase tracking-widest opacity-80">' + s.label + '</div>'
-      + '<div class="text-2xl font-black mono mt-1">' + fmt(tot[k].qty) + '</div>'
-      + '<div class="text-[11px] font-bold opacity-70">' + tot[k].n + ' range' + (tot[k].n === 1 ? '' : 's') + '</div></div>';
-  }).join('');
-  document.querySelectorAll('#cs-stats .stat').forEach((el) => el.addEventListener('click', () => {
-    statusFilter = statusFilter === el.dataset.st ? null : el.dataset.st;
-    renderStats(); renderList();
-  }));
+// With a customer is a consent signed and not yet on a DO: pending
+// collection, or scanned at collection with no DO yet.
+const NURSERY_VIEW = {
+  cust: { title: 'Seal with Customer', states: ['pending', 'scanned'] },
+  cab:  { title: 'Seal in MJM Nursery Cabinet', states: ['in_stock'] },
+  used: { title: 'Seal used', states: ['collected'] },
+};
+const sumQty = (list) => list.reduce((t, r) => t + (Number(r.qty) || 0), 0);
+function renderBlocks() {
+  const of = (v) => allRows.filter((r) => NURSERY_VIEW[v].states.includes(r.seg_status));
+  const cust = of('cust'), cab = of('cab'), used = of('used');
+  const nAl = new Set(cust.map((r) => r.al_number)).size;
+  const nDo = new Set(used.map((r) => r.do_number).filter(Boolean)).size;
+  document.getElementById('nb-cust-qty').textContent = fmt(sumQty(cust));
+  document.getElementById('nb-cust-sub').textContent = nAl ? nAl + ' customer order' + (nAl === 1 ? '' : 's') + ' · consent signed, not collected yet' : 'consent signed, not collected yet';
+  document.getElementById('nb-cab-qty').textContent = fmt(sumQty(cab));
+  document.getElementById('nb-used-qty').textContent = fmt(sumQty(used));
+  document.getElementById('nb-used-sub').textContent = nDo ? 'on ' + nDo + ' DO' + (nDo === 1 ? '' : 's') : 'collected on a DO';
+  ['cust', 'cab', 'used'].forEach((v) => document.getElementById('nb-' + v).classList.toggle('on', nurseryView === v));
 }
+document.querySelectorAll('[data-nv]').forEach((el) => el.addEventListener('click', () => {
+  nurseryView = el.dataset.nv;
+  renderBlocks(); renderList();
+}));
 
-// One block per customer order, newest consent first, its ranges in seal
-// order underneath with the state each one is in.
+// The list of whichever block is pressed.
 function renderList() {
-  const list = statusFilter ? rows.filter((r) => r.seg_status === statusFilter) : rows;
+  const view = NURSERY_VIEW[nurseryView];
+  const list = rows.filter((r) => view.states.includes(r.seg_status));
   const q = document.getElementById('q').value.trim();
+  document.getElementById('nv-title').textContent = view.title;
+  const box = document.getElementById('list-table');
+  const note = (n) => { document.getElementById('list-note').textContent = n + (q ? ' · matching "' + q + '"' : ''); };
+  if (!list.length) {
+    note('');
+    box.innerHTML = '<div class="py-6 text-center text-slate-400">' + (q ? 'Nothing here matches this search.'
+      : nurseryView === 'cust' ? 'No seals with a customer waiting to be collected.'
+      : nurseryView === 'cab' ? 'The MJM Nursery cabinet is empty.' : 'No seals used yet.') + '</div>';
+    return;
+  }
+  if (nurseryView === 'cab') {
+    note(list.length + ' range' + (list.length === 1 ? '' : 's') + ' · ' + fmt(sumQty(list)) + ' seals');
+    box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Received</th></tr></thead><tbody>'
+      + list.map((r) => '<tr><td class="mono font-black text-slate-800">' + range(r.start_code, r.end_code) + '</td>'
+        + '<td class="text-right mono">' + fmt(r.qty) + '</td><td class="text-slate-500">' + fmtDate(r.consent_at) + '</td></tr>').join('')
+      + '</tbody></table>';
+    return;
+  }
+  if (nurseryView === 'used') {
+    const sorted = list.slice().sort((a, b) => String(doDates[b.do_number] || '').localeCompare(String(doDates[a.do_number] || '')) || Number(a.start_no) - Number(b.start_no));
+    const nDo = new Set(list.map((r) => r.do_number)).size;
+    note(nDo + ' DO' + (nDo === 1 ? '' : 's') + ' · ' + fmt(sumQty(list)) + ' seals');
+    box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Customer</th><th>DO number</th><th>DO date</th></tr></thead><tbody>'
+      + sorted.map((r) => '<tr><td class="mono font-black text-slate-800">' + range(r.start_code, r.end_code) + '</td>'
+        + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
+        + '<td><div class="text-slate-800">' + esc(r.customer_name || '—') + '</div><div class="mono text-[10px] text-slate-400">' + esc(r.al_number || '') + '</div></td>'
+        + '<td class="mono">' + esc(r.do_number || '—') + '</td>'
+        + '<td>' + fmtDate(doDates[r.do_number]) + '</td></tr>').join('')
+      + '</tbody></table>';
+    return;
+  }
+  // With customer: one block per customer order, newest consent first.
   const groups = new Map();
   list.forEach((r) => {
-    // Seals not yet given to anybody are one block of their own, above the
-    // customers, because they are the stock the next consent comes out of.
-    const stock = r.seg_status === 'in_stock';
-    const k = stock ? '__stock' : (r.al_number || r.consent_id || '?');
-    if (!groups.has(k)) groups.set(k, { stock, al: r.al_number, customer: r.customer_name, at: stock ? null : r.consent_at, rows: [] });
+    const k = r.al_number || r.consent_id || '?';
+    if (!groups.has(k)) groups.set(k, { al: r.al_number, customer: r.customer_name, at: r.consent_at, rows: [] });
     const g = groups.get(k);
     g.rows.push(r);
-    if (!stock && r.consent_at && (!g.at || r.consent_at > g.at)) g.at = r.consent_at;
+    if (r.consent_at && (!g.at || r.consent_at > g.at)) g.at = r.consent_at;
   });
-  const gs = Array.from(groups.values()).sort((a, b) => (b.stock - a.stock) || String(b.at || '').localeCompare(String(a.at || '')));
-  const nCust = gs.filter((g) => !g.stock).length;
-  document.getElementById('list-note').textContent = nCust + ' customer order' + (nCust === 1 ? '' : 's') + ' · ' + list.length + ' range' + (list.length === 1 ? '' : 's')
-    + (statusFilter ? ' · ' + STATUS[statusFilter].label : '') + (q ? ' · matching "' + q + '"' : '');
-  const box = document.getElementById('list-table');
-  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No seals' + (q ? ' match this search' : ' at the nursery yet') + '.</div>'; return; }
-  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th>DO</th></tr></thead><tbody>'
+  const gs = Array.from(groups.values()).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  note(gs.length + ' customer order' + (gs.length === 1 ? '' : 's') + ' · ' + fmt(sumQty(list)) + ' seals');
+  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th></tr></thead><tbody>'
     + gs.map((g) => {
-      const total = g.rows.reduce((t, r) => t + (Number(r.qty) || 0), 0);
       const probs = g.rows.reduce((t, r) => Math.max(t, Number(r.open_problems) || 0), 0);
       const warn = probs > 0 ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'nelos\');return false;">⚠ ' + probs + '</a>' : '';
-      if (g.stock) {
-        return '<tr class="cust-head"><td colspan="4"><span class="font-black text-slate-800">In stock at MJM Nursery</span>'
-          + ' <span class="text-slate-500">· not yet given to a customer</span>'
-          + '<span class="float-right text-[11px] text-slate-500"><b class="mono">' + fmt(total) + '</b> seals</span></td></tr>'
-          + g.rows.map((r) => '<tr><td class="mono font-black text-slate-800 pl-6">' + range(r.start_code, r.end_code) + '</td>'
-            + '<td class="text-right mono">' + fmt(r.qty) + '</td><td><span class="badge s-in_stock">In stock</span></td>'
-            + '<td class="text-slate-400">Received ' + fmtDate(r.consent_at) + '</td></tr>').join('');
-      }
-      return '<tr class="cust-head"><td colspan="4"><span class="font-black text-slate-800">' + esc(g.customer || '—') + '</span>'
+      return '<tr class="cust-head"><td colspan="3"><span class="font-black text-slate-800">' + esc(g.customer || '—') + '</span>'
         + ' <span class="mono text-slate-500">· ' + esc(g.al || '—') + '</span>' + warn
-        + '<span class="float-right text-[11px] text-slate-500">Consent ' + fmtDate(g.at) + ' · <b class="mono">' + fmt(total) + '</b> seals</span></td></tr>'
+        + '<span class="float-right text-[11px] text-slate-500">Consent ' + fmtDate(g.at) + ' · <b class="mono">' + fmt(sumQty(g.rows)) + '</b> seals</span></td></tr>'
         + g.rows.map((r) => {
-          const s = STATUS[r.seg_status] || { label: r.seg_status, cls: '' };
+          const st = STATUS[r.seg_status] || { label: r.seg_status, cls: '' };
           return '<tr><td class="mono font-black text-slate-800 pl-6">' + range(r.start_code, r.end_code) + '</td>'
             + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
-            + '<td><span class="badge ' + s.cls + '">' + s.label + '</span></td>'
-            + '<td class="mono">' + esc(r.do_number || '—') + '</td></tr>';
+            + '<td><span class="badge ' + st.cls + '">' + st.label + '</span></td></tr>';
         }).join('');
     }).join('') + '</tbody></table>';
 }
+
+// ══════════════════════ REPORT ═══════════════════════════════════════════
+// Every seal number from the first the system knows to the latest, each run
+// with where it is now. Built from what the other two tabs already read; a
+// seal is where its LATEST step put it, so a later step wins over an earlier
+// one: used, then with a customer, then the nursery cabinet, then on the way,
+// then the HQ cabinet, then ordered and not yet received. A gap between
+// numbers is said, not skipped -- a seal nobody has a record of is the thing
+// to look at.
+const REPORT_STATUS = {
+  collected: { label: 'Used · on a DO',               cls: 's-collected' },
+  scanned:   { label: 'With customer · scanned',      cls: 's-scanned' },
+  pending:   { label: 'With customer · pending',      cls: 's-pending' },
+  in_stock:  { label: 'MJM Nursery cabinet',          cls: 's-in_stock' },
+  going:     { label: 'Delivering to MJM Nursery',    cls: 's-going' },
+  hq:        { label: 'HQ cabinet',                   cls: 's-hq' },
+  ordered:   { label: 'Pending receive at HQ',        cls: 's-ordered' },
+  none:      { label: 'No record',                    cls: 's-none' },
+};
+const REPORT_ORDER = ['ordered', 'hq', 'going', 'in_stock', 'pending', 'scanned', 'collected', 'none'];
+let reportRows = [];
+let reportFilter = null;
+async function loadReport() {
+  const box = document.getElementById('rp-table');
+  const [seg, ord, hqr, st, dv] = await Promise.all([
+    _supabase.rpc('seal_list', { p_search: null, p_status: null }),
+    _supabase.from('seal_orders').select('*').limit(2000),
+    _supabase.from('seal_hq_receipts').select('*').limit(5000),
+    _supabase.rpc('seal_hq_stock'),
+    _supabase.from('seal_deliveries').select('*').limit(2000),
+  ]);
+  if (seg.error) { box.innerHTML = missingSetup(seg.error) ? 'Not set up yet.' : '<span class="text-red-600">' + esc(seg.error.message) + '</span>'; return; }
+  const segs = seg.data || [];
+  await loadDoDates(segs);
+  // Each layer, latest step first. A layer only keeps what no later step has
+  // already claimed.
+  const layers = [];
+  ['collected', 'scanned', 'pending', 'in_stock'].forEach((k) => segs.filter((r) => r.seg_status === k).forEach((r) => layers.push({
+    status: k, start: r.start_code, end: r.end_code,
+    who: r.customer_name ? r.customer_name + (r.al_number ? ' · ' + r.al_number : '') : '',
+    doNo: r.do_number || '', doDate: r.do_number ? doDates[r.do_number] : null,
+    at: k === 'in_stock' ? 'Received ' + fmtDate(r.consent_at) : '',
+  })));
+  (dv.data || []).filter((d) => d.status !== 'received').forEach((d) => (d.ranges || []).forEach((g) => layers.push({
+    status: 'going', start: g.start, end: g.end || g.start, who: '', doNo: '', doDate: null,
+    at: 'Delivery #' + d.id + ' · ' + (d.status === 'delivered' ? 'at the site office' : 'packed'),
+  })));
+  (st.data || []).forEach((r) => layers.push({ status: 'hq', start: r.start_code, end: r.end_code, who: '', doNo: '', doDate: null,
+    at: 'Received ' + fmtDate(r.received_date) }));
+  const got = (hqr.data || []).flatMap((r) => r.ranges || []);
+  (ord.data || []).filter((o) => o.start_code && o.status !== 'Closed').forEach((o) => minusRanges([{ start: o.start_code, end: o.end_code }], got).forEach((g) => layers.push({
+    status: 'ordered', start: g.start, end: g.end, who: '', doNo: '', doDate: null, at: 'Ordered ' + fmtDate(o.order_date),
+  })));
+  const covered = [];
+  const out = [];
+  layers.forEach((l) => {
+    minusRanges([{ start: l.start, end: l.end }], covered).forEach((p) => out.push({ ...l, start: p.start, end: p.end, s: sealNo(p.start), e: sealNo(p.end), w: sealWidth(p.start) }));
+    covered.push({ start: l.start, end: l.end });
+  });
+  out.sort((a, b) => a.s - b.s);
+  // The gaps between, and running pieces that say the same thing joined.
+  const full = [];
+  out.forEach((r) => {
+    const last = full[full.length - 1];
+    if (last && r.s > last.e + 1) full.push({ status: 'none', s: last.e + 1, e: r.s - 1, w: Math.max(last.w, r.w), who: '', doNo: '', doDate: null, at: '' });
+    const prev = full[full.length - 1];
+    if (prev && prev.status === r.status && prev.who === r.who && prev.doNo === r.doNo && prev.at === r.at && prev.e + 1 === r.s) prev.e = r.e;
+    else full.push({ ...r });
+  });
+  full.forEach((r) => { r.start = sealCode(r.s, r.w); r.end = sealCode(r.e, r.w); r.qty = r.e - r.s + 1; });
+  reportRows = full;
+  renderReport();
+}
+function renderReport() {
+  const tot = {};
+  reportRows.forEach((r) => { tot[r.status] = (tot[r.status] || 0) + r.qty; });
+  document.getElementById('rp-stats').innerHTML = REPORT_ORDER.filter((k) => tot[k]).map((k) =>
+    '<button class="badge ' + REPORT_STATUS[k].cls + '" data-rs="' + k + '" style="font-size:11px;padding:6px 12px;cursor:pointer;'
+    + (reportFilter === k ? 'box-shadow:0 0 0 2px #0f172a;' : '') + '">' + REPORT_STATUS[k].label + ' · <span class="mono">' + fmt(tot[k]) + '</span></button>').join('');
+  document.querySelectorAll('#rp-stats [data-rs]').forEach((b) => b.addEventListener('click', () => {
+    reportFilter = reportFilter === b.dataset.rs ? null : b.dataset.rs; renderReport();
+  }));
+  const q = document.getElementById('rp-q').value.trim();
+  const n = sealNo(q);
+  const isNum = q && /^[0-9 ]+$/.test(q);
+  const ql = q.toLowerCase();
+  const list = reportRows.filter((r) => (!reportFilter || r.status === reportFilter)
+    && (!q || (isNum ? n >= r.s && n <= r.e : (r.who + ' ' + r.doNo).toLowerCase().includes(ql))));
+  const box = document.getElementById('rp-table');
+  document.getElementById('rp-note').textContent = reportRows.length
+    ? 'Seals ' + reportRows[0].start + ' – ' + reportRows[reportRows.length - 1].end + ' · ' + list.length + ' range' + (list.length === 1 ? '' : 's') + ' shown' : '';
+  if (!list.length) { box.innerHTML = '<div class="py-6 text-center text-slate-400">' + (reportRows.length ? 'Nothing matches.' : 'No seals in the system yet.') + '</div>'; return; }
+  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th>Customer</th><th>DO number</th><th>DO date</th><th>Detail</th></tr></thead><tbody>'
+    + list.map((r) => '<tr><td class="mono font-black ' + (r.status === 'none' ? 'text-slate-400' : 'text-slate-800') + '">' + range(r.start, r.end) + '</td>'
+      + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
+      + '<td><span class="badge ' + REPORT_STATUS[r.status].cls + '">' + REPORT_STATUS[r.status].label + '</span></td>'
+      + '<td>' + esc(r.who || '—') + '</td>'
+      + '<td class="mono">' + esc(r.doNo || '—') + '</td>'
+      + '<td>' + (r.doNo ? fmtDate(r.doDate) : '—') + '</td>'
+      + '<td class="text-slate-500">' + esc(r.at || '') + '</td></tr>').join('')
+    + '</tbody></table>';
+}
+let reportTimer = null;
+document.getElementById('rp-q').addEventListener('input', () => { clearTimeout(reportTimer); reportTimer = setTimeout(renderReport, 200); });
 
 // ══════════════════════ NELOS ════════════════════════════════════════════
 // Every case the seal checks opened, whoever it is assigned to. Asked of
@@ -1169,7 +1353,7 @@ document.getElementById('st-save').addEventListener('click', async () => {
     const OLD = { list: 'nursery', customers: 'nursery', orders: 'hq', receipts: 'hq', problems: 'nelos' };
     let want = new URLSearchParams(location.search).get('tab');
     want = OLD[want] || want;
-    switchTab(['nursery', 'hq', 'nelos'].concat(isAdmin ? ['settings'] : []).includes(want) ? want : 'nursery');
+    switchTab(['nursery', 'hq', 'report', 'nelos'].concat(isAdmin ? ['settings'] : []).includes(want) ? want : 'nursery');
     // The tab label carries the open count, so it is asked for up front.
     if (!loaded.nelos) { loaded.nelos = true; loadNelos(); }
   } catch (e) {
