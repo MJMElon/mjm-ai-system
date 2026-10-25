@@ -20,7 +20,7 @@
  *   - site keys the start and end AGAIN, compared with what HQ sent
  *   - NELOS lists every seal case, whoever has it, asked of seal_nelos_cases
  *   - Settings is an admin only, as a small gear at the end of the tabs
- *   - the two SQL files carry ONE seal_raise_case, word for word
+ *   - the SQL files carry ONE seal_raise_case and ONE seal_segments, word for word
  *
  * Run: NODE_PATH=/opt/node22/lib/node_modules node tests/seal_dashboard.cjs
  */
@@ -77,6 +77,7 @@ window.supabase = { createClient: function () {
       window.__RPC.push({ fn: fn, args: args });
       var d = (window.__RPCDATA || {})[fn];
       if (typeof d === 'function') d = d(args);
+      if (d && d.__error) return Promise.resolve({ data: null, error: { message: d.__error } });
       return Promise.resolve({ data: d || [], error: null });
     },
     channel: function () { var c = { on: function(){return c;}, subscribe: function(){return c;} }; return c; },
@@ -119,6 +120,9 @@ const HQ_RECEIPTS = [
   { id: 9, order_id: 3, ranges: [{ start: '0040001', end: '0041000' }], received_by: 'Amy', received_date: '2026-10-22' },
 ];
 const RPCDATA = {
+  seal_missed_scans: [{ al_number: 'AL-1234', customer_name: 'Ah Seng Farm', start_code: '0009550', end_code: '0009560', start_no: 9550, end_no: 9560, qty: 11,
+                        do_before: 'DO-1234-01', do_after: 'DO-1234-02', problem_id: 61, nelos_case_id: 89 }],
+  seal_settle_scan: 'Seals 0009550 - 0009560 (11) settled as delivered on DO DO-1234-01 by Office.',
   seal_nelos_cases: [
     { id: 88, title: 'Seals 0010001 - 0010050 given twice, already with Ah Seng Farm (AL-1234), for Kebun Maju (AL-1240)', status: 'open', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: 'Admin 2', created_at: '2026-10-06T00:00:00Z' },
     { id: 80, title: 'Seal 0009001 collected but on no consent', status: 'closed', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: null, created_at: '2026-10-01T00:00:00Z' },
@@ -160,7 +164,8 @@ async function open(browser, port, level, tab) {
     window.__RPCDATA = Object.assign({ seal_list: segs }, rpc);
     window.__ROWS = { seal_problems: probs, seal_settings: [{ id: 1, enforce_stock: false }], nelos_modules: [],
                       seal_deliveries: dels, seal_orders: ords, seal_hq_receipts: hqr, seal_receipts: [],
-                      shared_do_records: [{ do_number: 'DO-1234-01', delivery_date: '2026-10-12' }],
+                      shared_do_records: [{ do_number: 'DO-1234-01', al_number: 'AL-1234', delivery_date: '2026-10-12' },
+                                          { do_number: 'DO-1234-02', al_number: 'AL-1234', delivery_date: '2026-10-14' }],
                       mobile_consent_records: [{ id: 41, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_qty: 2000, created_at: '2026-10-05T02:00:00Z',
                         seal_ranges: [{ start: '0010001', end: '0012000' }], signature_data: 'data:image/png;base64,iVBORw0KGgo=', photo_url: null }] };
     window.alert = () => {};
@@ -202,8 +207,8 @@ async function open(browser, port, level, tab) {
     const rowsOf = () => page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim())));
     is(await page.$$eval('#list-table thead th', (t) => t.map((h) => h.textContent.trim())), ['Seal range ▲', 'Qty', 'Customer', 'Consent date', ''],
       'Seal with Customer reads like Seal used: range, qty, customer, consent date, and a button');
-    is(await rowsOf(), [['0009601 – 0010000', '400', 'Ah Seng FarmAL-1234', '03 Oct 2026', ''],
-      ['0010001 – 0012000', '2,000', 'Kebun Maju ⚠ 1AL-1240', '05 Oct 2026', 'View consent']],
+    is(await rowsOf(), [['0009601 – 0010000', '400', 'Ah Seng FarmAL-1234', '03 Oct 2026', 'Key DO'],
+      ['0010001 – 0012000', '2,000', 'Kebun Maju ⚠ 1AL-1240', '05 Oct 2026', 'View consent Key DO']],
       'one flat list in seal-number order across customers, and a run part-scanned still reads as one start and end');
     is((await page.$eval('#list-table', (e) => e.textContent)).includes('0009001'), false, 'a used seal is not listed as with the customer');
     await page.click('#nv-sort');
@@ -388,11 +393,29 @@ async function open(browser, port, level, tab) {
     is(await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => r.children[0].textContent.trim())), ['0030001 – 0031000'], 'a seal number typed finds the range holding it');
     await page.fill('#rp-q', '');
     await page.waitForTimeout(400);
-    is(await page.$eval('#rp-stats [data-rs]', (b) => [b.dataset.rs, b.textContent.trim()]), ['all', 'All · 33,500'], 'All comes first, with every number counted');
-    await page.click('#rp-stats [data-rs="hq"]');
-    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), 2, 'a chip shows only its own status');
-    await page.click('#rp-stats [data-rs="all"]');
-    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), rp.length, 'and All shows the full list again');
+    is(await page.$$eval('#rp-stats, #rp-stats [data-rs]', (x) => x.length), 0, 'no row of status chips over the report any more');
+    is(await page.$eval('#rp-showing', (e) => e.textContent.replace(/\s+/g, ' ').trim()), 'Showing: All', 'it says it is showing All');
+    await page.click('#rp-status-btn');
+    const pop = await page.$$eval('#rp-pop label', (ls) => ls.map((l) => [l.querySelector('input').dataset.rf, l.querySelector('input').checked, l.textContent.replace(/\s+/g, ' ').trim()]));
+    is(pop[0], ['all', true, 'All33,500'], 'the filter on the Status heading opens on All, ticked, with every number counted');
+    is(pop.length, 9, 'and a tick for every status there is');
+    await page.check('#rp-pop [data-rf="hq"]');
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), 2, 'ticking one status shows only it');
+    await page.check('#rp-pop [data-rf="going"]');
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), 4, 'ticking a second shows both');
+    is(await page.$eval('#rp-pop [data-rf="all"]', (c) => c.checked), false, 'and All is no longer ticked');
+    is(await page.$eval('#rp-showing', (e) => e.textContent.replace(/\s+/g, ' ').trim()), 'Showing: HQ cabinet ✕Delivering to MJM Nursery ✕Show all',
+      'the line above the table says what is filtered');
+    is(await page.$eval('#rp-status-btn', (b) => b.textContent.trim()), 'Status · 2 ⏷', 'and the heading carries the count');
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_filter.png' });
+    await page.click('body', { position: { x: 5, y: 5 } });
+    is(await page.$$eval('#rp-pop', (x) => x.length), 0, 'a click elsewhere closes the filter');
+    await page.click('#rp-showing [data-unfilter="hq"]');
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), 2, 'the cross on a filter takes it off');
+    await page.click('#rp-status-btn');
+    await page.check('#rp-pop [data-rf="all"]');
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), rp.length, 'and ticking All shows the full list again');
+    await page.click('body', { position: { x: 5, y: 5 } });
     await page.click('#rp-sort');
     is(await page.$eval('#rp-table tbody tr', (r) => r.children[0].textContent.trim()), '0041001 – 0042500', 'the sort button turns it to descending');
     await page.click('#rp-sort');
@@ -403,7 +426,9 @@ async function open(browser, port, level, tab) {
       [['0009501 – 0009600', '100'], ['0009601 – 0010000', '400'], ['0010001 – 0010500', '500'], ['0010501 – 0010600', '100'],
        ['0010601 – 0012000', '1,400'], ['0012001 – 0012500', '500']],
       'From and To show only the numbers keyed, a range across either end cut at it');
-    is(await page.$eval('#rp-stats [data-rs="all"]', (b) => b.textContent.trim()), 'All · 3,000', 'and the counts are of what was keyed');
+    await page.click('#rp-status-btn');
+    is(await page.$eval('#rp-pop label', (l) => l.textContent.replace(/\s+/g, ' ').trim()), 'All3,000', 'and the counts are of what was keyed');
+    await page.click('body', { position: { x: 5, y: 5 } });
     await page.fill('#rp-from', '');
     await page.fill('#rp-to', '');
     if (process.env.SEAL_SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_report.png', fullPage: true }); }
@@ -418,6 +443,45 @@ async function open(browser, port, level, tab) {
     is(await page.evaluate(() => window.__RPC.some((c) => c.fn === 'seal_nelos_cases')), true, 'asked of seal_nelos_cases, not of what this login can see in NELOS');
     await page.check('#n-show-closed');
     is(await page.$$eval('#nelos-table tbody tr', (t) => t.length), 2, 'show closed adds the closed ones');
+
+    // ── seals nobody scanned: Key DO ──
+    is(await page.$$eval('#missed-table tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim()))),
+      [['0009550 – 0009560', '11', 'Ah Seng FarmAL-1234', 'DO-1234-01', 'DO-1234-02', 'Key DO']],
+      'the NELOS tab lists the seals never scanned, with the DO before and after');
+    await page.click('#missed-table [data-missed]');
+    await page.waitForSelector('#kd-do-pick [data-do]', { timeout: 3000 });
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Key DO for seals not scanned', 'Key DO opens its window');
+    is(await page.$$eval('#kd-do-pick [data-do]', (b) => b.map((x) => x.textContent.replace(/\s+/g, ' ').trim())),
+      ['DO-1234-02 · after 14 Oct 2026', 'DO-1234-01 · before 12 Oct 2026'], 'it offers the DOs of this customer, the two either side marked');
+    is(await page.$eval('#kd-do', (e) => e.value), '', 'two different DOs either side: nothing is chosen for the office');
+    await page.click('#kd-save');
+    is((await page.$eval('#kd-msg', (e) => e.textContent)).includes('Pick or key the DO'), true, 'delivered with no DO is refused on the page');
+    await page.click('#kd-do-pick [data-do="DO-1234-01"]');
+    is(await page.$eval('#kd-do', (e) => e.value), 'DO-1234-01', 'pressing a DO keys it');
+    await page.fill('#kd-remark', 'found on the truck');
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_keydo.png', fullPage: true });
+    await page.click('#kd-save');
+    await page.waitForFunction(() => window.__RPC.some((c) => c.fn === 'seal_settle_scan'), null, { timeout: 2000 }).catch(() => {});
+    const settle = await page.evaluate(() => (window.__RPC.find((c) => c.fn === 'seal_settle_scan') || {}).args);
+    is(settle, { p_al: 'AL-1234', p_start: '0009550', p_end: '0009560', p_outcome: 'delivered', p_do: 'DO-1234-01', p_remark: 'found on the truck', p_problem: 61 },
+      'Settle asks the database, naming the customer, the range, the DO and the problem');
+    is(await page.isVisible('#modal'), false, 'and the window closes');
+    await page.close();
+
+    // ── Key DO on any range with a customer, and the database answer shown ──
+    page = await open(browser, port, 'normal');
+    await page.waitForSelector('#list-table [data-keydo]', { timeout: 5000 });
+    await page.evaluate(() => { window.__RPCDATA.seal_settle_scan = { __error: 'Some of these seals were scanned already. Key only the seals that were not scanned.' }; });
+    await page.click('#list-table [data-keydo]');
+    await page.waitForSelector('#kd-start', { timeout: 3000 });
+    is([await page.$eval('#kd-start', (e) => e.value), await page.$eval('#kd-end', (e) => e.value)], ['0009601', '0010000'],
+      'Key DO on a Seal with Customer row opens on that range, to be narrowed to what was not scanned');
+    await page.check('input[name="kd-out"][value="not_delivered"]');
+    is(await page.$eval('#kd-do-box', (e) => e.classList.contains('hidden')), true, 'Not delivered asks for no DO');
+    await page.click('#kd-save');
+    await page.waitForFunction(() => /scanned already/.test(document.getElementById('kd-msg').textContent), null, { timeout: 2000 }).catch(() => {});
+    is((await page.$eval('#kd-msg', (e) => e.textContent)).includes('scanned already'), true, 'what the database refuses is said in the window, and it stays open');
+    is(await page.evaluate(() => (window.__RPC.filter((c) => c.fn === 'seal_settle_scan').pop() || {}).args.p_do), null, 'not delivered sends no DO');
     await page.close();
 
     // ── old links land on the new pages ──
@@ -448,8 +512,14 @@ async function open(browser, port, level, tab) {
 
   // ── one seal_raise_case ──
   const fn = (f) => { const s = fs.readFileSync(path.join(ROOT, 'shared', f), 'utf8'); const i = s.indexOf('CREATE OR REPLACE FUNCTION public.seal_raise_case'); return s.slice(i, s.indexOf('END $$;', i)); };
-  is(fn('RUN_ME_seal_hq_delivery.sql') === fn('RUN_ME_seal_management.sql') && fn('RUN_ME_seal_management.sql').length > 500, true,
-    'the two SQL files carry the same seal_raise_case, so running either one leaves the same titles');
+  is(fn('RUN_ME_seal_hq_delivery.sql') === fn('RUN_ME_seal_management.sql') && fn('RUN_ME_seal_missed_scan.sql') === fn('RUN_ME_seal_management.sql')
+    && fn('RUN_ME_seal_management.sql').length > 500, true,
+    'the three SQL files carry the same seal_raise_case, so running any one leaves the same titles');
+  // seal_segments decides every seal status; the missed-scan file carries a
+  // copy so it stands on its own, and the copy must be the original.
+  const seg = (f) => { const s = fs.readFileSync(path.join(ROOT, 'shared', f), 'utf8'); const i = s.indexOf('FUNCTION public.seal_segments(p_al'); return s.slice(i, s.indexOf('END $$;', i)); };
+  is(seg('RUN_ME_seal_missed_scan.sql') === seg('RUN_ME_seal_management.sql') && seg('RUN_ME_seal_management.sql').includes('seal_settled_scans'), true,
+    'seal_segments is one function in both files, and it reads the seals the office settled');
 
   console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
   process.exit(fails ? 1 : 0);
