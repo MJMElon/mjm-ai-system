@@ -620,6 +620,71 @@ BEGIN
 END $$;
 
 
+-- Every NELOS case the seal checks opened, whoever it is assigned to. NELOS
+-- shows a case only to somebody who holds NELOS, and the Seal Manage page is
+-- asked by people who may not, so it reads them through here instead.
+DROP FUNCTION IF EXISTS public.seal_nelos_cases();
+CREATE FUNCTION public.seal_nelos_cases()
+RETURNS TABLE (id BIGINT, case_no TEXT, title TEXT, status TEXT, priority TEXT, category TEXT,
+               assigned_module TEXT, assigned_module_label TEXT, assignee_name TEXT,
+               raised_by TEXT, created_at TIMESTAMPTZ)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT public.seal_is_staff() THEN RAISE EXCEPTION 'Staff only'; END IF;
+  IF to_regclass('public.nelos_cases') IS NULL THEN RETURN; END IF;
+  RETURN QUERY
+    SELECT c.id::BIGINT, (to_jsonb(c) ->> 'case_no')::TEXT, c.title::TEXT, c.status::TEXT,
+           c.priority::TEXT, c.category::TEXT, c.assigned_module::TEXT, m.label::TEXT,
+           p.full_name::TEXT, c.raised_by::TEXT, c.created_at::TIMESTAMPTZ
+      FROM public.nelos_cases c
+      LEFT JOIN public.nelos_modules m ON m.key = c.assigned_module
+      LEFT JOIN public.shared_profiles p ON p.id::TEXT = (to_jsonb(c) ->> 'assignee_id')
+     WHERE c.source_module = 'seal' OR lower(COALESCE(c.category, '')) = 'seal'
+     ORDER BY c.created_at DESC
+     LIMIT 1000;
+END $$;
+
+-- A seal problem is settled where its case is: when HQ resolves or closes the
+-- NELOS case, every seal problem filed on it is marked resolved, so the warning
+-- on the customer goes with it. Reopening the case reopens them. It never
+-- refuses the update on the case.
+CREATE OR REPLACE FUNCTION public.seal_follow_case()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.status IS NOT DISTINCT FROM OLD.status THEN RETURN NEW; END IF;
+  IF NEW.status IN ('resolved', 'closed') THEN
+    UPDATE public.seal_problems
+       SET status = 'resolved',
+           resolution = COALESCE(resolution, 'NELOS case ' || NEW.status),
+           resolved_by = COALESCE(resolved_by, 'NELOS'),
+           resolved_at = COALESCE(resolved_at, now())
+     WHERE nelos_case_id = NEW.id AND status = 'open';
+  ELSIF NEW.status IN ('open', 'in_progress') AND OLD.status IN ('resolved', 'closed') THEN
+    UPDATE public.seal_problems SET status = 'open'
+     WHERE nelos_case_id = NEW.id AND status = 'resolved' AND resolved_by = 'NELOS';
+  END IF;
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
+END $$;
+
+DO $fc$
+BEGIN
+  IF to_regclass('public.nelos_cases') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS seal_follow_case ON public.nelos_cases';
+    EXECUTE 'CREATE TRIGGER seal_follow_case AFTER UPDATE OF status ON public.nelos_cases
+               FOR EACH ROW EXECUTE FUNCTION public.seal_follow_case()';
+    -- Cases HQ already closed before this existed.
+    UPDATE public.seal_problems p
+       SET status = 'resolved',
+           resolution = COALESCE(p.resolution, 'NELOS case ' || c.status),
+           resolved_by = COALESCE(p.resolved_by, 'NELOS'),
+           resolved_at = COALESCE(p.resolved_at, now())
+      FROM public.nelos_cases c
+     WHERE c.id = p.nelos_case_id AND p.status = 'open' AND c.status IN ('resolved', 'closed');
+  END IF;
+END $fc$;
+
 -- ── 6. WHO MAY DO WHAT ───────────────────────────────────────────────────────
 
 ALTER TABLE public.seal_hq_receipts     ENABLE ROW LEVEL SECURITY;
@@ -654,12 +719,14 @@ REVOKE ALL ON FUNCTION public.seal_check_hq(TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.seal_hq_stock() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.seal_hq_summary() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.seal_check_hq(TEXT, TEXT, TEXT) TO authenticated;
+REVOKE ALL ON FUNCTION public.seal_nelos_cases() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.seal_nelos_cases() TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
 
 -- ── 7. CHECK ─────────────────────────────────────────────────────────────────
--- A good result is 12 rows, every one OK. next seal no. shows the number the
+-- A good result is 14 rows, every one OK. next seal no. shows the number the
 -- next order to the supplier should start at (empty on a database with no
 -- seals yet). nelos label reads Seal Manage.
 
@@ -675,6 +742,8 @@ UNION ALL SELECT 'trigger on delivery', CASE WHEN EXISTS (SELECT 1 FROM pg_trigg
 UNION ALL SELECT 'trigger on site confirm', CASE WHEN EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'seal_confirm_delivery') THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'order start and end columns', CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seal_orders' AND column_name = 'end_no') THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'function seal_hq_summary', CASE WHEN to_regprocedure('public.seal_hq_summary()') IS NOT NULL THEN 'OK' ELSE 'MISSING' END, ''
+UNION ALL SELECT 'function seal_nelos_cases', CASE WHEN to_regprocedure('public.seal_nelos_cases()') IS NOT NULL THEN 'OK' ELSE 'MISSING' END, ''
+UNION ALL SELECT 'trigger on NELOS case', CASE WHEN to_regclass('public.nelos_cases') IS NULL OR EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'seal_follow_case') THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'function seal_check_hq', CASE WHEN to_regprocedure('public.seal_check_hq(text,text,text)') IS NOT NULL THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'next seal no.', 'OK',
        COALESCE((SELECT public.seal_code(x.n + 1, length(x.c)) FROM (

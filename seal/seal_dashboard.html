@@ -21,9 +21,16 @@
             padding:8px 16px; transition:background .15s, border-color .15s; }
   .pn-out:hover { background:#ccfbf1; border-color:#5eead4; }
   .card { background:white; border:1.5px solid #ccfbf1; border-radius:20px; box-shadow:0 6px 20px rgba(13,148,136,.07); }
-  .tab { padding:9px 16px; border-radius:99px; font-size:11px; font-weight:900; letter-spacing:.08em;
-         text-transform:uppercase; color:#0f766e; background:white; border:1.5px solid #ccfbf1; cursor:pointer; }
-  .tab.on { background:#0d9488; color:white; border-color:#0d9488; }
+  /* Tabs that look like tabs: one line under the row, the open one sits on it. */
+  .tabbar { display:flex; align-items:flex-end; gap:2px; border-bottom:2px solid #ccfbf1; }
+  .tab { padding:11px 18px 10px; font-size:13px; font-weight:900; color:#64748b; background:transparent;
+         border:0; border-bottom:3px solid transparent; margin-bottom:-2px; cursor:pointer; white-space:nowrap;
+         border-radius:12px 12px 0 0; }
+  .tab:hover { color:#0f766e; background:#f0fdfa; }
+  .tab.on { color:#0f766e; border-bottom-color:#0d9488; background:white; }
+  .tab .count:not(:empty) { display:inline-block; min-width:20px; padding:1px 6px; margin-left:4px; border-radius:99px;
+         background:#fee2e2; color:#b91c1c; font-size:10px; }
+  .tab.gear { font-size:20px; padding:6px 12px 7px; }
   .stat { padding:14px 16px; border-radius:16px; border:2px solid transparent; }
   .stat.click { cursor:pointer; transition:transform .12s; }
   .stat.click:hover { transform:translateY(-2px); }
@@ -69,8 +76,9 @@
   .stop .t2 { font-size:11px; font-weight:700; color:#475569; margin-top:2px; }
   .cust-head td { background:#f8fafc; border-top:1.5px solid #e2e8f0; }
   .block-card { background:#f0fdfa; border:1.5px solid #99f6e4; border-radius:18px; padding:16px 18px; }
-  .block-card.click { cursor:pointer; transition:transform .12s; }
-  .block-card.click:hover { transform:translateY(-2px); }
+  .block-card.sel { cursor:pointer; transition:box-shadow .12s, transform .12s; }
+  .block-card.sel:hover { transform:translateY(-2px); }
+  .block-card.sel.on { box-shadow:0 0 0 3px var(--on); }
   .plus { width:34px; height:34px; border-radius:12px; background:#0d9488; color:white; font-size:20px; font-weight:900; line-height:1; cursor:pointer; flex-shrink:0; }
   .plus:hover { filter:brightness(.92); }
   .chunk { display:grid; grid-template-columns:1fr 70px 1fr auto; gap:10px; align-items:center; padding:8px 10px; border-top:1px solid #f1f5f9; font-size:12px; font-weight:700; }
@@ -100,11 +108,12 @@
     <p class="text-sm font-bold text-slate-500 mt-1">Run <span class="mono">shared/RUN_ME_seal_management.sql</span> and then <span class="mono">shared/RUN_ME_seal_hq_delivery.sql</span> in the Supabase SQL Editor, then reload this page.</p>
   </div>
 
-  <div class="flex flex-wrap gap-2 mb-5" id="tabs">
+  <div class="tabbar mb-5" id="tabs">
     <button class="tab on" data-tab="nursery">Seal at MJM Nursery</button>
     <button class="tab" data-tab="hq">Seal at HQ</button>
-    <button class="tab" data-tab="problems">Problems <span id="prob-count"></span></button>
-    <button class="tab hidden" data-tab="settings" id="tab-settings-btn">Settings</button>
+    <button class="tab" data-tab="nelos">NELOS <span id="prob-count" class="count"></span></button>
+    <span class="flex-1"></span>
+    <button class="tab gear hidden" data-tab="settings" id="tab-settings-btn" title="Settings" aria-label="Settings">⚙</button>
   </div>
 
   <!-- ═══════════════ SEAL AT MJM NURSERY ═══════════════ -->
@@ -121,56 +130,55 @@
   </section>
 
   <!-- ═══════════════ SEAL AT HQ ═══════════════ -->
-  <!-- Three blocks, one per question HQ asks: what was the last seal, what
-       is still to come from the supplier, what is on its way to site. Each
-       opens its own window, so the page itself is the list of what HQ holds. -->
+  <!-- Three blocks, and under them ONE view: press a block and its list is
+       shown below. Only a + opens a window, to add an order or a delivery. -->
   <section data-pane="hq" class="hidden">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-      <div class="block-card" id="blk-last">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div class="block-card sel" id="blk-last" style="--on:#0d9488">
         <div class="flex items-start justify-between gap-2">
-          <div class="text-[10px] font-black uppercase tracking-widest text-teal-800 opacity-80">Last seal number</div>
-          <button class="plus" id="btn-order" title="Order new seals">+</button>
+          <div class="text-[11px] font-black uppercase tracking-widest text-teal-800">Seal in HQ Cabinet</div>
+          <button class="plus" id="btn-order" title="Order new seals" aria-label="Order new seals">+</button>
         </div>
-        <div class="text-2xl font-black mono mt-1 text-teal-900" id="blk-last-code">—</div>
-        <div class="text-[11px] font-bold text-teal-800 opacity-70" id="blk-last-sub"></div>
+        <div class="text-2xl font-black mono text-teal-900" id="blk-last-qty">—</div>
+        <div class="text-[11px] font-bold text-teal-800 opacity-75" id="blk-last-sub"></div>
       </div>
-      <div class="block-card click" id="blk-pending" style="background:#fffbeb;border-color:#fde68a">
+      <div class="block-card sel" id="blk-pending" style="background:#fffbeb;border-color:#fde68a;--on:#d97706">
         <div class="flex items-start justify-between gap-2">
-          <div class="text-[10px] font-black uppercase tracking-widest text-amber-800 opacity-80">Seal pending receive</div>
-          <button class="plus" id="btn-order2" title="Order new seals" style="background:#d97706">+</button>
+          <div class="text-[11px] font-black uppercase tracking-widest text-amber-800">Seal pending receive</div>
+          <button class="plus" id="btn-order2" title="Order new seals" aria-label="Order new seals" style="background:#d97706">+</button>
         </div>
-        <div class="text-2xl font-black mono mt-1 text-amber-900" id="blk-pending-qty">—</div>
-        <div class="text-[11px] font-bold text-amber-800 opacity-70" id="blk-pending-sub">ordered, not yet at HQ</div>
+        <div class="text-2xl font-black mono text-amber-900" id="blk-pending-qty">—</div>
+        <div class="text-[11px] font-bold text-amber-800 opacity-75" id="blk-pending-sub">ordered, not yet at HQ</div>
       </div>
-      <div class="block-card click" id="blk-deliver" style="background:#eff6ff;border-color:#bfdbfe">
+      <div class="block-card sel" id="blk-deliver" style="background:#eff6ff;border-color:#bfdbfe;--on:#2563eb">
         <div class="flex items-start justify-between gap-2">
-          <div class="text-[10px] font-black uppercase tracking-widest text-blue-800 opacity-80">Seals delivery to MJM Nursery</div>
-          <button class="plus" id="btn-deliver" title="New delivery" style="background:#2563eb">+</button>
+          <div class="text-[11px] font-black uppercase tracking-widest text-blue-800">Seals delivery to MJM Nursery</div>
+          <button class="plus" id="btn-deliver" title="New delivery" aria-label="New delivery" style="background:#2563eb">+</button>
         </div>
-        <div class="text-2xl font-black mono mt-1 text-blue-900" id="blk-deliver-qty">—</div>
-        <div class="text-[11px] font-bold text-blue-800 opacity-70" id="blk-deliver-sub">sent, not yet received at the nursery</div>
+        <div class="text-2xl font-black mono text-blue-900" id="blk-deliver-qty">—</div>
+        <div class="text-[11px] font-bold text-blue-800 opacity-75" id="blk-deliver-sub">nothing on the way</div>
       </div>
     </div>
 
-    <div class="card p-4 mb-4 flex flex-wrap gap-3 items-center justify-between">
-      <div>
-        <div class="font-black text-slate-800">Seals at HQ</div>
-        <div class="text-[11px] font-bold text-slate-400">Received from the supplier and not yet received at site.</div>
+    <div class="card p-5">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div class="flex items-center gap-2 min-w-0">
+          <button class="hidden w-8 h-8 rounded-xl bg-slate-100 text-slate-600 font-black shrink-0" id="hq-view-back" title="Back" aria-label="Back">←</button>
+          <div class="font-black text-slate-800" id="hq-view-title"></div>
+        </div>
+        <div id="hq-view-actions"></div>
       </div>
-      <div class="flex gap-2" id="hq-filter"></div>
+      <div id="hq-view-body" class="overflow-x-auto text-sm font-bold text-slate-400">Loading…</div>
     </div>
-    <div class="card p-2 overflow-x-auto"><div id="hq-list" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
   </section>
 
-  <!-- ═══════════════ PROBLEMS ═══════════════ -->
-  <section data-pane="problems" class="hidden">
-    <div class="card p-4 mb-4 text-sm font-bold text-slate-500">
-      Every problem the system found on a seal — a range given to two customers, a seal collected for the
-      wrong customer, a roll received twice, a delivery site counted differently from what HQ sent. Each one
-      opened a NELOS case to HQ. Mark it resolved here once the record has been put right.
-      <label class="ml-3 text-slate-600"><input type="checkbox" id="p-show-resolved"> show resolved</label>
+  <!-- ═══════════════ NELOS ═══════════════ -->
+  <!-- Every NELOS case the seal checks opened, whoever it is assigned to. -->
+  <section data-pane="nelos" class="hidden">
+    <div class="flex justify-end mb-3">
+      <label class="text-[12px] font-black text-slate-500"><input type="checkbox" id="n-show-closed"> show closed</label>
     </div>
-    <div class="card p-2 overflow-x-auto"><div id="problems-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
+    <div class="card p-2 overflow-x-auto"><div id="nelos-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
   </section>
 
   <!-- ═══════════════ SETTINGS ═══════════════ -->
@@ -401,7 +409,7 @@ async function checkRows(box, kind) {
 
 // ── TABS ─────────────────────────────────────────────────────────────────
 const loaded = {};
-const TAB_LOAD = { nursery: loadList, hq: loadHQ, problems: loadProblems, settings: loadSettings };
+const TAB_LOAD = { nursery: loadList, hq: loadHQ, nelos: loadNelos, settings: loadSettings };
 function switchTab(tab) {
   document.querySelectorAll('#tabs .tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
@@ -411,9 +419,9 @@ function switchTab(tab) {
 document.querySelectorAll('#tabs .tab').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
 // ══════════════════════ SEAL AT HQ ═══════════════════════════════════════
-// One window at a time, opened from the three blocks.
-// A window opened from another one carries a Back to it, so a check list or
-// a history is a step in, not a window somebody has to close and reopen.
+// Three blocks along the top, and ONE view under them: pressing a block
+// shows its list below. Only a + opens a window, and the window is the form
+// for adding something -- an order, or a delivery.
 function openModal(title, html, back) {
   document.getElementById('modal-title').textContent = title;
   const b = document.getElementById('modal-back');
@@ -427,68 +435,72 @@ function closeModal() {
   document.getElementById('modal-body').innerHTML = '';
   modalKind = null;
 }
-let modalKind = null;   // which window is open, so a save can redraw it
+let modalKind = null;   // which window is open
+
+// The view under the blocks. A step into it (a check list, a history) carries
+// a Back to the list it came from.
+let hqView = 'cabinet';
+const VIEW_BLOCK = { cabinet: 'blk-last', pending: 'blk-pending', receive: 'blk-pending', 'pending-history': 'blk-pending',
+                     deliver: 'blk-deliver', 'delivery-history': 'blk-deliver' };
+function setView(v, title, html, opts) {
+  opts = opts || {};
+  hqView = v;
+  ['blk-last', 'blk-pending', 'blk-deliver'].forEach((id) => document.getElementById(id).classList.toggle('on', VIEW_BLOCK[v] === id));
+  document.getElementById('hq-view-title').textContent = title;
+  document.getElementById('hq-view-actions').innerHTML = opts.actions || '';
+  const b = document.getElementById('hq-view-back');
+  b.classList.toggle('hidden', !opts.back);
+  b.onclick = opts.back || null;
+  document.getElementById('hq-view-body').innerHTML = html;
+}
+function showView(v) { ({ cabinet: drawCabinet, pending: openPending, deliver: openDeliveries })[v](); }
+document.getElementById('blk-last').addEventListener('click', () => showView('cabinet'));
 
 let summary = {};
 let hqReceipts = [];    // seal_hq_receipts, what HQ has received and from which order
 let deliveryList = [];
 let deliveryProbs = {};
-let hqFilter = null;    // null | 'hq' | 'going'
 
-function loadHQ() { return Promise.all([loadSummary(), loadHQSeals()]); }
+function loadHQ() { return Promise.all([loadSummary(), loadHQSeals()]).then(() => showView('cabinet')); }
 
 async function loadSummary() {
   const { data, error } = await _supabase.rpc('seal_hq_summary');
   if (error) { missingSetup(error); return; }
   summary = (data && data[0]) || {};
-  document.getElementById('blk-last-code').textContent = summary.last_code || '—';
-  document.getElementById('blk-last-sub').innerHTML = summary.next_code
-    ? 'Next order starts at <b class="mono">' + esc(summary.next_order_code || summary.next_code) + '</b>' : 'No seals keyed yet';
+  document.getElementById('blk-last-qty').textContent = fmt(summary.hq_stock);
+  document.getElementById('blk-last-sub').innerHTML = summary.last_code
+    ? 'Last seal <b class="mono">' + esc(summary.last_code) + '</b> · next order starts <b class="mono">' + esc(summary.next_order_code || summary.next_code) + '</b>'
+    : 'No seals keyed yet';
   document.getElementById('blk-pending-qty').textContent = fmt(summary.pending_receive);
   document.getElementById('blk-deliver-qty').textContent = fmt(summary.on_the_way);
 }
 
-// The page itself: every seal at HQ, In HQ or on its way to site. A seal
-// leaves this list when site has received it, and is on the MJM Nursery tab
-// from then on.
+// What HQ holds and what is on its way. The blocks read it; the Cabinet view
+// draws it.
 async function loadHQSeals() {
-  const box = document.getElementById('hq-list');
   const [st, d, p] = await Promise.all([
     _supabase.rpc('seal_hq_stock'),
     _supabase.from('seal_deliveries').select('*').order('id', { ascending: false }).limit(300),
     _supabase.from('seal_problems').select('id,kind,delivery_id,status').not('delivery_id', 'is', null).eq('status', 'open'),
   ]);
-  if (st.error) { box.innerHTML = missingSetup(st.error) ? 'Not set up yet.' : esc(st.error.message); return; }
+  if (st.error) { missingSetup(st.error); return; }
   hqStock = st.data || [];
   deliveryList = d.data || [];
   deliveryProbs = {};
   (p.data || []).forEach((x) => { (deliveryProbs[x.delivery_id] = deliveryProbs[x.delivery_id] || []).push(x); });
   const going = deliveryList.filter((x) => x.status !== 'received');
   document.getElementById('blk-deliver-sub').textContent = going.length
-    ? going.length + ' deliver' + (going.length === 1 ? 'y' : 'ies') + ' not yet received at the nursery' : 'sent, not yet received at the nursery';
+    ? going.length + ' deliver' + (going.length === 1 ? 'y' : 'ies') + ' on the way' : 'nothing on the way';
+}
 
-  const list = [];
-  normRanges(hqStock.map((x) => ({ start: x.start_code, end: x.end_code }))).forEach((r) => {
-    list.push({ s: r.s, e: r.e, w: r.w, kind: 'hq', note: '' });
-  });
-  going.forEach((x) => normRanges(x.ranges).forEach((r) => {
-    list.push({ s: r.s, e: r.e, w: r.w, kind: 'going', note: 'Delivery #' + x.id + ' · ' + (x.status === 'delivered' ? 'at site office' : 'packed'), id: x.id });
-  }));
-  list.sort((a, b) => a.s - b.s);
-  const tot = { hq: 0, going: 0 };
-  list.forEach((r) => { tot[r.kind] += r.e - r.s + 1; });
-  const chips = [[null, 'All'], ['hq', 'In HQ · ' + fmt(tot.hq)], ['going', 'Delivering to site · ' + fmt(tot.going)]];
-  document.getElementById('hq-filter').innerHTML = chips.map(([k, l]) =>
-    '<button class="chip' + (hqFilter === k ? ' on' : '') + '" data-k="' + (k || '') + '">' + l + '</button>').join('');
-  document.querySelectorAll('#hq-filter .chip').forEach((b) => b.addEventListener('click', () => { hqFilter = b.dataset.k || null; loadHQSeals(); }));
-  const shown = hqFilter ? list.filter((r) => r.kind === hqFilter) : list;
-  if (!shown.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No seals at HQ' + (hqFilter ? ' with this status' : '') + '.</div>'; return; }
-  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th></th></tr></thead><tbody>'
-    + shown.map((r) => '<tr><td class="mono font-black text-slate-800">' + range(sealCode(r.s, r.w), sealCode(r.e, r.w)) + '</td>'
-      + '<td class="text-right mono">' + fmt(r.e - r.s + 1) + '</td>'
-      + '<td><span class="badge ' + (r.kind === 'hq' ? 's-hq">In HQ' : 's-going">Delivering to site') + '</span></td>'
-      + '<td class="text-slate-500">' + (r.id ? '<a href="#" class="underline" onclick="openDeliveries();return false;">' + esc(r.note) + '</a>' : '') + '</td></tr>').join('')
-    + '</tbody></table>';
+// The seals in the HQ cabinet: received from the supplier and not yet sent.
+function drawCabinet() {
+  const list = normRanges(hqStock.map((x) => ({ start: x.start_code, end: x.end_code })));
+  setView('cabinet', 'Seal in HQ Cabinet', list.length
+    ? '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th></tr></thead><tbody>'
+      + list.map((r) => '<tr><td class="mono font-black text-slate-800">' + range(sealCode(r.s, r.w), sealCode(r.e, r.w)) + '</td>'
+        + '<td class="text-right mono">' + fmt(r.e - r.s + 1) + '</td></tr>').join('') + '</tbody></table>'
+    : '<div class="py-8 text-center text-slate-400 font-bold">The HQ cabinet is empty.</div>');
 }
 
 // ── ORDER NEW SEALS (the + on Last seal number) ──
@@ -549,6 +561,7 @@ async function saveOrder(e) {
     toast('Order saved — ' + fmt(qty) + ' seals.');
     closeModal();
     loadSummary();
+    showView('pending');
   } finally { e.target.disabled = false; }
 }
 
@@ -557,7 +570,7 @@ async function saveOrder(e) {
 // receiving check list, cut in rows of a thousand from its first seal, so a
 // box of 10,000 is checked and received a thousand at a time -- or several
 // rows at once, by ticking the first and the last.
-document.getElementById('blk-pending').addEventListener('click', openPending);
+document.getElementById('blk-pending').addEventListener('click', () => showView('pending'));
 document.getElementById('btn-order2').addEventListener('click', (e) => { e.stopPropagation(); openOrder(); });
 let orderRows = [];     // seal_orders with a range, as last loaded
 async function loadOrdersAndReceipts() {
@@ -565,7 +578,7 @@ async function loadOrdersAndReceipts() {
     _supabase.from('seal_orders').select('*').order('order_date', { ascending: false }).order('id', { ascending: false }).limit(300),
     _supabase.from('seal_hq_receipts').select('*').order('received_date', { ascending: false }).order('id', { ascending: false }),
   ]);
-  if (o.error) { document.getElementById('modal-body').innerHTML = missingSetup(o.error) ? 'Not set up yet.' : esc(o.error.message); return false; }
+  if (o.error) { document.getElementById('hq-view-body').innerHTML = missingSetup(o.error) ? 'Not set up yet.' : esc(o.error.message); return false; }
   hqReceipts = r.data || [];
   orderRows = (o.data || []).filter((x) => x.start_code);
   return true;
@@ -575,13 +588,11 @@ function orderLeft(x) {
   return rangesQty(minusRanges([{ start: x.start_code, end: x.end_code }], hqReceipts.flatMap((r) => r.ranges || [])));
 }
 async function openPending() {
-  modalKind = 'pending';
-  openModal('Seal pending receive list', 'Loading…');
-  if (!(await loadOrdersAndReceipts()) || modalKind !== 'pending') return;
+  const hist = '<button class="btn btn-soft btn-sm" onclick="openPendingHistory()">🕘 History</button>';
+  setView('pending', 'Seal pending receive', 'Loading…', { actions: hist });
+  if (!(await loadOrdersAndReceipts()) || hqView !== 'pending') return;
   const rows = orderRows.filter((x) => x.status !== 'Closed' && orderLeft(x) > 0);
-  document.getElementById('modal-body').innerHTML =
-    '<div class="flex justify-end mb-3"><button class="btn btn-soft btn-sm" onclick="openPendingHistory()">🕘 History</button></div>'
-    + (rows.length
+  setView('pending', 'Seal pending receive', (rows.length
       ? '<table class="t"><thead><tr><th>Order date</th><th>Range</th><th>By</th><th></th></tr></thead><tbody>'
         + rows.map((x) => {
           const left = orderLeft(x);
@@ -592,7 +603,7 @@ async function openPending() {
             + '<td>' + esc(x.created_by || '—') + '</td>'
             + '<td class="text-right"><button class="btn btn-soft btn-sm" title="Open" aria-label="Open">&gt;</button></td></tr>';
         }).join('') + '</tbody></table>'
-      : '<div class="py-6 text-center text-slate-400 font-bold">Nothing waiting to be received.</div>');
+      : '<div class="py-6 text-center text-slate-400 font-bold">Nothing waiting to be received.</div>'), { actions: hist });
 }
 
 // The receiving check list of one order.
@@ -604,7 +615,6 @@ function openOrderReceive(id) {
   if (!rcvOrder) return;
   rcvTicked = new Set();
   rcvAnchor = null;
-  modalKind = 'receive';
   drawOrderReceive();
 }
 function orderChunks(x) {
@@ -624,7 +634,7 @@ function drawOrderReceive() {
   const open = chunks.filter((c) => c.nLeft > 0);
   const picked = open.filter((c) => rcvTicked.has(c.s));
   const pickedQty = picked.reduce((t, c) => t + c.nLeft, 0);
-  openModal('Order : ' + fmtDate(x.order_date) + ', ' + x.start_code + ' – ' + x.end_code + ' receiving check list',
+  setView('receive', 'Order : ' + fmtDate(x.order_date) + ', ' + x.start_code + ' – ' + x.end_code + ' receiving check list',
     '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">'
     + '<div class="text-[12px] font-bold text-slate-500">Tick the first row and the last row — every row between is ticked for you.</div>'
     + '<div class="flex gap-2"><button class="btn btn-soft btn-sm" onclick="rcvAll(true)">Tick all</button><button class="btn btn-soft btn-sm" onclick="rcvAll(false)">Clear</button></div></div>'
@@ -647,8 +657,8 @@ function drawOrderReceive() {
     + '<div class="flex justify-between items-center gap-2 mt-4">'
     + '<div class="text-[12px] font-black text-slate-700">' + (picked.length ? picked.length + ' row' + (picked.length === 1 ? '' : 's') + ' ticked · ' + fmt(pickedQty) + ' seals' : 'Nothing ticked') + '</div>'
     + '<button class="btn btn-main" id="rcv-save"' + (picked.length ? '' : ' disabled') + '>Receive ticked</button></div>',
-    openPending);
-  document.querySelectorAll('#modal-body input[data-s]').forEach((cb) => cb.addEventListener('change', () => rcvTick(Number(cb.dataset.s), cb.checked)));
+    { back: openPending });
+  document.querySelectorAll('#hq-view-body input[data-s]').forEach((cb) => cb.addEventListener('change', () => rcvTick(Number(cb.dataset.s), cb.checked)));
   document.getElementById('rcv-save').addEventListener('click', receiveTicked);
 }
 // Start and end: the second tick, with exactly one row ticked before it,
@@ -696,11 +706,10 @@ async function receiveTicked(e) {
 
 // What HQ has received, newest first.
 async function openPendingHistory() {
-  modalKind = 'pending-history';
-  openModal('Received at HQ — history', 'Loading…', openPending);
-  if (!(await loadOrdersAndReceipts()) || modalKind !== 'pending-history') return;
+  setView('pending-history', 'Received at HQ — history', 'Loading…', { back: openPending });
+  if (!(await loadOrdersAndReceipts()) || hqView !== 'pending-history') return;
   const orders = {}; orderRows.forEach((x) => { orders[x.id] = x; });
-  document.getElementById('modal-body').innerHTML = hqReceipts.length
+  setView('pending-history', 'Received at HQ — history', hqReceipts.length
     ? '<table class="t"><thead><tr><th>Received</th><th>Seals</th><th class="text-right">Qty</th><th>By</th><th>Order</th></tr></thead><tbody>'
       + hqReceipts.map((r) => {
         const o = r.order_id && orders[r.order_id];
@@ -710,36 +719,34 @@ async function openPendingHistory() {
           + '<td>' + esc(r.received_by || '—') + '</td>'
           + '<td class="text-slate-500">' + (o ? fmtDate(o.order_date) + '<div class="mono text-[10px]">' + range(o.start_code, o.end_code) + '</div>' : '—') + '</td></tr>';
       }).join('') + '</tbody></table>'
-    : '<div class="py-6 text-center text-slate-400 font-bold">Nothing received at HQ yet.</div>';
+    : '<div class="py-6 text-center text-slate-400 font-bold">Nothing received at HQ yet.</div>', { back: openPending });
 }
 
 // ── SEALS DELIVERY TO MJM NURSERY (the block, and its +) ──
-document.getElementById('blk-deliver').addEventListener('click', openDeliveries);
+document.getElementById('blk-deliver').addEventListener('click', () => showView('deliver'));
 document.getElementById('btn-deliver').addEventListener('click', (e) => { e.stopPropagation(); openDeliver(); });
 const confirmBoxes = {};   // delivery id -> RangeBox while open
 async function openDeliveries() {
-  modalKind = 'deliveries';
-  openModal('Seals delivery to MJM Nursery', 'Loading…');
+  const hist = '<button class="btn btn-soft btn-sm" onclick="openDeliveryHistory()">🕘 History</button>';
+  setView('deliver', 'Seals delivery to MJM Nursery', 'Loading…', { actions: hist });
   await loadHQSeals();
-  if (modalKind !== 'deliveries') return;
+  if (hqView !== 'deliver') return;
   const list = deliveryList.filter((x) => x.status !== 'received');
   Object.keys(confirmBoxes).forEach((k) => delete confirmBoxes[k]);
-  document.getElementById('modal-body').innerHTML =
-    '<div class="flex justify-between items-center mb-3"><button class="btn btn-soft btn-sm" onclick="openDeliveryHistory()">🕘 History</button>'
-    + '<button class="btn btn-main btn-sm" onclick="openDeliver()">+ New delivery</button></div>'
-    + '<div class="space-y-3">' + (list.length ? list.map((x) => deliveryCard(x, deliveryProbs[x.id] || [])).join('') : '<div class="py-6 text-center text-slate-400 font-bold">No deliveries on the way.</div>') + '</div>';
+  setView('deliver', 'Seals delivery to MJM Nursery',
+    '<div class="space-y-3">' + (list.length ? list.map((x) => deliveryCard(x, deliveryProbs[x.id] || [])).join('') : '<div class="py-6 text-center text-slate-400 font-bold">No deliveries on the way.</div>') + '</div>',
+    { actions: hist });
 }
 // What the nursery has received, newest first.
 async function openDeliveryHistory() {
-  modalKind = 'delivery-history';
-  openModal('Received at MJM Nursery — history', 'Loading…', openDeliveries);
+  setView('delivery-history', 'Received at MJM Nursery — history', 'Loading…', { back: openDeliveries });
   await loadHQSeals();
-  if (modalKind !== 'delivery-history') return;
+  if (hqView !== 'delivery-history') return;
   const list = deliveryList.filter((x) => x.status === 'received')
     .sort((a, b) => String(b.received_at || '').localeCompare(String(a.received_at || '')));
-  document.getElementById('modal-body').innerHTML = '<div class="space-y-3">'
+  setView('delivery-history', 'Received at MJM Nursery — history', '<div class="space-y-3">'
     + (list.length ? list.map((x) => deliveryCard(x, deliveryProbs[x.id] || [])).join('') : '<div class="py-6 text-center text-slate-400 font-bold">Nothing received at MJM Nursery yet.</div>')
-    + '</div>';
+    + '</div>', { back: openDeliveries });
 }
 
 let dvBlocked = false;
@@ -755,8 +762,7 @@ function openDeliver() {
     +   '<div><label class="lbl">Remark</label><input id="dv-remark" class="inp" placeholder="Optional"></div>'
     + '</div>'
     + '<div class="text-[11px] font-bold mt-3" id="dv-msg"></div>'
-    + '<div class="flex justify-end gap-2 mt-4"><button class="btn btn-soft" onclick="openDeliveries()">Cancel</button><button class="btn btn-main" id="dv-save">Save · Packed</button></div>',
-    openDeliveries);
+    + '<div class="flex justify-end gap-2 mt-4"><button class="btn btn-soft" onclick="closeModal()">Cancel</button><button class="btn btn-main" id="dv-save">Save · Packed</button></div>');
   dvBlocked = false;
   dvBox = RangeBox(document.getElementById('dv-ranges'), { onChange: checkDV });
   document.getElementById('dv-fill').addEventListener('click', fillDV);
@@ -811,8 +817,9 @@ async function saveDV(e) {
     }]);
     if (error) { missingSetup(error); toast(error.message, true); return; }
     toast('Delivery packed — ' + fmt(rangesQty(rs)) + ' seals.');
+    closeModal();
     loadSummary();
-    openDeliveries();
+    showView('deliver');
   } finally { e.target.disabled = false; }
 }
 
@@ -822,7 +829,7 @@ function deliveryCard(x, probs) {
     + '<div class="t1">' + title + '</div><div class="t2">' + sub + '</div></div>';
   const differs = x.status === 'received' && rangesQty(minusRanges(x.ranges, x.received_ranges)) + rangesQty(minusRanges(x.received_ranges, x.ranges)) > 0;
   const probBadge = probs.length
-    ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="closeModal();switchTab(\'problems\');return false;">⚠ ' + probs.map((p) => esc(PROBLEM_LABEL[p.kind] || p.kind)).join(', ') + '</a>' : '';
+    ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'nelos\');return false;">⚠ ' + probs.map((p) => esc(PROBLEM_LABEL[p.kind] || p.kind)).join(', ') + '</a>' : '';
   return '<div class="border-[1.5px] border-slate-200 rounded-2xl p-4 bg-white">'
     + '<div class="flex flex-wrap items-start justify-between gap-3 mb-4">'
     +   '<div><div class="font-black text-slate-800">Delivery #' + x.id + ' <span class="text-slate-400 font-bold">to ' + esc(x.site) + '</span>' + probBadge + '</div>'
@@ -917,7 +924,7 @@ async function saveConfirm(id) {
     }]);
     if (error) { missingSetup(error); toast(error.message, true); return; }
     toast('Delivery #' + id + ' received by ' + staffName + '.');
-    loadSummary(); openDeliveries(); loadProblems();
+    loadSummary(); openDeliveries(); loadNelos();
     if (loaded.nursery) loadList();
   } finally { btn.disabled = false; }
 }
@@ -1033,7 +1040,7 @@ function renderList() {
     + gs.map((g) => {
       const total = g.rows.reduce((t, r) => t + (Number(r.qty) || 0), 0);
       const probs = g.rows.reduce((t, r) => Math.max(t, Number(r.open_problems) || 0), 0);
-      const warn = probs > 0 ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'problems\');return false;">⚠ ' + probs + '</a>' : '';
+      const warn = probs > 0 ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'nelos\');return false;">⚠ ' + probs + '</a>' : '';
       if (g.stock) {
         return '<tr class="cust-head"><td colspan="4"><span class="font-black text-slate-800">In stock at MJM Nursery</span>'
           + ' <span class="text-slate-500">· not yet given to a customer</span>'
@@ -1055,43 +1062,37 @@ function renderList() {
     }).join('') + '</tbody></table>';
 }
 
-// ══════════════════════ PROBLEMS ═════════════════════════════════════════
-document.getElementById('p-show-resolved').addEventListener('change', loadProblems);
-
-async function loadProblems() {
-  const box = document.getElementById('problems-table');
-  let q = _supabase.from('seal_problems').select('*').order('created_at', { ascending: false }).limit(500);
-  if (!document.getElementById('p-show-resolved').checked) q = q.eq('status', 'open');
-  const { data, error } = await q;
-  if (error) { box.innerHTML = missingSetup(error) ? 'Not set up yet.' : esc(error.message); return; }
-  const list = data || [];
-  const open = list.filter((p) => p.status === 'open').length;
-  document.getElementById('prob-count').textContent = open ? '(' + open + ')' : '';
-  const focus = Number(new URLSearchParams(location.search).get('problem')) || null;
-  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No problems.</div>'; return; }
-  box.innerHTML = '<table class="t"><thead><tr><th>Found</th><th>Problem</th><th>Seals</th><th>For</th><th>Belongs to</th><th>Detail</th><th>NELOS</th><th></th></tr></thead><tbody>'
-    + list.map((p) => {
-      const ring = p.id === focus ? ' style="background:#fef9c3"' : '';
-      const forWho = p.delivery_id ? 'Delivery #' + p.delivery_id : (p.customer_name || '—');
-      return '<tr' + ring + '><td>' + fmtDate(p.created_at) + '</td>'
-        + '<td><span class="badge ' + (p.status === 'open' ? 'bg-red-100 text-red-700' : 's-collected') + '">' + esc(PROBLEM_LABEL[p.kind] || p.kind) + '</span></td>'
-        + '<td class="mono">' + (p.seal_from ? range(p.seal_from, p.seal_to) : '—') + (p.qty > 1 ? '<div class="text-[10px] text-slate-400">' + fmt(p.qty) + ' seals</div>' : '') + '</td>'
-        + '<td>' + esc(forWho) + '<div class="text-[10px] text-slate-400 mono">' + esc(p.al_number || '') + '</div></td>'
-        + '<td>' + esc(p.other_customer || '—') + '<div class="text-[10px] text-slate-400 mono">' + esc(p.other_al || '') + '</div></td>'
-        + '<td class="text-slate-500 text-[11px] max-w-[320px]">' + esc(p.detail) + (p.resolution ? '<div class="text-emerald-700 mt-1">✔ ' + esc(p.resolution) + ' — ' + esc(p.resolved_by || '') + '</div>' : '') + '</td>'
-        + '<td>' + (p.nelos_case_id ? '<a class="text-teal-700 underline" href="../nelos/nelos_case.html?id=' + p.nelos_case_id + '">Case</a>' : '—') + '</td>'
-        + '<td>' + (p.status === 'open' ? '<button class="btn btn-soft btn-sm" onclick="resolveProblem(' + p.id + ')">Resolve</button>' : '') + '</td></tr>';
+// ══════════════════════ NELOS ════════════════════════════════════════════
+// Every case the seal checks opened, whoever it is assigned to. Asked of
+// seal_nelos_cases() because NELOS itself shows a case only to somebody who
+// holds NELOS; a database without that function is read directly, which is
+// whatever this login may see.
+document.getElementById('n-show-closed').addEventListener('change', loadNelos);
+const CASE_OPEN = ['open', 'in_progress', 'pending'];
+async function loadNelos() {
+  const box = document.getElementById('nelos-table');
+  let res = await _supabase.rpc('seal_nelos_cases');
+  if (res.error) {
+    res = await _supabase.from('nelos_cases').select('*').or('source_module.eq.seal,category.eq.Seal')
+      .order('created_at', { ascending: false }).limit(500);
+  }
+  if (res.error) { box.innerHTML = '<span class="text-red-600">' + esc(res.error.message) + '</span>'; return; }
+  const all = res.data || [];
+  const open = all.filter((c) => CASE_OPEN.includes(String(c.status || '').toLowerCase()));
+  document.getElementById('prob-count').textContent = open.length ? open.length : '';
+  const list = document.getElementById('n-show-closed').checked ? all : open;
+  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">' + (all.length ? 'No open seal cases.' : 'No seal cases.') + '</div>'; return; }
+  box.innerHTML = '<table class="t"><thead><tr><th>Raised</th><th>Case</th><th>Status</th><th>With</th><th></th></tr></thead><tbody>'
+    + list.map((c) => {
+      const st = String(c.status || '').toLowerCase();
+      const cls = CASE_OPEN.includes(st) ? 'bg-red-100 text-red-700' : 's-collected';
+      return '<tr><td>' + fmtDate(c.created_at) + '</td>'
+        + '<td><div class="font-black text-slate-800">' + esc(c.title || '—') + '</div>'
+        +   (c.case_no ? '<div class="text-[10px] text-slate-400 mono">' + esc(c.case_no) + '</div>' : '') + '</td>'
+        + '<td><span class="badge ' + cls + '">' + esc((c.status || '—').replace('_', ' ')) + '</span></td>'
+        + '<td class="text-slate-500">' + esc(c.assignee_name || c.assigned_module_label || c.assigned_module || 'HQ') + '</td>'
+        + '<td class="text-right"><a class="btn btn-soft btn-sm" href="../nelos/nelos_case.html?id=' + c.id + '">Open</a></td></tr>';
     }).join('') + '</tbody></table>';
-}
-async function resolveProblem(id) {
-  const what = prompt('What was done to put it right?');
-  if (what == null || !what.trim()) return;
-  const { error } = await _supabase.from('seal_problems').update({
-    status: 'resolved', resolution: what.trim(), resolved_by: staffName, resolved_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) { toast(error.message, true); return; }
-  toast('Marked resolved.');
-  loadProblems();
 }
 
 // ══════════════════════ SETTINGS ═════════════════════════════════════════
@@ -1146,12 +1147,12 @@ document.getElementById('st-save').addEventListener('click', async () => {
     document.getElementById('main').classList.remove('hidden');
 
     // Links written before the pages were renamed still land somewhere sane.
-    const OLD = { list: 'nursery', customers: 'nursery', orders: 'hq', receipts: 'hq' };
+    const OLD = { list: 'nursery', customers: 'nursery', orders: 'hq', receipts: 'hq', problems: 'nelos' };
     let want = new URLSearchParams(location.search).get('tab');
     want = OLD[want] || want;
-    switchTab(['nursery', 'hq', 'problems'].concat(isAdmin ? ['settings'] : []).includes(want) ? want : 'nursery');
+    switchTab(['nursery', 'hq', 'nelos'].concat(isAdmin ? ['settings'] : []).includes(want) ? want : 'nursery');
     // The tab label carries the open count, so it is asked for up front.
-    if (!loaded.problems) { loaded.problems = true; loadProblems(); }
+    if (!loaded.nelos) { loaded.nelos = true; loadNelos(); }
   } catch (e) {
     console.warn(e);
     window.location.replace('../index.html');
