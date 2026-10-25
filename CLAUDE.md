@@ -4190,7 +4190,23 @@ tick the first row and the last and every row between is ticked, and
 Receive ticked writes ONE receipt with the running numbers joined. Neither
 list carries a show-received tick — a **History** button switches the same
 window to what HQ, or the nursery, has received, and a window opened from
-another carries a Back to it. A list joins
+another carries a Back to it.
+
+**Then simpler again.** The tabs are tabs (Seal at MJM Nursery, Seal at HQ,
+NELOS, and Settings as a small gear). On Seal at HQ the three blocks are
+SELECTORS — Seal in HQ Cabinet (the last seal and where the next order
+starts are a small line under it), Seal pending receive, Seals delivery to
+MJM Nursery — and the list of whichever is pressed is shown in ONE view
+under them, check list and History included. **Only a + opens a window**,
+and the window is the form for adding: an order or a delivery.
+
+**Problems became NELOS.** The tab lists every case the seal checks opened,
+whoever it is assigned to, through `seal_nelos_cases()` — NELOS shows a case
+only to somebody who holds NELOS, and the people on this page may not. And
+a seal problem is settled where its case is: `seal_follow_case` on
+`nelos_cases` resolves the problems filed on a case when HQ resolves or
+closes it, and reopens them if the case is reopened, so the warning on a
+customer cannot outlive the case it came from. A list joins
 running numbers into one start and end wherever nothing breaks the run.
 
 `tests/seal_dashboard.cjs` holds the office page.

@@ -18,8 +18,8 @@
  *     delivery on the right. Both carry a History in place of a show-received
  *     tick
  *   - site keys the start and end AGAIN, compared with what HQ sent
- *   - Problems names both customers and links the NELOS case
- *   - Settings is an admin only
+ *   - NELOS lists every seal case, whoever has it, asked of seal_nelos_cases
+ *   - Settings is an admin only, as a small gear at the end of the tabs
  *   - the two SQL files carry ONE seal_raise_case, word for word
  *
  * Run: NODE_PATH=/opt/node22/lib/node_modules node tests/seal_dashboard.cjs
@@ -117,6 +117,10 @@ const HQ_RECEIPTS = [
   { id: 9, order_id: 3, ranges: [{ start: '0040001', end: '0041000' }], received_by: 'Amy', received_date: '2026-10-22' },
 ];
 const RPCDATA = {
+  seal_nelos_cases: [
+    { id: 88, title: 'Seals 0010001 - 0010050 given twice, already with Ah Seng Farm (AL-1234), for Kebun Maju (AL-1240)', status: 'open', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: 'Admin 2', created_at: '2026-10-06T00:00:00Z' },
+    { id: 80, title: 'Seal 0009001 collected but on no consent', status: 'closed', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: null, created_at: '2026-10-01T00:00:00Z' },
+  ],
   seal_hq_summary: [{ last_code: '0042500', next_code: '0042501', hq_received: 6000, hq_stock: 4000, on_the_way: 2000, site_stock: 8000,
                       last_ordered_code: '0042500', next_order_code: '0042501', pending_receive: 1500 }],
   seal_hq_stock: [{ start_code: '0031001', end_code: '0033000', start_no: 31001, end_no: 33000, qty: 2000, received_date: '2026-10-15' },
@@ -139,7 +143,11 @@ async function open(browser, port, level, tab) {
     return r.fulfill({ status: 200, contentType: 'text/plain', body: '' });
   });
   await page.route('**cdn.tailwindcss.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript',
-    body: 'document.addEventListener("DOMContentLoaded",function(){document.head.insertAdjacentHTML("beforeend","<style>.hidden{display:none}</style>")});' }));
+    // SEAL_TW_CSS names a Tailwind build of the page, for screenshots that
+    // look like the real thing; the checks themselves do not need it.
+    body: 'document.addEventListener("DOMContentLoaded",function(){var s=document.createElement("style");s.textContent='
+      + JSON.stringify((process.env.SEAL_TW_CSS ? fs.readFileSync(process.env.SEAL_TW_CSS, 'utf8') : '') + '.hidden{display:none}')
+      + ';document.head.appendChild(s)});' }));
   await page.route('**cdn.jsdelivr.net/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_SUPABASE }));
   await page.addInitScript(({ level, segs, probs, dels, rpc, ords, hqr }) => {
     const user = { id: 'u1', email: 'office@mjmnursery.com', user_metadata: { full_name: 'Office' } };
@@ -176,8 +184,9 @@ async function open(browser, port, level, tab) {
     is(await page.$$eval('#main a', (as) => as.filter((a) => /back to main portal|user access/i.test(a.textContent)).length), 0,
       'no Back to Main Portal and no User Access button, only the ribbon [<- Portal]');
     is(await page.$$eval('#tabs .tab:not(.hidden)', (b) => b.map((x) => x.textContent.trim().replace(/\s+/g, ' '))),
-      ['Seal at MJM Nursery', 'Seal at HQ', 'Problems (1)'], 'Seal at MJM Nursery first, then Seal at HQ, then Problems');
+      ['Seal at MJM Nursery', 'Seal at HQ', 'NELOS 1'], 'three tabs: Seal at MJM Nursery, Seal at HQ, NELOS with its open count');
     is(await page.$eval('#tabs .tab.on', (b) => b.dataset.tab), 'nursery', 'and the page opens on Seal at MJM Nursery');
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_nursery.png', fullPage: true });
 
     const statQty = await page.$$eval('#cs-stats .stat .text-2xl', (els) => els.map((e) => e.textContent));
     is(statQty, ['8,000', '2,400', '0', '600'], 'four states at the nursery, adding up seals (in stock, pending, scanned, collected)');
@@ -196,21 +205,27 @@ async function open(browser, port, level, tab) {
     is(await page.evaluate(() => window.__RPC.some((c) => c.fn === 'seal_list' && c.args.p_search === '9655')), true,
       'a typed seal number is asked of the database');
 
-    // ── Seal at HQ: three blocks ──
+    // ── Seal at HQ: three blocks, ONE view under them ──
     await page.click('[data-tab="hq"]');
-    await page.waitForFunction(() => document.getElementById('blk-last-code').textContent !== '—', null, { timeout: 3000 }).catch(() => {});
-    is(await page.$eval('#blk-last-code', (e) => e.textContent), '0042500', 'block 1 is the last seal number');
+    await page.waitForSelector('#hq-view-body table', { timeout: 3000 });
+    is(await page.$eval('#blk-last', (e) => e.textContent.includes('Seal in HQ Cabinet')), true, 'block 1 is called Seal in HQ Cabinet');
+    is(await page.$eval('#blk-last-qty', (e) => e.textContent), '4,000', 'and counts what is in the cabinet');
+    is(await page.$eval('#blk-last-sub', (e) => e.textContent), 'Last seal 0042500 · next order starts 0042501', 'the last seal and the next order start are a small line under it');
     is(await page.$eval('#blk-pending-qty', (e) => e.textContent), '1,500', 'block 2 is the seals still to be received');
-    is(await page.$eval('#blk-deliver-qty', (e) => e.textContent), '2,000', 'block 3 is the seals delivering to site');
-    await page.waitForSelector('#hq-list table', { timeout: 3000 });
-    const hqRows = await page.$$eval('#hq-list tbody tr', (t) => t.map((r) => [...r.children].slice(0, 3).map((c) => c.textContent.trim())));
-    is(hqRows.map((r) => r[2]), ['Delivering to site', 'Delivering to site', 'In HQ'], 'the list is every seal at HQ, In HQ or Delivering to site');
-    is(hqRows[2].slice(0, 2), ['0031001 – 0035000', '4,000'], 'two receipts that meet are one run In HQ');
+    is(await page.$eval('#blk-deliver-qty', (e) => e.textContent), '2,000', 'block 3 is the seals delivering to the nursery');
+    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Seal in HQ Cabinet', 'the view under the blocks opens on the cabinet');
+    is(await page.$eval('#blk-last', (e) => e.classList.contains('on')), true, 'and its block is marked as the one showing');
+    const cab = await page.$$eval('#hq-view-body tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.trim())));
+    is(cab, [['0031001 – 0035000', '4,000']], 'the cabinet is the seals In HQ only, two receipts that meet as one run');
+    is(await page.$$eval('.chip, #hq-filter, #hq-list', (x) => x.length), 0, 'no All / In HQ / Delivering chips any more');
+    is(await page.isVisible('#modal'), false, 'pressing a block opens no window');
+    // SEAL_SHOTS=dir saves what the page looks like, for a person to check.
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_hq.png', fullPage: true });
 
-    // + on Last seal number: order a range
+    // + on block 1: order a range, in a window
     await page.click('#btn-order');
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order new seal?', 'the + opens Order new seal?');
-    is(await page.$eval('#ord-start', (e) => e.value), '0042501', 'the start is filled in after the last ordered seal');
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order new seal?', 'the + opens Order new seal? in a window');
+    is(await page.$eval('#ord-start', (e) => e.value), '0042501', 'the start is filled in after the last seal');
     await page.fill('#ord-end', '0052500');
     await page.waitForFunction(() => /10,000/.test(document.getElementById('ord-msg').textContent), null, { timeout: 2000 }).catch(() => {});
     is((await page.$eval('#ord-msg', (e) => e.textContent)).includes('10,000 seals, 10 rows of 1,000'), true, 'it says how many seals and how many rows of 1,000');
@@ -219,62 +234,53 @@ async function open(browser, port, level, tab) {
     const ord = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_orders') || {}).rows);
     is(ord && [ord[0].start_code, ord[0].end_code, ord[0].qty, ord[0].created_by], ['0042501', '0052500', 10000, 'Office'], 'Save writes the order with its range');
     is(await page.isVisible('#modal'), false, 'and the window closes');
+    await page.waitForFunction(() => document.getElementById('hq-view-title').textContent === 'Seal pending receive', null, { timeout: 3000 }).catch(() => {});
+    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Seal pending receive', 'and the view below moves to the orders waiting');
 
-    // Seal pending receive: one row per order, > opens its check list
-    is(await page.$eval('#blk-pending', (e) => e.textContent.includes('Seal pending receive')), true, 'block 2 is called Seal pending receive');
+    // block 2: the list below
     await page.click('#btn-order2');
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order new seal?', 'and its + orders new seals too');
-    await page.click('#modal button[aria-label]:not(.hidden), #modal button:has-text("×")');
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order new seal?', 'block 2 has the same + to order');
+    await page.click('#modal button:has-text("Cancel")');
+    await page.click('#blk-last');
     await page.click('#blk-pending');
-    await page.waitForSelector('#modal-body table', { timeout: 3000 });
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Seal pending receive list', 'it opens the Seal pending receive list');
-    const prow = await page.$eval('#modal-body tbody tr', (r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
-    is([prow[0], prow[1].startsWith('0040001 – 0042500'), prow[2], prow[3]], ['20 Oct 2026', true, 'Amy', '>'], 'a row reads order date, range, by whom, and >');
-    is(await page.$$eval('#modal-body input[type=checkbox]', (x) => x.length), 0, 'no show-received tick on the list, History holds those');
-    await page.click('#modal-body tbody tr button');
-    await page.waitForSelector('#modal-body .chunk', { timeout: 3000 });
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order : 20 Oct 2026, 0040001 – 0042500 receiving check list', 'the order opens as its receiving check list');
-    is(await page.isVisible('#modal-back'), true, 'with a Back to the list');
-    const chunks = await page.$$eval('#modal-body .chunk', (cs) => cs.map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
-    is(chunks.length, 3, '2,500 seals open as three rows of up to 1,000');
-    is(chunks[0].includes('0040001 – 0041000') && chunks[0].includes('Received by Amy'), true, 'the first thousand reads as received, and by whom');
-    is(await page.$$eval('#modal-body .chunk input[type=checkbox]', (x) => x.length), 2, 'the two rows still to come each carry a tick');
-    // tick the first and the last: everything between is ticked
-    await page.check('#modal-body input[data-s="41001"]');
-    await page.check('#modal-body input[data-s="42001"]');
-    is(await page.$$eval('#modal-body input[data-s]:checked', (x) => x.length), 2, 'ticking a start and an end ticks the rows between');
-    is((await page.$eval('#modal-body', (e) => e.textContent)).includes('2 rows ticked · 1,500 seals'), true, 'and says how many seals that is');
+    await page.waitForSelector('#hq-view-body tbody tr', { timeout: 3000 });
+    is(await page.$eval('#blk-pending', (e) => e.classList.contains('on')), true, 'pressing block 2 marks it');
+    const prow = await page.$eval('#hq-view-body tbody tr', (r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
+    is([prow[0], prow[1].startsWith('0040001 – 0042500'), prow[2], prow[3]], ['20 Oct 2026', true, 'Amy', '>'], 'the view below lists each order: date, range, by whom, >');
+    await page.click('#hq-view-body tbody tr button');
+    await page.waitForSelector('#hq-view-body .chunk', { timeout: 3000 });
+    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Order : 20 Oct 2026, 0040001 – 0042500 receiving check list', 'the order opens below as its receiving check list');
+    is(await page.isVisible('#hq-view-back'), true, 'with a Back to the list');
+    const chunks = await page.$$eval('#hq-view-body .chunk', (cs) => cs.map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
+    is(chunks.length === 3 && chunks[0].includes('Received by Amy'), true, '2,500 seals as three rows, the first already received');
+    await page.check('#hq-view-body input[data-s="41001"]');
+    await page.check('#hq-view-body input[data-s="42001"]');
+    is((await page.$eval('#hq-view-body', (e) => e.textContent)).includes('2 rows ticked · 1,500 seals'), true, 'tick a start and an end, and it counts them');
     await page.click('#rcv-save');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_hq_receipts'), null, { timeout: 2000 }).catch(() => {});
     const rcv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_hq_receipts') || {}).rows);
-    is(rcv && [rcv[0].order_id, rcv[0].ranges, rcv[0].received_by], [3, [{ start: '0041001', end: '0042500' }], 'Office'],
-      'Receive ticked writes ONE receipt for the ticked rows, running numbers joined');
-    await page.click('#modal-back');
-    await page.waitForSelector('#modal-body table', { timeout: 3000 });
-    await page.click('#modal-body button:has-text("History")');
-    await page.waitForFunction(() => /history/.test(document.getElementById('modal-title').textContent), null, { timeout: 3000 }).catch(() => {});
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Received at HQ — history', 'History switches the window to what HQ received');
-    await page.waitForSelector('#modal-body table', { timeout: 3000 });
-    is((await page.$eval('#modal-body tbody tr', (r) => r.textContent)).includes('0040001 – 0041000'), true, 'listing each receipt');
-    await page.click('#modal button:has-text("×")');
+    is(rcv && [rcv[0].order_id, rcv[0].ranges], [3, [{ start: '0041001', end: '0042500' }]], 'Receive ticked writes one receipt for the ticked rows');
+    await page.click('#hq-view-back');
+    await page.waitForSelector('#hq-view-body tbody tr', { timeout: 3000 });
+    await page.click('#hq-view-actions button:has-text("History")');
+    await page.waitForFunction(() => /history/.test(document.getElementById('hq-view-title').textContent), null, { timeout: 3000 }).catch(() => {});
+    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Received at HQ — history', 'History switches the view to what HQ received');
+    is(await page.isVisible('#modal'), false, 'still no window');
 
-    // Seals delivery to MJM Nursery: the deliveries, like a parcel
-    is(await page.$eval('#blk-deliver', (e) => e.textContent.includes('Seals delivery to MJM Nursery')), true, 'block 3 is called Seals delivery to MJM Nursery');
+    // block 3: the deliveries below
     await page.click('#blk-deliver');
-    await page.waitForSelector('#modal-body .track', { timeout: 3000 });
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Seals delivery to MJM Nursery', 'and so is its window');
-    const top = await page.$$eval('#modal-body > div:first-child button', (b) => b.map((x) => x.textContent.trim()));
-    is(top, ['🕘 History', '+ New delivery'], 'History on the left, + New delivery on the right');
-    const cards = await page.$$eval('#modal-body .track', (ts) => ts.map((t) => [...t.querySelectorAll('.stop')].map((s) => s.classList.contains('done') ? 'done' : s.classList.contains('now') ? 'now' : '-')));
+    await page.waitForSelector('#hq-view-body .track', { timeout: 3000 });
+    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Seals delivery to MJM Nursery', 'pressing block 3 shows the deliveries below');
+    const cards = await page.$$eval('#hq-view-body .track', (ts) => ts.map((t) => [...t.querySelectorAll('.stop')].map((s) => s.classList.contains('done') ? 'done' : s.classList.contains('now') ? 'now' : '-')));
     is(cards, [['done', 'now', '-'], ['done', 'done', 'now']], 'a packed delivery waits to reach the site office, a delivered one waits for the nursery');
-    await page.click('#modal-body button:has-text("Mark delivered")');
+    await page.click('#hq-view-body button:has-text("Mark delivered")');
     await page.waitForFunction(() => window.__UPDATES.length > 0, null, { timeout: 2000 }).catch(() => {});
     const upd = await page.evaluate(() => window.__UPDATES[0]);
     is([upd && upd.table, upd && upd.row.status, upd && upd.row.delivered_by], ['seal_deliveries', 'delivered', 'Office'], 'Mark delivered writes who and when');
 
     // Site keys it again -- delivery #4 sent 0029001 - 0030000.
-    await page.waitForSelector('#modal-body .track', { timeout: 3000 });
-    await page.click('#modal-body .space-y-3 > div:nth-child(2) button:has-text("confirm receive")');
+    await page.waitForSelector('#hq-view-body .track', { timeout: 3000 });
+    await page.click('#hq-view-body .space-y-3 > div:nth-child(2) button:has-text("confirm receive")');
     await page.fill('#cbox-4 [data-k="start"]', '0029001');
     await page.fill('#cbox-4 [data-k="end"]', '0029950');
     await page.waitForFunction(() => /Does not match/.test(document.getElementById('cmsg-4').textContent), null, { timeout: 2000 }).catch(() => {});
@@ -286,11 +292,10 @@ async function open(browser, port, level, tab) {
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_receipts'), null, { timeout: 2000 }).catch(() => {});
     const rc = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_receipts') || {}).rows);
     is(rc && [rc[0].delivery_id, rc[0].received_by, rc[0].site], [4, 'Office', 'UNN 1'], 'confirming saves a site receipt naming the delivery');
-    await page.click('#modal button:has-text("×")');
 
-    // + on Delivering to site: pack a new delivery
+    // + on block 3: a new delivery, in a window
     await page.click('#btn-deliver');
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'New delivery to MJM Nursery', 'the + opens a new delivery, not the list');
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'New delivery to MJM Nursery', 'the + opens New delivery in a window');
     await page.fill('#dv-fill-qty', '2500');
     await page.click('#dv-fill');
     is(await page.$$eval('#dv-ranges input', (i) => i.map((x) => x.value)), ['0031001', '0033500'], 'Fill takes the lowest seals at HQ, as one run');
@@ -298,20 +303,24 @@ async function open(browser, port, level, tab) {
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries'), null, { timeout: 2000 }).catch(() => {});
     const dv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_deliveries') || {}).rows);
     is(dv && [dv[0].status, dv[0].packed_by, dv[0].ranges], ['packed', 'Office', [{ start: '0031001', end: '0033500' }]], 'a new delivery is saved Packed, by whoever packed it');
-    await page.waitForFunction(() => document.getElementById('modal-title').textContent === 'Seals delivery to MJM Nursery', null, { timeout: 3000 }).catch(() => {});
-    await page.click('#modal-body button:has-text("History")');
-    await page.waitForFunction(() => /history/.test(document.getElementById('modal-title').textContent), null, { timeout: 3000 }).catch(() => {});
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Received at MJM Nursery — history', 'its History switches the window to what the nursery received');
+    is(await page.isVisible('#modal'), false, 'and the window closes');
+    await page.waitForSelector('#hq-view-actions button', { timeout: 3000 });
+    await page.click('#hq-view-actions button:has-text("History")');
+    await page.waitForFunction(() => /history/.test(document.getElementById('hq-view-title').textContent), null, { timeout: 3000 }).catch(() => {});
+    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Received at MJM Nursery — history', 'its History switches the view to what the nursery received');
 
     is(await page.isVisible('#tab-settings-btn'), false, 'Settings is not offered to a normal user');
 
-    // ── Problems ──
-    await page.click('#modal button:has-text("×")').catch(() => {});
-    await page.click('[data-tab="problems"]');
-    await page.waitForSelector('#problems-table table', { timeout: 3000 });
-    const prob = await page.$eval('#problems-table tbody tr', (tr) => tr.textContent);
-    is(prob.includes('Kebun Maju') && prob.includes('Ah Seng Farm'), true, 'a problem names both customers');
-    is(await page.$eval('#problems-table a[href*="nelos_case.html"]', (a) => a.getAttribute('href')), '../nelos/nelos_case.html?id=88', 'and links its NELOS case');
+    // ── NELOS ──
+    await page.click('[data-tab="nelos"]');
+    await page.waitForSelector('#nelos-table table', { timeout: 3000 });
+    const nrows = await page.$$eval('#nelos-table tbody tr', (t) => t.map((r) => r.textContent.replace(/\s+/g, ' ').trim()));
+    is(nrows.length === 1 && nrows[0].includes('Seals 0010001 - 0010050 given twice') && nrows[0].includes('Admin 2'), true,
+      'the NELOS tab lists the open seal cases, whoever has them');
+    is(await page.$eval('#nelos-table a[href*="nelos_case.html"]', (a) => a.getAttribute('href')), '../nelos/nelos_case.html?id=88', 'each opens its case');
+    is(await page.evaluate(() => window.__RPC.some((c) => c.fn === 'seal_nelos_cases')), true, 'asked of seal_nelos_cases, not of what this login can see in NELOS');
+    await page.check('#n-show-closed');
+    is(await page.$$eval('#nelos-table tbody tr', (t) => t.length), 2, 'show closed adds the closed ones');
     await page.close();
 
     // ── old links land on the new pages ──
@@ -324,6 +333,7 @@ async function open(browser, port, level, tab) {
     page = await open(browser, port, 'admin');
     await page.waitForSelector('#list-table table', { timeout: 5000 });
     is(await page.isVisible('#tab-settings-btn'), true, 'an admin is offered Settings');
+    is(await page.$eval('#tab-settings-btn', (b) => [b.textContent.trim(), b.getAttribute('title')]), ['⚙', 'Settings'], 'as a small gear');
     await page.close();
   } finally {
     await browser.close();
