@@ -4241,7 +4241,9 @@ order and each keeps only what no later one claimed: used, with a customer,
 nursery cabinet, delivering, HQ cabinet, ordered and not received. A gap
 between numbers is a **No record** row, never skipped -- a seal nobody has
 a record of is the thing to look at. Nothing in the database was added for
-it.
+it. **All** is the first chip and the default; From seal / To seal cut the
+list to the numbers keyed, a range across either end cut at it, and the chip
+figures count what is left after the cut. The Seal range heading sorts it.
 
 `tests/seal_dashboard.cjs` holds the office page.
 

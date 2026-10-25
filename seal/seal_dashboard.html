@@ -99,6 +99,7 @@
   .s-hq { background:#ccfbf1; color:#115e59; }
   .s-going { background:#e0e7ff; color:#3730a3; }
   .s-ordered { background:#fef9c3; color:#854d0e; }
+  .s-all { background:#0f172a; color:white; }
   .s-none { background:white; color:#94a3b8; border:1px dashed #cbd5e1; }
 </style>
 </head>
@@ -166,6 +167,14 @@
   <section data-pane="report" class="hidden">
     <div class="flex flex-wrap gap-2 mb-4" id="rp-stats"></div>
     <div class="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <div class="w-[150px]">
+        <label class="lbl">From seal</label>
+        <input id="rp-from" class="inp mono" inputmode="numeric" placeholder="First seal">
+      </div>
+      <div class="w-[150px]">
+        <label class="lbl">To seal</label>
+        <input id="rp-to" class="inp mono" inputmode="numeric" placeholder="Last seal">
+      </div>
       <div class="flex-1 min-w-[220px]">
         <label class="lbl">Search</label>
         <input id="rp-q" class="inp" placeholder="Seal number, customer, AL or DO">
@@ -1242,24 +1251,39 @@ async function loadReport() {
   reportRows = full;
   renderReport();
 }
+// A From and To cut the list to the numbers keyed, a range that runs across
+// either end cut at it, so the figures are of what was asked for. The chips
+// count what is left after that cut.
+let reportSort = 'asc';
+function toggleReportSort() { reportSort = reportSort === 'asc' ? 'desc' : 'asc'; renderReport(); }
 function renderReport() {
+  const lo = sealNo(document.getElementById('rp-from').value.trim());
+  const hi = sealNo(document.getElementById('rp-to').value.trim());
+  const cut = reportRows.filter((r) => (lo == null || r.e >= lo) && (hi == null || r.s <= hi)).map((r) => {
+    const s2 = lo == null ? r.s : Math.max(r.s, lo), e2 = hi == null ? r.e : Math.min(r.e, hi);
+    return s2 === r.s && e2 === r.e ? r : { ...r, s: s2, e: e2, start: sealCode(s2, r.w), end: sealCode(e2, r.w), qty: e2 - s2 + 1 };
+  });
   const tot = {};
-  reportRows.forEach((r) => { tot[r.status] = (tot[r.status] || 0) + r.qty; });
-  document.getElementById('rp-stats').innerHTML = REPORT_ORDER.filter((k) => tot[k]).map((k) =>
-    '<button class="badge ' + REPORT_STATUS[k].cls + '" data-rs="' + k + '" style="font-size:11px;padding:6px 12px;cursor:pointer;'
-    + (reportFilter === k ? 'box-shadow:0 0 0 2px #0f172a;' : '') + '">' + REPORT_STATUS[k].label + ' · <span class="mono">' + fmt(tot[k]) + '</span></button>').join('');
+  let all = 0;
+  cut.forEach((r) => { tot[r.status] = (tot[r.status] || 0) + r.qty; all += r.qty; });
+  const chip = (k, label, cls, qty) => '<button class="badge ' + cls + '" data-rs="' + k + '" style="font-size:11px;padding:6px 12px;cursor:pointer;'
+    + ((reportFilter || 'all') === k ? 'box-shadow:0 0 0 2px #0f172a;' : '') + '">' + label + ' · <span class="mono">' + fmt(qty) + '</span></button>';
+  document.getElementById('rp-stats').innerHTML = chip('all', 'All', 's-all', all)
+    + REPORT_ORDER.filter((k) => tot[k]).map((k) => chip(k, REPORT_STATUS[k].label, REPORT_STATUS[k].cls, tot[k])).join('');
   document.querySelectorAll('#rp-stats [data-rs]').forEach((b) => b.addEventListener('click', () => {
-    reportFilter = reportFilter === b.dataset.rs ? null : b.dataset.rs; renderReport();
+    reportFilter = b.dataset.rs === 'all' ? null : b.dataset.rs; renderReport();
   }));
   const q = document.getElementById('rp-q').value.trim();
   const n = sealNo(q);
   const isNum = q && /^[0-9 ]+$/.test(q);
   const ql = q.toLowerCase();
-  const list = reportRows.filter((r) => (!reportFilter || r.status === reportFilter)
+  const list = cut.filter((r) => (!reportFilter || r.status === reportFilter)
     && (!q || (isNum ? n >= r.s && n <= r.e : (r.who + ' ' + r.doNo).toLowerCase().includes(ql))));
+  if (reportSort === 'desc') list.reverse();
   const box = document.getElementById('rp-table');
   if (!list.length) { box.innerHTML = '<div class="py-6 text-center text-slate-400">' + (reportRows.length ? 'Nothing matches.' : 'No seals in the system yet.') + '</div>'; return; }
-  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th>Customer</th><th>DO number</th><th>DO date</th><th>Detail</th></tr></thead><tbody>'
+  box.innerHTML = '<table class="t"><thead><tr><th><button type="button" id="rp-sort" onclick="toggleReportSort()" class="uppercase tracking-[.12em] font-black" style="color:inherit" title="Sort by seal number">Seal range '
+    + (reportSort === 'asc' ? '▲' : '▼') + '</button></th><th class="text-right">Qty</th><th>Status</th><th>Customer</th><th>DO number</th><th>DO date</th><th>Detail</th></tr></thead><tbody>'
     + list.map((r) => '<tr><td class="mono font-black ' + (r.status === 'none' ? 'text-slate-400' : 'text-slate-800') + '">' + range(r.start, r.end) + '</td>'
       + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
       + '<td><span class="badge ' + REPORT_STATUS[r.status].cls + '">' + REPORT_STATUS[r.status].label + '</span></td>'
@@ -1270,7 +1294,7 @@ function renderReport() {
     + '</tbody></table>';
 }
 let reportTimer = null;
-document.getElementById('rp-q').addEventListener('input', () => { clearTimeout(reportTimer); reportTimer = setTimeout(renderReport, 200); });
+['rp-q', 'rp-from', 'rp-to'].forEach((id) => document.getElementById(id).addEventListener('input', () => { clearTimeout(reportTimer); reportTimer = setTimeout(renderReport, 200); }));
 
 // ══════════════════════ NELOS ════════════════════════════════════════════
 // Every case the seal checks opened, whoever it is assigned to. Asked of
