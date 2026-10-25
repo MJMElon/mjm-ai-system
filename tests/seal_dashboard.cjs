@@ -387,6 +387,25 @@ async function open(browser, port, level, tab) {
     await page.waitForTimeout(400);
     is(await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => r.children[0].textContent.trim())), ['0030001 – 0031000'], 'a seal number typed finds the range holding it');
     await page.fill('#rp-q', '');
+    await page.waitForTimeout(400);
+    is(await page.$eval('#rp-stats [data-rs]', (b) => [b.dataset.rs, b.textContent.trim()]), ['all', 'All · 33,500'], 'All comes first, with every number counted');
+    await page.click('#rp-stats [data-rs="hq"]');
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), 2, 'a chip shows only its own status');
+    await page.click('#rp-stats [data-rs="all"]');
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.length), rp.length, 'and All shows the full list again');
+    await page.click('#rp-sort');
+    is(await page.$eval('#rp-table tbody tr', (r) => r.children[0].textContent.trim()), '0041001 – 0042500', 'the sort button turns it to descending');
+    await page.click('#rp-sort');
+    await page.fill('#rp-from', '9501');
+    await page.fill('#rp-to', '12500');
+    await page.waitForTimeout(400);
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => [r.children[0].textContent.trim(), r.children[1].textContent.trim()])),
+      [['0009501 – 0009600', '100'], ['0009601 – 0010000', '400'], ['0010001 – 0010500', '500'], ['0010501 – 0010600', '100'],
+       ['0010601 – 0012000', '1,400'], ['0012001 – 0012500', '500']],
+      'From and To show only the numbers keyed, a range across either end cut at it');
+    is(await page.$eval('#rp-stats [data-rs="all"]', (b) => b.textContent.trim()), 'All · 3,000', 'and the counts are of what was keyed');
+    await page.fill('#rp-from', '');
+    await page.fill('#rp-to', '');
     if (process.env.SEAL_SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_report.png', fullPage: true }); }
 
     // ── NELOS ──
