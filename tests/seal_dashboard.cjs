@@ -217,6 +217,10 @@ async function open(browser, port, level, tab) {
     is(await page.$eval('#blk-last', (e) => e.classList.contains('on')), true, 'and its block is marked as the one showing');
     const cab = await page.$$eval('#hq-view-body tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.trim())));
     is(cab, [['0031001 – 0035000', '4,000']], 'the cabinet is the seals In HQ only, two receipts that meet as one run');
+    const align = await page.$eval('#hq-view-body table', (t) => [...t.querySelectorAll('th')].map((h, i) =>
+      [getComputedStyle(h).textAlign, getComputedStyle(t.querySelector('tbody tr').children[i]).textAlign]));
+    is(align.map(([h, d]) => (h === 'start' ? 'left' : h) === (d === 'start' ? 'left' : d)), [true, true], 'every heading sits on the same side as its figures (Qty right over the numbers)');
+    is(await page.$$eval('#btn-order2, #blk-pending .plus', (x) => x.length), 0, 'Seal pending receive carries no + any more');
     is(await page.$$eval('.chip, #hq-filter, #hq-list', (x) => x.length), 0, 'no All / In HQ / Delivering chips any more');
     is(await page.isVisible('#modal'), false, 'pressing a block opens no window');
     // SEAL_SHOTS=dir saves what the page looks like, for a person to check.
@@ -224,8 +228,16 @@ async function open(browser, port, level, tab) {
 
     // + on block 1: order a range, in a window
     await page.click('#btn-order');
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order new seal?', 'the + opens Order new seal? in a window');
+    is(await page.$eval('#modal-title', (e) => e.textContent), 'New Seal Order', 'the + opens New Seal Order in a window');
     is(await page.$eval('#ord-start', (e) => e.value), '0042501', 'the start is filled in after the last seal');
+    is(await page.$eval('#ord-start', (e) => parseFloat(getComputedStyle(e).fontSize)) >= 16, true, 'the order window is set a size up');
+    await page.fill('#ord-start', '0042601');
+    await page.waitForFunction(() => /would start at/.test(document.getElementById('ord-warn').textContent), null, { timeout: 2000 }).catch(() => {});
+    is((await page.$eval('#ord-warn', (e) => e.textContent)).includes('the next order would start at 0042501'), true, 'a start other than last order + 1 is warned about');
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_order.png', fullPage: true });
+    await page.fill('#ord-start', '0042501');
+    await page.waitForFunction(() => !document.getElementById('ord-warn').textContent, null, { timeout: 2000 }).catch(() => {});
+    is(await page.$eval('#ord-warn', (e) => e.textContent), '', 'and the warning goes when it is put back');
     await page.fill('#ord-end', '0052500');
     await page.waitForFunction(() => /10,000/.test(document.getElementById('ord-msg').textContent), null, { timeout: 2000 }).catch(() => {});
     is((await page.$eval('#ord-msg', (e) => e.textContent)).includes('10,000 seals, 10 rows of 1,000'), true, 'it says how many seals and how many rows of 1,000');
@@ -238,9 +250,6 @@ async function open(browser, port, level, tab) {
     is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Seal pending receive', 'and the view below moves to the orders waiting');
 
     // block 2: the list below
-    await page.click('#btn-order2');
-    is(await page.$eval('#modal-title', (e) => e.textContent), 'Order new seal?', 'block 2 has the same + to order');
-    await page.click('#modal button:has-text("Cancel")');
     await page.click('#blk-last');
     await page.click('#blk-pending');
     await page.waitForSelector('#hq-view-body tbody tr', { timeout: 3000 });
@@ -253,9 +262,14 @@ async function open(browser, port, level, tab) {
     is(await page.isVisible('#hq-view-back'), true, 'with a Back to the list');
     const chunks = await page.$$eval('#hq-view-body .chunk', (cs) => cs.map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
     is(chunks.length === 3 && chunks[0].includes('Received by Amy'), true, '2,500 seals as three rows, the first already received');
+    is(await page.$$eval('#hq-view-body .chunk-head > div', (d) => d.map((x) => x.textContent)), ['Range', 'Quantity', 'Status'], 'the check list has its column headings');
+    is((await page.$eval('#hq-view-body', (e) => e.textContent)).includes('Tick the first row'), false, 'and no subtitle above it');
+    is(await page.$$eval('#rcv-clear', (x) => x.length), 0, 'Clear is not offered while nothing is ticked');
     await page.check('#hq-view-body input[data-s="41001"]');
     await page.check('#hq-view-body input[data-s="42001"]');
     is((await page.$eval('#hq-view-body', (e) => e.textContent)).includes('2 rows ticked · 1,500 seals'), true, 'tick a start and an end, and it counts them');
+    is(await page.$$eval('#rcv-clear', (x) => x.length), 1, 'and Clear appears once something is ticked');
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_receive.png', fullPage: true });
     await page.click('#rcv-save');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_hq_receipts'), null, { timeout: 2000 }).catch(() => {});
     const rcv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_hq_receipts') || {}).rows);
@@ -296,9 +310,28 @@ async function open(browser, port, level, tab) {
     // + on block 3: a new delivery, in a window
     await page.click('#btn-deliver');
     is(await page.$eval('#modal-title', (e) => e.textContent), 'New delivery to MJM Nursery', 'the + opens New delivery in a window');
-    await page.fill('#dv-fill-qty', '2500');
-    await page.click('#dv-fill');
-    is(await page.$$eval('#dv-ranges input', (i) => i.map((x) => x.value)), ['0031001', '0033500'], 'Fill takes the lowest seals at HQ, as one run');
+    is(await page.$$eval('#dv-fill, #dv-fill-qty', (x) => x.length), 0, 'no Fill from HQ stock');
+    is(await page.$eval('#modal-body', (e) => !!e.querySelector('p')), false, 'and no subtitle');
+    is(await page.$eval('#dv-remark', (e) => [e.tagName, !!(e.compareDocumentPosition(document.getElementById('dv-ranges')) & Node.DOCUMENT_POSITION_PRECEDING)]),
+      ['TEXTAREA', true], 'Remark is a larger box, under the seal ranges');
+    // Not in the cabinet: 0035001 onward never reached HQ.
+    await page.fill('#dv-ranges [data-k="start"]', '0034501');
+    await page.fill('#dv-ranges [data-k="end"]', '0035500');
+    await page.waitForFunction(() => /not in the HQ cabinet/.test(document.getElementById('dv-ranges').textContent), null, { timeout: 2000 }).catch(() => {});
+    is((await page.$eval('#dv-ranges', (e) => e.textContent)).includes('0035001 – 0035500: not in the HQ cabinet'), true, 'a seal not in the HQ cabinet is named');
+    if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_delivery.png', fullPage: true });
+    await page.click('#dv-save');
+    is(await page.evaluate(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries')), false, 'and cannot be saved');
+    // Backwards.
+    await page.fill('#dv-ranges [data-k="start"]', '0033500');
+    await page.fill('#dv-ranges [data-k="end"]', '0031001');
+    await page.click('#dv-save');
+    is(await page.evaluate(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries')), false, 'a range keyed backwards cannot be saved, even before the check has run');
+    await page.waitForFunction(() => /before the first/.test(document.getElementById('dv-ranges').textContent), null, { timeout: 2000 }).catch(() => {});
+    is((await page.$eval('#dv-ranges', (e) => e.textContent)).includes('The last seal is before the first'), true, 'and says why');
+    await page.fill('#dv-ranges [data-k="start"]', '0031001');
+    await page.fill('#dv-ranges [data-k="end"]', '0033500');
+    await page.waitForFunction(() => !/cabinet|before the first/.test(document.getElementById('dv-ranges').textContent), null, { timeout: 2000 }).catch(() => {});
     await page.click('#dv-save');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries'), null, { timeout: 2000 }).catch(() => {});
     const dv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_deliveries') || {}).rows);
