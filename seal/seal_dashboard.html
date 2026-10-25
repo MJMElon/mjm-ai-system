@@ -68,6 +68,16 @@
   .stop.done .t1, .stop.now .t1 { color:#0f766e; }
   .stop .t2 { font-size:11px; font-weight:700; color:#475569; margin-top:2px; }
   .cust-head td { background:#f8fafc; border-top:1.5px solid #e2e8f0; }
+  .block-card { background:#f0fdfa; border:1.5px solid #99f6e4; border-radius:18px; padding:16px 18px; }
+  .block-card.click { cursor:pointer; transition:transform .12s; }
+  .block-card.click:hover { transform:translateY(-2px); }
+  .plus { width:34px; height:34px; border-radius:12px; background:#0d9488; color:white; font-size:20px; font-weight:900; line-height:1; cursor:pointer; flex-shrink:0; }
+  .plus:hover { filter:brightness(.92); }
+  .chunk { display:grid; grid-template-columns:1fr 70px 1fr auto; gap:10px; align-items:center; padding:8px 10px; border-top:1px solid #f1f5f9; font-size:12px; font-weight:700; }
+  .chip { padding:6px 12px; border-radius:99px; font-size:10px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border:1.5px solid #e2e8f0; background:white; color:#475569; cursor:pointer; }
+  .chip.on { background:#0f172a; color:white; border-color:#0f172a; }
+  .s-hq { background:#ccfbf1; color:#115e59; }
+  .s-going { background:#dbeafe; color:#1e40af; }
 </style>
 </head>
 <body>
@@ -80,12 +90,9 @@
 
 <div id="main" class="max-w-[1180px] mx-auto px-4 md:px-6 py-8 hidden">
 
-  <!-- The ribbon's [← Portal] is the one way back, so there is no second
-       Back button here. -->
-  <div class="flex flex-wrap items-center justify-end gap-3 mb-6 hidden" id="top-row">
-    <a class="pn-out" id="user-access-btn" href="../user_access.html">🔐 User Access</a>
-  </div>
-
+  <!-- The ribbon's [← Portal] is the one way back, and the Settings tab is
+       the one way into what the module is set to, so neither a Back button
+       nor a User Access button sits here. -->
   <div id="nelos-todo" class="mb-6"></div>
 
   <div id="setup-missing" class="card p-6 mb-6 hidden">
@@ -94,100 +101,15 @@
   </div>
 
   <div class="flex flex-wrap gap-2 mb-5" id="tabs">
-    <button class="tab on" data-tab="hq">HQ Order &amp; Delivery</button>
-    <button class="tab" data-tab="customers">Customer Seals</button>
+    <button class="tab on" data-tab="nursery">Seal at MJM Nursery</button>
+    <button class="tab" data-tab="hq">Seal at HQ</button>
     <button class="tab" data-tab="problems">Problems <span id="prob-count"></span></button>
     <button class="tab hidden" data-tab="settings" id="tab-settings-btn">Settings</button>
   </div>
 
-  <!-- ═══════════════ HQ ORDER & DELIVERY ═══════════════ -->
-  <section data-pane="hq">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5" id="hq-stats"></div>
-
-    <!-- 1. ORDER -->
-    <div class="card p-5 mb-4">
-      <div class="font-black text-slate-800 mb-1"><span class="step-no">1</span>Order from the seal supplier</div>
-      <p class="text-[12px] font-bold text-slate-500 mb-3" id="o-hint"></p>
-      <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
-        <div><label class="lbl">Order no.</label><input id="o-no" class="inp" placeholder="PO-…"></div>
-        <div class="md:col-span-2"><label class="lbl">Supplier</label><input id="o-supplier" class="inp"></div>
-        <div><label class="lbl">Qty (seals)</label><input id="o-qty" type="number" min="1" class="inp"></div>
-        <div><label class="lbl">Order date</label><input id="o-date" type="date" class="inp"></div>
-        <div><label class="lbl">Expected</label><input id="o-exp" type="date" class="inp"></div>
-        <div class="md:col-span-5"><label class="lbl">Remark</label><input id="o-remark" class="inp"></div>
-        <div class="flex items-end"><button class="btn btn-main w-full" id="o-save">Save order</button></div>
-      </div>
-      <div class="overflow-x-auto mt-4"><div id="orders-table" class="text-sm font-bold text-slate-400">Loading…</div></div>
-    </div>
-
-    <!-- 2. RECEIVE AT HQ -->
-    <div class="card p-5 mb-4">
-      <div class="font-black text-slate-800 mb-1"><span class="step-no">2</span>Receive at HQ</div>
-      <p class="text-[12px] font-bold text-slate-500 mb-3">Key the first and last seal of every roll that arrived from the supplier. Enter moves on by itself, so a barcode gun works.</p>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="lbl">Seal ranges</label>
-          <div id="hr-ranges"></div>
-        </div>
-        <div class="grid grid-cols-2 gap-3 content-start">
-          <div class="col-span-2"><label class="lbl">Seal order</label><select id="hr-order" class="inp"></select></div>
-          <div><label class="lbl">Received date</label><input id="hr-date" type="date" class="inp"></div>
-          <div><label class="lbl">Remark</label><input id="hr-remark" class="inp" placeholder="Optional"></div>
-          <div class="col-span-2"><label class="lbl">Photos (optional)</label><input id="hr-photos" type="file" accept="image/*" multiple class="text-xs font-bold"></div>
-          <label class="col-span-2 text-[12px] font-black text-slate-600"><input type="checkbox" id="hr-opening"> Opening stock <span class="font-bold text-slate-400">— seals HQ already held before the system</span></label>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-between gap-3 mt-4">
-        <div class="text-[11px] font-bold text-slate-500" id="hr-msg"></div>
-        <button class="btn btn-main" id="hr-save">Save receipt</button>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
-        <div>
-          <div class="lbl">At HQ now</div>
-          <div id="hq-stock-table" class="text-sm font-bold text-slate-400">Loading…</div>
-        </div>
-        <div>
-          <div class="lbl">Received at HQ</div>
-          <div class="overflow-x-auto"><div id="hq-receipts-table" class="text-sm font-bold text-slate-400">Loading…</div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. DELIVER TO SITE -->
-    <div class="card p-5 mb-4">
-      <div class="font-black text-slate-800 mb-1"><span class="step-no">3</span>Deliver to site (UNN 1)</div>
-      <p class="text-[12px] font-bold text-slate-500 mb-3">Key the seals going to site. Saving marks the delivery <b>Packed</b>. Then mark it <b>Delivered to site office</b>, and site keys the start and end again to confirm it is <b>Received</b> — here or on the 555 Admin Portal, Receive Seals.</p>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="lbl">Seal ranges</label>
-          <div id="dv-ranges"></div>
-        </div>
-        <div class="grid grid-cols-2 gap-3 content-start">
-          <div><label class="lbl">Fill from HQ stock</label><input id="dv-fill-qty" type="number" min="1" class="inp" placeholder="How many seals"></div>
-          <div class="flex items-end"><button class="btn btn-soft w-full" id="dv-fill">Fill</button></div>
-          <div class="col-span-2"><label class="lbl">Remark</label><input id="dv-remark" class="inp" placeholder="Optional"></div>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-between gap-3 mt-4">
-        <div class="text-[11px] font-bold text-slate-500" id="dv-msg"></div>
-        <button class="btn btn-main" id="dv-save">Save · Packed</button>
-      </div>
-
-      <div class="flex flex-wrap items-center justify-between gap-2 mt-6 mb-2">
-        <div class="lbl" style="margin:0">Deliveries</div>
-        <label class="text-[11px] font-black text-slate-500"><input type="checkbox" id="dv-show-done"> show received</label>
-      </div>
-      <div id="deliveries" class="space-y-3 text-sm font-bold text-slate-400">Loading…</div>
-
-      <div class="lbl mt-6">Other seals received at UNN 1 <span class="normal-case tracking-normal font-bold text-slate-400">— opening stock, or keyed on the phone without a delivery</span></div>
-      <div class="overflow-x-auto"><div id="site-receipts-table" class="text-sm font-bold text-slate-400">Loading…</div></div>
-    </div>
-  </section>
-
-  <!-- ═══════════════ CUSTOMER SEALS ═══════════════ -->
-  <section data-pane="customers" class="hidden">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4" id="cs-stats"></div>
+  <!-- ═══════════════ SEAL AT MJM NURSERY ═══════════════ -->
+  <section data-pane="nursery">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="cs-stats"></div>
     <div class="card p-4 mb-4 flex flex-wrap gap-3 items-end">
       <div class="flex-1 min-w-[220px]">
         <label class="lbl">Search</label>
@@ -196,6 +118,45 @@
       <div class="text-[11px] font-bold text-slate-400 pb-2" id="list-note"></div>
     </div>
     <div class="card p-2 overflow-x-auto"><div id="list-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
+  </section>
+
+  <!-- ═══════════════ SEAL AT HQ ═══════════════ -->
+  <!-- Three blocks, one per question HQ asks: what was the last seal, what
+       is still to come from the supplier, what is on its way to site. Each
+       opens its own window, so the page itself is the list of what HQ holds. -->
+  <section data-pane="hq" class="hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+      <div class="block-card" id="blk-last">
+        <div class="flex items-start justify-between gap-2">
+          <div class="text-[10px] font-black uppercase tracking-widest text-teal-800 opacity-80">Last seal number</div>
+          <button class="plus" id="btn-order" title="Order new seals">+</button>
+        </div>
+        <div class="text-2xl font-black mono mt-1 text-teal-900" id="blk-last-code">—</div>
+        <div class="text-[11px] font-bold text-teal-800 opacity-70" id="blk-last-sub"></div>
+      </div>
+      <div class="block-card click" id="blk-pending" style="background:#fffbeb;border-color:#fde68a">
+        <div class="text-[10px] font-black uppercase tracking-widest text-amber-800 opacity-80">Pending receive seal</div>
+        <div class="text-2xl font-black mono mt-1 text-amber-900" id="blk-pending-qty">—</div>
+        <div class="text-[11px] font-bold text-amber-800 opacity-70" id="blk-pending-sub">ordered, not yet at HQ</div>
+      </div>
+      <div class="block-card click" id="blk-deliver" style="background:#eff6ff;border-color:#bfdbfe">
+        <div class="flex items-start justify-between gap-2">
+          <div class="text-[10px] font-black uppercase tracking-widest text-blue-800 opacity-80">Delivering to site</div>
+          <button class="plus" id="btn-deliver" title="Deliver seals to site" style="background:#2563eb">+</button>
+        </div>
+        <div class="text-2xl font-black mono mt-1 text-blue-900" id="blk-deliver-qty">—</div>
+        <div class="text-[11px] font-bold text-blue-800 opacity-70" id="blk-deliver-sub">sent, not yet received at site</div>
+      </div>
+    </div>
+
+    <div class="card p-4 mb-4 flex flex-wrap gap-3 items-center justify-between">
+      <div>
+        <div class="font-black text-slate-800">Seals at HQ</div>
+        <div class="text-[11px] font-bold text-slate-400">Received from the supplier and not yet received at site.</div>
+      </div>
+      <div class="flex gap-2" id="hq-filter"></div>
+    </div>
+    <div class="card p-2 overflow-x-auto"><div id="hq-list" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
   </section>
 
   <!-- ═══════════════ PROBLEMS ═══════════════ -->
@@ -228,6 +189,16 @@
   </section>
 </div>
 
+<div id="modal" class="fixed inset-0 bg-black/50 hidden z-[70] flex items-start md:items-center justify-center p-3 md:p-6" onclick="if(event.target===this)closeModal()">
+  <div class="bg-white rounded-[20px] w-full max-w-[760px] max-h-[90vh] flex flex-col shadow-2xl">
+    <div class="flex items-center justify-between px-5 py-4 border-b-[1.5px] border-slate-100">
+      <div class="font-black text-slate-800" id="modal-title"></div>
+      <button class="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 font-black text-lg" onclick="closeModal()">×</button>
+    </div>
+    <div class="p-5 overflow-y-auto" id="modal-body"></div>
+  </div>
+</div>
+
 <div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
 <div id="lightbox" class="fixed inset-0 bg-black/80 hidden z-[90] flex items-center justify-center p-6" onclick="this.classList.add('hidden')">
   <img id="lightbox-img" class="max-w-full max-h-full rounded-xl" alt="">
@@ -237,14 +208,14 @@
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 
 const STATUS = {
-  in_stock:  { label: 'In stock',           cls: 's-in_stock',  bg: '#f8fafc', ink: '#475569' },
+  in_stock:  { label: 'In stock at nursery', cls: 's-in_stock',  bg: '#f8fafc', ink: '#475569' },
   pending:   { label: 'Pending collection', cls: 's-pending',   bg: '#fffbeb', ink: '#92400e' },
   scanned:   { label: 'Scanned, no DO yet', cls: 's-scanned',   bg: '#eff6ff', ink: '#1e40af' },
   collected: { label: 'Collected',          cls: 's-collected', bg: '#ecfdf5', ink: '#065f46' },
 };
-// The Customer Seals page is the seals a customer has been given, so the
-// three states after a consent and not In stock.
-const CUSTOMER_STATES = ['pending', 'scanned', 'collected'];
+// Seal at MJM Nursery is every seal that has reached the nursery: in stock
+// there, then the three states after a consent.
+const CUSTOMER_STATES = ['in_stock', 'pending', 'scanned', 'collected'];
 const PROBLEM_LABEL = {
   consent_overlap:      'Given to two customers',
   consent_not_received: 'Never received',
@@ -263,7 +234,6 @@ let statusFilter = null;
 let isAdmin = false;
 let staffName = '';
 let hqStock = [];       // seal_hq_stock, for Fill
-let orderList = [];
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n) => Number(n || 0).toLocaleString('en-MY');
@@ -428,7 +398,7 @@ async function checkRows(box, kind) {
 
 // ── TABS ─────────────────────────────────────────────────────────────────
 const loaded = {};
-const TAB_LOAD = { hq: loadHQ, customers: loadList, problems: loadProblems, settings: loadSettings };
+const TAB_LOAD = { nursery: loadList, hq: loadHQ, problems: loadProblems, settings: loadSettings };
 function switchTab(tab) {
   document.querySelectorAll('#tabs .tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
@@ -437,197 +407,271 @@ function switchTab(tab) {
 }
 document.querySelectorAll('#tabs .tab').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
-// ══════════════════════ HQ ORDER & DELIVERY ══════════════════════════════
-function loadHQ() {
-  loadSummary(); loadOrders(); loadHQReceipts(); loadHQStock(); loadDeliveries(); loadSiteReceipts();
+// ══════════════════════ SEAL AT HQ ═══════════════════════════════════════
+// One window at a time, opened from the three blocks.
+function openModal(title, html) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').classList.remove('hidden');
 }
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden');
+  document.getElementById('modal-body').innerHTML = '';
+  modalKind = null;
+}
+let modalKind = null;   // which window is open, so a save can redraw it
+
+let summary = {};
+let hqReceipts = [];    // seal_hq_receipts, what HQ has received and from which order
+let deliveryList = [];
+let deliveryProbs = {};
+let hqFilter = null;    // null | 'hq' | 'going'
+
+function loadHQ() { return Promise.all([loadSummary(), loadHQSeals()]); }
 
 async function loadSummary() {
   const { data, error } = await _supabase.rpc('seal_hq_summary');
-  const box = document.getElementById('hq-stats');
-  if (error) { missingSetup(error); box.innerHTML = ''; return; }
-  const s = (data && data[0]) || {};
-  const card = (label, big, sub, bg, ink) => '<div class="stat" style="background:' + bg + ';color:' + ink + '">'
-    + '<div class="text-[10px] font-black uppercase tracking-widest opacity-80">' + label + '</div>'
-    + '<div class="text-2xl font-black mono mt-1">' + big + '</div>'
-    + '<div class="text-[11px] font-bold opacity-70">' + sub + '</div></div>';
-  box.innerHTML = card('Last seal number', esc(s.last_code || '—'), s.next_code ? 'Next order starts at <b class="mono">' + esc(s.next_code) + '</b>' : 'No seals keyed yet', '#f0fdfa', '#0f766e')
-    + card('At HQ', fmt(s.hq_stock), 'received, not yet sent', '#f8fafc', '#475569')
-    + card('On the way to site', fmt(s.on_the_way), 'packed or delivered, not received', '#fffbeb', '#92400e')
-    + card('In stock at UNN 1', fmt(s.site_stock), 'received at site, not on a consent', '#ecfdf5', '#065f46');
-  document.getElementById('o-hint').innerHTML = s.next_code
-    ? 'The last seal number in the system is <b class="mono">' + esc(s.last_code) + '</b>, so the next order should start at <b class="mono">' + esc(s.next_code) + '</b>.'
-    : 'No seal numbers keyed yet.';
+  if (error) { missingSetup(error); return; }
+  summary = (data && data[0]) || {};
+  document.getElementById('blk-last-code').textContent = summary.last_code || '—';
+  document.getElementById('blk-last-sub').innerHTML = summary.next_code
+    ? 'Next order starts at <b class="mono">' + esc(summary.next_order_code || summary.next_code) + '</b>' : 'No seals keyed yet';
+  document.getElementById('blk-pending-qty').textContent = fmt(summary.pending_receive);
+  document.getElementById('blk-deliver-qty').textContent = fmt(summary.on_the_way);
 }
 
-// ── 1. ORDERS ──
-document.getElementById('o-date').value = todayLocal();
-document.getElementById('o-save').addEventListener('click', async () => {
-  const qty = parseInt(document.getElementById('o-qty').value, 10);
-  if (!(qty > 0)) { toast('Enter how many seals were ordered.', true); return; }
-  const row = {
-    order_no: document.getElementById('o-no').value.trim() || null,
-    supplier: document.getElementById('o-supplier').value.trim() || null,
-    qty,
-    order_date: document.getElementById('o-date').value || todayLocal(),
-    expected_date: document.getElementById('o-exp').value || null,
-    remark: document.getElementById('o-remark').value.trim() || null,
-    created_by: staffName,
-    created_by_id: (MJMAccess.user() || {}).id || null,
-  };
-  const { error } = await _supabase.from('seal_orders').insert([row]);
-  if (error) { missingSetup(error); toast(error.message, true); return; }
-  ['o-no', 'o-supplier', 'o-qty', 'o-exp', 'o-remark'].forEach((id) => { document.getElementById(id).value = ''; });
-  toast('Order saved.');
-  loadOrders();
-});
-
-async function loadOrders() {
-  const box = document.getElementById('orders-table');
-  const [o, r] = await Promise.all([
-    _supabase.from('seal_orders').select('*').order('order_date', { ascending: false }).limit(300),
-    _supabase.from('seal_hq_receipts').select('id,order_id,ranges').not('order_id', 'is', null),
+// The page itself: every seal at HQ, In HQ or on its way to site. A seal
+// leaves this list when site has received it, and is on the MJM Nursery tab
+// from then on.
+async function loadHQSeals() {
+  const box = document.getElementById('hq-list');
+  const [st, d, p] = await Promise.all([
+    _supabase.rpc('seal_hq_stock'),
+    _supabase.from('seal_deliveries').select('*').order('id', { ascending: false }).limit(300),
+    _supabase.from('seal_problems').select('id,kind,delivery_id,status').not('delivery_id', 'is', null).eq('status', 'open'),
   ]);
-  if (o.error) { box.innerHTML = missingSetup(o.error) ? 'Not set up yet.' : esc(o.error.message); return; }
-  orderList = o.data || [];
-  const sel = document.getElementById('hr-order');
-  sel.innerHTML = '<option value="">— Not linked to an order —</option>'
-    + orderList.filter((x) => x.status !== 'Closed').map((x) => '<option value="' + x.id + '">' + esc([x.order_no || '#' + x.id, x.supplier, fmt(x.qty)].filter(Boolean).join(' · ')) + '</option>').join('');
-  // Received per order is what HQ keyed against it, counted off the ranges.
-  const got = {};
-  (r.data || []).forEach((x) => { got[x.order_id] = (got[x.order_id] || 0) + rangesQty(x.ranges); });
-  if (!orderList.length) { box.innerHTML = '<div class="py-3 text-slate-400">No orders yet.</div>'; return; }
-  box.innerHTML = '<table class="t"><thead><tr><th>Order date</th><th>Order no.</th><th>Supplier</th><th class="text-right">Ordered</th><th class="text-right">Received at HQ</th><th>Expected</th><th>Status</th><th>Remark</th><th></th></tr></thead><tbody>'
-    + orderList.map((x) => {
-      const rec = got[x.id] || 0;
-      const st = x.status === 'Closed' ? 'Closed' : rec >= x.qty ? 'Received' : rec > 0 ? 'Partly received' : 'Ordered';
-      const cls = st === 'Received' || st === 'Closed' ? 's-collected' : st === 'Partly received' ? 's-pending' : 's-in_stock';
-      return '<tr><td>' + fmtDate(x.order_date) + '</td><td class="mono">' + esc(x.order_no || '—') + '</td><td>' + esc(x.supplier || '—') + '</td>'
-        + '<td class="text-right mono">' + fmt(x.qty) + '</td><td class="text-right mono">' + fmt(rec) + '</td>'
-        + '<td>' + fmtDate(x.expected_date) + '</td><td><span class="badge ' + cls + '">' + st + '</span></td>'
-        + '<td class="text-slate-500">' + esc(x.remark || '') + '</td>'
-        + '<td>' + (x.status === 'Closed' ? '' : '<button class="btn btn-soft btn-sm" onclick="closeOrder(' + x.id + ')">Close</button>') + '</td></tr>';
-    }).join('') + '</tbody></table>';
-}
-async function closeOrder(id) {
-  if (!confirm('Close this order? Use it when no more seals will come against it.')) return;
-  const { error } = await _supabase.from('seal_orders').update({ status: 'Closed' }).eq('id', id);
-  if (error) { toast(error.message, true); return; }
-  loadOrders();
-}
+  if (st.error) { box.innerHTML = missingSetup(st.error) ? 'Not set up yet.' : esc(st.error.message); return; }
+  hqStock = st.data || [];
+  deliveryList = d.data || [];
+  deliveryProbs = {};
+  (p.data || []).forEach((x) => { (deliveryProbs[x.delivery_id] = deliveryProbs[x.delivery_id] || []).push(x); });
+  const going = deliveryList.filter((x) => x.status !== 'received');
+  document.getElementById('blk-deliver-sub').textContent = going.length
+    ? going.length + ' deliver' + (going.length === 1 ? 'y' : 'ies') + ' not yet received at site' : 'sent, not yet received at site';
 
-// ── Photos: made smaller before they go up, so a phone photo of a box of
-// rolls is not five megabytes on the page every time it is opened.
-function shrink(file, max) {
-  return new Promise((res) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const k = Math.min(1, (max || 1600) / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      c.toBlob((b) => res(b || file), 'image/jpeg', 0.82);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); res(file); };
-    img.src = url;
+  const list = [];
+  normRanges(hqStock.map((x) => ({ start: x.start_code, end: x.end_code }))).forEach((r) => {
+    list.push({ s: r.s, e: r.e, w: r.w, kind: 'hq', note: '' });
   });
-}
-async function uploadPhotos(input, folder) {
-  const urls = [];
-  const files = Array.from((input && input.files) || []);
-  for (let i = 0; i < files.length; i++) {
-    const blob = await shrink(files[i]);
-    const path = folder + '/' + (i + 1) + '.jpg';
-    const { error } = await _supabase.storage.from('documents').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-    if (error) { toast('A photo did not upload: ' + error.message, true); continue; }
-    const { data } = _supabase.storage.from('documents').getPublicUrl(path);
-    if (data && data.publicUrl) urls.push(data.publicUrl);
-  }
-  return urls;
-}
-function photosHtml(list) {
-  return (Array.isArray(list) ? list : []).map((u) => '<img class="thumb" src="' + esc(u) + '" onclick="lightbox(\'' + esc(u) + '\')" alt="">').join(' ');
-}
-
-// ── 2. RECEIVE AT HQ ──
-document.getElementById('hr-date').value = todayLocal();
-let hrBlocked = false;
-const hrBox = RangeBox(document.getElementById('hr-ranges'), { onChange: checkHR });
-async function checkHR(box) {
-  const hits = await checkRows(box, 'hq_receive');
-  hrBlocked = false;
-  hits.forEach((h, i) => {
-    const got = h.filter((x) => x.problem === 'received');
-    if (got.length) hrBlocked = true;
-    box.note(i, got.map((x) => '<div class="text-red-600">' + range(x.from_code, x.to_code) + ': ' + esc(x.detail) + '</div>').join(''));
-  });
-  document.getElementById('hr-msg').innerHTML = hrBlocked ? '<span class="text-red-600">Remove the seals HQ already received.</span>' : '';
-}
-document.getElementById('hr-save').addEventListener('click', async (e) => {
-  const rs = hrBox.ranges();
-  if (!rs.length) { toast('Key at least one range.', true); return; }
-  if (hrBox.incomplete()) { toast('Finish or remove the incomplete range.', true); return; }
-  if (hrBlocked) { toast('Some of these seals were already received at HQ.', true); return; }
-  e.target.disabled = true;
-  try {
-    const ref = newRef();
-    const photos = await uploadPhotos(document.getElementById('hr-photos'), 'seal_hq/' + ref);
-    const { error } = await _supabase.from('seal_hq_receipts').insert([{
-      client_ref: ref,
-      order_id: Number(document.getElementById('hr-order').value) || null,
-      received_date: document.getElementById('hr-date').value || todayLocal(),
-      ranges: rs,
-      photo_urls: photos,
-      is_opening: document.getElementById('hr-opening').checked,
-      remark: document.getElementById('hr-remark').value.trim() || null,
-      received_by: staffName,
-      received_by_id: (MJMAccess.user() || {}).id || null,
-    }]);
-    if (error) { missingSetup(error); toast(error.message, true); return; }
-    toast(fmt(rangesQty(rs)) + ' seals received at HQ.');
-    hrBox.clear();
-    document.getElementById('hr-remark').value = '';
-    document.getElementById('hr-photos').value = '';
-    document.getElementById('hr-opening').checked = false;
-    loadSummary(); loadOrders(); loadHQReceipts(); loadHQStock();
-  } finally { e.target.disabled = false; }
-});
-
-async function loadHQReceipts() {
-  const box = document.getElementById('hq-receipts-table');
-  const { data, error } = await _supabase.from('seal_hq_receipts').select('*').order('received_date', { ascending: false }).order('id', { ascending: false }).limit(200);
-  if (error) { box.innerHTML = missingSetup(error) ? 'Not set up yet.' : esc(error.message); return; }
-  const list = data || [];
-  if (!list.length) { box.innerHTML = '<div class="py-3 text-slate-400">Nothing received at HQ yet.</div>'; return; }
-  const orders = {}; orderList.forEach((x) => { orders[x.id] = x; });
-  box.innerHTML = '<table class="t"><thead><tr><th>Received</th><th>Seals</th><th class="text-right">Qty</th><th>By</th><th>Photos</th></tr></thead><tbody>'
-    + list.map((x) => {
-      const ord = x.order_id && orders[x.order_id];
-      return '<tr><td>' + fmtDate(x.received_date) + (x.is_opening ? ' <span class="badge s-pending">Opening</span>' : '')
-        + (ord ? '<div class="text-[10px] text-slate-400">' + esc(ord.order_no || 'Order #' + ord.id) + '</div>' : '') + '</td>'
-        + '<td class="mono">' + rangesHtml(x.ranges) + (x.remark ? '<div class="text-[10px] text-slate-400 font-bold">' + esc(x.remark) + '</div>' : '') + '</td>'
-        + '<td class="text-right mono">' + fmt(rangesQty(x.ranges)) + '</td>'
-        + '<td>' + esc(x.received_by || '—') + '</td><td>' + (photosHtml(x.photo_urls) || '—') + '</td></tr>';
-    }).join('') + '</tbody></table>';
-}
-
-async function loadHQStock() {
-  const box = document.getElementById('hq-stock-table');
-  const { data, error } = await _supabase.rpc('seal_hq_stock');
-  if (error) { box.innerHTML = missingSetup(error) ? 'Not set up yet.' : esc(error.message); return; }
-  hqStock = data || [];
-  if (!hqStock.length) { box.innerHTML = '<div class="py-3 text-slate-400">No seals at HQ.</div>'; return; }
-  box.innerHTML = '<table class="t"><thead><tr><th>Seals</th><th class="text-right">Qty</th><th>Received</th></tr></thead><tbody>'
-    + hqStock.map((x) => '<tr><td class="mono font-black text-slate-800">' + range(x.start_code, x.end_code) + '</td>'
-      + '<td class="text-right mono">' + fmt(x.qty) + '</td><td>' + fmtDate(x.received_date) + '</td></tr>').join('')
+  going.forEach((x) => normRanges(x.ranges).forEach((r) => {
+    list.push({ s: r.s, e: r.e, w: r.w, kind: 'going', note: 'Delivery #' + x.id + ' · ' + (x.status === 'delivered' ? 'at site office' : 'packed'), id: x.id });
+  }));
+  list.sort((a, b) => a.s - b.s);
+  const tot = { hq: 0, going: 0 };
+  list.forEach((r) => { tot[r.kind] += r.e - r.s + 1; });
+  const chips = [[null, 'All'], ['hq', 'In HQ · ' + fmt(tot.hq)], ['going', 'Delivering to site · ' + fmt(tot.going)]];
+  document.getElementById('hq-filter').innerHTML = chips.map(([k, l]) =>
+    '<button class="chip' + (hqFilter === k ? ' on' : '') + '" data-k="' + (k || '') + '">' + l + '</button>').join('');
+  document.querySelectorAll('#hq-filter .chip').forEach((b) => b.addEventListener('click', () => { hqFilter = b.dataset.k || null; loadHQSeals(); }));
+  const shown = hqFilter ? list.filter((r) => r.kind === hqFilter) : list;
+  if (!shown.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No seals at HQ' + (hqFilter ? ' with this status' : '') + '.</div>'; return; }
+  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th></th></tr></thead><tbody>'
+    + shown.map((r) => '<tr><td class="mono font-black text-slate-800">' + range(sealCode(r.s, r.w), sealCode(r.e, r.w)) + '</td>'
+      + '<td class="text-right mono">' + fmt(r.e - r.s + 1) + '</td>'
+      + '<td><span class="badge ' + (r.kind === 'hq' ? 's-hq">In HQ' : 's-going">Delivering to site') + '</span></td>'
+      + '<td class="text-slate-500">' + (r.id ? '<a href="#" class="underline" onclick="openDeliveries();return false;">' + esc(r.note) + '</a>' : '') + '</td></tr>').join('')
     + '</tbody></table>';
 }
 
-// ── 3. DELIVER TO SITE ──
+// ── ORDER NEW SEALS (the + on Last seal number) ──
+let orderTimer = null;
+document.getElementById('btn-order').addEventListener('click', (e) => { e.stopPropagation(); openOrder(); });
+function openOrder() {
+  modalKind = 'order';
+  openModal('Order new seal?',
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">'
+    + '<div><div class="lbl">Last ordered seal number</div><div class="text-xl font-black mono text-slate-800">' + esc(summary.last_ordered_code || '—') + '</div>'
+    +   (summary.last_code && summary.last_code !== summary.last_ordered_code ? '<div class="text-[11px] font-bold text-slate-400">Last seal anywhere in the system: <span class="mono">' + esc(summary.last_code) + '</span></div>' : '') + '</div>'
+    + '<div><label class="lbl">Order date</label><input id="ord-date" type="date" class="inp" value="' + todayLocal() + '"></div>'
+    + '</div>'
+    + '<div class="lbl mt-5">Next order seal number</div>'
+    + '<div class="grid grid-cols-2 gap-3">'
+    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0">Start</label><input id="ord-start" class="inp mono" inputmode="numeric" value="' + esc(summary.next_order_code || summary.next_code || '') + '"></div>'
+    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0">End</label><input id="ord-end" class="inp mono" inputmode="numeric" placeholder="Last seal of this order"></div>'
+    + '</div>'
+    + '<div id="ord-msg" class="text-[12px] font-bold mt-3 text-slate-500"></div>'
+    + '<div class="flex justify-end gap-2 mt-5"><button class="btn btn-soft" onclick="closeModal()">Cancel</button><button class="btn btn-main" id="ord-save">Save order</button></div>');
+  ['ord-start', 'ord-end'].forEach((id) => document.getElementById(id).addEventListener('input', () => { clearTimeout(orderTimer); orderTimer = setTimeout(checkOrder, 300); }));
+  document.getElementById('ord-save').addEventListener('click', saveOrder);
+  document.getElementById('ord-end').focus();
+}
+let orderBlocked = false;
+async function checkOrder() {
+  const a = document.getElementById('ord-start'), b = document.getElementById('ord-end');
+  const el = document.getElementById('ord-msg');
+  if (!a || !el) return;
+  orderBlocked = false;
+  const s = a.value.trim(), e = b.value.trim();
+  if (sealNo(s) == null || sealNo(e) == null) { el.textContent = ''; return; }
+  if (sealNo(e) < sealNo(s)) { el.innerHTML = '<span class="text-red-600">The end is before the start.</span>'; orderBlocked = true; return; }
+  const qty = sealQty(s, e);
+  el.innerHTML = '<b class="mono text-slate-800">' + fmt(qty) + '</b> seals, ' + fmt(Math.ceil(qty / 1000)) + ' row' + (qty > 1000 ? 's' : '') + ' of 1,000 to receive.';
+  const { data, error } = await _supabase.rpc('seal_check_hq', { p_start: s, p_end: e, p_kind: 'order' });
+  if (error || !data || !data.length) return;
+  orderBlocked = true;
+  el.innerHTML += data.map((x) => '<div class="text-red-600">' + range(x.from_code, x.to_code) + ': ' + esc(x.detail) + '</div>').join('');
+}
+async function saveOrder(e) {
+  const s = document.getElementById('ord-start').value.trim(), en = document.getElementById('ord-end').value.trim();
+  if (sealNo(s) == null || sealNo(en) == null) { toast('Key the start and the end seal number.', true); return; }
+  if (sealNo(en) < sealNo(s)) { toast('The end is before the start.', true); return; }
+  await checkOrder();
+  if (orderBlocked) { toast('Some of these seals were already ordered.', true); return; }
+  e.target.disabled = true;
+  try {
+    const qty = sealQty(s, en);
+    const { error } = await _supabase.from('seal_orders').insert([{
+      start_code: s, end_code: en, qty,
+      order_date: document.getElementById('ord-date').value || todayLocal(),
+      status: 'Ordered',
+      created_by: staffName,
+      created_by_id: (MJMAccess.user() || {}).id || null,
+    }]);
+    if (error) { missingSetup(error); toast(error.message, true); return; }
+    toast('Order saved — ' + fmt(qty) + ' seals.');
+    closeModal();
+    loadSummary();
+  } finally { e.target.disabled = false; }
+}
+
+// ── PENDING RECEIVE (the block) ──
+// Every order, opened up into rows of a thousand. Each row is received on
+// its own, so a box of 10,000 can be checked and updated a thousand at a time.
+document.getElementById('blk-pending').addEventListener('click', openPending);
+let pendingShowDone = false;
+const openOrders = new Set();
+async function openPending() {
+  modalKind = 'pending';
+  if (document.getElementById('modal').classList.contains('hidden')) openModal('Pending receive — ordered seals', 'Loading…');
+  const [o, r] = await Promise.all([
+    _supabase.from('seal_orders').select('*').order('order_date', { ascending: false }).order('id', { ascending: false }).limit(300),
+    _supabase.from('seal_hq_receipts').select('id,order_id,ranges,received_by,received_date,created_at'),
+  ]);
+  if (modalKind !== 'pending') return;
+  if (o.error) { document.getElementById('modal-body').innerHTML = missingSetup(o.error) ? 'Not set up yet.' : esc(o.error.message); return; }
+  hqReceipts = r.data || [];
+  const got = normRanges(hqReceipts.flatMap((x) => x.ranges || []));
+  const orders = (o.data || []).filter((x) => x.start_code);
+  const rows = orders.map((x) => {
+    const want = [{ start: x.start_code, end: x.end_code }];
+    const left = minusRanges(want, got.map((g) => ({ start: sealCode(g.s, g.w), end: sealCode(g.e, g.w) })));
+    return { x, left: rangesQty(left) };
+  }).filter((r) => pendingShowDone || (r.left > 0 && r.x.status !== 'Closed'));
+  const body = document.getElementById('modal-body');
+  body.innerHTML = '<div class="flex justify-between items-center mb-3"><div class="text-[12px] font-bold text-slate-500">Press an order to open it in rows of 1,000.</div>'
+    + '<label class="text-[11px] font-black text-slate-500"><input type="checkbox" id="pend-done"' + (pendingShowDone ? ' checked' : '') + '> show fully received</label></div>'
+    + (rows.length ? rows.map((r) => orderBlock(r.x, r.left)).join('') : '<div class="py-6 text-center text-slate-400 font-bold">Nothing waiting to be received.</div>');
+  document.getElementById('pend-done').addEventListener('change', (e) => { pendingShowDone = e.target.checked; openPending(); });
+}
+function orderBlock(x, left) {
+  const isOpen = openOrders.has(x.id);
+  const done = x.qty - left;
+  const st = x.status === 'Closed' ? 'Closed' : left === 0 ? 'Received' : done > 0 ? 'Partly received' : 'Ordered';
+  const cls = st === 'Received' || st === 'Closed' ? 's-collected' : st === 'Partly received' ? 's-pending' : 's-in_stock';
+  return '<div class="border-[1.5px] border-slate-200 rounded-2xl mb-3 overflow-hidden">'
+    + '<div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 cursor-pointer bg-slate-50" onclick="toggleOrder(' + x.id + ')">'
+    +   '<div><div class="font-black text-slate-800 mono">' + range(x.start_code, x.end_code) + '</div>'
+    +   '<div class="text-[11px] font-bold text-slate-500">Ordered ' + fmtDate(x.order_date) + (x.created_by ? ' by ' + esc(x.created_by) : '') + ' · ' + fmt(x.qty) + ' seals</div></div>'
+    +   '<div class="flex items-center gap-2"><span class="text-[11px] font-black text-slate-600 mono">' + fmt(done) + ' / ' + fmt(x.qty) + '</span>'
+    +   '<span class="badge ' + cls + '">' + st + '</span><span class="text-slate-400 font-black">' + (isOpen ? '▾' : '▸') + '</span></div>'
+    + '</div>'
+    + (isOpen ? chunkRows(x) : '')
+    + '</div>';
+}
+// The order cut into thousands from its own first seal. A row is received
+// when every seal in it is on an HQ receipt, whichever receipt it was.
+function chunkRows(x) {
+  const a = sealNo(x.start_code), b = sealNo(x.end_code), w = Math.max(sealWidth(x.start_code), sealWidth(x.end_code));
+  const got = hqReceipts.flatMap((r) => r.ranges || []);
+  let html = '';
+  for (let s = a; s <= b; s += 1000) {
+    const e = Math.min(b, s + 999);
+    const chunk = [{ start: sealCode(s, w), end: sealCode(e, w) }];
+    const left = minusRanges(chunk, got);
+    const nLeft = rangesQty(left), n = e - s + 1;
+    let right;
+    if (!nLeft) {
+      const rc = hqReceipts.find((r) => normRanges(r.ranges).some((g) => g.s <= e && g.e >= s));
+      right = '<span class="text-emerald-700 font-black">✔ Received' + (rc ? ' by ' + esc(rc.received_by || '—') + ' · ' + fmtDate(rc.received_date) : '') + '</span>';
+    } else {
+      right = (nLeft < n ? '<span class="text-amber-700 mr-2">' + fmt(n - nLeft) + ' already in</span>' : '')
+        + (x.status === 'Closed' ? '<span class="text-slate-400">Order closed</span>'
+          : '<button class="btn btn-main btn-sm" onclick="receiveChunk(' + x.id + ',\'' + esc(JSON.stringify(left)).replace(/'/g, '') + '\', this)">Receive</button>');
+    }
+    html += '<div class="chunk"><div class="mono font-black text-slate-800">' + range(sealCode(s, w), sealCode(e, w)) + '</div>'
+      + '<div class="mono text-right text-slate-500">' + fmt(n) + '</div><div></div><div class="text-right">' + right + '</div></div>';
+  }
+  return html;
+}
+function toggleOrder(id) { openOrders.has(id) ? openOrders.delete(id) : openOrders.add(id); openPending(); }
+async function receiveChunk(orderId, rangesJson, btn) {
+  const rs = JSON.parse(rangesJson);
+  const qty = rangesQty(rs);
+  if (!confirm('Receive ' + rs.map((r) => r.start === r.end ? r.start : r.start + ' – ' + r.end).join(', ') + ' (' + fmt(qty) + ' seals) at HQ?')) return;
+  btn.disabled = true;
+  const { error } = await _supabase.from('seal_hq_receipts').insert([{
+    client_ref: newRef(),
+    order_id: orderId,
+    received_date: todayLocal(),
+    ranges: rs,
+    received_by: staffName,
+    received_by_id: (MJMAccess.user() || {}).id || null,
+  }]);
+  if (error) { btn.disabled = false; missingSetup(error); toast(error.message, true); return; }
+  toast(fmt(qty) + ' seals received at HQ.');
+  // Marked Received on the order once nothing of it is left to come.
+  openPending(); loadSummary(); loadHQSeals();
+}
+
+// ── DELIVERING TO SITE (the block, and its +) ──
+document.getElementById('blk-deliver').addEventListener('click', openDeliveries);
+document.getElementById('btn-deliver').addEventListener('click', (e) => { e.stopPropagation(); openDeliver(); });
+let dvShowDone = false;
+const confirmBoxes = {};   // delivery id -> RangeBox while open
+async function openDeliveries() {
+  modalKind = 'deliveries';
+  if (document.getElementById('modal').classList.contains('hidden')) openModal('Delivering to site', 'Loading…');
+  await loadHQSeals();
+  if (modalKind !== 'deliveries') return;
+  const list = dvShowDone ? deliveryList : deliveryList.filter((x) => x.status !== 'received');
+  Object.keys(confirmBoxes).forEach((k) => delete confirmBoxes[k]);
+  document.getElementById('modal-body').innerHTML =
+    '<div class="flex justify-between items-center mb-3"><button class="btn btn-main btn-sm" onclick="openDeliver()">+ Deliver seals to site</button>'
+    + '<label class="text-[11px] font-black text-slate-500"><input type="checkbox" id="dv-done"' + (dvShowDone ? ' checked' : '') + '> show received</label></div>'
+    + '<div class="space-y-3">' + (list.length ? list.map((x) => deliveryCard(x, deliveryProbs[x.id] || [])).join('') : '<div class="py-6 text-center text-slate-400 font-bold">No deliveries on the way.</div>') + '</div>';
+  document.getElementById('dv-done').addEventListener('change', (e) => { dvShowDone = e.target.checked; openDeliveries(); });
+}
+
 let dvBlocked = false;
-const dvBox = RangeBox(document.getElementById('dv-ranges'), { onChange: checkDV });
+let dvBox = null;
+function openDeliver() {
+  modalKind = 'deliver';
+  openModal('Deliver seals to site (UNN 1)',
+    '<p class="text-[12px] font-bold text-slate-500 mb-3">Key the first and last seal of each range going to site. Saving marks the delivery <b>Packed</b>; site keys the start and end again to confirm it is received.</p>'
+    + '<div id="dv-ranges"></div>'
+    + '<div class="grid grid-cols-3 gap-3 mt-4">'
+    +   '<div><label class="lbl">Fill from HQ stock</label><input id="dv-fill-qty" type="number" min="1" class="inp" placeholder="How many"></div>'
+    +   '<div class="flex items-end"><button class="btn btn-soft w-full" id="dv-fill">Fill</button></div>'
+    +   '<div><label class="lbl">Remark</label><input id="dv-remark" class="inp" placeholder="Optional"></div>'
+    + '</div>'
+    + '<div class="text-[11px] font-bold mt-3" id="dv-msg"></div>'
+    + '<div class="flex justify-end gap-2 mt-4"><button class="btn btn-soft" onclick="closeModal()">Cancel</button><button class="btn btn-main" id="dv-save">Save · Packed</button></div>');
+  dvBlocked = false;
+  dvBox = RangeBox(document.getElementById('dv-ranges'), { onChange: checkDV });
+  document.getElementById('dv-fill').addEventListener('click', fillDV);
+  document.getElementById('dv-save').addEventListener('click', saveDV);
+  document.querySelector('#dv-ranges input').focus();
+}
 async function checkDV(box) {
   const hits = await checkRows(box, 'deliver');
   dvBlocked = false;
@@ -638,12 +682,13 @@ async function checkDV(box) {
     box.note(i, h.map((x) => '<div class="' + (x.problem === 'delivered' ? 'text-red-600' : 'text-amber-600') + '">'
       + range(x.from_code, x.to_code) + ': ' + esc(x.detail) + '</div>').join(''));
   });
-  document.getElementById('dv-msg').innerHTML = dvBlocked
+  const el = document.getElementById('dv-msg');
+  if (el) el.innerHTML = dvBlocked
     ? '<span class="text-red-600">Remove the seals already sent on another delivery.</span>'
     : warn ? '<span class="text-amber-600">Some seals were never received at HQ. It can still be sent.</span>' : '';
 }
 // Fill takes the lowest seals at HQ first, so rolls go out in order.
-document.getElementById('dv-fill').addEventListener('click', () => {
+function fillDV() {
   let want = parseInt(document.getElementById('dv-fill-qty').value, 10);
   if (!(want > 0)) { toast('How many seals are going to site?', true); return; }
   const out = [];
@@ -656,8 +701,8 @@ document.getElementById('dv-fill').addEventListener('click', () => {
   if (!out.length) { toast('There are no seals at HQ to send.', true); return; }
   if (want > 0) toast('Only ' + fmt(rangesQty(out)) + ' seals are at HQ.', true);
   dvBox.set(out);
-});
-document.getElementById('dv-save').addEventListener('click', async (e) => {
+}
+async function saveDV(e) {
   const rs = dvBox.ranges();
   if (!rs.length) { toast('Key at least one range.', true); return; }
   if (dvBox.incomplete()) { toast('Finish or remove the incomplete range.', true); return; }
@@ -675,44 +720,18 @@ document.getElementById('dv-save').addEventListener('click', async (e) => {
     }]);
     if (error) { missingSetup(error); toast(error.message, true); return; }
     toast('Delivery packed — ' + fmt(rangesQty(rs)) + ' seals.');
-    dvBox.clear();
-    document.getElementById('dv-remark').value = '';
-    document.getElementById('dv-fill-qty').value = '';
-    document.getElementById('dv-msg').innerHTML = '';
-    loadSummary(); loadHQStock(); loadDeliveries();
+    loadSummary();
+    openDeliveries();
   } finally { e.target.disabled = false; }
-});
-document.getElementById('dv-show-done').addEventListener('change', loadDeliveries);
-
-let deliveryList = [];
-const confirmBoxes = {};   // delivery id -> RangeBox while open
-async function loadDeliveries() {
-  const box = document.getElementById('deliveries');
-  let q = _supabase.from('seal_deliveries').select('*').order('id', { ascending: false }).limit(200);
-  if (!document.getElementById('dv-show-done').checked) q = q.neq('status', 'received');
-  const [d, p] = await Promise.all([
-    q,
-    _supabase.from('seal_problems').select('id,kind,delivery_id,status').not('delivery_id', 'is', null).eq('status', 'open'),
-  ]);
-  if (d.error) { box.innerHTML = missingSetup(d.error) ? 'Not set up yet.' : esc(d.error.message); return; }
-  deliveryList = d.data || [];
-  const probs = {};
-  (p.data || []).forEach((x) => { (probs[x.delivery_id] = probs[x.delivery_id] || []).push(x); });
-  if (!deliveryList.length) { box.innerHTML = '<div class="py-3 text-slate-400">No deliveries waiting.</div>'; return; }
-  Object.keys(confirmBoxes).forEach((k) => delete confirmBoxes[k]);
-  box.innerHTML = deliveryList.map((x) => deliveryCard(x, probs[x.id] || [])).join('');
 }
 
 function deliveryCard(x, probs) {
   const step = x.status === 'received' ? 3 : x.status === 'delivered' ? 2 : 1;
   const stop = (n, title, sub) => '<div class="stop ' + (step >= n ? 'done' : step + 1 === n ? 'now' : '') + '"><div class="dot"></div>'
     + '<div class="t1">' + title + '</div><div class="t2">' + sub + '</div></div>';
-  const recvLine = x.status === 'received'
-    ? esc(x.received_by || '—') + '<br><span class="text-slate-400">' + fmtWhen(x.received_at) + '</span>'
-    : '<span class="text-slate-400">waiting for site</span>';
   const differs = x.status === 'received' && rangesQty(minusRanges(x.ranges, x.received_ranges)) + rangesQty(minusRanges(x.received_ranges, x.ranges)) > 0;
   const probBadge = probs.length
-    ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'problems\');return false;">⚠ ' + probs.map((p) => esc(PROBLEM_LABEL[p.kind] || p.kind)).join(', ') + '</a>' : '';
+    ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="closeModal();switchTab(\'problems\');return false;">⚠ ' + probs.map((p) => esc(PROBLEM_LABEL[p.kind] || p.kind)).join(', ') + '</a>' : '';
   return '<div class="border-[1.5px] border-slate-200 rounded-2xl p-4 bg-white">'
     + '<div class="flex flex-wrap items-start justify-between gap-3 mb-4">'
     +   '<div><div class="font-black text-slate-800">Delivery #' + x.id + ' <span class="text-slate-400 font-bold">to ' + esc(x.site) + '</span>' + probBadge + '</div>'
@@ -728,7 +747,7 @@ function deliveryCard(x, probs) {
     + '<div class="track">'
     +   stop(1, 'Packed', esc(x.packed_by || '—') + '<br><span class="text-slate-400">' + fmtWhen(x.packed_at) + '</span>')
     +   stop(2, 'Delivered to site office', x.delivered_at ? esc(x.delivered_by || '—') + '<br><span class="text-slate-400">' + fmtWhen(x.delivered_at) + '</span>' : '<span class="text-slate-400">not yet</span>')
-    +   stop(3, x.status === 'received' ? 'Received by ' + esc(x.received_by || '—') : 'Received', x.status === 'received' ? '<span class="text-slate-400">' + fmtWhen(x.received_at) + '</span>' : recvLine)
+    +   stop(3, x.status === 'received' ? 'Received by ' + esc(x.received_by || '—') : 'Received', x.status === 'received' ? '<span class="text-slate-400">' + fmtWhen(x.received_at) + '</span>' : '<span class="text-slate-400">waiting for site</span>')
     + '</div>'
     + '<div id="confirm-' + x.id + '" class="hidden mt-4 border-t-[1.5px] border-slate-100 pt-4"></div>'
     + '</div>';
@@ -740,7 +759,7 @@ async function markDelivered(id) {
   }).eq('id', id).eq('status', 'packed');
   if (error) { toast(error.message, true); return; }
   toast('Delivery #' + id + ' delivered to the site office.');
-  loadDeliveries();
+  openDeliveries();
 }
 
 // Site keys the start and end again. It is not filled in from the delivery
@@ -807,27 +826,44 @@ async function saveConfirm(id) {
     }]);
     if (error) { missingSetup(error); toast(error.message, true); return; }
     toast('Delivery #' + id + ' received by ' + staffName + '.');
-    loadSummary(); loadDeliveries(); loadProblems();
-    if (loaded.customers) loadList();
+    loadSummary(); openDeliveries(); loadProblems();
+    if (loaded.nursery) loadList();
   } finally { btn.disabled = false; }
 }
 
-async function loadSiteReceipts() {
-  const box = document.getElementById('site-receipts-table');
-  const { data, error } = await _supabase.from('seal_receipts').select('*').is('delivery_id', null)
-    .order('received_date', { ascending: false }).order('id', { ascending: false }).limit(200);
-  if (error) { box.innerHTML = missingSetup(error) ? 'Not set up yet.' : esc(error.message); return; }
-  const list = data || [];
-  if (!list.length) { box.innerHTML = '<div class="py-3 text-slate-400">None.</div>'; return; }
-  box.innerHTML = '<table class="t"><thead><tr><th>Received</th><th>Seals</th><th class="text-right">Qty</th><th>By</th><th>Photos</th><th>Remark</th></tr></thead><tbody>'
-    + list.map((x) => '<tr><td>' + fmtDate(x.received_date) + (x.is_opening ? ' <span class="badge s-pending">Opening stock</span>' : '') + '</td>'
-      + '<td class="mono">' + rangesHtml(x.ranges) + '</td><td class="text-right mono">' + fmt(rangesQty(x.ranges)) + '</td>'
-      + '<td>' + esc(x.received_by || '—') + '</td><td>' + (photosHtml(x.photo_urls) || '—') + '</td>'
-      + '<td class="text-slate-500">' + esc(x.remark || '') + '</td></tr>').join('')
-    + '</tbody></table>';
+// ── Photos: made smaller before they go up, so a phone photo of a box of
+// rolls is not five megabytes on the page every time it is opened.
+function shrink(file, max) {
+  return new Promise((res) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, (max || 1600) / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => res(b || file), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); res(file); };
+    img.src = url;
+  });
+}
+async function uploadPhotos(input, folder) {
+  const urls = [];
+  const files = Array.from((input && input.files) || []);
+  for (let i = 0; i < files.length; i++) {
+    const blob = await shrink(files[i]);
+    const path = folder + '/' + (i + 1) + '.jpg';
+    const { error } = await _supabase.storage.from('documents').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    if (error) { toast('A photo did not upload: ' + error.message, true); continue; }
+    const { data } = _supabase.storage.from('documents').getPublicUrl(path);
+    if (data && data.publicUrl) urls.push(data.publicUrl);
+  }
+  return urls;
 }
 
-// ══════════════════════ CUSTOMER SEALS ═══════════════════════════════════
+// ══════════════════════ SEAL AT MJM NURSERY ══════════════════════════════
 let searchTimer = null;
 document.getElementById('q').addEventListener('input', () => {
   clearTimeout(searchTimer); searchTimer = setTimeout(loadList, 300);
@@ -887,22 +923,34 @@ function renderList() {
   const q = document.getElementById('q').value.trim();
   const groups = new Map();
   list.forEach((r) => {
-    const k = r.al_number || r.consent_id || '?';
-    if (!groups.has(k)) groups.set(k, { al: r.al_number, customer: r.customer_name, at: r.consent_at, rows: [] });
+    // Seals not yet given to anybody are one block of their own, above the
+    // customers, because they are the stock the next consent comes out of.
+    const stock = r.seg_status === 'in_stock';
+    const k = stock ? '__stock' : (r.al_number || r.consent_id || '?');
+    if (!groups.has(k)) groups.set(k, { stock, al: r.al_number, customer: r.customer_name, at: stock ? null : r.consent_at, rows: [] });
     const g = groups.get(k);
     g.rows.push(r);
-    if (r.consent_at && (!g.at || r.consent_at > g.at)) g.at = r.consent_at;
+    if (!stock && r.consent_at && (!g.at || r.consent_at > g.at)) g.at = r.consent_at;
   });
-  const gs = Array.from(groups.values()).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
-  document.getElementById('list-note').textContent = gs.length + ' customer order' + (gs.length === 1 ? '' : 's') + ' · ' + list.length + ' range' + (list.length === 1 ? '' : 's')
+  const gs = Array.from(groups.values()).sort((a, b) => (b.stock - a.stock) || String(b.at || '').localeCompare(String(a.at || '')));
+  const nCust = gs.filter((g) => !g.stock).length;
+  document.getElementById('list-note').textContent = nCust + ' customer order' + (nCust === 1 ? '' : 's') + ' · ' + list.length + ' range' + (list.length === 1 ? '' : 's')
     + (statusFilter ? ' · ' + STATUS[statusFilter].label : '') + (q ? ' · matching "' + q + '"' : '');
   const box = document.getElementById('list-table');
-  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No seals' + (q ? ' match this search' : ' given to a customer yet') + '.</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No seals' + (q ? ' match this search' : ' at the nursery yet') + '.</div>'; return; }
   box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th>DO</th></tr></thead><tbody>'
     + gs.map((g) => {
       const total = g.rows.reduce((t, r) => t + (Number(r.qty) || 0), 0);
       const probs = g.rows.reduce((t, r) => Math.max(t, Number(r.open_problems) || 0), 0);
       const warn = probs > 0 ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'problems\');return false;">⚠ ' + probs + '</a>' : '';
+      if (g.stock) {
+        return '<tr class="cust-head"><td colspan="4"><span class="font-black text-slate-800">In stock at MJM Nursery</span>'
+          + ' <span class="text-slate-500">· not yet given to a customer</span>'
+          + '<span class="float-right text-[11px] text-slate-500"><b class="mono">' + fmt(total) + '</b> seals</span></td></tr>'
+          + g.rows.map((r) => '<tr><td class="mono font-black text-slate-800 pl-6">' + range(r.start_code, r.end_code) + '</td>'
+            + '<td class="text-right mono">' + fmt(r.qty) + '</td><td><span class="badge s-in_stock">In stock</span></td>'
+            + '<td class="text-slate-400">Received ' + fmtDate(r.consent_at) + '</td></tr>').join('');
+      }
       return '<tr class="cust-head"><td colspan="4"><span class="font-black text-slate-800">' + esc(g.customer || '—') + '</span>'
         + ' <span class="mono text-slate-500">· ' + esc(g.al || '—') + '</span>' + warn
         + '<span class="float-right text-[11px] text-slate-500">Consent ' + fmtDate(g.at) + ' · <b class="mono">' + fmt(total) + '</b> seals</span></td></tr>'
@@ -995,7 +1043,6 @@ document.getElementById('st-save').addEventListener('click', async () => {
     staffName = u.full_name || (u.user_metadata && u.user_metadata.full_name) || u.email || 'Staff';
     try {
       isAdmin = MJMAccess.isAdminOf('seal');
-      if (MJMAccess.canManageUsers()) document.getElementById('top-row').classList.remove('hidden');
     } catch (_) { /* keep the page usable */ }
     if (isAdmin) document.getElementById('tab-settings-btn').classList.remove('hidden');
 
@@ -1007,11 +1054,11 @@ document.getElementById('st-save').addEventListener('click', async () => {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
 
-    // Links written before the two pages existed still land somewhere sane.
-    const OLD = { list: 'customers', orders: 'hq', receipts: 'hq' };
+    // Links written before the pages were renamed still land somewhere sane.
+    const OLD = { list: 'nursery', customers: 'nursery', orders: 'hq', receipts: 'hq' };
     let want = new URLSearchParams(location.search).get('tab');
     want = OLD[want] || want;
-    switchTab(['hq', 'customers', 'problems'].concat(isAdmin ? ['settings'] : []).includes(want) ? want : 'hq');
+    switchTab(['nursery', 'hq', 'problems'].concat(isAdmin ? ['settings'] : []).includes(want) ? want : 'nursery');
     // The tab label carries the open count, so it is asked for up front.
     if (!loaded.problems) { loaded.problems = true; loadProblems(); }
   } catch (e) {

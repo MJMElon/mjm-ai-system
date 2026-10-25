@@ -4171,8 +4171,17 @@ from the delivery on purpose: the point is that somebody counted what
 arrived. `seal_raise_case` is in BOTH SQL files, word for word, so running
 either leaves the same titles — the test compares them.
 
-The office page is two pages, **HQ Order & Delivery** and **Customer
-Seals**, and the ribbon's [← Portal] is the only way back. A list joins
+The office page is two pages, **Seal at MJM Nursery** (first: in stock at
+the nursery, then every customer order) and **Seal at HQ**, and the ribbon's
+[← Portal] is the only way back — no User Access button either, Settings is
+enough. Seal at HQ is three blocks, each opening a window: **Last seal
+number** with a + that orders a RANGE (`seal_orders.start_code/end_code`,
+the start filled in after the last seal anywhere, the qty worked out by a
+trigger from the two codes); **Pending receive**, the orders opened up in
+rows of 1,000 cut from each order's own first seal, each row received on its
+own — so a box of 10,000 is checked a thousand at a time; and **Delivering to
+site** with a + that packs a delivery. Below them is every seal at HQ, In HQ
+or Delivering to site; a seal leaves it when site receives it. A list joins
 running numbers into one start and end wherever nothing breaks the run.
 
 `tests/seal_dashboard.cjs` holds the office page.
