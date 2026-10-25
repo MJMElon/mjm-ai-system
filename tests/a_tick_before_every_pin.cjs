@@ -1,14 +1,14 @@
 /* Verify AL, Cancel / Restore AL and Delete DO / BA were guarded by the
    Master PIN alone, and the PIN is written into the pages where anybody can
    read it with Inspect. Each is now a tick in Operation > User Access,
-   asked BEFORE the PIN (which stays as the office's second lock).
+   and the PIN is gone — the office asked for the tick to be the only lock.
 
    Two things are held here:
      1. who the three new ticks answer yes for, on a row saved before they
         existed, on a legacy row, and on a row that ticks them — through the
         shipped shared_access.js;
-     2. in each of the five pages the tick is asked before the PIN prompt,
-        and refuses if the access helper never loaded.
+     2. each of the five asks its tick and refuses if the access helper
+        never loaded, and no PIN is left in any of the three pages.
 
    The database asks the same question in public.mjm_can(); change one,
    change the other. */
@@ -49,21 +49,24 @@ async function access(perms) {
     check(got.every(g => g === want), label + ': ' + (want ? 'yes' : 'no') + ' (' + got.join(', ') + ')');
   }
 
-  console.log('\n2. In every page the tick comes first, then the PIN');
+  console.log('\n2. Every one of the five asks its tick, and no PIN is left');
   const sites = [
-    ['operation_booking.html', 'async function verifyAL()',   "'al_verify'", 'Enter Admin PIN to Verify:'],
-    ['operation_booking.html', 'async function cancelAL()',   "'al_cancel'", 'Enter Master PIN to Cancel AL:'],
-    ['operation_booking.html', 'async function restoreAL()',  "'al_cancel'", 'Enter Master PIN to Restore AL:'],
-    ['operation_ba.html',      'async function deleteBA()',   "'delete'",    'Enter Master PIN to delete BA:'],
-    ['operation_delivery.html', 'Enter Master PIN to delete DO:', "'delete'", 'Enter Master PIN to delete DO:'],
+    ['operation_booking.html',  'async function verifyAL()',  "'al_verify'"],
+    ['operation_booking.html',  'async function cancelAL()',  "'al_cancel'"],
+    ['operation_booking.html',  'async function restoreAL()', "'al_cancel'"],
+    ['operation_ba.html',       'async function deleteBA()',  "'delete'"],
+    ['operation_delivery.html', 'async function deleteDO()',  "'delete'"],
   ];
-  for (const [file, anchor, tick, pin] of sites) {
+  for (const [file, anchor, tick] of sites) {
     const src = fs.readFileSync(path.join(ROOT, 'operation', file), 'utf8');
-    const pinAt = src.indexOf(pin);
-    const start = anchor === pin ? src.lastIndexOf('function', pinAt) : src.indexOf(anchor);
-    const body = src.slice(start, pinAt);
+    const start = src.indexOf(anchor);
+    const body = src.slice(start, start + 1200);
     const gate = "typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', " + tick + ')';
-    check(start !== -1 && pinAt > start && body.includes(gate), file + ' ' + pin.replace(/:$/, '') + ': ' + tick + ' asked first, and refuses with no helper');
+    check(start !== -1 && body.includes(gate), file + ' ' + anchor.replace('async function ', '') + ': asks ' + tick + ', and refuses with no helper');
+  }
+  for (const file of ['operation_booking.html', 'operation_ba.html', 'operation_delivery.html']) {
+    const src = fs.readFileSync(path.join(ROOT, 'operation', file), 'utf8');
+    check(!src.includes('8888') && !/prompt\([^)]*PIN/.test(src), file + ': no Master PIN left in the page');
   }
 
   console.log(fails ? `\n${fails} FAILED` : '\nall checks passed');

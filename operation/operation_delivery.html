@@ -1447,10 +1447,9 @@
             const doRec = globalDOs.find(d => String(d.id) === id);
             if (isDoLocked(doRec)) return alert('This DO is in a locked month (Month Lock Calendar, System Settings) and can\'t be deleted. Unlock that month if this was locked in error.');
 
-            // The Delete DO / BA tick decides; the PIN after it is the office's second lock.
+            // The Delete DO / BA tick decides. The Master PIN that used to follow
+            // was written into this page, readable by anybody with Inspect.
             if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'delete')) return;
-            const pin = prompt("Enter Master PIN to delete DO:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
 
             if (!confirm("Are you sure you want to permanently DELETE this DO? This action cannot be undone and will restore the AL balance.")) return;
 

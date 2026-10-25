@@ -79,6 +79,10 @@
     }
     out.manage_users = !!perms.manage_users;
     out.can_verify_operation = !!perms.can_verify_operation;
+    // The one who decides who may manage users. Set only by SQL
+    // (shared/RUN_ME_access_in_the_database.sql names them); the database
+    // guard refuses anybody else touching manage_users or super_admin.
+    out.super_admin = !!perms.super_admin;
     // Per-page and per-function access INSIDE a module, managed from that
     // module's own User Access page. Any `<module>_pages` / `<module>_actions`
     // key is carried through, so adding a module needs no change here.
@@ -426,6 +430,7 @@
   function canAccess(name)  { return moduleLevel(name) !== 'none'; }
   function isAdminOf(name)  { return moduleLevel(name) === 'admin'; }
   function canManageUsers() { return !!permissions().manage_users; }
+  function isSuperAdmin()   { return !!permissions().super_admin; }
 
   // Per-page access inside the operation module (see operation_pages above).
   // Page keys mirror the dashboard cards: batch, orders, stock, settings.
@@ -657,6 +662,7 @@
     operationPageLevel,
     canOpenOperationPage,
     canDoOperation,
+    isSuperAdmin,
     requireOperationAction,
     canDo,
     canOpenPage,
