@@ -466,6 +466,14 @@
     orders: ['ba_manage', 'al_manage'],
     stock:  ['customer', 'map'],
   };
+  /* Ticks that replaced the Master PIN written into the AL, BA and DO
+     pages (anybody could read it with Inspect). On a row saved before they
+     existed they answer as the old rule for a guarded action does: an
+     Operation admin, yes; anybody else, no.
+     Database twin: public.mjm_can() — change one, change the other. */
+  const OPERATION_NEW_ACTION_ADMIN = {
+    orders: ['al_verify', 'al_cancel', 'delete'],
+  };
 
   function canDoOperation(page, action) {
     const p = permissions();
@@ -478,6 +486,7 @@
       if (!acts.view) return false;      // page closed → every function closed
       if (action === 'view') return true;
       if (acts[action] === undefined && (OPERATION_NEW_ACTION_DEFAULT[page] || []).includes(action)) return true;
+      if (acts[action] === undefined && (OPERATION_NEW_ACTION_ADMIN[page] || []).includes(action)) return isAdminOf('operation');
       return !!acts[action];
     }
     // Legacy fallback.
@@ -489,7 +498,9 @@
     switch (action) {
       case 'verify':     return !!p.can_verify_operation || isAdminOf('operation');
       case 'review':     return isAdminOf('operation');
-      case 'delete':     return isAdminOf('operation');
+      case 'delete':
+      case 'al_verify':
+      case 'al_cancel':  return isAdminOf('operation');
       case 'clear_logs': return isAdminOf('audit_trail');
       default:           return true; // add_new, fill_report, manage…
     }

@@ -838,6 +838,8 @@
         async function deleteBA() {
             if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value;
+            // The Delete DO / BA tick decides; the PIN after it is the office's second lock.
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'delete')) return;
             const pin = prompt("Enter Master PIN to delete BA:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
             if(!confirm(`Are you sure you want to completely delete BA: ${originalKey}? This will unlink it from all DOs.`)) return;

@@ -1020,6 +1020,9 @@
         }
 
         async function verifyAL() { 
+            // The Verify AL tick in Operation > User Access decides. The PIN
+            // after it is the office's second lock, kept as asked.
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'al_verify')) return;
             const pin = prompt("Enter Admin PIN to Verify:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN."); 
             
@@ -1040,6 +1043,7 @@
         }
         
         async function cancelAL() {
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'al_cancel')) return;
             const pin = prompt("Enter Master PIN to Cancel AL:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
 
@@ -1204,6 +1208,7 @@
         }
 
         async function restoreAL() {
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'al_cancel')) return;
             const pin = prompt("Enter Master PIN to Restore AL:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
             if (!confirm("Restore this cancelled AL back to ACTIVE (Unverified) status?")) return;

@@ -143,8 +143,8 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
           'the six separate sections are gone — only the two merged cards remain');
     const byId = Object.fromEntries(drawer.cards.map(c => [c.id, c]));
     check(JSON.stringify(byId['d-card-orders'].actions) === JSON.stringify(
-      ['Add new DO', 'Manage Borang Akuan (BA) Record', 'Add New AL']),
-      'Customer Order Documentation offers all three ticks, in order (' + byId['d-card-orders'].actions.join(' / ') + ')');
+      ['Add new DO', 'Manage Borang Akuan (BA) Record', 'Add New AL', 'Verify AL', 'Cancel & restore AL', 'Delete DO / BA']),
+      'Customer Order Documentation offers its six ticks, in order (' + byId['d-card-orders'].actions.join(' / ') + ')');
     check(JSON.stringify(byId['d-card-stock'].actions) === JSON.stringify(
       ['Customer Monitoring', 'Update stock & sales', 'Inventory Map']),
       'Seedling Sales Control offers all three ticks, in order (' + byId['d-card-stock'].actions.join(' / ') + ')');
