@@ -4209,6 +4209,17 @@ closes it, and reopens them if the case is reopened, so the warning on a
 customer cannot outlive the case it came from. A list joins
 running numbers into one start and end wherever nothing breaks the run.
 
+**A delivery can only take what is in the HQ cabinet.** The page checks
+each keyed range against `seal_hq_stock` (received, on no other delivery)
+and refuses one that is not in it or is keyed backwards. Save checks it
+again, because the check waits for typing to stop and a quick Save can
+arrive before it, or carry an answer about what was keyed before. Fill was
+taken out: the office keys the first and last seal off the roll in hand. A
+New Seal Order whose start is not the last order + 1 is WARNED and still
+allowed, because a supplier may skip a run. `table.t .text-right` is set in
+the page itself, because `table.t th` said left for every heading and beat
+the Tailwind class, so Qty sat left over figures on the right.
+
 `tests/seal_dashboard.cjs` holds the office page.
 
 ## Coming back to the portal is not signing in again

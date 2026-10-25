@@ -48,6 +48,10 @@
              background:#0d9488; color:white; font-size:12px; font-weight:900; margin-right:8px; }
   table.t { width:100%; border-collapse:collapse; font-size:12px; }
   table.t th { text-align:left; font-size:9px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; color:#94a3b8; padding:10px 8px; border-bottom:1.5px solid #f1f5f9; }
+  /* A heading sits over its figures: table.t th says left for every column,
+     which beat the text-right class on a number column. */
+  table.t .text-right { text-align:right; }
+  table.t .text-center { text-align:center; }
   table.t td { padding:10px 8px; border-bottom:1px solid #f1f5f9; font-weight:700; color:#334155; vertical-align:top; }
   .badge { display:inline-block; padding:3px 9px; border-radius:99px; font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
   /* One colour per state, the same four on every screen that shows a seal:
@@ -81,7 +85,15 @@
   .block-card.sel.on { box-shadow:0 0 0 3px var(--on); }
   .plus { width:34px; height:34px; border-radius:12px; background:#0d9488; color:white; font-size:20px; font-weight:900; line-height:1; cursor:pointer; flex-shrink:0; }
   .plus:hover { filter:brightness(.92); }
-  .chunk { display:grid; grid-template-columns:1fr 70px 1fr auto; gap:10px; align-items:center; padding:8px 10px; border-top:1px solid #f1f5f9; font-size:12px; font-weight:700; }
+  .chunk-head { display:grid; grid-template-columns:1fr 90px 1fr; gap:10px; padding:8px 10px; background:#f8fafc;
+                font-size:9px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; color:#94a3b8; }
+  /* New Seal Order is read off a screen while the box of seals is in the
+     other hand, so everything in it is a size up. */
+  .big-form .inp { font-size:17px; padding:12px 14px; }
+  .big-form .lbl { font-size:12px; }
+  .big-form .say { font-size:14px; }
+  #modal-title.big { font-size:20px; }
+  .chunk { display:grid; grid-template-columns:1fr 90px 1fr; gap:10px; align-items:center; padding:8px 10px; border-top:1px solid #f1f5f9; font-size:12px; font-weight:700; }
   .chip { padding:6px 12px; border-radius:99px; font-size:10px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border:1.5px solid #e2e8f0; background:white; color:#475569; cursor:pointer; }
   .chip.on { background:#0f172a; color:white; border-color:#0f172a; }
   .s-hq { background:#ccfbf1; color:#115e59; }
@@ -143,10 +155,7 @@
         <div class="text-[11px] font-bold text-teal-800 opacity-75" id="blk-last-sub"></div>
       </div>
       <div class="block-card sel" id="blk-pending" style="background:#fffbeb;border-color:#fde68a;--on:#d97706">
-        <div class="flex items-start justify-between gap-2">
-          <div class="text-[11px] font-black uppercase tracking-widest text-amber-800">Seal pending receive</div>
-          <button class="plus" id="btn-order2" title="Order new seals" aria-label="Order new seals" style="background:#d97706">+</button>
-        </div>
+        <div class="text-[11px] font-black uppercase tracking-widest text-amber-800 mb-[10px]">Seal pending receive</div>
         <div class="text-2xl font-black mono text-amber-900" id="blk-pending-qty">—</div>
         <div class="text-[11px] font-bold text-amber-800 opacity-75" id="blk-pending-sub">ordered, not yet at HQ</div>
       </div>
@@ -244,7 +253,7 @@ let rows = [];          // seal_list, unfiltered by status
 let statusFilter = null;
 let isAdmin = false;
 let staffName = '';
-let hqStock = [];       // seal_hq_stock, for Fill
+let hqStock = [];       // seal_hq_stock: the cabinet, and what a delivery may take
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n) => Number(n || 0).toLocaleString('en-MY');
@@ -423,7 +432,9 @@ document.querySelectorAll('#tabs .tab').forEach((b) => b.addEventListener('click
 // shows its list below. Only a + opens a window, and the window is the form
 // for adding something -- an order, or a delivery.
 function openModal(title, html, back) {
-  document.getElementById('modal-title').textContent = title;
+  const t = document.getElementById('modal-title');
+  t.textContent = title;
+  t.classList.remove('big');
   const b = document.getElementById('modal-back');
   b.classList.toggle('hidden', !back);
   b.onclick = back || null;
@@ -508,30 +519,45 @@ let orderTimer = null;
 document.getElementById('btn-order').addEventListener('click', (e) => { e.stopPropagation(); openOrder(); });
 function openOrder() {
   modalKind = 'order';
-  openModal('Order new seal?',
-    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">'
-    + '<div><div class="lbl">Last ordered seal number</div><div class="text-xl font-black mono text-slate-800">' + esc(summary.last_ordered_code || '—') + '</div>'
-    +   (summary.last_code && summary.last_code !== summary.last_ordered_code ? '<div class="text-[11px] font-bold text-slate-400">Last seal anywhere in the system: <span class="mono">' + esc(summary.last_code) + '</span></div>' : '') + '</div>'
+  openModal('New Seal Order',
+    '<div class="big-form"><div class="grid grid-cols-1 md:grid-cols-2 gap-4">'
+    + '<div><div class="lbl">Last ordered seal number</div><div class="text-2xl font-black mono text-slate-800">' + esc(summary.last_ordered_code || '—') + '</div>'
+    +   (summary.last_code && summary.last_code !== summary.last_ordered_code ? '<div class="say font-bold text-slate-400">Last seal anywhere in the system: <span class="mono">' + esc(summary.last_code) + '</span></div>' : '') + '</div>'
     + '<div><label class="lbl">Order date</label><input id="ord-date" type="date" class="inp" value="' + todayLocal() + '"></div>'
     + '</div>'
     + '<div class="lbl mt-5">Next order seal number</div>'
     + '<div class="grid grid-cols-2 gap-3">'
-    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0">Start</label><input id="ord-start" class="inp mono" inputmode="numeric" value="' + esc(summary.next_order_code || summary.next_code || '') + '"></div>'
-    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0">End</label><input id="ord-end" class="inp mono" inputmode="numeric" placeholder="Last seal of this order"></div>'
+    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">Start</label><input id="ord-start" class="inp mono" inputmode="numeric" value="' + esc(summary.next_order_code || summary.next_code || '') + '"></div>'
+    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">End</label><input id="ord-end" class="inp mono" inputmode="numeric" placeholder="Last seal of this order"></div>'
     + '</div>'
-    + '<div id="ord-msg" class="text-[12px] font-bold mt-3 text-slate-500"></div>'
-    + '<div class="flex justify-end gap-2 mt-5"><button class="btn btn-soft" onclick="closeModal()">Cancel</button><button class="btn btn-main" id="ord-save">Save order</button></div>');
+    + '<div id="ord-warn" class="say font-bold mt-3"></div>'
+    + '<div id="ord-msg" class="say font-bold mt-2 text-slate-500"></div>'
+    + '<div class="flex justify-end gap-2 mt-5"><button class="btn btn-soft" style="font-size:14px" onclick="closeModal()">Cancel</button><button class="btn btn-main" style="font-size:14px" id="ord-save">Save order</button></div></div>');
+  document.getElementById('modal-title').classList.add('big');
   ['ord-start', 'ord-end'].forEach((id) => document.getElementById(id).addEventListener('input', () => { clearTimeout(orderTimer); orderTimer = setTimeout(checkOrder, 300); }));
   document.getElementById('ord-save').addEventListener('click', saveOrder);
   document.getElementById('ord-end').focus();
 }
 let orderBlocked = false;
+// An order normally starts one after the last one ended. A different start
+// is allowed -- a supplier may skip a run -- but it is said, so nobody keys a
+// gap or an overlap by accident.
+function orderStartWarn(s) {
+  const el = document.getElementById('ord-warn');
+  if (!el) return;
+  const want = summary.next_order_code || summary.next_code;
+  if (!want || sealNo(s) == null || sealNo(s) === sealNo(want)) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="rounded-xl border-[1.5px] border-amber-300 bg-amber-50 text-amber-800 px-3 py-2">⚠ The last order ended at <b class="mono">'
+    + esc(summary.last_ordered_code || summary.last_code || '—') + '</b>, so the next order would start at <b class="mono">' + esc(want)
+    + '</b>. This one starts at <b class="mono">' + esc(s) + '</b> — check it is right before saving.</div>';
+}
 async function checkOrder() {
   const a = document.getElementById('ord-start'), b = document.getElementById('ord-end');
   const el = document.getElementById('ord-msg');
   if (!a || !el) return;
   orderBlocked = false;
   const s = a.value.trim(), e = b.value.trim();
+  orderStartWarn(s);
   if (sealNo(s) == null || sealNo(e) == null) { el.textContent = ''; return; }
   if (sealNo(e) < sealNo(s)) { el.innerHTML = '<span class="text-red-600">The end is before the start.</span>'; orderBlocked = true; return; }
   const qty = sealQty(s, e);
@@ -565,13 +591,12 @@ async function saveOrder(e) {
   } finally { e.target.disabled = false; }
 }
 
-// ── SEAL PENDING RECEIVE (the block, and its +) ──
+// ── SEAL PENDING RECEIVE (the block) ──
 // The orders still to come, one row each. An order opens into its own
 // receiving check list, cut in rows of a thousand from its first seal, so a
 // box of 10,000 is checked and received a thousand at a time -- or several
 // rows at once, by ticking the first and the last.
 document.getElementById('blk-pending').addEventListener('click', () => showView('pending'));
-document.getElementById('btn-order2').addEventListener('click', (e) => { e.stopPropagation(); openOrder(); });
 let orderRows = [];     // seal_orders with a range, as last loaded
 async function loadOrdersAndReceipts() {
   const [o, r] = await Promise.all([
@@ -635,22 +660,22 @@ function drawOrderReceive() {
   const picked = open.filter((c) => rcvTicked.has(c.s));
   const pickedQty = picked.reduce((t, c) => t + c.nLeft, 0);
   setView('receive', 'Order : ' + fmtDate(x.order_date) + ', ' + x.start_code + ' – ' + x.end_code + ' receiving check list',
-    '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">'
-    + '<div class="text-[12px] font-bold text-slate-500">Tick the first row and the last row — every row between is ticked for you.</div>'
-    + '<div class="flex gap-2"><button class="btn btn-soft btn-sm" onclick="rcvAll(true)">Tick all</button><button class="btn btn-soft btn-sm" onclick="rcvAll(false)">Clear</button></div></div>'
+    '<div class="flex justify-end gap-2 mb-3"><button class="btn btn-soft btn-sm" onclick="rcvAll(true)">Tick all</button>'
+    + (rcvTicked.size ? '<button class="btn btn-soft btn-sm" id="rcv-clear" onclick="rcvAll(false)">Clear</button>' : '') + '</div>'
     + '<div class="border-[1.5px] border-slate-200 rounded-2xl overflow-hidden">'
+    + '<div class="chunk-head"><div>Range</div><div class="text-right">Quantity</div><div class="text-right">Status</div></div>'
     + chunks.map((c) => {
       const code = range(sealCode(c.s, c.w), sealCode(c.e, c.w));
       if (!c.nLeft) {
         const rc = hqReceipts.find((r) => normRanges(r.ranges).some((g) => g.s <= c.e && g.e >= c.s));
         return '<div class="chunk" style="background:#f8fafc"><div class="mono font-black text-slate-400">✔ ' + code + '</div>'
-          + '<div class="mono text-right text-slate-400">' + fmt(c.n) + '</div><div></div>'
+          + '<div class="mono text-right text-slate-400">' + fmt(c.n) + '</div>'
           + '<div class="text-right text-emerald-700 font-black">Received' + (rc ? ' by ' + esc(rc.received_by || '—') + ' · ' + fmtDate(rc.received_date) : '') + '</div></div>';
       }
       const on = rcvTicked.has(c.s);
       return '<label class="chunk cursor-pointer' + (on ? ' bg-teal-50' : '') + '">'
         + '<div class="mono font-black text-slate-800"><input type="checkbox" class="mr-2 align-middle" data-s="' + c.s + '"' + (on ? ' checked' : '') + '>' + code + '</div>'
-        + '<div class="mono text-right text-slate-500">' + fmt(c.n) + '</div><div></div>'
+        + '<div class="mono text-right text-slate-500">' + fmt(c.n) + '</div>'
         + '<div class="text-right text-amber-700">' + (c.nLeft < c.n ? fmt(c.n - c.nLeft) + ' already in' : 'Pending') + '</div></label>';
     }).join('')
     + '</div>'
@@ -754,56 +779,50 @@ let dvBox = null;
 function openDeliver() {
   modalKind = 'deliver';
   openModal('New delivery to MJM Nursery',
-    '<p class="text-[12px] font-bold text-slate-500 mb-3">Key the first and last seal of each range going to the nursery. Saving marks the delivery <b>Packed</b>; the nursery keys the start and end again to confirm it is received.</p>'
-    + '<div id="dv-ranges"></div>'
-    + '<div class="grid grid-cols-3 gap-3 mt-4">'
-    +   '<div><label class="lbl">Fill from HQ stock</label><input id="dv-fill-qty" type="number" min="1" class="inp" placeholder="How many"></div>'
-    +   '<div class="flex items-end"><button class="btn btn-soft w-full" id="dv-fill">Fill</button></div>'
-    +   '<div><label class="lbl">Remark</label><input id="dv-remark" class="inp" placeholder="Optional"></div>'
-    + '</div>'
+    '<div id="dv-ranges"></div>'
+    + '<div class="mt-4"><label class="lbl">Remark</label><textarea id="dv-remark" class="inp" rows="3" placeholder="Optional" style="resize:vertical"></textarea></div>'
     + '<div class="text-[11px] font-bold mt-3" id="dv-msg"></div>'
     + '<div class="flex justify-end gap-2 mt-4"><button class="btn btn-soft" onclick="closeModal()">Cancel</button><button class="btn btn-main" id="dv-save">Save · Packed</button></div>');
   dvBlocked = false;
   dvBox = RangeBox(document.getElementById('dv-ranges'), { onChange: checkDV });
-  document.getElementById('dv-fill').addEventListener('click', fillDV);
   document.getElementById('dv-save').addEventListener('click', saveDV);
   document.querySelector('#dv-ranges input').focus();
 }
+// Only what is in the HQ cabinet can go out: received from the supplier and
+// on no other delivery. Checked here, off the cabinet the page already holds,
+// so a seal that is not there cannot be saved -- and a range keyed backwards
+// is refused rather than read the other way round.
+function dvLocal(box) {
+  const cab = hqStock.map((x) => ({ start: x.start_code, end: x.end_code }));
+  return box.rows().map((r) => {
+    const a = r.start.trim(), b = (r.end || r.start).trim();
+    if (sealNo(a) == null || sealNo(b) == null) return [];
+    if (sealNo(b) < sealNo(a)) return ['The last seal is before the first. Key it from the smaller number.'];
+    return minusRanges([{ start: a, end: b }], cab).map((m) => range(m.start, m.end) + ': not in the HQ cabinet');
+  });
+}
 async function checkDV(box) {
+  const local = dvLocal(box);
+  dvBlocked = local.some((l) => l.length);
   const hits = await checkRows(box, 'deliver');
-  dvBlocked = false;
-  let warn = false;
   hits.forEach((h, i) => {
-    if (h.some((x) => x.problem === 'delivered')) dvBlocked = true;
-    if (h.some((x) => x.problem === 'not_at_hq')) warn = true;
-    box.note(i, h.map((x) => '<div class="' + (x.problem === 'delivered' ? 'text-red-600' : 'text-amber-600') + '">'
-      + range(x.from_code, x.to_code) + ': ' + esc(x.detail) + '</div>').join(''));
+    if (h.some((x) => x.problem === 'delivered' || x.problem === 'not_at_hq')) dvBlocked = true;
+    // The cabinet answer says it plainly; the database one is for a seal the
+    // page could not see (sent from another screen a moment ago).
+    const say = (local[i] || []).length ? local[i] : h.map((x) => range(x.from_code, x.to_code) + ': ' + esc(x.detail));
+    box.note(i, say.map((t) => '<div class="text-red-600">' + t + '</div>').join(''));
   });
   const el = document.getElementById('dv-msg');
-  if (el) el.innerHTML = dvBlocked
-    ? '<span class="text-red-600">Remove the seals already sent on another delivery.</span>'
-    : warn ? '<span class="text-amber-600">Some seals were never received at HQ. It can still be sent.</span>' : '';
-}
-// Fill takes the lowest seals at HQ first, so rolls go out in order.
-function fillDV() {
-  let want = parseInt(document.getElementById('dv-fill-qty').value, 10);
-  if (!(want > 0)) { toast('How many seals are going to site?', true); return; }
-  const out = [];
-  normRanges(hqStock.map((x) => ({ start: x.start_code, end: x.end_code }))).forEach((r) => {
-    if (want <= 0) return;
-    const take = Math.min(want, r.e - r.s + 1);
-    out.push({ start: sealCode(r.s, r.w), end: sealCode(r.s + take - 1, r.w) });
-    want -= take;
-  });
-  if (!out.length) { toast('There are no seals at HQ to send.', true); return; }
-  if (want > 0) toast('Only ' + fmt(rangesQty(out)) + ' seals are at HQ.', true);
-  dvBox.set(out);
+  if (el) el.innerHTML = dvBlocked ? '<span class="text-red-600">Only seals in the HQ cabinet can be delivered. Correct the ranges marked red.</span>' : '';
 }
 async function saveDV(e) {
   const rs = dvBox.ranges();
   if (!rs.length) { toast('Key at least one range.', true); return; }
   if (dvBox.incomplete()) { toast('Finish or remove the incomplete range.', true); return; }
-  if (dvBlocked) { toast('Some of these seals were already sent to site.', true); return; }
+  // Asked again here: the check waits for typing to stop, so a quick Save
+  // can arrive before it, or after an answer about what was keyed before.
+  await checkDV(dvBox);
+  if (dvBlocked) { toast('Only seals in the HQ cabinet can be delivered.', true); return; }
   e.target.disabled = true;
   try {
     const { error } = await _supabase.from('seal_deliveries').insert([{
