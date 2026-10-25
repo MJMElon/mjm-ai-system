@@ -46,6 +46,7 @@ const SWEPT = [
   'CHECK_seed_side_calibrations.sql',
   'RUN_ME_seal_management.sql',
   'RUN_ME_seal_hq_delivery.sql',
+  'RUN_ME_seal_missed_scan.sql',
   'RUN_ME_audit_save_every_table.sql',
   'RUN_ME_worker_rejected.sql',
   'CHECK_which_plots_were_never_audited.sql',

@@ -99,7 +99,17 @@
   .s-hq { background:#ccfbf1; color:#115e59; }
   .s-going { background:#e0e7ff; color:#3730a3; }
   .s-ordered { background:#fef9c3; color:#854d0e; }
+  /* The status filter hangs off the Status heading, outside the scrolling
+     table so it is never clipped by it. */
   .s-all { background:#0f172a; color:white; }
+  .rp-pop { position:fixed; z-index:60; background:white; border:1.5px solid #e2e8f0; border-radius:14px;
+            box-shadow:0 12px 30px rgba(15,23,42,.18); padding:8px; min-width:250px; }
+  .rp-pop label { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:9px; cursor:pointer;
+                  font-size:12px; font-weight:800; color:#334155; }
+  .rp-pop label:hover { background:#f8fafc; }
+  .rp-pop .q { margin-left:auto; font-variant-numeric:tabular-nums; color:#94a3b8; }
+  .rp-filter-btn { display:inline-flex; align-items:center; gap:5px; text-transform:uppercase; letter-spacing:.12em; font-weight:900; color:inherit; }
+  .rp-filter-btn.on { color:#0f766e; }
   .s-none { background:white; color:#94a3b8; border:1px dashed #cbd5e1; }
 </style>
 </head>
@@ -120,7 +130,7 @@
 
   <div id="setup-missing" class="card p-6 mb-6 hidden">
     <div class="font-black text-amber-700">Seal data is not set up yet</div>
-    <p class="text-sm font-bold text-slate-500 mt-1">Run <span class="mono">shared/RUN_ME_seal_management.sql</span> and then <span class="mono">shared/RUN_ME_seal_hq_delivery.sql</span> in the Supabase SQL Editor, then reload this page.</p>
+    <p class="text-sm font-bold text-slate-500 mt-1">Run <span class="mono">shared/RUN_ME_seal_management.sql</span> and then <span class="mono">shared/RUN_ME_seal_hq_delivery.sql</span>, then <span class="mono">shared/RUN_ME_seal_missed_scan.sql</span> in the Supabase SQL Editor, then reload this page.</p>
   </div>
 
   <div class="tabbar mb-5" id="tabs">
@@ -165,7 +175,6 @@
   <!-- ═══════════════ REPORT ═══════════════ -->
   <!-- Every seal number from the first to the latest, wherever it is now. -->
   <section data-pane="report" class="hidden">
-    <div class="flex flex-wrap gap-2 mb-4" id="rp-stats"></div>
     <div class="card p-4 mb-4 flex flex-wrap gap-3 items-end">
       <div class="w-[150px]">
         <label class="lbl">From seal</label>
@@ -180,7 +189,7 @@
         <input id="rp-q" class="inp" placeholder="Seal number, customer, AL or DO">
       </div>
     </div>
-    <div class="card p-5"><div id="rp-table" class="overflow-x-auto text-sm font-bold text-slate-400">Loading…</div></div>
+    <div class="card p-5"><div id="rp-showing" class="flex flex-wrap items-center gap-2 mb-3 text-[11px] font-black text-slate-500"></div><div id="rp-table" class="overflow-x-auto text-sm font-bold text-slate-400">Loading…</div></div>
   </section>
 
   <!-- ═══════════════ SEAL AT HQ ═══════════════ -->
@@ -226,6 +235,13 @@
   <!-- ═══════════════ NELOS ═══════════════ -->
   <!-- Every NELOS case the seal checks opened, whoever it is assigned to. -->
   <section data-pane="nelos" class="hidden">
+    <!-- Runs of a customer seals nobody scanned, with the seals either side
+         already on a DO. Each has a NELOS case; Key DO settles it. -->
+    <div id="missed-card" class="card p-5 mb-4 hidden">
+      <div class="font-black text-slate-800 mb-1">Seals not scanned</div>
+      <div class="text-[12px] font-bold text-slate-500 mb-3">The seals before and after are already on a DO. Check whether these went out, then key the DO for them.</div>
+      <div id="missed-table" class="overflow-x-auto text-sm font-bold text-slate-400"></div>
+    </div>
     <div class="flex justify-end mb-3">
       <label class="text-[12px] font-black text-slate-500"><input type="checkbox" id="n-show-closed"> show closed</label>
     </div>
@@ -1148,10 +1164,15 @@ function renderList() {
   box.innerHTML = head('<th>Customer</th><th>Consent date</th><th></th>')
     + list.map((r) => '<tr>' + sealCell(r) + '<td class="text-right mono">' + fmt(r.qty) + '</td>' + custCell(r)
       + '<td>' + fmtDate(r.consent_at) + '</td>'
-      + '<td class="text-right">' + (r.consent_ids.length
-        ? '<button class="btn btn-soft btn-sm" data-consent="' + esc(r.consent_ids.join(',')) + '">View consent</button>' : '') + '</td></tr>').join('')
+      + '<td class="text-right whitespace-nowrap">' + (r.consent_ids.length
+        ? '<button class="btn btn-soft btn-sm" data-consent="' + esc(r.consent_ids.join(',')) + '">View consent</button> ' : '')
+      + '<button class="btn btn-soft btn-sm" data-keydo="' + list.indexOf(r) + '" title="Seals that went out without being scanned">Key DO</button></td></tr>').join('')
     + '</tbody></table>';
   box.querySelectorAll('[data-consent]').forEach((b) => b.addEventListener('click', () => openConsent(b.dataset.consent.split(','))));
+  box.querySelectorAll('[data-keydo]').forEach((b) => b.addEventListener('click', () => {
+    const r = list[Number(b.dataset.keydo)];
+    openSettle({ al: r.al_number, customer: r.customer_name, start: r.start_code, end: r.end_code });
+  }));
 }
 
 // The signed consent, as the customer signed it: the seals given, the
@@ -1199,7 +1220,7 @@ const REPORT_STATUS = {
 };
 const REPORT_ORDER = ['ordered', 'hq', 'going', 'in_stock', 'pending', 'scanned', 'collected', 'none'];
 let reportRows = [];
-let reportFilter = null;
+let reportFilter = new Set();   // statuses ticked; empty is All
 async function loadReport() {
   const box = document.getElementById('rp-table');
   const [seg, ord, hqr, st, dv] = await Promise.all([
@@ -1263,27 +1284,31 @@ function renderReport() {
     const s2 = lo == null ? r.s : Math.max(r.s, lo), e2 = hi == null ? r.e : Math.min(r.e, hi);
     return s2 === r.s && e2 === r.e ? r : { ...r, s: s2, e: e2, start: sealCode(s2, r.w), end: sealCode(e2, r.w), qty: e2 - s2 + 1 };
   });
-  const tot = {};
-  let all = 0;
-  cut.forEach((r) => { tot[r.status] = (tot[r.status] || 0) + r.qty; all += r.qty; });
-  const chip = (k, label, cls, qty) => '<button class="badge ' + cls + '" data-rs="' + k + '" style="font-size:11px;padding:6px 12px;cursor:pointer;'
-    + ((reportFilter || 'all') === k ? 'box-shadow:0 0 0 2px #0f172a;' : '') + '">' + label + ' · <span class="mono">' + fmt(qty) + '</span></button>';
-  document.getElementById('rp-stats').innerHTML = chip('all', 'All', 's-all', all)
-    + REPORT_ORDER.filter((k) => tot[k]).map((k) => chip(k, REPORT_STATUS[k].label, REPORT_STATUS[k].cls, tot[k])).join('');
-  document.querySelectorAll('#rp-stats [data-rs]').forEach((b) => b.addEventListener('click', () => {
-    reportFilter = b.dataset.rs === 'all' ? null : b.dataset.rs; renderReport();
+  reportTotals = {};
+  cut.forEach((r) => { reportTotals[r.status] = (reportTotals[r.status] || 0) + r.qty; });
+  // What is being shown, said above the table: All, or each status ticked with
+  // a cross to take it off.
+  document.getElementById('rp-showing').innerHTML = 'Showing: ' + (reportFilter.size
+    ? REPORT_ORDER.filter((k) => reportFilter.has(k)).map((k) => '<span class="badge ' + REPORT_STATUS[k].cls + '" style="font-size:10px">'
+        + REPORT_STATUS[k].label + ' <button type="button" data-unfilter="' + k + '" title="Remove" aria-label="Remove" style="margin-left:4px">✕</button></span>').join('')
+      + '<button type="button" class="underline text-teal-700" data-unfilter="all">Show all</button>'
+    : '<span class="badge s-all" style="font-size:10px">All</span>');
+  document.querySelectorAll('#rp-showing [data-unfilter]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.unfilter === 'all') reportFilter.clear(); else reportFilter.delete(b.dataset.unfilter);
+    renderReport();
   }));
   const q = document.getElementById('rp-q').value.trim();
   const n = sealNo(q);
   const isNum = q && /^[0-9 ]+$/.test(q);
   const ql = q.toLowerCase();
-  const list = cut.filter((r) => (!reportFilter || r.status === reportFilter)
+  const list = cut.filter((r) => (!reportFilter.size || reportFilter.has(r.status))
     && (!q || (isNum ? n >= r.s && n <= r.e : (r.who + ' ' + r.doNo).toLowerCase().includes(ql))));
   if (reportSort === 'desc') list.reverse();
   const box = document.getElementById('rp-table');
   if (!list.length) { box.innerHTML = '<div class="py-6 text-center text-slate-400">' + (reportRows.length ? 'Nothing matches.' : 'No seals in the system yet.') + '</div>'; return; }
   box.innerHTML = '<table class="t"><thead><tr><th><button type="button" id="rp-sort" onclick="toggleReportSort()" class="uppercase tracking-[.12em] font-black" style="color:inherit" title="Sort by seal number">Seal range '
-    + (reportSort === 'asc' ? '▲' : '▼') + '</button></th><th class="text-right">Qty</th><th>Status</th><th>Customer</th><th>DO number</th><th>DO date</th><th>Detail</th></tr></thead><tbody>'
+    + (reportSort === 'asc' ? '▲' : '▼') + '</button></th><th class="text-right">Qty</th><th><button type="button" id="rp-status-btn" class="rp-filter-btn' + (reportFilter.size ? ' on' : '') + '" onclick="toggleStatusFilter(event)" title="Filter by status">Status'
+    + (reportFilter.size ? ' · ' + reportFilter.size : '') + ' <span aria-hidden="true">⏷</span></button></th><th>Customer</th><th>DO number</th><th>DO date</th><th>Detail</th></tr></thead><tbody>'
     + list.map((r) => '<tr><td class="mono font-black ' + (r.status === 'none' ? 'text-slate-400' : 'text-slate-800') + '">' + range(r.start, r.end) + '</td>'
       + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
       + '<td><span class="badge ' + REPORT_STATUS[r.status].cls + '">' + REPORT_STATUS[r.status].label + '</span></td>'
@@ -1293,6 +1318,41 @@ function renderReport() {
       + '<td class="text-slate-500">' + esc(r.at || '') + '</td></tr>').join('')
     + '</tbody></table>';
 }
+// The Status heading opens a list of ticks: All, or any mix of statuses.
+let reportTotals = {};
+function closeStatusFilter() { const el = document.getElementById('rp-pop'); if (el) el.remove(); }
+function toggleStatusFilter(ev) {
+  ev.stopPropagation();
+  if (document.getElementById('rp-pop')) { closeStatusFilter(); return; }
+  drawStatusFilter(ev.currentTarget.getBoundingClientRect());
+}
+function drawStatusFilter(at) {
+  closeStatusFilter();
+  const all = Object.values(reportTotals).reduce((t, n) => t + n, 0);
+  const row = (k, label, qty, on) => '<label><input type="checkbox" data-rf="' + k + '"' + (on ? ' checked' : '') + '>'
+    + (k === 'all' ? '<b>' + label + '</b>' : '<span class="badge ' + REPORT_STATUS[k].cls + '">' + label + '</span>')
+    + '<span class="q">' + fmt(qty) + '</span></label>';
+  const pop = document.createElement('div');
+  pop.id = 'rp-pop';
+  pop.className = 'rp-pop';
+  pop.innerHTML = row('all', 'All', all, !reportFilter.size)
+    + REPORT_ORDER.filter((k) => reportTotals[k]).map((k) => row(k, REPORT_STATUS[k].label, reportTotals[k], reportFilter.has(k))).join('');
+  pop.style.top = Math.round(at.bottom + 6) + 'px';
+  pop.style.left = Math.round(Math.max(8, Math.min(at.left, window.innerWidth - 270))) + 'px';
+  pop.addEventListener('click', (e) => e.stopPropagation());
+  pop.querySelectorAll('[data-rf]').forEach((cb) => cb.addEventListener('change', () => {
+    const k = cb.dataset.rf;
+    if (k === 'all') reportFilter.clear();
+    else if (cb.checked) reportFilter.add(k); else reportFilter.delete(k);
+    renderReport();
+    const btn = document.getElementById('rp-status-btn');
+    if (btn) drawStatusFilter(btn.getBoundingClientRect());
+  }));
+  document.body.appendChild(pop);
+}
+document.addEventListener('click', closeStatusFilter);
+window.addEventListener('scroll', closeStatusFilter, true);
+
 let reportTimer = null;
 ['rp-q', 'rp-from', 'rp-to'].forEach((id) => document.getElementById(id).addEventListener('input', () => { clearTimeout(reportTimer); reportTimer = setTimeout(renderReport, 200); }));
 
@@ -1304,6 +1364,7 @@ let reportTimer = null;
 document.getElementById('n-show-closed').addEventListener('change', loadNelos);
 const CASE_OPEN = ['open', 'in_progress', 'pending'];
 async function loadNelos() {
+  loadMissed();
   const box = document.getElementById('nelos-table');
   let res = await _supabase.rpc('seal_nelos_cases');
   if (res.error) {
@@ -1327,6 +1388,108 @@ async function loadNelos() {
         + '<td class="text-slate-500">' + esc(c.assignee_name || c.assigned_module_label || c.assigned_module || 'HQ') + '</td>'
         + '<td class="text-right"><a class="btn btn-soft btn-sm" href="../nelos/nelos_case.html?id=' + c.id + '">Open</a></td></tr>';
     }).join('') + '</tbody></table>';
+}
+
+// Seals nobody scanned, between seals already on a DO. A database without
+// RUN_ME_seal_missed_scan.sql has no seal_missed_scans, and the card stays hidden.
+let missedRows = [];
+async function loadMissed() {
+  const card = document.getElementById('missed-card');
+  const { data, error } = await _supabase.rpc('seal_missed_scans');
+  missedRows = error ? [] : (data || []);
+  card.classList.toggle('hidden', !missedRows.length);
+  if (!missedRows.length) return;
+  document.getElementById('missed-table').innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Customer</th>'
+    + '<th>DO before</th><th>DO after</th><th></th></tr></thead><tbody>'
+    + missedRows.map((r, i) => '<tr><td class="mono font-black text-slate-800">' + range(r.start_code, r.end_code) + '</td>'
+      + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
+      + '<td><div class="text-slate-800">' + esc(r.customer_name || '—') + '</div><div class="mono text-[10px] text-slate-400">' + esc(r.al_number) + '</div></td>'
+      + '<td class="mono">' + esc(r.do_before || '—') + '</td><td class="mono">' + esc(r.do_after || '—') + '</td>'
+      + '<td class="text-right"><button class="btn btn-main btn-sm" data-missed="' + i + '">Key DO</button></td></tr>').join('')
+    + '</tbody></table>';
+  document.querySelectorAll('[data-missed]').forEach((b) => b.addEventListener('click', () => {
+    const r = missedRows[Number(b.dataset.missed)];
+    openSettle({ al: r.al_number, customer: r.customer_name, start: r.start_code, end: r.end_code,
+                 doBefore: r.do_before, doAfter: r.do_after, problemId: r.problem_id });
+  }));
+}
+
+// KEY DO -- the standard way to put a DO to seals the FC Portal never scanned,
+// whether the system found the gap or the office did. Every check is in
+// seal_settle_scan: the range, the customer, nothing scanned, nothing settled
+// twice, and a DO that belongs to this customer. The page only offers the
+// DOs to pick from and says what the database answers.
+let settleCtx = null;
+async function openSettle(ctx) {
+  settleCtx = ctx;
+  modalKind = 'settle';
+  openModal('Key DO for seals not scanned',
+    '<div class="grid grid-cols-2 gap-3 mb-4">'
+    + '<div><div class="lbl">Customer</div><div class="font-black text-slate-800">' + esc(ctx.customer || '—') + '</div></div>'
+    + '<div><div class="lbl">AL</div><div class="font-black mono text-slate-800">' + esc(ctx.al) + '</div></div></div>'
+    + '<div class="grid grid-cols-2 gap-3 mb-4">'
+    + '<div><label class="lbl">First seal</label><input id="kd-start" class="inp mono" inputmode="numeric" value="' + esc(ctx.start) + '"></div>'
+    + '<div><label class="lbl">Last seal</label><input id="kd-end" class="inp mono" inputmode="numeric" value="' + esc(ctx.end) + '"></div></div>'
+    + '<div class="lbl">Did these seals go out?</div>'
+    + '<div class="flex gap-4 mb-4 text-[13px] font-black text-slate-700">'
+    + '<label class="flex items-center gap-2"><input type="radio" name="kd-out" value="delivered" checked> Delivered</label>'
+    + '<label class="flex items-center gap-2"><input type="radio" name="kd-out" value="not_delivered"> Not delivered</label></div>'
+    + '<div id="kd-do-box"><label class="lbl">DO number they went out on</label>'
+    + '<div id="kd-do-pick" class="flex flex-wrap gap-2 mb-2"></div>'
+    + '<input id="kd-do" class="inp mono" placeholder="Pick a DO above or key it" value="' + esc(ctx.doBefore && ctx.doBefore === ctx.doAfter ? ctx.doBefore : '') + '"></div>'
+    + '<div class="mt-4"><label class="lbl">Remark</label><textarea id="kd-remark" class="inp" rows="2" placeholder="Optional" style="resize:vertical"></textarea></div>'
+    + '<div id="kd-msg" class="text-[12px] font-bold mt-3"></div>'
+    + '<div class="flex justify-end gap-2 mt-4"><button class="btn btn-soft" onclick="closeModal()">Cancel</button><button class="btn btn-main" id="kd-save">Settle</button></div>');
+  document.querySelectorAll('input[name="kd-out"]').forEach((r) => r.addEventListener('change', () => {
+    document.getElementById('kd-do-box').classList.toggle('hidden', settleOutcome() !== 'delivered');
+  }));
+  document.getElementById('kd-save').addEventListener('click', saveSettle);
+  // The DOs of this customer, newest first, the two either side of a gap marked.
+  const { data } = await _supabase.from('shared_do_records').select('do_number,delivery_date,created_at').eq('al_number', ctx.al).limit(200);
+  const box = document.getElementById('kd-do-pick');
+  if (!box) return;
+  const seen = new Set();
+  const dos = (data || []).filter((d) => d.do_number && !seen.has(d.do_number) && seen.add(d.do_number))
+    .sort((a, b) => String(b.delivery_date || b.created_at || '').localeCompare(String(a.delivery_date || a.created_at || '')));
+  box.innerHTML = dos.map((d) => {
+    const tag = d.do_number === ctx.doBefore && d.do_number === ctx.doAfter ? ' · before & after'
+      : d.do_number === ctx.doBefore ? ' · before' : d.do_number === ctx.doAfter ? ' · after' : '';
+    return '<button type="button" class="chip" data-do="' + esc(d.do_number) + '">' + esc(d.do_number) + tag
+      + (d.delivery_date ? ' <span class="opacity-60">' + fmtDate(d.delivery_date) + '</span>' : '') + '</button>';
+  }).join('') || '<span class="text-[11px] font-bold text-slate-400">No DO found for this customer.</span>';
+  const mark = () => {
+    box.querySelectorAll('[data-do]').forEach((b) => b.classList.toggle('on', b.dataset.do === document.getElementById('kd-do').value.trim()));
+    document.getElementById('kd-msg').innerHTML = '';
+  };
+  box.querySelectorAll('[data-do]').forEach((b) => b.addEventListener('click', () => { document.getElementById('kd-do').value = b.dataset.do; mark(); }));
+  document.getElementById('kd-do').addEventListener('input', mark);
+  mark();
+}
+function settleOutcome() { const r = document.querySelector('input[name="kd-out"]:checked'); return r ? r.value : 'delivered'; }
+async function saveSettle(e) {
+  const msg = document.getElementById('kd-msg');
+  const start = document.getElementById('kd-start').value.trim(), end = document.getElementById('kd-end').value.trim();
+  const out = settleOutcome();
+  const doNo = document.getElementById('kd-do').value.trim();
+  if (sealNo(start) == null || sealNo(end) == null) { msg.innerHTML = '<span class="text-red-600">Key the first and the last seal.</span>'; return; }
+  if (sealNo(end) < sealNo(start)) { msg.innerHTML = '<span class="text-red-600">The last seal is before the first.</span>'; return; }
+  if (out === 'delivered' && !doNo) { msg.innerHTML = '<span class="text-red-600">Pick or key the DO these seals went out on.</span>'; return; }
+  e.target.disabled = true;
+  try {
+    const { data, error } = await _supabase.rpc('seal_settle_scan', {
+      p_al: settleCtx.al, p_start: start, p_end: end, p_outcome: out,
+      p_do: out === 'delivered' ? doNo : null,
+      p_remark: document.getElementById('kd-remark').value.trim() || null,
+      p_problem: settleCtx.problemId || null,
+    });
+    if (error) { msg.innerHTML = '<span class="text-red-600">' + esc(missingSetup(error) ? 'Run shared/RUN_ME_seal_missed_scan.sql first.' : error.message) + '</span>'; return; }
+    toast(data || 'Settled.');
+    closeModal();
+    allRows = [];
+    loadList();
+    loadNelos();
+    if (loaded.report) loadReport();
+  } finally { e.target.disabled = false; }
 }
 
 // ══════════════════════ SETTINGS ═════════════════════════════════════════

@@ -4245,6 +4245,43 @@ it. **All** is the first chip and the default; From seal / To seal cut the
 list to the numbers keyed, a range across either end cut at it, and the chip
 figures count what is left after the cut. The Seal range heading sorts it.
 
+**The Report filter is a tick list on the Status heading**, not a row of
+chips: All, or any mix of statuses, each with its figure, and a line above
+the table saying what is shown with a cross on each. It is drawn OUTSIDE the
+table (`position:fixed` off the heading) because the table scrolls sideways
+and would clip it.
+
+### A seal that went out unscanned is SETTLED, never re-scanned
+
+The FC Portal scans every seal as it goes out, and the DO names the scanned
+ones. A seal that went out unscanned stays Pending collection for ever, with
+the seals either side already on a DO -- which is how the office found them.
+`shared/RUN_ME_seal_missed_scan.sql` is the whole of it:
+
+- **Found by the database**: `seal_find_missed` is a pending run of one
+  customer with a collected seal immediately before AND after it. A DO save
+  runs `seal_flag_missed` (trigger `seal_sync_do_missed`, named to sort AFTER
+  `seal_sync_do` so the scans already carry the DO), which raises a
+  `missed_scan` problem and NELOS case per gap, once, and resolves the ones
+  that stopped being a gap.
+- **Settled by the office**, Key DO on the NELOS tab or on any Seal with
+  Customer row -- the standard way, gap or not. `seal_settle_scan` checks
+  everything (range, this customer, nothing scanned, nothing settled twice,
+  a DO of THIS customer) and the page only says what it answers. It writes
+  `seal_settled_scans` (read-only to everybody; the function is the one
+  writer), adds the range to that DO `seal_ranges` marked `settled`, and
+  resolves the problem and its case. **The problem is resolved BEFORE the DO
+  is updated**: the DO update sets off the gap check, which would otherwise
+  resolve it first in the system name.
+- **Read everywhere for free**: `seal_segments` counts a delivered settled
+  seal as scanned on its DO, so the nursery tab, the Report and the customer
+  portal all say Used. Not delivered leaves the seals Pending and never a gap
+  again.
+
+`seal_raise_case` is in THREE files now and `seal_segments` in two, word for
+word; the test compares them. With two different DOs either side, nothing is
+chosen for the office -- both are offered, marked before and after.
+
 `tests/seal_dashboard.cjs` holds the office page.
 
 ## Coming back to the portal is not signing in again

@@ -250,6 +250,7 @@ BEGIN
     WHEN 'deliver_overlap'      THEN 'Seals ' || pr.seal_from || ' - ' || pr.seal_to || ' sent to site twice'
     WHEN 'delivery_mismatch'    THEN 'Delivery #' || COALESCE(pr.delivery_id::TEXT, '?') || ' received at site does not match what HQ sent'
     WHEN 'delivery_twice'       THEN 'Delivery #' || COALESCE(pr.delivery_id::TEXT, '?') || ' confirmed received twice'
+    WHEN 'missed_scan'          THEN 'Seals ' || pr.seal_from || ' - ' || pr.seal_to || ' not scanned, the seals either side are on a DO'
     ELSE 'Seal problem' END;
   IF pr.al_number IS NOT NULL THEN
     v_title := v_title || ', for ' || COALESCE(pr.customer_name, '?') || ' (' || pr.al_number || ')';
