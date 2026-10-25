@@ -6,8 +6,8 @@
 --
 -- The seals now come to HQ first:
 --
---   1. HQ orders from the supplier                  seal_orders (already there)
---   2. HQ receives them, keying the start and end    seal_hq_receipts
+--   1. HQ orders a RANGE from the supplier           seal_orders + start, end
+--   2. HQ receives it a thousand at a time           seal_hq_receipts
 --   3. HQ sends a range to site                      seal_deliveries, Packed
 --   4. HQ marks it delivered to the site office      status Delivered
 --   5. Site keys the start and end AGAIN             a seal_receipts row with
@@ -158,6 +158,36 @@ ALTER TABLE public.seal_receipts ADD COLUMN IF NOT EXISTS delivery_id BIGINT REF
 CREATE INDEX IF NOT EXISTS seal_receipts_delivery_idx ON public.seal_receipts (delivery_id);
 
 ALTER TABLE public.seal_problems ADD COLUMN IF NOT EXISTS delivery_id BIGINT;
+
+-- An order names the range the supplier is printing, so the next order can
+-- start after it and HQ can receive it a thousand at a time. The numbers and
+-- the qty are worked out here from the two codes, so a page cannot store a
+-- qty that disagrees with its own range.
+ALTER TABLE public.seal_orders ADD COLUMN IF NOT EXISTS start_code TEXT;
+ALTER TABLE public.seal_orders ADD COLUMN IF NOT EXISTS end_code TEXT;
+ALTER TABLE public.seal_orders ADD COLUMN IF NOT EXISTS start_no BIGINT;
+ALTER TABLE public.seal_orders ADD COLUMN IF NOT EXISTS end_no BIGINT;
+CREATE INDEX IF NOT EXISTS seal_orders_no_idx ON public.seal_orders (start_no, end_no);
+
+CREATE OR REPLACE FUNCTION public.seal_order_numbers()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE r RECORD;
+BEGIN
+  IF NEW.start_code IS NULL OR NEW.start_code = '' THEN RETURN NEW; END IF;
+  SELECT * INTO r FROM public.seal_parse_ranges(jsonb_build_array(jsonb_build_object('start', NEW.start_code, 'end', COALESCE(NULLIF(NEW.end_code, ''), NEW.start_code)))) LIMIT 1;
+  IF NOT FOUND THEN RETURN NEW; END IF;
+  NEW.start_code := r.start_code;
+  NEW.end_code   := r.end_code;
+  NEW.start_no   := r.start_no;
+  NEW.end_no     := r.end_no;
+  NEW.qty        := (r.end_no - r.start_no + 1)::INT;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS seal_order_numbers ON public.seal_orders;
+CREATE TRIGGER seal_order_numbers
+  BEFORE INSERT OR UPDATE OF start_code, end_code ON public.seal_orders
+  FOR EACH ROW EXECUTE FUNCTION public.seal_order_numbers();
 
 
 -- ── 3. NELOS ─────────────────────────────────────────────────────────────────
@@ -484,15 +514,21 @@ END $$;
 DROP FUNCTION IF EXISTS public.seal_hq_summary();
 CREATE FUNCTION public.seal_hq_summary()
 RETURNS TABLE (last_code TEXT, next_code TEXT, hq_received BIGINT, hq_stock BIGINT,
-               on_the_way BIGINT, site_stock BIGINT)
+               on_the_way BIGINT, site_stock BIGINT,
+               last_ordered_code TEXT, next_order_code TEXT, pending_receive BIGINT)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_last  BIGINT;
   v_code  TEXT;
+  v_olast BIGINT;
+  v_ocode TEXT;
 BEGIN
   IF NOT public.seal_is_staff() THEN RAISE EXCEPTION 'Staff only'; END IF;
+  SELECT o.end_no, o.end_code INTO v_olast, v_ocode FROM public.seal_orders o
+   WHERE o.end_no IS NOT NULL ORDER BY o.end_no DESC LIMIT 1;
   SELECT x.n, x.c INTO v_last, v_code FROM (
-    SELECT end_no AS n, end_code AS c FROM public.seal_hq_ranges
+    SELECT end_no AS n, end_code AS c FROM public.seal_orders WHERE end_no IS NOT NULL
+    UNION ALL SELECT end_no, end_code FROM public.seal_hq_ranges
     UNION ALL SELECT end_no, end_code FROM public.seal_receipt_ranges
     UNION ALL SELECT end_no, end_code FROM public.seal_delivery_ranges
     UNION ALL SELECT end_no, end_code FROM public.seal_allocations
@@ -504,10 +540,21 @@ BEGIN
     (SELECT COALESCE(sum(s.qty), 0) FROM public.seal_hq_stock() s)::BIGINT,
     (SELECT COALESCE(sum(r.qty), 0) FROM public.seal_delivery_ranges r
        JOIN public.seal_deliveries d ON d.id = r.delivery_id WHERE d.status <> 'received')::BIGINT,
-    (SELECT COALESCE(sum(g.qty), 0) FROM public.seal_segments(NULL) g WHERE g.seg_status = 'in_stock')::BIGINT;
+    (SELECT COALESCE(sum(g.qty), 0) FROM public.seal_segments(NULL) g WHERE g.seg_status = 'in_stock')::BIGINT,
+    v_ocode,
+    -- The next order starts after the last seal ANYWHERE, not only the last
+    -- one ordered: seals keyed as opening stock were printed too.
+    CASE WHEN v_last IS NULL THEN NULL ELSE public.seal_code(v_last + 1, length(v_code)) END,
+    -- Ordered and not yet received at HQ, on orders still open.
+    (SELECT COALESCE(sum(o.qty - COALESCE((SELECT sum(GREATEST(0, LEAST(h.end_no, o.end_no) - GREATEST(h.start_no, o.start_no) + 1))
+                                            FROM public.seal_hq_ranges h
+                                           WHERE h.start_no <= o.end_no AND h.end_no >= o.start_no), 0)), 0)
+       FROM public.seal_orders o
+      WHERE o.start_no IS NOT NULL AND COALESCE(o.status, '') <> 'Closed')::BIGINT;
 END $$;
 
 -- A range checked before it is saved, on the HQ page.
+--   order       already on another order             block
 --   hq_receive  already received at HQ               block
 --   deliver     already sent on another delivery     block
 --               not received at HQ                   warn
@@ -537,6 +584,18 @@ BEGIN
         FROM public.seal_hq_ranges h JOIN public.seal_hq_receipts s ON s.id = h.receipt_id
        WHERE h.start_no <= n2 AND h.end_no >= n1
        ORDER BY h.start_no;
+    RETURN;
+  END IF;
+
+  IF p_kind = 'order' THEN
+    RETURN QUERY
+      SELECT 'ordered'::TEXT,
+             public.seal_code(GREATEST(o.start_no, n1), w), public.seal_code(LEAST(o.end_no, n2), w),
+             (LEAST(o.end_no, n2) - GREATEST(o.start_no, n1) + 1)::BIGINT,
+             ('Already ordered on ' || to_char(o.order_date, 'DD Mon YYYY') || COALESCE(' (' || o.order_no || ')', ''))::TEXT
+        FROM public.seal_orders o
+       WHERE o.start_no IS NOT NULL AND o.start_no <= n2 AND o.end_no >= n1
+       ORDER BY o.start_no;
     RETURN;
   END IF;
 
@@ -600,7 +659,7 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ── 7. CHECK ─────────────────────────────────────────────────────────────────
--- A good result is 11 rows, every one OK. next seal no. shows the number the
+-- A good result is 12 rows, every one OK. next seal no. shows the number the
 -- next order to the supplier should start at (empty on a database with no
 -- seals yet). nelos label reads Seal Manage.
 
@@ -614,11 +673,13 @@ UNION ALL SELECT 'problem delivery_id column', CASE WHEN EXISTS (SELECT 1 FROM i
 UNION ALL SELECT 'trigger on HQ receipt', CASE WHEN EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'seal_sync_hq_receipt') THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'trigger on delivery', CASE WHEN EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'seal_sync_delivery') THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'trigger on site confirm', CASE WHEN EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'seal_confirm_delivery') THEN 'OK' ELSE 'MISSING' END, ''
+UNION ALL SELECT 'order start and end columns', CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seal_orders' AND column_name = 'end_no') THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'function seal_hq_summary', CASE WHEN to_regprocedure('public.seal_hq_summary()') IS NOT NULL THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'function seal_check_hq', CASE WHEN to_regprocedure('public.seal_check_hq(text,text,text)') IS NOT NULL THEN 'OK' ELSE 'MISSING' END, ''
 UNION ALL SELECT 'next seal no.', 'OK',
        COALESCE((SELECT public.seal_code(x.n + 1, length(x.c)) FROM (
-          SELECT end_no AS n, end_code AS c FROM public.seal_hq_ranges
+          SELECT end_no AS n, end_code AS c FROM public.seal_orders WHERE end_no IS NOT NULL
+          UNION ALL SELECT end_no, end_code FROM public.seal_hq_ranges
           UNION ALL SELECT end_no, end_code FROM public.seal_receipt_ranges
           UNION ALL SELECT end_no, end_code FROM public.seal_delivery_ranges
           UNION ALL SELECT end_no, end_code FROM public.seal_allocations) x ORDER BY x.n DESC LIMIT 1), '')
