@@ -200,15 +200,22 @@ const PAGE_DEFS = [
      key: a row saved before today has an opinion about 'manage' only, so
      the two new ticks default to allowed on such a row (see
      OPERATION_NEW_ACTION_DEFAULT in shared_access.js) rather than reading
-     a row that never heard of them as "no". Deleting a DO or BA still
-     asks the Master PIN on the page — the PIN is a second lock, not a
-     replacement for the tick. */
+     a row that never heard of them as "no".
+     Verify AL, Cancel / Restore AL and Delete DO / BA were guarded by the
+     Master PIN alone, and the PIN is written into the pages where anybody
+     can read it with Inspect. Each is a tick now (al_verify, al_cancel,
+     delete) and the PIN is gone: the office asked for the tick to be the
+     only lock. On a row saved before them they answer as the PIN-guarded
+     actions always did: Operation admin yes, anybody else no. */
   { key:'orders', store:'pages', def:'normal', label:'Customer Order Documentation',
     desc:'Delivery Note (DO), Borang Akuan (BA) and Approval Letter (AL)',
     actions:[
-      { key:'manage',    label:'Add new DO',                      desc:'Create, edit and upload DOs — deleting one still asks the Master PIN' },
-      { key:'ba_manage', label:'Manage Borang Akuan (BA) Record', desc:'Add, edit and save BA records — deleting one still asks the Master PIN' },
-      { key:'al_manage', label:'Add New AL',                      desc:'Create new approval letters and edit their details' }
+      { key:'manage',    label:'Add new DO',                      desc:'Create, edit and upload DOs' },
+      { key:'ba_manage', label:'Manage Borang Akuan (BA) Record', desc:'Add, edit and save BA records' },
+      { key:'al_manage', label:'Add New AL',                      desc:'Create new approval letters and edit their details' },
+      { key:'al_verify', label:'Verify AL',                       desc:'Mark an approval letter as Verified' },
+      { key:'al_cancel', label:'Cancel & restore AL',             desc:'Cancel an approval letter, or bring a cancelled one back' },
+      { key:'delete',    label:'Delete DO / BA',                  desc:'Delete a Delivery Note or a Borang Akuan record' }
     ]},
   /* ── Seedling Sales Control — one card, three ticks ──
      Same move as above, one page sooner: Customer Monitoring and
@@ -278,22 +285,34 @@ function pageLevel(perms, def_) {
    Uses the saved operation_actions when present; otherwise derives the
    same answer the legacy fields give, so the drawer always shows what
    the user can ACTUALLY do today. */
+/* Ticks a row saved before them has no opinion about, and what that row
+   answers until somebody ticks it. Same lists as shared_access.js. */
+const NEW_ACTION_DEFAULT = { orders: ['ba_manage', 'al_manage'], stock: ['customer', 'map'] };
+const NEW_ACTION_ADMIN   = { orders: ['al_verify', 'al_cancel', 'delete'] };
+
 function effectiveActions(perms, d) {
+  const isOpAdmin = !!(perms.modules && perms.modules.operation === 'admin');
   const saved = perms.operation_actions && perms.operation_actions[d.key];
   if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
     const out = { view: !!saved.view };
-    d.actions.forEach(a => { out[a.key] = out.view && !!saved[a.key]; });
+    d.actions.forEach(a => {
+      let v = !!saved[a.key];
+      if (saved[a.key] === undefined && (NEW_ACTION_DEFAULT[d.key] || []).includes(a.key)) v = true;
+      if (saved[a.key] === undefined && (NEW_ACTION_ADMIN[d.key] || []).includes(a.key)) v = isOpAdmin;
+      out[a.key] = out.view && v;
+    });
     return out;
   }
   const view = pageLevel(perms, d) !== 'none';
-  const isOpAdmin = !!(perms.modules && perms.modules.operation === 'admin');
   const out = { view };
   d.actions.forEach(a => {
     let v;
     switch (a.key) {
       case 'verify':     v = !!perms.can_verify_operation || isOpAdmin; break;
       case 'review':
-      case 'delete':     v = isOpAdmin; break;
+      case 'delete':
+      case 'al_verify':
+      case 'al_cancel':  v = isOpAdmin; break;
       case 'clear_logs': v = !!(perms.modules && perms.modules.audit_trail === 'admin'); break;
       default:           v = true; // legacy "normal" could always use page functions
     }
@@ -414,6 +433,14 @@ function openDrawer(uid) {
   document.getElementById('d-pages').innerHTML =
     PAGE_DEFS.map(d => pageCardHtml(d, effectiveActions(editingPerms, d))).join('');
   document.getElementById('d-manage-users').checked = !!editingPerms.manage_users;
+  // Only a super admin gives or takes away user management (see user_access.html).
+  (function () {
+    const sup = MJMAccess.isSuperAdmin && MJMAccess.isSuperAdmin();
+    const tog = document.getElementById('d-manage-users');
+    tog.disabled = !sup;
+    tog.parentElement.style.opacity = sup ? '' : '.45';
+    tog.parentElement.title = sup ? '' : 'Only a super admin can change this';
+  })();
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-backdrop').classList.add('open');
@@ -475,7 +502,9 @@ async function saveDrawer() {
       && !confirm('You are removing YOUR OWN "able to change user roles" permission. You will lose access to this page. Continue?')) {
     return;
   }
-  next.manage_users = manageEl.checked;
+  const _sup = MJMAccess.isSuperAdmin && MJMAccess.isSuperAdmin();
+  if (editingPerms.super_admin && !_sup) { showToast('Only a super admin can change a super admin.', 'err'); return; }
+  next.manage_users = _sup ? manageEl.checked : !!editingPerms.manage_users;
 
   const saveBtn = document.getElementById('d-save');
   saveBtn.disabled = true;

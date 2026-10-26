@@ -207,10 +207,23 @@ function plotCaps(nursery, plots, ticked){
    rounded again — 1950 mL is 1.95 L, and calling that 2 L would add half a
    litre the rule did not ask for. Two decimals is enough for any multiple
    of 50 mL; trailing zeros go, so 2000 mL reads "2 L" and not "2.00 L". */
+/* THE LOCALE IS PINNED, and it is the point of this function rather than a
+   detail of it. A bare toLocaleString reads the DEVICE's, which on a phone
+   is whatever the person set their handset to: this office screen read
+   4.4 kg and the Field Conductor's phone read 4,4 kg on the same dose, in
+   the same week. Two figures for one amount, and nothing on either screen
+   saying which is the real one.
+
+   'en-MY' is the spelling moneyFig on the salary claim already uses — the
+   one figure in this system that was always written deliberately — and the
+   phone pins the same name in src/lib/numberText.js. Change one, change the
+   other. */
+const USAGE_LOCALE = 'en-MY';
+
 function fmtUsage(totalAmount, unit){
   const big = totalAmount / 1000;
   const shown = Math.round(big * 100) / 100;
-  return shown.toLocaleString(undefined, { maximumFractionDigits: 2 })
+  return shown.toLocaleString(USAGE_LOCALE, { maximumFractionDigits: 2 })
        + (unit === 'gm' ? ' kg' : ' L');
 }
 /* Unit per chemical — used to auto-set mL/gm when one is selected. Reads
@@ -396,7 +409,7 @@ function calcFertUsage(caps, fertName, doseGm, decimals = 2){
   if (!totalGm) return { kg:'—', bags:'—', totalGm:0 };
   // A whole number of 100 gm steps, so shown exactly rather than rounded on.
   const kgStr = (Math.round((totalGm / 1000) * 100) / 100)
-    .toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' kg';
+    .toLocaleString(USAGE_LOCALE, { maximumFractionDigits: 2 }) + ' kg';
   // Bags are not a step of anything, so this one still rounds UP: a bag
   // count rounded down is a lorry going back for one more bag.
   const bagsStr = info ? ceilTo(totalGm / info.bagSizeGm, decimals) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
@@ -861,8 +874,8 @@ function capFmt(v) {
   if (!n) return '—';
   const r = Math.round(n * 100) / 100;
   return Number.isInteger(r)
-    ? r.toLocaleString()
-    : r.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    ? r.toLocaleString(USAGE_LOCALE)
+    : r.toLocaleString(USAGE_LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /* Capacity each worker earned on one work type: every ticked row hands its

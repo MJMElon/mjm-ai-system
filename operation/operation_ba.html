@@ -838,8 +838,9 @@
         async function deleteBA() {
             if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value;
-            const pin = prompt("Enter Master PIN to delete BA:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
+            // The Delete DO / BA tick decides. The Master PIN that used to follow
+            // was written into this page, readable by anybody with Inspect.
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'delete')) return;
             if(!confirm(`Are you sure you want to completely delete BA: ${originalKey}? This will unlink it from all DOs.`)) return;
 
             try {
@@ -1027,8 +1028,8 @@
      in the module's User Access (operation_user_access.html, key 'orders'
      — the one "Open Page" switch for DO/BA/AL together; 'ba_manage' is
      this page's own write tick). Fails open on read errors, same as the
-     DO page's guard. Deleting a BA still asks the Master PIN on top of
-     the tick — inside deleteBA(). -->
+     DO page's guard. Deleting a BA asks the Delete DO / BA tick inside
+     deleteBA(); the Master PIN it used to ask as well is gone. -->
 <script src="../shared/shared_access.js"></script>
 <script>
 (async () => {

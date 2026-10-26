@@ -1020,8 +1020,11 @@
         }
 
         async function verifyAL() { 
-            const pin = prompt("Enter Admin PIN to Verify:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN."); 
+            // The Verify AL tick in Operation > User Access decides. There
+            // was a Master PIN here too; it was written into this page, where
+            // anybody could read it with Inspect, so it was no lock at all.
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'al_verify')) return;
+
             
             const { data: { session } } = await _supabase.auth.getSession();
             const email = session?.user?.email || 'Admin';
@@ -1040,8 +1043,7 @@
         }
         
         async function cancelAL() {
-            const pin = prompt("Enter Master PIN to Cancel AL:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'al_cancel')) return;
 
             const reason = prompt("State the reason for cancelling this Approval Letter:");
             if (!reason) return;
@@ -1204,8 +1206,7 @@
         }
 
         async function restoreAL() {
-            const pin = prompt("Enter Master PIN to Restore AL:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'al_cancel')) return;
             if (!confirm("Restore this cancelled AL back to ACTIVE (Unverified) status?")) return;
             try {
                 const orderId = document.getElementById('edit-id').value;

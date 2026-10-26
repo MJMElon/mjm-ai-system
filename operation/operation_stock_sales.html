@@ -208,6 +208,7 @@
         .pill-pending  { background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
         .pill-completed{ background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}
         .pill-cancelled{ background:#f1f5f9;color:#64748b;border-color:#cbd5e1;}
+        .pill-closed{ background:#334155;color:#fff;border-color:#334155;}
 
         /* ── Sales-module tab switcher ── */
         .ssm-tabs{display:flex;gap:6px;background:white;border:1px solid #e2e8f0;border-radius:14px;padding:6px;box-shadow:0 2px 8px rgba(0,0,0,.04);width:100%;}
@@ -711,6 +712,7 @@
                         <button type="button" class="cf-opt active" data-value="all" onclick="selectCustFilter('all')">All Orders</button>
                         <button type="button" class="cf-opt" data-value="outstanding" onclick="selectCustFilter('outstanding')">Outstanding Balance</button>
                         <button type="button" class="cf-opt" data-value="cancelled" onclick="selectCustFilter('cancelled')">Cancelled Orders</button>
+                        <button type="button" class="cf-opt" data-value="closed" onclick="selectCustFilter('closed')">Closed Orders</button>
                         <button type="button" class="cf-opt" data-value="completed" onclick="selectCustFilter('completed')">Completed Orders</button>
                     </div>
                 </div>
@@ -957,7 +959,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=5"></script>
+<script src="operation_stock_sales.js?v=6"></script>
 <!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
 <div class="ci-modal" id="ci-upload-modal">
     <div class="ci-modal-card">

@@ -143,8 +143,8 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
           'the six separate sections are gone — only the two merged cards remain');
     const byId = Object.fromEntries(drawer.cards.map(c => [c.id, c]));
     check(JSON.stringify(byId['d-card-orders'].actions) === JSON.stringify(
-      ['Add new DO', 'Manage Borang Akuan (BA) Record', 'Add New AL']),
-      'Customer Order Documentation offers all three ticks, in order (' + byId['d-card-orders'].actions.join(' / ') + ')');
+      ['Add new DO', 'Manage Borang Akuan (BA) Record', 'Add New AL', 'Verify AL', 'Cancel & restore AL', 'Delete DO / BA']),
+      'Customer Order Documentation offers its six ticks, in order (' + byId['d-card-orders'].actions.join(' / ') + ')');
     check(JSON.stringify(byId['d-card-stock'].actions) === JSON.stringify(
       ['Customer Monitoring', 'Update stock & sales', 'Inventory Map']),
       'Seedling Sales Control offers all three ticks, in order (' + byId['d-card-stock'].actions.join(' / ') + ')');
@@ -264,7 +264,7 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
   }
 
   // ── F. AL obeys its own tick; PIN flows untouched ───────────────────────
-  console.log('\nF. Approval Letter obeys al_manage; the Master PIN sentences are untouched');
+  console.log('\nF. Approval Letter obeys al_manage; no Master PIN is left');
   {
     const u = prof('u7', { modules: { operation: 'normal' }, operation_actions: {
       orders: { view: true, manage: true, ba_manage: true, al_manage: false } } });
@@ -278,7 +278,7 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
     });
     check(d.blocked, 'al_manage off: Add New AL never opens');
     const pinSrc = fs_read_pins();
-    check(pinSrc, 'the Master PIN prompts are still in the pages, word for word');
+    check(pinSrc, 'no Master PIN is left in the pages (the office asked for the ticks to be the only lock)');
     await ctx.close();
   }
 
@@ -287,14 +287,13 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
 
-/* The PIN prompts are the office's second lock and this change must not
-   touch them: the exact sentences stay in the pages. */
+/* The PIN prompts were the office's second lock until the office asked
+   for them to go: the PIN was written into the pages, readable by anybody
+   with Inspect. The Verify AL / Cancel AL / Delete DO-BA ticks replace it
+   (tests/a_tick_before_every_pin.cjs). None of it may come back. */
 function fs_read_pins() {
   const ba = fs.readFileSync(path.join(ROOT, 'operation', 'operation_ba.html'), 'utf8');
   const al = fs.readFileSync(path.join(ROOT, 'operation', 'operation_booking.html'), 'utf8');
   const dlv = fs.readFileSync(path.join(ROOT, 'operation', 'operation_delivery.html'), 'utf8');
-  return ba.includes('Enter Master PIN to delete BA:')
-      && dlv.includes('Enter Master PIN to delete DO:')
-      && al.includes('Enter Master PIN to Cancel AL:')
-      && al.includes('Enter Admin PIN to Verify:');
+  return ![ba, dlv, al].some(src => src.includes('8888') || /prompt\([^)]*PIN/.test(src));
 }

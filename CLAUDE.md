@@ -4188,7 +4188,10 @@ Three things worth knowing:
 
 - **Seals are compared as numbers and shown at their width.** 0009297 and 9297
   are one seal. `sealRanges.js` is the rule and lives in mobile, fc-portal and
-  the Sales Web as the same file — change all of them.
+  the Sales Web as the same file — change all of them. **The office page
+  shows a seal at no fewer than six digits** (`SEAL_MIN_WIDTH`), so 1101 keyed
+  without its zeros reads 001101; only the showing pads, the number decides.
+  The phone copies of `sealRanges.js` do not pad yet.
 - **A DO says which seals it carried** (`shared_do_records.seal_ranges`), the
   ones scanned on that card since its last DO, so a consent collected over
   three trips gives three DOs with three different lists.
@@ -4196,7 +4199,142 @@ Three things worth knowing:
   opening stock. Turned on before that, every consent is a "never received"
   case.
 
+**Seals come to HQ first** (`shared/RUN_ME_seal_hq_delivery.sql`): HQ
+orders, HQ receives (`seal_hq_receipts`), HQ packs a delivery to site
+(`seal_deliveries`: packed, then delivered to the site office), and site
+keys the start and end AGAIN — on Receive Seals or on the office page —
+which is an ordinary `seal_receipts` row naming the delivery. The trigger
+closes the delivery and compares the two both ways round; a difference is a
+problem and a case, never a refused receipt. The confirm is not filled in
+from the delivery on purpose: the point is that somebody counted what
+arrived. `seal_raise_case` is in BOTH SQL files, word for word, so running
+either leaves the same titles — the test compares them.
+
+The office page is two pages, **Seal at MJM Nursery** (first: in stock at
+the nursery, then every customer order) and **Seal at HQ**, and the ribbon's
+[← Portal] is the only way back — no User Access button either, Settings is
+enough. Seal at HQ is three blocks, each opening a window: **Last seal
+number** with a + that orders a RANGE (`seal_orders.start_code/end_code`,
+the start filled in after the last seal anywhere, the qty worked out by a
+trigger from the two codes); **Pending receive**, the orders opened up in
+rows of 1,000 cut from each order's own first seal, each row received on its
+own — so a box of 10,000 is checked a thousand at a time; and **Delivering to
+site** with a + that packs a delivery. Below them is every seal at HQ, In HQ
+or Delivering to site; a seal leaves it when site receives it.
+
+The second and third are now **Seal pending receive** (one row per order:
+date, range, by whom, `>`) and **Seals delivery to MJM Nursery** (+ New
+delivery on the right). `>` opens the order's own *receiving check list*:
+tick the first row and the last and every row between is ticked, and
+Receive ticked writes ONE receipt with the running numbers joined. Neither
+list carries a show-received tick — a **History** button switches the same
+window to what HQ, or the nursery, has received, and a window opened from
+another carries a Back to it.
+
+**Then simpler again.** The tabs are tabs (Seal at MJM Nursery, Seal at HQ,
+NELOS, and Settings as a small gear). On Seal at HQ the three blocks are
+SELECTORS — Seal in HQ Cabinet (the last seal and where the next order
+starts are a small line under it), Seal pending receive, Seals delivery to
+MJM Nursery — and the list of whichever is pressed is shown in ONE view
+under them, check list and History included. **Only a + opens a window**,
+and the window is the form for adding: an order or a delivery.
+
+**Problems became NELOS.** The tab lists every case the seal checks opened,
+whoever it is assigned to, through `seal_nelos_cases()` — NELOS shows a case
+only to somebody who holds NELOS, and the people on this page may not. And
+a seal problem is settled where its case is: `seal_follow_case` on
+`nelos_cases` resolves the problems filed on a case when HQ resolves or
+closes it, and reopens them if the case is reopened, so the warning on a
+customer cannot outlive the case it came from. A list joins
+running numbers into one start and end wherever nothing breaks the run.
+
+**A delivery can only take what is in the HQ cabinet.** The page checks
+each keyed range against `seal_hq_stock` (received, on no other delivery)
+and refuses one that is not in it or is keyed backwards. Save checks it
+again, because the check waits for typing to stop and a quick Save can
+arrive before it, or carry an answer about what was keyed before. Fill was
+taken out: the office keys the first and last seal off the roll in hand. A
+New Seal Order whose start is not the last order + 1 is WARNED and still
+allowed, because a supplier may skip a run. `table.t .text-right` is set in
+the page itself, because `table.t th` said left for every heading and beat
+the Tailwind class, so Qty sat left over figures on the right.
+
+**Seal at MJM Nursery is three blocks the same way**: Seal with Customer
+(a consent signed and not yet on a DO -- pending or scanned), Seal in MJM
+Nursery Cabinet (in stock), and Seal used (on a DO, with the customer, the
+DO number and the DO date, which is read off `shared_do_records.
+delivery_date` because the seal does not carry it). The block totals are
+everything at the nursery; the search narrows only the list under them.
+The blocks carry a title and a figure and nothing else, and nothing sits
+beside the search bar -- the office asked for both lines to go. Every list
+is ONE list in seal-number order whoever the seals went to, and the Seal
+range heading turns it round. Seal with Customer joins a customer run
+across pending and scanned, so a range part-scanned still reads as one
+start and end, and its View consent opens the `mobile_consent_records`
+row (`select *`, so a column a database lacks cannot refuse the read).
+
+**Report is every number from the first to the latest**, each run with
+where it is now, built in the page from what the other tabs already read.
+A seal is where its LATEST step put it, so the layers are laid in that
+order and each keeps only what no later one claimed: used, with a customer,
+nursery cabinet, delivering, HQ cabinet, ordered and not received. A gap
+between numbers is a **No record** row, never skipped -- a seal nobody has
+a record of is the thing to look at. Nothing in the database was added for
+it. **All** is the first chip and the default; From seal / To seal cut the
+list to the numbers keyed, a range across either end cut at it, and the chip
+figures count what is left after the cut. The Seal range heading sorts it.
+
+**The Report filter is a tick list on the Status heading**, not a row of
+chips: All, or any mix of statuses, each with its figure, and a line above
+the table saying what is shown with a cross on each. It is drawn OUTSIDE the
+table (`position:fixed` off the heading) because the table scrolls sideways
+and would clip it.
+
+### A seal that went out unscanned is SETTLED, never re-scanned
+
+The FC Portal scans every seal as it goes out, and the DO names the scanned
+ones. A seal that went out unscanned stays Pending collection for ever, with
+the seals either side already on a DO -- which is how the office found them.
+`shared/RUN_ME_seal_missed_scan.sql` is the whole of it:
+
+- **Found by the database**: `seal_find_missed` is a pending run of one
+  customer with a collected seal immediately before AND after it. A DO save
+  runs `seal_flag_missed` (trigger `seal_sync_do_missed`, named to sort AFTER
+  `seal_sync_do` so the scans already carry the DO), which raises a
+  `missed_scan` problem and NELOS case per gap, once, and resolves the ones
+  that stopped being a gap.
+- **Settled by the office**, Key DO on the NELOS tab or on any Seal with
+  Customer row -- the standard way, gap or not. `seal_settle_scan` checks
+  everything (range, this customer, nothing scanned, nothing settled twice,
+  a DO of THIS customer) and the page only says what it answers. It writes
+  `seal_settled_scans` (read-only to everybody; the function is the one
+  writer), adds the range to that DO `seal_ranges` marked `settled`, and
+  resolves the problem and its case. **The problem is resolved BEFORE the DO
+  is updated**: the DO update sets off the gap check, which would otherwise
+  resolve it first in the system name.
+- **Read everywhere for free**: `seal_segments` counts a delivered settled
+  seal as scanned on its DO, so the nursery tab, the Report and the customer
+  portal all say Used. Not delivered leaves the seals Pending and never a gap
+  again.
+
+`seal_raise_case` is in THREE files now and `seal_segments` in two, word for
+word; the test compares them. With two different DOs either side, nothing is
+chosen for the office -- both are offered, marked before and after.
+
 `tests/seal_dashboard.cjs` holds the office page.
+
+## Coming back to the portal is not signing in again
+
+`index.html` shows the sign-in screen until `onAuthStateChange` has read the
+profile, and that read goes over the network — so every module's [← Portal]
+put the login up for a second or two over somebody signed in the whole time,
+and the office read it as being thrown out. A device holding a session and
+the last profile this account was given (`mjm_perm_last__`) now opens on the
+hub straight away; the handler still reads the profile and redraws it, and
+still shows the sign-in when the session has gone. A session with nothing
+remembered shows neither screen rather than the login.
+`tests/portal_back_is_not_a_sign_in.cjs` holds it against a database that
+never answers.
 
 ## A category nothing raises is a feature somebody stopped halfway
 
@@ -4284,6 +4422,62 @@ single number with no way to tell a second look from a second selection — and
 it was dropped rather than merged beside the first. Two copies of one rule is
 the fault this file has a heading about. What was genuinely missing was on the
 office side and is above: the condition on the row.
+
+## 4.4 kg on the office screen and 4,4 kg on the phone
+
+The office read a dose off their own schedule and the Field Conductor read
+the same dose off his phone, in the same week, and the two did not match.
+Nothing was wrong with the arithmetic — `weekUsage` on the phone and
+`calcMaxChem` in the office agree to the millilitre, which is why that file
+is written twice and says so.
+
+**`n.toLocaleString()` with no locale reads the DEVICE's.** On a desk in the
+office that is English; on a handset set to a language that writes decimals
+with a comma it is 4,4. So the figure was correct and the separator was the
+reader's, and there is nothing on either screen that could say so.
+
+**A dose is the harmless end of it, and that is the part worth keeping.**
+The separator swaps BOTH ways: on that same phone a plot of 6,515 seedlings
+prints **6.515**, which somebody running down a column reads as six and a
+half. Every figure in the phone app went through that call — 51 of them.
+The dose was simply the one with a decimal in it, so it was the only one
+anybody could see was wrong.
+
+So the pin is **`en-MY`**, in both repositories and under the same name,
+because one rule in two repositories under two spellings is the drift this
+file keeps finding. It was already the spelling `moneyFig` uses on the
+salary claim — the one figure in this system that was always written
+deliberately.
+
+- **The phone has ONE formatter**, `src/lib/numberText.js`, and nothing else
+  formats a figure: `numText(n, opts)`, with a value that is not a finite
+  number coming back EMPTY rather than as `NaN`, because "NaN kg" on a dose
+  line reads as an amount.
+- **A DATE IS NOT A FIGURE** and must not be swept with them. A timestamp in
+  a console table, or the Sync pill's "last synced", SHOULD read in the
+  language of whoever is looking at it. The seven of those are deliberately
+  left on the device locale, and the test asserts they are still there —
+  a sweep that takes the dates with it is the easy way to do this wrong, and
+  the first attempt here did exactly that (`new numText(Date(x), loc)`,
+  which does not even parse).
+- **Four office formatters carried the same fault**: `fmtUsage` and the
+  fertiliser kg line in `plot_maintenance_script.js` (the dose itself),
+  `fmtMoney` in `operation_reports.html` and `capFmt` in
+  `npayroll_script.js`. Money was already safe, `moneyFig` having named its
+  locale from the start.
+
+**The office side is only half swept**, and the half that is left is the
+bare integers: **584 `toLocaleString()` calls** across the office pages that
+still read the machine's locale. They have never bitten, because the office
+machines are English — but every one of them prints a plot of 6,515 as
+6.515 on a phone, and these pages are opened on phones. That is its own
+sweep and it is owed.
+
+`Barcode_Counter/tests/a_figure_reads_the_same_on_every_phone.cjs` holds the
+phone half, reading the SHIPPED files so a file added later is in the check
+without anybody listing it: no figure left on the device locale, no second
+pin anywhere, every caller importing the one formatter, and the dates
+untouched. On the previous code it names all 51 sites.
 
 ## Two repositories, one system
 

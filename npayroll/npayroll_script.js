@@ -1110,9 +1110,13 @@ const cap2   = v => Math.round(Number(v || 0) * 100) / 100;
 const capFmt = v => {
   const n = cap2(v);
   if (!n) return '—';
+  /* The locale is NAMED, the way moneyFig above names it. A bare
+     toLocaleString reads the DEVICE's, and a claim opened on a phone set
+     to a comma-decimal language printed a capacity nobody could reconcile
+     against the sheet it came off. */
   return Number.isInteger(n)
-    ? n.toLocaleString()
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    ? n.toLocaleString('en-MY')
+    : n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 /* ════════════ TRANSPLANTING, AS THE FIELD RECORDED IT ════════════

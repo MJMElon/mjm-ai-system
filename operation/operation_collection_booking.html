@@ -926,10 +926,13 @@ function isToday(d) {
 // DATA LOADING
 let plotsData = [];
 
+// Closed is excluded the same way Cancelled is — the office decided this
+// order's business is done, so no new collection should be booked against
+// it. See Close AL in operation_booking.html.
 async function loadALData() {
   try {
     var results = await Promise.all([
-      _supabase.from('shared_al_orders').select('*').not('status', 'in', '("Cancelled","Collected")').gt('balance_quantity', 0).order('customer_name', { ascending: true }),
+      _supabase.from('shared_al_orders').select('*').not('status', 'in', '("Cancelled","Closed","Collected")').gt('balance_quantity', 0).order('customer_name', { ascending: true }),
       _supabase.from('shared_plots').select('plot_name, nursery_name'),
     ]);
     alData = (results[0] && results[0].data) || [];

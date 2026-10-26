@@ -343,9 +343,9 @@
         <div class="module-tag">555_MJM_TEAM</div>
       </a>
 
-      <!-- Seal Management — the seal stickers: orders to the supplier, what
-           arrived at UNN 1, which customer holds which range, and what was
-           collected on which DO. A new module, so hidden until granted on
+      <!-- Seal Manage — the seal stickers: orders to the supplier, what
+           HQ received and sent to UNN 1, which customer holds which range,
+           and what was collected on which DO. A new module, so hidden until granted on
            User Access (no data-module-open). -->
       <a class="module-card" data-card="seal" data-module="seal" href="seal/seal_dashboard.html"
          style="--accent:#0d9488;--glow:rgba(13,148,136,.25);--glow-strong:rgba(13,148,136,.35);--icon-bg:rgba(13,148,136,.12);">
@@ -357,7 +357,7 @@
             <path d="M9 12v10M12 12v10M14.5 12v10M18 12v10M20.5 12v10M24.5 12v10" stroke="#2dd4bf" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
         </div>
-        <div class="module-name">Seal<br>Management</div>
+        <div class="module-name">Seal<br>Manage</div>
         <div class="module-tag">SEAL</div>
       </a>
 
@@ -623,6 +623,30 @@
       const target = document.querySelector(location.hash);
       if (target) requestAnimationFrame(() =>
         target.scrollIntoView({ block: 'start', behavior: 'auto' }));
+    }
+  }
+
+  /* COMING BACK TO THE PORTAL IS NOT SIGNING IN AGAIN.
+     The sign-in screen is what this page shows until onAuthStateChange has
+     read the profile, and that read goes over the network. So every module
+     [← Portal] put the login screen up for a second or two over somebody who
+     was signed in the whole time, which reads exactly like being signed out.
+     A device holding a session and the last profile this account was given
+     opens on the hub straight away; the handler below still reads the
+     profile and redraws it, and still shows the sign-in if the session has
+     gone. A session with no remembered profile shows nothing rather than the
+     login, for the same second. */
+  if (!_hashHasToken && !_isRecoveryLink) {
+    const _s = _cachedSession();
+    if (_s) {
+      const _last = _lastKnownProfile(_s.user.id);
+      if (_last && hasOpsAccess(_last)) {
+        try { applyModuleVisibility(_last); } catch (e) { /* the handler draws it again */ }
+        welcomeText.innerText = (_s.user.user_metadata && _s.user.user_metadata.full_name) || _s.user.email || '';
+        showHub();
+      } else {
+        authScreen.style.display = 'none';
+      }
     }
   }
 

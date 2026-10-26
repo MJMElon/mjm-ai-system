@@ -180,8 +180,8 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">Seal Management</div>
-            <div class="text-[11px] text-slate-500">Seal orders, stock and who holds which seal. Admin sees Settings</div>
+            <div class="font-black text-slate-800 text-sm">Seal Manage</div>
+            <div class="text-[11px] text-slate-500">Seal orders, HQ stock, deliveries to site and who holds which seal. Admin sees Settings</div>
           </div>
           <select id="d-mod-seal" class="lvl-select"></select>
         </div>
@@ -330,21 +330,23 @@ function defaultPerms() {
 function normPerms(p) {
   const out = defaultPerms();
   if (!p || typeof p !== 'object') return out;
+  /* KEEP EVERYTHING, tidy only what this page owns. This used to rebuild
+     the object from a short list of keys, and Save writes it back whole —
+     so every save here silently threw away what the OTHER User Access
+     pages had set: scan_actions / scan_areas (FC Portal), nursery_ops_*,
+     npayroll_*, audit_pages / audit_actions, every *_nurseries limit.
+     Changing somebody's module level here wiped their ticks inside the
+     modules, and nothing said so. Now every key is carried through, and
+     only the module levels and the two flags are normalised. */
+  const copy = JSON.parse(JSON.stringify(p));
+  Object.assign(out, copy);
+  out.modules = defaultPerms().modules;
   if (p.modules) {
-    // Copy EVERY valid module key — including ones this page has no UI for
-    // (reports, audit_trail) — so saving here never wipes them.
     for (const [k, v] of Object.entries(p.modules)) if (LEVELS.includes(v)) out.modules[k] = v;
   }
   out.manage_users = !!p.manage_users;
   out.can_verify_operation = !!p.can_verify_operation;
-  if (p.operation_pages && typeof p.operation_pages === 'object') out.operation_pages = p.operation_pages;
-  // Per-function ticks managed inside the operation module's own User
-  // Access page — carry them through so saving here never wipes them.
-  if (p.operation_actions && typeof p.operation_actions === 'object') out.operation_actions = p.operation_actions;
-  // 555 Worker Portal (`scan`) nursery restriction (key named for the retired Plot Status
-  // module; renaming it would reopen every nursery). Array = only those
-  // nurseries; key absent = all nurseries allowed.
-  if (Array.isArray(p.plot_status_nurseries)) out.plot_status_nurseries = p.plot_status_nurseries;
+  if (p.super_admin) out.super_admin = true; else delete out.super_admin;
   return out;
 }
 
@@ -491,10 +493,27 @@ function openDrawer(uid) {
   document.getElementById('d-email').textContent = p.email || '—';
   MODULES.forEach(m => rebuildDropdown('d-mod-' + m, pending.modules[m] || 'none'));
   document.getElementById('d-manage-users').checked = !!pending.manage_users;
+  applySuperAdminRule(p);
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-backdrop').classList.add('open');
   document.getElementById('drawer').setAttribute('aria-hidden', 'false');
+}
+
+/* SUPER ADMIN. Managing users lets somebody change everybody's access, so
+   who may manage users is decided by a super admin and nobody else. The
+   super admins themselves are named in SQL, never on a screen. The
+   database guard enforces the same; this only says so before the save. */
+function applySuperAdminRule(p) {
+  const sup = MJMAccess.isSuperAdmin && MJMAccess.isSuperAdmin();
+  const tog = document.getElementById('d-manage-users');
+  tog.disabled = !sup;
+  tog.parentElement.style.opacity = sup ? '' : '.45';
+  tog.parentElement.title = sup ? '' : 'Only a super admin can change this';
+  const lockedRow = !!(p.permissions && p.permissions.super_admin) && !sup;
+  const save = document.getElementById('d-save');
+  save.disabled = lockedRow;
+  save.title = lockedRow ? 'Only a super admin can change a super admin' : '';
 }
 
 function closeDrawer() {
@@ -532,7 +551,14 @@ async function saveDrawer() {
 
   // Read latest values from the form (in case of last-second changes).
   MODULES.forEach(m => { pending.modules[m] = document.getElementById('d-mod-' + m).value; });
-  pending.manage_users = document.getElementById('d-manage-users').checked;
+  // Only a super admin gives or takes away "Can edit other people's access";
+  // for anybody else the toggle is locked and the saved value is kept.
+  const _sup = MJMAccess.isSuperAdmin && MJMAccess.isSuperAdmin();
+  if (p.permissions && p.permissions.super_admin && !_sup) {
+    showToast('Only a super admin can change a super admin.', 'err');
+    return;
+  }
+  pending.manage_users = _sup ? document.getElementById('d-manage-users').checked : !!(p.permissions && p.permissions.manage_users);
   // Nursery checklist state already lives on `pending` (see listeners above).
   // Closing the `scan` module clears the restriction so re-opening later
   // starts clean at "all nurseries".

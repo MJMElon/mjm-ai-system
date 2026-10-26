@@ -600,7 +600,11 @@ function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN
 // Same thousand-separator grouping as fmtNum, kept at 2 decimals — a
 // subtotal like RM 33390.00 read as one long unbroken run of digits;
 // toLocaleString groups it the same way fmtNum already groups quantities.
-function fmtMoney(n) { return (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// The locale is NAMED, like fmtDate above it. A bare toLocaleString reads
+// the DEVICE's, so this figure printed 33.390,00 on a machine set to a
+// language that writes decimals with a comma -- the same fault the
+// maintenance dose showed on a Field Conductor phone.
+function fmtMoney(n) { return (n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 async function loadBreeds() {
   const { data } = await _supabase.from('shared_breeds').select('name').order('name');

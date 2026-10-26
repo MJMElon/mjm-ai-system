@@ -656,11 +656,14 @@ let alData = [];
 let consentALSet = new Set(); // AL numbers that have at least 1 consent record
 let allDOsCache = []; // All DO records for expandable list
 
+// Closed is excluded the same way Cancelled is — the office decided this
+// order's business is done, so no new DO should be issued against it. See
+// Close AL in operation_booking.html (the AI system).
 async function loadActiveALs() {
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,created_at')
-    .not('status', 'in', '("Cancelled","Collected")')
+    .not('status', 'in', '("Cancelled","Closed","Collected")')
     .gt('balance_quantity', 0)
     .order('created_at', { ascending: false });
   if (error) {
