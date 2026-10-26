@@ -1788,6 +1788,42 @@ everywhere else on that tab, and the remark boxes are part of it.
 wiring, the awkward shapes included: a remark with a semicolon and a pipe in
 it, a map with no name, a pdf that must not be taken for a picture.
 
+### A box with no way IN is a box nobody fills
+
+The remark existed from the day the maps became a list, and the office asked
+for it again all the same — *3rd culling upload 的 drone map 要可以放 remark*.
+They were right, and the box was not the thing missing: **the panel it lives
+in only ever opened on the CHIP, and the chip only opened it with a map
+already behind it.** So on the first upload the picker closed, the chip went
+green, and nothing anywhere offered a remark. The one route to the box was
+knowing to press the chip a SECOND time, which is not a thing a screen says.
+
+So a map that ARRIVES opens the panel and puts the cursor in its remark. The
+moment to write *"north half, flown 21 Feb"* is the moment somebody is
+holding the picture in their head, not a press they have to discover.
+
+Four things in it:
+
+- **`processT6Doc` ANSWERS WITH WHERE THE MAP LANDED.** It read a file and
+  told nobody, so the caller had nothing to point at. It returns a promise of
+  the index now — and `null` for a map that never landed, which is a locked
+  row or a file the reader refused. **Nothing is offered for a map that is
+  not there**, or the screen would be saying an upload worked.
+- **Several files open on the FIRST of them.** The panel lists every one
+  underneath, so the rest are a tab away, and scrolling to the last is the
+  one that is never what you want. The readers finish in whatever order they
+  finish, so it is the lowest index and not the last to resolve.
+- **A REPLACE asks nothing.** It keeps the remark already written —
+  deliberately, that describes the plot — so putting the cursor in it would
+  invite overwriting a sentence somebody meant to keep.
+- **The box is focused and NOT selected.** There is nothing in it to replace.
+
+`tests/the_drone_map_asks_for_its_remark.cjs` drives the real page and the
+real picker; six of its checks fail on the previous code. And the three
+source patterns in `a_plot_has_many_drone_maps.cjs` moved with the refactor —
+a test that pins the exact SPELLING of a line is a test that fails on a
+change which altered nothing it was about.
+
 ## `error` means one thing: what you keyed is not in the database
 
 The batch page's X closed a morning's counting without a word, so closing now
