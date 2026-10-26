@@ -105,16 +105,16 @@ checkTrue('and DocList is written beside them',
 console.log('\nAdding is adding, not replacing');
 checkTrue('the picker takes more than one file', /id="\$\{rowId\}-doc-input" class="hidden" multiple/.test(SRC));
 checkTrue('and every file picked is processed',
-          /files\.forEach\(f => processT6Doc\(f, rowId\)\);/.test(SRC));
+          /files\.map\(f => processT6Doc\(f, rowId\)\)/.test(SRC));
 checkTrue('a drop takes all of them too',
           /const files = Array\.from\(\(event\.dataTransfer && event\.dataTransfer\.files\) \|\| \[\]\);/.test(SRC));
 checkTrue('a new file is pushed onto the list', /list\.push\(\{ name: file\.name/.test(SRC));
 /* Replace is the deliberate one, and it keeps the remark: that describes the
    PLOT, and swapping a cloudy picture has not changed where it was flown. */
 checkTrue('Replace swaps one and keeps its remark',
-          /note: list\[_t6ReplaceAt\]\.note \|\| ''/.test(SRC));
+          /at = _t6ReplaceAt;[\s\S]{0,200}note: list\[at\]\.note \|\| ''/.test(SRC));
 checkTrue('…and takes one file even if several are picked',
-          /if \(_t6ReplaceAt != null && _t6ReplaceRow === rowId\) \{\s*\n\s*if \(files\[0\]\) processT6Doc\(files\[0\], rowId\);/.test(SRC));
+          /const replacing = \(_t6ReplaceAt != null && _t6ReplaceRow === rowId\);[\s\S]{0,200}if \(files\[0\]\) at = \[await processT6Doc\(files\[0\], rowId\)\];/.test(SRC));
 checkTrue('Remove takes one by index', /function removeT6Doc\(rowId, idx\)/.test(SRC));
 
 console.log('\nThe row says how many, and the panel says which');

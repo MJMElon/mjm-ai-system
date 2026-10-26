@@ -222,6 +222,9 @@ async function open(browser, port, level, tab) {
     if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_consent.png', fullPage: true });
     await page.evaluate(() => closeModal());
 
+    is(await page.evaluate(() => [range('1101', '1200'), range('1101'), range('0009297', '0009300'), sealCode(1101, 4), range('AB12')]),
+      ['001101 – 001200', '001101', '0009297 – 0009300', '001101', 'AB12'],
+      'a seal keyed without its zeros reads at least six digits, a wider one keeps its width');
     await page.click('#nb-cab');
     is(await page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].slice(0, 2).map((c) => c.textContent.trim()))),
       [['0012001 – 0020000', '8,000']], 'pressing the cabinet lists what is in it');

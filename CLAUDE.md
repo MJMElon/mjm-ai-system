@@ -1788,6 +1788,76 @@ everywhere else on that tab, and the remark boxes are part of it.
 wiring, the awkward shapes included: a remark with a semicolon and a pipe in
 it, a map with no name, a pdf that must not be taken for a picture.
 
+### A box with no way IN is a box nobody fills
+
+The remark existed from the day the maps became a list, and the office asked
+for it again all the same — *3rd culling upload 的 drone map 要可以放 remark*.
+They were right, and the box was not the thing missing: **the panel it lives
+in only ever opened on the CHIP, and the chip only opened it with a map
+already behind it.** So on the first upload the picker closed, the chip went
+green, and nothing anywhere offered a remark. The one route to the box was
+knowing to press the chip a SECOND time, which is not a thing a screen says.
+
+So a map that ARRIVES opens the panel and puts the cursor in its remark. The
+moment to write *"north half, flown 21 Feb"* is the moment somebody is
+holding the picture in their head, not a press they have to discover.
+
+Four things in it:
+
+- **`processT6Doc` ANSWERS WITH WHERE THE MAP LANDED.** It read a file and
+  told nobody, so the caller had nothing to point at. It returns a promise of
+  the index now — and `null` for a map that never landed, which is a locked
+  row or a file the reader refused. **Nothing is offered for a map that is
+  not there**, or the screen would be saying an upload worked.
+- **Several files open on the FIRST of them.** The panel lists every one
+  underneath, so the rest are a tab away, and scrolling to the last is the
+  one that is never what you want. The readers finish in whatever order they
+  finish, so it is the lowest index and not the last to resolve.
+- **A REPLACE asks nothing.** It keeps the remark already written —
+  deliberately, that describes the plot — so putting the cursor in it would
+  invite overwriting a sentence somebody meant to keep.
+- **The box is focused and NOT selected.** There is nothing in it to replace.
+
+`tests/the_drone_map_asks_for_its_remark.cjs` drives the real page and the
+real picker; six of its checks fail on the previous code. And the three
+source patterns in `a_plot_has_many_drone_maps.cjs` moved with the refactor —
+a test that pins the exact SPELLING of a line is a test that fails on a
+change which altered nothing it was about.
+
+### A panel OUTSIDE the tab is work the close guard cannot see
+
+The office typed a remark, closed, and nothing asked — *我刚留了 remark 不小心
+关掉 结果就直接关了 没有问我确定要不要 save.*
+
+`_markTabDirty` listens on `input` and `change` across the document and asks
+`el.closest('.tab-content')` which tab the element is in. **The maps panel is
+a full-screen overlay declared at the top of the body, outside every tab
+pane**, so the remark box answered no tab at all: 3rd Culling never went
+dirty, the X left without a word, and the sentence went with it — it lives in
+`t6_plotDocs` and nothing but `saveTab6` writes it.
+
+**The MAP is the same fault wearing a file input.** `_markTabDirty` skips
+those on purpose, and the reason given was that picking one changes nothing
+until the row is saved. That is not true here and was not true of the seed
+counts either, which is exactly why Seed Audit has a flag of its own.
+
+So `_t6DocsDirty` is the third answer in `_dirtyTabIndices`, set wherever
+`t6_plotDocs` MOVES — attached, replaced, removed, or a remark typed — and
+never by the load that restores them, which has changed nothing anybody
+keyed. It is cleared in the three places `_seedAuditDirty` is: beside it in
+`_trackTabSave`'s `done()`, in `_leaveBatchRecord`, and it is asked by the
+`beforeunload` guard, because a reload or a typed address never reaches the
+page's own dialog.
+
+**The lesson is the shape, not the flag.** Anything keyed into a dialog,
+drawer or overlay drawn outside `.tab-content` is invisible to the one
+listener that decides whether a batch can be closed. The screen looks
+identical either way, and the only thing that says so is the work being gone.
+
+Section 5 of `the_drone_map_asks_for_its_remark.cjs` holds it, LAST in the
+file because the three things it drives change what is on the plot and a
+section that moves the screen belongs after the ones that count it.
+
 ## `error` means one thing: what you keyed is not in the database
 
 The batch page's X closed a morning's counting without a word, so closing now
@@ -4084,6 +4154,36 @@ hold the ring under 100 for ever on everything keyed since, with the map on
 screen. `t3CardMaps` is rebuilt by every sync and only ever ADDS — a row
 carrying its own `MapUrl:` answered yes before and still does.
 
+### A heading that moved INTO the card left the foot wordless
+
+The office read the bottom of the tab and asked — *这三个是什么 - 1057 1057*.
+It said
+
+    TOTAL TRANSPLANTED   2 RECORDS   —   1,057   1,057
+
+which is the Adjustment, the Qty and the Final Qty, in that order, with no
+word on any of them. **None of them ever needed one**: while the saved list
+was a grid they sat on its tracks, under the tab's own column headings, and
+the comment in the markup says why they came off it — *"a total laid out on
+their tracks would be lining up with nothing"*, which is right. What that
+missed is that the headings went down INTO each card, so the one row still
+laid out flat was left with the figures and nothing above them.
+
+So each figure carries its own label, and two things about them:
+
+- **The words are the card's, letter for letter** — Qty, Adjustment, Final
+  Qty — because that is what each one totals. A foot that words a column
+  differently from the column is a figure somebody has to place.
+- **And in the card's ORDER**, which the old row was not: it printed the
+  adjustment first, so the two green figures beside each other read as a
+  pair and the red one read as a label for them.
+
+The phone row was never in this — it has always said *Total Transplanted*
+and *After adjustments* in words, having no columns to inherit.
+
+Five checks at the end of `tests/t3_row_adjustments.cjs` hold it, and all
+five fail on the previous markup.
+
 ### Three faults the cards left behind, and none was on a test
 
 Each was found by running a test that had never covered the thing it broke,
@@ -4152,7 +4252,10 @@ Three things worth knowing:
 
 - **Seals are compared as numbers and shown at their width.** 0009297 and 9297
   are one seal. `sealRanges.js` is the rule and lives in mobile, fc-portal and
-  the Sales Web as the same file — change all of them.
+  the Sales Web as the same file — change all of them. **The office page
+  shows a seal at no fewer than six digits** (`SEAL_MIN_WIDTH`), so 1101 keyed
+  without its zeros reads 001101; only the showing pads, the number decides.
+  The phone copies of `sealRanges.js` do not pad yet.
 - **A DO says which seals it carried** (`shared_do_records.seal_ranges`), the
   ones scanned on that card since its last DO, so a consent collected over
   three trips gives three DOs with three different lists.

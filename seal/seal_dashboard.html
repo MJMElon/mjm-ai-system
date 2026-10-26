@@ -319,7 +319,7 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': 
 const fmt = (n) => Number(n || 0).toLocaleString('en-MY');
 const fmtDate = (d) => d ? new Date(String(d).length === 10 ? d + 'T00:00:00' : d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const fmtWhen = (d) => d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-const range = (a, b) => (!b || a === b) ? esc(a) : esc(a) + ' – ' + esc(b);
+const range = (a, b) => (!b || sealShow(a) === sealShow(b)) ? esc(sealShow(a)) : esc(sealShow(a)) + ' – ' + esc(sealShow(b));
 // Local date, never toISOString: that is yesterday in Malaysia until 8am.
 const todayLocal = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const newRef = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -346,11 +346,15 @@ function missingSetup(error) {
 }
 
 // ── SEAL NUMBERS ─────────────────────────────────────────────────────────
-// Compared as numbers, shown at the width they were keyed. Same rule as
-// sealRanges.js in Mobile, the FC Portal and the Sales Web.
+// Compared as numbers, shown at the width they were keyed -- and never
+// under SEAL_MIN_WIDTH digits, so 1101 keyed without its zeros reads 001101
+// (office, 25 Oct 2026). Only the SHOWING pads: the number is the seal.
 function sealNo(c) { const d = String(c == null ? '' : c).replace(/\D+/g, ''); return d && d.length <= 15 ? Number(d) : null; }
 function sealWidth(c) { return String(c == null ? '' : c).replace(/\D+/g, '').length; }
-function sealCode(n, w) { const s = String(n); return s.length >= w ? s : s.padStart(w, '0'); }
+const SEAL_MIN_WIDTH = 6;
+function sealCode(n, w) { const s = String(n); return s.padStart(Math.max(w || 0, SEAL_MIN_WIDTH), '0'); }
+// A code as keyed, shown padded. Anything that is not all digits is left alone.
+function sealShow(c) { const s = String(c == null ? '' : c).trim(); return /^[0-9]+$/.test(s) ? sealCode(s, s.length) : s; }
 function sealQty(a, b) { const x = sealNo(a), y = sealNo(b || a); return x == null || y == null ? 0 : Math.abs(y - x) + 1; }
 // A list of ranges as numbers, smallest first, running ones joined, so a
 // list shows start and end wherever nothing breaks the run.
@@ -540,7 +544,7 @@ async function loadSummary() {
   summary = (data && data[0]) || {};
   document.getElementById('blk-last-qty').textContent = fmt(summary.hq_stock);
   document.getElementById('blk-last-sub').innerHTML = summary.last_code
-    ? 'Last seal <b class="mono">' + esc(summary.last_code) + '</b> · next order starts <b class="mono">' + esc(summary.next_order_code || summary.next_code) + '</b>'
+    ? 'Last seal <b class="mono">' + esc(sealShow(summary.last_code)) + '</b> · next order starts <b class="mono">' + esc(sealShow(summary.next_order_code || summary.next_code)) + '</b>'
     : 'No seals keyed yet';
   document.getElementById('blk-pending-qty').textContent = fmt(summary.pending_receive);
   document.getElementById('blk-deliver-qty').textContent = fmt(summary.on_the_way);
@@ -581,13 +585,13 @@ function openOrder() {
   modalKind = 'order';
   openModal('New Seal Order',
     '<div class="big-form"><div class="grid grid-cols-1 md:grid-cols-2 gap-4">'
-    + '<div><div class="lbl">Last ordered seal number</div><div class="text-2xl font-black mono text-slate-800">' + esc(summary.last_ordered_code || '—') + '</div>'
-    +   (summary.last_code && summary.last_code !== summary.last_ordered_code ? '<div class="say font-bold text-slate-400">Last seal anywhere in the system: <span class="mono">' + esc(summary.last_code) + '</span></div>' : '') + '</div>'
+    + '<div><div class="lbl">Last ordered seal number</div><div class="text-2xl font-black mono text-slate-800">' + esc(sealShow(summary.last_ordered_code) || '—') + '</div>'
+    +   (summary.last_code && summary.last_code !== summary.last_ordered_code ? '<div class="say font-bold text-slate-400">Last seal anywhere in the system: <span class="mono">' + esc(sealShow(summary.last_code)) + '</span></div>' : '') + '</div>'
     + '<div><label class="lbl">Order date</label><input id="ord-date" type="date" class="inp" value="' + todayLocal() + '"></div>'
     + '</div>'
     + '<div class="lbl mt-5">Next order seal number</div>'
     + '<div class="grid grid-cols-2 gap-3">'
-    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">Start</label><input id="ord-start" class="inp mono" inputmode="numeric" value="' + esc(summary.next_order_code || summary.next_code || '') + '"></div>'
+    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">Start</label><input id="ord-start" class="inp mono" inputmode="numeric" value="' + esc(sealShow(summary.next_order_code || summary.next_code || '')) + '"></div>'
     +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">End</label><input id="ord-end" class="inp mono" inputmode="numeric" placeholder="Last seal of this order"></div>'
     + '</div>'
     + '<div id="ord-warn" class="say font-bold mt-3"></div>'
@@ -608,8 +612,8 @@ function orderStartWarn(s) {
   const want = summary.next_order_code || summary.next_code;
   if (!want || sealNo(s) == null || sealNo(s) === sealNo(want)) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="rounded-xl border-[1.5px] border-amber-300 bg-amber-50 text-amber-800 px-3 py-2">⚠ The last order ended at <b class="mono">'
-    + esc(summary.last_ordered_code || summary.last_code || '—') + '</b>, so the next order would start at <b class="mono">' + esc(want)
-    + '</b>. This one starts at <b class="mono">' + esc(s) + '</b> — check it is right before saving.</div>';
+    + esc(sealShow(summary.last_ordered_code || summary.last_code) || '—') + '</b>, so the next order would start at <b class="mono">' + esc(sealShow(want))
+    + '</b>. This one starts at <b class="mono">' + esc(sealShow(s)) + '</b> — check it is right before saving.</div>';
 }
 async function checkOrder() {
   const a = document.getElementById('ord-start'), b = document.getElementById('ord-end');
@@ -719,7 +723,7 @@ function drawOrderReceive() {
   const open = chunks.filter((c) => c.nLeft > 0);
   const picked = open.filter((c) => rcvTicked.has(c.s));
   const pickedQty = picked.reduce((t, c) => t + c.nLeft, 0);
-  setView('receive', 'Order : ' + fmtDate(x.order_date) + ', ' + x.start_code + ' – ' + x.end_code + ' receiving check list',
+  setView('receive', 'Order : ' + fmtDate(x.order_date) + ', ' + sealShow(x.start_code) + ' – ' + sealShow(x.end_code) + ' receiving check list',
     '<div class="flex justify-end gap-2 mb-3"><button class="btn btn-soft btn-sm" onclick="rcvAll(true)">Tick all</button>'
     + (rcvTicked.size ? '<button class="btn btn-soft btn-sm" id="rcv-clear" onclick="rcvAll(false)">Clear</button>' : '') + '</div>'
     + '<div class="border-[1.5px] border-slate-200 rounded-2xl overflow-hidden">'
@@ -1428,8 +1432,8 @@ async function openSettle(ctx) {
     + '<div><div class="lbl">Customer</div><div class="font-black text-slate-800">' + esc(ctx.customer || '—') + '</div></div>'
     + '<div><div class="lbl">AL</div><div class="font-black mono text-slate-800">' + esc(ctx.al) + '</div></div></div>'
     + '<div class="grid grid-cols-2 gap-3 mb-4">'
-    + '<div><label class="lbl">First seal</label><input id="kd-start" class="inp mono" inputmode="numeric" value="' + esc(ctx.start) + '"></div>'
-    + '<div><label class="lbl">Last seal</label><input id="kd-end" class="inp mono" inputmode="numeric" value="' + esc(ctx.end) + '"></div></div>'
+    + '<div><label class="lbl">First seal</label><input id="kd-start" class="inp mono" inputmode="numeric" value="' + esc(sealShow(ctx.start)) + '"></div>'
+    + '<div><label class="lbl">Last seal</label><input id="kd-end" class="inp mono" inputmode="numeric" value="' + esc(sealShow(ctx.end)) + '"></div></div>'
     + '<div class="lbl">Did these seals go out?</div>'
     + '<div class="flex gap-4 mb-4 text-[13px] font-black text-slate-700">'
     + '<label class="flex items-center gap-2"><input type="radio" name="kd-out" value="delivered" checked> Delivered</label>'

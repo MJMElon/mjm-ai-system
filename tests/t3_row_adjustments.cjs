@@ -331,6 +331,47 @@ const CAL_ROWS = [
         /<span class="text-\[#a83020\]">Adjustment<\/span>/.test(src)
           && /<span class="text-\[#4a7a2e\]">Final Qty<\/span>/.test(src), true);
 
+  console.log('\nAnd the three figures in the foot SAY which they are');
+  /* The office asked, with the row on screen: 这三个是什么 - 1057 1057.
+     It read `TOTAL TRANSPLANTED  2 RECORDS  —  1,057  1,057`, which is the
+     adjustment, the qty and the final qty, in that order, with no words on
+     any of them. They never needed words while this was a grid: they sat
+     under the tab's own column headings. The cards took those headings down
+     INTO each card, and nothing put them back here.
+
+     The labels have to be the card's own, letter for letter, and in the
+     card's order -- a foot that totals a column under a different word, or
+     in a different place, is a figure somebody has to work out which column
+     it belongs to. */
+  const foot = await page.evaluate(() => {
+    const ids = ['t3-saved-total-qty', 't3-saved-total-adj', 't3-saved-total-final'];
+    const row = document.getElementById('t3-saved-total-qty')
+                  .closest('.border-t-2');
+    const figs = Array.from(row.querySelectorAll('[id^="t3-saved-total-"]'))
+                   .filter(e => ids.indexOf(e.id) >= 0);
+    return {
+      /* The order they are actually drawn in. */
+      order: figs.map(e => e.id),
+      /* Each figure's own label: the words beside it, inside its own block. */
+      labels: ids.map(id => {
+        const fig = document.getElementById(id);
+        const own = fig.parentElement;
+        return Array.from(own.children)
+          .filter(c => c !== fig).map(c => c.textContent.trim()).join(' ');
+      })
+    };
+  });
+  check('they are drawn in the card order — qty, adjustment, final',
+        foot.order.join(','),
+        't3-saved-total-qty,t3-saved-total-adj,t3-saved-total-final');
+  check('the qty total says Qty',        foot.labels[0], 'Qty');
+  check('the adjustment total says Adjustment', foot.labels[1], 'Adjustment');
+  check('the final total says Final Qty',      foot.labels[2], 'Final Qty');
+  /* And the words are the card headings and not a second set of wordings. */
+  checkTrue('each label is a card column heading, letter for letter',
+            foot.labels.every(l => new RegExp('<span class="text-\\[#[0-9a-f]{6}\\]">'
+              + l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '</span>').test(src)));
+
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
