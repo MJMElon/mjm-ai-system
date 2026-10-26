@@ -1824,6 +1824,40 @@ source patterns in `a_plot_has_many_drone_maps.cjs` moved with the refactor —
 a test that pins the exact SPELLING of a line is a test that fails on a
 change which altered nothing it was about.
 
+### A panel OUTSIDE the tab is work the close guard cannot see
+
+The office typed a remark, closed, and nothing asked — *我刚留了 remark 不小心
+关掉 结果就直接关了 没有问我确定要不要 save.*
+
+`_markTabDirty` listens on `input` and `change` across the document and asks
+`el.closest('.tab-content')` which tab the element is in. **The maps panel is
+a full-screen overlay declared at the top of the body, outside every tab
+pane**, so the remark box answered no tab at all: 3rd Culling never went
+dirty, the X left without a word, and the sentence went with it — it lives in
+`t6_plotDocs` and nothing but `saveTab6` writes it.
+
+**The MAP is the same fault wearing a file input.** `_markTabDirty` skips
+those on purpose, and the reason given was that picking one changes nothing
+until the row is saved. That is not true here and was not true of the seed
+counts either, which is exactly why Seed Audit has a flag of its own.
+
+So `_t6DocsDirty` is the third answer in `_dirtyTabIndices`, set wherever
+`t6_plotDocs` MOVES — attached, replaced, removed, or a remark typed — and
+never by the load that restores them, which has changed nothing anybody
+keyed. It is cleared in the three places `_seedAuditDirty` is: beside it in
+`_trackTabSave`'s `done()`, in `_leaveBatchRecord`, and it is asked by the
+`beforeunload` guard, because a reload or a typed address never reaches the
+page's own dialog.
+
+**The lesson is the shape, not the flag.** Anything keyed into a dialog,
+drawer or overlay drawn outside `.tab-content` is invisible to the one
+listener that decides whether a batch can be closed. The screen looks
+identical either way, and the only thing that says so is the work being gone.
+
+Section 5 of `the_drone_map_asks_for_its_remark.cjs` holds it, LAST in the
+file because the three things it drives change what is on the plot and a
+section that moves the screen belongs after the ones that count it.
+
 ## `error` means one thing: what you keyed is not in the database
 
 The batch page's X closed a morning's counting without a word, so closing now

@@ -311,6 +311,69 @@ function check(name, ok) {
         JSON.stringify(final) === JSON.stringify(
           ['North half, flown 21 Feb', 'South half, re-flown after cloud', '']));
 
+  console.log('\n── 5 · AND THE X CANNOT CLOSE OVER ANY OF IT ──');
+  /* The office typed a remark, closed, and nothing asked:
+     我刚留了 remark 不小心关掉 结果就直接关了 没有问我确定要不要 save.
+
+     `_markTabDirty` asks `el.closest('.tab-content')`, and this panel is a
+     full-screen overlay at the top of the body — OUTSIDE every tab pane. So
+     the box reached no tab, 3rd Culling never went dirty, and the X left
+     without a word over a sentence that lives in `t6_plotDocs` and nowhere
+     else until saveTab6 runs. The MAP is the same fault wearing a file
+     input, which `_markTabDirty` skips on purpose — the exact hole Seed
+     Audit needed a flag of its own for.
+
+     It is asked LAST on purpose: the three things it drives — a remark, an
+     attach, a remove — change what is on the plot, and a section that moves
+     the screen belongs after the ones that count it. */
+  check('the maps and remarks keyed above left 3rd Culling dirty',
+        await page.evaluate(() => _dirtyTabIndices().indexOf(6) >= 0));
+  check('…and the close dialog would name the tab',
+        await page.evaluate(() => _dirtyTabNames().indexOf('3rd Culling') >= 0));
+
+  /* Only the SAVE settles it, and it is cleared where the seed-audit flag
+     is — one place that decides a tab is saved. */
+  await page.evaluate(() => {
+    window.safeReplaceLogs = () => Promise.resolve({ error: null });
+    window.safeInsertLogs  = () => Promise.resolve({ error: null });
+    window._uploadBatchDoc = async () => 'https://store/transplant_maps/241/u4.jpg';
+    window.confirm = () => true;
+  });
+  await page.evaluate(async () => { try { await saveTab6(); } catch (e) {} });
+  await page.waitForTimeout(1200);
+  check('saving 3rd Culling settles it',
+        await page.evaluate(() => _dirtyTabIndices().indexOf(6) < 0));
+
+  console.log('\nA remark typed AFTER that makes it dirty again');
+  await page.evaluate((r) => onT6DocChip(r), rowId);
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    const box = document.querySelector('#t6-maps-body .t6-doc-note');
+    box.value = 'Re-flown 3 Mar, east edge';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  check('…it is dirty', await page.evaluate(() => _dirtyTabIndices().indexOf(6) >= 0));
+  await page.evaluate(async () => { try { await saveTab6(); } catch (e) {} });
+  await page.waitForTimeout(1200);
+  check('…and saving again settles it',
+        await page.evaluate(() => _dirtyTabIndices().indexOf(6) < 0));
+
+  console.log('\nAnd REMOVING one is a change to the record too');
+  /* A map taken off and the X pressed would otherwise be back on the next
+     load, with nothing having said the removal was never written. */
+  await page.evaluate((r) => removeT6Doc(r, 0), rowId);
+  await page.waitForTimeout(300);
+  check('removing a map makes it dirty',
+        await page.evaluate(() => _dirtyTabIndices().indexOf(6) >= 0));
+
+  console.log('\nThe browser own Leave-site prompt knows as well');
+  /* A reload or a typed address never reaches the page's dialog, so the
+     beforeunload guard has to ask the same question. */
+  check('beforeunload asks the flag by name',
+        /_seedAuditDirty \|\| _t6DocsDirty \|\| _dirtyTabNames\(\)\.length/
+          .test(require('fs').readFileSync(
+            require('path').join(__dirname, '..', 'operation', 'operation_batch_detail.html'), 'utf8')));
+
   await browser.close();
   server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

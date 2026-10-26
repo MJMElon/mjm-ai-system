@@ -4591,6 +4591,7 @@
                        itself, but clearing it here as well keeps ONE place
                        that decides a tab is saved. */
                     if (tabIdx === 8) _seedAuditDirty = false;
+                    if (tabIdx === 6) _t6DocsDirty    = false;
                 };
                 let out;
                 try { out = orig.apply(this, arguments); }
@@ -4620,9 +4621,29 @@
            close dialog knew nothing about — so counting eight bags and
            pressing the X closed the batch without a word and the counts were
            gone, having never reached the database at all. */
+        /* AND THE 3RD CULLING DRONE MAPS KEEP THEIR OWN FLAG, for the same
+           reason and a second one on top of it.
+
+           `_markTabDirty` asks `el.closest('.tab-content')`, and the maps
+           panel is a full-screen overlay at the top of the body — OUTSIDE
+           every tab pane. So a remark typed into it reached no tab, the X
+           closed the batch without a word, and the sentence went with it:
+           it lives in `t6_plotDocs` and nothing but saveTab6 writes it.
+
+           The MAP is the file-input half of the same fault. Skipping file
+           inputs was right when picking one changed nothing until the row
+           was saved; it is held in memory here exactly as the bag counts
+           are, which is why Seed Audit needed a flag of its own.
+
+           `_t6DocsDirty` is set wherever `t6_plotDocs` moves — attached,
+           replaced, removed, or a remark typed — and never by the load that
+           restores them, which has changed nothing anybody keyed. */
+        let _t6DocsDirty = false;
+
         function _dirtyTabIndices() {
             const out = Object.keys(_tabDirty).filter(n => _tabDirty[n]).map(Number);
             if (_seedAuditDirty && out.indexOf(8) < 0) out.push(8);
+            if (_t6DocsDirty    && out.indexOf(6) < 0) out.push(6);
             return out.sort((a, b) => a - b);
         }
 
@@ -4631,6 +4652,7 @@
                prompt does not ask again about a question just answered. */
             Object.keys(_tabDirty).forEach(k => delete _tabDirty[k]);
             _seedAuditDirty = false;
+            _t6DocsDirty = false;
             window.location.href = 'operation_batch_record.html';
         }
 
@@ -9402,7 +9424,7 @@
         const seedAuditPhotoState = {};
         let _seedAuditDirty = false;
         window.addEventListener('beforeunload', e => {
-            if (_seedAuditDirty || _dirtyTabNames().length) {
+            if (_seedAuditDirty || _t6DocsDirty || _dirtyTabNames().length) {
                 e.preventDefault();
                 e.returnValue = ''; // browser shows its own "Leave site?" prompt
             }
@@ -13935,6 +13957,11 @@ Thank you.`;
             const list = t6DocsOf(rowId);
             if (!list[idx]) return;
             list[idx].note = String(value || '');
+            /* The panel is an overlay OUTSIDE every tab pane, so the listener
+               that marks a tab dirty never sees this box. Without this the X
+               closed the batch without a word over a sentence somebody had
+               just typed. */
+            _t6DocsDirty = true;
         }
 
         function renderT6Gallery() {
@@ -15787,6 +15814,9 @@ Thank you.`;
                         list.push({ name: file.name, base64: e.target.result, isImg, note: '' });
                     }
                     t6SetDocs(rowId, list);
+                    // Held in memory until saveTab6, exactly as the bag counts
+                    // are -- and _markTabDirty skips file inputs.
+                    _t6DocsDirty = true;
                     t6PaintDocChip(rowId);
                     if (_t6GalleryRow === rowId) renderT6Gallery();
                     calcT6();
@@ -15804,6 +15834,7 @@ Thank you.`;
             if (idx == null) list.length = 0;            // every one of them
             else list.splice(idx, 1);
             t6SetDocs(rowId, list);
+            _t6DocsDirty = true;
             const input = document.getElementById(`${rowId}-doc-input`);
             if (input) input.value = '';
             t6PaintDocChip(rowId);
