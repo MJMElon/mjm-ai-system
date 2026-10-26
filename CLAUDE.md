@@ -4154,6 +4154,36 @@ hold the ring under 100 for ever on everything keyed since, with the map on
 screen. `t3CardMaps` is rebuilt by every sync and only ever ADDS — a row
 carrying its own `MapUrl:` answered yes before and still does.
 
+### A heading that moved INTO the card left the foot wordless
+
+The office read the bottom of the tab and asked — *这三个是什么 - 1057 1057*.
+It said
+
+    TOTAL TRANSPLANTED   2 RECORDS   —   1,057   1,057
+
+which is the Adjustment, the Qty and the Final Qty, in that order, with no
+word on any of them. **None of them ever needed one**: while the saved list
+was a grid they sat on its tracks, under the tab's own column headings, and
+the comment in the markup says why they came off it — *"a total laid out on
+their tracks would be lining up with nothing"*, which is right. What that
+missed is that the headings went down INTO each card, so the one row still
+laid out flat was left with the figures and nothing above them.
+
+So each figure carries its own label, and two things about them:
+
+- **The words are the card's, letter for letter** — Qty, Adjustment, Final
+  Qty — because that is what each one totals. A foot that words a column
+  differently from the column is a figure somebody has to place.
+- **And in the card's ORDER**, which the old row was not: it printed the
+  adjustment first, so the two green figures beside each other read as a
+  pair and the red one read as a label for them.
+
+The phone row was never in this — it has always said *Total Transplanted*
+and *After adjustments* in words, having no columns to inherit.
+
+Five checks at the end of `tests/t3_row_adjustments.cjs` hold it, and all
+five fail on the previous markup.
+
 ### Three faults the cards left behind, and none was on a test
 
 Each was found by running a test that had never covered the thing it broke,
