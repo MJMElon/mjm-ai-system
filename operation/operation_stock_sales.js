@@ -1175,16 +1175,6 @@
             const plotBalance        = r.afterCulling - collected - otherDed;
             const afterDeductReserve = plotBalance - allocSum;
 
-            const reservHtml = rowAllocs.length
-                ? `<div class="reserv-stack">${rowAllocs.map(a => `
-                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(a.order_number || '')} — drag chip to move to another row">
-                        <span class="reserv-chip-grip">⋮⋮</span>
-                        <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
-                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
-                        <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
-                    </div>`).join('')}</div>`
-                : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
-
             // Sold Out overrides whatever was picked — it's never written
             // back to plotAllocations (that stays the person's last real
             // choice, in case the plot's balance later recovers), only
@@ -1195,8 +1185,26 @@
                 ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
                 : '';
 
+            // Finished is a person's judgment that this plot's allocation is
+            // done, even while a balance is still sitting on it — a manual
+            // status, so only the manual pick blocks the drop and not Sold
+            // Out, which already blocks it on the balance alone.
+            const matFinished = status === 'finished';
+
+            const reservHtml = rowAllocs.length
+                ? `<div class="reserv-stack">${rowAllocs.map(a => `
+                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(a.order_number || '')} — drag chip to move to another row">
+                        <span class="reserv-chip-grip">⋮⋮</span>
+                        <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
+                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
+                        <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
+                    </div>`).join('')}</div>`
+                : matFinished
+                    ? `<div class="reserv-empty reserv-empty-finished"><span class="reserv-empty-emoji">🔒</span><span>Finished — no new allocations</span></div>`
+                    : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
+
             const html = `
-                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}">
+                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}">
                     <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
                     <td class="col-prod">${escapeHtml(r.location)}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
@@ -3374,7 +3382,7 @@
 
         document.querySelectorAll('#maturity-rows tr[data-batch-key]').forEach(tr => {
             const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-            if (balance > 0) tr.classList.add('drop-target');
+            if (balance > 0 && tr.dataset.matStatus !== 'finished') tr.classList.add('drop-target');
             else             tr.classList.add('drop-disabled');
         });
     }
@@ -3411,7 +3419,7 @@
                           && tr.dataset.plotName  === _draggingAlloc.sourcePlot;
             if (isSource) return;
             const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-            if (balance > 0) tr.classList.add('drop-target');
+            if (balance > 0 && tr.dataset.matStatus !== 'finished') tr.classList.add('drop-target');
             else             tr.classList.add('drop-disabled');
         });
     }
@@ -3433,7 +3441,7 @@
             if (isSource) return;
         }
         const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-        if (balance <= 0) return;
+        if (balance <= 0 || tr.dataset.matStatus === 'finished') return;
         e.preventDefault();
         e.dataTransfer.dropEffect = _draggingAlloc ? 'move' : 'copy';
         tr.classList.add('drop-hover');
@@ -3448,7 +3456,10 @@
         const balance   = parseInt(tr.dataset.batchBalance || '0', 10);
         const batchName = tr.dataset.batchName || '';
         const plotName  = tr.dataset.plotName  || '';
-        if (balance <= 0) return;
+        // Finished is a person's judgment, separate from the balance check
+        // above it — a plot can be marked done with stock still sitting on
+        // it, and that stock is not open to a new drop.
+        if (balance <= 0 || tr.dataset.matStatus === 'finished') return;
 
         if (_draggingAlloc) {
             const isSource = batchName === _draggingAlloc.sourceBatch && plotName === _draggingAlloc.sourcePlot;
