@@ -7,6 +7,8 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Customers cannot enter the staff system: see the file. -->
+<script src="../shared/shared_staff_gate.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Outfit', system-ui, sans-serif; }
@@ -244,21 +246,24 @@ _supabase.auth.onAuthStateChange(async (event, session) => {
     sessionStorage.setItem('mjm_user_email', session.user.email);
     sessionStorage.setItem('mjm_user_name', session.user.user_metadata?.full_name || session.user.email);
 
-    // Mobile-module gate. The signed-in user must have the mobile
-    // module set to a staff-grade level (or Manage Users). Without
-    // that they're bounced to mobile_auth.html where the inline
-    // Pending Access notice is shown. Fail-open on profile-read
-    // errors so a brief Supabase hiccup doesn't lock real admins out.
-    var hasAccess = true;
-    try {
-      var resp = await _supabase
-        .from('shared_profiles')
-        .select('role, user_type, permissions')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      if (resp && !resp.error) hasAccess = _mjmHasMobileAccess(resp.data);
-      console.log('[mobile-gate]', { canEnter: hasAccess, profile: resp && resp.data });
-    } catch (e) { console.warn('[mobile-gate] profile read failed (allowing through):', e); }
+    // Staff gate first (shared/shared_staff_gate.js): a customer is signed
+    // out and shown only the refusal; a read that failed stands on the last
+    // profile this device was given for this account, and with none the
+    // dashboard is not drawn — "could not check, retry". It used to let a
+    // thrown read straight through.
+    //
+    // Then the mobile-module gate. The signed-in user must have the mobile
+    // module set to a staff-grade level (or Manage Users). Without that
+    // they're bounced to mobile_auth.html where the inline Pending Access
+    // notice is shown.
+    var gate = await MJMStaffGate.enforce(_supabase, session);
+    if (gate.status === 'customer' || gate.status === 'unknown') {
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('dashboard-screen').style.display = 'none';
+      return;
+    }
+    var hasAccess = _mjmHasMobileAccess(gate.profile);
+    console.log('[mobile-gate]', { canEnter: hasAccess, status: gate.status, fromCache: gate.fromCache });
     if (!hasAccess) {
       // Land back on mobile_auth.html which renders the Pending Access
       // card inline. Stay signed in so a hub admin grant + Refresh on

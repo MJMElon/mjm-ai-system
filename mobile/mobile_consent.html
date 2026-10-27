@@ -10,6 +10,8 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Customers cannot enter the staff system: see the file. -->
+<script src="../shared/shared_staff_gate.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Outfit', system-ui, sans-serif; }
@@ -397,19 +399,22 @@ function _mjmHasMobileAccess(profile) {
   return !!lvl && _MOBILE_STAFF_LEVELS.indexOf(String(lvl).toLowerCase()) !== -1;
 }
 
-_supabase.auth.getSession().then(async ({ data: { session } }) => {
+// Resolves true only once the person is let in; the page's own loading
+// waits on it, so nothing is fetched or drawn for somebody turned away.
+window.MJM_PAGE_GATE = _supabase.auth.getSession().then(async ({ data: { session } }) => {
   if (!session) { window.location.href = 'mobile_landing.html'; return; }
-  try {
-    const { data: profile } = await _supabase
-      .from('shared_profiles').select('permissions')
-      .eq('id', session.user.id).maybeSingle();
-    if (profile && !_mjmHasMobileAccess(profile)) {
-      window.location.replace('mobile_landing.html'); return;
-    }
-  } catch (_) { /* fail open on transient errors */ }
+  // Staff gate (shared/shared_staff_gate.js): a customer is refused, an
+  // unreadable profile with nothing remembered is held with a Retry, and a
+  // login with no row is not let through as it used to be.
+  const gate = await MJMStaffGate.enforce(_supabase, session);
+  if (gate.status === 'customer' || gate.status === 'unknown') return;
+  if (!_mjmHasMobileAccess(gate.profile)) {
+    window.location.replace('mobile_landing.html'); return;
+  }
   currentSession = session;
   document.getElementById('user-label').innerText =
     session.user.user_metadata?.full_name || session.user.email;
+  return true;
 });
 
 _supabase.auth.onAuthStateChange((event, session) => {
@@ -565,7 +570,7 @@ async function loadAllData() {
   renderCombined(document.getElementById('input-search')?.value || '');
 }
 
-window.addEventListener('DOMContentLoaded', () => { loadAllData(); });
+window.addEventListener('DOMContentLoaded', async () => { if (!(await window.MJM_PAGE_GATE)) return; loadAllData(); });
 
 // ════════════════════════════════════════════════════════
 //  BARCODE SCANNER

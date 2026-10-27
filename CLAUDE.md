@@ -3436,6 +3436,40 @@ Which means: **an absent answer is not "no", it is "nobody has been asked"** —
 and code that writes today's default into somebody's row turns an unasked
 question into a decision. Do not seed defaults into saved rows.
 
+## A customer is never let in, and an unread profile is never full access
+
+The owner, in one line: *"all staff system. customer only can see sales web
+and customer portal."* A Sales Web customer is an ordinary Supabase login
+whose `shared_profiles.user_type` is `'customer'` — same project, same
+password box — so nothing stopped one signing in here, and several doors
+then failed OPEN on top of it: the hub drew every tile for a profile it
+could not read or that had no row, `shared_access.js` skipped its gate when
+the read failed and nothing was cached, and the audit sign-in wrote
+`mjm_user` for anybody the password box accepted.
+
+`shared/shared_staff_gate.js` is the ONE rule, asked on sign-in and on every
+load with a session, and every door calls it rather than keeping a copy:
+
+- **customer** (read OK) → signed out, this device forgets them, and the
+  page shows only the refusal. A sessionStorage flag carries the refusal
+  across the redirects a sign out sets off.
+- **no row, or no staff access** (read OK) → the door's own Pending
+  behaviour. `hasStaffAccess(null)` is **false** now.
+- **read failed** — a returned `{error}` counts exactly like a throw → the
+  last profile THIS DEVICE was given for THIS USER ID; with none, "could not
+  check" and a Retry, **session kept**. Offline use still works for anybody
+  who has signed in on that device before.
+
+This is different from "access fails open" above: that is about a STAFF
+member nobody has configured a tick for. An unknown PERSON is not staff.
+
+Every page that loads `shared_access.js` loads the gate file just before it;
+the hub, `mobile/` and `audit/audit_index.html` load it themselves, and
+`audit_login_guard.js` / `refreshAuditPermissions()` refuse a cached or
+freshly-read customer. `tests/customers_cannot_enter_the_staff_system.cjs`
+drives the real pages. Row-level security is still what actually protects
+the data; this is the screen agreeing with it.
+
 ## The three layers of a Maintenance permission
 
 Getting these confused is the single easiest mistake here.
