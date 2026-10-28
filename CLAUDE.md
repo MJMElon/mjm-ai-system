@@ -3112,6 +3112,46 @@ Five things in it, and four of them are faults this file has had before:
   nursery-month, how many rows are agreed, and the capacity on no claim.
   Hand it over with any change here.
 
+### Which of the six reasons an empty sheet is, and how to read it off the screen
+
+The office asked why BNN and UNN1 had no transplanting in October, and the
+answer is in the sentence the screen was already printing. **The by-plot
+table has two empty sentences and they mean different things**, which is the
+whole point of `renderTransplantByPlot` carrying both: *"N plots … are
+waiting to be Checked"* is work recorded and not agreed, and the bare
+*"Nothing transplanted in UNN1 for October 2026"* is drawn only when the
+section has no row in `transplantField` **AND** none in `transplantHeld` —
+which between them are every row the read returned. So that sentence means
+exactly one thing: **no record came back for `schedule_month = 'Oct 2026'`
+whose `nursery_name` normalises to `UNN1`.** Reading it the other way round
+and going looking for an unticked row is an afternoon spent on the one
+branch the screen had already ruled out.
+
+What is left is four causes, and `shared/CHECK_transplant_not_on_claim.sql`
+separates them in one paste. It was rewritten for this:
+
+- **It answers for EVERY section**, not the one circle somebody edits into
+  line 1 — the office asked about two nurseries and the old file would have
+  been run twice. One batch is the example, never the scope.
+- **It knows about the Checked gate**, which it predated. `checked_at` is
+  read as `to_jsonb(t) ->> 'checked_at'` rather than named as a column, so
+  the file still parses on a database that has not had
+  `RUN_ME_transplant_checked.sql` run — the same trick as the `DO` block
+  that keeps `storage.buckets` out of a `CASE`. An absent column and an
+  unticked row both read NULL, so the **first row of the result says whether
+  the gate is installed at all** and the held counts mean nothing until it
+  does.
+- **NOBODY NAMED is asked before the Checked test.** Both can be true of one
+  section, and a record with an empty crew pays nothing even once somebody
+  ticks it, so that is the answer somebody can act on.
+
+**And the fifth cause is invisible to any query.** `loadTransplantField`
+turns ANY read error into an empty list — the branch exists so a database
+without the table goes on working — so an RLS refusal or a dropped
+connection draws a month with nothing in it and nothing anywhere saying so.
+Only the `checked_at` error is told apart and said in red. If the check
+below says the work is there and on the claim, that is what is left.
+
 **A MONTH THE OFFICE HAS VERIFIED IS ALREADY AGREED**, and more strongly
 than a tick. The Transplanting sheet keeps no snapshot the way Work
 Maintenance does — `verifyCurrentSheet` builds one for `maint` and `null`
