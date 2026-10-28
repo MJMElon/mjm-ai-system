@@ -425,7 +425,15 @@
           filter: grayscale(.25);
         }
     </style>
-    <script src="../shared/shared_cf_select.js"></script>
+    <!-- THE ONLY ONE OF THE 53 PAGES THAT CARRIES A NUMBER, and that is
+         deliberate rather than tidy. The skin is otherwise loaded with no
+         `?v=` anywhere, so a browser holding yesterday's copy keeps it
+         until somebody hard-reloads -- and the tray dropdown fix had to
+         reach the office on the page they were looking at. This page has
+         the three no-cache metas, so the PAGE is always fresh and asking
+         for a new number here is enough. Bump it in the same commit as
+         `shared_cf_select.js`. -->
+    <script src="../shared/shared_cf_select.js?v=2"></script>
 </head>
 <body>
 

@@ -4029,6 +4029,69 @@ Three parts to the fix, and the first is the one that matters:
 it — 12 of its checks fail on the previous code, and the dosage one fails
 with the office's own number: **0 pixels of room for a digit.**
 
+### A menu that opens past the foot of the window is a list with no bottom
+
+The third way that bargain comes due, and the worst of them: the office
+opened Source Tray on a draft card near the bottom of the screen and said
+**看不到full** — four trays of thirteen, and nothing they did brought the
+rest up.
+
+**`.cf-menu` is `position:absolute` under its button, so every scroller
+above it can cut it off — and a FIXED one cuts it off for good.**
+`operation_batch_detail.html` scrolls inside `.modal-backdrop`, which is
+`position:fixed; inset:0; overflow-y:auto`. So the tail of the menu hung
+below the window and there was no way to reach it: **scrolling moves the
+BUTTON by exactly the same amount**, so the menu rides down with it and
+never comes up the screen, and at the end of the document it cannot move
+at all. Measured on the real page, the menu ran to **1,335 on a window of
+1,200**.
+
+The flat `max-height:260px` could not help and was never the cause — **the
+cut is below the window, not inside the menu.** It also meant a dropdown
+on a 1,200px screen showed six rows while 900px of room sat under it.
+
+So `placeMenu()` measures the room when the menu OPENS, and four things in
+it are each the shape of a way this comes back:
+
+- **The clip is every ancestor that clips, not just the window**
+  (`clipBand`). A menu inside a scrolling panel is cut at the PANEL, and a
+  height measured off the window alone would hang out of it exactly as
+  before. **BODY and HTML are skipped**: a page whose scroller is a fixed
+  overlay leaves the body at zero height, which would read as no room at
+  all and collapse every menu on the page.
+- **It opens UPWARDS where there is more room above** (`.cf-up`), which is
+  the only answer for a row at the very bottom — there is no height that
+  fits under it. Thirteen trays now draw in full, 490px of them, above the
+  button.
+- **It is re-measured while it is OPEN**, on a captured `scroll` and on
+  `resize`. The menu moves with its button, so a height worked out once
+  goes stale the moment anybody scrolls — and stale in the one direction
+  that puts it back off the foot of the window.
+- **A button scrolled out of sight CLOSES it.** The menu is anchored to
+  that button, so it otherwise goes on hanging where the button now is:
+  off the screen, or floating over a part of the page with nothing saying
+  what it belongs to.
+
+Two smaller things:
+
+- **The 260px stays in the stylesheet as a fallback**, for a menu drawn
+  before any of this runs. It is not a second copy of the rule.
+- **`.cf-menu` sets its own `box-sizing:border-box`.** Tailwind's preflight
+  was the only thing setting it, so on a page whose CDN had not answered
+  the max-height meant the CONTENT box and the menu stood 10px taller than
+  the room it was given — which is exactly the margin this rule is about.
+
+`tests/the_tray_list_is_not_cut_off.cjs` drives the real page with the
+office's own thirteen trays; **11 of its 26 checks fail on the previous
+skin**, and section 2 drives the old flat 260px directly to show what it
+cost.
+
+**And this is the one page of the 53 where the skin carries a `?v=`.** It
+is loaded bare everywhere else, so a browser holding yesterday's copy keeps
+it until a hard reload — and this fix had to reach the office on the page
+they were looking at. That page has the three no-cache metas, so asking for
+a new number there is enough. Bump it in the same commit as the file.
+
 ## One card per plot per day, and two people fill it in
 
 Tab 3 was one flat row per TRAY. Two trays into N15 on the 17th therefore
