@@ -2028,7 +2028,6 @@ function openCullAdd() {
     const inp = 'width:100%;padding:9px 10px;border:1.5px solid var(--border,#d1d5db);border-radius:8px;font-size:13px;';
     el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
       <div style="font-size:14px;font-weight:800;">Add a plot to the culling incentive</div>
-      <div id="ca-what" style="font-size:12px;color:var(--text-muted,#6b7280);margin-top:4px;"></div>
       <label style="${lab}">Plot</label><input id="ca-plot" style="${inp}" placeholder="B4">
       <!-- THE TWO LINES THAT FILL THEMSELVES KEEP THEIR ROOM WHETHER THEY
            SAY ANYTHING OR NOT. Both appear while somebody is reaching for
@@ -2128,9 +2127,7 @@ function openCullAdd() {
   }
   const el = _cullAddEl;
   const n = getNursery();
-  el.querySelector('#ca-what').textContent =
-    `For ${getMonth()}. Name the plot and the two days fill in from PALMS where it has them — the `
-    + `${MJMCullIncentive.TARGET_DAYS}-day rule still decides, and the plot is paid only once it is Checked.`;
+  /* No explaining line under the title — the office: "删掉 没必要". */
   el.querySelector('#ca-sec').innerHTML = MJMCullIncentive.NURSERIES
     .map(s => `<option value="${esc(s)}"${s === n ? ' selected' : ''}>${esc(NURSERY_NAMES[s] || s)}</option>`).join('');
   el.querySelector('#ca-plot').value = '';
