@@ -249,30 +249,32 @@ const payOf = (page, sec) => page.evaluate((s) =>
   txt = await tableText(mp);
   check('2 of 3 checked, B7 still held', /2 of 3 plots checked/.test(txt) && /1 not checked yet/.test(txt), true);
 
-  console.log('— by hand');
-  await mp.evaluate(() => openCullHand('', 'add'));
-  await mp.fill('#ch-plot', 'b3-r'); await mp.fill('#ch-remark', 'try');
-  await mp.click('#ch-save');
-  check('a -R plot cannot be added by hand', m.errs.some(e => /B3-R is a -R plot/.test(e)), true);
-  await mp.evaluate(() => { document.getElementById('cull-hand').style.display = 'none'; });
-  await mp.evaluate(() => openCullHand('B1', 'remove'));
+  console.log('— by hand: Remove, and nothing else');
+  check('no Count it and no Add plot anywhere — only Check and Remove',
+    await mp.evaluate(() => {
+      const txt = document.getElementById('tab-payroll').textContent;
+      return [/Count it/.test(txt), /Add plot/.test(txt), typeof window.openCullHand];
+    }), [false, false, 'undefined']);
+  check('a plot that does not earn it offers no button at all',
+    await mp.evaluate(() => [...document.querySelectorAll('#payroll-table tr')]
+      .filter(tr => /Over 15 days|not closed|No Saringan/.test(tr.textContent))
+      .map(tr => tr.querySelectorAll('button').length)), [0, 0, 0, 0]);
+  await mp.evaluate(() => openCullRemove('B1'));
   await mp.fill('#ch-remark', 'should not go');
   await mp.click('#ch-save');
   check('a Checked plot cannot be removed until it is unchecked', m.errs.some(e => /B1 is Checked\. Uncheck it first/.test(e)), true);
   await mp.evaluate(() => { document.getElementById('cull-hand').style.display = 'none'; });
-  await mp.evaluate(() => openCullHand('B4', 'add'));
-  check('Count it opens on the plot and does not let it be retyped',
-    await mp.evaluate(() => [document.getElementById('ch-plot').value, document.getElementById('ch-plot').readOnly]), ['B4', true]);
+  await mp.evaluate(() => openCullRemove('B7'));
   await mp.click('#ch-save');
-  check('a change with no reason is refused', m.errs.some(e => /Say why/.test(e)), true);
-  await mp.fill('#ch-remark', 'Transplanting finished 10th, FC forgot to close');
+  check('a Remove with no reason is refused', m.errs.some(e => /Say why/.test(e)), true);
+  await mp.fill('#ch-remark', 'Re-culled, does not count');
   await mp.click('#ch-save');
   await mp.waitForFunction(() => document.getElementById('cull-hand').style.display === 'none');
-  await mp.waitForFunction(() => /Counted by hand/.test(document.getElementById('payroll-table').textContent));
-  check('B4 now earns it, saying who counted it and why',
-    [(await rowsOf(mp)).find(r => r[0] === 'B4'), /B4.*Counted by hand: Transplanting finished 10th/.test(await tableText(mp))],
-    [['B4', true, null, false], true]);
-  await mp.evaluate(() => toggleCullChecked('B4'));
+  await mp.waitForFunction(() => /Taken out by hand/.test(document.getElementById('payroll-table').textContent));
+  txt = await tableText(mp);
+  check('B7 is listed under NOT earning it, saying who took it out and why, with Put back',
+    [(await rowsOf(mp)).find(r => r[0] === 'B7'), /NOT earning it.*B7Taken out by hand: Re-culled, does not count.*Put back/.test(txt)],
+    [['B7', false, 10, false], true]);
   await mp.evaluate(() => toggleCullChecked('B3'));   // and uncheck one
   await mp.waitForFunction(() => window.__DB.nops_cull_incentive_checks.some(r => r.plot === 'B3' && !r.checked_at));
   check('Uncheck clears the tick and what it had written down',
@@ -297,14 +299,14 @@ const payOf = (page, sec) => page.evaluate((s) =>
     transplant_date: D(8), days: 7, checked_at: `${YM}-20T01:00:00Z`, checked_by: 'elon.mjm@gmail.com' });
   const { page, errs } = await boot(browser, Object.assign({}, db,
     { nops_cull_incentive_checks: left.checks, mjmnpayroll_cull_incentive_overrides: left.overrides }));
-  check('paid: B1 and B4 in BNN (B3 unchecked, B7 never checked)',
+  check('paid: B1 alone in BNN (B3 unchecked, B7 removed)',
     await page.evaluate(() => cullIncentivePlots('BNN').map(r => [r.plot, r.days == null ? null : r.days])),
-    [['B1', 13], ['B4', null]]);
+    [['B1', 13]]);
   check('BNN: RM 20 a plot each to Rousell and Florence, RM 50 a plot to Lalu Aenal only',
     await payOf(page, 'BNN'),
-    [['Rousell Wayne', 40], ['Florence Anak Jugah', 40], ['Lalu Aenal Mashuri', 100]]);
+    [['Rousell Wayne', 20], ['Florence Anak Jugah', 20], ['Lalu Aenal Mashuri', 50]]);
   check('All nurseries: Akbar gets nothing, Azhar his one checked plot', await payOf(page, ''),
-    [['Rousell Wayne', 60], ['Florence Anak Jugah', 60], ['Lalu Aenal Mashuri', 100],
+    [['Rousell Wayne', 40], ['Florence Anak Jugah', 40], ['Lalu Aenal Mashuri', 50],
      ['Akbar Cahaya', 0], ['Muhamad Azhar', 50]]);
   const screen = await page.evaluate(() => {
     const t = (id) => (document.getElementById(id).textContent || '').replace(/\s+/g, ' ').trim();
@@ -314,10 +316,10 @@ const payOf = (page, sec) => page.evaluate((s) =>
              add: !!document.getElementById('cull-inc-add'), modal: !!document.getElementById('cull-add-modal') };
   });
   check('the screen lists the checked plots with who checked them',
-    [/B1.*Elon Ting/.test(screen.plots), /B4.*Counted by hand/.test(screen.plots), /B3|B7/.test(screen.plots)], [true, true, false]);
-  check('the screen total is the BNN incentive, RM 180.00', /TOTAL INCENTIVE.*180\.00/.test(screen.pay), true);
+    [/B1.*Elon Ting/.test(screen.plots), /B3|B7/.test(screen.plots)], [true, false]);
+  check('the screen total is the BNN incentive, RM 90.00', /TOTAL INCENTIVE.*90\.00/.test(screen.pay), true);
   check('the plots waiting to be checked are named, with the way there',
-    [/B3, B7 qualify and have not been Checked yet/.test(screen.note),
+    [/B3 qualifies and has not been Checked yet/.test(screen.note),
      /nursery_ops_maintenance\.html\?view=cull_incentive/.test(screen.note)], [true, true]);
   check('the sheet links to Worker Activity, and adds nothing by hand itself',
     [screen.link, screen.add, screen.modal],
@@ -329,7 +331,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
     return monthlyRows().filter(r => r.transpl).map(r => [r.name, r.transpl]);
   });
   check('each person is paid across every nursery, under Transplanting', monthly.sort(),
-    [['Florence Anak Jugah', 60], ['Lalu Aenal Mashuri', 100], ['Muhamad Azhar', 50], ['Rousell Wayne', 60]]);
+    [['Florence Anak Jugah', 40], ['Lalu Aenal Mashuri', 50], ['Muhamad Azhar', 50], ['Rousell Wayne', 40]]);
 
   console.log('— the claim PDF');
   await page.evaluate(() => { document.getElementById('transpl-section').value = 'BNN'; return downloadTransplantPDF(); });

@@ -15,6 +15,11 @@
 --    · the records are on this nurserys plots and NOBODY IS NAMED on
 --      them -- the claim pays per worker, so a crew of nobody is no lines
 --      at all, however big the quantity
+--    · the job is recorded as NOT DONE. A blanket spray is not always
+--      needed, so a conductor can answer a job with "nobody did this" --
+--      an ordinary record with an empty crew and not_done set. There is
+--      nothing to pay and nothing to tick, and that is an answer rather
+--      than a fault
 --    · the plots nursery name is spelled in a way the payroll sections do
 --      not recognise, so the work lands under "No section"
 --    · the records are there and the office has not ticked CHECKED on them
@@ -49,6 +54,16 @@
 --   -> every record is waiting for the office. The claim is right to be
 --      empty and the sheet should say so in words. Tick Checked on
 --      Worker Record -> Transplanting.
+--
+--   "record" ROWS SAYING "recorded as NOT DONE"
+--   -> the conductor answered that job: nobody carried the work out, so
+--      there is nothing to pay and nothing to tick. Asked BEFORE the
+--      nobody-named test below, because such a record has an empty crew as
+--      well and "go and add who did the work" is the wrong instruction for
+--      work nobody did. If that is wrong -- the job WAS done -- he reopens
+--      it in the FC Portal under Maintenance -> Transplanting Job and ticks
+--      the crew. Where the not_done column is not on the database yet this
+--      answer cannot appear at all, and such a record cannot exist either.
 --
 --   "record" ROWS SAYING "NOBODY NAMED"
 --   -> the work and its quantity are in the database, but no worker is on
@@ -110,7 +125,11 @@ r AS (
          (SELECT count(*)
             FROM jsonb_array_elements(COALESCE(t.workers, '[]'::jsonb)) w
            WHERE COALESCE(w ->> 'name', '') <> '')              AS crew,
-         to_jsonb(t) ->> 'checked_at'                           AS checked_txt
+         to_jsonb(t) ->> 'checked_at'                           AS checked_txt,
+         -- Read the same way, and for the same reason: this file has to run
+         -- on a database that has not had RUN_ME_transplant_not_done.sql
+         -- yet, where no record can be not-done and every row reads false.
+         COALESCE((to_jsonb(t) ->> 'not_done')::boolean, false)  AS notdone
     FROM nops_transplant_field_records t
 )
 SELECT * FROM (
@@ -157,14 +176,24 @@ SELECT * FROM (
                             AND r.checked_txt IS NOT NULL)
            || ' / nobody named: ' || (SELECT count(*)::text FROM r, q
                           WHERE r.schedule_month = q.month AND r.nkey = s.section
-                            AND r.crew = 0),
+                            AND r.crew = 0 AND NOT r.notdone)
+           || ' / not done: ' || (SELECT count(*)::text FROM r, q
+                          WHERE r.schedule_month = q.month AND r.nkey = s.section
+                            AND r.notdone),
          CASE
            WHEN (SELECT count(*) FROM r, q
                   WHERE r.schedule_month = q.month AND r.nkey = s.section) = 0
              THEN 'nothing on this circle for this month'
-           -- NOBODY NAMED is asked FIRST on purpose: a record with an empty
-           -- crew pays nothing even once somebody ticks it, so that is the
-           -- answer somebody can act on.
+           -- NOT DONE is asked before everything else: such a record has an
+           -- empty crew as well, and "nobody is named, go and add who did
+           -- the work" is the wrong instruction for work nobody did.
+           WHEN (SELECT count(*) FROM r, q
+                  WHERE r.schedule_month = q.month AND r.nkey = s.section
+                    AND NOT r.notdone) = 0
+             THEN 'every job here is recorded as NOT DONE -- nothing to pay, and that is an answer'
+           -- NOBODY NAMED is asked next, and before the tick: a record with
+           -- an empty crew pays nothing even once somebody ticks it, so that
+           -- is the answer somebody can act on.
            WHEN (SELECT count(*) FROM r, q
                   WHERE r.schedule_month = q.month AND r.nkey = s.section
                     AND r.crew > 0) = 0
@@ -186,8 +215,10 @@ SELECT * FROM (
          COALESCE(r.nursery_name, '(no nursery)') || ' / ' || COALESCE(r.plot_name, '(no plot)'),
          COALESCE(r.work_type, '(no job)') || ' / qty '
            || COALESCE(r.source_qty::text, '-'),
-         'crew: ' || r.crew::text,
+         'crew: ' || r.crew::text || CASE WHEN r.notdone THEN ' / not done' ELSE '' END,
          CASE
+           WHEN r.notdone
+             THEN 'recorded as NOT DONE -- nobody carried this job out, so there is nothing to pay'
            WHEN r.crew = 0
              THEN 'NOBODY NAMED -- this record pays nothing and shows nowhere'
            WHEN r.nkey NOT IN ('PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'DRIVER')
@@ -227,7 +258,10 @@ SELECT * FROM (
          'checked: ' || (SELECT count(*)::text FROM r, q
                           WHERE r.schedule_month = q.month AND r.checked_txt IS NOT NULL)
            || ' / nobody named: ' || (SELECT count(*)::text FROM r, q
-                          WHERE r.schedule_month = q.month AND r.crew = 0),
+                          WHERE r.schedule_month = q.month AND r.crew = 0
+                            AND NOT r.notdone)
+           || ' / not done: ' || (SELECT count(*)::text FROM r, q
+                          WHERE r.schedule_month = q.month AND r.notdone),
          'records in the table under every other month: '
            || (SELECT count(*)::text FROM r, q WHERE r.schedule_month IS DISTINCT FROM q.month)
 

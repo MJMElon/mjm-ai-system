@@ -3179,6 +3179,64 @@ saying it is being held could not be reached.
 through all three cases, and `tests/transplant_claim_empty.cjs` holds the two
 new empty sentences against the real page in a real browser.
 
+### A job NOBODY DID is on neither list, and it is an answer
+
+A blanket spray is not always needed, so the Field Conductor can answer a
+job with *"nobody did this"* — `shared/RUN_ME_transplant_not_done.sql`, and
+the FC Portal's own `CLAUDE.md` says why the plot needed a way to say it.
+It is an ordinary record of the table with an **EMPTY CREW** and `not_done`
+set, so `transplantFieldLines` has always dropped it: the money needed no
+change at all. What needed changing is every screen that reads a crew of
+nobody as a crew somebody FORGOT.
+
+**IT IS NOT HELD WORK.** Held means the office has still to agree a figure,
+and there is no figure here to agree. Left in `transplantHeld` the claim
+would read *"RM 0.00 is NOT on this claim — 1 row has not been Checked"*
+and send somebody to tick a row that can never pay anybody. So
+`splitTransplantField` takes these rows out FIRST, before the tick is asked
+about, and they are in NEITHER list — `transplantNotDone` is the third.
+
+Five things follow, and four of them are sentences this file already has a
+heading about:
+
+- **A month whose records all say "not done" is not an empty month.** Both
+  empty sentences and the by-plot table learned a seventh answer. "No
+  transplanting was recorded" over a conductor who answered every question
+  put to him is the same wrong sentence as telling him his work never
+  arrived, which is the whole argument of `transplantEmptyLead`.
+- **It is COUNTED AND NAMED**, with the plot and the job, in the claim's
+  notes, in the by-plot note and under the Worker Record total — in SLATE
+  rather than amber, because held work is a question waiting for the office
+  and this is an answer already given.
+- **The Worker Record offers no tick on one.** A Check button would offer a
+  tick that moves no money, and a ticked row that pays nobody is what
+  somebody later reads as a fault. Its Qty cell says *Nobody did it* rather
+  than quoting the plot's figure — that figure is what the job WOULD have
+  been, and printing it reads as capacity somebody worked.
+- **TWO OPTIONAL COLUMNS, AND POSTGREST NAMES ONLY THE FIRST IT CANNOT
+  FIND**, so both readers' fallbacks became LADDERS rather than two ifs:
+  each refusal drops the column it names and asks again. A missing
+  `not_done` needs no warning, unlike a missing `checked_at` — a not-done
+  record cannot exist on a database without the column, so every row reads
+  as an ordinary one, which is the truth.
+- **The flag decides, not the crew left on the row.** `_tpNotDone` is
+  asked in `transplantFieldLines` and in `tpShare` as well as in the split,
+  because a row hand-edited in the Supabase dashboard could carry both.
+
+**One trigger function in TWO files**, word for word: both
+`RUN_ME_transplant_checked.sql` and `RUN_ME_transplant_not_done.sql` create
+`nops_transplant_clear_check`, so whichever is run last is the one the
+database keeps and a condition added to one and not the other is a tick
+surviving a change it should not. `not_done` is compared THROUGH `to_jsonb`
+in both — never named as a column — which is what makes the body parse on a
+database where only one of the two has been run, so the order does not
+matter. Section 10 of `tests/the_transplant_claim_asks_the_office.cjs`
+compares the two bodies with their comments stripped.
+
+`shared/CHECK_transplant_not_on_claim.sql` asks NOT DONE **before** NOBODY
+NAMED, for the reason above: such a record has an empty crew as well, and
+"go and add who did the work" is the wrong instruction for work nobody did.
+
 ## User Access is one block per PORTAL, and two of them were on no screen
 
 The screen was five flat doors in no particular order — the back office, the
@@ -4705,9 +4763,12 @@ office moved it: *"把culling incentive全部搬到这里 under worker activity�
 
 - **Worker Activity → Culling Incentive** (`renderCullIncentivePayroll` in
   `nursery_ops/plot_maintenance_script.js`) shows the plot, the two dates,
-  the duration and who earns it — **no RM**, on purpose — and carries the
-  **Check** and Add / Count it / Remove by hand. Plots that do not earn it
-  are listed under the ones that do, saying why.
+  the duration and who earns it — **no RM**, on purpose — and carries
+  **Check and Remove, and nothing else**: *"count it 不用 只需要check /
+  removed"*. A plot PALMS does not qualify is listed under the ones that do,
+  saying why, with no button that pays it anyway. A by-hand `add` written
+  before that is still honoured and offers Undo, so nothing agreed moves by
+  itself.
 - **The payroll Transplanting sheet pays the CHECKED plots and nothing
   else**, links back (`?view=cull_incentive` opens the tab), and names the
   plots that qualify and are still waiting to be Checked. It writes nothing.
@@ -4736,8 +4797,8 @@ What the rule asks, and must keep asking:
   unchecked — changing what was agreed starts with taking the agreement back.
 - **By hand is plot by plot**, never person by person, so one decision moves
   all five people's money together. `mjmnpayroll_cull_incentive_overrides`
-  holds ONE record per plot per month: `add` counts a plot whatever PALMS
-  says, `remove` leaves one out. Every one carries a reason, who and when,
+  holds ONE record per plot per month: `remove` leaves one out, and `add`
+  (no longer offered) counted one whatever PALMS said. Every one carries a reason, who and when,
   shown on the row. Gated on admin of Work Maintenance or Adjust Pay on
   Transplanting, asked again at the write. A dialog, never a `prompt`.
 - It goes into the Monthly Payroll's Transplanting column, under each

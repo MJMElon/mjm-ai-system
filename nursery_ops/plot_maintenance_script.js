@@ -1268,6 +1268,12 @@ const TP_JOBS = [
 ];
 const TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));
 
+/* Answered "nobody did this job". A database without the column answers
+   undefined for every row, so nothing is not-done and this tab reads
+   exactly as it did before -- which is the right way round: a record of
+   this kind cannot exist until the column does. */
+const tpNotDone = (rec) => !!(rec && rec.not_done);
+
 /* WHAT ONE WORKER DID ON ONE RECORD.
 
    SAME RULE as transplantFieldLines() in npayroll/npayroll_script.js, which
@@ -1283,6 +1289,15 @@ const TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));
    equally among the crew. */
 function tpShare(rec, w) {
   const job  = TP_JOB[rec.work_type];
+  /* A JOB NOBODY DID PAYS NOBODY. The conductor can answer a job with "not
+     done" -- a blanket spray on a plot where the grass never came -- and
+     that is an ordinary row of this table with an empty crew and `not_done`
+     set. See shared/RUN_ME_transplant_not_done.sql. The empty crew already
+     makes this nought; the flag is said as well because it is the answer
+     that decides, not the names left on the row, and a row hand-edited in
+     the Supabase dashboard could carry both. SAME GUARD as
+     transplantFieldLines in npayroll_script.js. */
+  if (tpNotDone(rec)) return 0;
   const crew = Array.isArray(rec.workers) ? rec.workers.filter(x => x && x.name) : [];
   if (!crew.length) return 0;
   return job && job.split
@@ -1324,13 +1339,26 @@ async function loadTransplantRecordsForPayroll(n, m) {
      falls back to the columns that have always been there and the tab says,
      in orange, that the gate is not installed. Showing the work is the safe
      direction; showing nothing is the one fault this tab cannot have. */
-  let { data, error } = await ask(TP_PAY_COLS + ', checked_at, checked_by');
-  if (error && /checked_at|checked_by/i.test(error.message || '')) {
-    _tpNoGate[key] = true;
-    ({ data, error } = await ask(TP_PAY_COLS));
-  } else if (!error) {
-    _tpNoGate[key] = false;
+  /* TWO OPTIONAL COLUMNS, AND POSTGREST NAMES ONLY THE FIRST ONE IT CANNOT
+     FIND -- so this is a ladder and not two ifs. `not_done` is the newer of
+     the two (RUN_ME_transplant_not_done.sql) and its absence needs no
+     warning: a not-done record cannot exist on a database without the
+     column, so every row reads as an ordinary one, which is the truth.
+     SAME LADDER as loadTransplantField in npayroll_script.js. */
+  let want = { nd: true, chk: true };
+  const build = () => TP_PAY_COLS
+    + (want.nd ? ', not_done' : '')
+    + (want.chk ? ', checked_at, checked_by' : '');
+  let { data, error } = await ask(build());
+  for (let i = 0; i < 2 && error; i++) {
+    const msg = String(error.message || '');
+    if (want.nd && /not_done/i.test(msg)) { want.nd = false; }
+    else if (want.chk && /checked_at|checked_by/i.test(msg)) {
+      want.chk = false; _tpNoGate[key] = true;
+    } else break;
+    ({ data, error } = await ask(build()));
   }
+  if (!error && want.chk) _tpNoGate[key] = false;
 
   _tpRecordsLoading[key] = false;
   if (error) {
@@ -1362,6 +1390,39 @@ function transplantingRows(n, m) {
           || String(a.work_type || '').localeCompare(String(b.work_type || ''));
     });
 }
+
+/* THE THREE ANSWERS the Transplanting sheet and its PDF both need, written
+   once so the paper cannot say something the screen does not.
+
+   Columns: the register's names FIRST, in their own order, then any name the
+   records carry that the register does not know -- see the note inside
+   renderTransplantingPayroll for why such a name still gets a column. */
+function tpWorkerColumns(n, rows) {
+  const reg = workers[n] || [];
+  const onRecords = [...new Set(rows.flatMap(r =>
+    (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
+  const extra = onRecords.filter(name => !reg.includes(name)).sort();
+  return { wk: reg.concat(extra), extra };
+}
+/* The record's own figure, which is what the claim quotes: the keyed
+   quantities where the job splits, the plot's source figure otherwise. */
+function tpRowCap(r) {
+  const job  = TP_JOB[r.work_type];
+  /* A JOB NOBODY DID HAS NO CAPACITY. The plot's own quantity is still on
+     the row -- that is what the job WOULD have been -- and quoting it
+     anywhere reads as capacity somebody worked. Tested HERE rather than in
+     each caller, so the screen, the PDF of the same sheet and anything
+     added later get it without knowing this rule exists. */
+  if (tpNotDone(r)) return 0;
+  const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
+  return job && job.split
+    ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
+    : Number(r.source_qty || 0);
+}
+/* WHERE THE GATE IS NOT INSTALLED, EVERY ROW IS AGREED -- because every row
+   is being paid. Reading the absent column as "not checked" would draw the
+   whole sheet held, under an orange line saying the opposite. */
+function tpAgreed(key, r) { return !!_tpNoGate[key] || !!r.checked_at; }
 
 function renderTransplantingPayroll() {
   const tbl = document.getElementById('payroll-table');
@@ -1407,11 +1468,7 @@ function renderTransplantingPayroll() {
      `pay.fieldNoColumn` exists to shout about on the other tabs. So the
      columns are the register's names FIRST, in their own order, and then
      any name the records carry that the register does not know. */
-  const reg = workers[n] || [];
-  const onRecords = [...new Set(rows.flatMap(r =>
-    (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
-  const extra = onRecords.filter(name => !reg.includes(name)).sort();
-  const wk = reg.concat(extra);
+  const { wk, extra } = tpWorkerColumns(n, rows);
 
   const payTh = (txt, w, cls) =>
     `<th class="${cls || ''}" style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
@@ -1429,11 +1486,8 @@ function renderTransplantingPayroll() {
     </tr></thead><tbody>`;
 
   const totals = {}; wk.forEach(w => totals[w] = 0);
-  let capTotal = 0, heldCap = 0, heldRows = 0;
-  /* WHERE THE GATE IS NOT INSTALLED, EVERY ROW IS AGREED -- because every row
-     is being paid. Reading the absent column as "not checked" would draw the
-     whole sheet held, under an orange line saying the opposite. */
-  const agreed = (r) => !!_tpNoGate[key] || !!r.checked_at;
+  let capTotal = 0, heldCap = 0, heldRows = 0, skipRows = 0;
+  const agreed = (r) => tpAgreed(key, r);
 
   if (!rows.length) {
     h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noTransplant')}</td></tr>`;
@@ -1442,22 +1496,34 @@ function renderTransplantingPayroll() {
       const job  = TP_JOB[r.work_type];
       const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
       const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
-      /* The record's own figure, which is what the claim quotes: the keyed
-         quantities where the job splits, the plot's source figure
-         otherwise. */
-      const rowCap = job && job.split
-        ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
-        : Number(r.source_qty || 0);
+      /* NOT DONE IS A THIRD STATE, not a held row and not an agreed one.
+         Held means the office has still to agree a figure; here there is no
+         figure to agree, so it is in NEITHER total -- adding it to the held
+         line would send somebody to tick a row that can never pay anybody.
+         SAME SPLIT as splitTransplantField in npayroll_script.js, which
+         keeps these rows out of both of the claim's lists. The CAPACITY is
+         nought from tpRowCap itself, so the PDF of this sheet gets that half
+         without knowing this rule exists. */
+      const skipped = tpNotDone(r);
+      const rowCap = tpRowCap(r);
       /* THE TOTAL IS WHAT THE CLAIM PAYS. A row nobody has agreed is not on
          the claim, so counting it in the foot here would hand the office a
          figure the claim does not quote and no way to see which. Held rows
          are added up on their own and said under it. */
-      if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
-      h += `<tr${agreed(r) ? '' : ' class="tp-row-held"'}>
+      if (skipped) skipRows++;
+      else if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+      h += `<tr${skipped ? ' class="tp-row-skipped" style="opacity:.72;"'
+                        : (agreed(r) ? '' : ' class="tp-row-held"')}>
         <td style="font-weight:600;white-space:nowrap;">${r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—'}</td>
         <td class="plot-td">${esc(r.plot_name || '—')}</td>
-        <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}</td>
-        <td>${rowCap ? rowCap.toLocaleString() : '—'}</td>
+        <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}${
+          skipped ? ` <span style="display:inline-block;margin-left:.3rem;padding:.05rem .35rem;`
+                  + `border:1px solid #cbd5e1;border-radius:.5rem;background:#f1f5f9;color:#475569;`
+                  + `font-size:10px;font-weight:800;letter-spacing:.04em;" title="${esc(t('pay.tpNotDoneWhy'))}">`
+                  + `${esc(t('pay.tpNotDoneTag'))}</span>` : ''}</td>
+        <td${skipped ? ' style="color:var(--text-faint);font-weight:600;"' : ''}>${
+          skipped ? esc(t('pay.tpNotDoneCell'))
+                  : (rowCap ? rowCap.toLocaleString() : '—')}</td>
         ${wk.map(w => {
           const on = byName[w];
           if (!on) return '<td></td>';
@@ -1495,6 +1561,17 @@ function renderTransplantingPayroll() {
       <td colspan="${wk.length + 2}" style="text-align:left;color:#92400e;font-weight:600;">
         ${t('pay.tpHeld').replace('{n}', heldRows)}</td></tr>`;
   }
+  /* AND A JOB NOBODY DID IS SAID TOO, in slate rather than amber: held work
+     is a question waiting for the office, and this is an answer that is
+     already given. A row in no total with nothing under the sheet saying so
+     is the one shape of short figure this file is most careful about. */
+  if (skipRows) {
+    h += `<tr class="jumlah-tr" style="background:#f8fafc;">
+      <td class="th-left" colspan="3" style="color:#475569;">${t('pay.tpNotDoneLabel')}</td>
+      <td style="color:#475569;">—</td>
+      <td colspan="${wk.length + 2}" style="text-align:left;color:#475569;font-weight:600;">
+        ${t('pay.tpNotDoneFoot').replace('{n}', skipRows)}</td></tr>`;
+  }
   h += `</tfoot>`;
   tbl.innerHTML = h;
 
@@ -1512,6 +1589,13 @@ function renderTransplantingPayroll() {
    anybody can tick and only an admin can untick is not a lock, it is a trap.
    Unticking takes nothing away -- it puts the row back where it was. */
 function _tpCheckCell(r, key) {
+  /* NOTHING TO AGREE ON A JOB NOBODY DID. A Check button here would offer
+     the office a tick that moves no money, and a ticked row that pays
+     nobody is the kind of thing somebody later reads as a fault. */
+  if (tpNotDone(r)) {
+    return `<span style="color:#475569;font-size:11px;font-weight:700;"
+      title="${esc(t('pay.tpNotDoneWhy'))}">${esc(t('pay.tpNotDoneLabel'))}</span>`;
+  }
   if (_tpNoGate[key]) {
     return `<span style="color:var(--text-faint);font-size:11px;"
       title="The Checked columns are not on this database yet — run shared/RUN_ME_transplant_checked.sql">—</span>`;
@@ -1585,7 +1669,7 @@ async function toggleTransplantChecked(id) {
 
    - A plot that does NOT qualify is shown, under the ones that do, saying
      why. A plot silently missing from an incentive list is the one nobody
-     asks about — and it is where Count it lives.
+     asks about.
    - CHECKED WRITES DOWN WHAT THE ROW READ. The dates and the days go into
      nops_cull_incentive_checks with the tick, so a PALMS correction after
      the office signed does not move money already agreed. Uncheck clears
@@ -1714,9 +1798,12 @@ function renderCullIncentivePayroll() {
       return `<button class="btn btn-sm" onclick="cullDeleteOverride(${Number(r.override.id)})"
         title="Delete the by-hand record — the plot goes back to what PALMS says">${label}</button>`;
     }
+    /* Check or Remove, and nothing else — the office: "count it 不用 只需要
+       check / removed". A plot PALMS does not qualify is not paid; there is
+       no button that pays it anyway. */
     return r.counts
-      ? `<button class="btn btn-sm" onclick="openCullHand('${q(r.plot)}','remove')" title="Leave this plot out of the incentive this month">Remove</button>`
-      : `<button class="btn btn-sm" onclick="openCullHand('${q(r.plot)}','add')" title="Count this plot whatever PALMS says">Count it</button>`;
+      ? `<button class="btn btn-sm" onclick="openCullRemove('${q(r.plot)}')" title="Leave this plot out of the incentive this month">Remove</button>`
+      : '';
   };
   const checkCell = r => {
     if (!st.checksReady) return `<span style="color:var(--text-faint);font-size:11px;"
@@ -1787,10 +1874,7 @@ function renderCullIncentivePayroll() {
   if (!st.overridesReady) notes.push('Adding or removing a plot by hand needs shared/RUN_ME_cull_incentive_checked.sql run once.');
   if (off && notes.length) { off.style.display = ''; off.innerHTML = notes.map(esc).join('<br>'); }
 
-  const add = mayHand
-    ? `<button class="btn btn-sm" style="margin-top:8px;" onclick="openCullHand('','add')">+ Add plot by hand</button>` : '';
-  const extra = document.getElementById('payroll-extra');
-  if (extra) extra.innerHTML = add;
+
 }
 
 /* The two writes are ONE plot-month record each, and the Check carries what
@@ -1822,12 +1906,14 @@ async function toggleCullChecked(plot) {
   }
 }
 
-/* Add / Count it / Remove go through one dialog, never a prompt: a prompt
-   dismissed out of habit is a cancel that looks like a save. */
-let _cullHandEl = null, _cullHandMode = 'add';
-function openCullHand(plot, mode) {
-  if (!_cullMayHand()) { alert('Adding or removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
-  _cullHandMode = mode === 'remove' ? 'remove' : 'add';
+/* Remove goes through a dialog, never a prompt: a prompt dismissed out of
+   habit is a cancel that looks like a save. It is the ONLY by-hand change
+   offered — adding or counting a plot by hand came off at the office's
+   word. A record already written as `add` before that is still honoured,
+   and its row offers Undo, so nothing already agreed moves on its own. */
+let _cullHandEl = null;
+function openCullRemove(plot) {
+  if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
   if (!_cullHandEl) {
     const el = document.createElement('div');
     el.id = 'cull-hand';
@@ -1837,55 +1923,40 @@ function openCullHand(plot, mode) {
     el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:20px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
       <div id="ch-title" style="font-size:14px;font-weight:800;"></div>
       <div id="ch-what" style="font-size:12px;color:var(--text-muted,#6b7280);margin-top:4px;"></div>
-      <label style="${lab}">Plot</label><input id="ch-plot" style="${inp}">
-      <div id="ch-dates"><label style="${lab}">Saringan started (optional)</label><input id="ch-s1" type="date" style="${inp}">
-      <label style="${lab}">Transplanting ended (optional)</label><input id="ch-s2" type="date" style="${inp}"></div>
       <label style="${lab}">Why (required)</label><input id="ch-remark" style="${inp}">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
-        <button class="btn" id="ch-cancel">Cancel</button><button class="btn btn-primary" id="ch-save">Save</button></div></div>`;
+        <button class="btn" id="ch-cancel">Cancel</button><button class="btn btn-primary" id="ch-save">Remove</button></div></div>`;
     document.body.appendChild(el);
     const close = () => { el.style.display = 'none'; };
     el.addEventListener('click', e => { if (e.target === el) close(); });
     el.querySelector('#ch-cancel').addEventListener('click', close);
-    el.querySelector('#ch-save').addEventListener('click', saveCullHand);
+    el.querySelector('#ch-save').addEventListener('click', saveCullRemove);
     _cullHandEl = el;
   }
-  const el = _cullHandEl, m = getMonth();
-  const remove = _cullHandMode === 'remove';
-  el.querySelector('#ch-title').textContent = remove ? `Take ${plot} out of the culling incentive`
-    : (plot ? `Count ${plot} for the incentive` : 'Add a plot to the culling incentive');
-  el.querySelector('#ch-what').textContent = remove
-    ? `Nobody earns it for ${plot} in ${m}. PALMS and the ledger are not changed.`
-    : `It earns the incentive in ${m} whatever PALMS says. It still has to be Checked to be paid.`;
-  el.querySelector('#ch-plot').value = plot || '';
-  el.querySelector('#ch-plot').readOnly = !!plot;
-  el.querySelector('#ch-dates').style.display = remove ? 'none' : '';
-  ['#ch-s1', '#ch-s2', '#ch-remark'].forEach(s => { el.querySelector(s).value = ''; });
-  el.querySelector('#ch-save').textContent = remove ? 'Remove' : 'Save';
+  const el = _cullHandEl;
+  el.dataset.plot = plot;
+  el.querySelector('#ch-title').textContent = `Take ${plot} out of the culling incentive`;
+  el.querySelector('#ch-what').textContent = `Nobody earns it for ${plot} in ${getMonth()}. PALMS and the ledger are not changed.`;
+  el.querySelector('#ch-remark').value = '';
   el.style.display = 'flex';
-  setTimeout(() => el.querySelector(plot ? '#ch-remark' : '#ch-plot').focus(), 30);
+  setTimeout(() => el.querySelector('#ch-remark').focus(), 30);
 }
 
-async function saveCullHand() {
+async function saveCullRemove() {
   if (!_cullMayHand()) return;
   const el = _cullHandEl, n = getNursery(), ym = _cullYm(), CI = MJMCullIncentive;
-  const plot = String(el.querySelector('#ch-plot').value || '').trim().toUpperCase();
+  const plot = String(el.dataset.plot || '').trim().toUpperCase();
   const remark = String(el.querySelector('#ch-remark').value || '').trim();
-  if (!plot) { alert('Which plot?'); return; }
-  if (CI.isReplant(plot)) { alert(plot + ' is a -R plot, and a -R plot is not on the culling incentive.'); return; }
-  if (!remark) { alert('Say why — a plot changed by hand is one somebody will ask about.'); return; }
+  if (!plot) return;
+  if (!remark) { alert('Say why — a plot taken out by hand is one somebody will ask about.'); return; }
   const checked = cullIncentiveRows(n, ym).find(r => CI.key(r.plot) === CI.key(plot) && r.check);
-  if (checked) { alert(plot + ' is Checked. Uncheck it first, then change it.'); return; }
-  const remove = _cullHandMode === 'remove';
-  const s1 = remove ? null : (el.querySelector('#ch-s1').value || null);
-  const s2 = remove ? null : (el.querySelector('#ch-s2').value || null);
-  if (s1 && s2 && s2 < s1) { alert('Transplanting cannot end before Saringan started.'); return; }
+  if (checked) { alert(plot + ' is Checked. Uncheck it first, then remove it.'); return; }
   const btn = el.querySelector('#ch-save'); btn.disabled = true;
   try {
     const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
-      month: ym, plot, action: remove ? 'remove' : 'add',
+      month: ym, plot, action: 'remove',
       section: CI.sectionOfPlot(plot) || n,
-      saringan_date: s1, transplant_date: s2, remark,
+      saringan_date: null, transplant_date: null, remark,
       created_by: window.currentUserEmail || _signingAs() || null,
       created_at: new Date().toISOString()
     }, { onConflict: 'month,plot' });
@@ -2032,8 +2103,15 @@ function _fmtRate(r) {
    which reads this same record. */
 function downloadPayrollPDF() {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const PW = 210, PH = 297, MARGIN = 25;
+  /* THE TAB ON SCREEN DECIDES WHAT IS PRINTED. Pressed on Transplanting it
+     printed the four maintenance sheets regardless, which is the office
+     asking for one thing and getting another -- "当我在transplanting的tab，
+     我要下载的是transplanting的资料". Transplanting is a wider sheet (a Work
+     column and a number in every worker cell, not a tick), so it takes the
+     wide page; the four tick sheets keep the tall one they have always had. */
+  const tpView = _payrollView === 'transplanting';
+  const doc = new jsPDF({ orientation: tpView ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const PW = tpView ? 297 : 210, PH = tpView ? 210 : 297, MARGIN = 25;
   const CONTENT_W = PW - MARGIN * 2;      // 160 mm
   const MID = PW / 2;
 
@@ -2041,7 +2119,7 @@ function downloadPayrollPDF() {
   const wk = workers[n] || [];
   const TYPES = ['pd', 'manuring', 'weeding', 'interrow'];
 
-  if (!wk.length) {
+  if (!tpView && !wk.length) {
     alert(t('pay.noWorkers'));
     return;
   }
@@ -2152,6 +2230,155 @@ function downloadPayrollPDF() {
     return y + 9;
   }
 
+  /* THE TRANSPLANTING SHEET, as the tab draws it: Date, Plot, Work, Qty, a
+     column per worker carrying THEIR SHARE (not a tick -- the FC Portal
+     recorded who, and tpShare is how much), the row's capacity and whether
+     the office has Checked it. The totals are the CLAIM's -- agreed rows only
+     -- and what is held back is said under them, exactly as on screen. */
+  function drawTransplantingSheet() {
+    const key = _tpPayrollKey(n, m);
+    if (_tpRecordsCache[key] === undefined || _tpRecordsLoading[key]) {
+      alert(t('pay.loading'));
+      return;
+    }
+    if (_tpRecordsErr[key]) { alert(_tpRecordsErr[key]); return; }
+    const rows = transplantingRows(n, m);
+    const { wk: cols } = tpWorkerColumns(n, rows);
+    const agreed = (r) => tpAgreed(key, r);
+    const noGate = !!_tpNoGate[key];
+    const label = t('tab.transplanting');
+
+    const W_DATE = 20, W_PLOT = 13, W_WORK = 44, W_QTY = 18, W_PER = 20, W_CHK = 16;
+    const FIX = W_DATE + W_PLOT + W_WORK + W_QTY + W_PER + W_CHK;   // 131 of 247 mm
+    const per = Math.max(1, Math.floor((CONTENT_W - FIX) / 11));
+    const tchunks = [];
+    for (let i = 0; i < cols.length; i += per) tchunks.push(cols.slice(i, i + per));
+    if (!tchunks.length) tchunks.push([]);
+
+    tchunks.forEach((chunk, ci) => {
+      if (ci) doc.addPage();
+      const part = tchunks.length > 1
+        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
+        : '';
+      let y = titleBlock(label, part);
+      const wkW = chunk.length ? (CONTENT_W - FIX) / chunk.length : 0;
+      // A sheet with no names on it gives the room to Work rather than to nothing.
+      const workW = chunk.length ? W_WORK : W_WORK + (CONTENT_W - FIX);
+      const widths = [W_DATE, W_PLOT, workW, W_QTY, ...chunk.map(() => wkW), W_PER, W_CHK];
+      const xs = []; let x = MARGIN;
+      widths.forEach(w => { xs.push(x); x += w; });
+      const iPer = widths.length - 2, iChk = widths.length - 1;
+      const HEAD_H = headerHeightFor(chunk.length ? chunk : ['']);
+      const drawHead = () => {
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.date'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.plot'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.work'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[3], y, widths[3], HEAD_H, t('pay.qtyTransplant'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[4 + i], y, widths[4 + i], HEAD_H, w));
+        cell(xs[iPer], y, widths[iPer], HEAD_H, t('pay.perWorker'), { bold: true, size: 7, fill: HEAD_FILL });
+        cell(xs[iChk], y, widths[iChk], HEAD_H, t('pay.checked'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        y += HEAD_H;
+      };
+      drawHead();
+
+      const totals = {}; chunk.forEach(w => totals[w] = 0);
+      let capTotal = 0, heldCap = 0, heldRows = 0, skipRows = 0;
+      if (!rows.length) {
+        cell(MARGIN, y, CONTENT_W, 14, t('pay.noTransplant'), { size: 9 });
+        y += 14;
+      } else {
+        // Room under the last row for the total, the held-back line and the note.
+        const pageOf = payrollPlotPages(rows.map(r => ({ plot: r.plot_name })), {
+          rowH: ROW_H, floor: PH - MARGIN - 36, firstY: y, freshY: MARGIN + 27 + 9 + HEAD_H
+        });
+        rows.forEach((r, ri) => {
+          if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
+            doc.addPage();
+            y = titleBlock(label, part);
+            drawHead();
+          }
+          const job = TP_JOB[r.work_type];
+          const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
+          const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
+          const rowCap = tpRowCap(r);
+          /* A JOB NOBODY DID IS IN NEITHER TOTAL, the same third state the
+             screen draws. Its capacity is already nought, so without this
+             it would still add a ROW to the held count and the paper would
+             say "1 row is not Checked" about work nobody is ever going to
+             tick. */
+          const skipped = tpNotDone(r);
+          const ok = agreed(r);
+          if (skipped) skipRows++;
+          else if (ok) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+          const z = ri % 2 ? ZEBRA : null;
+          cell(xs[0], y, widths[0], ROW_H, r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—',
+               { size: 8, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, r.plot_name || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
+          cell(xs[2], y, widths[2], ROW_H, ((job && job.label) || r.jenis || r.work_type || '—')
+               + (skipped ? ` (${t('pay.tpNotDoneTag')})` : ''),
+               { size: 7.5, fill: z, align: 'left' });
+          cell(xs[3], y, widths[3], ROW_H,
+               skipped ? t('pay.tpNotDoneCell')
+                       : (rowCap ? rowCap.toLocaleString('en-MY') : '—'),
+               { size: skipped ? 6.5 : 8.5, nowrap: true, fill: z });
+          chunk.forEach((w, i) => {
+            const on = byName[w];
+            const share = on ? tpShare(r, on) : 0;
+            if (on && ok) totals[w] += share;
+            cell(xs[4 + i], y, widths[4 + i], ROW_H, on ? capFmt(share) : '', { size: 7.5, nowrap: true, fill: z });
+          });
+          cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(rowCap), { size: 8.5, bold: true, nowrap: true, fill: z });
+          /* NOTHING TO AGREE ON A JOB NOBODY DID, so the Checked column says
+             what it is rather than a tick or "Not checked" -- the same
+             choice _tpCheckCell makes on screen. */
+          if (skipped) cell(xs[iChk], y, widths[iChk], ROW_H, t('pay.tpNotDoneLabel'), { size: 6.5, nowrap: true, fill: z });
+          else if (noGate) cell(xs[iChk], y, widths[iChk], ROW_H, '—', { size: 8, fill: z });
+          else if (ok) { cell(xs[iChk], y, widths[iChk], ROW_H, '', { fill: z }); drawTick(xs[iChk], y, widths[iChk], ROW_H); }
+          else cell(xs[iChk], y, widths[iChk], ROW_H, 'Not checked', { size: 6.5, nowrap: true, fill: z });
+          y += ROW_H;
+        });
+      }
+
+      const grand = chunk.reduce((sm, w) => sm + totals[w], 0);
+      cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[3], y, widths[3], ROW_H + 1, capTotal ? capTotal.toLocaleString('en-MY') : '—',
+           { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[4 + i], y, widths[4 + i], ROW_H + 1, capFmt(totals[w]),
+           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iPer], y, widths[iPer], ROW_H + 1, capFmt(grand), { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      cell(xs[iChk], y, widths[iChk], ROW_H + 1, '', { fill: TOTAL_FILL });
+      y += ROW_H + 1;
+      /* Held back is NAMED on the paper as on the screen: a claim short of
+         work reads exactly like a quiet month. */
+      if (heldRows) {
+        const HELD = [255, 251, 235];
+        cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpHeldLabel'), { bold: true, size: 8.5, fill: HELD });
+        cell(xs[3], y, widths[3], ROW_H + 4, heldCap ? heldCap.toLocaleString('en-MY') : '—', { bold: true, size: 8.5, nowrap: true, fill: HELD });
+        cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
+             t('pay.tpHeld').replace('{n}', heldRows), { size: 6.5, fill: HELD, align: 'left' });
+        y += ROW_H + 4;
+      }
+      /* And a job nobody did, in grey rather than amber: held work is a
+         question waiting for the office, and this is an answer already
+         given. On the paper for the same reason as on the screen -- a row
+         in no total with nothing saying so is a figure that reads short. */
+      if (skipRows) {
+        const SKIP = [248, 250, 252];
+        cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpNotDoneLabel'), { bold: true, size: 8.5, fill: SKIP });
+        cell(xs[3], y, widths[3], ROW_H + 4, '—', { bold: true, size: 8.5, nowrap: true, fill: SKIP });
+        cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
+             t('pay.tpNotDoneFoot').replace('{n}', skipRows), { size: 6.5, fill: SKIP, align: 'left' });
+        y += ROW_H + 4;
+      }
+
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    });
+
+    doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
+  }
+
   /* Column widths for one chunk of workers. The three fixed columns and the
      per-worker total keep their size; the workers share what is left. */
   const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
@@ -2164,6 +2391,7 @@ function downloadPayrollPDF() {
   for (let i = 0; i < wk.length; i += maxPerPage) chunks.push(wk.slice(i, i + maxPerPage));
 
   const ROW_H = 8;
+  if (tpView) { drawTransplantingSheet(); return; }
   let firstPage = true;
 
   TYPES.forEach(type => {
@@ -2863,6 +3091,11 @@ const I18N = {
     'pay.tpHeldLabel':'Held back',
     'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
     'pay.tpNoGate':'⚠ The Checked columns are not on this database yet, so every recorded row still reaches the salary claim. Run shared/RUN_ME_transplant_checked.sql in the Supabase SQL Editor.',
+    'pay.tpNotDoneTag':'NOT DONE',
+    'pay.tpNotDoneCell':'Nobody did it',
+    'pay.tpNotDoneWhy':'The Field Conductor recorded this job as not done — nobody carried it out, so there is nothing to check and nothing to pay. If it was done after all, he reopens the job on the FC Portal and ticks the crew.',
+    'pay.tpNotDoneLabel':'Not done',
+    'pay.tpNotDoneFoot':'{n} job(s) are recorded as NOT DONE — a blanket spray is not always needed, so a plot can genuinely never have one. They are in no total here and on no salary claim. That is the conductor’s answer, not a missing crew.',
     'pay.noDOs':'No Delivery Order has been issued for this nursery this month yet.',
     'pay.loadingHint':'Ticks come from the driver’s phone when the DO is signed, or from here if nobody has ticked it yet. Once saved, a row locks — only an admin can change it after that.',
     'pay.doLocked':'Locked — saved by {who} on {when}. Only an admin can change this.',
@@ -3002,6 +3235,11 @@ const I18N = {
     'pay.tpHeldLabel':'Ditahan',
     'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
     'pay.tpNoGate':'⚠ Lajur Disemak belum ada pada pangkalan data ini, jadi semua baris yang direkod masih masuk ke tuntutan gaji. Jalankan shared/RUN_ME_transplant_checked.sql di Supabase SQL Editor.',
+    'pay.tpNotDoneTag':'TIDAK DIBUAT',
+    'pay.tpNotDoneCell':'Tiada sesiapa buat',
+    'pay.tpNotDoneWhy':'Field Conductor merekodkan kerja ini sebagai tidak dibuat — tiada sesiapa melakukannya, jadi tiada apa untuk disemak dan tiada apa untuk dibayar. Jika ia ada dibuat, beliau membuka kerja itu semula di FC Portal dan menanda pekerjanya.',
+    'pay.tpNotDoneLabel':'Tidak dibuat',
+    'pay.tpNotDoneFoot':'{n} kerja direkod sebagai TIDAK DIBUAT — semburan rata tidak selalu diperlukan, jadi ada plot yang memang tidak pernah perlu. Ia tiada dalam mana-mana jumlah di sini dan tiada dalam tuntutan gaji. Itu jawapan conductor, bukan pekerja yang tertinggal.',
     'pay.noDOs':'Belum ada Delivery Order dikeluarkan untuk nurseri ini bulan ini.',
     'pay.loadingHint':'Tanda datang daripada telefon pemandu semasa DO ditandatangan, atau dari sini jika belum ditanda lagi. Setelah disimpan, baris dikunci — hanya admin boleh menukarnya selepas itu.',
     'pay.doLocked':'Dikunci — disimpan oleh {who} pada {when}. Hanya admin boleh menukarnya.',

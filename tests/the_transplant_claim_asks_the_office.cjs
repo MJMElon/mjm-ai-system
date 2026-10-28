@@ -59,6 +59,16 @@ const line = (src, header) => {
 /* `const X = '...' + '...';` across lines -- read to the semicolon that ends
    the statement rather than to the end of the line. */
 const stmt = line;
+const constBlockOf = (src, header) => {
+  const at = src.indexOf(header);
+  if (at < 0) throw new Error('not in the shipped file: ' + header);
+  return src.slice(at, src.indexOf('];', at) + 2);
+};
+const lineOf = (src, re) => {
+  const m = src.match(re);
+  if (!m) throw new Error('not in the shipped file: ' + re);
+  return m[0];
+};
 
 /* A database that answers the way PostgREST answers: a resolved object
    carrying `data` or `error`, and `.then(onOk, onErr)` on the builder. */
@@ -112,8 +122,9 @@ function runLoader(answer, lock) {
   vm.createContext(ctx);
   vm.runInContext(
     'var transplantRowsAll = [], transplantField = [], transplantHeld = [],'
-    + ' transplantGateOff = false;\n'
+    + ' transplantNotDone = [], transplantGateOff = false;\n'
     + stmt(CLAIM, "const TP_FIELD_COLS = ") + '\n'
+    + stmt(CLAIM, 'const _tpNotDone = (rec) =>') + '\n'
     + lift(CLAIM, 'async function loadTransplantField()') + '\n'
     + lift(CLAIM, 'function _tpVerifiedMonth(sec)') + '\n'
     + stmt(CLAIM, 'const _tpAgreed = (rec) =>') + '\n'
@@ -121,6 +132,7 @@ function runLoader(answer, lock) {
     + '\n;globalThis.__go = () => loadTransplantField().then(() => ({'
     + ' paid: transplantField.map(r => r.plot_name),'
     + ' held: transplantHeld.map(r => r.plot_name),'
+    + ' skipped: transplantNotDone.map(r => r.plot_name),'
     + ' gateOff: transplantGateOff }));', ctx);
   return vm.runInContext('__go()', ctx).then(r => ({ ...r, asked }));
 }
@@ -135,6 +147,34 @@ console.log('\n── 1. only a Checked row reaches the claim ──');
   yes(/checked_at/.test(r.asked[0].cols), 'the read asks for the tick');
   is(r.asked[0].col, 'schedule_month', 'asked by the month the claim pays on');
   is(r.asked[0].val, 'Oct 2026', 'and in the SHORT month shape, which is the stored key');
+}
+
+console.log('\n── 1b. a job nobody did is on NEITHER list ──');
+{
+  /* A blanket spray is not always needed, so the conductor can answer the
+     job with "nobody did this" -- see shared/RUN_ME_transplant_not_done.sql.
+     It is not held work: held means the office has still to agree a figure,
+     and there is no figure here to agree. Left in the held list the claim
+     would read "RM 0.00 is NOT on this claim, 1 row has not been Checked"
+     and send somebody to tick a row that can never pay anybody. */
+  const rows = ROWS.map(x => ({ ...x })).concat([{
+    plot_name: 'B2', work_type: 'blanket_spray', work_date: '2026-10-28',
+    nursery_name: 'BNN', schedule_month: 'Oct 2026', source_qty: 3164,
+    total_qty: null, checked_at: null, checked_by: null,
+    workers: [], not_done: true }]);
+  const r = await runLoader(() => ({ data: rows }));
+  is(r.paid, ['B04'], 'it is not paid');
+  is(r.held, ['B07', 'N15'], 'and it is not held either');
+  is(r.skipped, ['B2'], 'it is kept on its own, so the claim can say what it is');
+  yes(/not_done/.test(r.asked[0].cols), 'the read asks for the column');
+
+  /* AND AGREEING ONE CHANGES NOTHING. The office can tick a row in the
+     database by hand; the flag is the answer that decides. */
+  const ticked = rows.map(x => x.not_done
+    ? { ...x, checked_at: '2026-10-29T02:00:00Z' } : x);
+  const r2 = await runLoader(() => ({ data: ticked }));
+  is(r2.paid, ['B04'], 'a not-done row that somebody ticked is still not paid');
+  is(r2.skipped, ['B2'], 'it is still the answer it was');
 }
 
 console.log('\n── 2. a database without the columns FAILS OPEN ──');
@@ -195,6 +235,7 @@ console.log('\n── 4. held work is priced, so the claim can say what it is ho
     + 'var workers = [{ full_name: "Ali", section: "UNN1" }, { full_name: "Siti", section: "UNN1" }];\n'
     + 'const _tpSection = () => "UNN1";\n'
     + 'const transplantRate = () => ({ rate: 0.2, unit: "Bag" });\n'
+    + stmt(CLAIM, 'const _tpNotDone = (rec) =>') + '\n'
     + lift(CLAIM, 'function transplantFieldLines(src)')
     + '\n' + lift(CLAIM, 'function transplantHeldLines()')
     + '\n;globalThis.__held = (rows) => { transplantHeld = rows; return transplantHeldLines(); };'
@@ -249,21 +290,51 @@ console.log('\n── 6. the office writes the TICK and never the crew ──');
 console.log('\n── 7. the sheet totals what the claim pays ──');
 {
   const r = lift(SHEET, 'function renderTransplantingPayroll()');
-  yes(/if \(agreed\(r\)\) capTotal \+= rowCap; else \{ heldCap \+= rowCap; heldRows\+\+; \}/.test(r),
+  yes(/else if \(agreed\(r\)\) capTotal \+= rowCap; else \{ heldCap \+= rowCap; heldRows\+\+; \}/.test(r),
       'the foot adds up the agreed rows and keeps the held ones apart');
+  /* A JOB NOBODY DID IS A THIRD STATE and is in neither total. Held means
+     the office has still to agree a figure; there is no figure here to
+     agree, and putting it on the held line would send somebody to tick a
+     row that can never pay anybody. */
+  yes(/if \(skipped\) skipRows\+\+;/.test(r),
+      'and a job recorded as not done is counted apart from both');
+  yes(/pay\.tpNotDoneFoot/.test(r), 'and the sheet says so under the total');
   yes(/if \(agreed\(r\)\) totals\[w\] \+= share;/.test(r),
       'a worker column totals only the rows the office has agreed');
+
+  /* THE TWO HELPERS BOTH SHEETS SHARE, driven rather than read off a line:
+     the screen and the PDF of the same sheet each call these, so a rule
+     living in one caller is a rule the other does not obey. */
+  const hctx = { Object, Array, Number, String, Math, _tpNoGate: {} };
+  vm.createContext(hctx);
+  vm.runInContext(
+    constBlockOf(SHEET, 'const TP_JOBS = [')
+    + '\nconst TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));\n'
+    + lineOf(SHEET, /^const tpNotDone = .*$/m) + '\n'
+    + lift(SHEET, 'function tpRowCap(r)') + '\n'
+    + lineOf(SHEET, /^function tpAgreed\(key, r\).*$/m)
+    + '\n;globalThis.__cap = tpRowCap; globalThis.__ag = tpAgreed;', hctx);
+  const cap = vm.runInContext('__cap', hctx);
+  const ag  = vm.runInContext('__ag', hctx);
+  is(cap({ work_type: 'transplanting', source_qty: 3164, workers: [{ name: 'Ali' }] }), 3164,
+     'the row capacity is the plot figure on an ordinary row');
+  is(cap({ work_type: 'transplanting', source_qty: 3164, workers: [], not_done: true }), 0,
+     'and NOUGHT on a job nobody did — tested in the helper, so the PDF gets it free');
   /* And where the gate is not installed every row is agreed, because every
      row is being paid — a sheet drawn entirely held under an orange line
      saying the opposite is two screens disagreeing on one page. */
-  yes(/const agreed = \(r\) => !!_tpNoGate\[key\] \|\| !!r\.checked_at;/.test(r),
-      'a database with no gate draws every row as agreed, not every row as held');
+  is(ag('k', { checked_at: null }), false, 'an unticked row is not agreed');
+  vm.runInContext('_tpNoGate.k = true;', hctx);
+  is(ag('k', { checked_at: null }), true,
+     'a database with no gate draws every row as agreed, not every row as held');
   yes(/pay\.tpHeld/.test(r), 'and the held capacity is named under the total');
   yes(/_tpCheckCell\(r, key\)/.test(r), 'every row carries the tick cell');
   /* The cell itself, driven. */
-  const ctx = { esc: (v) => String(v == null ? '' : v), _tpNoGate: {} };
+  const ctx = { esc: (v) => String(v == null ? '' : v), _tpNoGate: {},
+                t: (k) => k };
   vm.createContext(ctx);
-  vm.runInContext(lift(SHEET, 'function _tpCheckCell(r, key)')
+  vm.runInContext(lineOf(SHEET, /^const tpNotDone = .*$/m) + '\n'
+    + lift(SHEET, 'function _tpCheckCell(r, key)')
     + '\n;globalThis.__cell = _tpCheckCell;', ctx);
   const cell = vm.runInContext('__cell', ctx);
   yes(/✓ Check</.test(cell({ id: 1, checked_at: null }, 'k')), 'an unagreed row offers Check');
@@ -271,6 +342,12 @@ console.log('\n── 7. the sheet totals what the claim pays ──');
   yes(/✓ Checked/.test(on) && /Uncheck/.test(on),
       'an agreed row says so and offers Uncheck to whoever could check');
   yes(/office@mjm/.test(on) && /2026-10-20/.test(on), 'with who agreed it and when');
+  /* A JOB NOBODY DID HAS NOTHING TO AGREE. A Check button over it would
+     offer a tick that moves no money, and a ticked row that pays nobody is
+     what somebody later reads as a fault. */
+  const nd = cell({ id: 1, checked_at: null, not_done: true }, 'k');
+  no(/button/.test(nd), 'a job recorded as not done is offered no tick');
+  yes(/pay\.tpNotDoneLabel/.test(nd), 'it says what it is instead');
   vm.runInContext('_tpNoGate.k = true;', ctx);
   no(/button/.test(cell({ id: 1, checked_at: null }, 'k')),
      'and no button at all where the database has not got the columns');
@@ -281,7 +358,12 @@ console.log('\n── 8. the loader on the sheet falls open the same way ──'
   const l = lift(SHEET, 'async function loadTransplantRecordsForPayroll(n, m)');
   yes(/checked_at\|checked_by/.test(l), 'it notices which column the database refused');
   yes(/_tpNoGate\[key\] = true/.test(l), 'marks the gate missing');
-  yes(/await ask\(TP_PAY_COLS\)/.test(l), 'and reads the columns that have always been there');
+  /* A LADDER AND NOT TWO IFS: there are two optional columns now and
+     PostgREST names only the first one it cannot find, so each refusal
+     drops the column it names and asks again. */
+  yes(/want\.nd && \/not_done\//.test(l), 'and it notices the other optional column too');
+  yes(/const build = \(\) => TP_PAY_COLS/.test(l),
+      'the column list is rebuilt from what is left, which is what it always reads');
   yes(/pay\.tpNoGate/.test(lift(SHEET, 'function renderTransplantingPayroll()')),
       'the tab says so in orange rather than reading empty');
 }
@@ -320,6 +402,42 @@ console.log('\n── 9. the SQL pastes into the editor ──');
   yes(/to_jsonb\(r\) ->> 'checked_at'/.test(CHK),
       'it reads the tick as a JSON key, so it still PARSES where the column is absent');
   yes(/no gate/.test(CHK), 'and says so rather than reporting every row as held');
+}
+
+console.log('\n── 10. the NOT DONE column, and the trigger the two files share ──');
+{
+  const ND = R('shared/RUN_ME_transplant_not_done.sql');
+  const c = ND.split('\n').filter(l => l.trim().startsWith('--'));
+  no(c.some(l => l.includes("'")), 'no apostrophe in a comment');
+  no(c.some(l => l.includes(';')), 'no semicolon in a comment');
+  no(ND.includes('\\'), 'no backslash anywhere');
+  yes(ND.trimEnd().endsWith(';'), 'the file ends at its last semicolon');
+  yes(/ADD COLUMN IF NOT EXISTS not_done BOOLEAN NOT NULL DEFAULT false/.test(ND),
+      'safe to run twice, and false until somebody answers a job');
+  no(/UPDATE nops_transplant_field_records/i.test(ND),
+     'it backfills NOTHING — a flag nobody set is not an answer');
+  const tail = ND.slice(ND.lastIndexOf('SELECT * FROM ('));
+  yes(/UNION ALL/.test(tail), 'the check is one result set');
+  yes(/VERDICT/.test(tail), 'ending in a verdict');
+
+  /* ONE TRIGGER FUNCTION IN TWO FILES, word for word -- whichever is run
+     last is the one the database keeps, so a condition added to one and not
+     the other is a tick that survives a change it should not. not_done is
+     compared THROUGH to_jsonb in both, which is what makes the body valid
+     on a database where only one of the two files has been run. */
+  /* The CODE, with the comments taken out: the two bodies have to run the
+     same, and a comment reworded in one of them has altered nothing this
+     is about. */
+  const body = (src) => src
+    .slice(src.indexOf('CREATE OR REPLACE FUNCTION'), src.indexOf('$$ LANGUAGE plpgsql;'))
+    .split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+  is(body(ND).replace(/\s+/g, ' ').trim(), body(SQL).replace(/\s+/g, ' ').trim(),
+     'both files carry the SAME clear-the-tick function');
+  yes(/\(to_jsonb\(NEW\) ->> 'not_done'\) IS DISTINCT FROM \(to_jsonb\(OLD\) ->> 'not_done'\)/
+        .test(body(ND)),
+      'and a job turning not-done, or back, clears the office agreement');
+  no(/NEW\.not_done/.test(ND),
+     'never named as a column — that body has to parse before the ALTER has run');
 }
 
 console.log('');
