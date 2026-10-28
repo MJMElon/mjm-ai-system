@@ -4305,6 +4305,68 @@ without anybody listing it: no figure left on the device locale, no second
 pin anywhere, every caller importing the one formatter, and the dates
 untouched. On the previous code it names all 51 sites.
 
+## Admin is a column on the Team Board, and a section is THREE files
+
+The office asked for an Admin column on the Worker System board. A column
+is a SECTION, and a section is not one thing in one file:
+
+| | |
+|---|---|
+| `scan/scan_workers.html` | draws the column |
+| `scan/scan_system_setting.html` | the Location card offers it |
+| `npayroll/npayroll_script.js` | decides whether work is done there |
+
+Two of those had their own copy of what a section is, and the copies are
+the whole of what made this more than one line.
+
+**The Location card kept the word UNE written down separately.** Both
+screens get the nurseries from `operation_nurseries`; what is left is the
+sections that are NOT nurseries, which the table will never hand over, so
+each screen added its own. A section added to the board alone would have
+drawn a column that the card reported as **"Not in a location"** — set up
+on one screen and a fault on the next. `OFF_NURSERY` in
+`shared/shared_worker_locations.js` is that list now, and both read it.
+
+**And the payroll asked "is this location not the estate".** That was
+right for exactly as long as the estate was the only place in the company
+with no plots in it. Admin is the second, and on that test the office
+staff arrive as a nursery to be sprayed: a maintenance sheet, a column of
+plots and a claim. A location carries **`maint: true/false`** now and
+`isMaintSection()` asks the flag, so a third non-field location added next
+year does not quietly become a nursery. Section 4 of the test drives the
+old rule beside the new one, because a flag-versus-name argument is only
+settled by what it actually moves.
+
+Three smaller things:
+
+- **A code in NO location still answers NO** to `isMaintSection`, which is
+  what the payroll has always done and is deliberately kept: the claim
+  offers a nursery to be ticked and signed, and one nothing can place is a
+  sheet nobody can reconcile. It shows on the Location card under "Not in a
+  location", where somebody can see it. The first version of the shared
+  helper answered YES there and would have moved a claim nobody asked to
+  move.
+- **Admin comes last**, after the nurseries and the estate — the board
+  reads left to right from the seedlings outwards.
+- **It arrives as a LOCATION, not through the fallback.** `boardColumns()`
+  gives any unrecognised section a column of its own, which would have
+  drawn the heading too — but that fallback is a safety net for a nursery
+  read that went wrong, and leaning on it for a section the company decided
+  to have is how the board and the card come to disagree again. The test
+  asserts the column count matches the locations.
+
+**The shared file was loaded with no `?v=` on all four pages**, and two of
+them had no no-cache metas either — so this change lived entirely in a file
+every browser was entitled to keep. Both are fixed; one hard reload per
+machine picks up the metas, and after that those pages stay fresh.
+
+`tests/admin_is_a_column_and_not_a_nursery.cjs` holds all of it and ends by
+driving the REAL board in a REAL browser with somebody filed under ADMIN —
+a column that is right in `boardColumns()` and missing on the board is the
+exact shape this file exists to catch. Its band check compares the headings
+as WRITTEN, because they are uppercased in CSS and `innerText` hands back
+what the stylesheet did.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the

@@ -98,19 +98,29 @@ let NURSERY_REGISTER = {};
 const nurseryCode = (name) =>
   String(name == null ? '' : name).replace(/[^a-z0-9]/gi, '').toUpperCase();
 
-/* Is this one a place maintenance work is done, or the Estate?
- 
-   The Estate is a section of the payroll register and a location on System
-   Setting, but it is not a nursery sheet — there are no plots on it and no
-   rounds to spray. Decided by shared_worker_locations.js, the file the Team
-   Board and the Location card already use, so all three agree about where a
-   section sits. Without that file loaded, everything in the register counts,
-   which is the old behaviour. */
+/* Is this one a place maintenance work is done?
+
+   The Estate and Admin are sections of the payroll register and locations
+   on System Setting, but neither is a nursery sheet — there are no plots on
+   either and no rounds to spray. Decided by shared_worker_locations.js, the
+   file the Team Board and the Location card already use, so all three agree
+   about where a section sits. Without that file loaded, everything in the
+   register counts, which is the old behaviour.
+
+   IT ASKS THE FLAG, NOT THE NAME. This used to read `loc.key !== 'estate'`,
+   which was right for exactly as long as the estate was the only place in
+   the company with no plots in it — Admin was the second, and on that test
+   it would have arrived as a nursery to be sprayed, with a maintenance
+   sheet and a claim. A location says whether work is done there; this does
+   not keep a list of the ones where it is not. */
 function isMaintNursery(code) {
   const L = window.MJMWorkerLocations;
+  if (L && typeof L.isMaintSection === 'function') return L.isMaintSection(code);
+  /* An older copy of the shared file, still cached on somebody's machine:
+     fall back to what it can answer, then to counting everything. */
   if (!L || typeof L.locationOf !== 'function') return true;
   const loc = L.locationOf(code);
-  return !!loc && loc.key !== 'estate';
+  return !!loc && loc.key !== 'estate' && loc.key !== 'admin';
 }
 
 async function loadNurseryRegister() {
