@@ -2018,6 +2018,34 @@ let cullTransplanted = {};    // plotKey → { plot, dates[] }, every month, fro
 let cullLedgerRead = false;
 let cullPalmsLogs = null;     // MJMPalms logs by unit; null = could not be read
 
+/* BY HAND. The office can add a plot the rule does not see (PALMS never
+   keyed, or a plot it cannot time) and take one out that it should not pay.
+   ONE record per plot per month in mjmnpayroll_cull_incentive_overrides:
+   `add` counts the plot whatever PALMS says, `remove` leaves it out.
+
+   Taking a PALMS plot out WRITES a record rather than deleting anything —
+   the ledger and PALMS are not this page's to change, and a plot that left
+   the incentive with nothing saying who took it out is a payment nobody
+   can account for later. Deleting the by-hand record puts the plot back to
+   what PALMS says, which is the whole of what Delete and Restore do. */
+let cullOverrides = [];       // this month's by-hand records
+let cullOverridesReady = true; // false = the table is not there yet
+
+async function loadCullOverrides() {
+  const res = await _supabase.from('mjmnpayroll_cull_incentive_overrides')
+    .select('id, month, plot, action, section, saringan_date, transplant_date, remark, created_by, created_at')
+    .eq('month', monthValue())
+    .then(r => r, e => ({ error: e }));
+  if (res && res.error) {
+    console.warn('[payroll] culling incentive overrides not read:', res.error.message || res.error);
+    cullOverridesReady = false;
+    cullOverrides = [];
+    return;
+  }
+  cullOverridesReady = true;
+  cullOverrides = (res && res.data) || [];
+}
+
 /* WHEN a ledger row happened. SHARED RULE — _logDate() in
    operation/operation_reports.html and logDate() in the FC Portal
    transplantData.js. Change one, change the others. */
@@ -2082,11 +2110,32 @@ function cullRunOf(plot, monthEnd) {
 /* Every plot transplanted in the month, in the nursery picked, timed. */
 function cullIncentivePlots(secFilter) {
   const ym = monthValue(), monthEnd = ym + '-31';
-  return Object.values(cullTransplanted)
+  const rows = Object.values(cullTransplanted)
     .map(p => ({ plot: p.plot, dates: [...new Set(p.dates.filter(d => d.slice(0, 7) === ym))].sort(),
                  section: _tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(p.plot) : '') }))
-    .filter(p => p.dates.length && (!secFilter || inSection(secFilter, p.section)))
-    .map(p => Object.assign(p, cullRunOf(p.plot, monthEnd)))
+    .filter(p => p.dates.length)
+    .map(p => Object.assign(p, cullRunOf(p.plot, monthEnd)));
+
+  /* By hand, last, so it has the final word on its plot. A record for a plot
+     the ledger did not transplant this month becomes a row of its own. */
+  cullOverrides.filter(o => o.month === ym).forEach(o => {
+    const k = _tpKey(o.plot);
+    let r = rows.find(x => _tpKey(x.plot) === k);
+    if (!r) {
+      if (o.action !== 'add') return;      // nothing to take out
+      const start = o.saringan_date || null, end = o.transplant_date || null;
+      r = { plot: String(o.plot).trim(), dates: end ? [end] : [], manual: true,
+            section: o.section || _tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(o.plot) : ''),
+            state: 'manual', start, end,
+            days: start && end && window.MJMPalms ? MJMPalms.diffDays(start, end) : null };
+      rows.push(r);
+    }
+    r.override = o;
+  });
+
+  return rows
+    .map(r => Object.assign(r, { counts: r.override ? r.override.action === 'add' : r.state === 'ok' }))
+    .filter(r => !secFilter || inSection(secFilter, r.section))
     .sort((a, b) => String(a.plot).localeCompare(String(b.plot),
                       undefined, { numeric: true, sensitivity: 'base' }));
 }
@@ -2105,7 +2154,7 @@ function cullWorker(name) {
 /* Who is paid what, off a list of timed plots. With a nursery picked, only
    that nursery's Field Conductor is on it — the other two have nothing here. */
 function cullIncentivePay(rows, secFilter) {
-  const ok = rows.filter(r => r.state === 'ok');
+  const ok = rows.filter(r => r.counts);
   const out = [];
   CULL_INCENTIVE.everyPlot.forEach(p => out.push({ ...p, rule: 'every', plots: ok }));
   CULL_INCENTIVE.ownNursery
@@ -2120,6 +2169,94 @@ function cullIncentivePay(rows, secFilter) {
   });
 }
 
+/* The Adjust Pay tick — the same one that lets somebody change what a worker
+   is paid on these sheets, because this changes exactly that. */
+function cullIncentiveMayEdit() { return mayAdjust('transpl'); }
+
+function _cullMayWrite() {
+  if (!cullIncentiveMayEdit()) {
+    alert('You do not have permission to change the culling incentive. Ask an admin for Adjust Pay on Transplanting in User Access.');
+    return false;
+  }
+  if (!cullOverridesReady) {
+    alert('Run shared/RUN_ME_cull_incentive_overrides.sql in Supabase first, then reload this page.');
+    return false;
+  }
+  return lockAllows('transpl');
+}
+
+let _cullMode = 'add';        // what the dialog will write: add | remove
+
+function openCullAdd(plot, mode) {
+  if (!_cullMayWrite()) return;
+  _cullMode = mode === 'remove' ? 'remove' : 'add';
+  $('ca-add-only').classList.toggle('hidden', _cullMode === 'remove');
+  const sec = $('transpl-section').value || '';
+  $('ca-plot').value = plot || '';
+  $('ca-plot').readOnly = !!plot;
+  $('ca-saringan').value = '';
+  $('ca-transplant').value = '';
+  $('ca-remark').value = '';
+  const ns = $('ca-nursery');
+  ns.innerHTML = CULL_INCENTIVE.ownNursery.map(p =>
+    `<option value="${esc(p.nursery)}">${esc(SECTION_NAME[p.nursery] || p.nursery)}</option>`).join('');
+  const guess = plot && window.MJMPalms ? _tpSection(MJMPalms.nurseryOfPlot(plot)) : '';
+  ns.value = guess || (CULL_INCENTIVE.ownNursery.some(p => p.nursery === sec) ? sec : CULL_INCENTIVE.ownNursery[0].nursery);
+  $('cull-add-title').textContent = _cullMode === 'remove'
+    ? `Take ${plot} out of the culling incentive`
+    : (plot ? `Count ${plot} for the incentive` : 'Add a plot to the culling incentive');
+  $('ca-what').textContent = _cullMode === 'remove'
+    ? `Nobody is paid for ${plot} in ${monthLabelFull(monthValue())}. PALMS and the ledger are not changed.`
+    : `Rousell Wayne and Florence are paid RM 20 for it, and the Field Conductor of its nursery RM 50, in ${monthLabelFull(monthValue())}.`;
+  $('ca-save').textContent = _cullMode === 'remove' ? 'Remove' : 'Save';
+  $('ca-save').classList.toggle('btn-danger', _cullMode === 'remove');
+  $('ca-save').classList.toggle('btn-primary', _cullMode !== 'remove');
+  $('cull-add-modal').classList.add('open');
+  setTimeout(() => (plot ? $('ca-remark') : $('ca-plot')).focus(), 50);
+}
+
+async function saveCullAdd() {
+  if (!_cullMayWrite()) return;
+  const plot = String($('ca-plot').value || '').trim().toUpperCase();
+  const remark = String($('ca-remark').value || '').trim();
+  if (!plot) { alert('Which plot?'); return; }
+  if (!remark) { alert('Say why — a plot changed by hand is one somebody will ask about.'); return; }
+  const remove = _cullMode === 'remove';
+  const s1 = remove ? null : ($('ca-saringan').value || null);
+  const s2 = remove ? null : ($('ca-transplant').value || null);
+  if (s1 && s2 && s2 < s1) { alert('Transplanting cannot end before Saringan started.'); return; }
+  const btn = $('ca-save'); if (btn) btn.disabled = true;
+  try {
+    const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
+      month: monthValue(), plot, action: remove ? 'remove' : 'add',
+      section: remove ? (_tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(plot) : '') || null)
+                      : ($('ca-nursery').value || null),
+      saringan_date: s1, transplant_date: s2, remark, created_by: userEmail || null,
+      created_at: new Date().toISOString()
+    }, { onConflict: 'month,plot' });
+    if (error) { alert('Could not save: ' + error.message); return; }
+    closeModal('cull-add-modal');
+    await loadCullOverrides();
+    refreshPayrollTab();
+  } finally { if (btn) btn.disabled = false; }
+}
+
+/* Taking a plot out goes through the same dialog, never a prompt: a prompt
+   dismissed out of habit is a cancel that looks like a save. */
+function cullRemovePlot(plot) { openCullAdd(plot, 'remove'); }
+
+async function cullDeleteOverride(id) {
+  if (!_cullMayWrite()) return;
+  const o = cullOverrides.find(x => Number(x.id) === Number(id));
+  if (!o) return;
+  const back = cullTransplanted[_tpKey(o.plot)] ? `${o.plot} goes back to what PALMS says.` : `${o.plot} comes off the incentive.`;
+  if (!confirm(`Delete the by-hand record for ${o.plot}?\n\n${back}`)) return;
+  const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').delete().eq('id', id);
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  await loadCullOverrides();
+  refreshPayrollTab();
+}
+
 function renderCullIncentive(secFilter) {
   const table = $('cull-inc-plots'), payT = $('cull-inc-pay');
   if (!table || !payT) return;
@@ -2131,31 +2268,64 @@ function renderCullIncentive(secFilter) {
   const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
 
   const rows = cullIncentivePlots(secFilter);
+  /* May this login change it. Asked again at the write, because a button
+     drawn before somebody's access changed is still sitting on the screen. */
+  const canEdit = cullIncentiveMayEdit();
+  const addBtn = $('cull-inc-add');
+  if (addBtn) addBtn.classList.toggle('hidden', !canEdit);
+
   const result = r => {
+    if (r.override && r.override.action === 'remove')
+      return `<span style="color:var(--text-faint);font-weight:700;text-decoration:line-through;">Not paid</span>`;
+    if (r.override && r.override.action === 'add')
+      return `<span style="color:#15803d;font-weight:800;">&#10003; Counted</span>`;
     if (r.state === 'ok')   return `<span style="color:#15803d;font-weight:800;">&#10003; Qualifies</span>`;
     if (r.state === 'slow') return `<span style="color:#c0392b;font-weight:700;">Over ${CULL_TARGET_DAYS} days</span>`;
     if (r.state === 'open') return `<span style="color:#b45309;font-weight:700;">Transplanting not closed in PALMS</span>`;
     if (r.state === 'unread') return `<span style="color:var(--text-faint);">PALMS not read</span>`;
     return `<span style="color:#b45309;font-weight:700;">No Saringan in PALMS</span>`;
   };
+  /* Who did it and why, on the row it changed — a figure moved by hand has
+     to say so where the figure is. */
+  const byHand = r => {
+    const o = r.override;
+    if (!o) return '<span style="color:var(--text-faint);">—</span>';
+    const what = o.action === 'add' ? (r.manual ? 'Added by hand' : 'Counted by hand') : 'Taken out by hand';
+    const who = [whoName(o.created_by), o.created_at ? fmtStamp(o.created_at) : ''].filter(Boolean).join(' · ');
+    return `<div style="font-weight:700;color:${o.action === 'add' ? '#15803d' : '#b45309'};">${what}</div>`
+      + (o.remark ? `<div style="font-size:12px;">${esc(o.remark)}</div>` : '')
+      + (who ? `<div style="font-size:11px;color:var(--text-faint);">${esc(who)}</div>` : '');
+  };
+  const action = r => {
+    if (!canEdit) return '';
+    if (r.override) {
+      const label = r.manual ? 'Delete' : (r.override.action === 'remove' ? 'Put back' : 'Undo');
+      return `<button class="btn btn-sm${r.manual ? ' btn-danger' : ''}" onclick="cullDeleteOverride(${Number(r.override.id)})">${label}</button>`;
+    }
+    if (r.counts) return `<button class="btn btn-sm btn-danger" onclick="cullRemovePlot('${esc(r.plot).replace(/'/g, '&#39;')}')">Remove</button>`;
+    return `<button class="btn btn-sm" onclick="openCullAdd('${esc(r.plot).replace(/'/g, '&#39;')}')">Count it</button>`;
+  };
   table.innerHTML = rows.length ? `
     <thead><tr>
       <th style="width:44px;">No.</th><th class="l">Plot</th><th>Transplanted (ledger)</th>
-      <th>Saringan started</th><th>Transplanting ended</th><th style="width:80px;">Days</th>
-      <th>Result</th>
+      <th>Saringan started</th><th>Transplanting ended</th><th style="width:70px;">Days</th>
+      <th>Result</th><th class="l">By hand</th>${canEdit ? '<th style="width:96px;"></th>' : ''}
     </tr></thead>
     <tbody>${rows.map((r, i) => `
-      <tr>
+      <tr${r.override && r.override.action === 'remove' ? ' style="opacity:.6;"' : ''}>
         <td style="color:var(--text-faint);">${i + 1}</td>
         <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
-        <td>${r.dates.map(pd).join(', ')}</td>
+        <td>${r.manual ? '<span style="color:var(--text-faint);">not in ledger</span>' : r.dates.map(pd).join(', ')}</td>
         <td>${pd(r.start)}</td>
         <td>${pd(r.end)}</td>
         <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
         <td>${result(r)}</td>
+        <td class="l">${byHand(r)}</td>
+        ${canEdit ? `<td>${action(r)}</td>` : ''}
       </tr>`).join('')}</tbody>`
     : `<tbody><tr><td class="empty">Nothing transplanted in ${
-        esc(secFilter ? secName(secFilter) : 'any nursery')} for ${esc(monthTxt)}, so no plot to time.</td></tr></tbody>`;
+        esc(secFilter ? secName(secFilter) : 'any nursery')} for ${esc(monthTxt)}, so no plot to time.${
+        canEdit ? ' Use + Add plot to count one by hand.' : ''}</td></tr></tbody>`;
 
   const pay = cullIncentivePay(rows, secFilter);
   const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
@@ -2183,6 +2353,8 @@ function renderCullIncentive(secFilter) {
     notes.push('PALMS answered with no plot log at all. This login is probably not allowed to read it — '
              + 'run shared/RUN_ME_payroll_reads_palms.sql once, then reload.');
   }
+  if (!cullOverridesReady) notes.push('Adding or removing a plot by hand needs shared/RUN_ME_cull_incentive_overrides.sql run once. '
+             + 'Until then the incentive is exactly what PALMS says.');
   if (!cullLedgerRead) notes.push('The transplanting ledger could not be read, so this month has no plots to time.');
   pay.filter(p => !p.known).forEach(p => notes.push(p.clash.length
     ? `${esc(p.name)} matches more than one worker on the register (${p.clash.map(esc).join(', ')}), so ${money(p.amount)} is NOT on the salary claim.`
@@ -4576,7 +4748,9 @@ function drawCullIncentive(doc, y, rows, pay, secTxt, monthTxt) {
     return X;
   };
 
-  const result = r => r.state === 'ok' ? 'QUALIFIES'
+  const result = r => r.override ? (r.override.action === 'add'
+      ? 'COUNTED BY HAND: ' + (r.override.remark || '') : 'TAKEN OUT BY HAND: ' + (r.override.remark || ''))
+    : r.state === 'ok' ? 'QUALIFIES'
     : r.state === 'slow' ? `Over ${CULL_TARGET_DAYS} days`
     : r.state === 'open' ? 'Transplanting not closed in PALMS'
     : r.state === 'unread' ? 'PALMS not read' : 'No Saringan in PALMS';
@@ -4815,7 +4989,7 @@ function maintFieldCredits(nursery, monthLbl, wk) {
 /* ════════════ BOOT ════════════ */
 $('global-month').addEventListener('change', async () => {
   try { localStorage.setItem('npayroll_month', monthValue()); } catch (_) {}
-  await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj()]);
+  await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj(), loadCullOverrides()]);
   refreshPayrollTab();
   if ($('tab-locks')) { try { renderLockCalendar(); } catch (_) {} }
 });
@@ -4824,7 +4998,7 @@ $('global-month').addEventListener('change', async () => {
    to be on this list and left with the Worker System, and a missing element
    here would have thrown before the page finished setting itself up — taking
    the whole payroll screen down over a dialog nobody had opened. */
-['rate-modal','entry-modal','adjust-modal'].forEach(id => {
+['rate-modal','entry-modal','adjust-modal','cull-add-modal'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(id); });
 });
@@ -4860,7 +5034,7 @@ $('global-month').addEventListener('change', async () => {
     await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
                        loadTransplantField(), loadEarnAdj(), loadTransplantMaps(),
-                       loadCullPalms()]);
+                       loadCullPalms(), loadCullOverrides()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and
