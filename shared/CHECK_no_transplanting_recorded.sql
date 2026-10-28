@@ -48,6 +48,12 @@
 --   there is nothing to compare it against. It is counted in section 3
 --   under whatever month it was filed in.
 --
+--   "plot owed the four jobs" ROWS
+--   -> the list to act on. Each one is a plot seedlings went into and the
+--      number of its four jobs that have been keyed, so 0 of the four is
+--      a plot nobody has touched and 2 of the four is one half done. A
+--      plot with all four keyed is not on this list at all.
+--
 --   "recorded in this month" ROWS
 --   -> what IS keyed for the month, by nursery, so the two sides can be
 --      read against each other without scrolling.
@@ -142,8 +148,39 @@ SELECT * FROM (
 
   UNION ALL
 
-  -- 3. WHAT IS KEYED FOR THAT MONTH, BY NURSERY.
+  -- 3. THE DRILL-DOWN: EVERY PLOT THAT TOOK SEEDLINGS, AND HOW MANY OF
+  --    ITS FOUR JOBS ARE KEYED. Section 2 says a nursery is owed work.
+  --    This says WHICH PLOT and HOW MUCH of it, which is what somebody
+  --    walks away with. A plot part-recorded is on it too -- the
+  --    dashboard Verification Board raises a plot while ANY of its four
+  --    jobs is unrecorded, and so does this.
   SELECT 3,
+         'plot owed the four jobs',
+         p.nursery || ' / ' || tx.plot,
+         sum(tx.qty)::text || ' seedlings',
+         'arrived ' || min(tx.happened)::text,
+         (SELECT count(DISTINCT r.work_type)::text
+            FROM nops_transplant_field_records r, mth
+           WHERE r.schedule_month = mth.label
+             AND upper(replace(replace(replace(btrim(COALESCE(r.plot_name, '')), ' ', ''), '-', ''), '_', ''))
+                 = tx.pk)
+           || ' of the four jobs keyed'
+    FROM tx
+    JOIN plots p ON p.pk = tx.pk
+   WHERE tx.t IN ('Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone')
+     AND tx.happened >= (SELECT m0 FROM mth)
+     AND tx.happened <  (SELECT m1 FROM mth)
+     AND (SELECT count(DISTINCT r.work_type)
+            FROM nops_transplant_field_records r, mth
+           WHERE r.schedule_month = mth.label
+             AND upper(replace(replace(replace(btrim(COALESCE(r.plot_name, '')), ' ', ''), '-', ''), '_', ''))
+                 = tx.pk) < 4
+   GROUP BY p.nursery, tx.plot, tx.pk
+
+  UNION ALL
+
+  -- 4. WHAT IS KEYED FOR THAT MONTH, BY NURSERY.
+  SELECT 4,
          'recorded in this month',
          COALESCE(r.nursery_name, '(no nursery)'),
          count(*)::text || ' record(s)',
@@ -155,8 +192,8 @@ SELECT * FROM (
 
   UNION ALL
 
-  -- 4. THE ANSWER IN ONE LINE.
-  SELECT 4,
+  -- 5. THE ANSWER IN ONE LINE.
+  SELECT 5,
          'summary',
          (SELECT label FROM mth),
          (SELECT count(*)::text FROM nops_transplant_field_records r, mth
