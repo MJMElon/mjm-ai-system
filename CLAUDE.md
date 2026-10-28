@@ -4885,6 +4885,17 @@ What the rule asks, and must keep asking:
     reserve their room (`min-height`) so the layout cannot move at all.
   - **The backdrop closes on a click that BEGAN on the backdrop**, which is
     the seatbelt for the same thing and for a drag out of a text selection.
+- **THE CLAIM FORM IS ONE TABLE: the name, the plots, the money.** It was
+  two — every plot with its Saringan, its Transplanting, the days and who
+  checked it, then a second headed *"CULLING INCENTIVE — WHO IT PAYS"* with
+  a No. and a Rule column — and the office read the printout and said
+  *"我只要看到 CULLING INCENTIVE 其他废话都不用. 表格里面我只要看到人名
+  plot 和价钱"*. The dates, the days and the checker are how the office
+  DECIDED, and they are all on Worker Activity → Culling Incentive, which
+  is where the deciding happens; a claim form is read by somebody adding up
+  money and signing it. A name the register cannot place keeps its *(NOT ON
+  REGISTER)* mark — that is money this claim does not pay, and it is the
+  one fault the table can carry.
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 

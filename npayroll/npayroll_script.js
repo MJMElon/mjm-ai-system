@@ -4496,7 +4496,7 @@ async function _downloadTransplantPDF() {
   }
 
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
-  y = drawCullIncentive(doc, y, cullRows, cullIncentivePay(cullRows, sec), secTxt, monthTxt);
+  y = drawCullIncentive(doc, y, cullRows, cullIncentivePay(cullRows, sec));
 
   y = pdfVerifiedNote(doc, y, 'transpl', sec, CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
@@ -4618,14 +4618,28 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
   return y;
 }
 
-/* THE CULLING INCENTIVE, ON THE CLAIM FORM — the two tables the screen
-   shows, the plots timed and who they pay. Same figures, same rule
-   (cullIncentivePlots / cullIncentivePay). Returns the y it finished at. */
-function drawCullIncentive(doc, y, rows, pay, secTxt, monthTxt) {
+/* THE CULLING INCENTIVE, ON THE CLAIM FORM — ONE TABLE: who, which plots,
+   how much. Same figures, same rule (cullIncentivePlots /
+   cullIncentivePay). Returns the y it finished at.
+
+   IT USED TO BE TWO TABLES AND A SENTENCE OF A HEADING. The first listed
+   every plot with its Saringan, its Transplanting, the days and who
+   checked it; the second paid them, under "CULLING INCENTIVE — WHO IT
+   PAYS", with a No. and a Rule column. The office read the printout and
+   said what a claim form is for: *"我只要看到 CULLING INCENTIVE 其他废话都
+   不用. 表格里面我只要看到人名 plot 和价钱"*.
+
+   They are right, and it is the same argument the Worker Record's by-plot
+   table already settled: a claim form is read by somebody adding up money
+   and signing it. The dates, the days and the checker are how the office
+   DECIDED, and that belongs on the screen where the deciding happens —
+   Worker Activity → Culling Incentive, which shows every one of them. A
+   figure on paper needs the name beside it and the plots it was earned
+   on, which is what is left. */
+function drawCullIncentive(doc, y, rows, pay) {
   if (!rows || !rows.length) return y;
   const L = 25, RH = 8, H = 9, HF = [232, 236, 252], TF = [222, 228, 250];
   const BOTTOM = 210 - ((RH + 1) + 6 + 4 + 3);
-  const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '-');
   const xs = cols => { const X = []; cols.reduce((x, w, i) => { X[i] = x; return x + w; }, L); return X; };
 
   const table = (title, cols, labels, data) => {
@@ -4644,32 +4658,25 @@ function drawCullIncentive(doc, y, rows, pay, secTxt, monthTxt) {
       if (y + RH > BOTTOM) { doc.addPage(); y = 25; heading(); }
       const z = i % 2 ? [250, 250, 253] : null;
       cells.forEach((t, c) => pdfCell(doc, X[c], y, cols[c], RH, t,
-        { size: 8.5, nowrap: true, bold: c === 1, fill: z }));
+        /* The NAME is the first column now, so it is the bold one. */
+        { size: 8.5, nowrap: true, bold: c === 0, fill: z }));
       y += RH;
     });
     return X;
   };
 
-  /* The CHECKED plots only — cullIncentivePlots hands nothing else over. */
-  const checked = r => 'CHECKED ' + [whoName(r.check && r.check.checked_by),
-    r.check && r.check.checked_at ? String(r.check.checked_at).slice(0, 10) : ''].filter(Boolean).join(' ')
-    + (r.override ? ' (BY HAND)' : '');
-  table(`CULLING INCENTIVE — SARINGAN TO TRANSPLANTING WITHIN ${CULL_TARGET_DAYS} DAYS — ${secTxt} · ${monthTxt}`,
-    [14, 30, 24, 32, 32, 18, 97],
-    ['No.', 'Plot', 'Nursery', 'Saringan', 'Transplanting', 'Days', 'Checked'],
-    rows.map((r, i) => [String(i + 1), r.plot, r.section || '-', pd(r.start), pd(r.end),
-                        r.days == null ? '-' : String(r.days), checked(r)]));
-
-  const COL = [14, 60, 55, 78, 40];
-  const X = table('CULLING INCENTIVE — WHO IT PAYS', COL,
-    ['No.', 'Person', 'Rule', 'Checked plots', 'Incentive (RM)'],
-    pay.map((p, i) => [String(i + 1), (p.known ? p.known.full_name : p.name + ' (NOT ON REGISTER)'),
-      p.rule === 'every' ? `Every nursery, ${money(p.rm)} / plot` : `${p.nursery} only, ${money(p.rm)} / plot`,
+  /* THE NAME, THE PLOTS, THE MONEY. A name the register cannot place keeps
+     its mark — that is money this claim does NOT pay, and dropping it
+     would hide the one fault on the table. */
+  const COL = [100, 97, 50];
+  const X = table('CULLING INCENTIVE', COL,
+    ['Person', 'Plot', 'Incentive (RM)'],
+    pay.map((p) => [(p.known ? p.known.full_name : p.name + ' (NOT ON REGISTER)'),
       p.plots.length ? p.plots.map(r => r.plot).join(', ') : 'none', money(p.amount)]));
   const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
-  pdfCell(doc, X[0], y, COL[0] + COL[1] + COL[2] + COL[3], RH + 1, 'TOTAL INCENTIVE',
+  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'TOTAL INCENTIVE',
           { bold: true, size: 8.5, fill: TF });
-  pdfCell(doc, X[4], y, COL[4], RH + 1, money(grand), { bold: true, size: 9, nowrap: true, fill: TF });
+  pdfCell(doc, X[2], y, COL[2], RH + 1, money(grand), { bold: true, size: 9, nowrap: true, fill: TF });
   y += RH + 1;
   doc.setTextColor(0, 0, 0);
   return y;

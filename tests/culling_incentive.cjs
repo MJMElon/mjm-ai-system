@@ -449,9 +449,24 @@ const payOf = (page, sec) => page.evaluate((s) =>
   await page.evaluate(() => { document.getElementById('transpl-section').value = 'BNN'; return downloadTransplantPDF(); });
   await page.waitForFunction(() => window.__PDFS.length && window.__PDFS[0].saved, { timeout: 10000 }).catch(() => {});
   const pdf = await page.evaluate(() => (window.__PDFS[0] || { lines: [] }).lines.join(' | '));
-  check('the form carries both tables, checked plots only',
-    [/CULLING INCENTIVE — SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf), /CHECKED Elon Ting/.test(pdf), / B7 /.test(pdf)],
-    [true, true, true, false]);
+  /* ONE TABLE, AND NOTHING THAT IS NOT A NAME, A PLOT OR AN AMOUNT. The
+     office read the printout and said it: *"我只要看到 CULLING INCENTIVE
+     其他废话都不用. 表格里面我只要看到人名 plot 和价钱"*. The dates, the
+     days and who checked it are how the office DECIDED, and they are all
+     on Worker Activity → Culling Incentive, which is where the deciding
+     happens. A claim form is read by somebody adding up and signing. */
+  check('one heading, and no sentence after it',
+    [/CULLING INCENTIVE/.test(pdf), /SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)],
+    [true, false, false]);
+  check('the name, the plots and the money — and nothing else',
+    [/Rousell Wayne/.test(pdf), /B1/.test(pdf), /RM 20\.00/.test(pdf),
+     /TOTAL INCENTIVE/.test(pdf), /RM 90\.00/.test(pdf)],
+    [true, true, true, true, true]);
+  check('no dates, no days, no checker, and no Rule column',
+    [/CHECKED Elon Ting/.test(pdf), /Every nursery,/.test(pdf),
+     /Saringan/.test(pdf), /Transplanting ended/.test(pdf)],
+    [false, false, false, false]);
+  check('and a plot nobody checked is still off it', / B7 /.test(pdf), false);
   check('no page errors', errs.filter(e => !/^ALERT: Nothing recorded/.test(e)), []);
   check('the payroll writes nothing', await page.evaluate(() => (window.__WRITES || []).length), 0);
   await page.close();
