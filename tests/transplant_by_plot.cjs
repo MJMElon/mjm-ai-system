@@ -133,10 +133,15 @@ async function boot(browser, field, ledger) {
       save(name) { this.saved = name; }
     } };
     function makeQuery(table) {
-      const st = { eqs: [], single: false };
+      const st = { eqs: [], ins: [], single: false };
+      /* `.in()` is honoured, as PostgREST does: a stub that hands back every
+         row whatever was asked for passes a read that asks for the wrong
+         transaction types — which is exactly how a map on a Transplant_Card
+         row went missing off the table. */
       const rows = () => {
         let out = (window.__DB[table] || []).slice();
         st.eqs.forEach(([c, v]) => { out = out.filter((r) => String(r[c]) === String(v)); });
+        st.ins.forEach(([c, vs]) => { out = out.filter((r) => vs.map(String).includes(String(r[c]))); });
         return out;
       };
       const run = () => {
@@ -146,6 +151,7 @@ async function boot(browser, field, ledger) {
       const q = new Proxy({}, { get(_, p) {
         if (p === 'then') return (a, b) => Promise.resolve(run()).then(a, b);
         if (p === 'eq') return (c, v) => { st.eqs.push([c, v]); return q; };
+        if (p === 'in') return (c, vs) => { st.ins.push([c, vs || []]); return q; };
         if (p === 'maybeSingle' || p === 'single') return () => { st.single = true; return Promise.resolve(run()); };
         if (p === 'range') return () => Promise.resolve(run());
         if (p === 'insert' || p === 'upsert' || p === 'update' || p === 'delete')
@@ -433,6 +439,23 @@ const read = (page) => page.evaluate(() => {
     const n7 = maps.find((m) => m.plot === 'N7');
     check('a batch nobody flew keeps its place, greyed, rather than leaving a '
         + 'gap that names nothing', [n7.links.length, n7.none, n7.labels], [0, 1, ['253']]);
+    await page.close();
+  }
+
+  console.log('\nA map on the batch report CARD reaches the table');
+  {
+    /* N7 flown since the map moved onto the batch report's CARD: its tray
+       row carries none, and the card row (one per plot per day) does. */
+    const card = { plot_name: 'N7', batch_name: '253', transaction_type: 'Transplant_Card',
+      quantity_change: 0, transaction_date: `${YM}-09`, created_at: `${YM}-09T03:00:00Z`,
+      remark: `Transplant card. Date: ${YM}-09 MapUrl:https://files.test/maps/n7card.jpg DroneQty:900` };
+    const page = await boot(browser, FIELD, LEDGER.concat([card]));
+    await pick(page, 'UNN2');
+    const n7 = await page.$$eval('#transpl-plots-table tbody tr', (trs) => {
+      const tr = trs.find((t) => (t.children[1].textContent || '').trim() === 'N7');
+      return [...tr.children[2].querySelectorAll('a.tp-map')].map((a) => a.getAttribute('href'));
+    });
+    check('N7 shows the map uploaded on the card', n7, ['https://files.test/maps/n7card.jpg']);
     await page.close();
   }
 

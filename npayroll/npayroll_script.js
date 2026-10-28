@@ -1637,8 +1637,16 @@ async function loadTransplantMaps() {
   try {
     const res = await PlotMovement.fetchAll(() => _supabase.from('shared_inventory_logs')
       .select('plot_name, batch_name, remark, transaction_type, transaction_date, created_at')
+      /* `Transplant_Card` too, because that is where the map is NOW. The batch
+         report moved the drone map off the tray rows and onto a card, one per
+         plot per day (_t3WriteCard in operation_batch_detail.html) — so a map
+         uploaded since then was on no row this read asked for, and the table
+         drew an empty frame over a plot somebody had flown. A tray row that
+         still carries its own `MapUrl:` is read as it always was. A card is
+         quantity_change nought and is never counted as a transplant: only
+         `Transplanted` feeds the culling incentive below. */
       .in('transaction_type',
-          ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+          ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone', 'Transplant_Card'])
       .order('id', { ascending: true }));
     if (res.error) throw res.error;
     const by = {};
