@@ -157,15 +157,26 @@
 
   /* A -R plot is a REPLANT plot — ground a 3rd-culling transfer moved
      seedlings onto. PALMS has nothing to say about one: the office said it
-     in as many words, "plot-R 不需要出现在palms 完全不需要". So it is dropped
-     where the log is read, which keeps it off every PALMS screen at once
-     rather than off whichever ones somebody remembered.
+     in as many words, "plot-R 不需要出现在palms 完全不需要" -- and then, when
+     the first version dropped it here, in the log every reader shares, that
+     it was ONLY the PALMS screens: "不要乱改 只有关系到palms而已的不用显示".
+     Life of Plot and the payroll culling incentive read this same log and
+     keep their -R plots. So the log is left whole and each PALMS page asks
+     for withoutReplant(logs) itself.
 
      SHARED RULE — isReplantPlot in the FC Portal,
      src/modules/palms/cullingSource.js. Change one, change the other. A
      trailing number is allowed for, so B4-R and B4-R2 both go. A split area
      ("B4-R#A") is judged by its plot. */
   const isReplantPlot = (p) => /-R\d*$/i.test(String(p == null ? '' : p).split('#')[0].trim());
+
+  /* The log with every -R unit left out -- for the PALMS pages only. A copy,
+     so the log a caller already holds is not changed under it. */
+  const withoutReplant = (logs) => {
+    const out = {};
+    Object.keys(logs || {}).forEach((k) => { if (!isReplantPlot(k)) out[k] = logs[k]; });
+    return out;
+  };
 
   const NURSERY_PREFIX = { B: 'BNN', U: 'UNN1', N: 'UNN2' };
   const nurseryOfPlot = (p) => NURSERY_PREFIX[String(p).charAt(0).toUpperCase()] || null;
@@ -178,7 +189,7 @@
     const logs = {};
     (rows || []).forEach((r) => {
       const key = r.plot_name;
-      if (!key || isReplantPlot(key)) return;
+      if (!key) return;
       (logs[key] = logs[key] || []).push({
         uid: r.client_uid,
         no: r.seq_no == null ? 0 : r.seq_no,
@@ -676,6 +687,7 @@
     keyLabel: keyLabel,
     plotOf: plotOf,
     isReplantPlot: isReplantPlot,
+    withoutReplant: withoutReplant,
     nurseryOfPlot: nurseryOfPlot,
     loadLogs: loadLogs,
     loadStages: loadStages,
