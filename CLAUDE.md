@@ -4693,11 +4693,29 @@ one, change the other.
 
 ## The culling incentive is timed by PALMS and asked by the ledger
 
-The Transplanting sheet pays it: a plot whose LATEST Saringan Anak Bibit →
-Transplanting run in PALMS took **15 days or fewer** earns **RM 20 a plot** to
-Rousell Wayne and to Florence, whatever the nursery, and **RM 50 a plot** to
-that nursery's own Field Conductor (Lalu Aenal BNN, Akbar UNN 1, Azhar UNN 2).
-`CULL_INCENTIVE` in `npayroll/npayroll_script.js` is the whole of the rule.
+A plot whose LATEST Saringan Anak Bibit → Transplanting run in PALMS took
+**15 days or fewer** earns **RM 20 a plot** to Rousell Wayne and to
+Florence, whatever the nursery, and **RM 50 a plot** to that nursery's own
+Field Conductor (Lalu Aenal BNN, Akbar UNN 1, Azhar UNN 2).
+
+**It is gone through on Work Maintenance and PAID on the payroll.** The
+office moved it: *"把culling incentive全部搬到这里 under worker activity，
+这里只会显示plot，duration，日期，谁拿到 after check，然后payroll那边要link
+这里 然后在payroll才会有钱"*. So:
+
+- **Worker Activity → Culling Incentive** (`renderCullIncentivePayroll` in
+  `nursery_ops/plot_maintenance_script.js`) shows the plot, the two dates,
+  the duration and who earns it — **no RM**, on purpose — and carries the
+  **Check** and Add / Count it / Remove by hand. Plots that do not earn it
+  are listed under the ones that do, saying why.
+- **The payroll Transplanting sheet pays the CHECKED plots and nothing
+  else**, links back (`?view=cull_incentive` opens the tab), and names the
+  plots that qualify and are still waiting to be Checked. It writes nothing.
+- **`shared/shared_cull_incentive.js` is the rule**, read by both pages —
+  `RULE` is who earns what, `plots()` times them. The payroll's own copy was
+  taken out the day this moved. Do not re-implement it in a page.
+
+What the rule asks, and must keep asking:
 
 - **Which plots** is the ledger's answer — `Transplanted` rows dated in the
   month, the Transplanting Report's date rule. **How long** is PALMS's, timed
@@ -4709,23 +4727,24 @@ that nursery's own Field Conductor (Lalu Aenal BNN, Akbar UNN 1, Azhar UNN 2).
   plot is timed as one: its areas' earliest Saringan to their last
   Transplanting.
 - A plot with no complete run is SHOWN and not paid, saying why.
+- **Checked writes down what the row read** — the dates, the days, the
+  nursery — into `nops_cull_incentive_checks`, one record per plot per month
+  (`shared/RUN_ME_cull_incentive_checked.sql`). A PALMS correction after the
+  office signed does not move money already agreed: same rule as `qtyFrozen`.
+  Uncheck clears all of it and the live answer comes back.
+- **A Checked plot cannot be added or removed by hand** until it is
+  unchecked — changing what was agreed starts with taking the agreement back.
+- **By hand is plot by plot**, never person by person, so one decision moves
+  all five people's money together. `mjmnpayroll_cull_incentive_overrides`
+  holds ONE record per plot per month: `add` counts a plot whatever PALMS
+  says, `remove` leaves one out. Every one carries a reason, who and when,
+  shown on the row. Gated on admin of Work Maintenance or Adjust Pay on
+  Transplanting, asked again at the write. A dialog, never a `prompt`.
 - It goes into the Monthly Payroll's Transplanting column, under each
-  person's register section.
-- **A payroll clerk cannot read PALMS without
-  `shared/RUN_ME_payroll_reads_palms.sql`** — the read comes back empty rather
-  than refused, and the sheet says so instead of quietly paying nobody.
+  person's register section, and onto the claim PDF — Checked plots only.
 
-- **The office can change it plot by plot**, never person by person — so
-  one decision moves all five people's money together, by the same rule.
-  `mjmnpayroll_cull_incentive_overrides` holds ONE record per plot per month
-  (`shared/RUN_ME_cull_incentive_overrides.sql`): `add` counts a plot
-  whatever PALMS says, `remove` leaves one out. Taking a PALMS plot out WRITES
-  a record and changes nothing in PALMS or the ledger; Delete / Put back
-  deletes only the by-hand record. Every one carries a reason, who and when,
-  shown on the row it changed. Gated on Adjust Pay for Transplanting and the
-  sheet lock, asked again at the write. A dialog, never a `prompt`.
-
-`tests/culling_incentive.cjs` holds it.
+`tests/culling_incentive.cjs` drives BOTH pages: the Check on Work
+Maintenance, then the payroll fed exactly what those writes left behind.
 
 ## A -R plot is on no PALMS screen
 

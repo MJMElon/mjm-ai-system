@@ -786,7 +786,7 @@ function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
    Record's list/chart: the panel's own sub-tab bar, and the side bar's
    expandable entry. _syncSubNav (declared beside switchRecordView) is the
    one place that keeps the two in step, by the type key alone. */
-const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting'];
+const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive'];
 function switchPayrollView(type) {
   _payrollView = type;
   _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
@@ -904,8 +904,13 @@ function payrollTotalsFor(type) {
 function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
+  /* The Culling Incentive's own buttons below the table; every other view
+     leaves it empty. */
+  const extra = document.getElementById('payroll-extra');
+  if (extra) extra.innerHTML = '';
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
+  if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -1559,6 +1564,358 @@ async function toggleTransplantChecked(id) {
     renderPayroll();
     alert('That did not save, so nothing has changed:\n\n' + error.message);
   }
+}
+
+/* ══ CULLING INCENTIVE — gone through here, paid on the payroll ══
+   The office asked for it to live beside the other piece work: *"把culling
+   incentive全部搬到这里 under worker activity，这里只会显示plot，duration，
+   日期，谁拿到 after check，然后payroll那边要link这里 然后在payroll才会有钱"*.
+
+   So this tab answers four things and no more — the plot, how long it took,
+   the two dates, and who earns it — and it carries the CHECK. There is no RM
+   on it on purpose: the money is the payroll's, and the payroll pays ONLY
+   the plots Checked here (npayroll_script.js, renderCullIncentive). Two
+   screens quoting the money is two places to keep in step.
+
+   The rule — which plots, how they are timed, who earns — is
+   shared/shared_cull_incentive.js, read by both pages. Do not re-implement
+   it here.
+
+   Three things in the shape:
+
+   - A plot that does NOT qualify is shown, under the ones that do, saying
+     why. A plot silently missing from an incentive list is the one nobody
+     asks about — and it is where Count it lives.
+   - CHECKED WRITES DOWN WHAT THE ROW READ. The dates and the days go into
+     nops_cull_incentive_checks with the tick, so a PALMS correction after
+     the office signed does not move money already agreed. Uncheck clears
+     the tick and the live answer comes back.
+   - A Checked plot cannot be added or removed by hand until it is
+     unchecked. Changing what was agreed starts with taking the agreement
+     back, or a payroll already priced moves under the person who priced it. */
+let _cullCache = {};          // ym → { transplanted, palms, overrides, checks, ... }
+let _cullLoading = {};
+
+function _cullYm() { return document.getElementById('global-month').value; }
+const _cullPd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
+
+async function loadCullIncentiveForPayroll(ym) {
+  if (!_supabase || !window.MJMCullIncentive) return;
+  _cullLoading[ym] = true;
+  renderPayroll();
+  const CI = MJMCullIncentive;
+  const st = { transplanted: {}, ledgerRead: false, palms: null,
+               overrides: [], overridesReady: true, checks: [], checksReady: true };
+  const ledger = (async () => {
+    try {
+      const all = [];
+      for (let from = 0; ; from += 1000) {
+        const res = await _supabase.from('shared_inventory_logs')
+          .select('plot_name, remark, transaction_type, transaction_date, created_at')
+          .eq('transaction_type', 'Transplanted')
+          .order('id', { ascending: true }).range(from, from + 999);
+        if (res.error) throw res.error;
+        all.push(...(res.data || []));
+        if (!res.data || res.data.length < 1000) break;
+      }
+      st.transplanted = CI.indexTransplanted(all);
+      st.ledgerRead = true;
+    } catch (e) { console.warn('[maint] the transplanting ledger was not read:', (e && e.message) || e); }
+  })();
+  const palms = (async () => {
+    if (!window.MJMPalms) return;
+    try {
+      await MJMPalms.loadStages(_supabase);
+      st.palms = await MJMPalms.loadLogs(_supabase);
+    } catch (e) { console.warn('[maint] PALMS was not read:', (e && e.message) || e); st.palms = null; }
+  })();
+  const ov = CI.loadOverrides(_supabase, ym).then(r => { st.overrides = r.rows; st.overridesReady = r.ready; });
+  const ck = CI.loadChecks(_supabase, ym).then(r => { st.checks = r.rows; st.checksReady = r.ready; });
+  await Promise.all([ledger, palms, ov, ck]);
+  _cullCache[ym] = st;
+  _cullLoading[ym] = false;
+  renderPayroll();
+}
+
+function cullIncentiveRows(n, ym) {
+  const st = _cullCache[ym];
+  if (!st) return [];
+  return MJMCullIncentive.plots({ transplanted: st.transplanted, palms: st.palms,
+    overrides: st.overrides, checks: st.checks, ym, section: n });
+}
+
+/* Add and Remove change who is paid, so they carry the tick that changes
+   pay: an admin of this module, or Adjust Pay on the payroll Transplanting
+   sheet (where they lived until this moved). Asked again at the write. */
+function _cullMayHand() {
+  if (isNopsAdmin) return true;
+  try {
+    const p = (MJMAccess.permissions && MJMAccess.permissions()) || {};
+    const set = p.npayroll_actions && p.npayroll_actions.transpl;
+    if (set) return !!set.adjust;
+    return MJMAccess.isAdminOf && MJMAccess.isAdminOf('npayroll');
+  } catch (_) { return false; }
+}
+
+function renderCullIncentivePayroll() {
+  const tbl = document.getElementById('payroll-table');
+  if (!tbl) return;
+  const n = getNursery(), m = getMonth(), ym = _cullYm();
+  const line = document.getElementById('payroll-form-line');
+  if (line) line.textContent = `${t('tab.cullIncentive')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
+  const hint = document.getElementById('payroll-hint');
+  const off = document.getElementById('payroll-offreg');
+  if (off) off.style.display = 'none';
+  if (hint) {
+    hint.classList.remove('pay-hint-warn');
+    hint.textContent = `A plot whose Saringan Anak Bibit to Transplanting took ${window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15} days or fewer `
+      + `earns the incentive. Tick Checked once you have been through a plot: ONLY a checked plot is paid, `
+      + `and the amounts are worked out on the Nursery Payroll Transplanting sheet.`;
+  }
+  const msg = (txt, colour) => {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:${colour || 'var(--text-faint)'};font-size:13px;">${txt}</td></tr></tbody>`;
+  };
+  if (!window.MJMCullIncentive) { msg('The culling incentive could not be loaded. Reload the page.', 'var(--danger,#c0392b)'); return; }
+  if (!MJMCullIncentive.NURSERIES.includes(n)) {
+    msg('The culling incentive is paid on BNN, UNN 1 and UNN 2 plots. Pick one of those nurseries.');
+    return;
+  }
+  if (_cullCache[ym] === undefined && !_cullLoading[ym]) loadCullIncentiveForPayroll(ym);
+  if (_cullLoading[ym] || !_cullCache[ym]) { msg(t('pay.loading')); return; }
+
+  const st = _cullCache[ym];
+  const rows = cullIncentiveRows(n, ym);
+  const mayHand = _cullMayHand() && st.overridesReady;
+  const qualify = rows.filter(r => r.counts);
+  const other = rows.filter(r => !r.counts);
+  const who = MJMCullIncentive.whoEarns(n);
+  const T = MJMCullIncentive.TARGET_DAYS;
+  const q = s => esc(s).replace(/'/g, '&#39;');
+
+  const byHand = r => {
+    const o = r.override;
+    if (!o) return '';
+    const what = o.action === 'add' ? (r.manual ? 'Added by hand' : 'Counted by hand') : 'Taken out by hand';
+    const stamp = [o.created_by, o.created_at ? String(o.created_at).slice(0, 10) : ''].filter(Boolean).join(' · ');
+    return `<div style="font-size:10.5px;font-weight:700;color:${o.action === 'add' ? '#15803d' : '#b45309'};margin-top:2px;"
+      title="${esc([o.remark, stamp].filter(Boolean).join(' — '))}">${what}${o.remark ? ': ' + esc(o.remark) : ''}</div>`;
+  };
+  const why = r => {
+    if (r.override && r.override.action === 'remove') return 'Taken out by hand';
+    if (r.state === 'slow') return `Over ${T} days`;
+    if (r.state === 'open') return 'Transplanting not closed in PALMS';
+    if (r.state === 'unread') return 'PALMS not read';
+    return 'No Saringan in PALMS';
+  };
+  const handBtn = r => {
+    if (!mayHand || r.check) return '';
+    if (r.override) {
+      const label = r.manual ? 'Delete' : (r.override.action === 'remove' ? 'Put back' : 'Undo');
+      return `<button class="btn btn-sm" onclick="cullDeleteOverride(${Number(r.override.id)})"
+        title="Delete the by-hand record — the plot goes back to what PALMS says">${label}</button>`;
+    }
+    return r.counts
+      ? `<button class="btn btn-sm" onclick="openCullHand('${q(r.plot)}','remove')" title="Leave this plot out of the incentive this month">Remove</button>`
+      : `<button class="btn btn-sm" onclick="openCullHand('${q(r.plot)}','add')" title="Count this plot whatever PALMS says">Count it</button>`;
+  };
+  const checkCell = r => {
+    if (!st.checksReady) return `<span style="color:var(--text-faint);font-size:11px;"
+      title="The Checked table is not on this database yet — run shared/RUN_ME_cull_incentive_checked.sql">—</span>`;
+    if (r.check) {
+      const when = String(r.check.checked_at).slice(0, 10);
+      const by = r.check.checked_by ? ` by ${r.check.checked_by}` : '';
+      return `<span class="rec-checked-badge" title="Checked${esc(by)} on ${esc(when)} — the payroll pays this plot">✓ Checked</span>`
+        + `<button class="btn btn-sm" onclick="toggleCullChecked('${q(r.plot)}')"
+             title="Put this plot back to unchecked — it comes off the payroll until somebody checks it again">Uncheck</button>`;
+    }
+    return `<button class="btn btn-sm btn-check" onclick="toggleCullChecked('${q(r.plot)}')"
+      title="Mark as checked — ONLY a checked plot is paid on the payroll">✓ Check</button>`;
+  };
+  const payTh = (txt, w) => `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+  const head = `${payTh('No.', 40)}${payTh(t('pay.plot'), 84)}${payTh('Saringan started', 110)}
+    ${payTh('Transplanting ended', 110)}${payTh(`Duration (days)`, 90)}${payTh('Who gets it', 230)}`;
+  const span = 6 + 2;
+
+  let h = `<thead>
+    <tr><th class="wk-th" colspan="${span}">${t('tab.cullIncentive')} — Saringan to Transplanting within ${T} days</th></tr>
+    <tr>${head}${payTh('', 90)}${payTh(t('pay.checked'), 132)}</tr></thead><tbody>`;
+  if (!qualify.length) {
+    h += `<tr><td colspan="${span}" style="padding:1.4rem;text-align:center;color:var(--text-faint);">
+      No plot in ${esc(NURSERY_NAMES[n])} qualifies for ${esc(m)}${rows.length ? ' — see the plots below' : ''}.</td></tr>`;
+  }
+  qualify.forEach((r, i) => {
+    h += `<tr${r.check ? '' : ' class="tp-row-held"'}>
+      <td style="color:var(--text-faint);">${i + 1}</td>
+      <td class="plot-td">${esc(r.plot)}${byHand(r)}</td>
+      <td>${_cullPd(r.start)}</td>
+      <td>${_cullPd(r.end)}</td>
+      <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
+      <td style="text-align:left;">${who.map(esc).join(', ')}</td>
+      <td style="white-space:nowrap;">${handBtn(r)}</td>
+      <td style="white-space:nowrap;">${checkCell(r)}</td>
+    </tr>`;
+  });
+  const held = qualify.filter(r => !r.check).length;
+  h += `</tbody><tfoot><tr class="jumlah-tr">
+      <td class="th-left" colspan="5">${qualify.length - held} of ${qualify.length} plot${qualify.length === 1 ? '' : 's'} checked — sent to the payroll</td>
+      <td colspan="3" style="text-align:left;">${held ? `<span style="color:#92400e;font-weight:600;">${held} not checked yet — not paid</span>` : ''}</td>
+    </tr></tfoot>`;
+  if (other.length) {
+    h += `<tbody><tr><th class="wk-th" colspan="${span}" style="background:#f3f4f6;color:#6b7280;">Transplanted this month and NOT earning it</th></tr>`;
+    other.forEach(r => {
+      h += `<tr style="opacity:.75;">
+        <td></td>
+        <td class="plot-td">${esc(r.plot)}${byHand(r)}</td>
+        <td>${_cullPd(r.start)}</td>
+        <td>${_cullPd(r.end)}</td>
+        <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
+        <td style="text-align:left;color:#b45309;font-weight:700;">${esc(why(r))}</td>
+        <td style="white-space:nowrap;">${handBtn(r)}</td>
+        <td></td>
+      </tr>`;
+    });
+    h += `</tbody>`;
+  }
+  tbl.innerHTML = h;
+
+  /* What makes the list wrong, or look wrong and is not. */
+  const notes = [];
+  if (st.palms === null) notes.push('PALMS could not be read, so no plot can be timed. Reload the page; if it stays, tell the office.');
+  else if (rows.length && !Object.keys(st.palms).length) notes.push('PALMS answered with no plot log at all — this login is probably not allowed to read it.');
+  if (!st.ledgerRead) notes.push('The transplanting ledger could not be read, so this month has no plots to time.');
+  if (!st.checksReady) notes.push('Checking a plot needs shared/RUN_ME_cull_incentive_checked.sql run once in Supabase. Until then nothing is paid.');
+  if (!st.overridesReady) notes.push('Adding or removing a plot by hand needs shared/RUN_ME_cull_incentive_checked.sql run once.');
+  if (off && notes.length) { off.style.display = ''; off.innerHTML = notes.map(esc).join('<br>'); }
+
+  const add = mayHand
+    ? `<button class="btn btn-sm" style="margin-top:8px;" onclick="openCullHand('','add')">+ Add plot by hand</button>` : '';
+  const extra = document.getElementById('payroll-extra');
+  if (extra) extra.innerHTML = add;
+}
+
+/* The two writes are ONE plot-month record each, and the Check carries what
+   the row read. Optimistic with a rollback, the same shape
+   toggleTransplantChecked uses. */
+async function toggleCullChecked(plot) {
+  const n = getNursery(), ym = _cullYm(), st = _cullCache[ym];
+  if (!st || !_supabase) return;
+  if (!st.checksReady) {
+    alert('This database has not got the Checked table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
+    return;
+  }
+  const r = cullIncentiveRows(n, ym).find(x => MJMCullIncentive.key(x.plot) === MJMCullIncentive.key(plot));
+  if (!r) return;
+  if (r.check && !confirm(`Put ${r.plot} back to unchecked?\n\nIt comes OFF the culling incentive on the payroll until somebody checks it again.`)) return;
+  const was = st.checks.slice();
+  const at = r.check ? null : new Date().toISOString();
+  const by = at ? (window.currentUserEmail || _signingAs() || 'office') : null;
+  const row = { month: ym, plot: r.plot, section: r.section || n,
+    saringan_date: at ? (r.start || null) : null, transplant_date: at ? (r.end || null) : null,
+    days: at && r.days != null ? r.days : null, checked_at: at, checked_by: by };
+  st.checks = st.checks.filter(c => MJMCullIncentive.key(c.plot) !== MJMCullIncentive.key(r.plot)).concat(at ? [row] : []);
+  renderPayroll();
+  const { error } = await _supabase.from('nops_cull_incentive_checks').upsert(row, { onConflict: 'month,plot' });
+  if (error) {
+    st.checks = was;
+    renderPayroll();
+    alert('That did not save, so nothing has changed:\n\n' + error.message);
+  }
+}
+
+/* Add / Count it / Remove go through one dialog, never a prompt: a prompt
+   dismissed out of habit is a cancel that looks like a save. */
+let _cullHandEl = null, _cullHandMode = 'add';
+function openCullHand(plot, mode) {
+  if (!_cullMayHand()) { alert('Adding or removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  _cullHandMode = mode === 'remove' ? 'remove' : 'add';
+  if (!_cullHandEl) {
+    const el = document.createElement('div');
+    el.id = 'cull-hand';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(15,12,8,.5);z-index:9998;display:none;align-items:center;justify-content:center;padding:20px;';
+    const lab = 'display:block;font-size:11px;font-weight:700;color:var(--text-muted,#6b7280);margin:10px 0 4px;';
+    const inp = 'width:100%;padding:9px 10px;border:1.5px solid var(--border,#d1d5db);border-radius:8px;font-size:13px;';
+    el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:20px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div id="ch-title" style="font-size:14px;font-weight:800;"></div>
+      <div id="ch-what" style="font-size:12px;color:var(--text-muted,#6b7280);margin-top:4px;"></div>
+      <label style="${lab}">Plot</label><input id="ch-plot" style="${inp}">
+      <div id="ch-dates"><label style="${lab}">Saringan started (optional)</label><input id="ch-s1" type="date" style="${inp}">
+      <label style="${lab}">Transplanting ended (optional)</label><input id="ch-s2" type="date" style="${inp}"></div>
+      <label style="${lab}">Why (required)</label><input id="ch-remark" style="${inp}">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+        <button class="btn" id="ch-cancel">Cancel</button><button class="btn btn-primary" id="ch-save">Save</button></div></div>`;
+    document.body.appendChild(el);
+    const close = () => { el.style.display = 'none'; };
+    el.addEventListener('click', e => { if (e.target === el) close(); });
+    el.querySelector('#ch-cancel').addEventListener('click', close);
+    el.querySelector('#ch-save').addEventListener('click', saveCullHand);
+    _cullHandEl = el;
+  }
+  const el = _cullHandEl, m = getMonth();
+  const remove = _cullHandMode === 'remove';
+  el.querySelector('#ch-title').textContent = remove ? `Take ${plot} out of the culling incentive`
+    : (plot ? `Count ${plot} for the incentive` : 'Add a plot to the culling incentive');
+  el.querySelector('#ch-what').textContent = remove
+    ? `Nobody earns it for ${plot} in ${m}. PALMS and the ledger are not changed.`
+    : `It earns the incentive in ${m} whatever PALMS says. It still has to be Checked to be paid.`;
+  el.querySelector('#ch-plot').value = plot || '';
+  el.querySelector('#ch-plot').readOnly = !!plot;
+  el.querySelector('#ch-dates').style.display = remove ? 'none' : '';
+  ['#ch-s1', '#ch-s2', '#ch-remark'].forEach(s => { el.querySelector(s).value = ''; });
+  el.querySelector('#ch-save').textContent = remove ? 'Remove' : 'Save';
+  el.style.display = 'flex';
+  setTimeout(() => el.querySelector(plot ? '#ch-remark' : '#ch-plot').focus(), 30);
+}
+
+async function saveCullHand() {
+  if (!_cullMayHand()) return;
+  const el = _cullHandEl, n = getNursery(), ym = _cullYm(), CI = MJMCullIncentive;
+  const plot = String(el.querySelector('#ch-plot').value || '').trim().toUpperCase();
+  const remark = String(el.querySelector('#ch-remark').value || '').trim();
+  if (!plot) { alert('Which plot?'); return; }
+  if (CI.isReplant(plot)) { alert(plot + ' is a -R plot, and a -R plot is not on the culling incentive.'); return; }
+  if (!remark) { alert('Say why — a plot changed by hand is one somebody will ask about.'); return; }
+  const checked = cullIncentiveRows(n, ym).find(r => CI.key(r.plot) === CI.key(plot) && r.check);
+  if (checked) { alert(plot + ' is Checked. Uncheck it first, then change it.'); return; }
+  const remove = _cullHandMode === 'remove';
+  const s1 = remove ? null : (el.querySelector('#ch-s1').value || null);
+  const s2 = remove ? null : (el.querySelector('#ch-s2').value || null);
+  if (s1 && s2 && s2 < s1) { alert('Transplanting cannot end before Saringan started.'); return; }
+  const btn = el.querySelector('#ch-save'); btn.disabled = true;
+  try {
+    const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
+      month: ym, plot, action: remove ? 'remove' : 'add',
+      section: CI.sectionOfPlot(plot) || n,
+      saringan_date: s1, transplant_date: s2, remark,
+      created_by: window.currentUserEmail || _signingAs() || null,
+      created_at: new Date().toISOString()
+    }, { onConflict: 'month,plot' });
+    if (error) { alert('Could not save: ' + error.message); return; }
+    el.style.display = 'none';
+    await _cullReload(ym);
+  } finally { btn.disabled = false; }
+}
+
+async function cullDeleteOverride(id) {
+  if (!_cullMayHand()) return;
+  const ym = _cullYm(), st = _cullCache[ym];
+  const o = st && st.overrides.find(x => Number(x.id) === Number(id));
+  if (!o) return;
+  if (!confirm(`Delete the by-hand record for ${o.plot}?\n\nIt goes back to what PALMS says.`)) return;
+  const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').delete().eq('id', id);
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  await _cullReload(ym);
+}
+
+/* Re-read the two small tables and redraw. The ledger and PALMS are kept —
+   neither is changed by anything on this tab. */
+async function _cullReload(ym) {
+  const st = _cullCache[ym];
+  if (!st) { loadCullIncentiveForPayroll(ym); return; }
+  const [ov, ck] = await Promise.all([MJMCullIncentive.loadOverrides(_supabase, ym),
+                                      MJMCullIncentive.loadChecks(_supabase, ym)]);
+  st.overrides = ov.rows; st.overridesReady = ov.ready;
+  st.checks = ck.rows; st.checksReady = ck.ready;
+  renderPayroll();
 }
 
 function renderLoadingSeedlingsPayroll() {
@@ -2494,7 +2851,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Incentive', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -2633,7 +2990,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Insentif Culling', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -7796,6 +8153,16 @@ async function initDb() {
     const landing = document.querySelector('.tab-panel.active');
     const key = landing && landing.id.replace(/^tab-/, '');
     if (key) switchTab(key, navTabFor(key));
+  } catch (_) {}
+  /* ?view=cull_incentive — the link the payroll Transplanting sheet carries,
+     so "check plots" lands on the plots and not on Work Records. Any of the
+     Worker Activity views can be named the same way. */
+  try {
+    const want = new URLSearchParams(location.search).get('view');
+    if (want && PAYROLL_VIEW_KEYS.includes(want)) {
+      switchTab('payroll', navTabFor('payroll'));
+      switchPayrollView(want);
+    }
   } catch (_) {}
   // Whichever way the bar was left last time.
   try { applyNav(); } catch (_) {}

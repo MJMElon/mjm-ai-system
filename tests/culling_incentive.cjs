@@ -1,4 +1,5 @@
-/* The culling incentive on the Transplanting sheet.
+/* The culling incentive: gone through and Checked on Work Maintenance,
+   paid on the payroll Transplanting sheet.
 
    A plot that went from Saringan Anak Bibit to the end of Transplanting in
    15 days or fewer pays: RM 20 a plot to Rousell Wayne and to Florence,
@@ -7,9 +8,12 @@
    about are the ones the LEDGER transplanted in the month; the time comes
    from PALMS, the plot's LATEST run.
 
-   This drives the real page with a ledger and a PALMS log built to hit
-   every way a plot can come out, and reads what is on screen, the Monthly
-   Payroll and the claim PDF.
+   The office moved it: Worker Activity -> Culling Incentive shows the plot,
+   the days, the dates and who earns it, and carries the Check; the payroll
+   pays the CHECKED plots and nothing else. This drives BOTH real pages with
+   a ledger and a PALMS log built to hit every way a plot can come out:
+   Work Maintenance first (what it shows, the Check, by hand), then the
+   payroll fed with exactly what those writes left in the database.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/culling_incentive.cjs
    with a static server on 8777 serving the repository root.               */
@@ -71,7 +75,8 @@ const REGISTER = [
   { id: 5, full_name: 'Muhamad Azhar',       section: 'UNN2', active: true }
 ];
 
-async function boot(browser, db) {
+async function boot(browser, db, where) {
+  where = where || 'payroll';
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
@@ -83,6 +88,8 @@ async function boot(browser, db) {
   });
   await page.addInitScript((seed) => {
     window.__DB = seed;
+    window.Chart = class { constructor() {} update() {} destroy() {} resize() {} };
+    try { localStorage.setItem('mjm_maint_nursery', 'BNN'); localStorage.removeItem('mjm_maint_month'); } catch (_) {}
     window.__PDFS = [];
     const fin = (v) => typeof v === 'number' && isFinite(v);
     function guard(method, args) {
@@ -173,6 +180,12 @@ async function boot(browser, db) {
                       '**/fonts.googleapis.com/**', '**/fonts.gstatic.com/**']) {
     await page.route(host, (r) => r.fulfill({ status: 200, body: '' }));
   }
+  if (where === 'maint') {
+    await page.goto('http://localhost:8777/nursery_ops/nursery_ops_maintenance.html?view=cull_incentive', { waitUntil: 'load' });
+    await page.waitForFunction(() => /Culling Incentive/.test((document.getElementById('payroll-table') || {}).textContent || '')
+      && document.getElementById('tab-payroll').classList.contains('active'), { timeout: 20000 });
+    return { page, errs };
+  }
   await page.goto('http://localhost:8777/npayroll/npayroll_dashboard.html', { waitUntil: 'load' });
   await page.waitForFunction(() => typeof window.renderCullIncentive === 'function', { timeout: 20000 });
   await page.click('[data-sub="transpl"]');
@@ -183,44 +196,132 @@ async function boot(browser, db) {
   return { page, errs };
 }
 
-const plotsOf = (page, sec) => page.evaluate((s) =>
-  cullIncentivePlots(s).map(r => [r.plot, r.state, r.days == null ? null : r.days]), sec);
+const tableText = (page) => page.evaluate(() =>
+  (document.getElementById('payroll-table').textContent || '').replace(/\s+/g, ' ').trim());
+const rowsOf = (page) => page.evaluate(() =>
+  cullIncentiveRows(getNursery(), document.getElementById('global-month').value)
+    .map(r => [r.plot, r.counts, r.days == null ? null : r.days, !!r.check]));
 const payOf = (page, sec) => page.evaluate((s) =>
   cullIncentivePay(cullIncentivePlots(s), s).map(p => [p.known ? p.known.full_name : p.name, p.amount]), sec);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-
-  console.log('— the plots and how long each took');
   const db = { mjmnpayroll_workers: REGISTER, shared_inventory_logs: LEDGER,
                fcportal_palms_plot_logs: PALMS };
-  const { page, errs } = await boot(browser, db);
-  check('BNN: every plot transplanted this month, timed off its latest run',
-    await plotsOf(page, 'BNN'),
-    [['B1', 'ok', 13], ['B2', 'slow', 19], ['B3', 'ok', 14], ['B4', 'open', null],
-     ['B5', 'none', null], ['B6', 'slow', 20], ['B7', 'ok', 10]]);
-  check('UNN 2 is its own list', await plotsOf(page, 'UNN2'), [['N7', 'ok', 7]]);
-  check('UNN 1 has nothing this month — U9 was last month', await plotsOf(page, 'UNN1'), []);
 
-  console.log('— who it pays');
+  console.log('— Work Maintenance: Worker Activity -> Culling Incentive');
+  const m = await boot(browser, db, 'maint');
+  const mp = m.page;
+  check('the payroll link lands on the tab, BNN picked',
+    await mp.evaluate(() => [document.getElementById('pn-subtab-cull_incentive').classList.contains('active'), getNursery()]),
+    [true, 'BNN']);
+  check('BNN: every plot transplanted this month, timed off its latest run, nothing checked yet',
+    await rowsOf(mp),
+    [['B1', true, 13, false], ['B2', false, 19, false], ['B3', true, 14, false], ['B4', false, null, false],
+     ['B5', false, null, false], ['B6', false, 20, false], ['B7', true, 10, false]]);
+  let txt = await tableText(mp);
+  check('it shows plot, dates, duration and who gets it — and no money',
+    [/Saringan started/.test(txt), /Transplanting ended/.test(txt), /Duration/.test(txt),
+     /B1.*Rousell Wayne, Florence, Lalu Aenal/.test(txt), /RM/.test(txt)], [true, true, true, true, false]);
+  check('the plots that do not earn it are listed under, saying why',
+    [/NOT earning it/.test(txt), /B2.*Over 15 days/.test(txt), /B4.*Transplanting not closed/.test(txt),
+     /B5.*No Saringan in PALMS/.test(txt)], [true, true, true, true]);
+  check('no -R plot, and no tray', [/B3-R/.test(txt), /B8/.test(txt)], [false, false]);
+  check('0 of 3 checked, and it says so', /0 of 3 plots checked/.test(txt) && /3 not checked yet — not paid/.test(txt), true);
+
+  await mp.evaluate(() => pickNursery('UNN2'));
+  await mp.waitForFunction(() => /N7/.test(document.getElementById('payroll-table').textContent));
+  txt = await tableText(mp);
+  check('UNN 2 is its own list, and its own Field Conductor', /N7.*Rousell Wayne, Florence, Azhar/.test(txt), true);
+  await mp.evaluate(() => pickNursery('PN'));
+  check('PN says the incentive is not paid there', /paid on BNN, UNN 1 and UNN 2/.test(await tableText(mp)), true);
+  await mp.evaluate(() => pickNursery('BNN'));
+
+  console.log('— the Check');
+  await mp.evaluate(() => toggleCullChecked('B1'));
+  await mp.evaluate(() => toggleCullChecked('B3'));
+  await mp.waitForFunction(() => (window.__DB.nops_cull_incentive_checks || []).filter(r => r.checked_at).length === 2);
+  check('a Check writes what the row read: dates, days, nursery, who',
+    await mp.evaluate(() => window.__DB.nops_cull_incentive_checks.map(r =>
+      [r.plot, r.section, r.saringan_date, r.transplant_date, r.days, !!r.checked_at, r.checked_by])),
+    [['B1', 'BNN', D(1), D(14), 13, true, 'Elon Ting'],
+     ['B3', 'BNN', D(2), D(16), 14, true, 'Elon Ting']]);
+  txt = await tableText(mp);
+  check('2 of 3 checked, B7 still held', /2 of 3 plots checked/.test(txt) && /1 not checked yet/.test(txt), true);
+
+  console.log('— by hand');
+  await mp.evaluate(() => openCullHand('', 'add'));
+  await mp.fill('#ch-plot', 'b3-r'); await mp.fill('#ch-remark', 'try');
+  await mp.click('#ch-save');
+  check('a -R plot cannot be added by hand', m.errs.some(e => /B3-R is a -R plot/.test(e)), true);
+  await mp.evaluate(() => { document.getElementById('cull-hand').style.display = 'none'; });
+  await mp.evaluate(() => openCullHand('B1', 'remove'));
+  await mp.fill('#ch-remark', 'should not go');
+  await mp.click('#ch-save');
+  check('a Checked plot cannot be removed until it is unchecked', m.errs.some(e => /B1 is Checked\. Uncheck it first/.test(e)), true);
+  await mp.evaluate(() => { document.getElementById('cull-hand').style.display = 'none'; });
+  await mp.evaluate(() => openCullHand('B4', 'add'));
+  check('Count it opens on the plot and does not let it be retyped',
+    await mp.evaluate(() => [document.getElementById('ch-plot').value, document.getElementById('ch-plot').readOnly]), ['B4', true]);
+  await mp.click('#ch-save');
+  check('a change with no reason is refused', m.errs.some(e => /Say why/.test(e)), true);
+  await mp.fill('#ch-remark', 'Transplanting finished 10th, FC forgot to close');
+  await mp.click('#ch-save');
+  await mp.waitForFunction(() => document.getElementById('cull-hand').style.display === 'none');
+  await mp.waitForFunction(() => /Counted by hand/.test(document.getElementById('payroll-table').textContent));
+  check('B4 now earns it, saying who counted it and why',
+    [(await rowsOf(mp)).find(r => r[0] === 'B4'), /B4.*Counted by hand: Transplanting finished 10th/.test(await tableText(mp))],
+    [['B4', true, null, false], true]);
+  await mp.evaluate(() => toggleCullChecked('B4'));
+  await mp.evaluate(() => toggleCullChecked('B3'));   // and uncheck one
+  await mp.waitForFunction(() => window.__DB.nops_cull_incentive_checks.some(r => r.plot === 'B3' && !r.checked_at));
+  check('Uncheck clears the tick and what it had written down',
+    await mp.evaluate(() => window.__DB.nops_cull_incentive_checks.find(r => r.plot === 'B3')),
+    await mp.evaluate(() => Object.assign({}, window.__DB.nops_cull_incentive_checks.find(r => r.plot === 'B3'),
+      { saringan_date: null, transplant_date: null, days: null, checked_at: null, checked_by: null })));
+  check('nothing written to the incentive but the Checks and the by-hand record',
+    await mp.evaluate(() => [...new Set(window.__WRITES.map(w => w[1]).filter(t => /cull/.test(t)))].sort()),
+    ['mjmnpayroll_cull_incentive_overrides', 'nops_cull_incentive_checks']);
+  check('no prompt, no page error', m.errs.filter(e => /^PROMPT|^(?!ALERT)/.test(e)), []);
+  if (process.env.SHOT) await mp.locator('#tab-payroll').screenshot({ path: process.env.SHOT });
+
+  // What Work Maintenance left in the database is what the payroll reads.
+  const left = await mp.evaluate(() => ({
+    checks: JSON.parse(JSON.stringify(window.__DB.nops_cull_incentive_checks)),
+    overrides: JSON.parse(JSON.stringify(window.__DB.mjmnpayroll_cull_incentive_overrides)) }));
+  await mp.close();
+
+  console.log('— the payroll pays the Checked plots and nothing else');
+  // N7 checked too, so a second nursery is paid; B7 left unchecked on purpose.
+  left.checks.push({ id: 900, month: YM, plot: 'N7', section: 'UNN2', saringan_date: D(1),
+    transplant_date: D(8), days: 7, checked_at: `${YM}-20T01:00:00Z`, checked_by: 'elon.mjm@gmail.com' });
+  const { page, errs } = await boot(browser, Object.assign({}, db,
+    { nops_cull_incentive_checks: left.checks, mjmnpayroll_cull_incentive_overrides: left.overrides }));
+  check('paid: B1 and B4 in BNN (B3 unchecked, B7 never checked)',
+    await page.evaluate(() => cullIncentivePlots('BNN').map(r => [r.plot, r.days == null ? null : r.days])),
+    [['B1', 13], ['B4', null]]);
   check('BNN: RM 20 a plot each to Rousell and Florence, RM 50 a plot to Lalu Aenal only',
     await payOf(page, 'BNN'),
-    [['Rousell Wayne', 60], ['Florence Anak Jugah', 60], ['Lalu Aenal Mashuri', 150]]);
-  check('UNN 2: Azhar for his own plot', await payOf(page, 'UNN2'),
-    [['Rousell Wayne', 20], ['Florence Anak Jugah', 20], ['Muhamad Azhar', 50]]);
-  check('All nurseries: Akbar gets nothing — UNN 1 finished nothing', await payOf(page, ''),
-    [['Rousell Wayne', 80], ['Florence Anak Jugah', 80], ['Lalu Aenal Mashuri', 150],
+    [['Rousell Wayne', 40], ['Florence Anak Jugah', 40], ['Lalu Aenal Mashuri', 100]]);
+  check('All nurseries: Akbar gets nothing, Azhar his one checked plot', await payOf(page, ''),
+    [['Rousell Wayne', 60], ['Florence Anak Jugah', 60], ['Lalu Aenal Mashuri', 100],
      ['Akbar Cahaya', 0], ['Muhamad Azhar', 50]]);
-
   const screen = await page.evaluate(() => {
     const t = (id) => (document.getElementById(id).textContent || '').replace(/\s+/g, ' ').trim();
-    return { plots: t('cull-inc-plots'), pay: t('cull-inc-pay'), note: t('cull-inc-note') };
+    return { plots: t('cull-inc-plots'), pay: t('cull-inc-pay'),
+             note: document.getElementById('cull-inc-note').innerHTML,
+             link: (document.getElementById('cull-inc-link') || {}).getAttribute ? document.getElementById('cull-inc-link').getAttribute('href') : null,
+             add: !!document.getElementById('cull-inc-add'), modal: !!document.getElementById('cull-add-modal') };
   });
-  check('the screen draws B1 as qualifying and B2 as over 15 days',
-    [/B1.*Qualifies/.test(screen.plots), /B2.*Over 15 days/.test(screen.plots)], [true, true]);
-  check('the screen total is the BNN incentive', /TOTAL INCENTIVE.*270\.00/.test(screen.pay), true);
-  check('nothing to warn about', screen.note, '');
-  if (process.env.SHOT) await page.locator('#cull-inc-wrap').screenshot({ path: process.env.SHOT });
+  check('the screen lists the checked plots with who checked them',
+    [/B1.*Elon Ting/.test(screen.plots), /B4.*Counted by hand/.test(screen.plots), /B3|B7/.test(screen.plots)], [true, true, false]);
+  check('the screen total is the BNN incentive, RM 180.00', /TOTAL INCENTIVE.*180\.00/.test(screen.pay), true);
+  check('the plots waiting to be checked are named, with the way there',
+    [/B3, B7 qualify and have not been Checked yet/.test(screen.note),
+     /nursery_ops_maintenance\.html\?view=cull_incentive/.test(screen.note)], [true, true]);
+  check('the sheet links to Worker Activity, and adds nothing by hand itself',
+    [screen.link, screen.add, screen.modal],
+    ['../nursery_ops/nursery_ops_maintenance.html?view=cull_incentive', false, false]);
 
   console.log('— the Monthly Payroll');
   const monthly = await page.evaluate(() => {
@@ -228,104 +329,36 @@ const payOf = (page, sec) => page.evaluate((s) =>
     return monthlyRows().filter(r => r.transpl).map(r => [r.name, r.transpl]);
   });
   check('each person is paid across every nursery, under Transplanting', monthly.sort(),
-    [['Florence Anak Jugah', 80], ['Lalu Aenal Mashuri', 150], ['Muhamad Azhar', 50], ['Rousell Wayne', 80]]);
+    [['Florence Anak Jugah', 60], ['Lalu Aenal Mashuri', 100], ['Muhamad Azhar', 50], ['Rousell Wayne', 60]]);
 
   console.log('— the claim PDF');
-  await page.evaluate(() => downloadTransplantPDF());
+  await page.evaluate(() => { document.getElementById('transpl-section').value = 'BNN'; return downloadTransplantPDF(); });
   await page.waitForFunction(() => window.__PDFS.length && window.__PDFS[0].saved, { timeout: 10000 }).catch(() => {});
   const pdf = await page.evaluate(() => (window.__PDFS[0] || { lines: [] }).lines.join(' | '));
-  check('the form carries both tables', [/CULLING INCENTIVE — SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)], [true, true]);
+  check('the form carries both tables, checked plots only',
+    [/CULLING INCENTIVE — SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf), /CHECKED Elon Ting/.test(pdf), / B7 /.test(pdf)],
+    [true, true, true, false]);
   check('no page errors', errs.filter(e => !/^ALERT: Nothing recorded/.test(e)), []);
-
-  console.log('— by hand: add, remove, delete');
-  await page.evaluate(() => openCullAdd());
-  await page.fill('#ca-plot', 'b3-r'); await page.fill('#ca-remark', 'try');
-  await page.click('#ca-save');
-  check('a -R plot cannot be added by hand either',
-    [errs.some(e => /B3-R is a -R plot/.test(e)),
-     await page.evaluate(() => (window.__WRITES || []).some(w => /-R/i.test((w[2] || {}).plot || '')))], [true, false]);
-  await page.evaluate(() => closeModal('cull-add-modal'));
-  const st = (page, sec) => page.evaluate((s) => cullIncentivePlots(s)
-    .map(r => [r.plot, r.counts, r.override ? r.override.action : null]), sec);
-  const pick = (rows, plot) => rows.find(r => r[0] === plot);
-  const fill = async (o) => {
-    for (const [id, v] of Object.entries(o)) await page.fill('#' + id, v);
-  };
-  check('+ Add plot is shown to somebody with Adjust Pay',
-    await page.evaluate(() => !document.getElementById('cull-inc-add').classList.contains('hidden')), true);
-
-  // A plot the ledger never transplanted, added through the real dialog.
-  await page.click('#cull-inc-add');
-  await fill({ 'ca-plot': 'b40', 'ca-saringan': D(1), 'ca-transplant': D(12), 'ca-remark': 'PALMS never keyed' });
-  await page.selectOption('#ca-nursery', 'BNN').catch(() => page.evaluate(() => { document.getElementById('ca-nursery').value = 'BNN'; }));
-  await page.click('#ca-save');
-  await page.waitForFunction(() => !document.getElementById('cull-add-modal').classList.contains('open'));
-  check('a plot added by hand is counted, written once with its reason',
-    [pick(await st(page, 'BNN'), 'B40'),
-     await page.evaluate(() => window.__WRITES.filter(w => w[0] === 'upsert').map(w => [w[2].plot, w[2].action, w[2].remark]))],
-    [['B40', true, 'add'], [['B40', 'add', 'PALMS never keyed']]]);
-  check('…and it pays: Lalu Aenal now four plots, Rousell five across all',
-    [(await payOf(page, 'BNN'))[2], (await payOf(page, ''))[0]],
-    [['Lalu Aenal Mashuri', 200], ['Rousell Wayne', 100]]);
-
-  // A plot PALMS cannot time, counted by hand off its own row.
-  await page.evaluate(() => openCullAdd('B4'));
-  check('Count it opens on the plot and does not let it be retyped',
-    await page.evaluate(() => [document.getElementById('ca-plot').value, document.getElementById('ca-plot').readOnly]), ['B4', true]);
-  await page.click('#ca-save');   // no reason
-  check('a change with no reason is refused', errs.some(e => /Say why/.test(e)), true);
-  await fill({ 'ca-remark': 'Transplanting finished 10th, FC forgot to close' });
-  await page.click('#ca-save');
-  await page.waitForFunction(() => !document.getElementById('cull-add-modal').classList.contains('open'));
-  check('B4 now counts', pick(await st(page, 'BNN'), 'B4'), ['B4', true, 'add']);
-
-  // A qualifying plot taken out.
-  await page.evaluate(() => cullRemovePlot('B1'));
-  check('Remove asks in the dialog, with no date boxes', await page.evaluate(() =>
-    [document.getElementById('cull-add-modal').classList.contains('open'),
-     document.getElementById('ca-add-only').classList.contains('hidden'),
-     document.getElementById('ca-save').textContent]), [true, true, 'Remove']);
-  await fill({ 'ca-remark': 'Re-culled, does not count' });
-  await page.click('#ca-save');
-  await page.waitForFunction(() => !document.getElementById('cull-add-modal').classList.contains('open'));
-  check('B1 is listed and not paid', pick(await st(page, 'BNN'), 'B1'), ['B1', false, 'remove']);
-  if (process.env.SHOT2) await page.locator('#cull-inc-wrap').screenshot({ path: process.env.SHOT2 });
-  check('BNN pays B3, B4, B7, B40', (await payOf(page, 'BNN'))[2], ['Lalu Aenal Mashuri', 200]);
-  const screen2 = await page.evaluate(() => (document.getElementById('cull-inc-plots').textContent || '').replace(/\s+/g, ' '));
-  check('the row says who changed it and why',
-    [/Taken out by hand ?Re-culled, does not count ?elon\.mjm/.test(screen2), /Added by hand ?PALMS never keyed/.test(screen2)], [true, true]);
-
-  // Put back, then delete the hand-added plot.
-  const idOf = (plot) => page.evaluate((p) => cullOverrides.find(o => o.plot === p).id, plot);
-  await page.evaluate((id) => cullDeleteOverride(id), await idOf('B1'));
-  await page.waitForFunction(() => !cullOverrides.some(o => o.plot === 'B1'));
-  check('Put back returns B1 to what PALMS says', pick(await st(page, 'BNN'), 'B1'), ['B1', true, null]);
-  await page.evaluate((id) => cullDeleteOverride(id), await idOf('B40'));
-  await page.waitForFunction(() => !cullOverrides.some(o => o.plot === 'B40'));
-  check('Delete takes the hand-added plot off entirely', pick(await st(page, 'BNN'), 'B40'), undefined);
-  check('the Monthly Payroll follows: B4 by hand, B1 back — Lalu 4 plots',
-    await page.evaluate(() => { document.getElementById('monthly-section').value = '';
-      return monthlyRows().filter(r => r.name === 'Lalu Aenal Mashuri').map(r => r.transpl); }), [200]);
-  check('only the by-hand records were ever deleted, and nothing else written',
-    await page.evaluate(() => [...new Set(window.__WRITES.map(w => w[1]))]), ['mjmnpayroll_cull_incentive_overrides']);
-  check('no prompt was ever raised', errs.filter(e => /^PROMPT/.test(e)), []);
+  check('the payroll writes nothing', await page.evaluate(() => (window.__WRITES || []).length), 0);
   await page.close();
 
   console.log('— the faults that must be said');
   const r2 = await boot(browser, { mjmnpayroll_workers: REGISTER.concat([{ id: 6, full_name: 'Florence Lee', section: 'BNN', active: true }]).filter(w => w.id !== 1),
-                                   shared_inventory_logs: LEDGER, fcportal_palms_plot_logs: [],
-                                   __MISSING: ['mjmnpayroll_cull_incentive_overrides'] });
+                                   shared_inventory_logs: LEDGER, fcportal_palms_plot_logs: PALMS,
+                                   __MISSING: ['nops_cull_incentive_checks'] });
   const note2 = await r2.page.evaluate(() => document.getElementById('cull-inc-note').textContent);
-  check('an empty PALMS says to run the read policy', /RUN_ME_payroll_reads_palms\.sql/.test(note2), true);
-  check('nobody is paid when PALMS times nothing', await payOf(r2.page, 'BNN'),
-    [['Rousell Wayne', 0], ['Florence', 0], ['Lalu Aenal Mashuri', 0]]);
-  check('without the table, the page says which file to run',
-    /RUN_ME_cull_incentive_overrides\.sql/.test(note2), true);
+  check('without the Checked table, nobody is paid and the page says which file to run',
+    [/RUN_ME_cull_incentive_checked\.sql/.test(note2), (await payOf(r2.page, 'BNN')).every(p => p[1] === 0)], [true, true]);
   check('a missing name and a name on two people are both named',
     [/Rousell Wayne is not on the worker register/.test(note2), /Florence matches more than one worker/.test(note2)], [true, true]);
   await r2.page.close();
+  const m2 = await boot(browser, Object.assign({}, db, { __MISSING: ['nops_cull_incentive_checks'] }), 'maint');
+  check('Work Maintenance says the same, and offers no Check',
+    [/RUN_ME_cull_incentive_checked\.sql/.test(await m2.page.evaluate(() => document.getElementById('payroll-offreg').textContent)),
+     await m2.page.evaluate(() => document.querySelectorAll('#payroll-table .btn-check').length)], [true, 0]);
+  await m2.page.close();
 
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})();

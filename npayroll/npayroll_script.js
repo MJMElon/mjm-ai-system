@@ -1574,7 +1574,7 @@ async function loadTransplantMaps() {
     const tp = {};
     (res.data || []).forEach(l => {
       if (l.transaction_type === 'Transplanted') {
-        const pk = _tpKey(l.plot_name), d = _cullLogDate(l);
+        const pk = _tpKey(l.plot_name), d = window.MJMCullIncentive ? MJMCullIncentive.logDate(l) : '';
         if (pk && d) (tp[pk] || (tp[pk] = { plot: String(l.plot_name).trim(), dates: [] })).dates.push(d);
       }
       const m = String(l.remark || '').match(/MapUrl:(\S+)/i);
@@ -1982,97 +1982,46 @@ function renderTransplantByPlot(secFilter) {
 
 /* ════════════ CULLING INCENTIVE ════════════
    A plot that went from Saringan Anak Bibit to the end of Transplanting in
-   15 days or fewer earns an incentive, and the office set who gets it:
+   15 days or fewer earns an incentive: RM 20 a plot to Rousell Wayne and to
+   Florence, whatever the nursery, and RM 50 a plot to that nursery's own
+   Field Conductor. The rule — which plots, how they are timed, who earns —
+   is shared/shared_cull_incentive.js, and this file does not keep a copy.
 
-     - Rousell Wayne and Florence, RM 20 for EVERY such plot, whichever
-       nursery it is in;
-     - each nursery's Field Conductor, RM 50 for every such plot in THEIR
-       OWN nursery — Lalu Aenal for BNN, Akbar for UNN 1, Azhar for UNN 2.
+   THE PLOTS ARE GONE THROUGH ON WORK MAINTENANCE, AND ONLY PAID HERE. The
+   office moved it: *"把culling incentive全部搬到这里 under worker activity
+   ... payroll那边要link这里 然后在payroll才会有钱"*. So Worker Activity →
+   Culling Incentive shows the plot, the days, the dates and who earns it,
+   carries Add / Remove by hand, and carries the CHECK — and this sheet pays
+   the Checked plots and nothing else, at the dates and days they were
+   checked at.
 
-   PER PLOT: three qualifying plots in BNN is RM 60 each to Rousell and
-   Florence and RM 150 to Lalu Aenal.
-
-   Which plots are asked about is the LEDGER's answer: every plot with a
-   `Transplanted` row dated in the month, the date read the way the
-   Transplanting Report reads it. How long the plot took is PALMS's answer,
-   and it is the Motion Study's own measure — the plot's cycle, from the
-   first day of Saringan to the last day Transplanting was closed
-   (MJMPalms.cyclesOf, diffDays, <= TARGET_DAYS). Two pages timing the same
-   run two ways is how a plot is fast on one and slow on the other.
-
-   THE LATEST RUN. A plot goes round many times, and the run that counts is
-   the newest one whose Saringan had started by the end of the month — so a
-   month already paid does not change its answer when the plot starts its
-   next intake. A split plot ("B2#A", "B2#B") is timed as one plot: its
-   areas' latest runs, from the earliest Saringan to the last Transplanting.
-
-   A plot PALMS has no complete run for is SHOWN and not paid, saying which
-   it is — no record at all, or Transplanting still open. A plot silently
-   missing from an incentive list is the one nobody asks about.
+   A plot that qualifies and has not been Checked is NAMED under the table,
+   with the way to Worker Activity. Capacity held back is never silently
+   missing — a claim short of a plot reads exactly like a quiet month — and
+   the transplanting sheet above says the same of its own unchecked rows.
 
    The people are matched to the worker register by name — every word of
    the name here has to be in exactly one register name. A name that finds
    nobody, or two people, is said under the table and is on no claim. */
-const CULL_INCENTIVE = {
-  everyPlot: [
-    { name: 'Rousell Wayne', rm: 20 },
-    { name: 'Florence',      rm: 20 }
-  ],
-  ownNursery: [
-    { name: 'Lalu Aenal', nursery: 'BNN',  rm: 50 },
-    { name: 'Akbar',      nursery: 'UNN1', rm: 50 },
-    { name: 'Azhar',      nursery: 'UNN2', rm: 50 }
-  ]
-};
-const CULL_TARGET_DAYS = (window.MJMPalms && MJMPalms.TARGET_DAYS) || 15;
+const CULL_INCENTIVE = window.MJMCullIncentive ? MJMCullIncentive.RULE : { everyPlot: [], ownNursery: [] };
+const CULL_TARGET_DAYS = window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15;
+const CULL_PAGE = '../nursery_ops/nursery_ops_maintenance.html?view=cull_incentive';
 
 let cullTransplanted = {};    // plotKey → { plot, dates[] }, every month, from loadTransplantMaps
 let cullLedgerRead = false;
 let cullPalmsLogs = null;     // MJMPalms logs by unit; null = could not be read
+let cullOverrides = [];       // this month's by-hand records (written on Work Maintenance)
+let cullChecks = [];          // this month's Checks (written on Work Maintenance)
+let cullChecksReady = true;   // false = the Checked table is not there yet
 
-/* BY HAND. The office can add a plot the rule does not see (PALMS never
-   keyed, or a plot it cannot time) and take one out that it should not pay.
-   ONE record per plot per month in mjmnpayroll_cull_incentive_overrides:
-   `add` counts the plot whatever PALMS says, `remove` leaves it out.
-
-   Taking a PALMS plot out WRITES a record rather than deleting anything —
-   the ledger and PALMS are not this page's to change, and a plot that left
-   the incentive with nothing saying who took it out is a payment nobody
-   can account for later. Deleting the by-hand record puts the plot back to
-   what PALMS says, which is the whole of what Delete and Restore do. */
-let cullOverrides = [];       // this month's by-hand records
-let cullOverridesReady = true; // false = the table is not there yet
-
-async function loadCullOverrides() {
-  const res = await _supabase.from('mjmnpayroll_cull_incentive_overrides')
-    .select('id, month, plot, action, section, saringan_date, transplant_date, remark, created_by, created_at')
-    .eq('month', monthValue())
-    .then(r => r, e => ({ error: e }));
-  if (res && res.error) {
-    console.warn('[payroll] culling incentive overrides not read:', res.error.message || res.error);
-    cullOverridesReady = false;
-    cullOverrides = [];
-    return;
-  }
-  cullOverridesReady = true;
-  cullOverrides = (res && res.data) || [];
-}
-
-/* WHEN a ledger row happened. SHARED RULE — _logDate() in
-   operation/operation_reports.html and logDate() in the FC Portal
-   transplantData.js. Change one, change the others. */
-function _cullLogDate(l) {
-  if (l && l.transaction_date) return String(l.transaction_date).slice(0, 10);
-  const m = l && l.remark ? String(l.remark).match(/(?:Cull)?Date:\s*(\d{4}-\d{2}-\d{2})/i) : null;
-  if (m) return m[1];
-  return l && l.created_at ? String(l.created_at).slice(0, 10) : '';
-}
-
-/* A -R (replant) plot. PALMS's own rule; the fallback is the same test, for
-   a page whose copy of shared_palms.js predates it. */
-function _cullIsReplant(plot) {
-  if (window.MJMPalms && MJMPalms.isReplantPlot) return MJMPalms.isReplantPlot(plot);
-  return /-R\d*$/i.test(String(plot == null ? '' : plot).split('#')[0].trim());
+async function loadCullChecks() {
+  if (!window.MJMCullIncentive) { cullChecksReady = false; return; }
+  const [ov, ck] = await Promise.all([MJMCullIncentive.loadOverrides(_supabase, monthValue()),
+                                      MJMCullIncentive.loadChecks(_supabase, monthValue())]);
+  cullOverrides = ov.rows;
+  cullChecks = ck.rows;
+  cullChecksReady = ck.ready;
+  if (!ck.ready) console.warn('[payroll] culling incentive checks not read:', ck.error && (ck.error.message || ck.error));
 }
 
 async function loadCullPalms() {
@@ -2086,84 +2035,19 @@ async function loadCullPalms() {
   }
 }
 
-/* A stage number, by NAME. The office keeps the stage list and a stage's
-   number is its place in it, so 9 is where Transplanting is today and not a
-   promise. Falls back to the built-in number when the name is not there. */
-function _cullActN(word, fallback) {
-  for (let n = 1; n <= 40; n++) {
-    const a = MJMPalms.actByN(n);
-    if (a && _tpKey(a.name).indexOf(word) !== -1) return n;
-  }
-  return fallback;
+/* Every plot of the month, as Work Maintenance sees it, in the nursery picked. */
+function _cullAll(secFilter) {
+  if (!window.MJMCullIncentive) return [];
+  return MJMCullIncentive.plots({ transplanted: cullTransplanted, palms: cullPalmsLogs,
+      overrides: cullOverrides, checks: cullChecks, ym: monthValue() })
+    .filter(r => !secFilter || inSection(secFilter, r.section));
 }
 
-/* The latest Saringan → Transplanting run of one plot, as at the month. */
-function cullRunOf(plot, monthEnd) {
-  if (!cullPalmsLogs) return { state: 'unread' };
-  const want = _tpKey(plot);
-  const keys = Object.keys(cullPalmsLogs).filter(k => _tpKey(MJMPalms.plotOf(k)) === want);
-  /* The start is PALMS's own first stage (Saringan Anak Bibit), because that
-     is the stage a cycle opens on — timing from any other would ask
-     cyclesOf for a start its cycles do not begin with. */
-  const lo = MJMPalms.FIRST_ACT || 1, hi = _cullActN('TRANSPLANT', 9);
-  const runs = [];
-  keys.forEach(k => {
-    let latest = null;
-    MJMPalms.cyclesOf(cullPalmsLogs[k]).forEach(cy => {
-      const starts = cy.entries.filter(e => e.actN === lo).map(e => e.start).sort();
-      if (!starts.length || starts[0] > monthEnd) return;
-      const ends = cy.entries.filter(e => e.actN === hi && e.end).map(e => e.end).sort();
-      const run = { start: starts[0], end: ends.length ? ends[ends.length - 1] : null };
-      if (!latest || run.start > latest.start) latest = run;
-    });
-    if (latest) runs.push(latest);
-  });
-  if (!runs.length) return { state: 'none' };
-  const start = runs.map(r => r.start).sort()[0];
-  if (runs.some(r => !r.end)) return { state: 'open', start };
-  const end = runs.map(r => r.end).sort().pop();
-  const days = MJMPalms.diffDays(start, end);
-  return { state: days <= CULL_TARGET_DAYS ? 'ok' : 'slow', start, end, days };
-}
+/* What is PAID: counted and Checked. Everything below reads this. */
+function cullIncentivePlots(secFilter) { return _cullAll(secFilter).filter(r => r.paid); }
 
-/* Every plot transplanted in the month, in the nursery picked, timed. */
-function cullIncentivePlots(secFilter) {
-  const ym = monthValue(), monthEnd = ym + '-31';
-  const rows = Object.values(cullTransplanted)
-    .map(p => ({ plot: p.plot, dates: [...new Set(p.dates.filter(d => d.slice(0, 7) === ym))].sort(),
-                 section: _tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(p.plot) : '') }))
-    /* No -R plot. A replant plot has no Saringan-to-Transplanting run of its
-       own to time, and the office said so of this incentive in as many words:
-       "culling incentive也不会有r plot". The rule is PALMS's own,
-       MJMPalms.isReplantPlot, so the incentive and the PALMS pages cannot
-       disagree about which plots are -R. */
-    .filter(p => p.dates.length && !_cullIsReplant(p.plot))
-    .map(p => Object.assign(p, cullRunOf(p.plot, monthEnd)));
-
-  /* By hand, last, so it has the final word on its plot. A record for a plot
-     the ledger did not transplant this month becomes a row of its own. */
-  cullOverrides.filter(o => o.month === ym).forEach(o => {
-    const k = _tpKey(o.plot);
-    let r = rows.find(x => _tpKey(x.plot) === k);
-    if (_cullIsReplant(o.plot)) return;    // a -R plot is never on it, by hand or not
-    if (!r) {
-      if (o.action !== 'add') return;      // nothing to take out
-      const start = o.saringan_date || null, end = o.transplant_date || null;
-      r = { plot: String(o.plot).trim(), dates: end ? [end] : [], manual: true,
-            section: o.section || _tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(o.plot) : ''),
-            state: 'manual', start, end,
-            days: start && end && window.MJMPalms ? MJMPalms.diffDays(start, end) : null };
-      rows.push(r);
-    }
-    r.override = o;
-  });
-
-  return rows
-    .map(r => Object.assign(r, { counts: r.override ? r.override.action === 'add' : r.state === 'ok' }))
-    .filter(r => !secFilter || inSection(secFilter, r.section))
-    .sort((a, b) => String(a.plot).localeCompare(String(b.plot),
-                      undefined, { numeric: true, sensitivity: 'base' }));
-}
+/* What would be paid once somebody Checks it on Work Maintenance. */
+function cullIncentiveHeld(secFilter) { return _cullAll(secFilter).filter(r => r.counts && !r.check); }
 
 /* One configured name to one register row — or to nobody, and why. */
 function cullWorker(name) {
@@ -2176,10 +2060,10 @@ function cullWorker(name) {
   return { w: null, clash: hits.map(w => w.full_name) };
 }
 
-/* Who is paid what, off a list of timed plots. With a nursery picked, only
+/* Who is paid what, off a list of PAID plots. With a nursery picked, only
    that nursery's Field Conductor is on it — the other two have nothing here. */
 function cullIncentivePay(rows, secFilter) {
-  const ok = rows.filter(r => r.counts);
+  const ok = rows.filter(r => r.paid);
   const out = [];
   CULL_INCENTIVE.everyPlot.forEach(p => out.push({ ...p, rule: 'every', plots: ok }));
   CULL_INCENTIVE.ownNursery
@@ -2194,171 +2078,45 @@ function cullIncentivePay(rows, secFilter) {
   });
 }
 
-/* The Adjust Pay tick — the same one that lets somebody change what a worker
-   is paid on these sheets, because this changes exactly that. */
-function cullIncentiveMayEdit() { return mayAdjust('transpl'); }
-
-function _cullMayWrite() {
-  if (!cullIncentiveMayEdit()) {
-    alert('You do not have permission to change the culling incentive. Ask an admin for Adjust Pay on Transplanting in User Access.');
-    return false;
-  }
-  if (!cullOverridesReady) {
-    alert('Run shared/RUN_ME_cull_incentive_overrides.sql in Supabase first, then reload this page.');
-    return false;
-  }
-  return lockAllows('transpl');
-}
-
-let _cullMode = 'add';        // what the dialog will write: add | remove
-
-function openCullAdd(plot, mode) {
-  if (!_cullMayWrite()) return;
-  _cullMode = mode === 'remove' ? 'remove' : 'add';
-  $('ca-add-only').classList.toggle('hidden', _cullMode === 'remove');
-  const sec = $('transpl-section').value || '';
-  $('ca-plot').value = plot || '';
-  $('ca-plot').readOnly = !!plot;
-  $('ca-saringan').value = '';
-  $('ca-transplant').value = '';
-  $('ca-remark').value = '';
-  const ns = $('ca-nursery');
-  ns.innerHTML = CULL_INCENTIVE.ownNursery.map(p =>
-    `<option value="${esc(p.nursery)}">${esc(SECTION_NAME[p.nursery] || p.nursery)}</option>`).join('');
-  const guess = plot && window.MJMPalms ? _tpSection(MJMPalms.nurseryOfPlot(plot)) : '';
-  ns.value = guess || (CULL_INCENTIVE.ownNursery.some(p => p.nursery === sec) ? sec : CULL_INCENTIVE.ownNursery[0].nursery);
-  $('cull-add-title').textContent = _cullMode === 'remove'
-    ? `Take ${plot} out of the culling incentive`
-    : (plot ? `Count ${plot} for the incentive` : 'Add a plot to the culling incentive');
-  $('ca-what').textContent = _cullMode === 'remove'
-    ? `Nobody is paid for ${plot} in ${monthLabelFull(monthValue())}. PALMS and the ledger are not changed.`
-    : `Rousell Wayne and Florence are paid RM 20 for it, and the Field Conductor of its nursery RM 50, in ${monthLabelFull(monthValue())}.`;
-  $('ca-save').textContent = _cullMode === 'remove' ? 'Remove' : 'Save';
-  $('ca-save').classList.toggle('btn-danger', _cullMode === 'remove');
-  $('ca-save').classList.toggle('btn-primary', _cullMode !== 'remove');
-  $('cull-add-modal').classList.add('open');
-  setTimeout(() => (plot ? $('ca-remark') : $('ca-plot')).focus(), 50);
-}
-
-async function saveCullAdd() {
-  if (!_cullMayWrite()) return;
-  const plot = String($('ca-plot').value || '').trim().toUpperCase();
-  const remark = String($('ca-remark').value || '').trim();
-  if (!plot) { alert('Which plot?'); return; }
-  if (_cullIsReplant(plot)) { alert(plot + ' is a -R plot, and a -R plot is not on the culling incentive.'); return; }
-  if (!remark) { alert('Say why — a plot changed by hand is one somebody will ask about.'); return; }
-  const remove = _cullMode === 'remove';
-  const s1 = remove ? null : ($('ca-saringan').value || null);
-  const s2 = remove ? null : ($('ca-transplant').value || null);
-  if (s1 && s2 && s2 < s1) { alert('Transplanting cannot end before Saringan started.'); return; }
-  const btn = $('ca-save'); if (btn) btn.disabled = true;
-  try {
-    const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
-      month: monthValue(), plot, action: remove ? 'remove' : 'add',
-      section: remove ? (_tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(plot) : '') || null)
-                      : ($('ca-nursery').value || null),
-      saringan_date: s1, transplant_date: s2, remark, created_by: userEmail || null,
-      created_at: new Date().toISOString()
-    }, { onConflict: 'month,plot' });
-    if (error) { alert('Could not save: ' + error.message); return; }
-    closeModal('cull-add-modal');
-    await loadCullOverrides();
-    refreshPayrollTab();
-  } finally { if (btn) btn.disabled = false; }
-}
-
-/* Taking a plot out goes through the same dialog, never a prompt: a prompt
-   dismissed out of habit is a cancel that looks like a save. */
-function cullRemovePlot(plot) { openCullAdd(plot, 'remove'); }
-
-async function cullDeleteOverride(id) {
-  if (!_cullMayWrite()) return;
-  const o = cullOverrides.find(x => Number(x.id) === Number(id));
-  if (!o) return;
-  const back = cullTransplanted[_tpKey(o.plot)] ? `${o.plot} goes back to what PALMS says.` : `${o.plot} comes off the incentive.`;
-  if (!confirm(`Delete the by-hand record for ${o.plot}?\n\n${back}`)) return;
-  const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').delete().eq('id', id);
-  if (error) { alert('Could not delete: ' + error.message); return; }
-  await loadCullOverrides();
-  refreshPayrollTab();
-}
-
 function renderCullIncentive(secFilter) {
   const table = $('cull-inc-plots'), payT = $('cull-inc-pay');
   if (!table || !payT) return;
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const monthTxt = monthLabelFull(monthValue());
   const head = $('cull-inc-head');
-  if (head) head.textContent = `Culling Incentive — Saringan to Transplanting within ${CULL_TARGET_DAYS} days — `
+  if (head) head.textContent = `Culling Incentive — Checked plots — `
     + `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthTxt}`;
   const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
 
   const rows = cullIncentivePlots(secFilter);
-  /* May this login change it. Asked again at the write, because a button
-     drawn before somebody's access changed is still sitting on the screen. */
-  const canEdit = cullIncentiveMayEdit();
-  const addBtn = $('cull-inc-add');
-  if (addBtn) addBtn.classList.toggle('hidden', !canEdit);
-
-  const result = r => {
-    if (r.override && r.override.action === 'remove')
-      return `<span style="color:var(--text-faint);font-weight:700;text-decoration:line-through;">Not paid</span>`;
-    if (r.override && r.override.action === 'add')
-      return `<span style="color:#15803d;font-weight:800;">&#10003; Counted</span>`;
-    if (r.state === 'ok')   return `<span style="color:#15803d;font-weight:800;">&#10003; Qualifies</span>`;
-    if (r.state === 'slow') return `<span style="color:#c0392b;font-weight:700;">Over ${CULL_TARGET_DAYS} days</span>`;
-    if (r.state === 'open') return `<span style="color:#b45309;font-weight:700;">Transplanting not closed in PALMS</span>`;
-    if (r.state === 'unread') return `<span style="color:var(--text-faint);">PALMS not read</span>`;
-    return `<span style="color:#b45309;font-weight:700;">No Saringan in PALMS</span>`;
-  };
-  /* Who did it and why, on the row it changed — a figure moved by hand has
-     to say so where the figure is. */
-  const byHand = r => {
-    const o = r.override;
-    if (!o) return '<span style="color:var(--text-faint);">—</span>';
-    const what = o.action === 'add' ? (r.manual ? 'Added by hand' : 'Counted by hand') : 'Taken out by hand';
-    const who = [whoName(o.created_by), o.created_at ? fmtStamp(o.created_at) : ''].filter(Boolean).join(' · ');
-    return `<div style="font-weight:700;color:${o.action === 'add' ? '#15803d' : '#b45309'};">${what}</div>`
-      + (o.remark ? `<div style="font-size:12px;">${esc(o.remark)}</div>` : '')
-      + (who ? `<div style="font-size:11px;color:var(--text-faint);">${esc(who)}</div>` : '');
-  };
-  const action = r => {
-    if (!canEdit) return '';
-    if (r.override) {
-      const label = r.manual ? 'Delete' : (r.override.action === 'remove' ? 'Put back' : 'Undo');
-      return `<button class="btn btn-sm${r.manual ? ' btn-danger' : ''}" onclick="cullDeleteOverride(${Number(r.override.id)})">${label}</button>`;
-    }
-    if (r.counts) return `<button class="btn btn-sm btn-danger" onclick="cullRemovePlot('${esc(r.plot).replace(/'/g, '&#39;')}')">Remove</button>`;
-    return `<button class="btn btn-sm" onclick="openCullAdd('${esc(r.plot).replace(/'/g, '&#39;')}')">Count it</button>`;
-  };
   table.innerHTML = rows.length ? `
     <thead><tr>
-      <th style="width:44px;">No.</th><th class="l">Plot</th><th>Transplanted (ledger)</th>
+      <th style="width:44px;">No.</th><th class="l">Plot</th><th>Nursery</th>
       <th>Saringan started</th><th>Transplanting ended</th><th style="width:70px;">Days</th>
-      <th>Result</th><th class="l">By hand</th>${canEdit ? '<th style="width:96px;"></th>' : ''}
+      <th class="l">Checked</th>
     </tr></thead>
     <tbody>${rows.map((r, i) => `
-      <tr${r.override && r.override.action === 'remove' ? ' style="opacity:.6;"' : ''}>
+      <tr>
         <td style="color:var(--text-faint);">${i + 1}</td>
-        <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
-        <td>${r.manual ? '<span style="color:var(--text-faint);">not in ledger</span>' : r.dates.map(pd).join(', ')}</td>
+        <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}${
+          r.override ? `<div style="font-size:11px;color:#15803d;font-weight:700;">${r.manual ? 'Added' : 'Counted'} by hand${
+            r.override.remark ? ': ' + esc(r.override.remark) : ''}</div>` : ''}</td>
+        <td>${esc(r.section || '—')}</td>
         <td>${pd(r.start)}</td>
         <td>${pd(r.end)}</td>
         <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
-        <td>${result(r)}</td>
-        <td class="l">${byHand(r)}</td>
-        ${canEdit ? `<td>${action(r)}</td>` : ''}
+        <td class="l" style="font-size:12px;">${esc([whoName(r.check.checked_by), fmtStamp(r.check.checked_at)].filter(Boolean).join(' · '))}</td>
       </tr>`).join('')}</tbody>`
-    : `<tbody><tr><td class="empty">Nothing transplanted in ${
-        esc(secFilter ? secName(secFilter) : 'any nursery')} for ${esc(monthTxt)}, so no plot to time.${
-        canEdit ? ' Use + Add plot to count one by hand.' : ''}</td></tr></tbody>`;
+    : `<tbody><tr><td class="empty">No plot in ${esc(secFilter ? secName(secFilter) : 'any nursery')} has been Checked for ${
+        esc(monthTxt)} yet, so nobody is paid this incentive. Plots are gone through on
+        <a href="${CULL_PAGE}">Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.</td></tr></tbody>`;
 
   const pay = cullIncentivePay(rows, secFilter);
   const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
   payT.innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th class="l">Person</th><th>Rule</th>
-      <th class="l">Plots that qualify</th><th style="width:130px;">Incentive (RM)</th>
+      <th class="l">Checked plots</th><th style="width:130px;">Incentive (RM)</th>
     </tr></thead>
     <tbody>${pay.map((p, i) => `
       <tr>
@@ -2373,15 +2131,14 @@ function renderCullIncentive(secFilter) {
     <tfoot><tr><td class="l" colspan="4">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`;
 
   const notes = [];
-  if (cullPalmsLogs === null) {
-    notes.push('PALMS could not be read, so no plot can be timed and nobody is paid this incentive. Reload the page; if it stays, tell the office.');
-  } else if (rows.length && !Object.keys(cullPalmsLogs).length) {
-    notes.push('PALMS answered with no plot log at all. This login is probably not allowed to read it — '
-             + 'run shared/RUN_ME_payroll_reads_palms.sql once, then reload.');
-  }
-  if (!cullOverridesReady) notes.push('Adding or removing a plot by hand needs shared/RUN_ME_cull_incentive_overrides.sql run once. '
-             + 'Until then the incentive is exactly what PALMS says.');
-  if (!cullLedgerRead) notes.push('The transplanting ledger could not be read, so this month has no plots to time.');
+  if (!window.MJMCullIncentive) notes.push('The culling incentive rule did not load. Reload the page.');
+  if (!cullChecksReady) notes.push('The Checked table is not on this database yet, so nothing is paid. '
+             + 'Run shared/RUN_ME_cull_incentive_checked.sql once in Supabase.');
+  const held = cullIncentiveHeld(secFilter);
+  if (held.length) notes.push(`${held.map(r => esc(r.plot)).join(', ')} ${held.length === 1 ? 'qualifies' : 'qualify'} and `
+             + `${held.length === 1 ? 'has' : 'have'} not been Checked yet, so ${held.length === 1 ? 'it is' : 'they are'} not paid. `
+             + `<a href="${CULL_PAGE}">Check on Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.`);
+  else if (cullPalmsLogs === null && !rows.length) notes.push('PALMS could not be read, so this sheet cannot say whether any plot is waiting to be Checked.');
   pay.filter(p => !p.known).forEach(p => notes.push(p.clash.length
     ? `${esc(p.name)} matches more than one worker on the register (${p.clash.map(esc).join(', ')}), so ${money(p.amount)} is NOT on the salary claim.`
     : `${esc(p.name)} is not on the worker register, so ${money(p.amount)} is NOT on the salary claim. Add them in Worker System.`));
@@ -4774,21 +4531,19 @@ function drawCullIncentive(doc, y, rows, pay, secTxt, monthTxt) {
     return X;
   };
 
-  const result = r => r.override ? (r.override.action === 'add'
-      ? 'COUNTED BY HAND: ' + (r.override.remark || '') : 'TAKEN OUT BY HAND: ' + (r.override.remark || ''))
-    : r.state === 'ok' ? 'QUALIFIES'
-    : r.state === 'slow' ? `Over ${CULL_TARGET_DAYS} days`
-    : r.state === 'open' ? 'Transplanting not closed in PALMS'
-    : r.state === 'unread' ? 'PALMS not read' : 'No Saringan in PALMS';
+  /* The CHECKED plots only — cullIncentivePlots hands nothing else over. */
+  const checked = r => 'CHECKED ' + [whoName(r.check && r.check.checked_by),
+    r.check && r.check.checked_at ? String(r.check.checked_at).slice(0, 10) : ''].filter(Boolean).join(' ')
+    + (r.override ? ' (BY HAND)' : '');
   table(`CULLING INCENTIVE — SARINGAN TO TRANSPLANTING WITHIN ${CULL_TARGET_DAYS} DAYS — ${secTxt} · ${monthTxt}`,
-    [14, 30, 52, 32, 32, 18, 69],
-    ['No.', 'Plot', 'Transplanted (ledger)', 'Saringan', 'Transplanting', 'Days', 'Result'],
-    rows.map((r, i) => [String(i + 1), r.plot, r.dates.map(pd).join(', '), pd(r.start), pd(r.end),
-                        r.days == null ? '-' : String(r.days), result(r)]));
+    [14, 30, 24, 32, 32, 18, 97],
+    ['No.', 'Plot', 'Nursery', 'Saringan', 'Transplanting', 'Days', 'Checked'],
+    rows.map((r, i) => [String(i + 1), r.plot, r.section || '-', pd(r.start), pd(r.end),
+                        r.days == null ? '-' : String(r.days), checked(r)]));
 
   const COL = [14, 60, 55, 78, 40];
   const X = table('CULLING INCENTIVE — WHO IT PAYS', COL,
-    ['No.', 'Person', 'Rule', 'Plots that qualify', 'Incentive (RM)'],
+    ['No.', 'Person', 'Rule', 'Checked plots', 'Incentive (RM)'],
     pay.map((p, i) => [String(i + 1), (p.known ? p.known.full_name : p.name + ' (NOT ON REGISTER)'),
       p.rule === 'every' ? `Every nursery, ${money(p.rm)} / plot` : `${p.nursery} only, ${money(p.rm)} / plot`,
       p.plots.length ? p.plots.map(r => r.plot).join(', ') : 'none', money(p.amount)]));
@@ -5015,7 +4770,7 @@ function maintFieldCredits(nursery, monthLbl, wk) {
 /* ════════════ BOOT ════════════ */
 $('global-month').addEventListener('change', async () => {
   try { localStorage.setItem('npayroll_month', monthValue()); } catch (_) {}
-  await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj(), loadCullOverrides()]);
+  await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj(), loadCullChecks()]);
   refreshPayrollTab();
   if ($('tab-locks')) { try { renderLockCalendar(); } catch (_) {} }
 });
@@ -5060,7 +4815,7 @@ $('global-month').addEventListener('change', async () => {
     await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
                        loadTransplantField(), loadEarnAdj(), loadTransplantMaps(),
-                       loadCullPalms(), loadCullOverrides()]);
+                       loadCullPalms(), loadCullChecks()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and

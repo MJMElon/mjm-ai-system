@@ -118,6 +118,9 @@
             <button type="button" class="pn-subtab" id="pn-subtab-transplanting" onclick="switchPayrollView('transplanting')">
               <span data-i18n="tab.transplanting">Transplanting</span>
             </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-cull_incentive" onclick="switchPayrollView('cull_incentive')">
+              <span data-i18n="tab.cullIncentive">Culling Incentive</span>
+            </button>
           </div>
           <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)">
             <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -459,6 +462,7 @@
       <div class="card"><div class="tbl-wrap"><table class="sched-table" id="payroll-table"></table></div></div>
       <div id="payroll-offreg" style="display:none;font-size:11.5px;font-weight:700;color:#92400e;background:var(--gold-bg);border:1.5px solid var(--gold-border);border-radius:var(--r-sm);padding:9px 12px;margin-top:8px;"></div>
       <div id="payroll-hint" style="font-size:11px;color:var(--text-faint);margin-top:8px;"></div>
+      <div id="payroll-extra"></div>
     </div>
 
     <!-- SETTING —————————————————————————————————————————————
@@ -844,7 +848,11 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=142"></script>
+<!-- PALMS, and the culling incentive rule both this page and the payroll
+     read. See shared_cull_incentive.js. -->
+<script src="../shared/shared_palms.js?v=3"></script>
+<script src="../shared/shared_cull_incentive.js?v=1"></script>
+<script src="plot_maintenance_script.js?v=143"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
