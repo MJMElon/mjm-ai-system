@@ -84,7 +84,12 @@ arr AS (
          sum(abs(COALESCE(l.quantity_change, 0)))                      AS qty_any,
          max(CASE WHEN l.transaction_type = 'Transplanted'
                   THEN COALESCE(l.transaction_date, l.created_at::date) END) AS last_plain,
-         max(COALESCE(l.transaction_date, l.created_at::date))               AS last_any
+         max(COALESCE(l.transaction_date, l.created_at::date))               AS last_any,
+         COALESCE(string_agg(DISTINCT btrim(l.batch_name), ', '
+                    ORDER BY btrim(l.batch_name))
+                  FILTER (WHERE l.transaction_type = 'Transplanted'
+                            AND COALESCE(btrim(l.batch_name), '') <> ''),
+                  '(no batch)')                                          AS batches_plain
     FROM shared_inventory_logs l, q
    WHERE l.transaction_type IN ('Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone')
      AND COALESCE(l.transaction_date, l.created_at::date) >= q.floor_day
@@ -127,6 +132,51 @@ SELECT * FROM (
     FROM arr a
     LEFT JOIN plots p  ON p.pk  = a.pk
     LEFT JOIN rec   rc ON rc.pk = a.pk
+
+  UNION ALL
+
+  -- 1b. THE TWO SIDES, BATCH BY BATCH AND QUANTITY BY QUANTITY.
+  --     The office settled what the board SHOULD do -- new seedlings into
+  --     a plot are a new filling, a new lining, a new planting and a new
+  --     spray, so the plot is owed its four jobs again -- and ruled out
+  --     doing it by DATE, because the filling and the lining are
+  --     sometimes done before the seedlings arrive and sometimes after,
+  --     so a record older than an arrival proves nothing.
+  --
+  --     That leaves two things a record can be matched to a delivery by,
+  --     and this says which of them the real records actually carry:
+  --     the BATCH written on the record, and the QUANTITY it was recorded
+  --     for. One row per plot per job, so a blank on either side is
+  --     visible rather than averaged away.
+  SELECT 1,
+         'job',
+         COALESCE(p.nursery, '(not in Seedling Stock)') || ' / ' || a.plot
+           || ' - ' || j.k,
+         'ledger: ' || a.batches_plain || ' / ' || a.qty_plain::text,
+         'record: ' || COALESCE(d.batch_name, '(no batch on the record)')
+           || ' / ' || COALESCE(d.source_qty::text, '(no qty)')
+           || COALESCE(' / ' || d.work_date::text, ''),
+         CASE
+           WHEN d.work_date IS NULL      THEN 'never recorded'
+           WHEN COALESCE(btrim(d.batch_name), '') = ''
+             THEN 'RECORDED WITH NO BATCH -- it cannot be tied to a delivery by batch'
+           WHEN d.batch_name = a.batches_plain
+             THEN 'batch matches the ledger exactly'
+           ELSE 'batch differs from the ledger list -- a later delivery is not on this record'
+         END
+    FROM arr a
+    CROSS JOIN jobs j
+    LEFT JOIN plots p ON p.pk = a.pk
+    LEFT JOIN LATERAL (
+      SELECT r.batch_name, r.source_qty, r.work_date
+        FROM nops_transplant_field_records r, q
+       WHERE upper(replace(replace(replace(btrim(COALESCE(r.plot_name, '')), ' ', ''), '-', ''), '_', '')) = a.pk
+         AND r.work_type = j.k
+         AND r.work_date >= q.floor_day
+       ORDER BY r.work_date DESC
+       LIMIT 1
+    ) d ON true
+   WHERE a.qty_plain > 0
 
   UNION ALL
 
