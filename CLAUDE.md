@@ -4744,7 +4744,11 @@ B4-R2 both go; a split area is judged by its plot.
   office said it straight away: *"不要乱改 只有关系到palms而已的不用显示"*.
   The log stays whole; the Plot Status Map and the Motion Study each read it
   through `MJMPalms.withoutReplant(...)`, and the test asserts Life of Plot
-  and the payroll do NOT.
+  does NOT.
+- **The culling incentive leaves them out as well** — *"culling incentive也
+  不会有r plot"* — by asking `MJMPalms.isReplantPlot` on the ledger's plots
+  and refusing one added by hand. It still reads the WHOLE log, because what
+  it leaves out is a plot to pay, and that is decided where the plots are.
 - **The board's map is OPT-IN** (`skipReplant` on `MJMPlotMap.load`), because
   Life of Plot shares that map and a -R plot is real ground with maintenance
   on it there.
