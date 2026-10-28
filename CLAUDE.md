@@ -1971,6 +1971,16 @@ changes and no history is silently re-read. Repointing can itself collide
 with a Membersih already open on that plot, so the duplicate sweep runs
 after it, in the same block.
 
+**And it found nothing, because Up-keep had already been taken off the list
+BY HAND.** The board then drew those entries as **"Stage 12"** — a stage is
+shown by its number only when the list has no stage of that number — and
+phones still on the old list went on keying 12 into October. The office ran
+`shared/CHECK_palms_stage_with_no_name.sql`, which prints the list and every
+number a plot log uses that the list has not got: **11 entries on 7 plots**.
+`shared/RUN_ME_stage_12_is_membersih.sql` moves them by NUMBER, and only while
+no stage has the number 12. **Delete a stage from the list only after its
+entries have been moved**, or they are left on a number nothing answers to.
+
 `tests/one_stage_logged_twice_is_not_two.cjs` drives the shipped
 `shared_palms.js` and holds both pages to it — 26 of its checks fail on the
 previous code.
