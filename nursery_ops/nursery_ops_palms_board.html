@@ -15,8 +15,8 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js"></script>
-<script src="../shared/shared_plot_map.js"></script>
+<script src="../shared/shared_palms.js?v=2"></script>
+<script src="../shared/shared_plot_map.js?v=2"></script>
 <script src="../shared/shared_plot_draw.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -692,7 +692,7 @@ async function loadHidden() {
       .select('plot_name, nursery_name, is_active').eq('is_active', false).order('plot_name');
     // No column means nothing can be hidden yet, which is not an error.
     if (res.error) { if (!/is_active/i.test(res.error.message || '')) throw res.error; return; }
-    HIDDEN = res.data || [];
+    HIDDEN = (res.data || []).filter((p) => !MJMPalms.isReplantPlot(p.plot_name));
   } catch (e) {
     console.warn('[palms] hidden plots not read:', (e && e.message) || e);
   }
@@ -1097,7 +1097,8 @@ function render() {
       onNurseryChange: renderTable,
       onPlotClick: openPlot,
     });
-    MAP_SCOPE = allowed ? { nurseries: visible } : {};
+    // No -R plots on PALMS — see isReplantPlot in shared_palms.js.
+    MAP_SCOPE = allowed ? { nurseries: visible, skipReplant: true } : { skipReplant: true };
     await MAP.load(_supabase, MAP_SCOPE);
     await loadAreas();
     await loadHidden();

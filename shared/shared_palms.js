@@ -155,6 +155,18 @@
   const keyLabel = (k) => (String(k).indexOf('#') !== -1 ? String(k).replace('#', ' · ') : String(k));
   const plotOf = (k) => String(k).split('#')[0];
 
+  /* A -R plot is a REPLANT plot — ground a 3rd-culling transfer moved
+     seedlings onto. PALMS has nothing to say about one: the office said it
+     in as many words, "plot-R 不需要出现在palms 完全不需要". So it is dropped
+     where the log is read, which keeps it off every PALMS screen at once
+     rather than off whichever ones somebody remembered.
+
+     SHARED RULE — isReplantPlot in the FC Portal,
+     src/modules/palms/cullingSource.js. Change one, change the other. A
+     trailing number is allowed for, so B4-R and B4-R2 both go. A split area
+     ("B4-R#A") is judged by its plot. */
+  const isReplantPlot = (p) => /-R\d*$/i.test(String(p == null ? '' : p).split('#')[0].trim());
+
   const NURSERY_PREFIX = { B: 'BNN', U: 'UNN1', N: 'UNN2' };
   const nurseryOfPlot = (p) => NURSERY_PREFIX[String(p).charAt(0).toUpperCase()] || null;
 
@@ -166,7 +178,7 @@
     const logs = {};
     (rows || []).forEach((r) => {
       const key = r.plot_name;
-      if (!key) return;
+      if (!key || isReplantPlot(key)) return;
       (logs[key] = logs[key] || []).push({
         uid: r.client_uid,
         no: r.seq_no == null ? 0 : r.seq_no,
@@ -663,6 +675,7 @@
     prettyD: prettyD,
     keyLabel: keyLabel,
     plotOf: plotOf,
+    isReplantPlot: isReplantPlot,
     nurseryOfPlot: nurseryOfPlot,
     loadLogs: loadLogs,
     loadStages: loadStages,
