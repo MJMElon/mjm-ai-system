@@ -635,9 +635,13 @@ function drawPvRound() {
        stage with only the end date in it, set flush right in the middle of a
        run of other words, so the one thing somebody opens a plot to find —
        when did each job start and finish — had to be worked out backwards
-       from a day count. In the order the work was done, stage 1 at the top,
-       because that is the order a round is read in. */
-    const rows = es.slice().reverse().map((e) => {
+       from a day count. NEWEST AT THE TOP — the office asked for it that
+       way, the latest work being what somebody opens a plot to see — and
+       numbered by POSITION, the oldest at the foot being 1. The stage's own
+       number is not shown: it is a code for the kind of job, the name
+       beside it already says which, and two numbers in one circle that mean
+       different things is a circle nobody can read. */
+    const rows = es.map((e, i) => {
       const act = MJMPalms.actByN(e.actN);
       const ideal = e.ideal == null ? (act && act.days) : e.ideal;
       let days, vs;
@@ -657,7 +661,7 @@ function drawPvRound() {
           : 'on time';
       }
       return '<tr class="' + (e.end ? '' : 'now') + '">' +
-        '<td><span class="pv-step-n">' + e.actN + '</span></td>' +
+        '<td><span class="pv-step-n">' + (es.length - i) + '</span></td>' +
         '<td class="pv-st-name">' + esc(act ? act.name : 'Stage ' + e.actN) +
           (e.by ? '<div class="pv-st-by">' + esc(e.by) + '</div>' : '') + '</td>' +
         '<td>' + MJMPalms.prettyD(e.start) + '</td>' +
