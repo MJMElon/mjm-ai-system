@@ -196,7 +196,8 @@ async function boot(browser, db, where) {
   await page.waitForFunction(() => typeof window.renderCullIncentive === 'function', { timeout: 20000 });
   await page.click('[data-sub="transpl"]');
   await page.waitForFunction(() => {
-    const t = document.getElementById('cull-inc-pay');
+    /* ONE table now — `cull-inc-pay` was the second card and is gone. */
+    const t = document.getElementById('cull-inc-plots');
     return t && (t.textContent || '').trim().length > 0;
   }, { timeout: 15000 });
   return { page, errs };
@@ -427,15 +428,49 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [['Rousell Wayne', 40], ['Florence Anak Jugah', 40], ['Lalu Aenal Mashuri', 50],
      ['Akbar Cahaya', 0], ['Muhamad Azhar', 50]]);
   const screen = await page.evaluate(() => {
+    const el = document.getElementById('cull-inc-plots');
     const t = (id) => (document.getElementById(id).textContent || '').replace(/\s+/g, ' ').trim();
-    return { plots: t('cull-inc-plots'), pay: t('cull-inc-pay'),
+    return { plots: t('cull-inc-plots'),
+             /* ONE table now, so the second id must be GONE — a card left
+                on the page that the renderer no longer writes is an empty
+                box under a sheet about money. */
+             second: !!document.getElementById('cull-inc-pay'),
+             cols: [...el.querySelectorAll('thead th')].map(h => h.textContent.trim()),
+             spans: [...el.querySelectorAll('tbody td[rowspan]')]
+               .map(td => [td.textContent.trim().split('\n')[0], Number(td.getAttribute('rowspan'))]),
+             bodyRows: el.querySelectorAll('tbody tr').length,
              note: document.getElementById('cull-inc-note').innerHTML,
              link: (document.getElementById('cull-inc-link') || {}).getAttribute ? document.getElementById('cull-inc-link').getAttribute('href') : null,
              add: !!document.getElementById('cull-inc-add'), modal: !!document.getElementById('cull-add-modal') };
   });
-  check('the screen lists the checked plots with who checked them',
-    [/B1.*Elon Ting/.test(screen.plots), /B3|B7/.test(screen.plots)], [true, false]);
-  check('the screen total is the BNN incentive, RM 90.00', /TOTAL INCENTIVE.*90\.00/.test(screen.pay), true);
+  /* ONE TABLE, SIX COLUMNS, THE PLOT MERGED — *"这里合起来 不需要分两个
+     plot, started date, ended date, days, person, RM"*. */
+  check('one table, and the second one is gone', screen.second, false);
+  check('the six columns the office asked for, in their order', screen.cols,
+    ['Plot', 'Saringan started', 'Transplanting ended', 'Days', 'Person', 'Incentive (RM)']);
+  /* BNN has one Checked plot paying three people, so the plot and its two
+     days and its duration are four cells spanning three rows each — asked
+     of the rowspan, because a list of words cannot tell a merged cell from
+     the plot written out three times. */
+  check('the plot and its dates are ONE cell each, three rows tall',
+    [screen.spans.length, screen.spans.every(([, n]) => n === 3), screen.bodyRows],
+    [4, true, 3]);
+  check('the plot, its run and the three people are on the one table',
+    [/B1/.test(screen.plots), /13/.test(screen.plots), /Rousell Wayne/.test(screen.plots),
+     /Lalu Aenal/.test(screen.plots), /B3|B7/.test(screen.plots)],
+    [true, true, true, true, false]);
+  /* The RM on a line is what that plot paid that person, so the column adds
+     up to the total — 20 + 20 + 50. */
+  check('the money is per plot per person, and the total is under it',
+    [(screen.plots.match(/RM 20\.00/g) || []).length, /RM 50\.00/.test(screen.plots),
+     /TOTAL INCENTIVE.*90\.00/.test(screen.plots)],
+    [2, true, true]);
+  /* Rule, Checked plots, Checked and Nursery came off. The checker is on
+     Worker Activity, one button away at the top of this section. */
+  check('and nothing the office struck off is still on it',
+    [/Every nursery/.test(screen.plots), /Checked plots/.test(screen.plots),
+     /Elon Ting/.test(screen.plots), /Nursery/.test(screen.cols.join(' '))],
+    [false, false, false, false]);
   check('the plots waiting to be checked are named, with the way there',
     [/B3 qualifies and has not been Checked yet/.test(screen.note),
      /nursery_ops_maintenance\.html\?view=cull_incentive/.test(screen.note)], [true, true]);

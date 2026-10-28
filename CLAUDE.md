@@ -4983,6 +4983,37 @@ What the rule asks, and must keep asking:
   and page. **Counted by WHERE they are, not by how many calls there
   were**: `pdfCell` draws a fill and then a border, so a striped block
   records the same cell twice and a plain count reads two plots.
+- **AND THE SCREEN IS ONE TABLE TOO, the same six columns.** It was two
+  stacked cards — the plots with their dates, then who they paid — and the
+  office read them and asked for the same merge: *"这里合起来 不需要分两个
+  plot, started date, ended date, days, person, RM"*. On the screen the
+  plot's four facts (its two days and its duration) ride in the merged
+  `rowspan` cell with it, which is what the second table could never show
+  beside a name. `cull-inc-pay` is GONE from the markup, not left empty.
+
+  Four columns came off, and each went somewhere rather than being lost:
+
+  - **Rule** (*"Every nursery · RM 20.00 / plot"*) — the figure on the
+    line IS that rate, one plot at a time, so it was the same answer in
+    words.
+  - **Checked plots** — that is the merged Plot cell now.
+  - **Checked** (who agreed it, when) — the claim form had already settled
+    this one: it is how the office DECIDED, and Worker Activity → Culling
+    Incentive carries it, one button away at the top of this section.
+  - **Nursery** — the heading names it whenever a nursery is picked, so a
+    column would be the same answer twice. It comes back as a muted line
+    under the plot for **All Sections** only, which is the one case the
+    heading cannot answer.
+
+  **A plot that paid NOBODY still keeps its row**, reading *"Nobody — on
+  no claim line"*. It is Checked and on no claim, which is exactly the
+  thing to see; dropping it would be the quiet month this file keeps
+  guarding against.
+
+  The screen half is asked of the **`rowspan`** for the same reason the
+  paper half is asked of the geometry: four cells of three, and three body
+  rows, is the only way to tell a merged cell from the plot written out
+  three times.
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 

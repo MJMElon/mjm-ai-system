@@ -2242,9 +2242,35 @@ function cullIncentivePay(rows, secFilter) {
   });
 }
 
+/* ONE TABLE, THE PLOT MERGED DOWN ITS OWN PEOPLE. It was two stacked cards —
+   the plots with their dates, and under it who they paid — and the office
+   read them and said *"这里合起来 不需要分两个 plot, started date, ended
+   date, days, person, RM"*.
+
+   They are the same six columns the claim form now carries, for the same
+   reason: the incentive is earned ONE PLOT AT A TIME, so the plot is the
+   row and the people are lines under it. On this screen the plot's four
+   facts — its two days, its duration — ride in the merged cell with it,
+   which is what the second table could never show beside a name.
+
+   What came OFF, and where it went rather than being lost:
+
+   - **Rule** (*"Every nursery · RM 20.00 / plot"*). The figure on the line
+     IS that rate, one plot at a time, so the column was the same answer
+     in words.
+   - **Checked plots** — that is the merged Plot cell now.
+   - **Checked** (who agreed it, when). The claim form settled this one
+     already: the dates, the days and the checker are how the office
+     DECIDED, and Worker Activity → Culling Incentive carries all of them,
+     one button away at the top of this very section.
+   - **Nursery.** The heading names it whenever a nursery is picked, and a
+     column repeating the heading on every row is the same answer twice. It
+     comes back as a line under the plot for **All Sections** ONLY, which
+     is the one case the heading cannot answer.
+   - **No.** The office listed six columns and this was not one of them. */
 function renderCullIncentive(secFilter) {
-  const table = $('cull-inc-plots'), payT = $('cull-inc-pay');
-  if (!table || !payT) return;
+  const table = $('cull-inc-plots');
+  if (!table) return;
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const monthTxt = monthLabelFull(monthValue());
   const head = $('cull-inc-head');
@@ -2253,46 +2279,49 @@ function renderCullIncentive(secFilter) {
   const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
 
   const rows = cullIncentivePlots(secFilter);
+  const pay = cullIncentivePay(rows, secFilter);
+  const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
+
+  /* Who each plot paid, and what it paid them — off the same `pay` the claim
+     form and the Monthly Payroll read, so a plot cannot pay one figure here
+     and another there. A plot that paid NOBODY still keeps its row: it is
+     Checked and on no claim line, which is the thing to see. */
+  const earners = (plot) => pay.filter(p => p.plots.some(q => q.plot === plot));
+  const personCell = (p) => p
+    ? `<td class="l" style="font-weight:700;color:var(--text-head);">${esc(p.known ? p.known.full_name : p.name)}${
+        p.known ? '' : '<span title="Not found on the worker register — this is not on the salary claim"'
+                     + ' style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+       <td class="money">${money(p.rm)}</td>`
+    : `<td class="l" style="color:var(--text-faint);">Nobody — on no claim line</td>
+       <td class="money" style="color:var(--text-faint);">${money(0)}</td>`;
+
   table.innerHTML = rows.length ? `
     <thead><tr>
-      <th style="width:44px;">No.</th><th class="l">Plot</th><th>Nursery</th>
+      <th class="l">Plot</th>
       <th>Saringan started</th><th>Transplanting ended</th><th style="width:70px;">Days</th>
-      <th class="l">Checked</th>
+      <th class="l">Person</th><th style="width:130px;">Incentive (RM)</th>
     </tr></thead>
-    <tbody>${rows.map((r, i) => `
-      <tr>
-        <td style="color:var(--text-faint);">${i + 1}</td>
-        <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}${
+    <tbody>${rows.map((r) => {
+      const who = earners(r.plot);
+      const span = Math.max(1, who.length);
+      /* The four plot cells are written ONCE, on the first line, and span
+         the rest — so the person column reads as a list under the plot
+         rather than the plot being repeated beside every name. */
+      const plotCells = `
+        <td class="l" rowspan="${span}" style="font-weight:800;color:var(--text-head);vertical-align:middle;">${esc(r.plot)}${
           r.override ? `<div style="font-size:11px;color:#15803d;font-weight:700;">${r.manual ? 'Added' : 'Counted'} by hand${
-            r.override.remark ? ': ' + esc(r.override.remark) : ''}</div>` : ''}</td>
-        <td>${esc(r.section || '—')}</td>
-        <td>${pd(r.start)}</td>
-        <td>${pd(r.end)}</td>
-        <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
-        <td class="l" style="font-size:12px;">${esc([whoName(r.check.checked_by), fmtStamp(r.check.checked_at)].filter(Boolean).join(' · '))}</td>
-      </tr>`).join('')}</tbody>`
+            r.override.remark ? ': ' + esc(r.override.remark) : ''}</div>` : ''}${
+          secFilter ? '' : `<div style="font-size:11px;color:var(--text-muted);font-weight:700;">${esc(r.section || '—')}</div>`}</td>
+        <td rowspan="${span}" style="vertical-align:middle;">${pd(r.start)}</td>
+        <td rowspan="${span}" style="vertical-align:middle;">${pd(r.end)}</td>
+        <td rowspan="${span}" style="font-weight:800;vertical-align:middle;">${r.days == null ? '—' : r.days}</td>`;
+      return (who.length ? who : [null]).map((p, k) =>
+        `<tr>${k === 0 ? plotCells : ''}${personCell(p)}</tr>`).join('');
+    }).join('')}</tbody>
+    <tfoot><tr><td class="l" colspan="5">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`
     : `<tbody><tr><td class="empty">No plot in ${esc(secFilter ? secName(secFilter) : 'any nursery')} has been Checked for ${
         esc(monthTxt)} yet, so nobody is paid this incentive. Plots are gone through on
         <a href="${CULL_PAGE}">Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.</td></tr></tbody>`;
-
-  const pay = cullIncentivePay(rows, secFilter);
-  const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
-  payT.innerHTML = `
-    <thead><tr>
-      <th style="width:44px;">No.</th><th class="l">Person</th><th>Rule</th>
-      <th class="l">Checked plots</th><th style="width:130px;">Incentive (RM)</th>
-    </tr></thead>
-    <tbody>${pay.map((p, i) => `
-      <tr>
-        <td style="color:var(--text-faint);">${i + 1}</td>
-        <td class="l" style="font-weight:700;color:var(--text-head);">${esc(p.known ? p.known.full_name : p.name)}${
-          p.known ? '' : '<span title="Not found on the worker register — this is not on the salary claim" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
-        <td>${p.rule === 'every' ? `Every nursery · ${money(p.rm)} / plot`
-                                 : `${esc(p.nursery)} only · ${money(p.rm)} / plot`}</td>
-        <td class="l">${p.plots.length ? p.plots.map(r => esc(r.plot)).join(', ') : '<span style="color:var(--text-faint);">none</span>'}</td>
-        <td class="money">${money(p.amount)}</td>
-      </tr>`).join('')}</tbody>
-    <tfoot><tr><td class="l" colspan="4">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`;
 
   const notes = [];
   if (!window.MJMCullIncentive) notes.push('The culling incentive rule did not load. Reload the page.');
