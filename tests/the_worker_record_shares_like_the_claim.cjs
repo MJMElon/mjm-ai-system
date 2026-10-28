@@ -172,7 +172,10 @@ yes(!/workers|source_qty|work_date|plot_name/.test(tickWrite),
 /* A name the FC credited that the register cannot place still gets a
    column. Without it their share leaves the sheet with nothing saying so,
    which is the fault pay.fieldNoColumn exists to shout about elsewhere. */
-yes(/const extra = onRecords\.filter\(name => !reg\.includes\(name\)\)/.test(tab),
+/* The rule lives in tpWorkerColumns, which the tab AND its PDF both call, so
+   the paper cannot leave somebody out that the screen shows. */
+yes(/const extra = onRecords\.filter\(name => !reg\.includes\(name\)\)/.test(lift(SHEET, 'function tpWorkerColumns(n, rows)'))
+    && /tpWorkerColumns\(n, rows\)/.test(tab),
     'a name the register cannot place still gets a column');
 yes(/t\('pay\.fieldNoColumn'\)/.test(tab), 'and the sheet says so underneath');
 

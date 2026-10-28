@@ -1358,6 +1358,33 @@ function transplantingRows(n, m) {
     });
 }
 
+/* THE THREE ANSWERS the Transplanting sheet and its PDF both need, written
+   once so the paper cannot say something the screen does not.
+
+   Columns: the register's names FIRST, in their own order, then any name the
+   records carry that the register does not know -- see the note inside
+   renderTransplantingPayroll for why such a name still gets a column. */
+function tpWorkerColumns(n, rows) {
+  const reg = workers[n] || [];
+  const onRecords = [...new Set(rows.flatMap(r =>
+    (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
+  const extra = onRecords.filter(name => !reg.includes(name)).sort();
+  return { wk: reg.concat(extra), extra };
+}
+/* The record's own figure, which is what the claim quotes: the keyed
+   quantities where the job splits, the plot's source figure otherwise. */
+function tpRowCap(r) {
+  const job  = TP_JOB[r.work_type];
+  const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
+  return job && job.split
+    ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
+    : Number(r.source_qty || 0);
+}
+/* WHERE THE GATE IS NOT INSTALLED, EVERY ROW IS AGREED -- because every row
+   is being paid. Reading the absent column as "not checked" would draw the
+   whole sheet held, under an orange line saying the opposite. */
+function tpAgreed(key, r) { return !!_tpNoGate[key] || !!r.checked_at; }
+
 function renderTransplantingPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
@@ -1402,11 +1429,7 @@ function renderTransplantingPayroll() {
      `pay.fieldNoColumn` exists to shout about on the other tabs. So the
      columns are the register's names FIRST, in their own order, and then
      any name the records carry that the register does not know. */
-  const reg = workers[n] || [];
-  const onRecords = [...new Set(rows.flatMap(r =>
-    (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
-  const extra = onRecords.filter(name => !reg.includes(name)).sort();
-  const wk = reg.concat(extra);
+  const { wk, extra } = tpWorkerColumns(n, rows);
 
   const payTh = (txt, w, cls) =>
     `<th class="${cls || ''}" style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
@@ -1425,10 +1448,7 @@ function renderTransplantingPayroll() {
 
   const totals = {}; wk.forEach(w => totals[w] = 0);
   let capTotal = 0, heldCap = 0, heldRows = 0;
-  /* WHERE THE GATE IS NOT INSTALLED, EVERY ROW IS AGREED -- because every row
-     is being paid. Reading the absent column as "not checked" would draw the
-     whole sheet held, under an orange line saying the opposite. */
-  const agreed = (r) => !!_tpNoGate[key] || !!r.checked_at;
+  const agreed = (r) => tpAgreed(key, r);
 
   if (!rows.length) {
     h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noTransplant')}</td></tr>`;
@@ -1437,12 +1457,7 @@ function renderTransplantingPayroll() {
       const job  = TP_JOB[r.work_type];
       const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
       const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
-      /* The record's own figure, which is what the claim quotes: the keyed
-         quantities where the job splits, the plot's source figure
-         otherwise. */
-      const rowCap = job && job.split
-        ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
-        : Number(r.source_qty || 0);
+      const rowCap = tpRowCap(r);
       /* THE TOTAL IS WHAT THE CLAIM PAYS. A row nobody has agreed is not on
          the claim, so counting it in the foot here would hand the office a
          figure the claim does not quote and no way to see which. Held rows
@@ -1675,8 +1690,15 @@ function _fmtRate(r) {
    which reads this same record. */
 function downloadPayrollPDF() {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const PW = 210, PH = 297, MARGIN = 25;
+  /* THE TAB ON SCREEN DECIDES WHAT IS PRINTED. Pressed on Transplanting it
+     printed the four maintenance sheets regardless, which is the office
+     asking for one thing and getting another -- "当我在transplanting的tab，
+     我要下载的是transplanting的资料". Transplanting is a wider sheet (a Work
+     column and a number in every worker cell, not a tick), so it takes the
+     wide page; the four tick sheets keep the tall one they have always had. */
+  const tpView = _payrollView === 'transplanting';
+  const doc = new jsPDF({ orientation: tpView ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const PW = tpView ? 297 : 210, PH = tpView ? 210 : 297, MARGIN = 25;
   const CONTENT_W = PW - MARGIN * 2;      // 160 mm
   const MID = PW / 2;
 
@@ -1684,7 +1706,7 @@ function downloadPayrollPDF() {
   const wk = workers[n] || [];
   const TYPES = ['pd', 'manuring', 'weeding', 'interrow'];
 
-  if (!wk.length) {
+  if (!tpView && !wk.length) {
     alert(t('pay.noWorkers'));
     return;
   }
@@ -1795,6 +1817,128 @@ function downloadPayrollPDF() {
     return y + 9;
   }
 
+  /* THE TRANSPLANTING SHEET, as the tab draws it: Date, Plot, Work, Qty, a
+     column per worker carrying THEIR SHARE (not a tick -- the FC Portal
+     recorded who, and tpShare is how much), the row's capacity and whether
+     the office has Checked it. The totals are the CLAIM's -- agreed rows only
+     -- and what is held back is said under them, exactly as on screen. */
+  function drawTransplantingSheet() {
+    const key = _tpPayrollKey(n, m);
+    if (_tpRecordsCache[key] === undefined || _tpRecordsLoading[key]) {
+      alert(t('pay.loading'));
+      return;
+    }
+    if (_tpRecordsErr[key]) { alert(_tpRecordsErr[key]); return; }
+    const rows = transplantingRows(n, m);
+    const { wk: cols } = tpWorkerColumns(n, rows);
+    const agreed = (r) => tpAgreed(key, r);
+    const noGate = !!_tpNoGate[key];
+    const label = t('tab.transplanting');
+
+    const W_DATE = 20, W_PLOT = 13, W_WORK = 44, W_QTY = 18, W_PER = 20, W_CHK = 16;
+    const FIX = W_DATE + W_PLOT + W_WORK + W_QTY + W_PER + W_CHK;   // 131 of 247 mm
+    const per = Math.max(1, Math.floor((CONTENT_W - FIX) / 11));
+    const tchunks = [];
+    for (let i = 0; i < cols.length; i += per) tchunks.push(cols.slice(i, i + per));
+    if (!tchunks.length) tchunks.push([]);
+
+    tchunks.forEach((chunk, ci) => {
+      if (ci) doc.addPage();
+      const part = tchunks.length > 1
+        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
+        : '';
+      let y = titleBlock(label, part);
+      const wkW = chunk.length ? (CONTENT_W - FIX) / chunk.length : 0;
+      // A sheet with no names on it gives the room to Work rather than to nothing.
+      const workW = chunk.length ? W_WORK : W_WORK + (CONTENT_W - FIX);
+      const widths = [W_DATE, W_PLOT, workW, W_QTY, ...chunk.map(() => wkW), W_PER, W_CHK];
+      const xs = []; let x = MARGIN;
+      widths.forEach(w => { xs.push(x); x += w; });
+      const iPer = widths.length - 2, iChk = widths.length - 1;
+      const HEAD_H = headerHeightFor(chunk.length ? chunk : ['']);
+      const drawHead = () => {
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.date'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.plot'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.work'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[3], y, widths[3], HEAD_H, t('pay.qtyTransplant'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[4 + i], y, widths[4 + i], HEAD_H, w));
+        cell(xs[iPer], y, widths[iPer], HEAD_H, t('pay.perWorker'), { bold: true, size: 7, fill: HEAD_FILL });
+        cell(xs[iChk], y, widths[iChk], HEAD_H, t('pay.checked'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        y += HEAD_H;
+      };
+      drawHead();
+
+      const totals = {}; chunk.forEach(w => totals[w] = 0);
+      let capTotal = 0, heldCap = 0, heldRows = 0;
+      if (!rows.length) {
+        cell(MARGIN, y, CONTENT_W, 14, t('pay.noTransplant'), { size: 9 });
+        y += 14;
+      } else {
+        // Room under the last row for the total, the held-back line and the note.
+        const pageOf = payrollPlotPages(rows.map(r => ({ plot: r.plot_name })), {
+          rowH: ROW_H, floor: PH - MARGIN - 36, firstY: y, freshY: MARGIN + 27 + 9 + HEAD_H
+        });
+        rows.forEach((r, ri) => {
+          if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
+            doc.addPage();
+            y = titleBlock(label, part);
+            drawHead();
+          }
+          const job = TP_JOB[r.work_type];
+          const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
+          const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
+          const rowCap = tpRowCap(r);
+          const ok = agreed(r);
+          if (ok) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+          const z = ri % 2 ? ZEBRA : null;
+          cell(xs[0], y, widths[0], ROW_H, r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—',
+               { size: 8, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, r.plot_name || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
+          cell(xs[2], y, widths[2], ROW_H, (job && job.label) || r.jenis || r.work_type || '—',
+               { size: 7.5, fill: z, align: 'left' });
+          cell(xs[3], y, widths[3], ROW_H, rowCap ? rowCap.toLocaleString('en-MY') : '—', { size: 8.5, nowrap: true, fill: z });
+          chunk.forEach((w, i) => {
+            const on = byName[w];
+            const share = on ? tpShare(r, on) : 0;
+            if (on && ok) totals[w] += share;
+            cell(xs[4 + i], y, widths[4 + i], ROW_H, on ? capFmt(share) : '', { size: 7.5, nowrap: true, fill: z });
+          });
+          cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(rowCap), { size: 8.5, bold: true, nowrap: true, fill: z });
+          if (noGate) cell(xs[iChk], y, widths[iChk], ROW_H, '—', { size: 8, fill: z });
+          else if (ok) { cell(xs[iChk], y, widths[iChk], ROW_H, '', { fill: z }); drawTick(xs[iChk], y, widths[iChk], ROW_H); }
+          else cell(xs[iChk], y, widths[iChk], ROW_H, 'Not checked', { size: 6.5, nowrap: true, fill: z });
+          y += ROW_H;
+        });
+      }
+
+      const grand = chunk.reduce((sm, w) => sm + totals[w], 0);
+      cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[3], y, widths[3], ROW_H + 1, capTotal ? capTotal.toLocaleString('en-MY') : '—',
+           { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[4 + i], y, widths[4 + i], ROW_H + 1, capFmt(totals[w]),
+           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iPer], y, widths[iPer], ROW_H + 1, capFmt(grand), { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      cell(xs[iChk], y, widths[iChk], ROW_H + 1, '', { fill: TOTAL_FILL });
+      y += ROW_H + 1;
+      /* Held back is NAMED on the paper as on the screen: a claim short of
+         work reads exactly like a quiet month. */
+      if (heldRows) {
+        const HELD = [255, 251, 235];
+        cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpHeldLabel'), { bold: true, size: 8.5, fill: HELD });
+        cell(xs[3], y, widths[3], ROW_H + 4, heldCap ? heldCap.toLocaleString('en-MY') : '—', { bold: true, size: 8.5, nowrap: true, fill: HELD });
+        cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
+             t('pay.tpHeld').replace('{n}', heldRows), { size: 6.5, fill: HELD, align: 'left' });
+        y += ROW_H + 4;
+      }
+
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    });
+
+    doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
+  }
+
   /* Column widths for one chunk of workers. The three fixed columns and the
      per-worker total keep their size; the workers share what is left. */
   const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
@@ -1807,6 +1951,7 @@ function downloadPayrollPDF() {
   for (let i = 0; i < wk.length; i += maxPerPage) chunks.push(wk.slice(i, i + maxPerPage));
 
   const ROW_H = 8;
+  if (tpView) { drawTransplantingSheet(); return; }
   let firstPage = true;
 
   TYPES.forEach(type => {
