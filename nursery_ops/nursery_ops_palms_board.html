@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Every line of this page's code is inline, so the PAGE is the deploy: without
+     these a browser holding yesterday's copy keeps it. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>PALMS Plot Status Map — Nursery Operation Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -131,6 +136,21 @@
   .pv-step-name { font-weight:900; color:#1e293b; flex:1 1 auto; min-width:0; }
   .pv-step-d { color:#64748b; font-weight:700; font-size:11.5px; white-space:nowrap; }
   .pv-step.now .pv-step-name { color:#0f766e; }
+  .pv-st-wrap { overflow-x:auto; }
+  .pv-st { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .pv-st th { font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8;
+    text-align:left; padding:4px 10px 6px 0; white-space:nowrap; border-bottom:1px solid #e2e8f0; }
+  .pv-st td { padding:6px 14px 6px 0; color:#334155; font-weight:700; white-space:nowrap; vertical-align:middle;
+    border-bottom:1px solid #f1f5f9; text-align:left; }
+  .pv-st th { background:none; }
+  .pv-st td:first-child, .pv-st th:first-child { width:30px; }
+  .pv-st tr:last-child td { border-bottom:none; }
+  .pv-st td.pv-st-name { font-weight:900; color:#1e293b; white-space:nowrap; text-align:left; }
+  .pv-st-by { font-size:11px; font-weight:700; color:#94a3b8; }
+  .pv-st th:nth-child(n+5), .pv-st td.pv-st-num { text-align:right; }
+  .pv-st th:nth-child(-n+4) { text-align:left; }
+  .pv-st tr.now td.pv-st-name { color:#0f766e; }
+  .pv-running { color:#0f766e; font-weight:900; }
   .pv-over { color:#e11d48; font-weight:900; }
   .pv-ahead { color:#059669; font-weight:900; }
   .pv-line { display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 12px; padding:5px 0; }
@@ -610,32 +630,48 @@ function drawPvRound() {
       return head + '<div class="pv-round-s">Nothing recorded for this plot yet.</div>';
     }
 
-    return head + es.map((e) => {
+    /* A TABLE, one stage a line, so the dates can be read DOWN: every stage's
+       first and last day in its own column. It used to be a sentence per
+       stage with only the end date in it, set flush right in the middle of a
+       run of other words, so the one thing somebody opens a plot to find —
+       when did each job start and finish — had to be worked out backwards
+       from a day count. In the order the work was done, stage 1 at the top,
+       because that is the order a round is read in. */
+    const rows = es.slice().reverse().map((e) => {
       const act = MJMPalms.actByN(e.actN);
       const ideal = e.ideal == null ? (act && act.days) : e.ideal;
-      let right;
+      let days, vs;
       if (!e.end) {
         const due = MJMPalms.addDays(e.start, ideal == null ? 0 : ideal);
         const left = MJMPalms.diffDays(MJMPalms.todayStr(), due);
-        right = 'since ' + MJMPalms.prettyD(e.start) + ' · ' +
-          (left < 0 ? '<span class="pv-over">' + (-left) + 'd over</span>'
-                    : '<span class="pv-ahead">' + left + 'd left</span>');
+        days = MJMPalms.diffDays(e.start, MJMPalms.todayStr()) + 'd so far';
+        vs = left < 0 ? '<span class="pv-over">' + (-left) + 'd over</span>'
+                      : '<span class="pv-ahead">' + left + 'd left</span>';
       } else {
         const took = MJMPalms.diffDays(e.start, e.end);
         const v = ideal == null ? null : took - Number(ideal);
-        right = MJMPalms.prettyD(e.end) + ' · ' + took + 'd' +
-          (v == null ? ''
-            : (v > 0 ? ' · <span class="pv-over">' + v + 'd over</span>'
-              : v < 0 ? ' · <span class="pv-ahead">' + (-v) + 'd ahead</span>'
-              : ' · on time'));
+        days = took + 'd';
+        vs = v == null ? '—'
+          : v > 0 ? '<span class="pv-over">' + v + 'd over</span>'
+          : v < 0 ? '<span class="pv-ahead">' + (-v) + 'd ahead</span>'
+          : 'on time';
       }
-      return '<div class="pv-step' + (e.end ? '' : ' now') + '">' +
-        '<span class="pv-step-n">' + e.actN + '</span>' +
-        '<span class="pv-step-name">' + esc(act ? act.name : 'Stage ' + e.actN) +
-          (e.by ? ' <span class="pv-round-s">· ' + esc(e.by) + '</span>' : '') + '</span>' +
-        '<span class="pv-step-d">' + right + '</span>' +
-        '</div>';
+      return '<tr class="' + (e.end ? '' : 'now') + '">' +
+        '<td><span class="pv-step-n">' + e.actN + '</span></td>' +
+        '<td class="pv-st-name">' + esc(act ? act.name : 'Stage ' + e.actN) +
+          (e.by ? '<div class="pv-st-by">' + esc(e.by) + '</div>' : '') + '</td>' +
+        '<td>' + MJMPalms.prettyD(e.start) + '</td>' +
+        '<td>' + (e.end ? MJMPalms.prettyD(e.end) : '<span class="pv-running">running</span>') + '</td>' +
+        '<td class="pv-st-num">' + days + '</td>' +
+        '<td class="pv-st-num">' + (ideal == null ? '—' : ideal + 'd') + '</td>' +
+        '<td class="pv-st-num">' + vs + '</td>' +
+        '</tr>';
     }).join('');
+    return head +
+      '<div class="pv-st-wrap"><table class="pv-st">' +
+        '<thead><tr><th></th><th class="l">Stage</th><th>Start</th><th>End</th>' +
+        '<th>Days</th><th>Ideal</th><th>Result</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>';
   }).join('');
 }
 
