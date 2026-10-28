@@ -4726,3 +4726,25 @@ that nursery's own Field Conductor (Lalu Aenal BNN, Akbar UNN 1, Azhar UNN 2).
   sheet lock, asked again at the write. A dialog, never a `prompt`.
 
 `tests/culling_incentive.cjs` holds it.
+
+## A -R plot is on no PALMS screen
+
+A -R plot is a REPLANT plot — ground a 3rd-culling transfer moved seedlings
+onto — and PALMS has nothing to say about one. The office: *"plot-R
+不需要出现在palms 完全不需要"*.
+
+`isReplantPlot` is the rule, written twice: `shared/shared_palms.js` here and
+`src/modules/palms/data.js` in the FC Portal (the Culling Calculator imports
+that one rather than keeping its own). Change one, change the other. B4-R and
+B4-R2 both go; a split area is judged by its plot.
+
+- **The office drops them where the PALMS log is read** (`logsFromRows`), so
+  the board, the motion study and the stage pages all lose them at once
+  rather than whichever ones somebody remembered.
+- **The board's map is OPT-IN** (`skipReplant` on `MJMPlotMap.load`), because
+  Life of Plot shares that map and a -R plot is real ground with maintenance
+  on it there.
+- **The FC Portal filters in `plotsOf` as well as where the list is built**,
+  because a phone can be holding a list cached before this.
+
+`tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
