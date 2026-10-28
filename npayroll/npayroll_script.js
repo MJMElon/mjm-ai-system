@@ -1170,10 +1170,28 @@ const TRANSPLANT_JOB = Object.fromEntries(TRANSPLANT_JOBS.map(j => [j.key, j]));
 let transplantRowsAll = [];    // every row of the month, as the database holds them
 let transplantField = [];      // the rows the OFFICE HAS AGREED, which is what is paid
 let transplantHeld  = [];      // recorded, not agreed yet, so on no claim and said out loud
+let transplantNotDone = [];    // answered "nobody did this job", so on no claim ever
 let transplantGateOff = false; // this database has not got the Checked columns
 
 const TP_FIELD_COLS = 'work_date, nursery_name, plot_name, batch_name, work_type, '
   + 'jenis, schedule_month, source_qty, workers, total_qty';
+
+/* A JOB THAT WAS NOT DONE IS A RECORD, AND IT IS NOT HELD WORK.
+   A blanket spray is not always needed, so a conductor can answer the job
+   with "nobody did this" -- an ordinary row of the table with an EMPTY crew
+   and not_done set. See shared/RUN_ME_transplant_not_done.sql for why that
+   is a column and not a word in the remark.
+
+   It is kept out of BOTH lists rather than counted as held: held means the
+   office has still to agree a figure, and there is no figure here to agree.
+   Left in `transplantHeld` the claim would read "RM 0.00 is NOT on this
+   claim, 1 row has not been Checked" and send somebody to tick a row that
+   can never pay anybody. It is surfaced on the by-plot table instead, which
+   is where the work is listed rather than the money.
+
+   A database without the column answers undefined for every row, so nothing
+   is not-done and every reader behaves exactly as it did before. */
+const _tpNotDone = (rec) => !!(rec && rec.not_done);
 
 /* ONLY A CHECKED ROW REACHES THE CLAIM — the same rule, and the same words,
    as maintTotals further down this file.
@@ -1198,16 +1216,31 @@ const TP_FIELD_COLS = 'work_date, nursery_name, plot_name, batch_name, work_type
    the claim says so in red. A gate that cannot be read must not take a
    month's work off a claim — same reason access fails open. */
 async function loadTransplantField() {
-  transplantField = []; transplantHeld = []; transplantGateOff = false;
+  transplantField = []; transplantHeld = []; transplantNotDone = [];
+  transplantGateOff = false;
   const ask = (cols) => _supabase.from('nops_transplant_field_records')
     .select(cols)
     .eq('schedule_month', monthLabel(monthValue()))
     .then(r => r, (e) => ({ error: e || { message: 'unreachable' } }));
 
-  let res = await ask(TP_FIELD_COLS + ', checked_at, checked_by');
-  if (res && res.error && /checked_at|checked_by/i.test(res.error.message || '')) {
-    transplantGateOff = true;
-    res = await ask(TP_FIELD_COLS);
+  /* TWO OPTIONAL COLUMNS, AND POSTGREST NAMES ONLY THE FIRST ONE IT CANNOT
+     FIND -- so this is a ladder and not two ifs. Each refusal that names a
+     column drops that column and asks again; anything else is a real error
+     and is handed back. A column list is explicit here (it always has been,
+     to keep the read small), which is what makes the fallback necessary:
+     select('*') would answer whatever the database has. */
+  let want = { nd: true, chk: true };
+  const build = () => TP_FIELD_COLS
+    + (want.nd ? ', not_done' : '')
+    + (want.chk ? ', checked_at, checked_by' : '');
+  let res = await ask(build());
+  for (let i = 0; i < 2 && res && res.error; i++) {
+    const msg = String(res.error.message || '');
+    if (want.nd && /not_done/i.test(msg)) { want.nd = false; }
+    else if (want.chk && /checked_at|checked_by/i.test(msg)) {
+      want.chk = false; transplantGateOff = true;
+    } else break;
+    res = await ask(build());
   }
   // A database without the table is not an error here: the office ran the
   // payroll module before this button existed and must go on running it.
@@ -1240,13 +1273,18 @@ const _tpAgreed = (rec) => !!rec.checked_at || _tpVerifiedMonth(_tpSection(rec.n
    the rows land. Every reader goes through here first, so the answer is
    whatever is true when the question is asked. */
 function splitTransplantField() {
+  /* A job nobody did is taken out FIRST, before the tick is asked about: it
+     is on no claim whether or not anybody agreed it, so it belongs in
+     neither of the two lists the claim is built from. */
+  transplantNotDone = transplantRowsAll.filter(_tpNotDone);
+  const payable = transplantRowsAll.filter(r => !_tpNotDone(r));
   if (transplantGateOff) {
-    transplantField = transplantRowsAll.slice();
+    transplantField = payable.slice();
     transplantHeld  = [];
     return;
   }
-  transplantField = transplantRowsAll.filter(_tpAgreed);
-  transplantHeld  = transplantRowsAll.filter(r => !_tpAgreed(r));
+  transplantField = payable.filter(_tpAgreed);
+  transplantHeld  = payable.filter(r => !_tpAgreed(r));
 }
 
 /* "UNN 1" and "UNN1" are one nursery. shared_plots spells it with a space,
@@ -1327,6 +1365,11 @@ function transplantFieldLines(src) {
   transplantRateClash = {};
   (src || transplantField).forEach(rec => {
     const job = TRANSPLANT_JOB[rec.work_type];
+    /* NOT DONE PAYS NOBODY, said here as well as in the split above. The
+       crew on such a row is empty, so the next line already stops it -- but
+       a row hand-edited in the Supabase dashboard could carry both, and the
+       flag is the answer that decides, not the names left on it. */
+    if (_tpNotDone(rec)) return;
     const crew = Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : [];
     if (!crew.length) return;
     const rate = transplantRate(rec);
@@ -1395,6 +1438,8 @@ function transplantWorkdone(sec) {
   transplantField.forEach(rec => {
     const job = TRANSPLANT_JOB[rec.work_type];
     if (!job) return;
+    // Nothing was done, so there is no capacity to add to the job's total.
+    if (_tpNotDone(rec)) return;
     if (sec && !inSection(sec, _tpSection(rec.nursery_name))) return;
     out[job.key] += (job.split && rec.total_qty != null)
       ? (Number(rec.total_qty) || 0)
@@ -1483,6 +1528,24 @@ function transplantSectionNotes(secFilter) {
       + `Open it in the FC Portal under Maintenance → Transplanting Job and add who did the work.`);
   }
 
+  /* JOBS NOBODY DID. On no claim line and never going to be, which is the
+     answer rather than a fault -- but a claim that simply does not mention
+     them reads as work the office has not been shown. Named with the plot
+     and the job, because "a job was not done" is not something anybody can
+     check without both. */
+  const skipped = transplantNotDone.filter(r => here(_tpSection(r.nursery_name)));
+  if (skipped.length) {
+    const what = [...new Set(skipped.map(r => {
+      const job = TRANSPLANT_JOB[r.work_type];
+      return `${r.plot_name || '(no plot)'} — ${(job && job.label) || r.work_type}`;
+    }))];
+    notes.push(`${_plural(skipped.length, 'job')} on ${esc(secName(secFilter))}’s plots `
+      + `${skipped.length === 1 ? 'is' : 'are'} recorded as NOT DONE, so nothing is claimed `
+      + `for ${skipped.length === 1 ? 'it' : 'them'} — ${what.map(esc).join('; ')}. `
+      + `That is the Field Conductor’s answer and not a missing crew. If the work was done `
+      + `after all, he reopens the job in the FC Portal and ticks who did it.`);
+  }
+
   /* Work done on this nursery's plots whose lines went to another circle,
      because the register has those workers there. Named rather than left as
      a gap: the gap is the thing that reads as lost work. */
@@ -1521,6 +1584,19 @@ function transplantEmptyLead(secFilter) {
          + `${n === 1 ? 'it has' : 'none of them has'} been Checked yet — so nothing is `
          + `on this claim. Tick Checked on Worker Record &rarr; Transplanting and the `
          + `rows arrive here as they are ticked.`;
+  }
+  /* A MONTH WHOSE RECORDS ALL SAY "NOBODY DID IT" IS NOT AN EMPTY MONTH
+     either. The conductor answered every question put to him; the answer
+     was that the work was not needed. Telling him nothing was recorded is
+     the same wrong sentence as telling him his work never arrived. */
+  if (!transplantField.length && !transplantHeld.length && transplantNotDone.length) {
+    const mine = transplantNotDone.filter(r => !secFilter
+      || inSection(secFilter, _tpSection(r.nursery_name)));
+    const n = mine.length || transplantNotDone.length;
+    return `${_plural(n, 'transplanting job')} reached the office for ${month}`
+         + `${mine.length ? ` on ${here}’s plots` : ''}, and every one of them is recorded `
+         + `as NOT DONE — so there is nothing to claim. That is the conductor’s answer, `
+         + `not a missing crew.`;
   }
   if (!transplantField.length) {
     return `No transplanting was recorded in the FC Portal for ${month} — in any nursery. `
@@ -1884,6 +1960,13 @@ function renderTransplantByPlot(secFilter) {
        keying is the office telling him his work never arrived. */
     const held = transplantHeld.filter(r => !secFilter
       || inSection(secFilter, _tpSection(r.nursery_name)));
+    /* AND A MONTH WHOSE JOBS WERE ALL ANSWERED "NOT DONE" is a third thing
+       again. Same care as the two sentences below it: say what is actually
+       known. "No transplanting job has been recorded" over a conductor who
+       answered every one of them is the office telling him his work never
+       arrived. */
+    const skipped = transplantNotDone.filter(r => !secFilter
+      || inSection(secFilter, _tpSection(r.nursery_name)));
     table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
       ${held.length
         ? (() => {
@@ -1902,6 +1985,19 @@ function renderTransplantByPlot(secFilter) {
            the four jobs nobody had keyed.
            Same care as the held sentence above it: say what is actually
            known, and say where the answer is given. */
+        : skipped.length
+          ? (() => {
+              /* NAMED, like the held sentence above it. "1 job is recorded
+                 as not done" without the plot is a fact nobody can check:
+                 the plot is what somebody walks to and the job is what they
+                 would be looking for. */
+              const where = [...new Set(skipped.map(r => r.plot_name).filter(Boolean))];
+              return `${_plural(skipped.length, 'job')} on ${esc(secName(secFilter))}’s plots for `
+                + `${esc(monthLabelFull(monthValue()))} ${skipped.length === 1 ? 'is' : 'are'} `
+                + `recorded as NOT DONE${where.length ? ' — ' + where.map(esc).join(', ') : ''}, `
+                + `and there is nothing else. Nothing is counted here because no work was `
+                + `carried out — that is the conductor’s answer, not a gap.`;
+            })()
         : `No transplanting job has been recorded for ${esc(secName(secFilter))} in `
           + `${esc(monthLabelFull(monthValue()))}. A plot that took seedlings is raised on `
           + `the FC Portal, under Pending Verification, until its four jobs are keyed.`}
@@ -1958,6 +2054,21 @@ function renderTransplantByPlot(secFilter) {
     notes.push(`${heldPlots.map(esc).join(', ')} ${heldPlots.length === 1 ? 'is' : 'are'} `
       + `not on this table and not in the total — ${heldPlots.length === 1 ? 'its' : 'their'} `
       + `rows have not been Checked on Worker Record &rarr; Transplanting yet.`);
+  }
+  /* PLOTS WHOSE ONLY RECORD IS "NOT DONE". They are off the table for the
+     same reason the held ones are -- it counts what the claim pays -- and a
+     missing plot reads as a plot nothing happened in, which here would be
+     exactly the wrong conclusion: something happened, and it was somebody
+     answering the question. A plot with other jobs recorded is already on
+     the table and needs no line of its own. */
+  const skippedPlots = [...new Set(transplantNotDone
+    .filter(r => !secFilter || inSection(secFilter, _tpSection(r.nursery_name)))
+    .map(r => r.plot_name).filter(Boolean))]
+    .filter(pl => !rows.some(r => _tpKey(r.plot) === _tpKey(pl)));
+  if (skippedPlots.length) {
+    notes.push(`${skippedPlots.map(esc).join(', ')} ${skippedPlots.length === 1 ? 'is' : 'are'} `
+      + `not on this table: every job recorded on ${skippedPlots.length === 1 ? 'it' : 'them'} `
+      + `is marked NOT DONE, so no work was carried out and there is nothing to pay.`);
   }
   const moved = rows.filter(r => r.disagrees);
   if (moved.length) {

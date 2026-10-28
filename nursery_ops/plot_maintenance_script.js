@@ -1263,6 +1263,12 @@ const TP_JOBS = [
 ];
 const TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));
 
+/* Answered "nobody did this job". A database without the column answers
+   undefined for every row, so nothing is not-done and this tab reads
+   exactly as it did before -- which is the right way round: a record of
+   this kind cannot exist until the column does. */
+const tpNotDone = (rec) => !!(rec && rec.not_done);
+
 /* WHAT ONE WORKER DID ON ONE RECORD.
 
    SAME RULE as transplantFieldLines() in npayroll/npayroll_script.js, which
@@ -1278,6 +1284,15 @@ const TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));
    equally among the crew. */
 function tpShare(rec, w) {
   const job  = TP_JOB[rec.work_type];
+  /* A JOB NOBODY DID PAYS NOBODY. The conductor can answer a job with "not
+     done" -- a blanket spray on a plot where the grass never came -- and
+     that is an ordinary row of this table with an empty crew and `not_done`
+     set. See shared/RUN_ME_transplant_not_done.sql. The empty crew already
+     makes this nought; the flag is said as well because it is the answer
+     that decides, not the names left on the row, and a row hand-edited in
+     the Supabase dashboard could carry both. SAME GUARD as
+     transplantFieldLines in npayroll_script.js. */
+  if (tpNotDone(rec)) return 0;
   const crew = Array.isArray(rec.workers) ? rec.workers.filter(x => x && x.name) : [];
   if (!crew.length) return 0;
   return job && job.split
@@ -1319,13 +1334,26 @@ async function loadTransplantRecordsForPayroll(n, m) {
      falls back to the columns that have always been there and the tab says,
      in orange, that the gate is not installed. Showing the work is the safe
      direction; showing nothing is the one fault this tab cannot have. */
-  let { data, error } = await ask(TP_PAY_COLS + ', checked_at, checked_by');
-  if (error && /checked_at|checked_by/i.test(error.message || '')) {
-    _tpNoGate[key] = true;
-    ({ data, error } = await ask(TP_PAY_COLS));
-  } else if (!error) {
-    _tpNoGate[key] = false;
+  /* TWO OPTIONAL COLUMNS, AND POSTGREST NAMES ONLY THE FIRST ONE IT CANNOT
+     FIND -- so this is a ladder and not two ifs. `not_done` is the newer of
+     the two (RUN_ME_transplant_not_done.sql) and its absence needs no
+     warning: a not-done record cannot exist on a database without the
+     column, so every row reads as an ordinary one, which is the truth.
+     SAME LADDER as loadTransplantField in npayroll_script.js. */
+  let want = { nd: true, chk: true };
+  const build = () => TP_PAY_COLS
+    + (want.nd ? ', not_done' : '')
+    + (want.chk ? ', checked_at, checked_by' : '');
+  let { data, error } = await ask(build());
+  for (let i = 0; i < 2 && error; i++) {
+    const msg = String(error.message || '');
+    if (want.nd && /not_done/i.test(msg)) { want.nd = false; }
+    else if (want.chk && /checked_at|checked_by/i.test(msg)) {
+      want.chk = false; _tpNoGate[key] = true;
+    } else break;
+    ({ data, error } = await ask(build()));
   }
+  if (!error && want.chk) _tpNoGate[key] = false;
 
   _tpRecordsLoading[key] = false;
   if (error) {
@@ -1375,6 +1403,12 @@ function tpWorkerColumns(n, rows) {
    quantities where the job splits, the plot's source figure otherwise. */
 function tpRowCap(r) {
   const job  = TP_JOB[r.work_type];
+  /* A JOB NOBODY DID HAS NO CAPACITY. The plot's own quantity is still on
+     the row -- that is what the job WOULD have been -- and quoting it
+     anywhere reads as capacity somebody worked. Tested HERE rather than in
+     each caller, so the screen, the PDF of the same sheet and anything
+     added later get it without knowing this rule exists. */
+  if (tpNotDone(r)) return 0;
   const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
   return job && job.split
     ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
@@ -1447,7 +1481,7 @@ function renderTransplantingPayroll() {
     </tr></thead><tbody>`;
 
   const totals = {}; wk.forEach(w => totals[w] = 0);
-  let capTotal = 0, heldCap = 0, heldRows = 0;
+  let capTotal = 0, heldCap = 0, heldRows = 0, skipRows = 0;
   const agreed = (r) => tpAgreed(key, r);
 
   if (!rows.length) {
@@ -1457,17 +1491,34 @@ function renderTransplantingPayroll() {
       const job  = TP_JOB[r.work_type];
       const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
       const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
+      /* NOT DONE IS A THIRD STATE, not a held row and not an agreed one.
+         Held means the office has still to agree a figure; here there is no
+         figure to agree, so it is in NEITHER total -- adding it to the held
+         line would send somebody to tick a row that can never pay anybody.
+         SAME SPLIT as splitTransplantField in npayroll_script.js, which
+         keeps these rows out of both of the claim's lists. The CAPACITY is
+         nought from tpRowCap itself, so the PDF of this sheet gets that half
+         without knowing this rule exists. */
+      const skipped = tpNotDone(r);
       const rowCap = tpRowCap(r);
       /* THE TOTAL IS WHAT THE CLAIM PAYS. A row nobody has agreed is not on
          the claim, so counting it in the foot here would hand the office a
          figure the claim does not quote and no way to see which. Held rows
          are added up on their own and said under it. */
-      if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
-      h += `<tr${agreed(r) ? '' : ' class="tp-row-held"'}>
+      if (skipped) skipRows++;
+      else if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+      h += `<tr${skipped ? ' class="tp-row-skipped" style="opacity:.72;"'
+                        : (agreed(r) ? '' : ' class="tp-row-held"')}>
         <td style="font-weight:600;white-space:nowrap;">${r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—'}</td>
         <td class="plot-td">${esc(r.plot_name || '—')}</td>
-        <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}</td>
-        <td>${rowCap ? rowCap.toLocaleString() : '—'}</td>
+        <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}${
+          skipped ? ` <span style="display:inline-block;margin-left:.3rem;padding:.05rem .35rem;`
+                  + `border:1px solid #cbd5e1;border-radius:.5rem;background:#f1f5f9;color:#475569;`
+                  + `font-size:10px;font-weight:800;letter-spacing:.04em;" title="${esc(t('pay.tpNotDoneWhy'))}">`
+                  + `${esc(t('pay.tpNotDoneTag'))}</span>` : ''}</td>
+        <td${skipped ? ' style="color:var(--text-faint);font-weight:600;"' : ''}>${
+          skipped ? esc(t('pay.tpNotDoneCell'))
+                  : (rowCap ? rowCap.toLocaleString() : '—')}</td>
         ${wk.map(w => {
           const on = byName[w];
           if (!on) return '<td></td>';
@@ -1505,6 +1556,17 @@ function renderTransplantingPayroll() {
       <td colspan="${wk.length + 2}" style="text-align:left;color:#92400e;font-weight:600;">
         ${t('pay.tpHeld').replace('{n}', heldRows)}</td></tr>`;
   }
+  /* AND A JOB NOBODY DID IS SAID TOO, in slate rather than amber: held work
+     is a question waiting for the office, and this is an answer that is
+     already given. A row in no total with nothing under the sheet saying so
+     is the one shape of short figure this file is most careful about. */
+  if (skipRows) {
+    h += `<tr class="jumlah-tr" style="background:#f8fafc;">
+      <td class="th-left" colspan="3" style="color:#475569;">${t('pay.tpNotDoneLabel')}</td>
+      <td style="color:#475569;">—</td>
+      <td colspan="${wk.length + 2}" style="text-align:left;color:#475569;font-weight:600;">
+        ${t('pay.tpNotDoneFoot').replace('{n}', skipRows)}</td></tr>`;
+  }
   h += `</tfoot>`;
   tbl.innerHTML = h;
 
@@ -1522,6 +1584,13 @@ function renderTransplantingPayroll() {
    anybody can tick and only an admin can untick is not a lock, it is a trap.
    Unticking takes nothing away -- it puts the row back where it was. */
 function _tpCheckCell(r, key) {
+  /* NOTHING TO AGREE ON A JOB NOBODY DID. A Check button here would offer
+     the office a tick that moves no money, and a ticked row that pays
+     nobody is the kind of thing somebody later reads as a fault. */
+  if (tpNotDone(r)) {
+    return `<span style="color:#475569;font-size:11px;font-weight:700;"
+      title="${esc(t('pay.tpNotDoneWhy'))}">${esc(t('pay.tpNotDoneLabel'))}</span>`;
+  }
   if (_tpNoGate[key]) {
     return `<span style="color:var(--text-faint);font-size:11px;"
       title="The Checked columns are not on this database yet — run shared/RUN_ME_transplant_checked.sql">—</span>`;
@@ -1869,7 +1938,7 @@ function downloadPayrollPDF() {
       drawHead();
 
       const totals = {}; chunk.forEach(w => totals[w] = 0);
-      let capTotal = 0, heldCap = 0, heldRows = 0;
+      let capTotal = 0, heldCap = 0, heldRows = 0, skipRows = 0;
       if (!rows.length) {
         cell(MARGIN, y, CONTENT_W, 14, t('pay.noTransplant'), { size: 9 });
         y += 14;
@@ -1888,15 +1957,26 @@ function downloadPayrollPDF() {
           const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
           const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
           const rowCap = tpRowCap(r);
+          /* A JOB NOBODY DID IS IN NEITHER TOTAL, the same third state the
+             screen draws. Its capacity is already nought, so without this
+             it would still add a ROW to the held count and the paper would
+             say "1 row is not Checked" about work nobody is ever going to
+             tick. */
+          const skipped = tpNotDone(r);
           const ok = agreed(r);
-          if (ok) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+          if (skipped) skipRows++;
+          else if (ok) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
           const z = ri % 2 ? ZEBRA : null;
           cell(xs[0], y, widths[0], ROW_H, r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—',
                { size: 8, nowrap: true, fill: z });
           cell(xs[1], y, widths[1], ROW_H, r.plot_name || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
-          cell(xs[2], y, widths[2], ROW_H, (job && job.label) || r.jenis || r.work_type || '—',
+          cell(xs[2], y, widths[2], ROW_H, ((job && job.label) || r.jenis || r.work_type || '—')
+               + (skipped ? ` (${t('pay.tpNotDoneTag')})` : ''),
                { size: 7.5, fill: z, align: 'left' });
-          cell(xs[3], y, widths[3], ROW_H, rowCap ? rowCap.toLocaleString('en-MY') : '—', { size: 8.5, nowrap: true, fill: z });
+          cell(xs[3], y, widths[3], ROW_H,
+               skipped ? t('pay.tpNotDoneCell')
+                       : (rowCap ? rowCap.toLocaleString('en-MY') : '—'),
+               { size: skipped ? 6.5 : 8.5, nowrap: true, fill: z });
           chunk.forEach((w, i) => {
             const on = byName[w];
             const share = on ? tpShare(r, on) : 0;
@@ -1904,7 +1984,11 @@ function downloadPayrollPDF() {
             cell(xs[4 + i], y, widths[4 + i], ROW_H, on ? capFmt(share) : '', { size: 7.5, nowrap: true, fill: z });
           });
           cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(rowCap), { size: 8.5, bold: true, nowrap: true, fill: z });
-          if (noGate) cell(xs[iChk], y, widths[iChk], ROW_H, '—', { size: 8, fill: z });
+          /* NOTHING TO AGREE ON A JOB NOBODY DID, so the Checked column says
+             what it is rather than a tick or "Not checked" -- the same
+             choice _tpCheckCell makes on screen. */
+          if (skipped) cell(xs[iChk], y, widths[iChk], ROW_H, t('pay.tpNotDoneLabel'), { size: 6.5, nowrap: true, fill: z });
+          else if (noGate) cell(xs[iChk], y, widths[iChk], ROW_H, '—', { size: 8, fill: z });
           else if (ok) { cell(xs[iChk], y, widths[iChk], ROW_H, '', { fill: z }); drawTick(xs[iChk], y, widths[iChk], ROW_H); }
           else cell(xs[iChk], y, widths[iChk], ROW_H, 'Not checked', { size: 6.5, nowrap: true, fill: z });
           y += ROW_H;
@@ -1928,6 +2012,18 @@ function downloadPayrollPDF() {
         cell(xs[3], y, widths[3], ROW_H + 4, heldCap ? heldCap.toLocaleString('en-MY') : '—', { bold: true, size: 8.5, nowrap: true, fill: HELD });
         cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
              t('pay.tpHeld').replace('{n}', heldRows), { size: 6.5, fill: HELD, align: 'left' });
+        y += ROW_H + 4;
+      }
+      /* And a job nobody did, in grey rather than amber: held work is a
+         question waiting for the office, and this is an answer already
+         given. On the paper for the same reason as on the screen -- a row
+         in no total with nothing saying so is a figure that reads short. */
+      if (skipRows) {
+        const SKIP = [248, 250, 252];
+        cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpNotDoneLabel'), { bold: true, size: 8.5, fill: SKIP });
+        cell(xs[3], y, widths[3], ROW_H + 4, '—', { bold: true, size: 8.5, nowrap: true, fill: SKIP });
+        cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
+             t('pay.tpNotDoneFoot').replace('{n}', skipRows), { size: 6.5, fill: SKIP, align: 'left' });
         y += ROW_H + 4;
       }
 
@@ -2651,6 +2747,11 @@ const I18N = {
     'pay.tpHeldLabel':'Held back',
     'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
     'pay.tpNoGate':'⚠ The Checked columns are not on this database yet, so every recorded row still reaches the salary claim. Run shared/RUN_ME_transplant_checked.sql in the Supabase SQL Editor.',
+    'pay.tpNotDoneTag':'NOT DONE',
+    'pay.tpNotDoneCell':'Nobody did it',
+    'pay.tpNotDoneWhy':'The Field Conductor recorded this job as not done — nobody carried it out, so there is nothing to check and nothing to pay. If it was done after all, he reopens the job on the FC Portal and ticks the crew.',
+    'pay.tpNotDoneLabel':'Not done',
+    'pay.tpNotDoneFoot':'{n} job(s) are recorded as NOT DONE — a blanket spray is not always needed, so a plot can genuinely never have one. They are in no total here and on no salary claim. That is the conductor’s answer, not a missing crew.',
     'pay.noDOs':'No Delivery Order has been issued for this nursery this month yet.',
     'pay.loadingHint':'Ticks come from the driver’s phone when the DO is signed, or from here if nobody has ticked it yet. Once saved, a row locks — only an admin can change it after that.',
     'pay.doLocked':'Locked — saved by {who} on {when}. Only an admin can change this.',
@@ -2790,6 +2891,11 @@ const I18N = {
     'pay.tpHeldLabel':'Ditahan',
     'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
     'pay.tpNoGate':'⚠ Lajur Disemak belum ada pada pangkalan data ini, jadi semua baris yang direkod masih masuk ke tuntutan gaji. Jalankan shared/RUN_ME_transplant_checked.sql di Supabase SQL Editor.',
+    'pay.tpNotDoneTag':'TIDAK DIBUAT',
+    'pay.tpNotDoneCell':'Tiada sesiapa buat',
+    'pay.tpNotDoneWhy':'Field Conductor merekodkan kerja ini sebagai tidak dibuat — tiada sesiapa melakukannya, jadi tiada apa untuk disemak dan tiada apa untuk dibayar. Jika ia ada dibuat, beliau membuka kerja itu semula di FC Portal dan menanda pekerjanya.',
+    'pay.tpNotDoneLabel':'Tidak dibuat',
+    'pay.tpNotDoneFoot':'{n} kerja direkod sebagai TIDAK DIBUAT — semburan rata tidak selalu diperlukan, jadi ada plot yang memang tidak pernah perlu. Ia tiada dalam mana-mana jumlah di sini dan tiada dalam tuntutan gaji. Itu jawapan conductor, bukan pekerja yang tertinggal.',
     'pay.noDOs':'Belum ada Delivery Order dikeluarkan untuk nurseri ini bulan ini.',
     'pay.loadingHint':'Tanda datang daripada telefon pemandu semasa DO ditandatangan, atau dari sini jika belum ditanda lagi. Setelah disimpan, baris dikunci — hanya admin boleh menukarnya selepas itu.',
     'pay.doLocked':'Dikunci — disimpan oleh {who} pada {when}. Hanya admin boleh menukarnya.',
