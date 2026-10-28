@@ -551,7 +551,14 @@ function refreshPayrollTab() {
   if (s === 'monthly')  renderMonthly();
 }
 
-function closeModal(id) { $(id).classList.remove('open'); }
+function closeModal(id) {
+  $(id).classList.remove('open');
+  /* THE MAP IS DROPPED AS IT CLOSES, and it is done HERE because there are
+     three ways out — the cross, the backdrop and Esc — and a picture left
+     behind on one of them is a picture that flashes up under the next plot
+     somebody opens, for as long as the new one takes to arrive. */
+  if (id === 'map-modal') { const i = $('map-modal-img'); if (i) i.removeAttribute('src'); }
+}
 
 /* The section picker on this module's own entry forms. It lived in the Worker
    System block and moved out with it, which broke every form that fills one —
@@ -1728,8 +1735,39 @@ function mapsByBatch(plot, batches) {
   return all.slice();
 }
 
-/* One plot's maps, as something to open. A new tab rather than a box on this
-   page: that is what prints, which is half of what the map is wanted for. */
+/* THE MAP POPS OUT OVER THE TABLE. It used to open as a whole page of its
+   own, and the office asked for the lighter thing: *"我按的时候pop out就好
+   不用整页"*. Looking at a map is a glance — which plot is this, does it
+   match what the record says — and a page of its own turns a glance into
+   somewhere to leave and come back from.
+
+   WHAT THE NEW TAB WAS REALLY FOR MUST SURVIVE IT, and it is the easy half
+   to lose: the tab is where the browser PRINTS, and the reason to want a
+   drone map is to stand in the plot holding it. So the pop-out carries Open
+   in a new tab, and the thumbnail is still a real `<a href>` — a ctrl-click
+   or a middle-click opens the file as it always did, and so does the press
+   itself on a page where this script never ran.
+
+   A PDF MAP IS NOT POPPED OUT. The browser has a reader for one, with its
+   own print and page controls, and a PDF handed to an `<img>` shows nothing
+   at all. It keeps the tab and wears the document glyph it always wore, so
+   the two do not look alike while behaving differently. */
+function openMapBox(ev, url, plot, batch, when) {
+  /* A modified click is somebody asking for a tab on purpose. */
+  if (ev && (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button === 1)) return true;
+  const box = $('map-modal'), img = $('map-modal-img'), go = $('map-modal-open');
+  /* No pop-out on this page: the link stands, which is where it started. */
+  if (!box || !img || !go) return true;
+  if (ev) ev.preventDefault();
+  img.src = url;
+  img.alt = ['Drone map', plot, batch ? 'batch ' + batch : ''].filter(Boolean).join(' · ');
+  $('map-modal-title').textContent = 'Drone Map · ' + plot;
+  $('map-modal-sub').textContent = [batch ? 'Batch ' + batch : '', when].filter(Boolean).join(' · ');
+  go.href = url;
+  box.classList.add('open');
+  return false;
+}
+
 function mapCellHtml(plot, batches) {
   const maps = mapsByBatch(plot, batches);
   if (!maps.length) return '<span style="color:var(--text-faint);">—</span>';
@@ -1743,8 +1781,15 @@ function mapCellHtml(plot, batches) {
     const pdf = _isPdfUrl(m.url);
     const tip = ['Drone map', plot, m.batch ? 'batch ' + m.batch : '', m.date]
       .filter(Boolean).join(' \u00b7 ');
-    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}" href="${esc(m.url)}"
-      target="_blank" rel="noopener" title="${esc(tip)} — opens in a new tab, where it prints"
+    /* Quoted into an attribute, so the apostrophe closing the handler and
+       the angle bracket closing the tag both have to be seen off. */
+    const arg = (s) => esc(String(s == null ? '' : s)).replace(/'/g, '&#39;');
+    const pop = pdf ? '' : ` onclick="return openMapBox(event,'${arg(m.url)}',`
+      + `'${arg(plot)}','${arg(m.batch)}','${arg(m.date)}')"`;
+    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}"${pop} href="${esc(m.url)}"
+      target="_blank" rel="noopener" title="${esc(tip)} — ${pdf
+        ? 'opens in a new tab, where it prints'
+        : 'opens over the table; the pop-out has the tab it prints from'}"
       ${pdf ? '' : `style="background-image:url('${esc(m.url)}')"`}>${pdf ? '\u{1F4C4}' : ''}</a>
       <span class="tp-map-b">${label}</span></span>`;
   }).join('') + `</span>`;
@@ -4947,9 +4992,20 @@ $('global-month').addEventListener('change', async () => {
    to be on this list and left with the Worker System, and a missing element
    here would have thrown before the page finished setting itself up — taking
    the whole payroll screen down over a dialog nobody had opened. */
-['rate-modal','entry-modal','adjust-modal','cull-add-modal'].forEach(id => {
+['rate-modal','entry-modal','adjust-modal','cull-add-modal','map-modal'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(id); });
+});
+
+/* Esc closes the MAP and nothing else. It is the one dialog here that holds
+   no keying: shutting it costs a press to reopen, where Esc over a half
+   filled form would be the work gone — which is why the other four are not
+   on this listener and must not be added to it without a guard of their
+   own. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const box = $('map-modal');
+  if (box && box.classList.contains('open')) closeModal('map-modal');
 });
 
 (async () => {

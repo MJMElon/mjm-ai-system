@@ -45,7 +45,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=26">
+<link rel="stylesheet" href="npayroll_styles.css?v=27">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -521,7 +521,31 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=83"></script>
+<!-- THE DRONE MAP, POPPED OUT. A thumbnail on the by-plot table used to
+     open the picture as a whole page of its own, and the office asked for
+     it over the table instead: *"我按的时候pop out就好 不用整页"*.
+
+     OPEN IN A NEW TAB IS STILL ON IT, and that is not a leftover. The tab
+     was never only a bigger view — it is where the browser PRINTS the map,
+     and standing in the plot with it on paper is what a drone map is for.
+     Taking the press away must not take the printing with it. -->
+<div class="modal-bg" id="map-modal">
+  <div class="map-box">
+    <div class="modal-top">
+      <div><div class="modal-title" id="map-modal-title">Drone Map</div>
+        <div class="map-box-sub" id="map-modal-sub"></div></div>
+      <button class="modal-x" onclick="closeModal('map-modal')" title="Close (Esc)">&times;</button>
+    </div>
+    <div class="map-box-img"><img id="map-modal-img" alt="Drone map"></div>
+    <div class="map-box-foot">
+      <span style="font-size:11.5px;color:var(--text-faint);">Esc closes this</span>
+      <a class="btn btn-primary" id="map-modal-open" href="#" target="_blank"
+         rel="noopener">Open in a new tab &mdash; to print</a>
+    </div>
+  </div>
+</div>
+
+<script src="npayroll_script.js?v=84"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

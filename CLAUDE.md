@@ -3725,6 +3725,63 @@ which is the only honest place and also what stops it looking for ever for a
 page it would fit on. `payrollPlotPages` is pure — rows in, page numbers out
 — so the rule is driven directly instead of being inferred from a PDF.
 
+## A drone map POPS OUT, and the tab it printed from goes with it
+
+The thumbnail on the Transplanting by-plot table used to open the picture as
+a whole page of its own, and the office asked for the lighter thing: *"我按
+的时候pop out就好 不用整页"*. They are right about what the press is for —
+looking at a map there is a GLANCE (which plot is this, does it match the
+record), and a page of its own turns a glance into somewhere to leave and
+come back from.
+
+**WHAT THE NEW TAB WAS REALLY FOR IS THE EASY HALF TO LOSE.** The tab was
+never only a bigger view: it is where the browser PRINTS, and the reason to
+want a drone map at all is to stand in the plot holding it. The old comment
+in `mapCellHtml` said exactly that and it is still true, so:
+
+- **The pop-out carries Open in a new tab**, which is the printing door.
+- **The thumbnail is still a real `<a href>`** with its `target`. A
+  ctrl-click or a middle-click opens the file as it always did, `openMapBox`
+  steps aside for a modified click, and on a page where the script never ran
+  the press itself still reaches the map. The pop-out is an enhancement over
+  a link that works, not a replacement for one.
+
+**A PDF MAP IS NOT POPPED OUT.** The browser has a reader for one, with its
+own print and page controls, and a PDF handed to an `<img>` shows nothing at
+all. It keeps the tab and wears the document glyph it always wore, so the
+two do not look alike while behaving differently.
+
+Three smaller things, each a way this goes quietly wrong:
+
+- **It is sized to the WINDOW, not to `.modal`.** That class is 540px wide
+  because it is a form width, and a map in a column of form controls is the
+  thumbnail again only bigger. The picture is `contain` and never `cover`:
+  the edge of a plot is the part somebody is comparing against what is in
+  front of them, and a crop takes exactly that away.
+- **The picture is dropped as it CLOSES, and that is done in `closeModal`**
+  rather than in the handler — there are three ways out (the cross, the
+  backdrop, Esc) and a picture left behind on one of them flashes up under
+  the next plot somebody opens, for as long as the new one takes to arrive.
+- **Esc closes the MAP and nothing else.** It is the one dialog on that page
+  holding no keying, so shutting it costs a press to reopen; Esc over a half
+  filled form is the work gone. The other four are deliberately not on that
+  listener.
+
+`tests/transplant_by_plot.cjs` drives the real page, and the check the
+office actually asked for is **the absence of a tab**: it clicks the map and
+WAITS on `popup` the way the PDF check does. The first version gave it 120ms
+and passed over the previous page, which opens one every time — the PDF's
+own tab takes up to a second and a half to arrive, so a short look proves
+only that nothing was quick. Five of its checks fail on the previous page.
+
+**And the fixture's `MAP_PNG` is 8 × 8**, which is right for a test about
+attributes and wrong for looking at the thing: a screenshot taken against it
+shows a dot in a collapsed band and reads as a broken layout. Swap it for a
+real-sized picture before judging the sizing by eye — and remember the route
+rule while doing it, because `files.test` is already routed further down
+`boot` and **routes match in REVERSE registration order**, so a second one
+added above it never fires.
+
 ## A column list typed out in a row is a list that will be wrong
 
 The Work Maintenance claim form laid itself out with eleven numbers:
