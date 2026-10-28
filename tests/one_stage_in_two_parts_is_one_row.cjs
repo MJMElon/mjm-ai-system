@@ -100,7 +100,7 @@ check('…with their own dates', logs.N2.map((e) => [e.start, e.end]), [[ago(57)
 console.log('— the board reads its round through it');
 const BOARD = fs.readFileSync(path.join(ROOT, 'nursery_ops', 'nursery_ops_palms_board.html'), 'utf8');
 check('drawPvRound folds the spells', /MJMPalms\.mergeSpells\(cur \? cur\.entries/.test(BOARD), true);
-check('…and says when a row is two entries combined', /entries combined/.test(BOARD), true);
+check('…and says nothing about how many entries it was — the office: "不用写2 entry"', /entries combined/.test(BOARD), false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

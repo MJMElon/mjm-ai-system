@@ -665,8 +665,7 @@ function drawPvRound() {
       return '<tr class="' + (e.end ? '' : 'now') + '">' +
         '<td><span class="pv-step-n">' + (es.length - i) + '</span></td>' +
         '<td class="pv-st-name">' + esc(act ? act.name : 'Stage ' + e.actN) +
-          (e.by ? '<div class="pv-st-by">' + esc(e.by) + '</div>' : '') +
-          (e.parts > 1 ? '<div class="pv-st-by" title="Keyed in ' + e.parts + ' parts back to back, shown as one">' + e.parts + ' entries combined</div>' : '') + '</td>' +
+          (e.by ? '<div class="pv-st-by">' + esc(e.by) + '</div>' : '') + '</td>' +
         '<td>' + MJMPalms.prettyD(e.start) + '</td>' +
         '<td>' + (e.end ? MJMPalms.prettyD(e.end) : '<span class="pv-running">running</span>') + '</td>' +
         '<td class="pv-st-num">' + days + '</td>' +
