@@ -249,32 +249,114 @@ const payOf = (page, sec) => page.evaluate((s) =>
   txt = await tableText(mp);
   check('2 of 3 checked, B7 still held', /2 of 3 plots checked/.test(txt) && /1 not checked yet/.test(txt), true);
 
-  console.log('— by hand: Remove, and nothing else');
-  check('no Count it and no Add plot anywhere — only Check and Remove',
+  console.log('— by hand: Check, Remove, and Add');
+  /* THERE IS STILL NO BUTTON THAT PAYS A SLOW PLOT. The office took Count it
+     off — "count it 不用" — and it stays off: the only way a plot PALMS says
+     is slow can be paid is for somebody to key a run that is not slow, which
+     is Add by hand, and that is timed like every other. */
+  check('no Count it anywhere',
     await mp.evaluate(() => {
       const txt = document.getElementById('tab-payroll').textContent;
-      return [/Count it/.test(txt), /Add plot/.test(txt), typeof window.openCullHand];
-    }), [false, false, 'undefined']);
-  check('a plot that does not earn it offers no button at all',
+      return [/Count it/.test(txt), typeof window.openCullHand];
+    }), [false, 'undefined']);
+  /* AND REMOVE IS ON EVERY ROW, which is the office's own next sentence:
+     *"底下 B3 B11 我可以remove"*. A plot earning nothing is not paid either
+     way, so the record moves no money — it moves the plot off the list
+     somebody is working down. */
+  check('a plot that does not earn it offers Remove, like every other row',
     await mp.evaluate(() => [...document.querySelectorAll('#payroll-table tr')]
       .filter(tr => /Over 15 days|not closed|No Saringan/.test(tr.textContent))
-      .map(tr => tr.querySelectorAll('button').length)), [0, 0, 0, 0]);
-  await mp.evaluate(() => openCullRemove('B1'));
-  await mp.fill('#ch-remark', 'should not go');
-  await mp.click('#ch-save');
-  check('a Checked plot cannot be removed until it is unchecked', m.errs.some(e => /B1 is Checked\. Uncheck it first/.test(e)), true);
-  await mp.evaluate(() => { document.getElementById('cull-hand').style.display = 'none'; });
-  await mp.evaluate(() => openCullRemove('B7'));
-  await mp.click('#ch-save');
-  check('a Remove with no reason is refused', m.errs.some(e => /Say why/.test(e)), true);
-  await mp.fill('#ch-remark', 'Re-culled, does not count');
-  await mp.click('#ch-save');
-  await mp.waitForFunction(() => document.getElementById('cull-hand').style.display === 'none');
-  await mp.waitForFunction(() => /Taken out by hand/.test(document.getElementById('payroll-table').textContent));
+      .map(tr => [...tr.querySelectorAll('button')].map(b => b.textContent.trim()))),
+    [['Remove'], ['Remove'], ['Remove'], ['Remove']]);
+  /* ONE PRESS, no dialog and no reason: *"我一按remove 就remove了 不要存在
+     也不用写remark"*. What makes that safe is the rule beside it — nothing
+     is paid until it is Checked, and a Checked plot refuses Remove — so no
+     press here can move anybody's money. */
+  await mp.evaluate(() => cullRemovePlot('B1'));
+  check('a Checked plot cannot be removed until it is unchecked',
+    [m.errs.some(e => /B1 is Checked\. Uncheck it first/.test(e)),
+     await mp.evaluate(() => !!document.getElementById('cull-hand'))], [true, false]);
+  await mp.evaluate(() => cullRemovePlot('B7'));
+  await mp.waitForFunction(() => !/B7/.test(document.getElementById('payroll-table').textContent));
   txt = await tableText(mp);
-  check('B7 is listed under NOT earning it, saying who took it out and why, with Put back',
-    [(await rowsOf(mp)).find(r => r[0] === 'B7'), /NOT earning it.*B7Taken out by hand: Re-culled, does not count.*Put back/.test(txt)],
-    [['B7', false, 10, false], true]);
+  check('one press and B7 is OFF both lists, with no reason asked for',
+    [/B7/.test(txt), (await rowsOf(mp)).find(r => r[0] === 'B7'),
+     await mp.evaluate(() => window.__DB.mjmnpayroll_cull_incentive_overrides
+       .find(o => o.plot === 'B7').remark)],
+    [false, ['B7', false, 10, false], null]);
+  check('and the line under the table says how many went, with the way back',
+    [/1 taken off this month/.test(await mp.evaluate(() => document.getElementById('payroll-extra').textContent)),
+     /B7 · Put back/.test(await mp.evaluate(() => document.getElementById('payroll-extra').textContent))],
+    [true, true]);
+
+  console.log('— Remove on a plot that earns nothing anyway');
+  /* The office asked for this half the day before: *"底下 B3 B11 我可以
+     remove"*. B2 is over 15 days and was never going to be paid, so the
+     press moves no money at all — what it moves is the list. */
+  await mp.evaluate(() => cullRemovePlot('B2'));
+  await mp.waitForFunction(() => !/B2/.test(document.getElementById('payroll-table').textContent));
+  txt = await tableText(mp);
+  check('B2 goes the same way, and the NOT-earning list is the plots still to look at',
+    [/B2/.test(txt), /B4/.test(txt) && /B5/.test(txt) && /B6/.test(txt)], [false, true]);
+  check('and it is still not paid, and never was', (await rowsOf(mp)).find(r => r[0] === 'B2'),
+    ['B2', false, 19, false]);
+  check('both are on the one line, and Put back is the only way they come back',
+    /2 taken off this month/.test(await mp.evaluate(() => document.getElementById('payroll-extra').textContent)), true);
+
+  console.log('— Add record');
+  /* The office named the button: *"add a plot by hand 改成 add record"*. */
+  check('the button is under the table for somebody who may change pay, and reads Add record',
+    await mp.evaluate(() => {
+      const b = document.getElementById('cull-add-btn');
+      return [!!b, b ? b.textContent.trim() : ''];
+    }), [true, '+ Add record']);
+  await mp.evaluate(() => openCullAdd());
+  await mp.click('#ca-save');
+  check('it refuses with no plot', m.errs.some(e => /Which plot/.test(e)), true);
+  await mp.fill('#ca-plot', 'B3-R');
+  await mp.click('#ca-save');
+  check('a -R plot is refused — it is on no PALMS screen and no incentive',
+    m.errs.some(e => /B3-R is a replant plot/.test(e)), true);
+  await mp.fill('#ca-plot', 'B9');
+  await mp.click('#ca-save');
+  check('both days are required — that is the run, and the run is the rule',
+    m.errs.some(e => /Key both days/.test(e)), true);
+  /* THE 15-DAY RULE STILL DECIDES. Adding by hand supplies a run PALMS has
+     not got; it does not waive the test — which is what keeps this from
+     being the Count it button the office took off. */
+  await mp.fill('#ca-start', D(1));
+  await mp.fill('#ca-end', D(26));
+  check('the dialog times it as it is keyed, and says it cannot go in',
+    await mp.evaluate(() => document.getElementById('ca-days').textContent),
+    '25 days — over 15, this cannot be added');
+  await mp.click('#ca-save');
+  check('and the save refuses it, naming the figure',
+    m.errs.some(e => /B9 took 25 days, which is over 15/.test(e)
+                  && /does not waive the rule/.test(e)), true);
+  await mp.fill('#ca-end', D(10));
+  await mp.fill('#ca-remark', 'PALMS was never closed for this plot');
+  await mp.click('#ca-save');
+  await mp.waitForFunction(() => document.getElementById('cull-add').style.display === 'none');
+  await mp.waitForFunction(() => /B9/.test(document.getElementById('payroll-table').textContent));
+  check('the by-hand record carries the run, the nursery, the reason and who',
+    await mp.evaluate(() => {
+      const o = window.__DB.mjmnpayroll_cull_incentive_overrides.find(x => x.plot === 'B9');
+      return [o.action, o.section, o.saringan_date, o.transplant_date, o.remark, !!o.created_at];
+    }), ['add', 'BNN', D(1), D(10), 'PALMS was never closed for this plot', true]);
+  check('it is on the list, timed, counted — and NOT paid until somebody Checks it',
+    (await rowsOf(mp)).find(r => r[0] === 'B9'), ['B9', true, 9, false]);
+  txt = await tableText(mp);
+  check('the row says it was added by hand, and the plot count moved with it',
+    [/B9Added by hand: PALMS was never closed for this plot/.test(txt),
+     /2 of 3 plots checked/.test(txt)], [true, true]);
+  /* Delete puts it back to what PALMS says — which here is nothing at all,
+     the ledger never having mentioned B9. */
+  await mp.evaluate(() => {
+    const id = window.__DB.mjmnpayroll_cull_incentive_overrides.find(x => x.plot === 'B9').id;
+    cullDeleteOverride(id);
+  });
+  await mp.waitForFunction(() => !/B9/.test(document.getElementById('payroll-table').textContent));
+  check('Delete takes a by-hand plot off again', (await rowsOf(mp)).some(r => r[0] === 'B9'), false);
   await mp.evaluate(() => toggleCullChecked('B3'));   // and uncheck one
   await mp.waitForFunction(() => window.__DB.nops_cull_incentive_checks.some(r => r.plot === 'B3' && !r.checked_at));
   check('Uncheck clears the tick and what it had written down',
@@ -359,6 +441,18 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [/RUN_ME_cull_incentive_checked\.sql/.test(await m2.page.evaluate(() => document.getElementById('payroll-offreg').textContent)),
      await m2.page.evaluate(() => document.querySelectorAll('#payroll-table .btn-check').length)], [true, 0]);
   await m2.page.close();
+  /* And the other table. Adding or removing by hand writes to the overrides
+     table, so without it both buttons go rather than refusing one at a time
+     with nothing saying why — and the page names the file to run. */
+  const m3 = await boot(browser, Object.assign({}, db,
+    { __MISSING: ['mjmnpayroll_cull_incentive_overrides'] }), 'maint');
+  check('without the by-hand table there is no Add and no Remove, and it says which file to run',
+    [await m3.page.evaluate(() => !!document.getElementById('cull-add-btn')),
+     await m3.page.evaluate(() => /Remove/.test(document.getElementById('payroll-table').textContent)),
+     /RUN_ME_cull_incentive_checked\.sql/.test(await m3.page.evaluate(() =>
+       document.getElementById('payroll-offreg').textContent))],
+    [false, false, true]);
+  await m3.page.close();
 
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);

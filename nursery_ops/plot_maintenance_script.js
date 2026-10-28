@@ -1683,6 +1683,19 @@ let _cullLoading = {};
 function _cullYm() { return document.getElementById('global-month').value; }
 const _cullPd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
 
+/* WHY A PLOT IS NOT EARNING IT — the sentence in the NOT-earning list. At
+   file scope rather than inside the renderer so anything else that has to
+   name the reason says it in the same words: the Remove dialog did, until
+   the office asked for Remove to be one press with nothing to read. */
+function _cullWhy(r) {
+  const T = window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15;
+  if (r.override && r.override.action === 'remove') return 'Taken out by hand';
+  if (r.state === 'slow') return `Over ${T} days`;
+  if (r.state === 'open') return 'Transplanting not closed in PALMS';
+  if (r.state === 'unread') return 'PALMS not read';
+  return 'No Saringan in PALMS';
+}
+
 async function loadCullIncentiveForPayroll(ym) {
   if (!_supabase || !window.MJMCullIncentive) return;
   _cullLoading[ym] = true;
@@ -1770,8 +1783,15 @@ function renderCullIncentivePayroll() {
   const st = _cullCache[ym];
   const rows = cullIncentiveRows(n, ym);
   const mayHand = _cullMayHand() && st.overridesReady;
+  /* A PLOT TAKEN OUT BY HAND IS OFF BOTH LISTS. The office asked for it in
+     the plainest words there are: *"我一按remove 就remove了 不要存在"*. It
+     was drawn in the NOT-earning list reading "Taken out by hand", which is
+     a row they had just said they did not want to see. The RECORD is still
+     written — that is what a Put back is made of — and the one line under
+     the table says how many went and offers it. */
+  const taken = rows.filter(r => r.override && r.override.action === 'remove');
   const qualify = rows.filter(r => r.counts);
-  const other = rows.filter(r => !r.counts);
+  const other = rows.filter(r => !r.counts && !(r.override && r.override.action === 'remove'));
   const who = MJMCullIncentive.whoEarns(n);
   const T = MJMCullIncentive.TARGET_DAYS;
   const q = s => esc(s).replace(/'/g, '&#39;');
@@ -1784,13 +1804,7 @@ function renderCullIncentivePayroll() {
     return `<div style="font-size:10.5px;font-weight:700;color:${o.action === 'add' ? '#15803d' : '#b45309'};margin-top:2px;"
       title="${esc([o.remark, stamp].filter(Boolean).join(' — '))}">${what}${o.remark ? ': ' + esc(o.remark) : ''}</div>`;
   };
-  const why = r => {
-    if (r.override && r.override.action === 'remove') return 'Taken out by hand';
-    if (r.state === 'slow') return `Over ${T} days`;
-    if (r.state === 'open') return 'Transplanting not closed in PALMS';
-    if (r.state === 'unread') return 'PALMS not read';
-    return 'No Saringan in PALMS';
-  };
+  const why = _cullWhy;
   const handBtn = r => {
     if (!mayHand || r.check) return '';
     if (r.override) {
@@ -1798,12 +1812,23 @@ function renderCullIncentivePayroll() {
       return `<button class="btn btn-sm" onclick="cullDeleteOverride(${Number(r.override.id)})"
         title="Delete the by-hand record — the plot goes back to what PALMS says">${label}</button>`;
     }
-    /* Check or Remove, and nothing else — the office: "count it 不用 只需要
-       check / removed". A plot PALMS does not qualify is not paid; there is
-       no button that pays it anyway. */
-    return r.counts
-      ? `<button class="btn btn-sm" onclick="openCullRemove('${q(r.plot)}')" title="Leave this plot out of the incentive this month">Remove</button>`
-      : '';
+    /* REMOVE IS ON EVERY ROW, earning it or not, and it is ONE PRESS: no
+       dialog, no reason. The office: *"我一按remove 就remove了 不要存在 也不
+       用写remark"*. It was a dialog demanding a sentence, which is a form to
+       fill in for a row they simply did not want on the screen.
+
+       WHAT MAKES ONE PRESS SAFE is the Checked rule beside it: nothing is
+       paid until a plot is Checked, and a Checked plot REFUSES Remove until
+       somebody unchecks it. So no press here can move money — the worst it
+       can do is take a row off a list, and the line under the table puts it
+       back.
+
+       There is still NO button that PAYS a plot PALMS says is slow — the
+       office asked for that off ("count it 不用") and it stays off. Supplying
+       a run PALMS has not got is Add record, which times it like any
+       other. */
+    return `<button class="btn btn-sm" onclick="cullRemovePlot('${q(r.plot)}')"
+      title="Take this plot off the list for this month — Put back is under the table">Remove</button>`;
   };
   const checkCell = r => {
     if (!st.checksReady) return `<span style="color:var(--text-faint);font-size:11px;"
@@ -1849,6 +1874,11 @@ function renderCullIncentivePayroll() {
     </tr></tfoot>`;
   if (other.length) {
     h += `<tbody><tr><th class="wk-th" colspan="${span}" style="background:#f3f4f6;color:#6b7280;">Transplanted this month and NOT earning it</th></tr>`;
+    /* A row somebody has taken out by hand SINKS to the foot of this list.
+       It is still on the screen — nothing here vanishes with nothing saying
+       where it went — but the plots still to be looked at are the ones at
+       the top, which is what the list is read for. */
+    other.sort((a, b) => (a.override ? 1 : 0) - (b.override ? 1 : 0));
     other.forEach(r => {
       h += `<tr style="opacity:.75;">
         <td></td>
@@ -1864,6 +1894,29 @@ function renderCullIncentivePayroll() {
     h += `</tbody>`;
   }
   tbl.innerHTML = h;
+
+  /* The one button that is not on a row. It sits UNDER the table because
+     what it adds is a row at the top of it, and because a plot the ledger
+     never mentioned is the rarer of the two things done on this screen —
+     the common one is working down the list that is already there. */
+  const extra = document.getElementById('payroll-extra');
+  if (extra) {
+    /* THE ONE LINE THAT SAYS WHERE A REMOVED PLOT WENT. The rows are off
+       both lists, which is what the office asked for; this is not a row and
+       not a list, it is the way back from a mis-press — without it the only
+       undo would be the Supabase dashboard. */
+    const back = taken.length && mayHand
+      ? `<div style="margin-top:8px;font-size:11px;color:var(--text-faint);">
+           ${taken.length} taken off this month: ${taken.map(r =>
+             `<button class="btn btn-sm" onclick="cullDeleteOverride(${Number(r.override.id)})"
+                title="Put ${esc(r.plot)} back on the list">${esc(r.plot)} · Put back</button>`).join(' ')}
+         </div>`
+      : '';
+    extra.innerHTML = (mayHand
+      ? `<button class="btn btn-sm" id="cull-add-btn" onclick="openCullAdd()" style="margin-top:8px;"
+           title="Add a plot PALMS has no run for — you key the two days, and the ${T}-day rule still decides">+ Add record</button>`
+      : '') + back;
+  }
 
   /* What makes the list wrong, or look wrong and is not. */
   const notes = [];
@@ -1906,57 +1959,165 @@ async function toggleCullChecked(plot) {
   }
 }
 
-/* Remove goes through a dialog, never a prompt: a prompt dismissed out of
-   habit is a cancel that looks like a save. It is the ONLY by-hand change
-   offered — adding or counting a plot by hand came off at the office's
-   word. A record already written as `add` before that is still honoured,
-   and its row offers Undo, so nothing already agreed moves on its own. */
-let _cullHandEl = null;
-function openCullRemove(plot) {
+/* REMOVE IS ONE PRESS. No dialog and no reason: the office asked for that
+   in the plainest words there are — *"我一按remove 就remove了 不要存在 也不
+   用写remark"* — and they are right that a form to fill in is the wrong
+   shape for taking a row off a list.
+
+   IT IS SAFE TO BE ONE PRESS because of the rule beside it: a plot is paid
+   only once it is CHECKED, and a Checked plot refuses Remove until somebody
+   unchecks it. So no press here can move anybody's money. What it can do is
+   take a row off a list, and the line under the table puts it back.
+
+   It is still a RECORD and never a deletion — one `remove` row per plot per
+   month, carrying who and when. That record IS the Put back. */
+async function cullRemovePlot(plot) {
   if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
-  if (!_cullHandEl) {
+  const n = getNursery(), ym = _cullYm(), st = _cullCache[ym], CI = MJMCullIncentive;
+  if (!st || !st.overridesReady) {
+    alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
+    return;
+  }
+  const name = String(plot || '').trim().toUpperCase();
+  if (!name) return;
+  const row = cullIncentiveRows(n, ym).find(r => CI.key(r.plot) === CI.key(name));
+  /* The one refusal. Taking back an agreement starts with taking it back. */
+  if (row && row.check) { alert(name + ' is Checked. Uncheck it first, then remove it.'); return; }
+  const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
+    month: ym, plot: name, action: 'remove',
+    section: CI.sectionOfPlot(name) || n,
+    saringan_date: null, transplant_date: null, remark: null,
+    created_by: window.currentUserEmail || _signingAs() || null,
+    created_at: new Date().toISOString()
+  }, { onConflict: 'month,plot' });
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  await _cullReload(ym);
+}
+
+/* ════════════ ADD A PLOT BY HAND ════════════
+   The office asked for it back in one line: *"我要可以manual add record"*.
+
+   IT SUPPLIES THE RUN, IT DOES NOT WAIVE THE RULE. That is the whole of the
+   design, and it is what keeps it from being the "Count it" button the
+   office took off a day earlier ("count it 不用"). PALMS is where a run is
+   timed, and a plot can be missing one for reasons that have nothing to do
+   with the ground: the Saringan was never opened, the Transplanting was
+   never closed, a phone pushed an entry back. The office knows the two days
+   and keys them here — and the 15-day test then decides, exactly as it does
+   for every other plot. A run of 25 days keyed by hand is refused in the
+   dialog, naming the figure.
+
+   So there is still no button anywhere that pays a plot PALMS says is slow.
+
+   The row it makes is an ordinary one: it goes in the qualifying list
+   marked Added by hand, and it is NOT paid until somebody Checks it, like
+   every other plot. */
+let _cullAddEl = null;
+function openCullAdd() {
+  if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  const ym = _cullYm(), st = _cullCache[ym];
+  if (!st || !st.overridesReady) {
+    alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
+    return;
+  }
+  if (!_cullAddEl) {
     const el = document.createElement('div');
-    el.id = 'cull-hand';
+    el.id = 'cull-add';
     el.style.cssText = 'position:fixed;inset:0;background:rgba(15,12,8,.5);z-index:9998;display:none;align-items:center;justify-content:center;padding:20px;';
     const lab = 'display:block;font-size:11px;font-weight:700;color:var(--text-muted,#6b7280);margin:10px 0 4px;';
     const inp = 'width:100%;padding:9px 10px;border:1.5px solid var(--border,#d1d5db);border-radius:8px;font-size:13px;';
-    el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:20px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
-      <div id="ch-title" style="font-size:14px;font-weight:800;"></div>
-      <div id="ch-what" style="font-size:12px;color:var(--text-muted,#6b7280);margin-top:4px;"></div>
-      <label style="${lab}">Why (required)</label><input id="ch-remark" style="${inp}">
+    el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="font-size:14px;font-weight:800;">Add a plot to the culling incentive</div>
+      <div id="ca-what" style="font-size:12px;color:var(--text-muted,#6b7280);margin-top:4px;"></div>
+      <label style="${lab}">Plot</label><input id="ca-plot" style="${inp}" placeholder="B4">
+      <label style="${lab}">Nursery</label><select id="ca-sec" style="${inp}"></select>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;"><label style="${lab}">Saringan started</label><input id="ca-start" type="date" style="${inp}"></div>
+        <div style="flex:1;"><label style="${lab}">Transplanting ended</label><input id="ca-end" type="date" style="${inp}"></div>
+      </div>
+      <div id="ca-days" style="font-size:12px;font-weight:700;margin-top:8px;"></div>
+      <label style="${lab}">Why (optional)</label><input id="ca-remark" style="${inp}" placeholder="PALMS was never closed for this plot">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
-        <button class="btn" id="ch-cancel">Cancel</button><button class="btn btn-primary" id="ch-save">Remove</button></div></div>`;
+        <button class="btn" id="ca-cancel">Cancel</button><button class="btn btn-primary" id="ca-save">Add</button></div></div>`;
     document.body.appendChild(el);
     const close = () => { el.style.display = 'none'; };
     el.addEventListener('click', e => { if (e.target === el) close(); });
-    el.querySelector('#ch-cancel').addEventListener('click', close);
-    el.querySelector('#ch-save').addEventListener('click', saveCullRemove);
-    _cullHandEl = el;
+    el.querySelector('#ca-cancel').addEventListener('click', close);
+    el.querySelector('#ca-save').addEventListener('click', saveCullAdd);
+    /* The duration as it is keyed, so the refusal is never a surprise at
+       the end. It is MJMPalms.diffDays and not a second day count: two
+       pages timing one run two ways is how a plot is fast on one screen
+       and slow on the next. */
+    const show = () => {
+      const d = _cullAddDays();
+      const T = MJMCullIncentive.TARGET_DAYS;
+      const box = el.querySelector('#ca-days');
+      if (d == null) { box.textContent = ''; return; }
+      box.textContent = d <= T ? `${d} days — it qualifies` : `${d} days — over ${T}, this cannot be added`;
+      box.style.color = d <= T ? '#15803d' : '#c0392b';
+    };
+    el.querySelector('#ca-start').addEventListener('change', show);
+    el.querySelector('#ca-end').addEventListener('change', show);
+    _cullAddEl = el;
   }
-  const el = _cullHandEl;
-  el.dataset.plot = plot;
-  el.querySelector('#ch-title').textContent = `Take ${plot} out of the culling incentive`;
-  el.querySelector('#ch-what').textContent = `Nobody earns it for ${plot} in ${getMonth()}. PALMS and the ledger are not changed.`;
-  el.querySelector('#ch-remark').value = '';
+  const el = _cullAddEl;
+  const n = getNursery();
+  el.querySelector('#ca-what').textContent =
+    `For ${getMonth()}. Key the two days off PALMS or off the paper — the `
+    + `${MJMCullIncentive.TARGET_DAYS}-day rule still decides, and the plot is paid only once it is Checked.`;
+  el.querySelector('#ca-sec').innerHTML = MJMCullIncentive.NURSERIES
+    .map(s => `<option value="${esc(s)}"${s === n ? ' selected' : ''}>${esc(NURSERY_NAMES[s] || s)}</option>`).join('');
+  el.querySelector('#ca-plot').value = '';
+  el.querySelector('#ca-start').value = '';
+  el.querySelector('#ca-end').value = '';
+  el.querySelector('#ca-days').textContent = '';
+  el.querySelector('#ca-remark').value = '';
   el.style.display = 'flex';
-  setTimeout(() => el.querySelector('#ch-remark').focus(), 30);
+  setTimeout(() => el.querySelector('#ca-plot').focus(), 30);
 }
 
-async function saveCullRemove() {
+/* The run as the dialog has it, or null where it cannot be timed. */
+function _cullAddDays() {
+  const el = _cullAddEl;
+  if (!el || !window.MJMPalms) return null;
+  const a = el.querySelector('#ca-start').value, b = el.querySelector('#ca-end').value;
+  if (!a || !b) return null;
+  const d = MJMPalms.diffDays(a, b);
+  return Number.isFinite(d) ? d : null;
+}
+
+async function saveCullAdd() {
   if (!_cullMayHand()) return;
-  const el = _cullHandEl, n = getNursery(), ym = _cullYm(), CI = MJMCullIncentive;
-  const plot = String(el.dataset.plot || '').trim().toUpperCase();
-  const remark = String(el.querySelector('#ch-remark').value || '').trim();
-  if (!plot) return;
-  if (!remark) { alert('Say why — a plot taken out by hand is one somebody will ask about.'); return; }
-  const checked = cullIncentiveRows(n, ym).find(r => CI.key(r.plot) === CI.key(plot) && r.check);
-  if (checked) { alert(plot + ' is Checked. Uncheck it first, then remove it.'); return; }
-  const btn = el.querySelector('#ch-save'); btn.disabled = true;
+  const el = _cullAddEl, ym = _cullYm(), CI = MJMCullIncentive;
+  const plot = String(el.querySelector('#ca-plot').value || '').trim().toUpperCase();
+  const section = String(el.querySelector('#ca-sec').value || '').trim();
+  const start = el.querySelector('#ca-start').value || '';
+  const end = el.querySelector('#ca-end').value || '';
+  const remark = String(el.querySelector('#ca-remark').value || '').trim();
+  if (!plot) { alert('Which plot?'); return; }
+  /* A -R plot is on no PALMS screen and on no incentive, by hand or not. */
+  if (CI.isReplant(plot)) { alert(plot + ' is a replant plot. The culling incentive is not paid on one.'); return; }
+  if (!start || !end) { alert('Key both days — the Saringan it started on and the day Transplanting ended.\n\nThat is the run, and it is what the rule is about.'); return; }
+  if (end < start) { alert('Transplanting ended before the Saringan started. Check the two days.'); return; }
+  const days = _cullAddDays();
+  if (days == null) { alert('PALMS could not be read, so the run cannot be timed. Reload the page and try again.'); return; }
+  if (days > CI.TARGET_DAYS) {
+    alert(`${plot} took ${days} days, which is over ${CI.TARGET_DAYS}.\n\n`
+      + 'Adding a plot by hand supplies the run PALMS has not got; it does not waive the rule.');
+    return;
+  }
+  /* The reason is OPTIONAL, like the Remove beside it — the office does not
+     want a form to fill in. The box stays because an added plot is the one
+     somebody asks about in three months, and the two days on the record
+     already say most of it. */
+  const already = cullIncentiveRows('', ym).find(r => CI.key(r.plot) === CI.key(plot) && r.override);
+  if (already && !confirm(`${plot} already carries a by-hand record this month.\n\nAdding replaces it.`)) return;
+  const btn = el.querySelector('#ca-save'); btn.disabled = true;
   try {
     const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
-      month: ym, plot, action: 'remove',
-      section: CI.sectionOfPlot(plot) || n,
-      saringan_date: null, transplant_date: null, remark,
+      month: ym, plot, action: 'add',
+      section: CI.sectionOf(section) || CI.sectionOfPlot(plot),
+      saringan_date: start, transplant_date: end, remark: remark || null,
       created_by: window.currentUserEmail || _signingAs() || null,
       created_at: new Date().toISOString()
     }, { onConflict: 'month,plot' });
