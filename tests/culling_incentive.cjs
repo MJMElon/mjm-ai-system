@@ -268,48 +268,48 @@ const payOf = (page, sec) => page.evaluate((s) =>
       .filter(tr => /Over 15 days|not closed|No Saringan/.test(tr.textContent))
       .map(tr => [...tr.querySelectorAll('button')].map(b => b.textContent.trim()))),
     [['Remove'], ['Remove'], ['Remove'], ['Remove']]);
-  await mp.evaluate(() => openCullRemove('B1'));
-  await mp.fill('#ch-remark', 'should not go');
-  await mp.click('#ch-save');
-  check('a Checked plot cannot be removed until it is unchecked', m.errs.some(e => /B1 is Checked\. Uncheck it first/.test(e)), true);
-  await mp.evaluate(() => { document.getElementById('cull-hand').style.display = 'none'; });
-  await mp.evaluate(() => openCullRemove('B7'));
-  await mp.click('#ch-save');
-  check('a Remove with no reason is refused', m.errs.some(e => /Say why/.test(e)), true);
-  await mp.fill('#ch-remark', 'Re-culled, does not count');
-  await mp.click('#ch-save');
-  await mp.waitForFunction(() => document.getElementById('cull-hand').style.display === 'none');
-  await mp.waitForFunction(() => /Taken out by hand/.test(document.getElementById('payroll-table').textContent));
+  /* ONE PRESS, no dialog and no reason: *"我一按remove 就remove了 不要存在
+     也不用写remark"*. What makes that safe is the rule beside it — nothing
+     is paid until it is Checked, and a Checked plot refuses Remove — so no
+     press here can move anybody's money. */
+  await mp.evaluate(() => cullRemovePlot('B1'));
+  check('a Checked plot cannot be removed until it is unchecked',
+    [m.errs.some(e => /B1 is Checked\. Uncheck it first/.test(e)),
+     await mp.evaluate(() => !!document.getElementById('cull-hand'))], [true, false]);
+  await mp.evaluate(() => cullRemovePlot('B7'));
+  await mp.waitForFunction(() => !/B7/.test(document.getElementById('payroll-table').textContent));
   txt = await tableText(mp);
-  check('B7 is listed under NOT earning it, saying who took it out and why, with Put back',
-    [(await rowsOf(mp)).find(r => r[0] === 'B7'), /NOT earning it.*B7Taken out by hand: Re-culled, does not count.*Put back/.test(txt)],
-    [['B7', false, 10, false], true]);
+  check('one press and B7 is OFF both lists, with no reason asked for',
+    [/B7/.test(txt), (await rowsOf(mp)).find(r => r[0] === 'B7'),
+     await mp.evaluate(() => window.__DB.mjmnpayroll_cull_incentive_overrides
+       .find(o => o.plot === 'B7').remark)],
+    [false, ['B7', false, 10, false], null]);
+  check('and the line under the table says how many went, with the way back',
+    [/1 taken off this month/.test(await mp.evaluate(() => document.getElementById('payroll-extra').textContent)),
+     /B7 · Put back/.test(await mp.evaluate(() => document.getElementById('payroll-extra').textContent))],
+    [true, true]);
 
   console.log('— Remove on a plot that earns nothing anyway');
-  /* The office asked for this half in one line. It moves no money — B2 is
-     over 15 days and was never going to be paid — so what it is FOR is the
-     list: a row reading "Taken out by hand" has been looked at, where "Over
-     15 days" has not. */
-  await mp.evaluate(() => openCullRemove('B2'));
-  check('the dialog says no money moves, and names the reason the row names',
-    await mp.evaluate(() => document.getElementById('ch-what').textContent),
-    `B2 earns nothing in ${await mp.evaluate(() => getMonth())} as it is (Over 15 days), so no money moves. `
-      + 'This records that somebody has been through it, and takes it off the list.');
-  await mp.fill('#ch-remark', 'Re-culled in September, not this intake');
-  await mp.click('#ch-save');
-  await mp.waitForFunction(() => /B2Taken out by hand/.test(
-    document.getElementById('payroll-table').textContent.replace(/\s+/g, ' ')));
+  /* The office asked for this half the day before: *"底下 B3 B11 我可以
+     remove"*. B2 is over 15 days and was never going to be paid, so the
+     press moves no money at all — what it moves is the list. */
+  await mp.evaluate(() => cullRemovePlot('B2'));
+  await mp.waitForFunction(() => !/B2/.test(document.getElementById('payroll-table').textContent));
   txt = await tableText(mp);
-  const notEarning = txt.slice(txt.indexOf('NOT earning it'));
-  check('it reads Taken out by hand and SINKS to the foot of that list',
-    [/B2Taken out by hand: Re-culled in September, not this intake/.test(notEarning),
-     notEarning.indexOf('B2') > notEarning.indexOf('B6')], [true, true]);
+  check('B2 goes the same way, and the NOT-earning list is the plots still to look at',
+    [/B2/.test(txt), /B4/.test(txt) && /B5/.test(txt) && /B6/.test(txt)], [false, true]);
   check('and it is still not paid, and never was', (await rowsOf(mp)).find(r => r[0] === 'B2'),
     ['B2', false, 19, false]);
+  check('both are on the one line, and Put back is the only way they come back',
+    /2 taken off this month/.test(await mp.evaluate(() => document.getElementById('payroll-extra').textContent)), true);
 
-  console.log('— Add a plot by hand');
-  check('the button is under the table for somebody who may change pay',
-    await mp.evaluate(() => !!document.getElementById('cull-add-btn')), true);
+  console.log('— Add record');
+  /* The office named the button: *"add a plot by hand 改成 add record"*. */
+  check('the button is under the table for somebody who may change pay, and reads Add record',
+    await mp.evaluate(() => {
+      const b = document.getElementById('cull-add-btn');
+      return [!!b, b ? b.textContent.trim() : ''];
+    }), [true, '+ Add record']);
   await mp.evaluate(() => openCullAdd());
   await mp.click('#ca-save');
   check('it refuses with no plot', m.errs.some(e => /Which plot/.test(e)), true);
@@ -334,8 +334,6 @@ const payOf = (page, sec) => page.evaluate((s) =>
     m.errs.some(e => /B9 took 25 days, which is over 15/.test(e)
                   && /does not waive the rule/.test(e)), true);
   await mp.fill('#ca-end', D(10));
-  await mp.click('#ca-save');
-  check('a reason is required, like a Remove', m.errs.some(e => /Say why/.test(e)), true);
   await mp.fill('#ca-remark', 'PALMS was never closed for this plot');
   await mp.click('#ca-save');
   await mp.waitForFunction(() => document.getElementById('cull-add').style.display === 'none');
