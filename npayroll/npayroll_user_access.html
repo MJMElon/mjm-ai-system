@@ -16,8 +16,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_module_access.js?v=1"></script>
+<script src="../shared/shared_module_access.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -28,7 +29,7 @@ MJMModuleAccess.init({
   moduleLabel: 'Nursery Payroll',
   icon:   '💵',
   accent: 'indigo',
-  back:   { href: 'npayroll_dashboard.html', label: 'Back to Main Page' },
+  back:   { href: 'npayroll_dashboard.html', label: 'Back' },
   note:   `This page manages users who were <strong>opened for this module</strong> on the main portal's User Access.
            This module decides what people are paid, so tick with care — anyone who can open a sheet can see
            every worker's earnings on it.`,

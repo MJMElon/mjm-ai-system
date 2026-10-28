@@ -206,6 +206,11 @@ function maintExtraNurseries() {
 function transplantExtraSections() {
   const seen = new Set();
   try { transplantFieldLines().forEach(l => seen.add(l.section || NO_SECTION)); } catch (_) {}
+  /* HELD WORK STILL EARNS ITS CIRCLE. This is which sections to offer, not
+     what is paid — and a nursery whose only transplanting is waiting to be
+     Checked would otherwise have no pill to press, so the one sentence saying
+     it is being held could not be reached. */
+  try { transplantHeldLines().forEach(l => seen.add(l.section || NO_SECTION)); } catch (_) {}
   try {
     entries.filter(e => e.category === 'transplanting')
            .forEach(e => seen.add(e.section || NO_SECTION));
@@ -1105,9 +1110,13 @@ const cap2   = v => Math.round(Number(v || 0) * 100) / 100;
 const capFmt = v => {
   const n = cap2(v);
   if (!n) return '—';
+  /* The locale is NAMED, the way moneyFig above names it. A bare
+     toLocaleString reads the DEVICE's, and a claim opened on a phone set
+     to a comma-decimal language printed a capacity nobody could reconcile
+     against the sheet it came off. */
   return Number.isInteger(n)
-    ? n.toLocaleString()
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    ? n.toLocaleString('en-MY')
+    : n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 /* ════════════ TRANSPLANTING, AS THE FIELD RECORDED IT ════════════
@@ -1158,22 +1167,86 @@ const TRANSPLANT_JOBS = [
 ];
 const TRANSPLANT_JOB = Object.fromEntries(TRANSPLANT_JOBS.map(j => [j.key, j]));
 
-let transplantField = [];      // the FC Portal's rows for the month on screen
+let transplantRowsAll = [];    // every row of the month, as the database holds them
+let transplantField = [];      // the rows the OFFICE HAS AGREED, which is what is paid
+let transplantHeld  = [];      // recorded, not agreed yet, so on no claim and said out loud
+let transplantGateOff = false; // this database has not got the Checked columns
 
-/* NOT filtered on a verification column, unlike loadMaint's field records.
-   Those can be recorded by a WORKER from the Worker Portal, so a conductor's
-   signature is what makes them payable — nobody signs for their own work.
-   A transplanting row is written by the conductor himself, from his own
-   portal: keying it IS the signature, and there is no second person to wait
-   for. If that ever changes, this is the line that has to change with it. */
+const TP_FIELD_COLS = 'work_date, nursery_name, plot_name, batch_name, work_type, '
+  + 'jenis, schedule_month, source_qty, workers, total_qty';
+
+/* ONLY A CHECKED ROW REACHES THE CLAIM — the same rule, and the same words,
+   as maintTotals further down this file.
+
+   It used to be paid straight off the conductor's record, on the argument
+   that keying it IS the signature and there is no second person to wait for.
+   What that left out is that the OFFICE has to agree a figure before it
+   prices it: a quantity the report is still moving, a crew somebody is about
+   to correct, a plot keyed against the wrong month. There was no way to hold
+   one, so the first anybody saw of a figure was the money. The office now
+   reads these rows on Worker Record -> Transplanting and ticks Checked, and
+   that tick is the one thing that sends a row here.
+
+   Held work is COUNTED AND NAMED, never silently missing — a claim short of
+   work reads exactly like a quiet month, which is the thing this file is most
+   careful about.
+
+   IT FAILS OPEN. A database that has not had RUN_ME_transplant_checked.sql
+   run refuses the whole select over a column it has not got, which would
+   empty the sheet; so the read falls back to the columns that have always
+   been there, every row is paid the way it was before this tick existed, and
+   the claim says so in red. A gate that cannot be read must not take a
+   month's work off a claim — same reason access fails open. */
 async function loadTransplantField() {
-  const res = await _supabase.from('nops_transplant_field_records')
-    .select('work_date, nursery_name, plot_name, batch_name, work_type, jenis, schedule_month, source_qty, workers, total_qty')
+  transplantField = []; transplantHeld = []; transplantGateOff = false;
+  const ask = (cols) => _supabase.from('nops_transplant_field_records')
+    .select(cols)
     .eq('schedule_month', monthLabel(monthValue()))
-    .then(r => r, () => ({ data: [] }));
+    .then(r => r, (e) => ({ error: e || { message: 'unreachable' } }));
+
+  let res = await ask(TP_FIELD_COLS + ', checked_at, checked_by');
+  if (res && res.error && /checked_at|checked_by/i.test(res.error.message || '')) {
+    transplantGateOff = true;
+    res = await ask(TP_FIELD_COLS);
+  }
   // A database without the table is not an error here: the office ran the
   // payroll module before this button existed and must go on running it.
-  transplantField = (res && !res.error && res.data) ? res.data : [];
+  transplantRowsAll = (res && !res.error && res.data) ? res.data : [];
+  splitTransplantField();
+}
+
+/* A MONTH THE OFFICE HAS VERIFIED HAS BEEN AGREED, and more strongly than a
+   tick: verifying a sheet is the office signing the whole of it, and it locks
+   the claim. Without this, deploying the gate would take every settled month
+   to NOUGHT -- the Transplanting sheet keeps no snapshot the way Work
+   Maintenance does, so it is always read live -- and the office could not
+   even fix it, because ticking a row in a locked month is not a thing this
+   system lets anybody do. A claim that was signed and paid reading empty is
+   the worst version of the fault this whole rule is careful about.
+
+   Asked of the row's own section, which is what a verification is filed
+   under. Best effort: no lock module, or one that has not loaded, is not a
+   verification and the tick decides on its own. */
+function _tpVerifiedMonth(sec) {
+  try {
+    return !!(typeof MJMPayrollLock !== 'undefined' && MJMPayrollLock.ready()
+      && MJMPayrollLock.verificationOf(monthValue(), 'transpl', sec));
+  } catch (_) { return false; }
+}
+const _tpAgreed = (rec) => !!rec.checked_at || _tpVerifiedMonth(_tpSection(rec.nursery_name));
+
+/* RE-SPLIT RATHER THAN SPLIT ONCE. The lock module loads in parallel with
+   this read, so a month that IS verified can look unverified at the moment
+   the rows land. Every reader goes through here first, so the answer is
+   whatever is true when the question is asked. */
+function splitTransplantField() {
+  if (transplantGateOff) {
+    transplantField = transplantRowsAll.slice();
+    transplantHeld  = [];
+    return;
+  }
+  transplantField = transplantRowsAll.filter(_tpAgreed);
+  transplantHeld  = transplantRowsAll.filter(r => !_tpAgreed(r));
 }
 
 /* "UNN 1" and "UNN1" are one nursery. shared_plots spells it with a space,
@@ -1241,10 +1314,18 @@ const _tpNorm = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]
  * plot_maintenance_script.js). Two sheets on one claim must not divide the
  * same kind of work two different ways.
  */
-function transplantFieldLines() {
+function transplantFieldLines(src) {
   const out = [];
+  // Which rows are agreed is asked now, not when they were read — see
+  // splitTransplantField.
+  if (!src) splitTransplantField();
+  /* A HELD ROW RAISES NO RATE CLASH NOTE. transplantRate records a clash as
+     it finds one, so asking it about rows that are not being priced would put
+     "it prices at nothing" on the screen about work that is not on the claim
+     in the first place. The map is put back exactly as it was. */
+  const keepClash = src ? transplantRateClash : null;
   transplantRateClash = {};
-  transplantField.forEach(rec => {
+  (src || transplantField).forEach(rec => {
     const job = TRANSPLANT_JOB[rec.work_type];
     const crew = Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : [];
     if (!crew.length) return;
@@ -1283,9 +1364,14 @@ function transplantFieldLines() {
       });
     });
   });
+  if (keepClash) transplantRateClash = keepClash;
   return out.sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
                          || String(a.worker_name).localeCompare(String(b.worker_name)));
 }
+
+/* The same lines for the rows the office has NOT agreed, so the claim can say
+   what it is holding back in money as well as in rows. */
+function transplantHeldLines() { return transplantFieldLines(transplantHeld); }
 
 /* WHAT THE FC SAVED, per job, for one nursery — the transplanting report's
    own totals rather than the per-worker shares this claim divides them into.
@@ -1356,6 +1442,36 @@ const _plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
 function transplantSectionNotes(secFilter) {
   const notes = [];
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+  // Same guard the claim's own line filter uses: with no section picked the
+  // sheet is every section at once, so nothing is filtered out.
+  const here = (v) => !secFilter || inSection(secFilter, v);
+
+  /* THE GATE ITSELF IS MISSING. Said before anything else, because every
+     sentence below it is about a gate that is not there — and a claim paying
+     work nobody has agreed, while the office believes it is gated, is worse
+     than one that is short. */
+  if (transplantGateOff) {
+    notes.push('The Checked columns are not on this database, so EVERY recorded row '
+      + 'is on this claim whether the office has agreed it or not. Run '
+      + 'shared/RUN_ME_transplant_checked.sql in the Supabase SQL Editor.');
+  }
+
+  /* WORK THAT IS RECORDED AND NOT AGREED. It is on no claim, and it is said
+     in money as well as in rows: a sheet that is short by RM 380 and does not
+     say so reads as a quiet month. */
+  const heldMine = transplantHeld.filter(r => here(_tpSection(r.nursery_name)));
+  if (heldMine.length) {
+    const rm = transplantHeldLines()
+      .filter(l => here(l.plotSection))
+      .reduce((sum, l) => sum + Number(l.amount || 0), 0);
+    const where = [...new Set(heldMine.map(r => r.plot_name).filter(Boolean))];
+    notes.push(`${money(rm)} is NOT on this claim — ${_plural(heldMine.length, 'row')} `
+      + `on ${esc(secName(secFilter))}’s plots `
+      + `${heldMine.length === 1 ? 'has' : 'have'} not been Checked`
+      + `${where.length ? ' — ' + where.map(esc).join(', ') : ''}. `
+      + 'Open Nursery Operation &rarr; Work Maintenance &rarr; Worker Record &rarr; '
+      + 'Transplanting and tick Checked on each row you have agreed.');
+  }
 
   const mine = transplantField.filter(r => inSection(secFilter, _tpSection(r.nursery_name)));
   const noCrew = mine.filter(r => !_tpCrew(r).length);
@@ -1392,6 +1508,20 @@ function transplantEmptyLead(secFilter) {
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const here = esc(secName(secFilter));
 
+  /* EVERYTHING HELD IS NOT NOTHING RECORDED. The lead is the first sentence
+     somebody reads, and "nothing was recorded" over a month the conductor
+     spent keying is the office telling him his work never arrived — which is
+     the whole reason this function exists. */
+  if (!transplantField.length && transplantHeld.length) {
+    const mineHeld = transplantHeld.filter(r => !secFilter
+      || inSection(secFilter, _tpSection(r.nursery_name)));
+    const n = mineHeld.length || transplantHeld.length;
+    return `${_plural(n, 'transplanting record')} reached the office for ${month}`
+         + `${mineHeld.length ? ` on ${here}’s plots` : ''}, and `
+         + `${n === 1 ? 'it has' : 'none of them has'} been Checked yet — so nothing is `
+         + `on this claim. Tick Checked on Worker Record &rarr; Transplanting and the `
+         + `rows arrive here as they are ticked.`;
+  }
   if (!transplantField.length) {
     return `No transplanting was recorded in the FC Portal for ${month} — in any nursery. `
          + `A conductor records it under Maintenance &rarr; Transplanting Job.`;
@@ -1749,8 +1879,20 @@ function renderTransplantByPlot(secFilter) {
   }
 
   if (!rows.length) {
+    /* A MONTH ENTIRELY HELD IS NOT AN EMPTY MONTH. Same reason as the claim's
+       own empty lead: "nothing transplanted" over a month the conductor spent
+       keying is the office telling him his work never arrived. */
+    const held = transplantHeld.filter(r => !secFilter
+      || inSection(secFilter, _tpSection(r.nursery_name)));
     table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
-      Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabelFull(monthValue()))}.
+      ${held.length
+        ? (() => {
+            const pl = [...new Set(held.map(r => r.plot_name).filter(Boolean))].length;
+            return `${_plural(pl, 'plot')} transplanted in ${esc(secName(secFilter))} for `
+                 + `${esc(monthLabelFull(monthValue()))} ${pl === 1 ? 'is' : 'are'} waiting to be `
+                 + `Checked, so nothing is counted here yet.`;
+          })()
+        : `Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabelFull(monthValue()))}.`}
     </td></tr></tbody>`;
     $('transpl-plots-note').textContent = '';
     return;
@@ -1792,6 +1934,19 @@ function renderTransplantByPlot(secFilter) {
 
   /* Anything that makes the total wrong, or looks wrong and is not. */
   const notes = [];
+  /* PLOTS THAT ARE OFF THIS TABLE BECAUSE THEY ARE HELD. The table counts
+     what the claim pays, so it agrees with the cards above it — which means a
+     plot waiting to be Checked is missing from a table headed "by plot", and
+     a missing plot reads as a plot nothing happened in. */
+  const heldPlots = [...new Set(transplantHeld
+    .filter(r => !secFilter || inSection(secFilter, _tpSection(r.nursery_name)))
+    .map(r => r.plot_name).filter(Boolean))]
+    .filter(pl => !rows.some(r => _tpKey(r.plot) === _tpKey(pl)));
+  if (heldPlots.length) {
+    notes.push(`${heldPlots.map(esc).join(', ')} ${heldPlots.length === 1 ? 'is' : 'are'} `
+      + `not on this table and not in the total — ${heldPlots.length === 1 ? 'its' : 'their'} `
+      + `rows have not been Checked on Worker Record &rarr; Transplanting yet.`);
+  }
   const moved = rows.filter(r => r.disagrees);
   if (moved.length) {
     notes.push(`${moved.map(r => `${esc(r.plot)} (${r.disagrees.map(n => num(n)).join(' and ')})`).join(', ')
@@ -2088,6 +2243,8 @@ function renderTransplGlance(secFilter) {
 
 function renderTransplantClaim() {
   const secFilter = $('transpl-section').value || '';
+  // Before the cards, which read transplantField directly.
+  splitTransplantField();
   renderTransplGlance(secFilter);
 
   /* What was transplanted, plot by plot — drawn from here so it is drawn

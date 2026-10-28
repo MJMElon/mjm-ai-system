@@ -36,8 +36,8 @@
        "operation_actions": {
          "batch":       { "view":true, "add_new":true, "fill_report":true,
                           "verify":false, "review":false, "delete":false },
-         "orders":      { "view":true, "manage":true },
-         "stock":       { "view":true, "manage":true },
+         "orders":      { "view":true, "manage":true, "ba_manage":true, "al_manage":true },
+         "stock":       { "view":true, "manage":true, "customer":true, "map":true },
          "reports":     { "view":false },
          "audit_trail": { "view":false, "clear_logs":false },
          "settings":    { "view":true, "manage":true }
@@ -79,6 +79,10 @@
     }
     out.manage_users = !!perms.manage_users;
     out.can_verify_operation = !!perms.can_verify_operation;
+    // The one who decides who may manage users. Set only by SQL
+    // (shared/RUN_ME_access_in_the_database.sql names them); the database
+    // guard refuses anybody else touching manage_users or super_admin.
+    out.super_admin = !!perms.super_admin;
     // Per-page and per-function access INSIDE a module, managed from that
     // module's own User Access page. Any `<module>_pages` / `<module>_actions`
     // key is carried through, so adding a module needs no change here.
@@ -245,12 +249,20 @@
 
   async function _fetchProfile(supa, uid) {
     if (_inflight[uid]) return _inflight[uid];
-    const p = supa
+    /* user_type and role ride along so a customer is recognised on every
+       page that loads this file (see shared_staff_gate.js). maybeSingle,
+       where the client has it: .single() answers a missing row with an
+       ERROR, and an error was read as "could not be read" — which skipped
+       the whole gate below for any login with no profile row at all. */
+    const q = supa
       .from('shared_profiles')
-      .select('full_name, email, permissions')
-      .eq('id', uid)
-      .single()
-      .then(function (r) { return r; })
+      .select('full_name, email, permissions, user_type, role')
+      .eq('id', uid);
+    const p = (typeof q.maybeSingle === 'function' ? q.maybeSingle() : q.single())
+      .then(function (r) {
+        if (r && r.error && r.error.code === 'PGRST116') return { data: null, error: null };
+        return r;
+      })
       .finally(function () { delete _inflight[uid]; });
     _inflight[uid] = p;
     return p;
@@ -301,6 +313,11 @@
       full_name: (u.user_metadata && u.user_metadata.full_name) || ''
     };
     let fetchOk = false;
+    /* What the staff test is asked of: the row as read, or the last one this
+       device was given for this account. Raw, not normalize()d — the hub
+       counts levels normalize() drops, and the two must agree. */
+    let rawProfile = null;
+    const G = global.MJMStaffGate || null;
     try {
       // Try the short-lived per-tab cache first — a repeat MJMAccess.load
       // inside the TTL is a no-op on the network, which cuts the dogpile
@@ -314,6 +331,13 @@
         if (!error && data) _writeProfileCache(u.id, data);
       }
       if (error) throw error;
+      rawProfile = data || null;
+      if (data && G && G.isCustomer(data)) {
+        /* A Sales Web customer. Signed out, nothing of this page shown. */
+        state.permissions = normalize(null);
+        await G.refuseCustomer(supa);
+        throw new Error('CUSTOMER_REFUSED');
+      }
       if (data) {
         if (data.full_name) state.user.full_name = data.full_name;
         state.permissions = normalize(data.permissions);
@@ -348,6 +372,7 @@
       }
       fetchOk = true;
     } catch (e) {
+      if (e && e.message === 'CUSTOMER_REFUSED') throw e;
       /* The read could not be made — almost always no signal. Fall back to
          the last answer this device was given rather than to none.
 
@@ -357,45 +382,77 @@
          entitled, holding a phone in a plot, and being shown an empty
          building. Their access did not change on the walk out there. */
       const last = _readLastKnown(u.id);
+      if (last && G && G.isCustomer(last)) {
+        state.permissions = normalize(null);
+        await G.refuseCustomer(supa);
+        throw new Error('CUSTOMER_REFUSED');
+      }
       if (last) {
         console.warn('[MJMAccess] permissions unreadable, using the last '
           + 'known copy for this account:', e);
         if (last.full_name) state.user.full_name = last.full_name;
         state.permissions = normalize(last.permissions);
         state.offline = true;
+        rawProfile = last;
+        /* The remembered answer is still an answer: the staff gate below
+           asks it, rather than being skipped because the read failed. */
+        fetchOk = true;
       } else {
         console.warn('[MJMAccess] failed to load permissions:', e);
         state.permissions = normalize(null);
+        /* NOTHING TO STAND ON: not read, nothing remembered for this
+           account. This used to skip the gate altogether and let the page
+           draw. Now the page says it could not check and offers Retry; the
+           session is kept, because a dropped line is not a reason to sign
+           anybody out. A page that does its own gating (the audit back
+           office) is left to it, with no permissions granted here. */
+        if (!global.__MJM_SKIP_ACCESS_GATE && G) {
+          G.showUnreachable();
+          throw new Error('PROFILE_UNREADABLE');
+        }
       }
     }
 
-    // Whole-system gate. The signed-in user MUST have at least one
-    // staff-grade entry on their permissions row — manage_users,
-    // can_verify_operation, or a non-'none' module level. Without that
-    // they have no business loading any ops page, so kick them back to
-    // the hub's index.html where the Pending Access screen explains
-    // they're awaiting admin approval.
+    /* Read fine, but the customer test could not be asked (a page cached
+       from before shared_staff_gate.js existed). Treat the customer as
+       having no ops access: the hub they are sent to does load the gate,
+       and refuses them there. */
+    const customerNoGate = !G && rawProfile &&
+      String(rawProfile.user_type || '').toLowerCase() === 'customer';
+
+    // Whole-system gate. The signed-in user MUST have staff access —
+    // MJMStaffGate.hasStaffAccess, the same test the hub asks. Without it
+    // they have no business loading any ops page, so kick them back to the
+    // hub's index.html where the Pending Access screen explains they're
+    // awaiting admin approval.
     //
-    // Fails OPEN on a profile-read error so a transient Supabase
-    // hiccup doesn't lock real ops admins out. Same policy as the hub
-    // gate. Allow opt-out via window.__MJM_SKIP_ACCESS_GATE for pages
-    // that already handle their own gating.
-    if (fetchOk && !global.__MJM_SKIP_ACCESS_GATE) {
+    // A failed read is answered by the last profile this device was given
+    // for this account (fetchOk is set for that too), and with none the
+    // page is held above — it no longer fails open. Allow opt-out via
+    // window.__MJM_SKIP_ACCESS_GATE for pages that already handle their own
+    // gating; a customer is refused whatever the page asked.
+    if (fetchOk && (!global.__MJM_SKIP_ACCESS_GATE || customerNoGate)) {
       const p = state.permissions || {};
-      let anyAccess = !!(p.manage_users || p.can_verify_operation);
-      if (!anyAccess && p.modules) {
-        for (const k in p.modules) {
-          if (p.modules[k] && p.modules[k] !== 'none') { anyAccess = true; break; }
-        }
-      }
-      if (!anyAccess) {
-        for (const key in p) {
-          if (!/_actions$/.test(key) || !p[key]) continue;
-          for (const page in p[key]) {
-            const acts = p[key][page];
-            if (acts && Object.keys(acts).some(a => acts[a])) { anyAccess = true; break; }
+      let anyAccess = false;
+      if (G) {
+        anyAccess = G.hasStaffAccess(rawProfile);
+      } else if (!customerNoGate) {
+        // A page without the gate file: the test this file always made.
+        anyAccess = !!(p.manage_users || p.can_verify_operation);
+        if (!anyAccess && p.modules) {
+          for (const k in p.modules) {
+            if (p.modules[k] && p.modules[k] !== 'none') { anyAccess = true; break; }
           }
-          if (anyAccess) break;
+        }
+        if (!anyAccess) {
+          for (const key in p) {
+            if (!/_actions$/.test(key) || !p[key]) continue;
+            for (const page in p[key]) {
+              const acts = p[key][page];
+              if (acts && Object.keys(acts).some(a => acts[a])) { anyAccess = true; break; }
+            }
+            if (anyAccess) break;
+          }
         }
       }
       if (!anyAccess) {
@@ -426,6 +483,7 @@
   function canAccess(name)  { return moduleLevel(name) !== 'none'; }
   function isAdminOf(name)  { return moduleLevel(name) === 'admin'; }
   function canManageUsers() { return !!permissions().manage_users; }
+  function isSuperAdmin()   { return !!permissions().super_admin; }
 
   // Per-page access inside the operation module (see operation_pages above).
   // Page keys mirror the dashboard cards: batch, orders, stock, settings.
@@ -451,6 +509,30 @@
   //                 page itself is open (the legacy "normal" behaviour)
   const MODULE_STORED_PAGES = new Set(['reports', 'audit_trail']);
 
+  /* An action tick ADDED to a page that already had its own saved row
+     reads as allowed, not denied, when that row has no opinion on it —
+     the function it gates had no gate at all before the tick existed, so
+     missing must not mean "nobody said yes" the way an ordinary unticked
+     box does. 'ba_manage' and 'al_manage' joined 'orders' the same day
+     Borang Akuan and Approval Letter stopped being ungated pages of their
+     own; 'customer' and 'map' joined 'stock' the same day Customer
+     Monitoring and Inventory Map stopped being panes nobody could lock
+     separately from it. A row saved before that day, or in the hour
+     between, has 'view'/'manage' and nothing else — this is what keeps
+     it reading the way it always did. */
+  const OPERATION_NEW_ACTION_DEFAULT = {
+    orders: ['ba_manage', 'al_manage'],
+    stock:  ['customer', 'map'],
+  };
+  /* Ticks that replaced the Master PIN written into the AL, BA and DO
+     pages (anybody could read it with Inspect). On a row saved before they
+     existed they answer as the old rule for a guarded action does: an
+     Operation admin, yes; anybody else, no.
+     Database twin: public.mjm_can() — change one, change the other. */
+  const OPERATION_NEW_ACTION_ADMIN = {
+    orders: ['al_verify', 'al_cancel', 'delete'],
+  };
+
   function canDoOperation(page, action) {
     const p = permissions();
     const acts = p.operation_actions && p.operation_actions[page];
@@ -461,6 +543,8 @@
       if (!MODULE_STORED_PAGES.has(page) && !canAccess('operation')) return false;
       if (!acts.view) return false;      // page closed → every function closed
       if (action === 'view') return true;
+      if (acts[action] === undefined && (OPERATION_NEW_ACTION_DEFAULT[page] || []).includes(action)) return true;
+      if (acts[action] === undefined && (OPERATION_NEW_ACTION_ADMIN[page] || []).includes(action)) return isAdminOf('operation');
       return !!acts[action];
     }
     // Legacy fallback.
@@ -472,7 +556,9 @@
     switch (action) {
       case 'verify':     return !!p.can_verify_operation || isAdminOf('operation');
       case 'review':     return isAdminOf('operation');
-      case 'delete':     return isAdminOf('operation');
+      case 'delete':
+      case 'al_verify':
+      case 'al_cancel':  return isAdminOf('operation');
       case 'clear_logs': return isAdminOf('audit_trail');
       default:           return true; // add_new, fill_report, manage…
     }
@@ -629,6 +715,7 @@
     operationPageLevel,
     canOpenOperationPage,
     canDoOperation,
+    isSuperAdmin,
     requireOperationAction,
     canDo,
     canOpenPage,

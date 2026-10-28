@@ -75,7 +75,7 @@
         
         <div class="glass-panel p-6 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4 relative overflow-hidden" id="main-title-panel">
             <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-purple-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-5 py-3 rounded-xl transition-colors flex items-center gap-2 self-start md:self-auto">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back
             </button>
             <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-purple-800 via-fuchsia-600 to-purple-500 drop-shadow-sm pb-1 text-center" style="word-spacing: 0.2em;">System Configuration</h1>
             <div class="hidden md:block w-[130px]"></div>
@@ -1608,6 +1608,7 @@
 <!-- Page-access guard: this page can be locked per user in the module's
      User Access (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script>
 (async () => {

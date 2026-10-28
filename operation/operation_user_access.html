@@ -8,6 +8,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -60,7 +61,7 @@
 <body>
 
 <div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
-  <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back to Main Page</a>
+  <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
   <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Module User Access</span>
   <div class="justify-self-end flex items-center gap-2">
     <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
@@ -188,6 +189,50 @@ const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
                        historically live there)
      batch.verify    → permissions.can_verify_operation */
 const PAGE_DEFS = [
+  /* ── Customer Order Documentation — one card, three write ticks ──
+     It was three sections for a day, one per page (DO/BA/AL each its own
+     "Open Page" switch) — the office looked at it next to Batch Records
+     and asked for the same shape here: ONE open-page switch for the
+     whole card, the three writes as ticks underneath. 'orders' is the
+     DO page's long-standing stored key and carries the section's view —
+     opening or locking the card opens or locks all three pages together
+     now, there is no page among them a user sees without the others.
+     'ba_manage' and 'al_manage' are new action keys on that same old
+     key: a row saved before today has an opinion about 'manage' only, so
+     the two new ticks default to allowed on such a row (see
+     OPERATION_NEW_ACTION_DEFAULT in shared_access.js) rather than reading
+     a row that never heard of them as "no".
+     Verify AL, Cancel / Restore AL and Delete DO / BA were guarded by the
+     Master PIN alone, and the PIN is written into the pages where anybody
+     can read it with Inspect. Each is a tick now (al_verify, al_cancel,
+     delete) and the PIN is gone: the office asked for the tick to be the
+     only lock. On a row saved before them they answer as the PIN-guarded
+     actions always did: Operation admin yes, anybody else no. */
+  { key:'orders', store:'pages', def:'normal', label:'Customer Order Documentation',
+    desc:'Delivery Note (DO), Borang Akuan (BA) and Approval Letter (AL)',
+    actions:[
+      { key:'manage',    label:'Add new DO',                      desc:'Create, edit and upload DOs' },
+      { key:'ba_manage', label:'Manage Borang Akuan (BA) Record', desc:'Add, edit and save BA records' },
+      { key:'al_manage', label:'Add New AL',                      desc:'Create new approval letters and edit their details' },
+      { key:'al_verify', label:'Verify AL',                       desc:'Mark an approval letter as Verified' },
+      { key:'al_cancel', label:'Cancel & restore AL',             desc:'Cancel an approval letter, or bring a cancelled one back' },
+      { key:'delete',    label:'Delete DO / BA',                  desc:'Delete a Delivery Note or a Borang Akuan record' }
+    ]},
+  /* ── Seedling Sales Control — one card, three ticks ──
+     Same move as above, one page sooner: Customer Monitoring and
+     Inventory Map were their own sections for a day (their unset answer
+     inheriting 'stock' — see the note this replaced); they are ticks
+     under the one 'stock' switch now, same as Stock Allocation's. A row
+     saved before today only has an opinion about 'manage'; 'customer' and
+     'map' default to allowed on it for the same reason 'ba_manage' and
+     'al_manage' do. */
+  { key:'stock', store:'pages', def:'normal', label:'Seedling Sales Control',
+    desc:'Customer Monitoring, Stock Allocation and Inventory Map',
+    actions:[
+      { key:'customer', label:'Customer Monitoring', desc:'View admin pickups and follow-ups' },
+      { key:'manage',   label:'Update stock & sales', desc:'Change allocations, upload invoices, mark orders paid' },
+      { key:'map',      label:'Inventory Map',        desc:'View plot batches, collected, balance' }
+    ]},
   { key:'batch', store:'pages', def:'normal', label:'Batch Records', desc:'Create and edit production batch records',
     actions:[
       { key:'add_new',     label:'Add new batch',            desc:'Create a new batch record' },
@@ -195,14 +240,6 @@ const PAGE_DEFS = [
       { key:'verify',      label:'Verify reports',           desc:'Sign off a batch tab as Verifier (before review)' },
       { key:'review',      label:'Review & approve reports', desc:'Mark as Reviewed, Reject, Unreview (HQ decision)' },
       { key:'delete',      label:'Delete batch records',     desc:'Permanently delete a whole batch' }
-    ]},
-  { key:'orders', store:'pages', def:'normal', label:'Delivery Orders', desc:'Delivery scheduling and order handling',
-    actions:[
-      { key:'manage', label:'Add, edit & delete orders', desc:'Create DOs / BAs, edit and delete existing ones' }
-    ]},
-  { key:'stock', store:'pages', def:'normal', label:'Stock & Sales', desc:'Stock levels, publishing, and sales',
-    actions:[
-      { key:'manage', label:'Update stock & sales', desc:'Change allocations, upload invoices, mark orders paid' }
     ]},
   { key:'reports', store:'modules', def:'none', label:'Reports', desc:'Batch production summary, analytics',
     actions:[] },
@@ -249,22 +286,34 @@ function pageLevel(perms, def_) {
    Uses the saved operation_actions when present; otherwise derives the
    same answer the legacy fields give, so the drawer always shows what
    the user can ACTUALLY do today. */
+/* Ticks a row saved before them has no opinion about, and what that row
+   answers until somebody ticks it. Same lists as shared_access.js. */
+const NEW_ACTION_DEFAULT = { orders: ['ba_manage', 'al_manage'], stock: ['customer', 'map'] };
+const NEW_ACTION_ADMIN   = { orders: ['al_verify', 'al_cancel', 'delete'] };
+
 function effectiveActions(perms, d) {
+  const isOpAdmin = !!(perms.modules && perms.modules.operation === 'admin');
   const saved = perms.operation_actions && perms.operation_actions[d.key];
   if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
     const out = { view: !!saved.view };
-    d.actions.forEach(a => { out[a.key] = out.view && !!saved[a.key]; });
+    d.actions.forEach(a => {
+      let v = !!saved[a.key];
+      if (saved[a.key] === undefined && (NEW_ACTION_DEFAULT[d.key] || []).includes(a.key)) v = true;
+      if (saved[a.key] === undefined && (NEW_ACTION_ADMIN[d.key] || []).includes(a.key)) v = isOpAdmin;
+      out[a.key] = out.view && v;
+    });
     return out;
   }
   const view = pageLevel(perms, d) !== 'none';
-  const isOpAdmin = !!(perms.modules && perms.modules.operation === 'admin');
   const out = { view };
   d.actions.forEach(a => {
     let v;
     switch (a.key) {
       case 'verify':     v = !!perms.can_verify_operation || isOpAdmin; break;
       case 'review':
-      case 'delete':     v = isOpAdmin; break;
+      case 'delete':
+      case 'al_verify':
+      case 'al_cancel':  v = isOpAdmin; break;
       case 'clear_logs': v = !!(perms.modules && perms.modules.audit_trail === 'admin'); break;
       default:           v = true; // legacy "normal" could always use page functions
     }
@@ -385,6 +434,14 @@ function openDrawer(uid) {
   document.getElementById('d-pages').innerHTML =
     PAGE_DEFS.map(d => pageCardHtml(d, effectiveActions(editingPerms, d))).join('');
   document.getElementById('d-manage-users').checked = !!editingPerms.manage_users;
+  // Only a super admin gives or takes away user management (see user_access.html).
+  (function () {
+    const sup = MJMAccess.isSuperAdmin && MJMAccess.isSuperAdmin();
+    const tog = document.getElementById('d-manage-users');
+    tog.disabled = !sup;
+    tog.parentElement.style.opacity = sup ? '' : '.45';
+    tog.parentElement.title = sup ? '' : 'Only a super admin can change this';
+  })();
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-backdrop').classList.add('open');
@@ -446,7 +503,9 @@ async function saveDrawer() {
       && !confirm('You are removing YOUR OWN "able to change user roles" permission. You will lose access to this page. Continue?')) {
     return;
   }
-  next.manage_users = manageEl.checked;
+  const _sup = MJMAccess.isSuperAdmin && MJMAccess.isSuperAdmin();
+  if (editingPerms.super_admin && !_sup) { showToast('Only a super admin can change a super admin.', 'err'); return; }
+  next.manage_users = _sup ? manageEl.checked : !!editingPerms.manage_users;
 
   const saveBtn = document.getElementById('d-save');
   saveBtn.disabled = true;

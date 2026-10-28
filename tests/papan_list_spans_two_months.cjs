@@ -28,6 +28,9 @@ const path = require('path');
 const { chromium } = require(process.env.NODE_PATH + '/playwright');
 
 const ROOT  = path.resolve(__dirname, '..');
+/* The shipped board, read as text for the one rule that is a line of code
+   rather than a thing on screen -- which module carriedOverdue carries. */
+const HOME  = fs.readFileSync(path.join(ROOT, 'audit/audit_home.html'), 'utf8');
 const TYPES = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
                 '.json':'application/json', '.png':'image/png', '.svg':'image/svg+xml' };
 const server = http.createServer((req, res) => {
@@ -215,9 +218,20 @@ const ok = (cond, what) => {
     ok(!!rows[0] && rows[0].plots.join(',') === 'B01,B02',
        'carrying nothing loses nothing of the two months: this month and last are both on it ('
        + ((rows[0]||{}).plots || []).join(',') + ')');
-    ok(other.length > 0,
-       'the OTHER modules are still carried -- this is papan only, because papan is the '
-       + 'only one whose roster already spans two months (' + other.join(',') + ')');
+    /* PAPAN WAS THE FIRST, AND NOW IT IS THE RULE. Papan stopped being
+       carried on a reason of its own -- a two-month roster asks about
+       September already, so carrying September listed the same plots
+       twice. Plot Condition and Seedling Height have now joined it on the
+       office own plain judgement, after N15 had never been walked and so
+       stacked AUG R-1, AUG R-2 and SEP R-1 one above the other: "remove
+       all aug and sep audit to do". Only MAINTENANCE is carried now, and
+       that one must be -- its row is a task with a deadline, not a round,
+       and the x is what retires it. */
+    ok(other.length === 0,
+       'no ROUND module carries a past month any more -- only maintenance does ('
+       + (other.join(',') || 'none') + ')');
+    ok(/if \(o\.mod !== 'maint'\) return;/.test(HOME),
+       'and carriedOverdue says so in one line, so the rule cannot be half-applied');
     ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
     await ctx.close();
   }

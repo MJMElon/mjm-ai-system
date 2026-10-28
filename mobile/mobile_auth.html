@@ -7,6 +7,8 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Customers cannot enter the staff system: see the file. -->
+<script src="../shared/shared_staff_gate.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Outfit', system-ui, sans-serif; }
@@ -326,11 +328,13 @@ async function handlePostLogin(session) {
   // yet) sees the inline Pending Access notice and stays on this
   // page. A Refresh button lets them re-check once the admin grants
   // access without re-typing credentials.
-  var { data: profile } = await _supabase
-    .from('shared_profiles')
-    .select('role, user_type, permissions')
-    .eq('id', session.user.id)
-    .single();
+  // Staff gate first (shared/shared_staff_gate.js). A customer is refused
+  // on ANY answer, not only a successful one; a read that failed is
+  // answered from this device's last copy for this account or, with none,
+  // held with a Retry and the session kept.
+  var gate = await MJMStaffGate.enforce(_supabase, session);
+  if (gate.status === 'customer' || gate.status === 'unknown') { showStatus('', 'success'); return; }
+  var profile = gate.profile;
   if (!hasOpsAccessMobile(profile)) {
     showPendingAccessUI(session.user.email || '');
     return;

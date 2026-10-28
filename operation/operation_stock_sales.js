@@ -602,9 +602,50 @@
         return new Date(y, m-1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' });
     }
 
+    /* WHEN a ledger row happened: the keyed date, else a date written into
+       the remark, else the created_at it was saved with. The batch report
+       saves most movement rows with NO transaction_date — the date the user
+       keyed sits in the remark ("... Date: 2026-07-22") — so this page used
+       to date those rows by their SAVE day: batch 264 went out to U12/U13
+       on 22 Jul 2026 and was keyed in mid-September, so both plots matured
+       onto the Jun 2027 tab while the Transplanting Report (which reads the
+       remark) said Apr 2027, and the office could not find them where every
+       other page pointed.
+
+       SHARED RULE. operation_reports.html carries the same resolution as
+       _logDate(), and the FC Portal as logDate() in
+       src/modules/maintenance/transplantData.js (MJMElon/FC-Portal).
+       Change one, change the others. */
+    const RE_LOG_DATE = /(?:Cull)?Date:\s*(\d{4}-\d{2}-\d{2})/i;
+    function logDate(l) {
+        if (l.transaction_date) return String(l.transaction_date).slice(0, 10);
+        const m = l.remark ? String(l.remark).match(RE_LOG_DATE) : null;
+        if (m) return m[1];
+        return l.created_at ? String(l.created_at).slice(0, 10) : null;
+    }
+
+    /* Supabase caps a single request at 1000 rows, and the ledger has grown
+       past it. The newest Cull3_Transfer rows — the reserve plots the office
+       made THIS month — were beyond the cap, so U6-R and U8-R stood on the
+       Movement report (which pages, see operation_reports.html's own
+       fetchAllRows) and were nowhere on the Plot-R tab here; the same cap
+       was quietly shorting the month tabs' transplants and the DO
+       deductions. Same helper, same .order('id') on every caller — a page
+       walk without a stable order can skip or repeat rows between pages. */
+    async function fetchAllRows(buildQuery, pageSize = 1000) {
+        const all = [];
+        for (let from = 0; ; from += pageSize) {
+            const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+            if (error) return { data: null, error };
+            all.push(...(data || []));
+            if (!data || data.length < pageSize) break;
+        }
+        return { data: all, error: null };
+    }
+
     async function loadMaturity() {
         try {
-            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes] = await Promise.all([
+            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes, seedsRes] = await Promise.all([
                 // 'Transplanted' only — Premium Care and D-Tone are holding
                 // trays, not plots (same distinction operation_batch_detail.html's
                 // own transplanted total and operation_reports.html's
@@ -615,16 +656,20 @@
                 // date, a Plot Status dropdown and a customer-allocation slot
                 // for a tray — and double-counted the qty once more when the
                 // same seedlings later left the tray for a real plot.
-                _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
-                    .eq('transaction_type', 'Transplanted'),
+                // remark rides along because the keyed date usually lives
+                // there, not in transaction_date — see logDate() above.
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date,remark')
+                    .eq('transaction_type', 'Transplanted')
+                    .order('id', { ascending: true })),
                 // P-R (reserve) plots — a Cull3_Transfer log is what actually
                 // creates one (Batch Detail Tab 6's P-R Culling "Transferred"
                 // figure is this same sum, grouped by the reserve plot it
                 // landed in). Fed into the P-R tab below, not the month tabs.
-                _supabase.from('shared_inventory_logs')
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date,remark')
-                    .eq('transaction_type', 'Cull3_Transfer'),
+                    .eq('transaction_type', 'Cull3_Transfer')
+                    .order('id', { ascending: true })),
                 // What Batch Detail's P-R Culling tab has actually culled off
                 // each reserve plot — read, not recomputed: a plot's real
                 // remaining balance is what's left standing (a batch report
@@ -632,17 +677,42 @@
                 // transplant row uses below. Without this, a plot the batch
                 // report already has at nought (fully culled, moved on, or
                 // sold) kept showing a stale positive balance here.
-                _supabase.from('shared_inventory_logs')
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,quantity_change')
-                    .eq('transaction_type', '3rd_Culling'),
+                    .eq('transaction_type', '3rd_Culling')
+                    .order('id', { ascending: true })),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_plot_allocations').select('*').then(r => r, e => ({ data: [], error: e })),
                 // Issued DOs are the official stock deduction: each carries up to
                 // 5 "Nursery Collection Details" lines (plot_N / batch_N / qty_N).
-                _supabase.from('shared_do_records')
+                fetchAllRows(() => _supabase.from('shared_do_records')
                     .select('do_number, total_qty, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+                    .order('id', { ascending: true }))
+                    .then(r => r, e => ({ data: [], error: e })),
+                // The batch's own breed, for rows saved without one. A
+                // Transplanted row is sometimes saved before the breed was
+                // keyed, and keying it later on the batch report (Tab 1's
+                // "Breed Variety" = the Seeds_Received row) rewrites no old
+                // transplant rows — so batch 260 read "—" here for ever,
+                // however many times the batch report was corrected and the
+                // page reloaded. Same fallback operation_reports.html uses;
+                // its own comment names batch 260/U4. This read failing must
+                // not take the table down — the breed column is worth losing,
+                // the stock is not.
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                    .select('batch_name,breed_name')
+                    .eq('transaction_type', 'Seeds_Received')
+                    .order('id', { ascending: true }))
                     .then(r => r, e => ({ data: [], error: e }))
             ]);
+
+            // Newest reception row wins — a batch is meant to have exactly
+            // one and some have many (see the duplicate receptions note in
+            // CLAUDE.md). Ordered by id, so the last write stands.
+            const batchBreed = {};
+            (seedsRes?.data || []).forEach(b => {
+                if (b.batch_name && b.breed_name) batchBreed[b.batch_name] = b.breed_name;
+            });
 
             const trans = transRes.data || [];
             const plots = plotsRes.data || [];
@@ -707,7 +777,7 @@
             const groupRows = (list, tag) => {
                 const groups = {};
                 list.forEach(l => {
-                    const effDate = l.transaction_date || l.created_at;
+                    const effDate = logDate(l);
                     const k = (l.batch_name||'') + '||' + (l.plot_name||'');
                     if (!groups[k]) groups[k] = {
                         batch: l.batch_name, plot: l.plot_name, breed: l.breed_name,
@@ -737,7 +807,9 @@
                         key: k,
                         batch: g.batch,
                         plot: g.plot,
-                        breed: g.breed || '—',
+                        // The row's own breed first, else the batch's — see
+                        // the Seeds_Received read above (batch 260).
+                        breed: g.breed || batchBreed[g.batch] || '—',
                         location: resolveLocation(g.plot),
                         qty: g.qty,
                         afterCulling,
@@ -755,8 +827,9 @@
                 });
             };
 
-            // Real transplant date keyed in the Batch Record; created_at is
-            // only the fallback for very old rows saved without a date.
+            // Dated by logDate() — the keyed date (usually inside the
+            // remark), with created_at only the fallback for rows saved
+            // without any date at all.
             const matRows = groupRows(trans, 'main');
             const prRows  = groupRows(prTrans, 'pr');
             allMatGroups  = matRows.concat(prRows);
@@ -1102,16 +1175,6 @@
             const plotBalance        = r.afterCulling - collected - otherDed;
             const afterDeductReserve = plotBalance - allocSum;
 
-            const reservHtml = rowAllocs.length
-                ? `<div class="reserv-stack">${rowAllocs.map(a => `
-                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(a.order_number || '')} — drag chip to move to another row">
-                        <span class="reserv-chip-grip">⋮⋮</span>
-                        <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
-                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
-                        <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
-                    </div>`).join('')}</div>`
-                : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
-
             // Sold Out overrides whatever was picked — it's never written
             // back to plotAllocations (that stays the person's last real
             // choice, in case the plot's balance later recovers), only
@@ -1122,8 +1185,26 @@
                 ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
                 : '';
 
+            // Finished is a person's judgment that this plot's allocation is
+            // done, even while a balance is still sitting on it — a manual
+            // status, so only the manual pick blocks the drop and not Sold
+            // Out, which already blocks it on the balance alone.
+            const matFinished = status === 'finished';
+
+            const reservHtml = rowAllocs.length
+                ? `<div class="reserv-stack">${rowAllocs.map(a => `
+                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(a.order_number || '')} — drag chip to move to another row">
+                        <span class="reserv-chip-grip">⋮⋮</span>
+                        <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
+                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
+                        <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
+                    </div>`).join('')}</div>`
+                : matFinished
+                    ? `<div class="reserv-empty reserv-empty-finished"><span class="reserv-empty-emoji">🔒</span><span>Finished — no new allocations</span></div>`
+                    : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
+
             const html = `
-                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}">
+                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}">
                     <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
                     <td class="col-prod">${escapeHtml(r.location)}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
@@ -1439,6 +1520,15 @@
                     al.status === 'Cancelled' ||
                     /\[CANCELLED\]/i.test(String(al.remark || ''))
                 );
+                // A closed AL is a second, separate terminal state — the
+                // office decided this order's business is done, whatever
+                // the remaining balance said, rather than that it never
+                // happened. Same two-route detection as Cancelled, same
+                // "[CLOSED]" tag Close AL writes in operation_booking.html.
+                const alClosed = !alCancelled && !!al && (
+                    al.status === 'Closed' ||
+                    /\[CLOSED\]/i.test(String(al.remark || ''))
+                );
                 if (al) {
                     const alQty = Number(al.quantity_ordered);
                     if (!isNaN(alQty)) totalQty = alQty;
@@ -1458,11 +1548,22 @@
                 if (alCancelled) {
                     balance = 0;
                     totalCollected = 0;
+                } else if (alClosed) {
+                    // Closed only zeroes what's left to collect — the
+                    // collection HISTORY (totalCollected) is real and
+                    // stays, unlike Cancelled where the order never
+                    // happened at all. Balance at 0 is what pulls a
+                    // closed order out of "pending to collect", the
+                    // weekly booking chart and the Outstanding filter,
+                    // the same way Cancelled already does.
+                    balance = 0;
                 }
 
                 let derivedStatus = o.status;
                 if (alCancelled) {
                     derivedStatus = 'Cancelled';
+                } else if (alClosed) {
+                    derivedStatus = 'Closed';
                 } else if (o.status !== 'Cancelled' && o.status !== 'Pending Payment') {
                     if      (totalCollected === 0)         derivedStatus = 'Paid · Pending Pickup';
                     else if (totalCollected >= totalQty)   derivedStatus = 'Completed';
@@ -1479,6 +1580,7 @@
                     rawStatus: o.status,
                     derivedStatus,
                     alCancelled,
+                    alClosed,
                     paymentMethod: o.payment_terms || 'cash',
                     collectionsByMonth: colByMonth,
                     bookingsByMonth: bookByMonth,
@@ -1930,6 +2032,7 @@
     function pillFor(derived, paymentMethod) {
         if (!derived) return ['pill-pending', '—'];
         if (derived === 'Cancelled') return ['pill-cancelled', 'Cancelled'];
+        if (derived === 'Closed') return ['pill-closed', 'Closed'];
 
         // Credit-terms orders carry a "Credit" label regardless of pay status,
         // with the collection stage appended when partial / completed.
@@ -1975,7 +2078,7 @@
     // Order-status filter — a custom dropdown (see .cf-* in the HTML) in
     // place of the state a native <select> would otherwise hold.
     let _custFilter = 'all';
-    const CUST_FILTER_LABELS = { all: 'All Orders', outstanding: 'Outstanding Balance', cancelled: 'Cancelled Orders', completed: 'Completed Orders' };
+    const CUST_FILTER_LABELS = { all: 'All Orders', outstanding: 'Outstanding Balance', cancelled: 'Cancelled Orders', closed: 'Closed Orders', completed: 'Completed Orders' };
 
     function toggleCustFilterMenu(e) {
         e && e.stopPropagation();
@@ -2063,10 +2166,14 @@
             // A cancelled AL kills the order the same as a raw
             // `rawStatus === 'Cancelled'` row — both read as "cancelled".
             // All Orders excludes them too; Cancelled Orders is the only
-            // place they're visible.
+            // place they're visible. A closed AL is the same shape, one
+            // state over: nothing left to do against it, excluded from
+            // All/Outstanding/Completed, visible only under Closed Orders.
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
+            const isClosed = !isCancelled && (r.rawStatus === 'Closed' || r.alClosed);
             if (filter === 'cancelled')   return isCancelled;
-            if (isCancelled) return false;
+            if (filter === 'closed')      return isClosed;
+            if (isCancelled || isClosed) return false;
             // A typed search is a request for ONE specific order, not "show
             // me this bucket" — so a row that matched it is shown whatever
             // Outstanding/Completed/All happens to be set to. Without this,
@@ -2128,11 +2235,16 @@
             const idx = startIdx + pageIdx;
             const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
             const [pillCls, pillTxt] = pillFor(r.derivedStatus, r.paymentMethod);
-            // Row-level cancel marker: any strike-through / muted styling
-            // applies to both raw-cancelled and AL-cancelled rows.
+            // Row-level terminal marker: any strike-through / muted styling
+            // applies to Cancelled rows (raw or AL-cancelled) and Closed
+            // rows (raw or AL-closed) alike — both mean nothing is still
+            // outstanding against this order, just for different reasons.
+            // Closed is never struck through: the order DID happen, it is
+            // only finished, where Cancelled means it never did.
             const rowCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
-            const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
+            const rowClosed = !rowCancelled && (r.rawStatus === 'Closed' || r.alClosed);
+            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : rowClosed ? 'style="background:#f8fafc"' : '';
+            const doneMark = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : rowClosed ? 'style="color:#64748b"' : '';
             const cellsHtml = months.map(m => {
                 const booked = r.balance > 0 ? (r.bookingsByMonth[m.key] || 0) : 0;
                 const cls = ['t-mo', booked ? 'has-booked' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
@@ -2142,10 +2254,10 @@
             return `
                 <tr ${rowStyle}>
                     <td class="t-cust">${idx + 1}</td>
-                    <td class="t-cust"><span class="cust-plain" ${cancelStrike}>${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
-                    <td ${cancelStrike}>${orderMonth}</td>
+                    <td class="t-cust"><span class="cust-plain" ${doneMark}>${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${doneMark}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
+                    <td ${doneMark}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
-                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
+                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${doneMark}>${r.balance.toLocaleString()}</td>
                     ${cellsHtml}
                 </tr>`;
         }).join('');
@@ -2243,8 +2355,10 @@
                        && !(r.customer     || '').toLowerCase().includes(search)
                        && !(r.alNumber     || '').toLowerCase().includes(search)) return false;
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
+            const isClosed = !isCancelled && (r.rawStatus === 'Closed' || r.alClosed);
             if (filter === 'cancelled')   return isCancelled;
-            if (isCancelled) return false;
+            if (filter === 'closed')      return isClosed;
+            if (isCancelled || isClosed) return false;
             if (search) return true;
             if (filter === 'all')         return true;
             if (filter === 'outstanding') return r.balance > 0;
@@ -2331,8 +2445,9 @@
             const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
             const [pillCls, pillTxt] = pillFor(r.derivedStatus, r.paymentMethod);
             const rowCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
-            const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
+            const rowClosed = !rowCancelled && (r.rawStatus === 'Closed' || r.alClosed);
+            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : rowClosed ? 'style="background:#f8fafc"' : '';
+            const doneMark = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : rowClosed ? 'style="color:#64748b"' : '';
             const byMonth = doByAl[r.alNumber] || {};
             // Total Collected for this row sums every month it ever had a
             // DO in, same as totDoAll above — a hidden older month must
@@ -2350,14 +2465,14 @@
             return `
                 <tr ${rowStyle}>
                     <td class="t-cust">${idx + 1}</td>
-                    <td class="t-cust"><span class="cust-link" ${cancelStrike} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
-                    <td ${cancelStrike}>${orderMonth}</td>
+                    <td class="t-cust"><span class="cust-link" ${doneMark} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${doneMark}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
+                    <td ${doneMark}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
-                    <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
+                    <td class="font-black" ${doneMark}>${r.totalQty.toLocaleString()}</td>
                     ${cellsHtml}
-                    <td class="t-tot" ${cancelStrike}>${rowTotal.toLocaleString()}</td>
-                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
-                    <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
+                    <td class="t-tot" ${doneMark}>${rowTotal.toLocaleString()}</td>
+                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${doneMark}>${r.balance.toLocaleString()}</td>
+                    <td class="t-tot" ${doneMark}>${fmtRM(r.totalAmount)}</td>
                 </tr>`;
         }).join('');
 
@@ -2823,7 +2938,7 @@
 
             const [transRes, plotsRes, bookingsRes] = await Promise.all([
                 _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,quantity_change,created_at')
+                    .select('batch_name,plot_name,quantity_change,created_at,transaction_date,remark')
                     .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_collection_bookings')
@@ -2851,10 +2966,13 @@
             const groupKey = (b, p) => (b||'') + '||' + (p||'');
             const groups = {};
             transLogs.forEach(l => {
+                // logDate(), not created_at — a row keyed late is dated by
+                // the work, not by the save (see loadMaturity, batch 264).
+                const d = logDate(l);
                 const k = groupKey(l.batch_name, l.plot_name);
-                if (!groups[k]) groups[k] = { qty: 0, firstDate: l.created_at, plot: l.plot_name };
+                if (!groups[k]) groups[k] = { qty: 0, firstDate: d, plot: l.plot_name };
                 groups[k].qty += (l.quantity_change || 0);
-                if (l.created_at < groups[k].firstDate) groups[k].firstDate = l.created_at;
+                if (d < groups[k].firstDate) groups[k].firstDate = d;
             });
 
             const matured = {};
@@ -3264,7 +3382,7 @@
 
         document.querySelectorAll('#maturity-rows tr[data-batch-key]').forEach(tr => {
             const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-            if (balance > 0) tr.classList.add('drop-target');
+            if (balance > 0 && tr.dataset.matStatus !== 'finished') tr.classList.add('drop-target');
             else             tr.classList.add('drop-disabled');
         });
     }
@@ -3301,7 +3419,7 @@
                           && tr.dataset.plotName  === _draggingAlloc.sourcePlot;
             if (isSource) return;
             const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-            if (balance > 0) tr.classList.add('drop-target');
+            if (balance > 0 && tr.dataset.matStatus !== 'finished') tr.classList.add('drop-target');
             else             tr.classList.add('drop-disabled');
         });
     }
@@ -3323,7 +3441,7 @@
             if (isSource) return;
         }
         const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-        if (balance <= 0) return;
+        if (balance <= 0 || tr.dataset.matStatus === 'finished') return;
         e.preventDefault();
         e.dataTransfer.dropEffect = _draggingAlloc ? 'move' : 'copy';
         tr.classList.add('drop-hover');
@@ -3338,7 +3456,10 @@
         const balance   = parseInt(tr.dataset.batchBalance || '0', 10);
         const batchName = tr.dataset.batchName || '';
         const plotName  = tr.dataset.plotName  || '';
-        if (balance <= 0) return;
+        // Finished is a person's judgment, separate from the balance check
+        // above it — a plot can be marked done with stock still sitting on
+        // it, and that stock is not open to a new drop.
+        if (balance <= 0 || tr.dataset.matStatus === 'finished') return;
 
         if (_draggingAlloc) {
             const isSource = batchName === _draggingAlloc.sourceBatch && plotName === _draggingAlloc.sourcePlot;
@@ -3567,7 +3688,7 @@
     async function loadInventoryMap() {
         const tabBar = document.getElementById('invmap-nursery-tabs');
         try {
-            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res] = await Promise.all([
+            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res, seedsRes] = await Promise.all([
                 _supabase.from('operation_nurseries').select('*').order('name'),
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
@@ -3586,8 +3707,20 @@
                 // batch is untidy, hiding a live one is stock nobody can find.
                 _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,quantity_change,remark')
-                    .eq('transaction_type', '3rd_Culling')
+                    .eq('transaction_type', '3rd_Culling'),
+                // The batch's own breed for transplant rows saved without
+                // one — same fallback loadMaturity carries (batch 260), and
+                // it keeps a breedless batch out of the "—" bucket on the
+                // By Breed sidebar. Failing is fine: the tile just reads —.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,breed_name')
+                    .eq('transaction_type', 'Seeds_Received')
+                    .then(r => r, e => ({ data: [] }))
             ]);
+            const batchBreedMap = {};
+            ((seedsRes && seedsRes.data) || []).forEach(b => {
+                if (b.batch_name && b.breed_name) batchBreedMap[b.batch_name] = b.breed_name;
+            });
 
             _invmap.nurseries = nursRes.data || [];
             _invmap.plots     = plotsRes.data || [];
@@ -3633,7 +3766,7 @@
                 if (!plotBatches[plot]) plotBatches[plot] = [];
                 plotBatches[plot].push({
                     batch,
-                    breed: breedByPlotBatch[key] || '—',
+                    breed: breedByPlotBatch[key] || batchBreedMap[batch] || '—',
                     full: fullByPlotBatch[key] || 0,
                     collected: collectedByPlotBatch[key] || 0,
                     balance: 0

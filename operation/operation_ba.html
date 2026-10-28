@@ -34,15 +34,15 @@
         <div class="glass-panel p-6 rounded-[2rem] flex flex-col items-center gap-4 relative overflow-hidden border-l-[12px] border-yellow-500" id="main-title-panel">
             <div class="flex flex-col md:flex-row w-full items-center justify-between z-30 relative gap-4">
                 <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-yellow-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-5 py-3 rounded-xl transition-colors flex items-center gap-2 self-start md:self-auto shadow-sm relative z-40">
-                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
+                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back
                 </button>
                 <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-yellow-700 via-yellow-600 to-yellow-500 drop-shadow-sm pb-1 text-center relative z-40" style="word-spacing: 0.2em;">Customer Order Monitoring</h1>
                 <div class="hidden md:block w-[130px] relative z-40"></div>
             </div>
             <div class="bg-slate-100/80 p-2 rounded-[20px] flex gap-2 z-30 shadow-inner w-full max-w-3xl overflow-x-auto border border-slate-200 backdrop-blur-md relative z-40">
-                <button onclick="window.location.href='operation_delivery.html'" class="tab-btn flex-1 hover:bg-emerald-50 hover:text-emerald-600">Delivery Note (DO)</button>
+                <button id="tab-do" onclick="window.location.href='operation_delivery.html'" class="tab-btn flex-1 hover:bg-emerald-50 hover:text-emerald-600">Delivery Note (DO)</button>
                 <button class="tab-btn flex-1 active-ba cursor-default">Borang Akuan (BA)</button>
-                <button onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
+                <button id="tab-al" onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
             </div>
             <div id="title-animation-zone" class="absolute inset-0 w-full h-full pointer-events-none z-10"></div>
         </div>
@@ -747,7 +747,7 @@
             input.onchange = (e) => { if (e.target.files.length) handleMngBAScan(e.target.files[0]); input.value = ''; };
         }
 
-        function removeBAImage() { currentMngBaImage = null; document.getElementById('mng-ba-file').value = ''; document.getElementById('mng-ba-image-container').classList.add('hidden'); document.getElementById('mng-ba-upload-container').classList.remove('hidden'); }
+        function removeBAImage() { if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return; currentMngBaImage = null; document.getElementById('mng-ba-file').value = ''; document.getElementById('mng-ba-image-container').classList.add('hidden'); document.getElementById('mng-ba-upload-container').classList.remove('hidden'); }
         function viewAttachedBADocument() { 
             if(!currentMngBaImage) return; 
             openStandaloneDoc(currentMngBaImage);
@@ -772,6 +772,7 @@
 
         // FIXED DOUBLE QUOTES FOR DATABASE OR QUERY
         async function saveManageBA() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value; 
             const newNum = document.getElementById('mng-ba-num').value.trim(); 
             const newName = document.getElementById('mng-ba-name').value.trim(); 
@@ -835,9 +836,11 @@
 
         // FIXED DOUBLE QUOTES FOR DATABASE OR QUERY
         async function deleteBA() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value;
-            const pin = prompt("Enter Master PIN to delete BA:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
+            // The Delete DO / BA tick decides. The Master PIN that used to follow
+            // was written into this page, readable by anybody with Inspect.
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'delete')) return;
             if(!confirm(`Are you sure you want to completely delete BA: ${originalKey}? This will unlink it from all DOs.`)) return;
 
             try {
@@ -861,6 +864,7 @@
         }
         
         function openBAModal() { 
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             document.getElementById('ba-modal').classList.remove('hidden'); 
             document.getElementById('bulk-ba-tbody').innerHTML = ''; 
             window.extractedBulkBAs = {}; 
@@ -949,6 +953,7 @@
         }
 
         async function saveBulkBA() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const btn = document.getElementById('save-bulk-btn'); btn.innerText = 'CROSS-CHECKING...'; btn.disabled = true; 
             const rows = document.querySelectorAll('#bulk-ba-tbody tr'); let successCount = 0;
             
@@ -1018,6 +1023,27 @@
         
         _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else fetchData(); });
     </script>
+
+<!-- Page-access guard: Borang Akuan is part of Customer Order Documentation
+     in the module's User Access (operation_user_access.html, key 'orders'
+     — the one "Open Page" switch for DO/BA/AL together; 'ba_manage' is
+     this page's own write tick). Fails open on read errors, same as the
+     DO page's guard. Deleting a BA asks the Delete DO / BA tick inside
+     deleteBA(); the Master PIN it used to ask as well is gone. -->
+<script src="../shared/shared_staff_gate.js"></script>
+<script src="../shared/shared_access.js"></script>
+<script>
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
+      alert('You do not have access to Customer Order Documentation.');
+      location.replace('operation_dashboard.html');
+      return;
+    }
+  } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
+})();
+</script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

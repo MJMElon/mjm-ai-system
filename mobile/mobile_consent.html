@@ -10,6 +10,8 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Customers cannot enter the staff system: see the file. -->
+<script src="../shared/shared_staff_gate.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Outfit', system-ui, sans-serif; }
@@ -92,7 +94,7 @@
 ══════════════════════════════════════════════ -->
 <div class="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
   <div class="flex items-center gap-3">
-    <a href="mobile_landing.html" class="flex items-center gap-2 bg-slate-100 hover:bg-emerald-100 rounded-lg px-3 py-2 text-slate-500 hover:text-emerald-700 transition-colors font-black text-xs uppercase tracking-wider whitespace-nowrap no-underline">&larr; Back to Main Page</a>
+    <a href="mobile_landing.html" class="flex items-center gap-2 bg-slate-100 hover:bg-emerald-100 rounded-lg px-3 py-2 text-slate-500 hover:text-emerald-700 transition-colors font-black text-xs uppercase tracking-wider whitespace-nowrap no-underline">&larr; Back</a>
     <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0">AI</div>
     <span class="font-black text-slate-800 uppercase tracking-widest text-sm hidden sm:inline">Customer Consent</span>
   </div>
@@ -397,19 +399,22 @@ function _mjmHasMobileAccess(profile) {
   return !!lvl && _MOBILE_STAFF_LEVELS.indexOf(String(lvl).toLowerCase()) !== -1;
 }
 
-_supabase.auth.getSession().then(async ({ data: { session } }) => {
+// Resolves true only once the person is let in; the page's own loading
+// waits on it, so nothing is fetched or drawn for somebody turned away.
+window.MJM_PAGE_GATE = _supabase.auth.getSession().then(async ({ data: { session } }) => {
   if (!session) { window.location.href = 'mobile_landing.html'; return; }
-  try {
-    const { data: profile } = await _supabase
-      .from('shared_profiles').select('permissions')
-      .eq('id', session.user.id).maybeSingle();
-    if (profile && !_mjmHasMobileAccess(profile)) {
-      window.location.replace('mobile_landing.html'); return;
-    }
-  } catch (_) { /* fail open on transient errors */ }
+  // Staff gate (shared/shared_staff_gate.js): a customer is refused, an
+  // unreadable profile with nothing remembered is held with a Retry, and a
+  // login with no row is not let through as it used to be.
+  const gate = await MJMStaffGate.enforce(_supabase, session);
+  if (gate.status === 'customer' || gate.status === 'unknown') return;
+  if (!_mjmHasMobileAccess(gate.profile)) {
+    window.location.replace('mobile_landing.html'); return;
+  }
   currentSession = session;
   document.getElementById('user-label').innerText =
     session.user.user_metadata?.full_name || session.user.email;
+  return true;
 });
 
 _supabase.auth.onAuthStateChange((event, session) => {
@@ -454,10 +459,15 @@ async function loadActiveALs() {
   // reaches a completed AL a different way: a live, server-side filtered
   // query for just what was typed, which cannot be capped out the same way
   // because the filter runs in the database, not after an unbounded fetch.
+  //
+  // Closed is excluded the same way Cancelled is — the office decided
+  // this order's business is done and nothing more should be signed
+  // against it, whatever balance_quantity still reads. See Close AL in
+  // operation_booking.html (the AI system).
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
-    .not('status', 'in', '("Cancelled","Collected")')
+    .not('status', 'in', '("Cancelled","Closed","Collected")')
     .gt('balance_quantity', 0)
     .order('created_at', { ascending: false });
 
@@ -560,7 +570,7 @@ async function loadAllData() {
   renderCombined(document.getElementById('input-search')?.value || '');
 }
 
-window.addEventListener('DOMContentLoaded', () => { loadAllData(); });
+window.addEventListener('DOMContentLoaded', async () => { if (!(await window.MJM_PAGE_GATE)) return; loadAllData(); });
 
 // ════════════════════════════════════════════════════════
 //  BARCODE SCANNER
@@ -675,7 +685,7 @@ async function liveSearchFallback(lower) {
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
-    .not('status', 'in', '("Cancelled","Collected")')
+    .not('status', 'in', '("Cancelled","Closed","Collected")')
     .or('al_number.ilike.%' + safe + '%,order_number.ilike.%' + safe + '%,customer_name.ilike.%' + safe + '%')
     .order('created_at', { ascending: false })
     .limit(50);

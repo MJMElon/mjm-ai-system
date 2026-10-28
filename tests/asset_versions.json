@@ -1,7 +1,7 @@
 {
   "audit/audit_settings.js@4": "5ce03fae66d3",
   "audit/audit_system_setting.js@3": "1643c01ab880",
-  "shared/shared_module_access.js@3": "6ff319ec6d45",
+  "shared/shared_module_access.js@4": "6b260ac84cf3",
   "shared/shared_plot_movement.js@7": "496177f7b535",
   "shared/shared_maint_plots.js@2": "35201cec7c02",
   "shared/shared_maint_workers.js@1": "4e0e8e5787c7",
@@ -10,11 +10,12 @@
   "shared/shared_people.js@1": "68a88c52adc6",
   "shared/shared_palms.js@1": "f802538030fc",
   "npayroll/npayroll_styles.css@26": "f69300501cfd",
-  "npayroll/npayroll_script.js@73": "898de9c7b00f",
-  "shared/shared_module_access.js@1": "6ff319ec6d45",
-  "nursery_ops/plot_maintenance_styles.css@86": "15d6efec9efd",
-  "nursery_ops/plot_maintenance_script.js@130": "319a2fe85b60",
+  "npayroll/npayroll_script.js@76": "8e9ebad356d8",
+  "shared/shared_module_access.js@2": "6b260ac84cf3",
+  "nursery_ops/plot_maintenance_styles.css@99": "1cd95758ad46",
+  "nursery_ops/plot_maintenance_script.js@142": "8d29e76bd98e",
   "shared/shared_empty_hole_report.js@1": "17fa638f266d",
   "shared/shared_month_lock.js@1": "9e3840e2e7dd",
-  "operation/operation_stock_sales.js@2": "d03af146b647"
+  "shared/shared_cf_select.js@2": "c4d4601acc72",
+  "operation/operation_stock_sales.js@7": "2b2a815eb180"
 }

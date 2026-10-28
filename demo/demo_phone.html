@@ -24,6 +24,7 @@
      trusted it. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <style>
   /* Hidden until the gate has answered, so the demo never flashes up for
@@ -107,6 +108,19 @@
   .pill:hover { color:#f8fafc; border-color:rgba(148,163,184,.45); }
   .note { font-size:11.5px; font-weight:600; color:var(--faint); line-height:1.6; }
 
+  /* The way back is a logo, not a sentence — the same round icon-button
+     shape as the Portal/Sign Out pills elsewhere, just icon-only, so it
+     reads as "leave" at a glance rather than something to read. */
+  .icon-pill {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:38px; height:38px; border-radius:999px; flex:0 0 auto;
+    border:1px solid rgba(148,163,184,.22); background:rgba(255,255,255,.04);
+    color:var(--dim); cursor:pointer; text-decoration:none;
+    transition:color .15s, border-color .15s, background .15s;
+  }
+  .icon-pill:hover { color:#f8fafc; border-color:rgba(148,163,184,.45); background:rgba(255,255,255,.08); }
+  .icon-pill svg { width:18px; height:18px; }
+
   /* ── Layout ──────────────────────────────────────────────────────────── */
   /* Tight at the top on purpose: every pixel spent on the heading is a pixel
      off the phone on a laptop screen. */
@@ -144,7 +158,14 @@
       <div class="title">555 Portal Demo</div>
       <div class="subtitle">The phones, on a desk</div>
     </div>
-    <a href="../index.html" class="pill">← Back to the hub</a>
+    <!-- Back goes to the MJM Team page (scan/scan_admin.html) — where the
+         Demo Portal link that opens this page actually lives — not to the
+         dark hub a click here used to land on. -->
+    <a href="../scan/scan_admin.html" class="icon-pill" aria-label="Back to MJM Team" title="Back to MJM Team">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 5l-7 7 7 7"/>
+      </svg>
+    </a>
   </div>
 
   <div class="cols">

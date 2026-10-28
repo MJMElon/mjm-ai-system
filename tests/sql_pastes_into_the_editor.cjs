@@ -45,8 +45,15 @@ const SWEPT = [
   'CHECK_what_life_of_seedlings_holds_back.sql',
   'CHECK_seed_side_calibrations.sql',
   'RUN_ME_seal_management.sql',
+  'RUN_ME_seal_hq_delivery.sql',
+  'RUN_ME_seal_missed_scan.sql',
   'RUN_ME_audit_save_every_table.sql',
   'RUN_ME_worker_rejected.sql',
+  'CHECK_which_plots_were_never_audited.sql',
+  'CHECK_which_batch_still_owes_the_round.sql',
+  'CHECK_has_a_plot_ever_read_anything_but_clean.sql',
+  'CHECK_the_alert_board_every_month.sql',
+  'CHECK_why_no_plot_condition_alert.sql',
 ];
 
 const DQ = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;

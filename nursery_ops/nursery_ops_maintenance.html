@@ -18,31 +18,33 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=86">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=99">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
 
-<!-- The ribbon every module page wears: wordmark left, module title in the
-     middle, Welcome / Portal / Sign Out on the right. Mounted here rather
-     than hand-built, so this page cannot drift from the others. -->
-<div id="mjm-ribbon" data-brand="MJM Nursery AI System"
-     data-center="Nursery Maintenance Schedule &amp; Work Record"
-     data-sub="Monthly Work Planning &amp; Record System" data-logo="off"></div>
-<script src="../shared/shared_ribbon.js"></script>
+<!-- The compact bar the Seeds Control page wears — Back pill, centred module
+     name, NO badge — asked for here and on the dashboard so the nursery-ops
+     pages read as one set. Inline styles, because this page loads no
+     Tailwind; the values are the Tailwind classes the Seeds bar uses,
+     written out. Sign Out lives on the portal the Back pill leads to. -->
+<div id="mjm-ribbon" style="background:#fff;border-bottom:1px solid #ccfbf1;padding:16px 24px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;position:sticky;top:0;z-index:30;box-shadow:0 1px 2px rgba(0,0,0,.05);font-family:'Outfit',system-ui,sans-serif;">
+  <a href="nursery_ops_dashboard.html" style="justify-self:start;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.1em;background:#f8fafc;padding:8px 16px;border-radius:999px;border:1px solid #e2e8f0;text-decoration:none;white-space:nowrap;">&#8592; Back</a>
+  <span style="justify-self:center;text-align:center;font-weight:900;color:#1e293b;text-transform:uppercase;letter-spacing:.1em;font-size:14px;padding:0 12px;">Nursery Maintenance Schedule &amp; Work Record</span>
+  <div style="justify-self:end;width:32px;height:32px;background:#0d9488;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:12px;">NO</div>
+</div>
 
 <!-- ═══ APP VIEW ═══ -->
 <div id="view-app">
   <div class="page sm-frame">
 
     <!-- ── The side bar ──────────────────────────────────────────────
-         The same bar PALMS wears, and deliberately so: same widths, same
-         pills, same rule between the way out and the pages inside. It is
-         a COPY rather than shared_palms_nav.js because that bar moves
-         between four HTML pages and this one moves between panels of one
-         — same shape, different mechanism. Change one, change the other;
-         the geometry is in plot_maintenance_styles.css beside a note
-         saying the same. -->
+         A solid teal menu, icon + name per row, active row highlighted —
+         the office handed over the design. It USED to be a copy of the
+         PALMS bar; the two diverged on purpose the day this one was
+         restyled, so only the sticky offset (76px, under the compact
+         header bar) still has to agree with shared_palms_nav.js. The
+         styles are in plot_maintenance_styles.css. -->
     <aside id="sm-nav">
       <!-- Pull the bar in and out.
            INSIDE the bar, not above it: as a sibling it needed a grid row of
@@ -56,21 +58,71 @@
               onclick="toggleNav()" aria-controls="sm-nav" aria-expanded="true"
               title="Hide the menu"><span id="sm-nav-toggle-ico">&#10094;</span></button>
       <nav aria-label="Nursery Maintenance Schedule &amp; Work Record">
-        <a class="pn-out" href="nursery_ops_dashboard.html">
-          <span aria-hidden="true">&#8592;</span>
-          <span>Back to Operation Manage Page</span>
-        </a>
+        <!-- No back link here any more — the header bar's ← Back pill is the
+             way out, and the office asked for a plain menu: icon + name per
+             row on a solid bar, the caption gone with the link.
+             data-i18n sits on the SPAN, never the button: applyI18n writes
+             textContent, which on the button would wipe the icon out. -->
         <div class="pn-group">
-          <div class="pn-cap">Nursery Maintenance Schedule &amp; Work Record</div>
-          <!-- Maintenance Work Record lands first and is what the page
-               opens on: the schedule is set once a month, the records are
-               what somebody is here for on any other day. Setting is last
-               and is hidden until MJMAccess confirms an admin (see
-               applyNopsAdminUI). -->
-          <button type="button" class="pn-tab is-on" onclick="switchTab('record',this)"   data-i18n="tab.record">Maintenance Work Record</button>
-          <button type="button" class="pn-tab"       onclick="switchTab('schedule',this)" data-i18n="tab.schedule">Monthly Maintenance Schedule</button>
-          <button type="button" class="pn-tab"       onclick="switchTab('payroll',this)"  data-i18n="tab.payroll">Worker Record</button>
-          <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)" data-i18n="tab.setting">Setting</button>
+          <!-- Work Log lands first and is what the page opens on: the
+               schedule is set once a month, the log is what somebody is
+               here for on any other day. Settings is last and is hidden
+               until MJMAccess confirms an admin (see applyNopsAdminUI). -->
+          <button type="button" class="pn-tab is-on" onclick="switchTab('record',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+            <span data-i18n="tab.record">Work Records</span>
+          </button>
+          <!-- Opened only while Work Records is the current tab — a CSS
+               sibling rule (.pn-tab.is-on + .pn-sub), so switchTab's own
+               is-on toggle is what shows and hides it and there is no
+               second piece of state to let this drift. The ONLY place the
+               two sub-views are chosen: the duplicate bar inside the panel
+               came off at the office's request, and switchRecordView(view)
+               still guards its old button ids. -->
+          <div class="pn-sub">
+            <button type="button" class="pn-subtab active" id="pn-subtab-list" onclick="switchRecordView('list')">
+              <span data-i18n="tab.maintList">Monthly Records</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-chart" onclick="switchRecordView('chart')">
+              <span data-i18n="tab.chart">Performance</span>
+            </button>
+          </div>
+          <button type="button" class="pn-tab" onclick="switchTab('schedule',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span data-i18n="tab.schedule">Work Schedule</span>
+          </button>
+          <button type="button" class="pn-tab" onclick="switchTab('payroll',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            <span data-i18n="tab.payroll">Worker Activity</span>
+          </button>
+          <!-- The six job sheets, opened only while Worker Activity is the
+               current tab — same sibling rule as Work Records' own sub-nav
+               above. switchPayrollView(type) is the one function that keeps
+               this and the panel's own sub-tab bar in step. -->
+          <div class="pn-sub">
+            <button type="button" class="pn-subtab active" id="pn-subtab-pd" onclick="switchPayrollView('pd')">
+              <span data-i18n="tab.pd">P &amp; D — Spraying</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-manuring" onclick="switchPayrollView('manuring')">
+              <span data-i18n="tab.manuring">Manuring</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-weeding" onclick="switchPayrollView('weeding')">
+              <span data-i18n="tab.weeding">Weeding</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-interrow" onclick="switchPayrollView('interrow')">
+              <span data-i18n="tab.interrow">Interrow Spray</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-loading_seedlings" onclick="switchPayrollView('loading_seedlings')">
+              <span data-i18n="tab.loadingSeedlings">Loading Seedlings</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-transplanting" onclick="switchPayrollView('transplanting')">
+              <span data-i18n="tab.transplanting">Transplanting</span>
+            </button>
+          </div>
+          <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span data-i18n="tab.setting">Settings</span>
+          </button>
         </div>
       </nav>
     </aside>
@@ -83,7 +135,7 @@
            Both hide themselves on a panel that has no use for them:
            Schedule shows every nursery at once, Setting has no month. -->
       <div class="sm-head">
-        <div class="sm-title" id="sm-title">Maintenance Work Record</div>
+        <div class="sm-title" id="sm-title">Work Records</div>
         <div class="sm-tools">
           <div class="top-ctrl" id="top-nursery-ctrl">
             <!-- Backing store for the circle buttons below, not its own
@@ -120,10 +172,10 @@
     <div id="tab-record" class="tab-panel active">
       <div class="page-hdr"><div class="page-hdr-title" id="record-nursery-line"></div></div>
       <div id="rec-metrics" class="metrics-big"></div>
-      <div class="subtabs-bar">
-        <button class="subtab-btn active" id="subtab-list"  onclick="switchRecordView('list',this)">📋 Work Maintenance List</button>
-        <button class="subtab-btn"        id="subtab-chart" onclick="switchRecordView('chart',this)">📊 Analytics</button>
-      </div>
+      <!-- The Monthly Records / Performance pair lives ONLY in the side
+           bar's Work Records entry now — the office removed the duplicate
+           bar that sat here. switchRecordView already guards the missing
+           #subtab-list/#subtab-chart ids. -->
       <div id="recview-list" class="recview active">
       <!-- WORK RECORD —————————————————————————————————————————————
            TWO SECTIONS, ONE AT A TIME.
@@ -146,12 +198,6 @@
 
            The filters below belong to BOTH: whichever section is open
            answers the same question about the same nursery. -->
-        <div class="subtabs-bar">
-          <button class="subtab-btn active" id="recsec-btn-approved"
-                  onclick="switchRecSection('approved',this)">✓ <span data-i18n="rec.partApproved">Approved</span></button>
-          <button class="subtab-btn" id="recsec-btn-rejected"
-                  onclick="switchRecSection('rejected',this)">⛔ <span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
-        </div>
         <div class="toolbar">
           <select class="filter-sel" id="rf-filter-jenis" onchange="renderRecords()">
             <option value="" data-i18n="rec.allJenis">All Jenis Kerja</option>
@@ -166,12 +212,30 @@
           <input class="filter-sel" type="text" id="rf-filter-date"
                  placeholder="Filter by date…" data-i18n-ph="rec.filterDate" oninput="renderRecords()"
                  style="width:160px;height:36px;padding:0 10px;font-size:12px;">
-          <button class="btn btn-primary" onclick="openRecModal()" data-i18n="btn.addRecord">+ Add Record</button>
-          <button class="btn" onclick="syncRecordsFromSchedule()" data-i18n="btn.sync">↺ Sync from Schedule</button>
+          <!-- Icon buttons, at the office's request — the title says what
+               each does. No data-i18n here: applyI18n writes textContent,
+               which would replace the icon with words. -->
+          <button class="btn btn-primary btn-ico" onclick="openRecModal()" title="Add Record" aria-label="Add Record">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-7-7h14"/></svg>
+          </button>
+          <button class="btn btn-ico" onclick="syncRecordsFromSchedule()" title="Sync from Schedule" aria-label="Sync from Schedule">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+        </div>
+
+        <!-- Approved / Rejected sit UNDER the filter row now, as tabs on the
+             top edge of the table itself — the active one a white tab that
+             joins the card below with no gap, the office's design. Keeps
+             the subtabs-bar class because switchRecSection finds its
+             siblings through it; rec-tabs restyles only this pair. -->
+        <div class="subtabs-bar rec-tabs">
+          <button class="subtab-btn active" id="recsec-btn-approved"
+                  onclick="switchRecSection('approved',this)"><span data-i18n="rec.partApproved">Approved</span></button>
+          <button class="subtab-btn" id="recsec-btn-rejected"
+                  onclick="switchRecSection('rejected',this)"><span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
         </div>
 
         <div id="recsec-approved" class="recsec active">
-        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partApprovedSub">The month's scheduled jobs, with the submissions a Field Conductor has signed off filled in</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table">
             <!-- The columns are PINNED here rather than left to the browser.
@@ -260,7 +324,6 @@
              so the confirm names the row that will go and refuses to guess
              when the pairing is ambiguous. -->
         <div id="recsec-rejected" class="recsec">
-        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partRejectedSub">Records a Field Conductor refused — approve one and it flows back into the approved section</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table rej-table">
             <!-- Pinned the same way and for the same reason as the table
@@ -351,7 +414,7 @@
     <div id="tab-schedule" class="tab-panel">
       <!-- No Save and no PDF here. Saving is what every tick already does,
            and publishing to the worker app happens when the Edit popup's
-           Reviewed & Sync is pressed — see saveWorkEditor(). -->
+           Save & Sync is pressed — see saveWorkEditor(). -->
 
       <!-- ── SUMMARY ────────────────────────────────────────────────
            Every nursery, every week, the four works. A tick means that work
@@ -380,13 +443,11 @@
     <!-- CHEMICAL CALCULATOR -->
     <div id="tab-payroll" class="tab-panel">
       <div class="page-hdr"><div class="page-hdr-title" id="payroll-nursery-line"></div></div>
-      <div class="subtabs-bar">
-        <button class="subtab-btn active" onclick="switchPayrollView('pd',this)"       data-i18n="tab.pd">P &amp; D — Racun</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('manuring',this)" data-i18n="tab.manuring">Manuring</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('weeding',this)"  data-i18n="tab.weeding">Weeding</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('interrow',this)" data-i18n="tab.interrow">Interrow Spray</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('loading_seedlings',this)" data-i18n="tab.loadingSeedlings">Loading Seedlings</button>
-      </div>
+      <!-- The six job sheets live ONLY in the side bar's Worker Activity
+           entry now — the duplicate bar that sat here came off, the same
+           way Work Record's did. switchPayrollView already guards the
+           missing #subtab-* ids (_syncSubNav checks the element exists
+           before touching it), so nothing throws. -->
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--text-head);">Mega Jutamas Sdn Bhd</div>
@@ -554,12 +615,13 @@
 
 <!-- ═══ ONE WORK, ONE WEEK ═══ -->
 <div class="modal-overlay" id="we-modal">
-  <!-- The work editor is a TABLE — every plot down, every week across — so it
-       wants the screen, not a dialog's worth of it. 1600px wide and 94vh tall
-       means a nursery of fourteen plots over four weeks is read without
-       scrolling in either direction on an office monitor; the max-width and
-       max-height keep it inside a laptop. -->
-  <div class="modal" style="width:1600px;max-width:96vw;height:94vh;max-height:94vh;">
+  <!-- The work editor is a TABLE — every plot down, every week across — and
+       takes the WHOLE screen now (sizing is in plot_maintenance_styles.css,
+       #we-modal .modal), so a nursery of fourteen plots over four weeks is
+       read without scrolling in either direction, and Next below has room
+       to carry somebody straight through a nursery's four jobs without
+       closing and reopening this. -->
+  <div class="modal">
     <div class="modal-top">
       <div>
         <div class="modal-title" id="we-title">Work</div>
@@ -573,8 +635,24 @@
            set. The summary only counts them. -->
       <button class="btn schedule-edit-ctrl" id="we-add-week" onclick="weAddWeek()"
         style="margin-right:auto;">&#65291; Add Week</button>
-      <button class="btn" onclick="cancelWorkEditor()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveWorkEditor()">Reviewed &amp; Sync</button>
+      <button class="btn" onclick="cancelWorkEditor()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+        Cancel
+      </button>
+      <button class="btn btn-primary" onclick="saveWorkEditor()">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        Save &amp; Sync
+      </button>
+      <!-- Reviews this section the same way Save & Sync does, then opens
+           the next one -- Manuring after P & D, Weeding after that, Interrow
+           last, and then the next nursery's own P & D. Greyed at the very
+           end of the whole list rather than hidden, the same choice every
+           other stepper on this page makes: a control that disappears is
+           one people stop trusting to be where it was. -->
+      <button class="btn btn-primary" id="we-next" onclick="weNext()">
+        <span id="we-next-label">Next</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </button>
     </div>
   </div>
 </div>
@@ -751,6 +829,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_plot_movement.js?v=7"></script>
 <!-- Which nursery a plot belongs to. Shared with the payroll module's salary
@@ -765,7 +844,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=130"></script>
+<script src="plot_maintenance_script.js?v=142"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
