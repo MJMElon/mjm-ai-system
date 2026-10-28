@@ -436,6 +436,9 @@ const payOf = (page, sec) => page.evaluate((s) =>
                 box under a sheet about money. */
              second: !!document.getElementById('cull-inc-pay'),
              cols: [...el.querySelectorAll('thead th')].map(h => h.textContent.trim()),
+             /* The WIDTHS as the browser settled them, not as they were
+                asked for: the complaint was about what is on screen. */
+             widths: [...el.querySelectorAll('thead th')].map(h => Math.round(h.getBoundingClientRect().width)),
              spans: [...el.querySelectorAll('tbody td[rowspan]')]
                .map(td => [td.textContent.trim().split('\n')[0], Number(td.getAttribute('rowspan'))]),
              bodyRows: el.querySelectorAll('tbody tr').length,
@@ -465,6 +468,31 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [(screen.plots.match(/RM 20\.00/g) || []).length, /RM 50\.00/.test(screen.plots),
      /TOTAL INCENTIVE.*90\.00/.test(screen.plots)],
     [2, true, true]);
+  /* NO COLUMN TAKES THE SLACK ON ITS OWN — *"alignment 不对 有些太大有些
+     太小"*. Auto layout hands the most room to the widest content, which
+     is the two long date HEADINGS, so a 90px date sat in 400px beside a
+     plot squeezed into 131. Pinning only the dates moved the surplus onto
+     Person (548px for a name) rather than fixing it.
+
+     Asked of the RENDERED widths, because that is what the office was
+     looking at; a check on the style attribute passes over a column the
+     browser then stretched anyway. And asked as a RATIO, not in pixels —
+     a pixel floor passes or fails on the harness window rather than on
+     the layout. */
+  {
+    const w = screen.widths;
+    /* A DATE IS NEVER THE WIDEST COLUMN ON THE ROW. That is the office's
+       picture stated as a rule: the widest should be the one carrying the
+       longest VALUE (a name), never one carrying the longest HEADING.
+       A looser form of this — "nothing takes a third of the table" —
+       passed over the broken layout at 28% and proved nothing. */
+    const widest = w.indexOf(Math.max(...w));
+    check('the widest column is the one with the longest value on it, not a date',
+      [w.length, widest], [6, 4]);
+    check('neither date is wider than the name beside it, nor than the plot by half',
+      [w[1] <= w[4], w[2] <= w[4], w[1] < w[0] * 1.5, w[2] < w[0] * 1.5],
+      [true, true, true, true]);
+  }
   /* Rule, Checked plots, Checked and Nursery came off. The checker is on
      Worker Activity, one button away at the top of this section. */
   check('and nothing the office struck off is still on it',

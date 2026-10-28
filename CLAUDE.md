@@ -5014,6 +5014,33 @@ What the rule asks, and must keep asking:
   paper half is asked of the geometry: four cells of three, and three body
   rows, is the only way to tell a merged cell from the plot written out
   three times.
+
+  **AND THE WIDTHS ARE PER CENT, where every other table on this page uses
+  pixels.** Left unpinned, the slack all went to the two DATES — auto
+  layout hands the most room to the widest content, and their HEADINGS are
+  the longest words on the row — so a 90px date sat in 400px beside a plot
+  squeezed into 131, and the office said *"alignment 不对 有些太大有些太
+  小"*. **Pinning only the dates MOVES the fault**: the surplus then lands
+  on Person, 548px for a name, which is the same picture the other way
+  round. Six short values cannot fill a table told to be 100% wide, so the
+  surplus has to go somewhere, and per cent is what spreads it over all
+  six. Measured at 1,450px and again at 1,100 before choosing — the shape
+  holds at both, which neither pixel plan did.
+
+  **Auto layout, never `table-layout:fixed`.** The headings are `nowrap`,
+  so a fixed column narrower than its own heading runs the words out of
+  the cell on a laptop; auto grows and `.tbl-wrap` scrolls.
+
+  The test asks the RENDERED widths, and asks the office's own picture:
+  **a date is never the widest column on the row** — the widest should be
+  the one carrying the longest VALUE, never the longest heading. A looser
+  form of that ("nothing takes a third of the table") passed over the
+  broken layout at 28% and proved nothing.
+
+  **A design note NEVER goes inside the template literal.** A comment
+  there is shipped markup, and one backtick in it ends the literal — which
+  is what happened writing the note above, and the page died with
+  `renderCullIncentive` never defined and nothing on screen saying why.
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 

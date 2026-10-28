@@ -2267,7 +2267,29 @@ function cullIncentivePay(rows, secFilter) {
      column repeating the heading on every row is the same answer twice. It
      comes back as a line under the plot for **All Sections** ONLY, which
      is the one case the heading cannot answer.
-   - **No.** The office listed six columns and this was not one of them. */
+   - **No.** The office listed six columns and this was not one of them.
+
+   **EVERY COLUMN IS GIVEN ITS SHARE, which is why the widths are per cent
+   where every other table on this page uses pixels.** Unpinned, the slack
+   all went to the two DATES — their headings are the longest words on the
+   row and auto layout hands the most room to the widest content — so a
+   90px date sat in 400px beside a plot squeezed into 131, and the office
+   said *"alignment 不对 有些太大有些太小"*. Pinning only the dates MOVES
+   the fault rather than fixing it: the surplus then lands on Person, 548px
+   for a name, which is the same picture the other way round. Six short
+   values cannot fill a table told to be 100% wide, so the surplus has to
+   go somewhere; per cent is what spreads it over all six instead of piling
+   it on one. Measured at 1,450px and again at 1,100 — the shape holds at
+   both, which neither pixel plan did.
+
+   **Auto layout, never table-layout:fixed.** The headings are nowrap, so a
+   fixed column narrower than its own heading would have the words run out
+   of the cell on a laptop; auto simply grows and .tbl-wrap scrolls.
+
+   And a design note NEVER goes inside the template literal: a comment
+   there is shipped markup, and one backtick in it ends the literal. That
+   is what happened writing this one, and the page died with
+   renderCullIncentive never defined. */
 function renderCullIncentive(secFilter) {
   const table = $('cull-inc-plots');
   if (!table) return;
@@ -2297,9 +2319,10 @@ function renderCullIncentive(secFilter) {
 
   table.innerHTML = rows.length ? `
     <thead><tr>
-      <th class="l">Plot</th>
-      <th>Saringan started</th><th>Transplanting ended</th><th style="width:70px;">Days</th>
-      <th class="l">Person</th><th style="width:130px;">Incentive (RM)</th>
+      <th class="l" style="width:15%;">Plot</th>
+      <th style="width:15%;">Saringan started</th>
+      <th style="width:16%;">Transplanting ended</th><th style="width:8%;">Days</th>
+      <th class="l" style="width:28%;">Person</th><th style="width:18%;">Incentive (RM)</th>
     </tr></thead>
     <tbody>${rows.map((r) => {
       const who = earners(r.plot);
