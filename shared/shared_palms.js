@@ -258,8 +258,8 @@
   }
 
   /* A list of entries with each spell folded into one row: the first start,
-     the last end (or open while its newest part is), every hand that keyed a
-     part, and how many parts it was. Oldest first, as given. */
+     the last end (or open while any part is), the name of whoever keyed it
+     first, and how many parts it was. Oldest first, as given. */
   function mergeSpells(entries) {
     const out = [];
     (entries || []).slice().sort((a, b) => String(a.start).localeCompare(String(b.start)) || (a.no - b.no))
@@ -276,13 +276,15 @@
           if (gap <= SPELL_GAP_DAYS) {
             prev.end = (e.end && prev.end) ? (String(e.end) > String(prev.end) ? e.end : prev.end) : null;
             if (prev.ideal == null) prev.ideal = e.ideal;
-            if (e.by && !prev.byAll.includes(e.by)) prev.byAll.push(e.by);
-            prev.by = prev.byAll.join(', ') || null;
+            /* The name is whoever keyed it FIRST — the office: "如果都一样 就
+               显示第一个key的人的名字". The later parts are the same stage
+               keyed again, not a second person doing the job. */
+            if (!prev.by && e.by) prev.by = e.by;
             prev.parts += 1;
             return;
           }
         }
-        out.push(Object.assign({}, e, { byAll: e.by ? [e.by] : [], parts: 1 }));
+        out.push(Object.assign({}, e, { parts: 1 }));
       });
     return out;
   }

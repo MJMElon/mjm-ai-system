@@ -56,7 +56,7 @@ const l2 = P.logsFromRows([
   row('b', MEMBESAR, ago(9), ago(2), 'B', 2)
 ]);
 const m2 = P.mergeSpells(l2.N2);
-check('one row, both hands named', [m2.length, m2[0].start, m2[0].end, m2[0].by], [1, ago(30), ago(2), 'A, B']);
+check('one row, named for whoever keyed it first', [m2.length, m2[0].start, m2[0].end, m2[0].by], [1, ago(30), ago(2), 'A']);
 
 console.log('— a real gap is two spells, and is left as two');
 const l3 = P.logsFromRows([
@@ -82,8 +82,8 @@ const l5 = P.logsFromRows([
   row('b', 10, ago(8), null, 'Azhar', 2)
 ]);
 const m5 = P.mergeSpells(l5.N2);
-check('one row, from the first start, running, both hands',
-  [m5.length, m5[0].start, m5[0].end, m5[0].by, m5[0].parts], [1, ago(21), null, 'Amri, Azhar', 2]);
+check('one row, from the first start, running, named for the first to key it (Amri)',
+  [m5.length, m5[0].start, m5[0].end, m5[0].by, m5[0].parts], [1, ago(21), null, 'Amri', 2]);
 check('…and the board times it from that first start', P.computeStatus(l5, 'N2').start, ago(21));
 
 console.log('— an open part with a closed one started inside it is one spell, still running');
