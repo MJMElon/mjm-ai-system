@@ -1430,13 +1430,23 @@ let transplantMaps = {};     // plotKey → [{ url, batch, date }], newest first
 async function loadTransplantMaps() {
   try {
     const res = await PlotMovement.fetchAll(() => _supabase.from('shared_inventory_logs')
-      .select('plot_name, batch_name, remark, transaction_date, created_at')
+      .select('plot_name, batch_name, remark, transaction_type, transaction_date, created_at')
       .in('transaction_type',
           ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
       .order('id', { ascending: true }));
     if (res.error) throw res.error;
     const by = {};
+    /* The same read answers the culling incentive's first question — which
+       plots were transplanted in a month — so it is indexed here rather than
+       read twice. Plain `Transplanted` only: the other two go into the
+       Premium Care and Double Tone TRAYS, and a tray has no Saringan to
+       Transplanting run to time. */
+    const tp = {};
     (res.data || []).forEach(l => {
+      if (l.transaction_type === 'Transplanted') {
+        const pk = _tpKey(l.plot_name), d = _cullLogDate(l);
+        if (pk && d) (tp[pk] || (tp[pk] = { plot: String(l.plot_name).trim(), dates: [] })).dates.push(d);
+      }
       const m = String(l.remark || '').match(/MapUrl:(\S+)/i);
       if (!m) return;
       const k = _tpKey(l.plot_name);
@@ -1454,6 +1464,8 @@ async function loadTransplantMaps() {
                    .filter(x => (seen.has(x.url) ? false : (seen.add(x.url), true)));
     });
     transplantMaps = by;
+    cullTransplanted = tp;
+    cullLedgerRead = true;
   } catch (e) {
     /* No maps is not no work. The table draws without the column rather than
        not at all, and says nothing it cannot answer. */
@@ -1801,6 +1813,229 @@ function renderTransplantByPlot(secFilter) {
     `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
 }
 
+/* ════════════ CULLING INCENTIVE ════════════
+   A plot that went from Saringan Anak Bibit to the end of Transplanting in
+   15 days or fewer earns an incentive, and the office set who gets it:
+
+     - Rousell Wayne and Florence, RM 20 for EVERY such plot, whichever
+       nursery it is in;
+     - each nursery's Field Conductor, RM 50 for every such plot in THEIR
+       OWN nursery — Lalu Aenal for BNN, Akbar for UNN 1, Azhar for UNN 2.
+
+   PER PLOT: three qualifying plots in BNN is RM 60 each to Rousell and
+   Florence and RM 150 to Lalu Aenal.
+
+   Which plots are asked about is the LEDGER's answer: every plot with a
+   `Transplanted` row dated in the month, the date read the way the
+   Transplanting Report reads it. How long the plot took is PALMS's answer,
+   and it is the Motion Study's own measure — the plot's cycle, from the
+   first day of Saringan to the last day Transplanting was closed
+   (MJMPalms.cyclesOf, diffDays, <= TARGET_DAYS). Two pages timing the same
+   run two ways is how a plot is fast on one and slow on the other.
+
+   THE LATEST RUN. A plot goes round many times, and the run that counts is
+   the newest one whose Saringan had started by the end of the month — so a
+   month already paid does not change its answer when the plot starts its
+   next intake. A split plot ("B2#A", "B2#B") is timed as one plot: its
+   areas' latest runs, from the earliest Saringan to the last Transplanting.
+
+   A plot PALMS has no complete run for is SHOWN and not paid, saying which
+   it is — no record at all, or Transplanting still open. A plot silently
+   missing from an incentive list is the one nobody asks about.
+
+   The people are matched to the worker register by name — every word of
+   the name here has to be in exactly one register name. A name that finds
+   nobody, or two people, is said under the table and is on no claim. */
+const CULL_INCENTIVE = {
+  everyPlot: [
+    { name: 'Rousell Wayne', rm: 20 },
+    { name: 'Florence',      rm: 20 }
+  ],
+  ownNursery: [
+    { name: 'Lalu Aenal', nursery: 'BNN',  rm: 50 },
+    { name: 'Akbar',      nursery: 'UNN1', rm: 50 },
+    { name: 'Azhar',      nursery: 'UNN2', rm: 50 }
+  ]
+};
+const CULL_TARGET_DAYS = (window.MJMPalms && MJMPalms.TARGET_DAYS) || 15;
+
+let cullTransplanted = {};    // plotKey → { plot, dates[] }, every month, from loadTransplantMaps
+let cullLedgerRead = false;
+let cullPalmsLogs = null;     // MJMPalms logs by unit; null = could not be read
+
+/* WHEN a ledger row happened. SHARED RULE — _logDate() in
+   operation/operation_reports.html and logDate() in the FC Portal
+   transplantData.js. Change one, change the others. */
+function _cullLogDate(l) {
+  if (l && l.transaction_date) return String(l.transaction_date).slice(0, 10);
+  const m = l && l.remark ? String(l.remark).match(/(?:Cull)?Date:\s*(\d{4}-\d{2}-\d{2})/i) : null;
+  if (m) return m[1];
+  return l && l.created_at ? String(l.created_at).slice(0, 10) : '';
+}
+
+async function loadCullPalms() {
+  if (!window.MJMPalms) { cullPalmsLogs = null; return; }
+  try {
+    await MJMPalms.loadStages(_supabase);     // the office's stage names, best effort
+    cullPalmsLogs = await MJMPalms.loadLogs(_supabase);
+  } catch (e) {
+    console.warn('[payroll] PALMS could not be read for the culling incentive:', (e && e.message) || e);
+    cullPalmsLogs = null;
+  }
+}
+
+/* A stage number, by NAME. The office keeps the stage list and a stage's
+   number is its place in it, so 9 is where Transplanting is today and not a
+   promise. Falls back to the built-in number when the name is not there. */
+function _cullActN(word, fallback) {
+  for (let n = 1; n <= 40; n++) {
+    const a = MJMPalms.actByN(n);
+    if (a && _tpKey(a.name).indexOf(word) !== -1) return n;
+  }
+  return fallback;
+}
+
+/* The latest Saringan → Transplanting run of one plot, as at the month. */
+function cullRunOf(plot, monthEnd) {
+  if (!cullPalmsLogs) return { state: 'unread' };
+  const want = _tpKey(plot);
+  const keys = Object.keys(cullPalmsLogs).filter(k => _tpKey(MJMPalms.plotOf(k)) === want);
+  /* The start is PALMS's own first stage (Saringan Anak Bibit), because that
+     is the stage a cycle opens on — timing from any other would ask
+     cyclesOf for a start its cycles do not begin with. */
+  const lo = MJMPalms.FIRST_ACT || 1, hi = _cullActN('TRANSPLANT', 9);
+  const runs = [];
+  keys.forEach(k => {
+    let latest = null;
+    MJMPalms.cyclesOf(cullPalmsLogs[k]).forEach(cy => {
+      const starts = cy.entries.filter(e => e.actN === lo).map(e => e.start).sort();
+      if (!starts.length || starts[0] > monthEnd) return;
+      const ends = cy.entries.filter(e => e.actN === hi && e.end).map(e => e.end).sort();
+      const run = { start: starts[0], end: ends.length ? ends[ends.length - 1] : null };
+      if (!latest || run.start > latest.start) latest = run;
+    });
+    if (latest) runs.push(latest);
+  });
+  if (!runs.length) return { state: 'none' };
+  const start = runs.map(r => r.start).sort()[0];
+  if (runs.some(r => !r.end)) return { state: 'open', start };
+  const end = runs.map(r => r.end).sort().pop();
+  const days = MJMPalms.diffDays(start, end);
+  return { state: days <= CULL_TARGET_DAYS ? 'ok' : 'slow', start, end, days };
+}
+
+/* Every plot transplanted in the month, in the nursery picked, timed. */
+function cullIncentivePlots(secFilter) {
+  const ym = monthValue(), monthEnd = ym + '-31';
+  return Object.values(cullTransplanted)
+    .map(p => ({ plot: p.plot, dates: [...new Set(p.dates.filter(d => d.slice(0, 7) === ym))].sort(),
+                 section: _tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(p.plot) : '') }))
+    .filter(p => p.dates.length && (!secFilter || inSection(secFilter, p.section)))
+    .map(p => Object.assign(p, cullRunOf(p.plot, monthEnd)))
+    .sort((a, b) => String(a.plot).localeCompare(String(b.plot),
+                      undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+/* One configured name to one register row — or to nobody, and why. */
+function cullWorker(name) {
+  const words = s => String(s || '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  const exact = workers.filter(w => _tpKey(w.full_name) === _tpKey(name));
+  if (exact.length === 1) return { w: exact[0] };
+  const want = words(name);
+  const hits = workers.filter(w => { const t = words(w.full_name); return want.every(x => t.includes(x)); });
+  if (hits.length === 1) return { w: hits[0] };
+  return { w: null, clash: hits.map(w => w.full_name) };
+}
+
+/* Who is paid what, off a list of timed plots. With a nursery picked, only
+   that nursery's Field Conductor is on it — the other two have nothing here. */
+function cullIncentivePay(rows, secFilter) {
+  const ok = rows.filter(r => r.state === 'ok');
+  const out = [];
+  CULL_INCENTIVE.everyPlot.forEach(p => out.push({ ...p, rule: 'every', plots: ok }));
+  CULL_INCENTIVE.ownNursery
+    .filter(p => !secFilter || p.nursery === secFilter)
+    .forEach(p => out.push({ ...p, rule: 'own', plots: ok.filter(r => r.section === p.nursery) }));
+  return out.map(p => {
+    const m = cullWorker(p.name);
+    return { ...p, known: m.w, clash: m.clash || [], amount: p.plots.length * p.rm,
+             // The register's section where it knows them; the FC's own
+             // nursery otherwise, so the Monthly Payroll files them somewhere.
+             section: (m.w && m.w.section) || p.nursery || '' };
+  });
+}
+
+function renderCullIncentive(secFilter) {
+  const table = $('cull-inc-plots'), payT = $('cull-inc-pay');
+  if (!table || !payT) return;
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+  const monthTxt = monthLabelFull(monthValue());
+  const head = $('cull-inc-head');
+  if (head) head.textContent = `Culling Incentive — Saringan to Transplanting within ${CULL_TARGET_DAYS} days — `
+    + `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthTxt}`;
+  const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
+
+  const rows = cullIncentivePlots(secFilter);
+  const result = r => {
+    if (r.state === 'ok')   return `<span style="color:#15803d;font-weight:800;">&#10003; Qualifies</span>`;
+    if (r.state === 'slow') return `<span style="color:#c0392b;font-weight:700;">Over ${CULL_TARGET_DAYS} days</span>`;
+    if (r.state === 'open') return `<span style="color:#b45309;font-weight:700;">Transplanting not closed in PALMS</span>`;
+    if (r.state === 'unread') return `<span style="color:var(--text-faint);">PALMS not read</span>`;
+    return `<span style="color:#b45309;font-weight:700;">No Saringan in PALMS</span>`;
+  };
+  table.innerHTML = rows.length ? `
+    <thead><tr>
+      <th style="width:44px;">No.</th><th class="l">Plot</th><th>Transplanted (ledger)</th>
+      <th>Saringan started</th><th>Transplanting ended</th><th style="width:80px;">Days</th>
+      <th>Result</th>
+    </tr></thead>
+    <tbody>${rows.map((r, i) => `
+      <tr>
+        <td style="color:var(--text-faint);">${i + 1}</td>
+        <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
+        <td>${r.dates.map(pd).join(', ')}</td>
+        <td>${pd(r.start)}</td>
+        <td>${pd(r.end)}</td>
+        <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
+        <td>${result(r)}</td>
+      </tr>`).join('')}</tbody>`
+    : `<tbody><tr><td class="empty">Nothing transplanted in ${
+        esc(secFilter ? secName(secFilter) : 'any nursery')} for ${esc(monthTxt)}, so no plot to time.</td></tr></tbody>`;
+
+  const pay = cullIncentivePay(rows, secFilter);
+  const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
+  payT.innerHTML = `
+    <thead><tr>
+      <th style="width:44px;">No.</th><th class="l">Person</th><th>Rule</th>
+      <th class="l">Plots that qualify</th><th style="width:130px;">Incentive (RM)</th>
+    </tr></thead>
+    <tbody>${pay.map((p, i) => `
+      <tr>
+        <td style="color:var(--text-faint);">${i + 1}</td>
+        <td class="l" style="font-weight:700;color:var(--text-head);">${esc(p.known ? p.known.full_name : p.name)}${
+          p.known ? '' : '<span title="Not found on the worker register — this is not on the salary claim" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+        <td>${p.rule === 'every' ? `Every nursery · ${money(p.rm)} / plot`
+                                 : `${esc(p.nursery)} only · ${money(p.rm)} / plot`}</td>
+        <td class="l">${p.plots.length ? p.plots.map(r => esc(r.plot)).join(', ') : '<span style="color:var(--text-faint);">none</span>'}</td>
+        <td class="money">${money(p.amount)}</td>
+      </tr>`).join('')}</tbody>
+    <tfoot><tr><td class="l" colspan="4">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`;
+
+  const notes = [];
+  if (cullPalmsLogs === null) {
+    notes.push('PALMS could not be read, so no plot can be timed and nobody is paid this incentive. Reload the page; if it stays, tell the office.');
+  } else if (rows.length && !Object.keys(cullPalmsLogs).length) {
+    notes.push('PALMS answered with no plot log at all. This login is probably not allowed to read it — '
+             + 'run shared/RUN_ME_payroll_reads_palms.sql once, then reload.');
+  }
+  if (!cullLedgerRead) notes.push('The transplanting ledger could not be read, so this month has no plots to time.');
+  pay.filter(p => !p.known).forEach(p => notes.push(p.clash.length
+    ? `${esc(p.name)} matches more than one worker on the register (${p.clash.map(esc).join(', ')}), so ${money(p.amount)} is NOT on the salary claim.`
+    : `${esc(p.name)} is not on the worker register, so ${money(p.amount)} is NOT on the salary claim. Add them in Worker System.`));
+  $('cull-inc-note').innerHTML = notes.map(t =>
+    `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
+}
+
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
@@ -1861,6 +2096,8 @@ function renderTransplantClaim() {
      month somebody needs to see the plots. */
   try { renderTransplantByPlot(secFilter); }
   catch (e) { console.warn('[payroll] the by-plot table could not be drawn:', e); }
+  try { renderCullIncentive(secFilter); }
+  catch (e) { console.warn('[payroll] the culling incentive could not be drawn:', e); }
 
   const lines = transplantFieldLines()
     .filter(l => !secFilter || inSection(secFilter, l.section));
@@ -3348,6 +3585,19 @@ function monthlyRows() {
     });
   }
 
+  /* The culling incentive, into Transplanting — it is that sheet's, and
+     priced there. Worked out over EVERY nursery and then filed under the
+     person's own section, because Rousell and Florence are paid for plots
+     in all three. A name the register cannot place is skipped here and said
+     on the sheet, same as a transplanting line. */
+  try {
+    cullIncentivePay(cullIncentivePlots(''), '').forEach(p => {
+      if (!p.known || !p.amount) return;
+      if (secFilter && (p.section || '') !== secFilter) return;
+      touch(p.known.full_name, p.section || '').transpl += p.amount;
+    });
+  } catch (e) { console.warn('[payroll] culling incentive left off the monthly payroll:', e); }
+
   // Keyed sheets.
   entries.filter(e => e.month === month).forEach(e => {
     const w = workers.find(x => x.id === e.worker_id);
@@ -3406,7 +3656,7 @@ function renderMonthly() {
       <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
 
   $('monthly-note').textContent =
-    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
+    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes the culling incentive; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
 }
 
 /* ════════════ PDF ════════════ */
@@ -3797,7 +4047,8 @@ async function _downloadTransplantPDF() {
   /* Nothing to claim AND nothing recorded is nothing to print. Records with
      nobody credited still print: the plot summary is the only page they ever
      appear on, and it is exactly the month somebody is looking for them. */
-  if (!names.length && !plotRows.length) {
+  const cullRows = cullIncentivePlots(sec);
+  if (!names.length && !plotRows.length && !cullRows.length) {
     alert('Nothing recorded for this nursery this month.'); return;
   }
 
@@ -4014,6 +4265,7 @@ async function _downloadTransplantPDF() {
   }
 
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
+  y = drawCullIncentive(doc, y, cullRows, cullIncentivePay(cullRows, sec), secTxt, monthTxt);
 
   y = pdfVerifiedNote(doc, y, 'transpl', sec, CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
@@ -4131,6 +4383,63 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
     say(noCrew.map(r => r.plot).join(', ') + ' — names nobody, so on this summary '
       + 'but on no claim line above.');
   }
+  doc.setTextColor(0, 0, 0);
+  return y;
+}
+
+/* THE CULLING INCENTIVE, ON THE CLAIM FORM — the two tables the screen
+   shows, the plots timed and who they pay. Same figures, same rule
+   (cullIncentivePlots / cullIncentivePay). Returns the y it finished at. */
+function drawCullIncentive(doc, y, rows, pay, secTxt, monthTxt) {
+  if (!rows || !rows.length) return y;
+  const L = 25, RH = 8, H = 9, HF = [232, 236, 252], TF = [222, 228, 250];
+  const BOTTOM = 210 - ((RH + 1) + 6 + 4 + 3);
+  const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '-');
+  const xs = cols => { const X = []; cols.reduce((x, w, i) => { X[i] = x; return x + w; }, L); return X; };
+
+  const table = (title, cols, labels, data) => {
+    const X = xs(cols);
+    const heading = () => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+      doc.text(title, L, y + 6);
+      y += 9;
+      labels.forEach((t, i) => pdfCell(doc, X[i], y, cols[i], H, t,
+        { bold: true, size: 7.5, nowrap: true, fill: HF }));
+      y += H;
+    };
+    if (y + 9 + H + RH * 2 > BOTTOM) { doc.addPage(); y = 25; } else y += 4;
+    heading();
+    data.forEach((cells, i) => {
+      if (y + RH > BOTTOM) { doc.addPage(); y = 25; heading(); }
+      const z = i % 2 ? [250, 250, 253] : null;
+      cells.forEach((t, c) => pdfCell(doc, X[c], y, cols[c], RH, t,
+        { size: 8.5, nowrap: true, bold: c === 1, fill: z }));
+      y += RH;
+    });
+    return X;
+  };
+
+  const result = r => r.state === 'ok' ? 'QUALIFIES'
+    : r.state === 'slow' ? `Over ${CULL_TARGET_DAYS} days`
+    : r.state === 'open' ? 'Transplanting not closed in PALMS'
+    : r.state === 'unread' ? 'PALMS not read' : 'No Saringan in PALMS';
+  table(`CULLING INCENTIVE — SARINGAN TO TRANSPLANTING WITHIN ${CULL_TARGET_DAYS} DAYS — ${secTxt} · ${monthTxt}`,
+    [14, 30, 52, 32, 32, 18, 69],
+    ['No.', 'Plot', 'Transplanted (ledger)', 'Saringan', 'Transplanting', 'Days', 'Result'],
+    rows.map((r, i) => [String(i + 1), r.plot, r.dates.map(pd).join(', '), pd(r.start), pd(r.end),
+                        r.days == null ? '-' : String(r.days), result(r)]));
+
+  const COL = [14, 60, 55, 78, 40];
+  const X = table('CULLING INCENTIVE — WHO IT PAYS', COL,
+    ['No.', 'Person', 'Rule', 'Plots that qualify', 'Incentive (RM)'],
+    pay.map((p, i) => [String(i + 1), (p.known ? p.known.full_name : p.name + ' (NOT ON REGISTER)'),
+      p.rule === 'every' ? `Every nursery, ${money(p.rm)} / plot` : `${p.nursery} only, ${money(p.rm)} / plot`,
+      p.plots.length ? p.plots.map(r => r.plot).join(', ') : 'none', money(p.amount)]));
+  const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
+  pdfCell(doc, X[0], y, COL[0] + COL[1] + COL[2] + COL[3], RH + 1, 'TOTAL INCENTIVE',
+          { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[4], y, COL[4], RH + 1, money(grand), { bold: true, size: 9, nowrap: true, fill: TF });
+  y += RH + 1;
   doc.setTextColor(0, 0, 0);
   return y;
 }
@@ -4393,7 +4702,8 @@ $('global-month').addEventListener('change', async () => {
        all read it, so everything after this should see the real list. */
     await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
-                       loadTransplantField(), loadEarnAdj(), loadTransplantMaps()]);
+                       loadTransplantField(), loadEarnAdj(), loadTransplantMaps(),
+                       loadCullPalms()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and
