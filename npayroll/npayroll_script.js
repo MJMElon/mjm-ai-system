@@ -4618,8 +4618,8 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
   return y;
 }
 
-/* THE CULLING INCENTIVE, ON THE CLAIM FORM — ONE TABLE: who, which plots,
-   how much. Same figures, same rule (cullIncentivePlots /
+/* THE CULLING INCENTIVE, ON THE CLAIM FORM — ONE TABLE: the plot, who it
+   paid, how much. Same figures, same rule (cullIncentivePlots /
    cullIncentivePay). Returns the y it finished at.
 
    IT USED TO BE TWO TABLES AND A SENTENCE OF A HEADING. The first listed
@@ -4633,46 +4633,88 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
    table already settled: a claim form is read by somebody adding up money
    and signing it. The dates, the days and the checker are how the office
    DECIDED, and that belongs on the screen where the deciding happens —
-   Worker Activity → Culling Incentive, which shows every one of them. A
-   figure on paper needs the name beside it and the plots it was earned
-   on, which is what is left. */
+   Worker Activity → Culling Incentive, which shows every one of them.
+
+   THEN THEY ASKED FOR IT THE OTHER WAY ROUND — *"我要plot 在前面 merge起来
+   中间人名 后面价钱"* — and that is not a reordering, it is the right
+   KEY. The incentive is earned ONE PLOT AT A TIME: a plot that came in
+   under the target pays RM 20 to each of the two, and RM 50 to that
+   nursery's own Field Conductor. So the plot is the thing, the people are
+   lines under it, and the plot is MERGED over its own lines rather than
+   spelt once per person.
+
+   Two things fall out of that, and both are improvements rather than
+   costs:
+
+   - **The money column now ADDS UP to the total.** Each figure is what
+     that plot paid that person, so somebody running down it reaches the
+     TOTAL INCENTIVE — where a column of per-person sums over a list of
+     plots did not say what any one plot was worth.
+   - **A person with no plot is not a row.** The table is a list of plots,
+     and a Field Conductor whose nursery had nothing Checked has no line
+     to be on. It read "none · RM 0.00" before, which is a row of nothing
+     on a form about money. Their nought is still in the total, where it
+     changes nothing.
+
+   A name the register cannot place keeps its mark on every line it is
+   on — that is money this claim does NOT pay, and dropping it would hide
+   the one fault the table can carry. */
 function drawCullIncentive(doc, y, rows, pay) {
   if (!rows || !rows.length) return y;
   const L = 25, RH = 8, H = 9, HF = [232, 236, 252], TF = [222, 228, 250];
   const BOTTOM = 210 - ((RH + 1) + 6 + 4 + 3);
-  const xs = cols => { const X = []; cols.reduce((x, w, i) => { X[i] = x; return x + w; }, L); return X; };
+  const COL = [50, 147, 50];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, L);
 
-  const table = (title, cols, labels, data) => {
-    const X = xs(cols);
-    const heading = () => {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-      doc.text(title, L, y + 6);
-      y += 9;
-      labels.forEach((t, i) => pdfCell(doc, X[i], y, cols[i], H, t,
-        { bold: true, size: 7.5, nowrap: true, fill: HF }));
-      y += H;
-    };
-    if (y + 9 + H + RH * 2 > BOTTOM) { doc.addPage(); y = 25; } else y += 4;
-    heading();
-    data.forEach((cells, i) => {
-      if (y + RH > BOTTOM) { doc.addPage(); y = 25; heading(); }
-      const z = i % 2 ? [250, 250, 253] : null;
-      cells.forEach((t, c) => pdfCell(doc, X[c], y, cols[c], RH, t,
-        /* The NAME is the first column now, so it is the bold one. */
-        { size: 8.5, nowrap: true, bold: c === 0, fill: z }));
-      y += RH;
-    });
-    return X;
+  const heading = () => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+    doc.text('CULLING INCENTIVE', L, y + 6);
+    y += 9;
+    ['Plot', 'Person', 'Incentive (RM)'].forEach((t, i) => pdfCell(doc, X[i], y, COL[i], H, t,
+      { bold: true, size: 7.5, nowrap: true, fill: HF }));
+    y += H;
   };
 
-  /* THE NAME, THE PLOTS, THE MONEY. A name the register cannot place keeps
-     its mark — that is money this claim does NOT pay, and dropping it
-     would hide the one fault on the table. */
-  const COL = [100, 97, 50];
-  const X = table('CULLING INCENTIVE', COL,
-    ['Person', 'Plot', 'Incentive (RM)'],
-    pay.map((p) => [(p.known ? p.known.full_name : p.name + ' (NOT ON REGISTER)'),
-      p.plots.length ? p.plots.map(r => r.plot).join(', ') : 'none', money(p.amount)]));
+  /* Who a plot paid, and what it paid them. Read off the same `pay` the
+     screen and the Monthly Payroll read, so a plot cannot pay one figure
+     here and another there. */
+  const runs = rows.map((r) => ({
+    plot: r.plot,
+    who: pay.filter((p) => p.plots.some((q) => q.plot === r.plot))
+      .map((p) => ({ name: p.known ? p.known.full_name : p.name + ' (NOT ON REGISTER)',
+                     rm: p.rm })),
+  })).filter((g) => g.who.length);
+  if (!runs.length) return y;
+
+  if (y + 9 + H + RH > BOTTOM) { doc.addPage(); y = 25; } else y += 4;
+  heading();
+  runs.forEach((g, i) => {
+    /* THE BREAK GOES BEFORE A RUN, never inside one — the rule the Worker
+       Record already follows for a plot, and here a break inside a run
+       would cut the merged cell in half. A run too tall for any page
+       splits at the page edge and NAMES THE PLOT AGAIN, which is the only
+       honest place for it; three people to a plot, it never comes up. */
+    let rest = g.who, whole = true;
+    while (rest.length) {
+      let room = Math.floor((BOTTOM - y) / RH);
+      if (room < rest.length && whole) { doc.addPage(); y = 25; heading(); room = Math.floor((BOTTOM - y) / RH); }
+      if (room < 1) { doc.addPage(); y = 25; heading(); room = Math.floor((BOTTOM - y) / RH); }
+      const take = rest.slice(0, Math.min(room, rest.length));
+      /* Striped by PLOT and not by row, because that is what the merged
+         cell is saying: one block is one plot. */
+      const z = i % 2 ? [250, 250, 253] : null;
+      pdfCell(doc, X[0], y, COL[0], RH * take.length, g.plot,
+              { bold: true, size: 8.5, nowrap: true, fill: z });
+      take.forEach((w, k) => {
+        pdfCell(doc, X[1], y + RH * k, COL[1], RH, w.name, { size: 8.5, nowrap: true, fill: z });
+        pdfCell(doc, X[2], y + RH * k, COL[2], RH, money(w.rm), { size: 8.5, nowrap: true, fill: z });
+      });
+      y += RH * take.length;
+      rest = rest.slice(take.length);
+      whole = false;
+    }
+  });
+
   const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
   pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'TOTAL INCENTIVE',
           { bold: true, size: 8.5, fill: TF });

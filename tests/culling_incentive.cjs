@@ -99,16 +99,22 @@ async function boot(browser, db, where) {
       });
     }
     window.jspdf = { jsPDF: class {
-      constructor() { this.page = 1; this.lines = []; this.saved = null; window.__PDFS.push(this); }
+      constructor() { this.page = 1; this.lines = []; this.rects = []; this.texts = [];
+                      this.saved = null; window.__PDFS.push(this); }
       setFont() {} setFontSize(n) { this._s = n; } setTextColor() {}
       setFillColor() {} setDrawColor() {} setLineWidth() {}
-      rect(x, y, w, h) { guard('rect', [x, y, w, h]); }
+      /* The GEOMETRY is recorded, not only the words: a merged cell is a
+         cell of its own HEIGHT, and nothing in a list of strings can say
+         whether the plot was drawn once over its three people or three
+         times beside them. */
+      rect(x, y, w, h) { guard('rect', [x, y, w, h]); this.rects.push({ x, y, w, h, p: this.page }); }
       roundedRect(x, y, w, h, rx, ry) { guard('roundedRect', [x, y, w, h, rx, ry]); }
       line(a, b, c, d) { guard('line', [a, b, c, d]); }
       addPage() { this.page++; }
       getTextWidth(t) { return String(t).length * (this._s || 9) * 0.5; }
       splitTextToSize(t) { return [String(t)]; }
-      text(t, x, y) { guard('text', [x, y]); this.lines.push(String(t)); }
+      text(t, x, y) { guard('text', [x, y]); this.lines.push(String(t));
+                      this.texts.push({ t: String(t), x, y, p: this.page }); }
       addImage(im, fmt, x, y, w, h) { guard('addImage', [x, y, w, h]); }
       save(name) { this.saved = name; }
     } };
@@ -449,6 +455,8 @@ const payOf = (page, sec) => page.evaluate((s) =>
   await page.evaluate(() => { document.getElementById('transpl-section').value = 'BNN'; return downloadTransplantPDF(); });
   await page.waitForFunction(() => window.__PDFS.length && window.__PDFS[0].saved, { timeout: 10000 }).catch(() => {});
   const pdf = await page.evaluate(() => (window.__PDFS[0] || { lines: [] }).lines.join(' | '));
+  const drawn = await page.evaluate(() =>
+    ({ texts: (window.__PDFS[0] || { texts: [] }).texts, rects: (window.__PDFS[0] || { rects: [] }).rects }));
   /* ONE TABLE, AND NOTHING THAT IS NOT A NAME, A PLOT OR AN AMOUNT. The
      office read the printout and said it: *"我只要看到 CULLING INCENTIVE
      其他废话都不用. 表格里面我只要看到人名 plot 和价钱"*. The dates, the
@@ -458,8 +466,8 @@ const payOf = (page, sec) => page.evaluate((s) =>
   check('one heading, and no sentence after it',
     [/CULLING INCENTIVE/.test(pdf), /SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)],
     [true, false, false]);
-  check('the name, the plots and the money — and nothing else',
-    [/Rousell Wayne/.test(pdf), /B1/.test(pdf), /RM 20\.00/.test(pdf),
+  check('the plot, the name and the money — and nothing else',
+    [/B1/.test(pdf), /Rousell Wayne/.test(pdf), /RM 20\.00/.test(pdf),
      /TOTAL INCENTIVE/.test(pdf), /RM 90\.00/.test(pdf)],
     [true, true, true, true, true]);
   check('no dates, no days, no checker, and no Rule column',
@@ -467,6 +475,66 @@ const payOf = (page, sec) => page.evaluate((s) =>
      /Saringan/.test(pdf), /Transplanting ended/.test(pdf)],
     [false, false, false, false]);
   check('and a plot nobody checked is still off it', / B7 /.test(pdf), false);
+
+  /* THE PLOT IS FIRST, AND IT IS MERGED OVER ITS OWN PEOPLE — *"我要plot
+     在前面 merge起来 中间人名 后面价钱"*. BNN has one Checked plot, B1,
+     and it pays three people, so the plot is ONE cell three rows tall and
+     the name is written once. Asked of the GEOMETRY: a list of strings
+     cannot tell a merged cell from three cells carrying the same word. */
+  /* Everything from the heading down, and on ITS page — the claim form
+     above it has tables of its own and a column of money at its own x. */
+  const at = drawn.texts.find(t => t.t === 'CULLING INCENTIVE') || { y: 1e9, p: -1 };
+  const mine = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
+  const texts = mine(drawn.texts), rects = mine(drawn.rects);
+  const head = ['Plot', 'Person', 'Incentive (RM)'].map(w =>
+    (texts.find(t => t.t === w) || { x: -1 }).x);
+  check('the headings run Plot, Person, Incentive — left to right',
+    [head[0] > 0, head[0] < head[1], head[1] < head[2]], [true, true, true]);
+  check('the plot is named ONCE for the three people it paid',
+    texts.filter(t => t.t === 'B1').length, 1);
+  const RH = 8, PLOTX = 25, PLOTW = 50;
+  /* COUNTED BY WHERE THEY ARE, not by how many rect calls there were:
+     `pdfCell` draws a fill and then a border, so a striped block records
+     the same cell twice and a plain count would read two plots. */
+  const merged = (a) => [...new Set(a
+    .filter(r => Math.abs(r.x - PLOTX) < 0.01 && Math.abs(r.w - PLOTW) < 0.01
+              && Math.abs(r.h - RH * 3) < 0.01)
+    .map(r => r.y))].length;
+  check('and its cell is three rows tall — one merged cell, not three',
+    merged(rects), 1);
+  /* AND THE COLUMN NOW ADDS UP TO THE TOTAL, which the per-person one did
+     not: each figure is what that plot paid that person. 20 + 20 + 50. */
+  const col = texts.filter(t => Math.abs(t.x - (PLOTX + PLOTW + 147 + 50 / 2)) < 0.01
+                             && /^RM /.test(t.t)).map(t => t.t);
+  check('every line is what the plot paid that person, and they sum to the total',
+    [col.slice(0, 3), col[3],
+     col.slice(0, 3).reduce((s, t) => s + Number(t.replace(/[^0-9.]/g, '')), 0)],
+    [['RM 20.00', 'RM 20.00', 'RM 50.00'], 'RM 90.00', 90]);
+  /* ON ONE PLOT A PER-PERSON TOTAL AND A PER-PLOT FIGURE ARE THE SAME
+     NUMBER, so BNN alone cannot tell the two apart. All Sections can:
+     Rousell earns RM 40 over two nurseries and must read RM 20 on each
+     line, because a line is a plot. Two blocks of three, and the column
+     comes to RM 180. */
+  await page.evaluate(() => { window.__PDFS.length = 0;
+    document.getElementById('transpl-section').value = ''; return downloadTransplantPDF(); });
+  await page.waitForFunction(() => window.__PDFS.length && window.__PDFS[0].saved, { timeout: 10000 }).catch(() => {});
+  const all = await page.evaluate(() => {
+    const d = window.__PDFS[0] || { texts: [], rects: [] };
+    const at = d.texts.find(t => t.t === 'CULLING INCENTIVE') || { y: 1e9, p: -1 };
+    const keep = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
+    return { texts: keep(d.texts), rects: keep(d.rects) };
+  });
+  const money2 = all.texts.filter(t => Math.abs(t.x - 247) < 0.01 && /^RM /.test(t.t)).map(t => t.t);
+  check('a plot is a LINE, so a person on two nurseries reads his plot rate twice',
+    [money2, money2.slice(0, 6).reduce((s, t) => s + Number(t.replace(/[^0-9.]/g, '')), 0)],
+    [['RM 20.00', 'RM 20.00', 'RM 50.00', 'RM 20.00', 'RM 20.00', 'RM 50.00', 'RM 180.00'], 180]);
+  check('two plots, two merged cells, each three rows tall', merged(all.rects), 2);
+  check('and the Field Conductor with nothing Checked is on neither block',
+    all.texts.filter(t => /Akbar/.test(t.t)).length, 0);
+  /* A Field Conductor whose nursery had nothing Checked has no plot, so he
+     has no LINE — the table is a list of plots. His nought is in the total
+     all the same, where it changes nothing. */
+  check('nobody is on it who earned nothing', /Akbar Cahaya|none/.test(pdf), false);
   check('no page errors', errs.filter(e => !/^ALERT: Nothing recorded/.test(e)), []);
   check('the payroll writes nothing', await page.evaluate(() => (window.__WRITES || []).length), 0);
   await page.close();

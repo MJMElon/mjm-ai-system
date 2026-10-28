@@ -4885,7 +4885,7 @@ What the rule asks, and must keep asking:
     reserve their room (`min-height`) so the layout cannot move at all.
   - **The backdrop closes on a click that BEGAN on the backdrop**, which is
     the seatbelt for the same thing and for a drag out of a text selection.
-- **THE CLAIM FORM IS ONE TABLE: the name, the plots, the money.** It was
+- **THE CLAIM FORM IS ONE TABLE: the plot, the name, the money.** It was
   two — every plot with its Saringan, its Transplanting, the days and who
   checked it, then a second headed *"CULLING INCENTIVE — WHO IT PAYS"* with
   a No. and a Rule column — and the office read the printout and said
@@ -4896,6 +4896,36 @@ What the rule asks, and must keep asking:
   money and signing it. A name the register cannot place keeps its *(NOT ON
   REGISTER)* mark — that is money this claim does not pay, and it is the
   one fault the table can carry.
+
+  **THE PLOT IS THE KEY, AND IT IS MERGED** — *"我要plot 在前面 merge起来
+  中间人名 后面价钱"*. That is not a reordering of three columns, it is the
+  right unit: the incentive is earned ONE PLOT AT A TIME, RM 20 to each of
+  the two and RM 50 to that nursery's own Field Conductor, so the plot is
+  the thing and the people are lines under it. Two things fall out, and
+  both are better rather than merely different:
+
+  - **The money column ADDS UP to the TOTAL.** Each figure is what that
+    plot paid that person, so somebody running down it reaches the total —
+    where a column of per-person sums over a list of plots never said what
+    any one plot was worth. **BNN alone cannot prove this**, because a
+    person with one plot has the same figure either way; the test drives
+    All Sections, where Rousell's RM 40 over two nurseries has to read
+    RM 20 on each line.
+  - **A person with no plot is not a row.** It read *"none · RM 0.00"*
+    before, which is a row of nothing on a form about money. The nought is
+    still in the total, where it changes nothing.
+
+  **The break goes BEFORE a run, never inside one** — the Worker Record's
+  rule for a plot, and here a break inside a run would cut the merged cell
+  in half. A run too tall for a page splits at the page edge and names the
+  plot again; at three people to a plot it never comes up.
+
+  **And the merge is asked of the GEOMETRY.** A list of the strings drawn
+  cannot tell one cell three rows tall from three cells carrying the same
+  word, so the harness records every `rect` and every `text` with its x, y
+  and page. **Counted by WHERE they are, not by how many calls there
+  were**: `pdfCell` draws a fill and then a border, so a striped block
+  records the same cell twice and a plain count reads two plots.
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 
