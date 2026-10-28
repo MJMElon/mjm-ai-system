@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Every line of this page's code is inline, so the PAGE is the deploy:
+     without these a browser holding yesterday's copy keeps it. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>NELOS</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23efc7e2%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%233b162f%27 text-anchor=%27middle%27%3ENL%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -98,6 +103,30 @@
               text-transform:uppercase; color:#f2cfe7; }
 
   .td-case { display:flex; gap:11px; min-width:0; }
+  /* The attachment on a row OPENS — a picture of a report that cannot be
+     looked at properly or saved is a thumbnail of nothing. */
+  .thumb-btn { padding:0; border:none; background:none; cursor:zoom-in; flex-shrink:0; align-self:flex-start; }
+  .thumb-btn:hover .thumb { border-color:#d946ef; }
+  .thumb-doc { width:58px; height:58px; border-radius:9px; border:1.5px solid #f8e2f1; background:#fdf4fb;
+               display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+               font-size:20px; cursor:pointer; overflow:hidden; }
+  .thumb-doc span { font-size:8.5px; font-weight:800; color:#86198f; max-width:52px; white-space:nowrap;
+                    overflow:hidden; text-overflow:ellipsis; }
+  .fv-scrim { position:fixed; inset:0; z-index:9999; background:rgba(15,12,20,.82); display:none;
+              flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:12px; }
+  .fv-scrim.on { display:flex; }
+  .fv-body { max-width:min(1100px,100%); max-height:calc(100vh - 110px); width:100%; display:flex;
+             align-items:center; justify-content:center; }
+  .fv-body img { max-width:100%; max-height:calc(100vh - 110px); object-fit:contain; border-radius:10px;
+                 background:#fff; }
+  .fv-body iframe { width:100%; height:calc(100vh - 110px); border:0; border-radius:10px; background:#fff; }
+  .fv-none { background:#fff; border-radius:12px; padding:22px; font-size:13px; font-weight:700; color:#334155; }
+  .fv-bar { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .fv-bar button, .fv-bar a { border:none; border-radius:11px; padding:10px 18px; font-size:11px; font-weight:900;
+               letter-spacing:.1em; text-transform:uppercase; cursor:pointer; text-decoration:none; }
+  .fv-dl { background:#a21caf; color:#fff; }
+  .fv-open { background:#fff; color:#86198f; }
+  .fv-x { background:rgba(255,255,255,.18); color:#fff; }
   .thumb { width:58px; height:58px; border-radius:9px; object-fit:cover; flex-shrink:0;
            border:1.5px solid #f8e2f1; background:#f8fafc; }
   .case-no { font-size:12px; font-weight:900; letter-spacing:.04em; color:#0f172a;
@@ -972,7 +1001,12 @@ function rowHtml(c) {
       </div>
 
       <div class="td-case">
-        ${c.photo_url ? `<img class="thumb" src="${esc(c.photo_url)}" alt="" loading="lazy">` : ''}
+        ${c.photo_url ? `<button type="button" class="thumb-btn" data-file="${esc(c.photo_url)}"
+             data-file-name="${esc((c.case_no || 'case') + ' photo')}" title="View or download the photo">
+             <img class="thumb" src="${esc(c.photo_url)}" alt="" loading="lazy"></button>` : ''}
+        ${c.doc_url ? `<button type="button" class="thumb-btn thumb-doc" data-file="${esc(c.doc_url)}"
+             data-file-name="${esc(c.doc_name || ((c.case_no || 'case') + ' document'))}"
+             title="${esc(c.doc_name || 'Document')} — view or download">📄<span>${esc(c.doc_name || 'Document')}</span></button>` : ''}
         <div class="min-w-0 flex-1">
           <div class="case-title">${esc(c.title)}</div>
           <!-- No category line: the problem chosen when the case is raised
@@ -1277,7 +1311,8 @@ function openSolve(c) {
     const rp = $('s-solved-photos');
     rp.classList.toggle('hidden', !sShots.length);
     rp.innerHTML = sShots.map(u =>
-      `<figure><a href="${esc(u)}" target="_blank" rel="noopener">
+      `<figure><a href="${esc(u)}" target="_blank" rel="noopener"
+           data-file="${esc(u)}" data-file-name="${esc((c.case_no || 'case') + ' fix photo')}">
          <img src="${esc(u)}" alt="Photo of the fix" loading="lazy"></a></figure>`).join('');
     const by = [c.resolved_by, c.resolved_at && fmtDate(String(c.resolved_at).slice(0, 10))]
       .filter(Boolean).join(' · ');
@@ -1314,7 +1349,9 @@ function caseBlockHtml(c) {
      now, which puts it in the solve sheet and the close sheet too, and
      means the next dialog to restate a case gets it without being told. */
   const shot = c.photo_url
-    ? `<img class="s-prev s-case-shot" src="${esc(c.photo_url)}" alt="Photo on the case" loading="lazy">`
+    ? `<img class="s-prev s-case-shot" src="${esc(c.photo_url)}" alt="Photo on the case" loading="lazy"
+         data-file="${esc(c.photo_url)}" data-file-name="${esc((c.case_no || 'case') + ' photo')}"
+         title="View or download the photo" style="cursor:zoom-in">`
     : '';
 
   /* …and the document, which is opened rather than looked at. Beside the
@@ -1322,7 +1359,8 @@ function caseBlockHtml(c) {
      decides whether a case is solved is the moment the attachment matters
      most, and it used to be visible on none of these dialogs. */
   const doc = c.doc_url
-    ? `<a class="s-case-doc" href="${esc(c.doc_url)}" target="_blank" rel="noopener">📄 ${
+    ? `<a class="s-case-doc" href="${esc(c.doc_url)}" target="_blank" rel="noopener"
+         data-file="${esc(c.doc_url)}" data-file-name="${esc(c.doc_name || 'Document')}">📄 ${
          esc(c.doc_name || 'Open the document')}</a>`
     : '';
 
@@ -1347,6 +1385,76 @@ const STATUS_SUB = {
   resolved: 'Solved — waiting to be closed', closed: 'Closed'
 };
 
+/* ── VIEW AND DOWNLOAD AN ATTACHMENT ─────────────────────────────────────
+   Every attachment on this page — the row's photo and document, the ones
+   restated in the View / Solve dialogs, and the photos of the fix — carries
+   data-file, and one listener opens it here: a picture shown whole, a PDF
+   in a frame, anything else offered to open. Download fetches the file and
+   saves it under its own name; where the storage refuses that fetch, it
+   falls back to the address with ?download, which the storage answers with
+   the file as an attachment. */
+const _fvIsImg = (u) => /\.(png|jpe?g|gif|webp|bmp|heic)(\?|#|$)/i.test(u) || /^data:image\//.test(u);
+const _fvIsPdf = (u) => /\.pdf(\?|#|$)/i.test(u);
+function _fvName(url, name) {
+  const fromUrl = decodeURIComponent(String(url).split('?')[0].split('/').pop() || 'file');
+  const ext = (fromUrl.match(/\.[a-z0-9]{2,5}$/i) || [''])[0];
+  let n = String(name || '').trim() || fromUrl;
+  if (ext && !/\.[a-z0-9]{2,5}$/i.test(n)) n += ext;
+  return n.replace(/[\\/:*?"<>|]+/g, '-');
+}
+let _fvEl = null;
+function openFileViewer(url, name) {
+  if (!_fvEl) {
+    _fvEl = document.createElement('div');
+    _fvEl.className = 'fv-scrim';
+    _fvEl.innerHTML = '<div class="fv-body"></div><div class="fv-bar">'
+      + '<button type="button" class="fv-dl">⬇ Download</button>'
+      + '<a class="fv-open" target="_blank" rel="noopener">Open in new tab</a>'
+      + '<button type="button" class="fv-x">Close</button></div>';
+    document.body.appendChild(_fvEl);
+    const close = () => { _fvEl.classList.remove('on'); _fvEl.querySelector('.fv-body').innerHTML = ''; };
+    _fvEl.addEventListener('click', (e) => { if (e.target === _fvEl) close(); });
+    _fvEl.querySelector('.fv-x').addEventListener('click', close);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _fvEl.classList.contains('on')) close(); });
+    _fvEl.querySelector('.fv-dl').addEventListener('click', () => downloadFile(_fvEl.dataset.url, _fvEl.dataset.name));
+  }
+  _fvEl.dataset.url = url;
+  _fvEl.dataset.name = name || '';
+  _fvEl.querySelector('.fv-open').href = url;
+  const body = _fvEl.querySelector('.fv-body');
+  body.innerHTML = _fvIsImg(url) ? `<img src="${esc(url)}" alt="${esc(name || 'Attachment')}">`
+    : _fvIsPdf(url) ? `<iframe src="${esc(url)}" title="${esc(name || 'Document')}"></iframe>`
+    : `<div class="fv-none">📄 ${esc(name || 'Document')}<br><span style="font-weight:600;color:#64748b">
+         This file cannot be shown here — download it, or open it in a new tab.</span></div>`;
+  _fvEl.classList.add('on');
+}
+async function downloadFile(url, name) {
+  const fileName = _fvName(url, name);
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href; a.download = fileName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 4000);
+  } catch (e) {
+    console.warn('[nelos] download by fetch refused, asking the storage for an attachment:', e && e.message);
+    const a = document.createElement('a');
+    a.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(fileName);
+    a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+}
+document.addEventListener('click', (e) => {
+  const el = e.target.closest && e.target.closest('[data-file]');
+  if (!el) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openFileViewer(el.getAttribute('data-file'), el.getAttribute('data-file-name'));
+}, true);
+
 function openView(c) {
   $('v-heading').textContent = c.case_no || 'Case';
   $('v-sub').textContent = STATUS_SUB[c.status] || c.status || '';
@@ -1364,7 +1472,8 @@ function openView(c) {
     const rp = $('v-res-photos');
     rp.classList.toggle('hidden', !shots.length);
     rp.innerHTML = shots.map(u =>
-      `<figure><a href="${esc(u)}" target="_blank" rel="noopener">
+      `<figure><a href="${esc(u)}" target="_blank" rel="noopener"
+           data-file="${esc(u)}" data-file-name="${esc((c.case_no || 'case') + ' fix photo')}">
          <img src="${esc(u)}" alt="Photo of the fix" loading="lazy"></a></figure>`).join('');
   }
 
