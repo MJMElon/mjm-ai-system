@@ -1929,6 +1929,17 @@ fall out:
   is closed, so the count has to carry the duplicates — and the name must
   not, because "Membesar + Membesar" describes nothing.
 
+**The board's "This round" table folds them into ONE row**, and so does its
+days-left — *"这种情况请combine"*. `MJMPalms.mergeSpells` is the rule: two
+entries of the same stage are one spell when the later starts while the
+earlier is still open (N14, Pengambilan open twice) or within a day of it
+ending (Membesar closed 16 Oct, opened again 16 Oct). The row runs from the
+first start, is running if any part is, names every hand and says *N entries
+combined*. `spellStart` makes `computeStatus` time a running stage from the
+same first day — timed from the second part, a plot 57 days into a 270-day
+Membesar read 258 days left instead of 213. A real gap is two spells and stays
+two. The log is untouched; `tests/one_stage_in_two_parts_is_one_row.cjs`.
+
 **The detail views still list every ROW** — the motion study and the plot
 history — because that is where a duplicate is actually seen and dated.
 

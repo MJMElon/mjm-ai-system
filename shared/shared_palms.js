@@ -228,12 +228,72 @@
      plotHistory. History should not change its verdict because the target
      moved afterwards. The stored value is the fallback here too, for a stage
      that has since been deleted from the office list. */
-  function statusOfEntry(key, e) {
+  /* ---------- one stage logged in two parts is ONE spell ----------
+     A Field Conductor closes Membesar on 16 Oct and opens Membesar again on
+     16 Oct — a phone re-keying the stage, or the day saved twice. That is one
+     stretch of work on the ground, and the office asked for it read as one:
+     "这种情况请combine". Shown as two it was worse than untidy: the open half
+     was timed from 16 Oct, so a plot 57 days into a 270-day stage read
+     "12d so far · 258d left", 45 days more generous than the truth.
+
+     Two entries of the SAME stage are one spell when the later starts while
+     the earlier is still open, or no more than a day after it ended. A real
+     gap between them is two spells and is left as two. Where either part is
+     still open the spell is running. The log itself is untouched — this is how it
+     is READ. */
+  const SPELL_GAP_DAYS = 1;
+
+  /* The first day of the spell an entry belongs to: walk back through closed
+     entries of the same stage that end within a day of where this one starts. */
+  function spellStart(log, e) {
+    let start = e.start;
+    const same = (log || []).filter((x) => x !== e && x.actN === e.actN && x.end && x.start);
+    for (let guard = 0; guard < 50; guard++) {
+      const prev = same.find((x) => x.start < start && diffDays(x.end, start) <= SPELL_GAP_DAYS
+                                   && diffDays(x.end, start) >= 0);
+      if (!prev) break;
+      start = prev.start;
+    }
+    return start;
+  }
+
+  /* A list of entries with each spell folded into one row: the first start,
+     the last end (or open while its newest part is), every hand that keyed a
+     part, and how many parts it was. Oldest first, as given. */
+  function mergeSpells(entries) {
+    const out = [];
+    (entries || []).slice().sort((a, b) => String(a.start).localeCompare(String(b.start)) || (a.no - b.no))
+      .forEach((e) => {
+        let prev = null;
+        for (let i = out.length - 1; i >= 0; i--) if (out[i].actN === e.actN) { prev = out[i]; break; }
+        /* A part still OPEN when the next one starts is the same spell too —
+           the "×2 open" case: Pengambilan opened on 7 Oct and opened AGAIN on
+           20 Oct with nothing closed, which read as two Pengambilan running
+           side by side. A part that ended before the next began joins only
+           across a gap of a day at most. */
+        if (prev && e.start) {
+          const gap = prev.end ? diffDays(prev.end, e.start) : -1;
+          if (gap <= SPELL_GAP_DAYS) {
+            prev.end = (e.end && prev.end) ? (String(e.end) > String(prev.end) ? e.end : prev.end) : null;
+            if (prev.ideal == null) prev.ideal = e.ideal;
+            if (e.by && !prev.byAll.includes(e.by)) prev.byAll.push(e.by);
+            prev.by = prev.byAll.join(', ') || null;
+            prev.parts += 1;
+            return;
+          }
+        }
+        out.push(Object.assign({}, e, { byAll: e.by ? [e.by] : [], parts: 1 }));
+      });
+    return out;
+  }
+
+  function statusOfEntry(key, e, log) {
     const act = actByN(e.actN);
     const ideal = act && act.days != null ? act.days : e.ideal;
-    const due = addDays(e.start, ideal == null ? 0 : ideal);
+    const start = log ? spellStart(log, e) : e.start;
+    const due = addDays(start, ideal == null ? 0 : ideal);
     const left = diffDays(todayStr(), due);
-    return { state: left < 0 ? 'overdue' : 'ontrack', act, due, left, start: e.start, key };
+    return { state: left < 0 ? 'overdue' : 'ontrack', act, due, left, start: start, key };
   }
 
   const STATE_RANK = { overdue: 0, ontrack: 1, none: 2 };
@@ -243,7 +303,7 @@
   function computeStatus(logs, key) {
     const open = currentEntries(logs, key);
     if (!open.length) return { state: 'none' };
-    return open.map((e) => statusOfEntry(key, e)).sort((a, b) => {
+    return open.map((e) => statusOfEntry(key, e, logs[key])).sort((a, b) => {
       const r = STATE_RANK[a.state] - STATE_RANK[b.state];
       return r !== 0 ? r : (a.left == null ? Infinity : a.left) - (b.left == null ? Infinity : b.left);
     })[0];
@@ -708,6 +768,8 @@
     plotHistory: plotHistory,
     openActivities: openActivities,
     cyclesOf: cyclesOf,
+    mergeSpells: mergeSpells,
+    spellStart: spellStart,
     lastRound: lastRound,
     roundResults: roundResults,
     activityStats: activityStats,

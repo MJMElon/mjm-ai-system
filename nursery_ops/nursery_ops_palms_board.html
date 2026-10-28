@@ -15,7 +15,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js?v=3"></script>
+<script src="../shared/shared_palms.js?v=4"></script>
 <script src="../shared/shared_plot_map.js?v=2"></script>
 <script src="../shared/shared_plot_draw.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -610,7 +610,9 @@ function drawPvRound() {
        with the caption saying the round's beginning is not in the log rather
        than the screen saying "nothing recorded" over real work. */
     const partial = !cur && log.length > 0;
-    const es = (cur ? cur.entries : (partial ? log.slice() : [])).slice().reverse();
+    /* One stage logged in two parts back to back is ONE row — see
+       MJMPalms.mergeSpells. */
+    const es = MJMPalms.mergeSpells(cur ? cur.entries : (partial ? log.slice() : [])).reverse();
     const done = MJMPalms.lastRound(LOGS, u.key);
 
     const head =
@@ -663,7 +665,8 @@ function drawPvRound() {
       return '<tr class="' + (e.end ? '' : 'now') + '">' +
         '<td><span class="pv-step-n">' + (es.length - i) + '</span></td>' +
         '<td class="pv-st-name">' + esc(act ? act.name : 'Stage ' + e.actN) +
-          (e.by ? '<div class="pv-st-by">' + esc(e.by) + '</div>' : '') + '</td>' +
+          (e.by ? '<div class="pv-st-by">' + esc(e.by) + '</div>' : '') +
+          (e.parts > 1 ? '<div class="pv-st-by" title="Keyed in ' + e.parts + ' parts back to back, shown as one">' + e.parts + ' entries combined</div>' : '') + '</td>' +
         '<td>' + MJMPalms.prettyD(e.start) + '</td>' +
         '<td>' + (e.end ? MJMPalms.prettyD(e.end) : '<span class="pv-running">running</span>') + '</td>' +
         '<td class="pv-st-num">' + days + '</td>' +
