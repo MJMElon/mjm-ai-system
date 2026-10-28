@@ -90,7 +90,12 @@ function check(name, got, want) {
         workers: [{ name: 'Marwan Hakim', qty: 808 }, { name: 'Muhamad Azhar', qty: 759 },
                   { name: 'Mustafa', qty: 855 }, { name: 'Suhaedi', qty: 451 }], checked_at: '2026-10-20T00:00:00Z' },
       { id: 3, work_date: '2026-10-07', plot_name: P2, work_type: 'transplanting', source_qty: 1000, workers: crew,
-        checked_at: null }
+        checked_at: null },
+      /* A JOB NOBODY DID. The conductor answered it -- a blanket spray on a
+         plot where the grass never came -- so it is on the paper, in no
+         total, and must NOT be printed as work waiting to be Checked. */
+      { id: 4, work_date: '2026-10-08', plot_name: P2, work_type: 'blanket_spray', source_qty: 4400,
+        workers: [], not_done: true, checked_at: null }
     ];
     _payrollView = 'transplanting';
     window.__PDFS.length = 0;
@@ -111,6 +116,23 @@ function check(name, got, want) {
   check('the total is the claim\'s — the agreed rows only (2,300 + 2,873)', got.lines.includes('5,173'), true);
   check('the unchecked row is printed and NAMED as held back',
     [got.lines.includes('Not checked'), got.lines.includes('1,000'), /Held back/.test(text)], [true, true, true]);
+  /* A JOB NOBODY DID is on the paper as on the screen: in neither total,
+     marked on its own row, and said under the sheet. Held back is a
+     question waiting for the office; this is an answer already given, so
+     printing it as held would send somebody to tick a row that can never
+     pay anybody. */
+  check('a job recorded as not done is marked and in NO total',
+    [/NOT DONE/.test(text), got.lines.includes('Nobody did it'),
+     got.lines.includes('4,400')],
+    [true, true, false]);
+  /* The held-back line counts the ONE genuinely unchecked row and not the
+     not-done one beside it. Two would be the paper sending somebody to
+     tick a row that can never pay anybody. */
+  check('…and the held count does not take it in',
+    [/1 row\(s\) are not Checked/.test(text), /2 row\(s\) are not Checked/.test(text)],
+    [true, false]);
+  check('…and it is said under the sheet, in its own words',
+    [/Not done/.test(text), /recorded as NOT DONE/.test(text)], [true, true]);
 
   // The other tabs are untouched: the maintenance file, the tall page.
   const maint = await page.evaluate(() => {

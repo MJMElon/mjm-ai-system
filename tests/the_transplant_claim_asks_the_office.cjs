@@ -59,6 +59,11 @@ const line = (src, header) => {
 /* `const X = '...' + '...';` across lines -- read to the semicolon that ends
    the statement rather than to the end of the line. */
 const stmt = line;
+const constBlockOf = (src, header) => {
+  const at = src.indexOf(header);
+  if (at < 0) throw new Error('not in the shipped file: ' + header);
+  return src.slice(at, src.indexOf('];', at) + 2);
+};
 const lineOf = (src, re) => {
   const m = src.match(re);
   if (!m) throw new Error('not in the shipped file: ' + re);
@@ -293,16 +298,35 @@ console.log('\n── 7. the sheet totals what the claim pays ──');
      row that can never pay anybody. */
   yes(/if \(skipped\) skipRows\+\+;/.test(r),
       'and a job recorded as not done is counted apart from both');
-  yes(/const rowCap = skipped \? 0 :/.test(r),
-      'such a row quotes no capacity — the plot figure on it is what the job WOULD have been');
   yes(/pay\.tpNotDoneFoot/.test(r), 'and the sheet says so under the total');
   yes(/if \(agreed\(r\)\) totals\[w\] \+= share;/.test(r),
       'a worker column totals only the rows the office has agreed');
+
+  /* THE TWO HELPERS BOTH SHEETS SHARE, driven rather than read off a line:
+     the screen and the PDF of the same sheet each call these, so a rule
+     living in one caller is a rule the other does not obey. */
+  const hctx = { Object, Array, Number, String, Math, _tpNoGate: {} };
+  vm.createContext(hctx);
+  vm.runInContext(
+    constBlockOf(SHEET, 'const TP_JOBS = [')
+    + '\nconst TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));\n'
+    + lineOf(SHEET, /^const tpNotDone = .*$/m) + '\n'
+    + lift(SHEET, 'function tpRowCap(r)') + '\n'
+    + lineOf(SHEET, /^function tpAgreed\(key, r\).*$/m)
+    + '\n;globalThis.__cap = tpRowCap; globalThis.__ag = tpAgreed;', hctx);
+  const cap = vm.runInContext('__cap', hctx);
+  const ag  = vm.runInContext('__ag', hctx);
+  is(cap({ work_type: 'transplanting', source_qty: 3164, workers: [{ name: 'Ali' }] }), 3164,
+     'the row capacity is the plot figure on an ordinary row');
+  is(cap({ work_type: 'transplanting', source_qty: 3164, workers: [], not_done: true }), 0,
+     'and NOUGHT on a job nobody did — tested in the helper, so the PDF gets it free');
   /* And where the gate is not installed every row is agreed, because every
      row is being paid — a sheet drawn entirely held under an orange line
      saying the opposite is two screens disagreeing on one page. */
-  yes(/const agreed = \(r\) => !!_tpNoGate\[key\] \|\| !!r\.checked_at;/.test(r),
-      'a database with no gate draws every row as agreed, not every row as held');
+  is(ag('k', { checked_at: null }), false, 'an unticked row is not agreed');
+  vm.runInContext('_tpNoGate.k = true;', hctx);
+  is(ag('k', { checked_at: null }), true,
+     'a database with no gate draws every row as agreed, not every row as held');
   yes(/pay\.tpHeld/.test(r), 'and the held capacity is named under the total');
   yes(/_tpCheckCell\(r, key\)/.test(r), 'every row carries the tick cell');
   /* The cell itself, driven. */
