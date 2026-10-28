@@ -2030,18 +2030,37 @@ function openCullAdd() {
       <div style="font-size:14px;font-weight:800;">Add a plot to the culling incentive</div>
       <div id="ca-what" style="font-size:12px;color:var(--text-muted,#6b7280);margin-top:4px;"></div>
       <label style="${lab}">Plot</label><input id="ca-plot" style="${inp}" placeholder="B4">
+      <!-- THE TWO LINES THAT FILL THEMSELVES KEEP THEIR ROOM WHETHER THEY
+           SAY ANYTHING OR NOT. Both appear while somebody is reaching for
+           the next box — one on blur of the plot, one on a date change — so
+           a panel that grows around them moves the button out from under
+           the pointer, and the press lands on nothing. Reserving the line
+           is what stops that happening at all; the backdrop guard below is
+           the seatbelt. -->
+      <div id="ca-from" style="font-size:11px;color:var(--text-faint);margin-top:4px;min-height:15px;"></div>
       <label style="${lab}">Nursery</label><select id="ca-sec" style="${inp}"></select>
       <div style="display:flex;gap:10px;">
         <div style="flex:1;"><label style="${lab}">Saringan started</label><input id="ca-start" type="date" style="${inp}"></div>
         <div style="flex:1;"><label style="${lab}">Transplanting ended</label><input id="ca-end" type="date" style="${inp}"></div>
       </div>
-      <div id="ca-days" style="font-size:12px;font-weight:700;margin-top:8px;"></div>
+      <div id="ca-days" style="font-size:12px;font-weight:700;margin-top:8px;min-height:16px;"></div>
       <label style="${lab}">Why (optional)</label><input id="ca-remark" style="${inp}" placeholder="PALMS was never closed for this plot">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
         <button class="btn" id="ca-cancel">Cancel</button><button class="btn btn-primary" id="ca-save">Add</button></div></div>`;
     document.body.appendChild(el);
     const close = () => { el.style.display = 'none'; };
-    el.addEventListener('click', e => { if (e.target === el) close(); });
+    /* THE BACKDROP CLOSES ON A CLICK THAT BEGAN ON THE BACKDROP, and that
+       `down` is not fussiness — it is a bug this dialog really had. Naming
+       the plot fills the two days in and writes a line under the box, so
+       the panel GROWS on blur; blur fires on mousedown, so the button
+       somebody was aiming at moves out from under the pointer and the
+       mouseup lands on the backdrop. The dialog shut on the press that was
+       meant to open the date picker, and everything keyed was gone.
+       Asking where the press STARTED fixes that, and the drag-out-of-a-
+       text-selection case with it. */
+    let down = false;
+    el.addEventListener('mousedown', e => { down = (e.target === el); });
+    el.addEventListener('click', e => { if (e.target === el && down) close(); });
     el.querySelector('#ca-cancel').addEventListener('click', close);
     el.querySelector('#ca-save').addEventListener('click', saveCullAdd);
     /* The duration as it is keyed, so the refusal is never a surprise at
@@ -2056,21 +2075,72 @@ function openCullAdd() {
       box.textContent = d <= T ? `${d} days — it qualifies` : `${d} days — over ${T}, this cannot be added`;
       box.style.color = d <= T ? '#15803d' : '#c0392b';
     };
-    el.querySelector('#ca-start').addEventListener('change', show);
-    el.querySelector('#ca-end').addEventListener('change', show);
+    const sI = el.querySelector('#ca-start'), eI = el.querySelector('#ca-end');
+    [sI, eI].forEach(i => {
+      i.addEventListener('change', show);
+      /* A day somebody KEYS stops being this dialog's to replace. Only a
+         programmatic set leaves the mark on, and that never fires input. */
+      i.addEventListener('input', () => { i.dataset.auto = ''; });
+    });
+    /* THE TWO DAYS ARE USUALLY IN PALMS ALREADY, and keying a date into a
+       dd/mm/yyyy box is the one thing on this screen somebody can fight for
+       a minute — the office did. So naming the plot FILLS them: the same
+       `runOf` the list itself is timed with, asked of one plot, so what is
+       keyed here is what the row would have read. Where PALMS has the
+       Saringan and no closed Transplanting — which is most of why a plot
+       needs this dialog at all — only the second day is left to key, and
+       the line says so.
+       It never writes over what somebody has TYPED: a day keyed by hand is
+       their answer, and the office correcting PALMS is half the point.
+
+       BUT A DAY THIS DIALOG FILLED IN BELONGS TO THE PLOT IT WAS FILLED
+       FOR. Keying one plot and then changing your mind left the first
+       plot's two days sitting under the second one's name — a record that
+       reads perfectly and is about the wrong ground. So the dialog
+       remembers which days are its own and drops them the moment the plot
+       changes. */
+    const fill = () => {
+      const plot = String(el.querySelector('#ca-plot').value || '').trim().toUpperCase();
+      const note = el.querySelector('#ca-from');
+      if (el.dataset.forPlot === plot) return;      // nothing new to look up
+      el.dataset.forPlot = plot;
+      [sI, eI].forEach(i => { if (i.dataset.auto === '1') { i.value = ''; i.dataset.auto = ''; } });
+      note.textContent = '';
+      show();
+      if (!plot || !window.MJMCullIncentive) return;
+      const CI = MJMCullIncentive;
+      const sec = CI.sectionOfPlot(plot);
+      if (sec) el.querySelector('#ca-sec').value = sec;
+      const st = _cullCache[_cullYm()];
+      const run = st ? CI.runOf(st.palms, plot, _cullYm() + '-31') : null;
+      if (!run || run.state === 'unread') return;
+      if (run.start && !sI.value) { sI.value = run.start; sI.dataset.auto = '1'; }
+      if (run.end && !eI.value) { eI.value = run.end; eI.dataset.auto = '1'; }
+      note.textContent = !run.start
+        ? `PALMS has no Saringan for ${plot} — key both days off the paper`
+        : run.end ? `From PALMS: ${plot} ${run.start} to ${run.end}`
+                  : `From PALMS: ${plot} started ${run.start} — Transplanting is not closed, so key the day it ended`;
+      show();
+    };
+    el.querySelector('#ca-plot').addEventListener('change', fill);
+    el.querySelector('#ca-plot').addEventListener('blur', fill);
     _cullAddEl = el;
   }
   const el = _cullAddEl;
   const n = getNursery();
   el.querySelector('#ca-what').textContent =
-    `For ${getMonth()}. Key the two days off PALMS or off the paper — the `
+    `For ${getMonth()}. Name the plot and the two days fill in from PALMS where it has them — the `
     + `${MJMCullIncentive.TARGET_DAYS}-day rule still decides, and the plot is paid only once it is Checked.`;
   el.querySelector('#ca-sec').innerHTML = MJMCullIncentive.NURSERIES
     .map(s => `<option value="${esc(s)}"${s === n ? ' selected' : ''}>${esc(NURSERY_NAMES[s] || s)}</option>`).join('');
   el.querySelector('#ca-plot').value = '';
   el.querySelector('#ca-start').value = '';
   el.querySelector('#ca-end').value = '';
+  el.querySelector('#ca-start').dataset.auto = '';
+  el.querySelector('#ca-end').dataset.auto = '';
+  el.dataset.forPlot = '';
   el.querySelector('#ca-days').textContent = '';
+  el.querySelector('#ca-from').textContent = '';
   el.querySelector('#ca-remark').value = '';
   el.style.display = 'flex';
   setTimeout(() => el.querySelector('#ca-plot').focus(), 30);

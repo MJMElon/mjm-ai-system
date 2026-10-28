@@ -313,6 +313,36 @@ const payOf = (page, sec) => page.evaluate((s) =>
   await mp.evaluate(() => openCullAdd());
   await mp.click('#ca-save');
   check('it refuses with no plot', m.errs.some(e => /Which plot/.test(e)), true);
+  /* NAMING THE PLOT FILLS THE TWO DAYS IN. The office could not key a date
+     into a dd/mm/yyyy box without a fight, and PALMS has the days already —
+     so it is `runOf`, asked of the one plot, the same reader the list is
+     timed with. */
+  await mp.fill('#ca-plot', 'B1');
+  await mp.evaluate(() => document.getElementById('ca-plot').blur());
+  check('naming a plot fills the run off PALMS, and says where it came from',
+    await mp.evaluate(() => [document.getElementById('ca-start').value,
+                             document.getElementById('ca-end').value,
+                             document.getElementById('ca-days').textContent,
+                             document.getElementById('ca-from').textContent]),
+    [D(1), D(14), '13 days — it qualifies', `From PALMS: B1 ${D(1)} to ${D(14)}`]);
+  /* AND THEY BELONG TO THE PLOT THEY WERE FILLED FOR. Changing your mind
+     about the plot used to leave the first one's days under the second
+     one's name — a record that reads perfectly and is about the wrong
+     ground. */
+  await mp.fill('#ca-plot', 'B9');
+  await mp.evaluate(() => document.getElementById('ca-plot').blur());
+  check('changing the plot drops the days it filled in',
+    await mp.evaluate(() => [document.getElementById('ca-start').value,
+                             document.getElementById('ca-end').value]), ['', '']);
+  /* A day somebody KEYED is theirs and stays — correcting PALMS is half the
+     reason this dialog exists. */
+  await mp.fill('#ca-start', D(2));
+  await mp.fill('#ca-plot', 'B6');
+  await mp.evaluate(() => document.getElementById('ca-plot').blur());
+  check('but a day keyed by hand is not thrown away',
+    await mp.evaluate(() => document.getElementById('ca-start').value), D(2));
+  await mp.fill('#ca-start', '');
+  await mp.fill('#ca-plot', '');
   await mp.fill('#ca-plot', 'B3-R');
   await mp.click('#ca-save');
   check('a -R plot is refused — it is on no PALMS screen and no incentive',

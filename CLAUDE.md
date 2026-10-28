@@ -4862,6 +4862,29 @@ What the rule asks, and must keep asking:
   reason is optional like the Remove beside it. The row it makes is an
   ordinary one: marked *Added by hand*, and **paid only once somebody Checks
   it**, like every other plot.
+
+  **NAMING THE PLOT FILLS THE TWO DAYS IN**, off the same `runOf` the list
+  itself is timed with — asked of one plot, so what lands in the boxes is
+  what the row would have read. The office could not key a date into a
+  dd/mm/yyyy box without a fight (*"日期我怎么打不到21号"*), and the days
+  were in PALMS the whole time; where PALMS has the Saringan and no closed
+  Transplanting — most of why a plot needs this dialog at all — only the
+  second day is left to key, and the line under the box says so. Three
+  things that cost an hour between them:
+
+  - **A day the dialog filled BELONGS TO THE PLOT IT WAS FILLED FOR.**
+    Keying one plot and then changing your mind left the first plot's days
+    under the second one's name — a record that reads perfectly and is about
+    the wrong ground. Each box carries `dataset.auto`, dropped the moment
+    the plot changes; a day somebody TYPED clears that mark and is never
+    thrown away, because correcting PALMS is half the point.
+  - **A LINE THAT APPEARS ON BLUR MOVES THE BUTTON OUT FROM UNDER THE
+    POINTER.** Blur fires on mousedown, so the panel grew between the press
+    and the release: the dialog shut on the click meant to open the date
+    picker and everything keyed went with it. Both self-filling lines
+    reserve their room (`min-height`) so the layout cannot move at all.
+  - **The backdrop closes on a click that BEGAN on the backdrop**, which is
+    the seatbelt for the same thing and for a drag out of a text selection.
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 
