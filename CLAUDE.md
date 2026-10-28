@@ -3084,6 +3084,15 @@ Three smaller things:
   name with no column would be a worker's share leaving the sheet with
   nothing saying it had gone.
 
+**THE DATE COLUMN IS THE BATCH REPORT DAY**, not the day the job was keyed
+— *"这边的日期 要跟着batch report的日期"*. The conductor keys the four jobs
+whenever he reaches the sheet, so a plot of rows all read 28/10. The column
+shows the `transaction_date` of the plot `Transplanted` row (Tab 3), matched
+on the plot and the record own batches as sets, the latest day where it
+names several; a record nothing matches keeps its keyed date and the hover
+says which. **Display only**: `schedule_month`, which decides the claim that
+pays it, does not move. `tests/transplant_date_is_the_batch_report.cjs`.
+
 `TP_JOBS` is the **third copy** of the job list — FC-Portal's
 `transplantData.js` and `npayroll_script.js` have the other two. Only the key
 and the label are needed here; the matching and the rates stay where they

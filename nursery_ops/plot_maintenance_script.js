@@ -1373,6 +1373,78 @@ async function loadTransplantRecordsForPayroll(n, m) {
   }
   _tpRecordsCache[key] = data || [];
   renderPayroll();
+  /* The batch report dates come after the rows, so a slow ledger read never
+     holds the sheet back -- it redraws once they are in. */
+  try {
+    const ledger = await _tpLoadLedgerDates();
+    if (ledger) { (data || []).forEach(r => { r._batchDate = tpBatchDate(ledger, r); }); renderPayroll(); }
+  } catch (e) { console.warn('[maint] transplant dates not read from the ledger:', (e && e.message) || e); }
+}
+
+/* THE DATE IS THE BATCH REPORT DATE. The Field Conductor keys the four jobs
+   whenever he gets to the sheet -- often days after the seedlings went in --
+   so work_date is the day it was KEYED, and a whole plot of jobs reading
+   28/10 says nothing about the plot. The office asked for the date the
+   batch report gives: the transaction_date of the plot Transplanted row
+   (Tab 3), read the same way the Transplanting Report reads it.
+
+   Matched on the PLOT and on the record own batches, compared as sets on
+   letters and digits, because a second delivery into the same plot is its
+   own record (B11: 269 in September, 271 on 24 Oct) and must show its own
+   day. Where the record names several batches the LATEST of their days is
+   shown -- the day the plot was finished. A record no ledger row matches
+   keeps its keyed date, so nothing is ever blank.
+
+   DISPLAY ONLY. schedule_month, which decides which claim pays the row, is
+   untouched: moving money between months is not what was asked. */
+let _tpLedgerPromise = null;
+function _tpLoadLedgerDates() {
+  if (!_supabase) return Promise.resolve(null);
+  if (_tpLedgerPromise) return _tpLedgerPromise;
+  _tpLedgerPromise = (async () => {
+    const all = [];
+    for (let from = 0; ; from += 1000) {
+      const res = await _supabase.from('shared_inventory_logs')
+        .select('plot_name, batch_name, remark, transaction_type, transaction_date, created_at')
+        .eq('transaction_type', 'Transplanted')
+        .order('id', { ascending: true }).range(from, from + 999);
+      if (res.error) throw res.error;
+      all.push(...(res.data || []));
+      if (!res.data || res.data.length < 1000) break;
+    }
+    return tpIndexLedgerDates(all);
+  })().catch(e => { _tpLedgerPromise = null; throw e; });
+  return _tpLedgerPromise;
+}
+const _tpKey = s => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+function _tpLogDate(l) {
+  if (window.MJMCullIncentive) return MJMCullIncentive.logDate(l);
+  return l && l.transaction_date ? String(l.transaction_date).slice(0, 10) : '';
+}
+/* { PLOTKEY: [{ batch: BATCHKEY, date: 'YYYY-MM-DD' }] } */
+function tpIndexLedgerDates(rows) {
+  const ix = {};
+  (rows || []).forEach(l => {
+    if (l.transaction_type !== 'Transplanted') return;
+    const pk = _tpKey(l.plot_name), d = _tpLogDate(l);
+    if (!pk || !d) return;
+    (ix[pk] || (ix[pk] = [])).push({ batch: _tpKey(l.batch_name), date: d });
+  });
+  return ix;
+}
+function tpBatchDate(ix, r) {
+  const list = (ix && ix[_tpKey(r && r.plot_name)]) || [];
+  if (!list.length) return null;
+  const want = new Set(String((r && r.batch_name) || '').split(',').map(_tpKey).filter(Boolean));
+  const hits = want.size ? list.filter(x => want.has(x.batch)) : list;
+  if (!hits.length) return null;
+  return hits.map(x => x.date).sort().pop();
+}
+/* What the Date column shows: the batch report day, else the keyed one. */
+function tpShownDate(r) { return (r && (r._batchDate || r.work_date)) || ''; }
+function tpDateText(r) {
+  const d = tpShownDate(r);
+  return d ? new Date(String(d).slice(0, 10)).toLocaleDateString('en-MY') : '—';
 }
 
 /* THE PLOT DECIDES which nursery a record is in -- the house rule, and the
@@ -1386,7 +1458,7 @@ function transplantingRows(n, m) {
     .sort((a, b) => {
       const pa = plots.indexOf(a.plot_name), pb = plots.indexOf(b.plot_name);
       if (pa !== pb) return pa - pb;
-      return String(a.work_date || '').localeCompare(String(b.work_date || ''))
+      return String(tpShownDate(a)).localeCompare(String(tpShownDate(b)))
           || String(a.work_type || '').localeCompare(String(b.work_type || ''));
     });
 }
@@ -1514,7 +1586,7 @@ function renderTransplantingPayroll() {
       else if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
       h += `<tr${skipped ? ' class="tp-row-skipped" style="opacity:.72;"'
                         : (agreed(r) ? '' : ' class="tp-row-held"')}>
-        <td style="font-weight:600;white-space:nowrap;">${r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—'}</td>
+        <td style="font-weight:600;white-space:nowrap;"${r._batchDate && r.work_date && String(r._batchDate) !== String(r.work_date).slice(0, 10) ? ` title="${esc(t('pay.tpKeyedOn', { d: new Date(String(r.work_date).slice(0, 10)).toLocaleDateString('en-MY') }))}"` : ''}>${tpDateText(r)}</td>
         <td class="plot-td">${esc(r.plot_name || '—')}</td>
         <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}${
           skipped ? ` <span style="display:inline-block;margin-left:.3rem;padding:.05rem .35rem;`
@@ -2539,7 +2611,7 @@ function downloadPayrollPDF() {
           if (skipped) skipRows++;
           else if (ok) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
           const z = ri % 2 ? ZEBRA : null;
-          cell(xs[0], y, widths[0], ROW_H, r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—',
+          cell(xs[0], y, widths[0], ROW_H, tpDateText(r),
                { size: 8, nowrap: true, fill: z });
           cell(xs[1], y, widths[1], ROW_H, r.plot_name || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
           cell(xs[2], y, widths[2], ROW_H, ((job && job.label) || r.jenis || r.work_type || '—')
@@ -3320,6 +3392,7 @@ const I18N = {
     'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
     'pay.tpNoGate':'⚠ The Checked columns are not on this database yet, so every recorded row still reaches the salary claim. Run shared/RUN_ME_transplant_checked.sql in the Supabase SQL Editor.',
     'pay.tpNotDoneTag':'NOT DONE',
+    'pay.tpKeyedOn':'Batch report date. Keyed on {d}.',
     'pay.tpNotDoneCell':'Nobody did it',
     'pay.tpNotDoneWhy':'The Field Conductor recorded this job as not done — nobody carried it out, so there is nothing to check and nothing to pay. If it was done after all, he reopens the job on the FC Portal and ticks the crew.',
     'pay.tpNotDoneLabel':'Not done',
@@ -3464,6 +3537,7 @@ const I18N = {
     'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
     'pay.tpNoGate':'⚠ Lajur Disemak belum ada pada pangkalan data ini, jadi semua baris yang direkod masih masuk ke tuntutan gaji. Jalankan shared/RUN_ME_transplant_checked.sql di Supabase SQL Editor.',
     'pay.tpNotDoneTag':'TIDAK DIBUAT',
+    'pay.tpKeyedOn':'Tarikh batch report. Diisi pada {d}.',
     'pay.tpNotDoneCell':'Tiada sesiapa buat',
     'pay.tpNotDoneWhy':'Field Conductor merekodkan kerja ini sebagai tidak dibuat — tiada sesiapa melakukannya, jadi tiada apa untuk disemak dan tiada apa untuk dibayar. Jika ia ada dibuat, beliau membuka kerja itu semula di FC Portal dan menanda pekerjanya.',
     'pay.tpNotDoneLabel':'Tidak dibuat',
