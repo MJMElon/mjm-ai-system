@@ -282,9 +282,19 @@ const read = (page) => page.evaluate(() => {
     await pick(page, 'UNN1');
     const u = await read(page);
     check('no rows', u.body.length, 1);
+    /* IT SAYS NOBODY RECORDED ANY, NOT THAT NOTHING WAS TRANSPLANTED.
+       This page reads nops_transplant_field_records and nothing else, so
+       it cannot see the ground -- and it said "Nothing transplanted in
+       BNN" over a month BNN took 3,448 seedlings in, which sent the
+       office looking for a fault in the claim instead of at the four
+       jobs nobody had keyed. */
     checkTrue('…and it says which nursery and which month is empty',
-              /Nothing transplanted/i.test(u.body[0][0])
+              /recorded/i.test(u.body[0][0])
               && u.body[0][0].includes('UNN1') && u.body[0][0].includes(MONTH_LABEL));
+    check('…and it does NOT claim nothing was transplanted',
+          /nothing transplanted/i.test(u.body[0][0]), false);
+    checkTrue('…and it names where the four jobs are keyed',
+              /Pending Verification/i.test(u.body[0][0]));
     await page.close();
   }
 

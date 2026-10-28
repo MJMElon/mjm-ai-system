@@ -1892,7 +1892,19 @@ function renderTransplantByPlot(secFilter) {
                  + `${esc(monthLabelFull(monthValue()))} ${pl === 1 ? 'is' : 'are'} waiting to be `
                  + `Checked, so nothing is counted here yet.`;
           })()
-        : `Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabelFull(monthValue()))}.`}
+        /* "NOTHING TRANSPLANTED" IS A CLAIM ABOUT THE GROUND, AND THIS
+           PAGE CANNOT SEE THE GROUND. It reads
+           nops_transplant_field_records and nothing else, so an empty
+           month here means nobody has RECORDED any, which is a different
+           fact -- BNN took 3,448 seedlings in October 2026 and read
+           "Nothing transplanted in BNN" on this very line, which is what
+           sent the office looking for a fault in the claim rather than at
+           the four jobs nobody had keyed.
+           Same care as the held sentence above it: say what is actually
+           known, and say where the answer is given. */
+        : `No transplanting job has been recorded for ${esc(secName(secFilter))} in `
+          + `${esc(monthLabelFull(monthValue()))}. A plot that took seedlings is raised on `
+          + `the FC Portal, under Pending Verification, until its four jobs are keyed.`}
     </td></tr></tbody>`;
     $('transpl-plots-note').textContent = '';
     return;
