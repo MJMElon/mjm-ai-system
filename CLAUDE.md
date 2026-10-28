@@ -4015,6 +4015,58 @@ names the button and the three rules, which is exactly what that comment is
 for — and a plain text search read it as the button still being there. The
 test strips the comments first and asks about the markup the browser gets.
 
+### And then the portal gave up its door too
+
+The back office lost its way across first. The portal kept its ribbon back
+arrow — out to the MJM AI hub, or to `audit_admin.html` for an admin, aimed
+at run time by `aimBack()` — and the office asked for that to go as well:
+*"remove the back button in auditor portal. so the auditor portal will
+become an individual webpage. It only link the data back to auditor portal
+manage webpage."*
+
+So **neither page now carries a door into the other**, and that is the whole
+shape of it. What joins them is the DATA: every audit saved on the portal
+lands in the back office — its history, its alert board, its monthly report
+— and that is the half that matters. A link was only ever the thing still
+saying the two are one place.
+
+Three things in it:
+
+- **THE LEFT CELL STAYS, as `.fcr-spacer`.** The ribbon is
+  `grid-template-columns:1fr auto 1fr` with the brand `justify-self:center`
+  in the middle cell, so the empty cell is what balances the right-hand
+  cluster and keeps the wordmark on the bar's real centre line. Delete the
+  anchor outright and the brand becomes the first grid item and slides
+  left; `display:none` collapses the cell and does the same. **This was not
+  invented** — `audit_admin.html` has carried exactly that span since it
+  was written, with a comment saying why, and the mobile rule
+  `.fcr-spacer{grid-area:1/1}` already existed. Copy the page that already
+  solved it.
+- **WHAT IT COSTS.** An admin standing on the portal reaches the manage
+  page through the hub tile *Nursery Audit System*, not from here. One door
+  per page is the point of it, and it is the same trade the back office
+  already made.
+- **`aimBack()` is now a no-op on everything that renders.** It guards on a
+  missing anchor and returns, and the only markup left is on
+  `audit_nursery_select.html`, which redirects in its own head and never
+  draws. It stays because that forwarder could be un-cancelled — but its
+  comment now SAYS it is dead, because a comment asserting a live rule over
+  code that cannot run is how the next person spends an hour.
+
+`tests/the_portal_is_a_page_of_its_own.cjs` holds all of it and strips the
+comments first, for the reason the section above names — the comment where
+the arrow stood quotes the office's own sentence, which a plain text search
+reads as the arrow still being there. Four of its checks fail on the
+previous code. It also asks that **no other anchor** on the page leaves for
+the hub or the back office: an arrow removed while a pill elsewhere still
+leaves is not a page of its own, which is the thinner-copy fault this file
+is full of.
+
+**`audit_sw.js` precaches `audit_home.html`** — `VER` moved to
+`mjm-26102801` — and `audit_ribbon.js` changed, so its `?v=` moved on all
+**four** pages that load it, not only the one being edited. Two of them
+were still on `20260824b`, which would have gone on serving the old file.
+
 ## System Setting governs BOTH portals, and it was filed under one of them
 
 Location, Portal View & Function and Boundary decide what the **555 FC
