@@ -611,6 +611,41 @@ let dbStateCache = {};   // `${nursery}_${month}` → saved schedule payload
 /* Admin of the "Nursery Operation Manage" module in User Access.
    Only admins may edit a record once it has been marked Checked. */
 let isNopsAdmin = false;
+
+/* ── MAY THIS PERSON OPEN SETTING ──────────────────────────────────────
+   The Setting tab was the module LEVEL and nothing else, so the tick the
+   office sets on User Access — "Open Setting (piece rates, plots,
+   workers)" — was written, shown as set on the screen, and read by
+   nothing. Somebody granted it saw no change at all, which is the fault
+   this codebase has a heading about: a permission saved and not obeyed
+   looks configured, and nobody finds out until somebody trusts it.
+
+   IT CONCLUDES EXACTLY WHAT THE SCREEN DRAWS, which is
+   effectiveActions() in shared/shared_module_access.js:
+
+     a saved row for this page is AUTHORITATIVE — the page must be open
+     and the function ticked, and that holds for an admin too, because an
+     admin the office has deliberately unticked is a decision and not an
+     oversight;
+
+     NO saved row is nobody having been asked, so the module level decides
+     — which is what governed this before the tick existed. `adminOnly` on
+     the action in nursery_ops_user_access.html is the other half of that
+     sentence, and the two are held together by a test rather than by
+     being written out twice.
+
+   Unreadable permissions fall back to `isNopsAdmin`, which is false when
+   the access load failed — the same safe default the tab has always had.
+   Failing OPEN here would hand the piece rates to everybody. */
+function maySetting() {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    const acts = p && p.nursery_ops_actions && p.nursery_ops_actions.maintenance;
+    if (acts) return !!acts.view && !!acts.setting;
+  } catch (_) { /* fall through to the module level */ }
+  return isNopsAdmin;
+}
 /* Plots added by the user via a schedule's "Add Row" (or Setting).
    Persisted in nops_maint_custom_plots and merged into NURSERY_PLOTS on load,
    so every existing renderer picks them up with no other changes. */
@@ -2820,7 +2855,7 @@ function onRateInput(code, val) {
 /* Write all four rates for this nursery, then lock. */
 async function savePieceRates() {
   const n = getNursery();
-  if (!isNopsAdmin) { alert('Only an administrator can change piece rates.'); return; }
+  if (!maySetting()) { alert('You are not allowed to change piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
   if (rateLocked(n)) return;
   // Never write before the saved rates have arrived — otherwise a save made
   // during startup would push empty boxes over real values.
@@ -2874,7 +2909,7 @@ async function savePieceRates() {
 
 async function unlockPieceRates() {
   const n = getNursery();
-  if (!isNopsAdmin) { alert('Only an administrator can unlock piece rates.'); return; }
+  if (!maySetting()) { alert('You are not allowed to unlock piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
   if (!confirm(`Unlock the piece rates for ${NURSERY_NAMES[n]} so they can be edited?`)) return;
   if (_supabase) {
     const { error } = await _supabase.from('nops_maint_rate_lock')
@@ -5320,13 +5355,18 @@ function autoSyncRecords() {
   renderRecords();
   persistRecords();
 }
-/* Show or hide the admin-only parts of the page. Called once MJMAccess has
+/* Show or hide the Setting side of the page. Called once MJMAccess has
    answered — until then the Setting tab stays hidden, which is the safe
-   default if the access check is slow or fails outright. */
+   default if the access check is slow or fails outright.
+
+   WHO MAY is maySetting(), not the module level: the office can tick
+   "Open Setting" for somebody who is not an admin of this module, and
+   that tick was being written and read by nothing. */
 function applyNopsAdminUI() {
+  const may = maySetting();
   const btn = document.getElementById('tab-btn-setting');
-  if (btn) btn.style.display = isNopsAdmin ? '' : 'none';
-  if (!isNopsAdmin) {
+  if (btn) btn.style.display = may ? '' : 'none';
+  if (!may) {
     // If a non-admin is sitting on Setting (restored tab, cached page), move
     // them back to Work Record rather than leaving the panel on screen.
     const panel = document.getElementById('tab-setting');
@@ -5467,12 +5507,14 @@ document.addEventListener('transitionend', (e) => {
 window.addEventListener('resize', fitAllTables);
 
 function switchTab(name, btn) {
-  // Setting holds piece rates and the worker list — admin only. The tab button
-  // is hidden for everyone else, but guard the switch too so a stale button, a
-  // restored tab or a console call can't get in either.
-  if (name === 'setting' && !isNopsAdmin) {
-    alert('Setting is for administrators only.\n\nAsk an admin if a plot capacity, ' +
-          'chemical or fertiliser needs changing.');
+  // Setting holds piece rates and the worker list, so it is the module
+  // admins and whoever the office has ticked "Open Setting" for. The tab
+  // button is hidden for everyone else, but guard the switch too so a stale
+  // button, a restored tab or a console call can't get in either.
+  if (name === 'setting' && !maySetting()) {
+    alert('Setting is not open to you.\n\nAsk an admin to tick "Open Setting" on '
+          + 'User Access, or to change the plot capacity, chemical or fertiliser '
+          + 'for you.');
     return;
   }
   document.querySelectorAll('#sm-nav .pn-tab').forEach(b=>b.classList.remove('is-on'));

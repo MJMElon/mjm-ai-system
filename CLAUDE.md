@@ -3542,9 +3542,54 @@ no DELETE is ever sent. **`nelos_user_setting.html` now carries the three
 no-cache metas**, for the reason every settings page that is being changed
 needs them.
 
+### The fourth time: Open Setting was written, shown as set, and read by nothing
+
+A normal-level user was granted **Open Setting (piece rates, plots,
+workers)** on the Nursery Maintenance module. It saved, it drew as ticked
+on User Access afterwards, and she opened the page to find no Setting tab
+at all. *"Why i allow this user to access the open setting but this user
+still didnt see anything from her side?"*
+
+Because the Setting tab asked ONE question — `isAdminOf('nursery_ops')`,
+the module LEVEL — in all four of its gates: the tab button, `switchTab`,
+and the two piece-rate writes. A tick that is not a module level could
+never move any of them, so `nursery_ops_actions.maintenance.setting` was
+written by the access screen and read by nothing at all.
+
+`maySetting()` in `plot_maintenance_script.js` is the read now, and the
+rule it obeys is the SCREEN's own — `effectiveActions()` in
+`shared_module_access.js`:
+
+- **A saved row is authoritative**, and for an admin too. An admin the
+  office has deliberately unticked is a decision, not an oversight, and a
+  screen drawing a tick off over a gate that allows it is the worst kind of
+  wrong, because it looks configured.
+- **No saved row is nobody having been asked**, so the module level decides
+  — what governed this before the tick existed. **That is the case a plain
+  `canDo()` gets wrong**: absent means yes to every action there, so
+  switching the gate to it would have handed the piece rates to every
+  normal user nobody has configured. `adminOnly:true` on the action in
+  `nursery_ops_user_access.html` is the other half of that sentence.
+- **It does NOT fail open.** Failing open is right for a door somebody
+  already held; this is the money side of the module, and unreadable
+  permissions fall back to the module level — which is false when the
+  access load failed, the same safe default the tab has always had.
+
+**`isNopsAdmin` answers two OTHER questions and both were left alone** —
+overriding a locked DO, and handing out culling incentive. Widening the
+flag instead of adding a function would have given those away to anybody
+ticked for piece rates, which is not what the tick says.
+
+`tests/the_open_setting_tick_is_obeyed.cjs` drives the same six saved rows
+through BOTH readers, lifted out of the shipped files, and fails where they
+disagree. On the previous code it says it in the office's own terms: *the
+screen draws true and the page opens false*. It also runs against a version
+that has no `maySetting` at all rather than throwing — what the previous
+code DID is the whole argument for the change.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
-It has happened three times in this codebase. A screen writes a setting, the
+It has happened four times in this codebase now. A screen writes a setting, the
 thing it governs never reads it, and the screen goes on showing it as set. It
 looks configured. Nobody finds out until somebody trusts it.
 
