@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- The page is the deploy: every version number below lives in it, so a
+     cached copy goes on asking for yesterday's file for ever. These three
+     are the only lever, the site being GitHub Pages with no build step and
+     nowhere to set a header. One hard reload per machine to pick them up in
+     the first place. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>System Setting — 555 Worker Portal</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
@@ -10,7 +18,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_worker_locations.js"></script>
+<script src="../shared/shared_worker_locations.js?v=1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -306,10 +314,17 @@ async function loadLocations() {
 
   /* Everything the register can file somebody under: what the table holds,
      plus the four it has always had. */
+  /* …and the sections that are NOT nurseries, which the table will never
+     hand over. That used to be the word UNE written down here on its own,
+     a second copy of what the Team Board also knew — so Admin added to one
+     of them would have drawn a column on the board that this card reported
+     as "Not in a location". Both read OFF_NURSERY now. */
   const codes = [];
   LOC.KEEP_NURSERIES.forEach(k => { if (!codes.includes(k.code)) codes.push(k.code); });
   [...named.keys()].forEach(c => { if (!codes.includes(c)) codes.push(c); });
-  if (!codes.includes('UNE')) codes.push('UNE');
+  (LOC.OFF_NURSERY || [{ code: 'UNE' }]).forEach(f => {
+    if (!codes.includes(f.code)) codes.push(f.code);
+  });
 
   const { locations, unplaced } = LOC.group(codes);
 
