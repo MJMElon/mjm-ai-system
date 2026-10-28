@@ -1,5 +1,6 @@
 /* The plot panel on the PALMS Monitoring Board shows every stage's START
-   and END date, each in a column of its own, in the order the work was done.
+   and END date, each in a column of its own, NEWEST AT THE TOP, numbered by
+   position with the oldest at the foot as 1 — never the stage's own code.
 
    It used to be one sentence per stage, newest first, carrying the END date
    only — so "when did Culling start" had to be worked out backwards from a
@@ -86,14 +87,16 @@ const LOG = [
   });
   check('the round is a table with Start and End columns',
     rows && rows.head, ['', 'Stage', 'Start', 'End', 'Days', 'Ideal', 'Result']);
-  check('in the order the work was done, stage 1 at the top',
-    rows && rows.body.map(r => r[0]), ['1', '2', '3', '8', '9']);
+  check('newest at the top',
+    rows && rows.body.map(r => r[1].split(' ')[0]), ['Transplanting', 'Lining', 'Culling', 'Tunggu', 'Saringan']);
+  check('numbered by position, the oldest at the foot being 1 — not 9, 8, 3, 2, 1',
+    rows && rows.body.map(r => r[0]), ['5', '4', '3', '2', '1']);
   check('Culling: started 23 Aug, ended 27 Aug, 4 days against 2',
     rows && rows.body[2], ['3', 'Culling Contoh', '23 Aug 2026', '27 Aug 2026', '4d', '2d', '2d over']);
   check('Lining carries its own start as well as its end',
-    rows && rows.body[3].slice(2, 6), ['01 Sep 2026', '03 Sep 2026', '2d', '2d']);
+    rows && rows.body[1].slice(2, 6), ['01 Sep 2026', '03 Sep 2026', '2d', '2d']);
   check('a stage still running says so in the End column, and counts its days so far',
-    rows && [rows.body[4][2], rows.body[4][3], /d so far$/.test(rows.body[4][4])], ['03 Sep 2026', 'running', true]);
+    rows && [rows.body[0][2], rows.body[0][3], /d so far$/.test(rows.body[0][4])], ['03 Sep 2026', 'running', true]);
   if (process.env.SHOT) await page.locator('#pv-round').screenshot({ path: process.env.SHOT });
   check('no page errors', errs, []);
 
