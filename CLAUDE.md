@@ -4715,4 +4715,14 @@ that nursery's own Field Conductor (Lalu Aenal BNN, Akbar UNN 1, Azhar UNN 2).
   `shared/RUN_ME_payroll_reads_palms.sql`** — the read comes back empty rather
   than refused, and the sheet says so instead of quietly paying nobody.
 
+- **The office can change it plot by plot**, never person by person — so
+  one decision moves all five people's money together, by the same rule.
+  `mjmnpayroll_cull_incentive_overrides` holds ONE record per plot per month
+  (`shared/RUN_ME_cull_incentive_overrides.sql`): `add` counts a plot
+  whatever PALMS says, `remove` leaves one out. Taking a PALMS plot out WRITES
+  a record and changes nothing in PALMS or the ledger; Delete / Put back
+  deletes only the by-hand record. Every one carries a reason, who and when,
+  shown on the row it changed. Gated on Adjust Pay for Transplanting and the
+  sheet lock, asked again at the write. A dialog, never a `prompt`.
+
 `tests/culling_incentive.cjs` holds it.

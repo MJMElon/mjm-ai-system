@@ -73,7 +73,12 @@ async function boot(browser, db) {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
-  page.on('dialog', (d) => { errs.push('ALERT: ' + d.message()); d.dismiss(); });
+  page.on('dialog', (d) => {
+    if (d.type() === 'confirm') { d.accept(); return; }
+    if (d.type() === 'prompt') errs.push('PROMPT: ' + d.message());
+    else errs.push('ALERT: ' + d.message());
+    d.dismiss();
+  });
   await page.addInitScript((seed) => {
     window.__DB = seed;
     window.__PDFS = [];
@@ -99,18 +104,40 @@ async function boot(browser, db) {
       save(name) { this.saved = name; }
     } };
     function makeQuery(table) {
-      const st = { eqs: [], single: false };
-      const rows = () => {
-        let out = (window.__DB[table] || []).slice();
-        st.eqs.forEach(([c, v]) => { out = out.filter((r) => String(r[c]) === String(v)); });
-        return out;
+      const st = { eqs: [], single: false, op: 'select' };
+      const tbl = () => (window.__DB[table] || (window.__DB[table] = []));
+      const match = (r) => st.eqs.every(([c, v]) => String(r[c]) === String(v));
+      const rows = () => tbl().filter(match);
+      /* Writes land, the way the database would take them: an upsert on
+         (month, plot) replaces, a delete removes what its eq names. A stub
+         that took a write and kept nothing would pass a button that saves
+         nothing. */
+      const run = () => {
+        // A table the database has not got yet answers as PostgREST does.
+        if ((window.__DB.__MISSING || []).includes(table))
+          return { data: null, error: { message: 'relation "' + table + '" does not exist' } };
+        if (st.op === 'delete') {
+          window.__DB[table] = tbl().filter(r => !match(r));
+          (window.__WRITES = window.__WRITES || []).push(['delete', table, st.eqs.slice()]);
+          return { data: [], error: null };
+        }
+        const o = rows(); return st.single ? { data: o[0] || null, error: null } : { data: o, error: null };
       };
-      const run = () => { const o = rows(); return st.single ? { data: o[0] || null, error: null } : { data: o, error: null }; };
       const q = new Proxy({}, { get(_, p) {
         if (p === 'then') return (a, b) => Promise.resolve(run()).then(a, b);
         if (p === 'eq') return (c, v) => { st.eqs.push([c, v]); return q; };
         if (p === 'maybeSingle' || p === 'single') return () => { st.single = true; return Promise.resolve(run()); };
         if (p === 'range') return () => Promise.resolve(run());
+        if (p === 'delete') return () => { st.op = 'delete'; return q; };
+        if (p === 'upsert') return (row) => {
+          (window.__WRITES = window.__WRITES || []).push(['upsert', table, row]);
+          const t = tbl();
+          const i = t.findIndex(r => r.month === row.month && r.plot === row.plot);
+          const id = i >= 0 ? t[i].id : (window.__ID = (window.__ID || 100) + 1);
+          const rec = Object.assign({}, row, { id });
+          if (i >= 0) t[i] = rec; else t.push(rec);
+          return Promise.resolve({ data: [rec], error: null });
+        };
         return () => q;
       } });
       return q;
@@ -207,15 +234,84 @@ const payOf = (page, sec) => page.evaluate((s) =>
   const pdf = await page.evaluate(() => (window.__PDFS[0] || { lines: [] }).lines.join(' | '));
   check('the form carries both tables', [/CULLING INCENTIVE — SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)], [true, true]);
   check('no page errors', errs.filter(e => !/^ALERT: Nothing recorded/.test(e)), []);
+
+  console.log('— by hand: add, remove, delete');
+  const st = (page, sec) => page.evaluate((s) => cullIncentivePlots(s)
+    .map(r => [r.plot, r.counts, r.override ? r.override.action : null]), sec);
+  const pick = (rows, plot) => rows.find(r => r[0] === plot);
+  const fill = async (o) => {
+    for (const [id, v] of Object.entries(o)) await page.fill('#' + id, v);
+  };
+  check('+ Add plot is shown to somebody with Adjust Pay',
+    await page.evaluate(() => !document.getElementById('cull-inc-add').classList.contains('hidden')), true);
+
+  // A plot the ledger never transplanted, added through the real dialog.
+  await page.click('#cull-inc-add');
+  await fill({ 'ca-plot': 'b40', 'ca-saringan': D(1), 'ca-transplant': D(12), 'ca-remark': 'PALMS never keyed' });
+  await page.selectOption('#ca-nursery', 'BNN').catch(() => page.evaluate(() => { document.getElementById('ca-nursery').value = 'BNN'; }));
+  await page.click('#ca-save');
+  await page.waitForFunction(() => !document.getElementById('cull-add-modal').classList.contains('open'));
+  check('a plot added by hand is counted, written once with its reason',
+    [pick(await st(page, 'BNN'), 'B40'),
+     await page.evaluate(() => window.__WRITES.filter(w => w[0] === 'upsert').map(w => [w[2].plot, w[2].action, w[2].remark]))],
+    [['B40', true, 'add'], [['B40', 'add', 'PALMS never keyed']]]);
+  check('…and it pays: Lalu Aenal now four plots, Rousell five across all',
+    [(await payOf(page, 'BNN'))[2], (await payOf(page, ''))[0]],
+    [['Lalu Aenal Mashuri', 200], ['Rousell Wayne', 100]]);
+
+  // A plot PALMS cannot time, counted by hand off its own row.
+  await page.evaluate(() => openCullAdd('B4'));
+  check('Count it opens on the plot and does not let it be retyped',
+    await page.evaluate(() => [document.getElementById('ca-plot').value, document.getElementById('ca-plot').readOnly]), ['B4', true]);
+  await page.click('#ca-save');   // no reason
+  check('a change with no reason is refused', errs.some(e => /Say why/.test(e)), true);
+  await fill({ 'ca-remark': 'Transplanting finished 10th, FC forgot to close' });
+  await page.click('#ca-save');
+  await page.waitForFunction(() => !document.getElementById('cull-add-modal').classList.contains('open'));
+  check('B4 now counts', pick(await st(page, 'BNN'), 'B4'), ['B4', true, 'add']);
+
+  // A qualifying plot taken out.
+  await page.evaluate(() => cullRemovePlot('B1'));
+  check('Remove asks in the dialog, with no date boxes', await page.evaluate(() =>
+    [document.getElementById('cull-add-modal').classList.contains('open'),
+     document.getElementById('ca-add-only').classList.contains('hidden'),
+     document.getElementById('ca-save').textContent]), [true, true, 'Remove']);
+  await fill({ 'ca-remark': 'Re-culled, does not count' });
+  await page.click('#ca-save');
+  await page.waitForFunction(() => !document.getElementById('cull-add-modal').classList.contains('open'));
+  check('B1 is listed and not paid', pick(await st(page, 'BNN'), 'B1'), ['B1', false, 'remove']);
+  if (process.env.SHOT2) await page.locator('#cull-inc-wrap').screenshot({ path: process.env.SHOT2 });
+  check('BNN pays B3, B4, B7, B40', (await payOf(page, 'BNN'))[2], ['Lalu Aenal Mashuri', 200]);
+  const screen2 = await page.evaluate(() => (document.getElementById('cull-inc-plots').textContent || '').replace(/\s+/g, ' '));
+  check('the row says who changed it and why',
+    [/Taken out by hand ?Re-culled, does not count ?elon\.mjm/.test(screen2), /Added by hand ?PALMS never keyed/.test(screen2)], [true, true]);
+
+  // Put back, then delete the hand-added plot.
+  const idOf = (plot) => page.evaluate((p) => cullOverrides.find(o => o.plot === p).id, plot);
+  await page.evaluate((id) => cullDeleteOverride(id), await idOf('B1'));
+  await page.waitForFunction(() => !cullOverrides.some(o => o.plot === 'B1'));
+  check('Put back returns B1 to what PALMS says', pick(await st(page, 'BNN'), 'B1'), ['B1', true, null]);
+  await page.evaluate((id) => cullDeleteOverride(id), await idOf('B40'));
+  await page.waitForFunction(() => !cullOverrides.some(o => o.plot === 'B40'));
+  check('Delete takes the hand-added plot off entirely', pick(await st(page, 'BNN'), 'B40'), undefined);
+  check('the Monthly Payroll follows: B4 by hand, B1 back — Lalu 4 plots',
+    await page.evaluate(() => { document.getElementById('monthly-section').value = '';
+      return monthlyRows().filter(r => r.name === 'Lalu Aenal Mashuri').map(r => r.transpl); }), [200]);
+  check('only the by-hand records were ever deleted, and nothing else written',
+    await page.evaluate(() => [...new Set(window.__WRITES.map(w => w[1]))]), ['mjmnpayroll_cull_incentive_overrides']);
+  check('no prompt was ever raised', errs.filter(e => /^PROMPT/.test(e)), []);
   await page.close();
 
   console.log('— the faults that must be said');
   const r2 = await boot(browser, { mjmnpayroll_workers: REGISTER.concat([{ id: 6, full_name: 'Florence Lee', section: 'BNN', active: true }]).filter(w => w.id !== 1),
-                                   shared_inventory_logs: LEDGER, fcportal_palms_plot_logs: [] });
+                                   shared_inventory_logs: LEDGER, fcportal_palms_plot_logs: [],
+                                   __MISSING: ['mjmnpayroll_cull_incentive_overrides'] });
   const note2 = await r2.page.evaluate(() => document.getElementById('cull-inc-note').textContent);
   check('an empty PALMS says to run the read policy', /RUN_ME_payroll_reads_palms\.sql/.test(note2), true);
   check('nobody is paid when PALMS times nothing', await payOf(r2.page, 'BNN'),
     [['Rousell Wayne', 0], ['Florence', 0], ['Lalu Aenal Mashuri', 0]]);
+  check('without the table, the page says which file to run',
+    /RUN_ME_cull_incentive_overrides\.sql/.test(note2), true);
   check('a missing name and a name on two people are both named',
     [/Rousell Wayne is not on the worker register/.test(note2), /Florence matches more than one worker/.test(note2)], [true, true]);
   await r2.page.close();
