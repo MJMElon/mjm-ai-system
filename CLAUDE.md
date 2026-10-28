@@ -4690,3 +4690,29 @@ untouched. On the previous code it names all 51 sites.
 Rules that live in both — the general-worker filter, the maintenance function
 keys, nursery-name matching — carry a comment in each copy saying so. Change
 one, change the other.
+
+## The culling incentive is timed by PALMS and asked by the ledger
+
+The Transplanting sheet pays it: a plot whose LATEST Saringan Anak Bibit →
+Transplanting run in PALMS took **15 days or fewer** earns **RM 20 a plot** to
+Rousell Wayne and to Florence, whatever the nursery, and **RM 50 a plot** to
+that nursery's own Field Conductor (Lalu Aenal BNN, Akbar UNN 1, Azhar UNN 2).
+`CULL_INCENTIVE` in `npayroll/npayroll_script.js` is the whole of the rule.
+
+- **Which plots** is the ledger's answer — `Transplanted` rows dated in the
+  month, the Transplanting Report's date rule. **How long** is PALMS's, timed
+  exactly as the Motion Study times its incentive runs (`cyclesOf`,
+  `diffDays`, `TARGET_DAYS`). Two pages timing one run two ways is how a plot
+  is fast on one and slow on the other.
+- **The latest run whose Saringan began by the end of the month**, so a month
+  already paid keeps its answer when the plot starts its next intake. A split
+  plot is timed as one: its areas' earliest Saringan to their last
+  Transplanting.
+- A plot with no complete run is SHOWN and not paid, saying why.
+- It goes into the Monthly Payroll's Transplanting column, under each
+  person's register section.
+- **A payroll clerk cannot read PALMS without
+  `shared/RUN_ME_payroll_reads_palms.sql`** — the read comes back empty rather
+  than refused, and the sheet says so instead of quietly paying nobody.
+
+`tests/culling_incentive.cjs` holds it.
