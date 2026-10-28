@@ -2068,6 +2068,13 @@ function _cullLogDate(l) {
   return l && l.created_at ? String(l.created_at).slice(0, 10) : '';
 }
 
+/* A -R (replant) plot. PALMS's own rule; the fallback is the same test, for
+   a page whose copy of shared_palms.js predates it. */
+function _cullIsReplant(plot) {
+  if (window.MJMPalms && MJMPalms.isReplantPlot) return MJMPalms.isReplantPlot(plot);
+  return /-R\d*$/i.test(String(plot == null ? '' : plot).split('#')[0].trim());
+}
+
 async function loadCullPalms() {
   if (!window.MJMPalms) { cullPalmsLogs = null; return; }
   try {
@@ -2125,7 +2132,12 @@ function cullIncentivePlots(secFilter) {
   const rows = Object.values(cullTransplanted)
     .map(p => ({ plot: p.plot, dates: [...new Set(p.dates.filter(d => d.slice(0, 7) === ym))].sort(),
                  section: _tpSection(window.MJMPalms ? MJMPalms.nurseryOfPlot(p.plot) : '') }))
-    .filter(p => p.dates.length)
+    /* No -R plot. A replant plot has no Saringan-to-Transplanting run of its
+       own to time, and the office said so of this incentive in as many words:
+       "culling incentive也不会有r plot". The rule is PALMS's own,
+       MJMPalms.isReplantPlot, so the incentive and the PALMS pages cannot
+       disagree about which plots are -R. */
+    .filter(p => p.dates.length && !_cullIsReplant(p.plot))
     .map(p => Object.assign(p, cullRunOf(p.plot, monthEnd)));
 
   /* By hand, last, so it has the final word on its plot. A record for a plot
@@ -2133,6 +2145,7 @@ function cullIncentivePlots(secFilter) {
   cullOverrides.filter(o => o.month === ym).forEach(o => {
     const k = _tpKey(o.plot);
     let r = rows.find(x => _tpKey(x.plot) === k);
+    if (_cullIsReplant(o.plot)) return;    // a -R plot is never on it, by hand or not
     if (!r) {
       if (o.action !== 'add') return;      // nothing to take out
       const start = o.saringan_date || null, end = o.transplant_date || null;
@@ -2232,6 +2245,7 @@ async function saveCullAdd() {
   const plot = String($('ca-plot').value || '').trim().toUpperCase();
   const remark = String($('ca-remark').value || '').trim();
   if (!plot) { alert('Which plot?'); return; }
+  if (_cullIsReplant(plot)) { alert(plot + ' is a -R plot, and a -R plot is not on the culling incentive.'); return; }
   if (!remark) { alert('Say why — a plot changed by hand is one somebody will ask about.'); return; }
   const remove = _cullMode === 'remove';
   const s1 = remove ? null : ($('ca-saringan').value || null);

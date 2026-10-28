@@ -46,7 +46,8 @@ const LEDGER = [
   tp('B7', null, { remark: `CullDate: x Date: ${D(11)}`, created_at: `${PREV}-02T00:00:00Z` }), // dated by remark
   tp('B8', D(9), { transaction_type: 'Transplanted_Premium' }),  // a tray, not a plot
   tp('U9', `${PREV}-20`),                            // last month — not this one
-  tp('N7', D(8))                                     // UNN 2, 7 days — qualifies
+  tp('N7', D(8)),                                    // UNN 2, 7 days — qualifies
+  tp('B3-R', D(16))                                  // a -R plot — never on the incentive
 ];
 const PALMS = [
   log('B1', 1, D(1), D(3)), log('B1', 9, D(12), D(14)),
@@ -59,6 +60,7 @@ const PALMS = [
   log('B6', 1, D(1), D(2)), log('B6', 9, D(19), D(21)),
   log('B7', 1, D(1), D(2)), log('B7', 9, D(9), D(11)),
   log('N7', 1, D(1), D(2)), log('N7', 9, D(6), D(8)),
+  log('B3-R', 1, D(5), D(6)), log('B3-R', 9, D(14), D(16)),
   log('U9', 1, `${PREV}-10`, `${PREV}-11`), log('U9', 9, `${PREV}-18`, `${PREV}-20`)
 ];
 const REGISTER = [
@@ -236,6 +238,13 @@ const payOf = (page, sec) => page.evaluate((s) =>
   check('no page errors', errs.filter(e => !/^ALERT: Nothing recorded/.test(e)), []);
 
   console.log('— by hand: add, remove, delete');
+  await page.evaluate(() => openCullAdd());
+  await page.fill('#ca-plot', 'b3-r'); await page.fill('#ca-remark', 'try');
+  await page.click('#ca-save');
+  check('a -R plot cannot be added by hand either',
+    [errs.some(e => /B3-R is a -R plot/.test(e)),
+     await page.evaluate(() => (window.__WRITES || []).some(w => /-R/i.test((w[2] || {}).plot || '')))], [true, false]);
+  await page.evaluate(() => closeModal('cull-add-modal'));
   const st = (page, sec) => page.evaluate((s) => cullIncentivePlots(s)
     .map(r => [r.plot, r.counts, r.override ? r.override.action : null]), sec);
   const pick = (rows, plot) => rows.find(r => r[0] === plot);

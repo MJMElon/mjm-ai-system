@@ -77,9 +77,14 @@ PALMS_PAGES.forEach(f => {
   check(f + ': every read of the log goes through withoutReplant',
     all.length > 0 && all.every(l => /withoutReplant\(await MJMPalms\.loadLogs\(/.test(l)), true);
 });
-['nursery_ops/nursery_ops_plot_life.html', 'npayroll/npayroll_script.js'].forEach(f => {
-  check(f + ': not a PALMS page, keeps its -R plots', /withoutReplant/.test(read(f)), false);
-});
+check('Life of Plot is not a PALMS page and keeps its -R plots',
+  /withoutReplant|isReplantPlot/.test(read('nursery_ops/nursery_ops_plot_life.html')), false);
+/* The culling incentive leaves them out too -- "culling incentive也不会有r
+   plot" -- and asks PALMS's own rule rather than keeping a second one. */
+const PAY = read('npayroll/npayroll_script.js');
+check('the culling incentive leaves -R plots out, by PALMS\'s own rule',
+  [/\.filter\(p => p\.dates\.length && !_cullIsReplant\(p\.plot\)\)/.test(PAY),
+   /return MJMPalms\.isReplantPlot\(plot\)/.test(PAY)], [true, true]);
 
 // ── the board map is opt-in, so Life of Plot keeps its -R plots ──────────
 const MAP = fs.readFileSync(path.join(ROOT, 'shared', 'shared_plot_map.js'), 'utf8');
