@@ -1981,6 +1981,17 @@ number a plot log uses that the list has not got: **11 entries on 7 plots**.
 no stage has the number 12. **Delete a stage from the list only after its
 entries have been moved**, or they are left on a number nothing answers to.
 
+Two things keep it from coming back, one per repository:
+
+- **The phones refresh the stage list EVERY time the docks open**, not only
+  when nothing is cached (`FloatingDock.jsx`, `PalmsDock.jsx` in the FC
+  Portal). Asked only with no cache, a phone that had ever opened PALMS kept
+  its old list for good — which is how Up-keep went on being offered.
+- **`shared/RUN_ME_stage_12_stays_membersih.sql` files a 12 as Membersih on
+  the way in**, on the plot log and the history, whatever app or version
+  sent it — a phone with no signal can hold an Up-keep day in its outbox for
+  days. It steps aside by itself the day a real stage 12 exists.
+
 `tests/one_stage_logged_twice_is_not_two.cjs` drives the shipped
 `shared_palms.js` and holds both pages to it — 26 of its checks fail on the
 previous code.
