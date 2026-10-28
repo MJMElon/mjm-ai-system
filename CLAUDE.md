@@ -4738,9 +4738,13 @@ onto — and PALMS has nothing to say about one. The office: *"plot-R
 that one rather than keeping its own). Change one, change the other. B4-R and
 B4-R2 both go; a split area is judged by its plot.
 
-- **The office drops them where the PALMS log is read** (`logsFromRows`), so
-  the board, the motion study and the stage pages all lose them at once
-  rather than whichever ones somebody remembered.
+- **ONLY THE PALMS PAGES, never the shared log.** The first version dropped
+  them in `logsFromRows`, which every reader of the log shares — so Life of
+  Plot and the payroll culling incentive lost their -R plots too, and the
+  office said it straight away: *"不要乱改 只有关系到palms而已的不用显示"*.
+  The log stays whole; the Plot Status Map and the Motion Study each read it
+  through `MJMPalms.withoutReplant(...)`, and the test asserts Life of Plot
+  and the payroll do NOT.
 - **The board's map is OPT-IN** (`skipReplant` on `MJMPlotMap.load`), because
   Life of Plot shares that map and a -R plot is real ground with maintenance
   on it there.

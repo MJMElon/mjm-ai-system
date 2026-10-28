@@ -53,15 +53,33 @@ const WANT  = [false, true, true, true, true, false, false, true, false, false, 
 check('office: which names are -R', NAMES.map(P.isReplantPlot), WANT);
 check('FC Portal: the same answer for every name', NAMES.map(ctx.R), WANT);
 
-// ── the office PALMS log drops them, so every PALMS page does ────────────
-const logs = P.logsFromRows([
+// ── only the PALMS pages leave them out; the shared log keeps them ─────
+// The office, after the first version dropped them in the shared log: "不要乱改
+// 只有关系到palms而已的不用显示". Life of Plot and the payroll culling incentive
+// read the same log and must go on seeing their -R plots.
+const raw = P.logsFromRows([
   { plot_name: 'B4', act_n: 1, start_date: '2026-10-01' },
   { plot_name: 'B4-R', act_n: 1, start_date: '2026-10-01' },
   { plot_name: 'B4-R#A', act_n: 1, start_date: '2026-10-01' },
   { plot_name: 'U10', act_n: 9, start_date: '2026-10-02' }
 ]);
-check('the PALMS log carries no -R plot', Object.keys(logs).sort(), ['B4', 'U10']);
-check('…so neither the board nor the motion study can list one', P.unitsOf(logs, 'all').sort(), ['B4', 'U10']);
+check('the shared log keeps -R plots, for Life of Plot and the payroll',
+  Object.keys(raw).sort(), ['B4', 'B4-R', 'B4-R#A', 'U10']);
+const logs = P.withoutReplant(raw);
+check('withoutReplant leaves them out', Object.keys(logs).sort(), ['B4', 'U10']);
+check('…without changing the log it was given', Object.keys(raw).length, 4);
+check('…so a PALMS page built off it lists none', P.unitsOf(logs, 'all').sort(), ['B4', 'U10']);
+const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+const PALMS_PAGES = ['nursery_ops/nursery_ops_palms_board.html', 'nursery_ops/nursery_ops_palms_motion.html'];
+PALMS_PAGES.forEach(f => {
+  const src = read(f);
+  const all = (src.match(/LOGS = [^;]*loadLogs\(/g) || []);
+  check(f + ': every read of the log goes through withoutReplant',
+    all.length > 0 && all.every(l => /withoutReplant\(await MJMPalms\.loadLogs\(/.test(l)), true);
+});
+['nursery_ops/nursery_ops_plot_life.html', 'npayroll/npayroll_script.js'].forEach(f => {
+  check(f + ': not a PALMS page, keeps its -R plots', /withoutReplant/.test(read(f)), false);
+});
 
 // ── the board map is opt-in, so Life of Plot keeps its -R plots ──────────
 const MAP = fs.readFileSync(path.join(ROOT, 'shared', 'shared_plot_map.js'), 'utf8');

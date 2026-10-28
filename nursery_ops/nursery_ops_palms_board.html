@@ -15,7 +15,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js?v=2"></script>
+<script src="../shared/shared_palms.js?v=3"></script>
 <script src="../shared/shared_plot_map.js?v=2"></script>
 <script src="../shared/shared_plot_draw.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -985,7 +985,7 @@ $('cf-ok').addEventListener('click', async () => {
 
     /* Re-read rather than patch: last update, the new due date and the days
        left all come off the log, and the server is the record. */
-    LOGS = await MJMPalms.loadLogs(_supabase);
+    LOGS = MJMPalms.withoutReplant(await MJMPalms.loadLogs(_supabase));   // no -R plot on PALMS
     await MJMPalms.loadSaves(_supabase);
     btn.disabled = false;
     closeCf(false);
@@ -1080,7 +1080,7 @@ function render() {
        has to be in place by the time the log is parsed or the due dates are
        computed against the built-in eleven. */
     await MJMPalms.loadStages(_supabase);
-    LOGS = await MJMPalms.loadLogs(_supabase);
+    LOGS = MJMPalms.withoutReplant(await MJMPalms.loadLogs(_supabase));   // no -R plot on PALMS
     /* The daily reports, which is where "last update" comes from: a Field
        Conductor's Save records every plot in the nursery, changed or not, so
        an unchanged plot is still a plot somebody looked at today. Its own
