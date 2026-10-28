@@ -4776,11 +4776,9 @@ office moved it: *"把culling incentive全部搬到这里 under worker activity�
 - **Worker Activity → Culling Incentive** (`renderCullIncentivePayroll` in
   `nursery_ops/plot_maintenance_script.js`) shows the plot, the two dates,
   the duration and who earns it — **no RM**, on purpose — and carries
-  **Check and Remove, and nothing else**: *"count it 不用 只需要check /
-  removed"*. A plot PALMS does not qualify is listed under the ones that do,
-  saying why, with no button that pays it anyway. A by-hand `add` written
-  before that is still honoured and offers Undo, so nothing agreed moves by
-  itself.
+  **Check, Remove and Add by hand**. A plot PALMS does not qualify is listed
+  under the ones that do, saying why, with **no button that pays it anyway**:
+  *"count it 不用 只需要check / removed"*, and Count it stays off.
 - **The payroll Transplanting sheet pays the CHECKED plots and nothing
   else**, links back (`?view=cull_incentive` opens the tab), and names the
   plots that qualify and are still waiting to be Checked. It writes nothing.
@@ -4809,10 +4807,27 @@ What the rule asks, and must keep asking:
   unchecked — changing what was agreed starts with taking the agreement back.
 - **By hand is plot by plot**, never person by person, so one decision moves
   all five people's money together. `mjmnpayroll_cull_incentive_overrides`
-  holds ONE record per plot per month: `remove` leaves one out, and `add`
-  (no longer offered) counted one whatever PALMS said. Every one carries a reason, who and when,
-  shown on the row. Gated on admin of Work Maintenance or Adjust Pay on
-  Transplanting, asked again at the write. A dialog, never a `prompt`.
+  holds ONE record per plot per month: `remove` leaves one out and `add`
+  counts one. Every one carries a reason, who and when, shown on the row.
+  Gated on admin of Work Maintenance or Adjust Pay on Transplanting, asked
+  again at the write. A dialog, never a `prompt`.
+- **REMOVE IS ON EVERY ROW, earning it or not** — the office asked for the
+  second half the day after the first: *"底下 B3 B11 我可以remove"*. On a
+  plot that earns nothing it moves no money at all; what it moves is the
+  LIST. A row reading *"Taken out by hand"* is one somebody has been through,
+  where *"Over 15 days"* is one they have still to look at, and a removed row
+  SINKS to the foot of that list rather than leaving it — nothing here
+  vanishes with nothing saying where it went.
+- **ADD BY HAND SUPPLIES THE RUN; IT DOES NOT WAIVE THE RULE**, and that is
+  the whole of what keeps it from being the Count it button the office took
+  off a day earlier. PALMS is where a run is timed and a plot can be missing
+  one for reasons that are nothing to do with the ground — a Saringan never
+  opened, a Transplanting never closed, a phone pushing an entry back. So the
+  dialog asks for the **two days**, times them with `MJMPalms.diffDays` (never
+  a second day count), shows the duration as it is keyed, and **refuses a run
+  over `TARGET_DAYS`, naming the figure**. A -R plot is refused outright. The
+  row it makes is an ordinary one: marked *Added by hand*, and **paid only
+  once somebody Checks it**, like every other plot.
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 
