@@ -9393,6 +9393,7 @@
                     <div>
                         <label class="label-style lg:hidden">AI Seed Count</label>
                         <input type="file" accept="image/*" capture="environment" class="hidden t8-photo-input" id="${rowId}-photo" onchange="handleBagPhoto(this,'${rowId}')">
+                        <input type="file" accept="image/*" class="hidden t8-upload-input" id="${rowId}-upload" onchange="handleBagPhoto(this,'${rowId}')">
                         <button type="button" class="t8-photo-btn w-full h-[45px] rounded-lg border border-[#cdd9bd] bg-white text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8f5da] shadow-sm flex items-center justify-center gap-1" onclick="onBagCountBtn('${rowId}')">📷 Count Seeds</button>
                         <div class="t8-verify-result hidden mt-1 text-[10px] font-black"></div>
                         <img class="t8-photo-thumb hidden mt-2 rounded-lg border border-[#e8dcc8] cursor-pointer w-full" style="max-height:160px;object-fit:contain;background:#fdfaf4" onclick="viewBagPhoto('${rowId}')" title="Tap to view full photo — red dots show each seed the AI counted" alt="bag seed photo with red dot per counted seed">
@@ -9826,8 +9827,22 @@
                again. Nothing is re-shot and nothing is re-laid.
              · Take a new photo — what the button has always done.
 
-           With no photo yet there is nothing to choose between, so the button
-           goes straight to the camera as it always did.
+           AND TAKING A PHOTO IS NOT THE SAME AS UPLOADING ONE. The one file
+           box carried capture="environment", which a phone reads as camera
+           only, so a photo already in the gallery could not be counted; and
+           a laptop ignores capture altogether, so on the office screen the
+           button could only ever upload and never take one. So the choice is
+           always asked now, photo or no photo:
+
+             · Take photo — on a phone, its own camera through the capture
+               box (sharper and focused, which a seed count needs); anywhere
+               else, a live camera in a dialog (_openBagCamera), because a
+               laptop has no other way to reach its webcam from a page.
+             · Upload photo — a second file box with NO capture, so the
+               gallery or a file is offered.
+
+           Both end in the same handleBagPhoto, so a photo counts the same
+           whichever door it came in by.
 
            IT COUNTS THE CLEAN PICTURE, NEVER THE DOTTED ONE. What is shown —
            and what is uploaded as PhotoUrl — carries a red dot on every seed
@@ -9835,10 +9850,108 @@
            own marks. The untouched frame is kept beside it (`sourceBase64`,
            uploaded as SrcUrl) and that is what a recount is given. */
         function onBagCountBtn(rowId) {
-            const st = seedAuditPhotoState[rowId] || {};
-            const src = st.sourceBase64 || st.sourceUrl;
-            if (!src) { document.getElementById(`${rowId}-photo`).click(); return; }
             _openRecountChooser(rowId);
+        }
+
+        /* A phone is told apart by its pointer, not its width: a coarse
+           pointer has a camera app the capture box opens, and a fine one is
+           a laptop whose webcam only getUserMedia can reach. */
+        function _bagUseLiveCamera() {
+            const md = navigator.mediaDevices;
+            if (!md || typeof md.getUserMedia !== 'function') return false;
+            try { if (window.matchMedia('(pointer: coarse)').matches) return false; } catch (e) {}
+            return true;
+        }
+
+        function bagTakePhoto(rowId) {
+            if (_bagUseLiveCamera()) { _openBagCamera(rowId); return; }
+            document.getElementById(`${rowId}-photo`).click();
+        }
+
+        function bagUploadPhoto(rowId) {
+            document.getElementById(`${rowId}-upload`).click();
+        }
+
+        /* The live camera. Every exit stops the stream, because a webcam left
+           running behind a closed dialog keeps its light on and the next
+           getUserMedia can be refused while it is held. If the camera cannot
+           be had at all — no camera, permission refused — it says so and
+           falls back to the capture box, which on a laptop is a file picker:
+           a photo can still be counted, just not taken here. */
+        let _bagCamEl = null, _bagCamStream = null, _bagCamRowId = null;
+        function _stopBagCamera() {
+            if (_bagCamStream) { _bagCamStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); }
+            _bagCamStream = null;
+            if (_bagCamEl) {
+                const v = _bagCamEl.querySelector('#bag-cam-video');
+                if (v) v.srcObject = null;
+                _bagCamEl.style.display = 'none';
+            }
+            _bagCamRowId = null;
+        }
+        async function _openBagCamera(rowId) {
+            if (!_bagCamEl) {
+                const el = document.createElement('div');
+                el.id = 'bag-camera';
+                el.style.cssText = 'position:fixed;inset:0;background:rgba(15,12,8,.75);backdrop-filter:blur(4px);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;';
+                el.innerHTML = ''
+                  + '<div style="background:#fdfaf4;border:1.5px solid #e8dcc8;border-radius:18px;padding:16px;max-width:720px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35)">'
+                  + '  <div style="font-size:13px;font-weight:900;color:#3d2610;letter-spacing:.04em">Take a photo of the seeds</div>'
+                  + '  <div id="bag-cam-sub" style="font-size:11px;font-weight:700;color:#8a7a68;margin-top:4px">Lay the seeds out flat and fill the frame with the tray.</div>'
+                  + '  <video id="bag-cam-video" autoplay playsinline muted style="margin-top:12px;width:100%;max-height:60vh;border-radius:12px;background:#000;object-fit:contain"></video>'
+                  + '  <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:12px">'
+                  + '    <button type="button" id="bag-cam-cancel" style="padding:12px;border-radius:12px;border:1.5px solid #e8dcc8;background:#fff;color:#8a7a68;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">Cancel</button>'
+                  + '    <button type="button" id="bag-cam-snap" disabled style="padding:12px;border-radius:12px;border:1.5px solid #4a7a2e;background:#4a7a2e;color:#fff;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">📸 Capture &amp; count</button>'
+                  + '  </div>'
+                  + '</div>';
+                document.body.appendChild(el);
+                el.addEventListener('click', e => { if (e.target === el) _stopBagCamera(); });
+                el.querySelector('#bag-cam-cancel').addEventListener('click', _stopBagCamera);
+                el.querySelector('#bag-cam-snap').addEventListener('click', _snapBagCamera);
+                document.addEventListener('keydown', e => {
+                    if (e.key === 'Escape' && el.style.display === 'flex') _stopBagCamera();
+                });
+                _bagCamEl = el;
+            }
+            _stopBagCamera();
+            _bagCamRowId = rowId;
+            const snap = _bagCamEl.querySelector('#bag-cam-snap');
+            snap.disabled = true; snap.style.opacity = '.5'; snap.style.cursor = 'not-allowed';
+            _bagCamEl.style.display = 'flex';
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false
+                });
+                if (_bagCamRowId !== rowId) { stream.getTracks().forEach(t => t.stop()); return; }
+                _bagCamStream = stream;
+                const v = _bagCamEl.querySelector('#bag-cam-video');
+                v.srcObject = stream;
+                try { await v.play(); } catch (e) {}
+                snap.disabled = false; snap.style.opacity = ''; snap.style.cursor = 'pointer';
+            } catch (e) {
+                console.warn('Camera unavailable:', e);
+                _stopBagCamera();
+                const why = (e && e.name === 'NotAllowedError') ? 'Camera permission was refused.'
+                          : (e && e.name === 'NotFoundError')   ? 'No camera was found on this device.'
+                          : 'The camera could not be opened.';
+                showToast(why + ' Choose a photo to upload instead.', 'error');
+                document.getElementById(`${rowId}-upload`).click();
+            }
+        }
+        function _snapBagCamera() {
+            const rowId = _bagCamRowId;
+            const v = _bagCamEl && _bagCamEl.querySelector('#bag-cam-video');
+            if (!rowId || !v || !v.videoWidth) return;
+            const c = document.createElement('canvas');
+            c.width = v.videoWidth; c.height = v.videoHeight;
+            c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+            _stopBagCamera();
+            c.toBlob(blob => {
+                if (!blob) { showToast('The photo could not be taken. Try again.', 'error'); return; }
+                const file = new File([blob], `bag-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                handleBagPhoto({ files: [file], value: '' }, rowId);
+            }, 'image/jpeg', 0.92);
         }
 
         let _recountChooserEl = null, _recountRowId = null;
@@ -9850,12 +9963,17 @@
                 el.style.cssText = 'position:fixed;inset:0;background:rgba(15,12,8,.55);backdrop-filter:blur(4px);z-index:9998;display:none;align-items:center;justify-content:center;padding:24px;';
                 el.innerHTML = ''
                   + '<div style="background:#fdfaf4;border:1.5px solid #e8dcc8;border-radius:18px;padding:22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">'
-                  + '  <div style="font-size:13px;font-weight:900;color:#3d2610;letter-spacing:.04em">Recount this bag</div>'
+                  + '  <div id="recount-title" style="font-size:13px;font-weight:900;color:#3d2610;letter-spacing:.04em">Recount this bag</div>'
                   + '  <div id="recount-sub" style="font-size:11px;font-weight:700;color:#8a7a68;margin-top:4px"></div>'
+                  + '  <div id="recount-same-wrap">'
                   + '  <button type="button" id="recount-same" style="margin-top:16px;width:100%;padding:12px;border-radius:12px;border:1.5px solid #4a7a2e;background:#4a7a2e;color:#fff;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">🔁 Count this photo again</button>'
                   + '  <div style="font-size:10px;font-weight:700;color:#8a7a68;margin-top:6px;line-height:1.5">The same picture, read by the AI again. Nothing to re-shoot.</div>'
-                  + '  <button type="button" id="recount-new" style="margin-top:14px;width:100%;padding:12px;border-radius:12px;border:1.5px solid #cdd9bd;background:#fff;color:#4a7a2e;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">📷 Take a new photo</button>'
-                  + '  <div style="font-size:10px;font-weight:700;color:#8a7a68;margin-top:6px;line-height:1.5">Replaces the picture on this row.</div>'
+                  + '  </div>'
+                  + '  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">'
+                  + '    <button type="button" id="recount-new" style="width:100%;padding:12px;border-radius:12px;border:1.5px solid #cdd9bd;background:#fff;color:#4a7a2e;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">📷 Take photo</button>'
+                  + '    <button type="button" id="recount-upload" style="width:100%;padding:12px;border-radius:12px;border:1.5px solid #cdd9bd;background:#fff;color:#4a7a2e;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">🖼 Upload photo</button>'
+                  + '  </div>'
+                  + '  <div id="recount-new-note" style="font-size:10px;font-weight:700;color:#8a7a68;margin-top:6px;line-height:1.5"></div>'
                   + '  <button type="button" id="recount-cancel" style="margin-top:16px;width:100%;padding:10px;border-radius:12px;border:none;background:transparent;color:#8a7a68;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;cursor:pointer">Cancel</button>'
                   + '</div>';
                 document.body.appendChild(el);
@@ -9867,7 +9985,11 @@
                 el.querySelector('#recount-cancel').addEventListener('click', close);
                 el.querySelector('#recount-new').addEventListener('click', () => {
                     const id = _recountRowId; close();
-                    if (id) document.getElementById(`${id}-photo`).click();
+                    if (id) bagTakePhoto(id);
+                });
+                el.querySelector('#recount-upload').addEventListener('click', () => {
+                    const id = _recountRowId; close();
+                    if (id) bagUploadPhoto(id);
                 });
                 el.querySelector('#recount-same').addEventListener('click', () => {
                     const id = _recountRowId; close();
@@ -9879,10 +10001,18 @@
                 _recountChooserEl = el;
             }
             const st = seedAuditPhotoState[rowId] || {};
+            const hasPhoto = !!(st.sourceBase64 || st.sourceUrl);
             const sub = _recountChooserEl.querySelector('#recount-sub');
             const bag = (document.getElementById(rowId)?.querySelector('.t8-bag-no')?.value || '').trim();
+            _recountChooserEl.querySelector('#recount-title').textContent = hasPhoto ? 'Recount this bag' : 'Count seeds';
+            _recountChooserEl.querySelector('#recount-same-wrap').style.display = hasPhoto ? '' : 'none';
+            _recountChooserEl.querySelector('#recount-new').textContent = hasPhoto ? '📷 Take a new photo' : '📷 Take photo';
+            _recountChooserEl.querySelector('#recount-new-note').textContent = hasPhoto
+                ? 'Either one replaces the picture on this row.'
+                : 'Take one now with the camera, or pick one already taken.';
             sub.textContent = (bag ? bag + ' · ' : '')
-                + (st.aiCount != null ? `the AI counted ${st.aiCount.toLocaleString()} last time` : 'already counted');
+                + (st.aiCount != null ? `the AI counted ${st.aiCount.toLocaleString()} last time`
+                   : hasPhoto ? 'already counted' : 'lay the seeds of one bag out on the tray');
             _recountChooserEl.style.display = 'flex';
         }
 
