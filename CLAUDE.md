@@ -1921,10 +1921,11 @@ fall out:
 
 - **A plot on ONE stage keeps its dropdown.** `many` taken off the rows cost
   it the selected stage and the colour tint as well, over a duplicate.
-- **The duplicate is out of the COUNT, not out of SIGHT.** The plot carrying
-  one is the plot somebody has to tidy, so the row gets an amber `×2 open`
-  mark saying it is one stage logged twice and that picking a stage closes
-  every one of them. Hiding it would have made the fault permanent.
+- **No mark says a stage is open twice.** It had an amber `×2 open` beside
+  the cell, on the argument that the plot carrying a duplicate is the one
+  somebody has to tidy; the office asked for it gone — *"2 open 我也不要看到"*.
+  The cell names each stage once and says nothing more, and picking a stage
+  still closes every open row underneath, which is the tidying.
 - **The confirm panel counts rows and names stages.** Every open row really
   is closed, so the count has to carry the duplicates — and the name must
   not, because "Membesar + Membesar" describes nothing.
