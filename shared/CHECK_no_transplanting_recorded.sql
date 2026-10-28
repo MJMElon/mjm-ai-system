@@ -70,12 +70,29 @@ mth AS (
          to_char(m0, 'Mon YYYY')         AS label
     FROM q
 ),
--- A plot name compared the way a person compares it: letters and digits
--- only. The ledger and Seedling Stock do not always agree on spacing.
-plots AS (
+-- A plot name compared the way a person compares it: spacing and dashes
+-- ignored, because the ledger and Seedling Stock do not always agree on
+-- them.
+stock AS (
   SELECT upper(replace(replace(replace(btrim(COALESCE(p.plot_name, '')), ' ', ''), '-', ''), '_', '')) AS pk,
-         btrim(COALESCE(p.nursery_name, '(no nursery)')) AS nursery
+         btrim(COALESCE(p.nursery_name, '(no nursery)')) AS nursery,
+         btrim(COALESCE(p.plot_name, '(no plot)'))       AS stock_plot
     FROM shared_plots p
+),
+-- ONE ROW PER KEY, NEVER ONE PER SEEDLING STOCK ROW. A plain join on the
+-- key multiplies the ledger row when Seedling Stock holds that plot twice
+-- -- which puts one arrival under two nurseries and doubles the seedlings
+-- under both, with nothing on screen saying so. Grouping first means a
+-- plot listed in two nurseries reads as "BNN + UNN 2" in ONE row, which is
+-- visible, and section 2c names it.
+plots AS (
+  SELECT s.pk,
+         string_agg(DISTINCT s.nursery, ' + ' ORDER BY s.nursery)    AS nursery,
+         string_agg(DISTINCT s.stock_plot, ' / ' ORDER BY s.stock_plot) AS stock_plot,
+         count(DISTINCT s.nursery)    AS n_nursery,
+         count(DISTINCT s.stock_plot) AS n_spelling
+    FROM stock s
+   GROUP BY s.pk
 ),
 tx AS (
   SELECT upper(replace(replace(replace(btrim(COALESCE(l.plot_name, '')), ' ', ''), '-', ''), '_', '')) AS pk,
@@ -128,6 +145,45 @@ SELECT * FROM (
 
   UNION ALL
 
+  -- 2c. A PLOT SEEDLING STOCK PLACES IN MORE THAN ONE NURSERY, OR SPELLS
+  --     MORE THAN ONE WAY. Either one puts an arrival under a nursery that
+  --     does not have that plot -- which is how BNN came to be shown a plot
+  --     it does not have -- and before this section was here, nothing on
+  --     the result said so. Asked of every plot in the list, not only the
+  --     ones that took seedlings this month, because the fault is in the
+  --     list and it will bite the next month too.
+  SELECT 2,
+         'plot listed more than once',
+         p.stock_plot,
+         p.nursery,
+         'key ' || p.pk,
+         CASE WHEN p.n_nursery > 1
+              THEN 'SEEDLING STOCK PUTS THIS PLOT IN MORE THAN ONE NURSERY -- every arrival on it is shown under both'
+              ELSE 'one nursery, spelled more than one way -- harmless here, worth tidying'
+         END
+    FROM plots p
+   WHERE p.n_nursery > 1 OR p.n_spelling > 1
+
+  UNION ALL
+
+  -- 2d. WHAT SEEDLING STOCK ACTUALLY SAYS EACH NURSERY HOLDS.
+  --     Every nursery placement above is read off this list and nowhere
+  --     else, so when the office says a nursery does not have the plot it
+  --     was shown, THIS is the row that settles it: either the list says
+  --     what they say it says and the fault is mine, or the list carries a
+  --     plot the nursery does not have and the list is what to correct.
+  --     Facility Management -> Seedling Stock is where it is edited.
+  SELECT 2,
+         'Seedling Stock says',
+         s.nursery,
+         count(DISTINCT s.stock_plot)::text || ' plot(s)',
+         left(string_agg(DISTINCT s.stock_plot, ', ' ORDER BY s.stock_plot), 300),
+         'this is the list every placement above is read off'
+    FROM stock s
+   GROUP BY s.nursery
+
+  UNION ALL
+
   -- 2b. AND THE ARRIVALS SEEDLING STOCK CANNOT PLACE.
   --     Section 2 reads the nursery off shared_plots, so a plot missing
   --     from Seedling Stock would quietly drop out of it -- and a nursery
@@ -156,7 +212,13 @@ SELECT * FROM (
   --    jobs is unrecorded, and so does this.
   SELECT 3,
          'plot owed the four jobs',
-         p.nursery || ' / ' || tx.plot,
+         p.nursery || ' / ' || tx.plot
+           -- THE LEDGER SPELLING AND SEEDLING STOCKS, where they differ.
+           -- The join ignores spacing and dashes, so B1-1 and B11 are one
+           -- key: without both names on the row, a plot placed under the
+           -- wrong nursery by a near-miss looks exactly like a right one.
+           || CASE WHEN upper(p.stock_plot) <> upper(tx.plot)
+                   THEN ' (Seedling Stock: ' || p.stock_plot || ')' ELSE '' END,
          sum(tx.qty)::text || ' seedlings',
          'arrived ' || min(tx.happened)::text,
          (SELECT count(DISTINCT r.work_type)::text
@@ -175,7 +237,7 @@ SELECT * FROM (
            WHERE r.schedule_month = mth.label
              AND upper(replace(replace(replace(btrim(COALESCE(r.plot_name, '')), ' ', ''), '-', ''), '_', ''))
                  = tx.pk) < 4
-   GROUP BY p.nursery, tx.plot, tx.pk
+   GROUP BY p.nursery, p.stock_plot, tx.plot, tx.pk
 
   UNION ALL
 
