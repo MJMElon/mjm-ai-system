@@ -804,6 +804,12 @@ const payOf = (page, sec) => page.evaluate((s) =>
   // N7 checked too, so a second nursery is paid; B7 left unchecked on purpose.
   left.checks.push({ id: 900, month: YM, plot: 'N7', section: 'UNN2', saringan_date: D(1),
     transplant_date: D(8), days: 7, checked_at: `${YM}-20T01:00:00Z`, checked_by: 'elon.mjm@gmail.com' });
+  /* N7 is ADDED BY HAND as well as Checked, which is what makes it the plot
+     to look at here: it is paid exactly like B1, so the sheet must say
+     nothing about how it got on. */
+  left.overrides.push({ id: 901, month: YM, plot: 'N7', action: 'add', section: 'UNN2',
+    saringan_date: D(1), transplant_date: D(8), remark: 'PALMS was never closed',
+    by_email: 'elon.mjm@gmail.com', at: `${YM}-20T01:00:00Z` });
   const { page, errs } = await boot(browser, Object.assign({}, db,
     { nops_cull_incentive_checks: left.checks, mjmnpayroll_cull_incentive_overrides: left.overrides }));
   check('paid: B1 alone in BNN (B3 unchecked, B7 removed)',
@@ -887,6 +893,24 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [/Every nursery/.test(screen.plots), /Checked plots/.test(screen.plots),
      /Elon Ting/.test(screen.plots), /Nursery/.test(screen.cols.join(' '))],
     [false, false, false, false]);
+  /* NOR "Added by hand", NOR ITS REMARK. The office asked for it off the
+     Work Maintenance tab and then off this sheet, and it is the same
+     judgement both times: this table is what is being PAID, and a plot
+     added by hand is paid exactly like every other plot. N7 is the one to
+     look at -- Checked AND added by hand -- and it has to read like B1. */
+  check('…nor "Added by hand" on a plot that is paid like every other',
+    await page.evaluate(() => {
+      /* N7 is UNN2, so it is on ALL SECTIONS and not on the BNN draw the
+         checks above read. Put the sheet back afterwards, or every check
+         below this one is quietly looking at a different table. */
+      renderCullIncentive('');
+      const txt = (document.getElementById('cull-inc-plots').textContent || '')
+        .replace(/\s+/g, ' ').trim();
+      renderCullIncentive('BNN');
+      return [/Added by hand/.test(txt), /by hand/.test(txt),
+              /PALMS was never closed/.test(txt), /N7/.test(txt)];
+    }),
+    [false, false, false, true]);
   check('the plots waiting to be checked are named, with the way there',
     [/B3 qualifies and has not been Checked yet/.test(screen.note),
      /nursery_ops_maintenance\.html\?view=cull_incentive/.test(screen.note)], [true, true]);

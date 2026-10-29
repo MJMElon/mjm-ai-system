@@ -2456,10 +2456,22 @@ function renderCullIncentive(secFilter) {
       /* The four plot cells are written ONCE, on the first line, and span
          the rest — so the person column reads as a list under the plot
          rather than the plot being repeated beside every name. */
+      /* NO "Added by hand" LINE UNDER THE PLOT, and no remark with it. The
+         office asked for it off here the same way they asked for it off
+         the Work Maintenance tab — *"不用show added by hand,包括 culling
+         incentive那里的remark"*, and then again of this sheet. It is the
+         same judgement both times: **this table is what is being PAID**,
+         and how a plot came to be on it is the deciding, which happens on
+         Worker Activity → Culling Monitoring and is still all there — the
+         record, its remark, who made it and the button that undoes it.
+         A plot added by hand is paid exactly like every other plot, so a
+         tag on it is a difference that makes none to the figure beside it.
+
+         The SECTION line stays: that is which nursery the money is coming
+         out of, which is a question about the claim and not about how the
+         row was decided. */
       const plotCells = `
         <td class="l" rowspan="${span}" style="font-weight:800;color:var(--text-head);vertical-align:middle;">${esc(r.plot)}${
-          r.override ? `<div style="font-size:11px;color:#15803d;font-weight:700;">${r.manual ? 'Added' : 'Counted'} by hand${
-            r.override.remark ? ': ' + esc(r.override.remark) : ''}</div>` : ''}${
           secFilter ? '' : `<div style="font-size:11px;color:var(--text-muted);font-weight:700;">${esc(r.section || '—')}</div>`}</td>
         <td rowspan="${span}" style="vertical-align:middle;">${pd(r.start)}</td>
         <td rowspan="${span}" style="vertical-align:middle;">${pd(r.end)}</td>
