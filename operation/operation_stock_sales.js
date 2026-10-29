@@ -1343,6 +1343,12 @@
         return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    // ONE normaliser for a human-keyed order reference — AL rows and one of
+    // the duplicate salesweb keyings carry a leading "#" that is formatting,
+    // not identity. Shared by the AL join, the order dedupe and the
+    // spent-allocation test, so the three cannot drift.
+    const _normOrderKey = v => String(v || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+
     let allCustomerOrders = [];
     // All ALs from shared_al_orders. Held at module scope so the Allocate FAB
     // can detect "orphan" ALs (ALs with balance > 0 that have no matching
@@ -1447,7 +1453,7 @@
             // If a single order_number happens to map to multiple ALs (e.g.
             // partial replacements), prefer the row with the highest
             // balance_quantity so the totals stay consistent for the user.
-            const normOrderKey = v => String(v || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+            const normOrderKey = _normOrderKey;
             const alByOrderNumber = {};
             alRows.forEach(a => {
                 if (!a.order_number) return;
@@ -3101,9 +3107,39 @@
         }
     }
 
+    // Which customer order an allocation belongs to. Matched on order_id
+    // first — through allIds, so a row written against EITHER keying of a
+    // duplicated order still finds it — then on the normalised order
+    // number, for a row with no id on it.
+    function orderForAlloc(a) {
+        if (!a) return null;
+        if (a.order_id) {
+            const hit = allCustomerOrders.find(o => (o.allIds || [o.id]).includes(a.order_id));
+            if (hit) return hit;
+        }
+        const k = _normOrderKey(a.order_number);
+        if (!k) return null;
+        return allCustomerOrders.find(o => _normOrderKey(o.orderNumber) === k) || null;
+    }
+
+    // An allocation is SPENT once its order has nothing left to collect —
+    // balance at nought, whether collected, cancelled or closed (the last
+    // two are zeroed at load). The office's rule in their own words: "my
+    // order balance has become 0, it disappear both from this list or
+    // Monthly Maturity Allocation table." It is HIDDEN, never deleted:
+    // cancel the DO and the balance comes back, and the reservation stands
+    // again by itself. An allocation no order can explain is NOT spent —
+    // a reservation nothing explains is the thing somebody has to see,
+    // with its × beside it.
+    function allocIsSpent(a) {
+        const o = orderForAlloc(a);
+        return !!o && (Number(o.balance) || 0) <= 0;
+    }
+
     function allocsForBatch(batchKey) {
         const [b, p] = batchKey.split('||');
-        return batchAllocations.filter(a => a.batch_name === b && a.plot_name === p);
+        return batchAllocations.filter(a =>
+            a.batch_name === b && a.plot_name === p && !allocIsSpent(a));
     }
 
     // Takes the order OBJECT where the caller has one — a deduplicated
@@ -3189,22 +3225,23 @@
             return;
         }
 
-        // EVERY order the Collection tab shows with a balance is on one of
-        // the two tabs — the office reconciles the drawer against that
-        // list, and 15 current-month orders that were already fully
-        // allocated used to vanish from here entirely, which read as
-        // orders the drawer had lost. A fully allocated one shows as a ✓
-        // card (Active) or a waiting-on-collection card (Past Due); only
-        // what is still unallocated drags.
+        // THE DRAWER IS A TO-DO LIST: a card is on it only while something
+        // is still UNALLOCATED. The office asked in as many words — "It
+        // should be disappear when I allocated" — so a fully allocated
+        // order leaves the list the moment the drop lands (the ✓ card of
+        // an earlier version is gone), and comes back by itself if its
+        // allocation is removed. An order whose BALANCE reaches nought
+        // (collected, cancelled, closed) is out the same way, because
+        // remaining can never exceed the balance.
         const eligible = allCustomerOrders.filter(isAllocatableStatus);
-        const active = eligible.filter(o => !isPastMonthOrder(o) && (o.balance || 0) > 0);
-        const past   = eligible.filter(o =>  isPastMonthOrder(o) && (o.balance || 0) > 0);
+        const active = eligible.filter(o => !isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
+        const past   = eligible.filter(o =>  isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
 
-        // Both tabs total the same thing: seedlings a customer is still
-        // owed (the Balance column of the Collection tab), so Active +
-        // Past Due adds up to what that list says is outstanding. What is
-        // left to ALLOCATE is each card's own figure.
-        const activeQty = active.reduce((s, o) => s + (o.balance || 0), 0);
+        // Each tab totals the figure its own cards show: Active cards show
+        // what is still to allocate, Past Due cards show what is
+        // uncollected — different questions, and each tab's total has to
+        // agree with the cards under it.
+        const activeQty = active.reduce((s, o) => s + orderUnallocatedQty(o), 0);
         const pastQty   = past.reduce((s, o) => s + (o.balance || 0), 0);
         updateAllocCounts(active.length, past.length, activeQty, pastQty);
 
@@ -3217,8 +3254,8 @@
                 msg = `🔎 No orders match "${_allocSearch}"`;
             } else {
                 msg = _allocTab === 'active'
-                    ? '✅ No current-month orders with a balance to collect'
-                    : '✅ No past-month uncollected orders';
+                    ? '✅ All current orders are fully allocated'
+                    : '✅ Every past-month order is allocated or collected';
             }
             body.innerHTML = `<div class="alloc-drawer-empty">${msg}</div>`;
             return;
@@ -3395,24 +3432,22 @@
         const total       = o.totalQty || 0;
         const collected   = o.totalCollected || 0;
         const pctAlloc    = total ? Math.min(100, ((allocated + collected) / total) * 100) : 0;
-        const fullyAlloc  = remaining === 0 && tab === 'active';
         const dateLabel   = o.orderDate ? o.orderDate.toLocaleDateString('en-MY', { day:'2-digit', month:'short' }) : '—';
         // A past-due order drags for allocation exactly like a current one —
-        // the office asked for that in as many words. What decides is the
-        // same test on both tabs: is anything still unallocated.
+        // the office asked for that in as many words. Every card the drawer
+        // draws has something unallocated (renderAllocDrawer filters the
+        // rest off: "It should be disappear when I allocated"), so every
+        // card drags; the remaining > 0 guard stays as the seatbelt.
         const dragAttrs   = (remaining > 0)
             ? `draggable="true" data-order-id="${escapeHtml(o.id || '')}"`
             : '';
-        const cls = (tab === 'past') ? 'order-card past-due' : (fullyAlloc ? 'order-card fully-allocated' : 'order-card');
+        const cls  = (tab === 'past') ? 'order-card past-due' : 'order-card';
         const grip = (remaining > 0) ? '<span class="order-card-grip">⋮⋮</span>' : '';
 
         let qtyDisplay, qtySubLabel;
         if (tab === 'past') {
             qtyDisplay = (o.balance || 0).toLocaleString();
             qtySubLabel = 'pcs uncollected · ordered ' + dateLabel;
-        } else if (fullyAlloc) {
-            qtyDisplay = '✓';
-            qtySubLabel = 'fully allocated · ' + total.toLocaleString() + ' pcs';
         } else {
             qtyDisplay = remaining.toLocaleString();
             qtySubLabel = 'pcs to allocate · of ' + total.toLocaleString();
@@ -3422,12 +3457,9 @@
         // a drop allocates what is UNALLOCATED (remaining), which is smaller
         // once some of it already sits on a batch — so the remark names the
         // figure the drag will actually move.
-        let remarkHtml = '';
-        if (tab === 'past') {
-            remarkHtml = remaining > 0
-                ? `<div class="order-card-remark">⏳ Not yet collected — drag onto a matured-stock row to allocate ${remaining.toLocaleString('en-MY')} pcs</div>`
-                : `<div class="order-card-remark">⏳ Fully allocated — waiting for the customer to collect</div>`;
-        }
+        const remarkHtml = (tab === 'past')
+            ? `<div class="order-card-remark">⏳ Not yet collected — drag onto a matured-stock row to allocate ${remaining.toLocaleString('en-MY')} pcs</div>`
+            : '';
 
         // A duplicated keying is counted ONCE and said, never hidden —
         // the same rule as the Seed Received cell's "⚠ 2 reception rows":
@@ -4477,7 +4509,11 @@
         loadNsd();
         loadTodoList();
         loadMaturity();
-        loadCustomerOrders().then(() => renderAllocDrawer());
+        // The maturity table hides SPENT allocations (allocIsSpent reads the
+        // order balances), and the three loads race — redraw it once the
+        // orders are in, or a spent chip drawn by the earlier render stands
+        // until something else touches the table.
+        loadCustomerOrders().then(() => { renderMaturityTable(); renderAllocDrawer(); });
         loadScheduledCollection();
         // loadAgingReport removed — Aging Report block deleted from UI.
         loadBatchAllocations().then(() => { renderMaturityTable(); renderAllocDrawer(); });
