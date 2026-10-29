@@ -5462,9 +5462,16 @@ it is decided. The office read it and said *"这里不用show"*, and they are
 right twice over. **None of the six is a lever anybody keys**, so they were
 six rows to read past sitting above the two boxes that ARE keyed; and every
 one of them is a rule with a heading of its own in this file, which is
-where an explanation belongs. The heading moved with the card — it read
-*"what moves it"* and reads **"the rule"** — because a heading promising a
-list the card no longer carries is a heading somebody has to ask about.
+where an explanation belongs.
+
+**The heading was cut back twice behind it**, and the second cut is the
+one worth keeping. It read *"Culling Monitoring — what moves it"* over
+the table; with the table gone it became *"— the rule"*, because a heading
+promising a list the card no longer carries is a heading somebody has to
+ask about. Then the office took that off as well (*"删掉"*), and they are
+right: **a qualifier distinguishes this card from another one, and there
+is no other one.** It tells a reader which of the two Culling Monitoring
+cards they are looking at on a page that has one. The NAME is the heading.
 
 **The DATED line is drawn only while EDITING.** It says what Save will
 actually do, so it belongs beside the Save button; a paragraph that is only
