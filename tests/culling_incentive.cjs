@@ -1,4 +1,4 @@
-/* The culling incentive: gone through and Checked on Work Maintenance,
+/* Culling Monitoring: gone through and Checked on Work Maintenance,
    paid on the payroll Transplanting sheet.
 
    A plot that went from Saringan Anak Bibit to the end of Transplanting in
@@ -8,7 +8,7 @@
    about are the ones the LEDGER transplanted in the month; the time comes
    from PALMS, the plot's LATEST run.
 
-   The office moved it: Worker Activity -> Culling Incentive shows the plot,
+   The office moved it: Worker Activity -> Culling Monitoring shows the plot,
    the days, the dates and who earns it, and carries the Check; the payroll
    pays the CHECKED plots and nothing else. This drives BOTH real pages with
    a ledger and a PALMS log built to hit every way a plot can come out:
@@ -188,7 +188,7 @@ async function boot(browser, db, where) {
   }
   if (where === 'maint') {
     await page.goto('http://localhost:8777/nursery_ops/nursery_ops_maintenance.html?view=cull_incentive', { waitUntil: 'load' });
-    await page.waitForFunction(() => /Culling Incentive/.test((document.getElementById('payroll-table') || {}).textContent || '')
+    await page.waitForFunction(() => /Culling Monitoring/.test((document.getElementById('payroll-table') || {}).textContent || '')
       && document.getElementById('tab-payroll').classList.contains('active'), { timeout: 20000 });
     return { page, errs };
   }
@@ -216,12 +216,33 @@ const payOf = (page, sec) => page.evaluate((s) =>
   const db = { mjmnpayroll_workers: REGISTER, shared_inventory_logs: LEDGER,
                fcportal_palms_plot_logs: PALMS };
 
-  console.log('— Work Maintenance: Worker Activity -> Culling Incentive');
+  console.log('— Work Maintenance: Worker Activity -> Culling Monitoring');
   const m = await boot(browser, db, 'maint');
   const mp = m.page;
   check('the payroll link lands on the tab, BNN picked',
     await mp.evaluate(() => [document.getElementById('pn-subtab-cull_incentive').classList.contains('active'), getNursery()]),
     [true, 'BNN']);
+
+  /* THE NAME IS CULLING MONITORING, AND THE KEYS DID NOT MOVE WITH IT.
+     The office: *"culling incentive 的名字换成culling monitoring"*. A label
+     that took its key with it would read every tick the office has ever set
+     as unset -- the same rule System Setting followed when Scan and Delivery
+     Order were renamed. So the tab's own id, the ?view= it is reached by and
+     both tables keep the spelling they are stored under. */
+  check('the tab reads Culling Monitoring, in both languages, and no Incentive left',
+    await mp.evaluate(() => {
+      const el = document.querySelector('[data-i18n="tab.cullIncentive"]');
+      const en = el.textContent.trim();
+      /* The toggle is 'bm', not 'ms' -- the page's own spelling. */
+      const was = currentLang;
+      setLang('bm'); const ms = el.textContent.trim(); setLang(was);
+      return [en, ms, /Culling Incentive/i.test(document.body.textContent)];
+    }),
+    ['Culling Monitoring', 'Pemantauan Culling', false]);
+  check('…and the KEY it is stored and reached under did not move',
+    await mp.evaluate(() => [!!document.getElementById('pn-subtab-cull_incentive'),
+      /view=cull_incentive/.test(document.getElementById('cm-set-link').getAttribute('href'))]),
+    [true, true]);
   check('BNN: every plot transplanted this month, timed off its latest run, nothing checked yet',
     await rowsOf(mp),
     [['B1', true, 13, false], ['B2', false, 19, false], ['B3', true, 14, false], ['B4', false, null, false],
@@ -408,6 +429,218 @@ const payOf = (page, sec) => page.evaluate((s) =>
   check('no prompt, no page error', m.errs.filter(e => /^PROMPT|^(?!ALERT)/.test(e)), []);
   if (process.env.SHOT) await mp.locator('#tab-payroll').screenshot({ path: process.env.SHOT });
 
+  /* ── SETTINGS: WHAT MOVES CULLING MONITORING ──────────────────────────
+     The office asked for the things that can affect it to be on Settings,
+     and the reason is that NOT ONE of them was on a screen: the target of
+     15 days, the two names paid on every nursery, the three Field
+     Conductors paid on their own, and the six other things that decide
+     whether a plot is asked about at all. */
+  console.log('— Settings: what moves Culling Monitoring');
+  const cm = await mp.evaluate(() => {
+    isNopsAdmin = true; switchTab('setting');
+    const b = document.getElementById('cm-set-body');
+    return { txt: (b.textContent || '').replace(/\s+/g, ' ').trim(),
+             rows: b.querySelectorAll('.cm-set-row').length };
+  });
+  check('it names every person the rule pays, and the price of each block',
+    [/Rousell Wayne/.test(cm.txt), /Florence/.test(cm.txt), /Lalu Aenal/.test(cm.txt),
+     /Akbar/.test(cm.txt), /Azhar/.test(cm.txt),
+     /ADMIN/i.test(cm.txt), /FIELD CONDUCTOR/i.test(cm.txt),
+     /RM 20\.00/.test(cm.txt), /RM 50\.00/.test(cm.txt)],
+    [true, true, true, true, true, true, true, true, true]);
+  check('…the target, and that nothing is paid before it is Checked',
+    [/15 days or fewer/.test(cm.txt), /Checked/.test(cm.txt)], [true, true]);
+  check('…and the six other things that move it, each saying where it is decided',
+    [cm.rows, /Seedling Stock/.test(cm.txt), /PALMS/.test(cm.txt),
+     /replant/i.test(cm.txt), /ledger/.test(cm.txt)],
+    [6, true, true, true, true]);
+
+  /* IT SAYS WHICH RULE IT IS ON. The tables are not on this fixture, so the
+     rule fell back to the one built into the file -- and a card that did
+     not say so would have the office believing they had set rates that
+     nothing reads. Loud, and no Edit button over a list that cannot save. */
+  check('without the tables it pays what it always paid, says so, and offers no Edit',
+    await mp.evaluate(() => [MJMCullIncentive.ruleSource(),
+      /built into the system/.test(document.getElementById('cm-set-body').textContent),
+      /RUN_ME_cull_monitoring_rule\.sql/.test(document.getElementById('cm-set-body').textContent),
+      document.querySelectorAll('#cm-set-body .cm-pick, #cm-set-body .cm-x').length,
+      MJMCullIncentive.RULE.everyPlot.length, MJMCullIncentive.RULE.ownNursery.length]),
+    ['built-in', true, true, 0, 2, 3]);
+
+  /* AND THE EDIT IS THE OFFICE'S SKETCH: a price on the BLOCK, a list of
+     names under it with a remove on each, an Add, and the Field Conductor
+     rows carrying a nursery. More than one per nursery is allowed -- they
+     asked for it. */
+  const ed = await mp.evaluate(() => {
+    MJMCullIncentive.ruleSource = () => 'office';
+    MJMCullIncentive.RULE.everyPlot.forEach((p, i) => { p.id = 100 + i; });
+    MJMCullIncentive.RULE.ownNursery.forEach((p, i) => { p.id = 200 + i; });
+    renderCullMonitoringSetting();
+    const hadEdit = /Edit/.test(document.getElementById('cm-set-body').textContent);
+    cmEdit();
+    const b = document.getElementById('cm-set-body');
+    return { hadEdit, picks: b.querySelectorAll('.cm-pick:not(.cm-pick-n)').length,
+             nurseryPicks: b.querySelectorAll('.cm-pick-n').length,
+             removes: b.querySelectorAll('.cm-x').length,
+             rates: [...b.querySelectorAll('.cm-pay-rate input')].map(i => i.value),
+             adds: [...b.querySelectorAll('.row-add')].length };
+  });
+  check('Edit opens the office\u2019s own shape: one price a block, a row a person',
+    [ed.hadEdit, ed.rates, ed.picks, ed.nurseryPicks, ed.removes, ed.adds],
+    [true, ['20', '50'], 5, 3, 5, 2]);
+
+  /* THE NAME IS A DROPDOWN OFF THE REGISTER, and it preselects through the
+     CLAIM's own resolver -- the rule says "Florence" and the register says
+     "Florence Anak Jugah", so an exact match alone would mark five people
+     the claim pays perfectly well as strangers to it. */
+  check('the dropdown offers the register, and resolves a short name to its row',
+    await mp.evaluate(() => {
+      const sel = document.querySelectorAll('#cm-set-body .cm-pick:not(.cm-pick-n)');
+      const first = sel[0], florence = sel[1];
+      return [[...first.options].map(o => o.value).includes('Rousell Wayne'),
+              florence.value, [...florence.options].some(o => /not on the register/.test(o.textContent))];
+    }),
+    [true, 'Florence Anak Jugah', false]);
+
+  check('Add puts a row on the block it was pressed on, Remove takes one off',
+    await mp.evaluate(() => {
+      cmAdd('fc');
+      const after = document.querySelectorAll('#cm-set-body .cm-pick-n').length;
+      cmRemove(cmDraft.people.findIndex(p => p.id == null));
+      const back = document.querySelectorAll('#cm-set-body .cm-pick-n').length;
+      /* A row that WAS saved is marked, never spliced -- taking somebody off
+         the rule is a record, and that is the way back. */
+      const i = cmDraft.people.findIndex(p => p.id === 200);
+      cmRemove(i);
+      return [after, back, cmDraft.people.length, cmDraft.people[i].active,
+              document.querySelectorAll('#cm-set-body .cm-pick-n').length];
+    }),
+    [4, 3, 5, false, 2]);
+
+  check('a rule with nobody on it is refused, not saved as paying nobody',
+    await mp.evaluate(async () => {
+      const keep = cmDraft.people.slice();
+      cmDraft.people.forEach(p => { p.active = false; });
+      window.__WRITES = [];
+      await cmSave();
+      const wrote = window.__WRITES.filter(w => /cull_monitoring/.test(w[1])).length;
+      cmDraft.people = keep; cmDraft.people.forEach(p => { p.active = true; });
+      return [wrote, !!cmDraft];
+    }),
+    [0, true]);
+  /* ── A PRICE CHANGED TODAY DOES NOT MOVE LAST MONTH ──────────────────
+     The office: *"我什么时候改的价钱 是不会影响以前的月份的 例如我10月改
+     RM50变40 9月份的还是RM50"*. So the rule is not one row saying what it
+     is NOW, it is a rule with a HISTORY, and a month is priced by the rule
+     that was in force FOR THAT MONTH.
+
+     Driven through the SHIPPED loader against rows of the shape the table
+     actually holds -- the whole question is which rows it picks for a
+     month, and a restatement here would prove nothing. */
+  const dated = await mp.evaluate(async () => {
+    const RATES = [
+      { id: 1, kind: 'admin', from_month: '2000-01', rm: 20 },
+      { id: 2, kind: 'fc',    from_month: '2000-01', rm: 50 },
+      { id: 3, kind: 'fc',    from_month: '2026-10', rm: 40 }   // changed in October
+    ];
+    const PEOPLE = [
+      { id: 11, kind: 'admin', nursery: '',     worker_name: 'Rousell Wayne', from_month: '2000-01', until_month: null },
+      { id: 12, kind: 'fc',    nursery: 'UNN2', worker_name: 'Azhar',         from_month: '2000-01', until_month: '2026-10' },
+      { id: 13, kind: 'fc',    nursery: 'UNN2', worker_name: 'Someone New',   from_month: '2026-10', until_month: null },
+      { id: 14, kind: 'fc',    nursery: 'BNN',  worker_name: 'Added in Nov',  from_month: '2026-11', until_month: null }
+    ];
+    const supa = { from: (t) => ({ select: () => Promise.resolve(
+      { data: t === 'nops_cull_monitoring_rate' ? RATES : PEOPLE, error: null }) }) };
+    const CI = window.MJMCullIncentive;
+    const read = async (ym) => {
+      await CI.loadRule(supa, ym);
+      return { fc: (CI.RULE.ownNursery[0] || {}).rm,
+               admin: (CI.RULE.everyPlot[0] || {}).rm,
+               who: CI.RULE.ownNursery.map(p => p.name).sort() };
+    };
+    return { sep: await read('2026-09'), oct: await read('2026-10'), nov: await read('2026-11') };
+  });
+  check('September keeps RM 50 after the price is changed in October',
+    [dated.sep.fc, dated.oct.fc, dated.nov.fc], [50, 40, 40]);
+  check('…and a price nobody changed is the same in every month',
+    [dated.sep.admin, dated.oct.admin, dated.nov.admin], [20, 20, 20]);
+  check('a Field Conductor swapped in October still names the old one in September',
+    [dated.sep.who, dated.oct.who, dated.nov.who],
+    [['Azhar'], ['Someone New'], ['Added in Nov', 'Someone New']]);
+  /* The month a row ENDS in is the first month it is off, and the month it
+     STARTS in is the first month it is on -- both ends exclusive-of-before,
+     or a conductor is paid twice over in the month of the swap. */
+  check('nobody is counted twice in the month of a swap', dated.oct.who.length, 1);
+
+  /* ── THE TARGET IS ONE NUMBER, AND THE OFFICE KEYS IT ────────────────
+     15 days used to be fixed in shared_palms.js, and Culling Monitoring
+     took a COPY of it at load -- so the load ORDER decided the answer and
+     this card carried a red line warning that the two might disagree.
+     There is one number now: PALMS owns it, everything reads it live, and
+     the warning is gone because nothing can drift. */
+  check('PALMS owns the target and the rule reads it LIVE, not a copy',
+    await mp.evaluate(() => {
+      const was = MJMPalms.TARGET_DAYS;
+      MJMPalms.setTargetDays(12);
+      const seen = [MJMCullIncentive.TARGET_DAYS, MJMPalms.TARGET_DAYS];
+      MJMPalms.setTargetDays(was);
+      return seen.concat([MJMCullIncentive.TARGET_DAYS, was]);
+    }),
+    [12, 12, 15, 15]);
+  check('…so the card no longer carries a line about the two disagreeing',
+    await mp.evaluate(() => {
+      /* Not while EDITING: the lead carries the box then, not the
+         sentence, and the box shows the draft rather than the live one. */
+      cmCancel();
+      const was = MJMPalms.TARGET_DAYS;
+      MJMPalms.setTargetDays(12); renderCullMonitoringSetting();
+      const txt = document.getElementById('cm-set-body').textContent;
+      MJMPalms.setTargetDays(was); renderCullMonitoringSetting();
+      return [/12 days or fewer/.test(txt), /have to be the same number/.test(txt)];
+    }),
+    [true, false]);
+  /* A target of nought is every plot off the incentive at once, and it is
+     not a number anybody means to key. */
+  check('a target under a day is refused, and nothing is written',
+    await mp.evaluate(async () => {
+      cmEdit();
+      cmDraft.rate.target = 0;
+      window.__WRITES = [];
+      await cmSave();
+      const wrote = window.__WRITES.filter(w => /cull_monitoring/.test(w[1])).length;
+      const still = !!cmDraft;
+      cmCancel();
+      return [wrote, still];
+    }),
+    [0, true]);
+  /* And it is DATED like the prices: a target changed in October leaves
+     September timing against the one it had. */
+  check('the target is dated too, so September keeps the target it had',
+    await mp.evaluate(async () => {
+      const RATES = [
+        { id: 1, kind: 'admin',  from_month: '2000-01', rm: 20 },
+        { id: 2, kind: 'fc',     from_month: '2000-01', rm: 50 },
+        { id: 3, kind: 'target', from_month: '2000-01', rm: 15 },
+        { id: 4, kind: 'target', from_month: '2026-10', rm: 12 }
+      ];
+      const PEOPLE = [{ id: 11, kind: 'admin', nursery: '', worker_name: 'A',
+                        from_month: '2000-01', until_month: null }];
+      const supa = { from: (t) => ({ select: () => Promise.resolve(
+        { data: t === 'nops_cull_monitoring_rate' ? RATES : PEOPLE, error: null }) }) };
+      const was = MJMPalms.TARGET_DAYS;
+      await MJMCullIncentive.loadRule(supa, '2026-09');
+      const sep = MJMCullIncentive.TARGET_DAYS;
+      await MJMCullIncentive.loadRule(supa, '2026-10');
+      const oct = MJMCullIncentive.TARGET_DAYS;
+      MJMPalms.setTargetDays(was);
+      return [sep, oct];
+    }),
+    [15, 12]);
+
+  await mp.evaluate(() => { cmCancel(); });
+
+  await mp.evaluate(() => switchTab('payroll'));
+
   // What Work Maintenance left in the database is what the payroll reads.
   const left = await mp.evaluate(() => ({
     checks: JSON.parse(JSON.stringify(window.__DB.nops_cull_incentive_checks)),
@@ -526,10 +759,10 @@ const payOf = (page, sec) => page.evaluate((s) =>
      office read the printout and said it: *"我只要看到 CULLING INCENTIVE
      其他废话都不用. 表格里面我只要看到人名 plot 和价钱"*. The dates, the
      days and who checked it are how the office DECIDED, and they are all
-     on Worker Activity → Culling Incentive, which is where the deciding
+     on Worker Activity → Culling Monitoring, which is where the deciding
      happens. A claim form is read by somebody adding up and signing. */
   check('one heading, and no sentence after it',
-    [/CULLING INCENTIVE/.test(pdf), /SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)],
+    [/CULLING MONITORING/.test(pdf), /SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)],
     [true, false, false]);
   check('the plot, the name and the money — and nothing else',
     [/B1/.test(pdf), /Rousell Wayne/.test(pdf), /RM 20\.00/.test(pdf),
@@ -548,7 +781,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
      cannot tell a merged cell from three cells carrying the same word. */
   /* Everything from the heading down, and on ITS page — the claim form
      above it has tables of its own and a column of money at its own x. */
-  const at = drawn.texts.find(t => t.t === 'CULLING INCENTIVE') || { y: 1e9, p: -1 };
+  const at = drawn.texts.find(t => t.t === 'CULLING MONITORING') || { y: 1e9, p: -1 };
   const mine = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
   const texts = mine(drawn.texts), rects = mine(drawn.rects);
   const head = ['Plot', 'Person', 'Incentive (RM)'].map(w =>
@@ -585,7 +818,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
   await page.waitForFunction(() => window.__PDFS.length && window.__PDFS[0].saved, { timeout: 10000 }).catch(() => {});
   const all = await page.evaluate(() => {
     const d = window.__PDFS[0] || { texts: [], rects: [] };
-    const at = d.texts.find(t => t.t === 'CULLING INCENTIVE') || { y: 1e9, p: -1 };
+    const at = d.texts.find(t => t.t === 'CULLING MONITORING') || { y: 1e9, p: -1 };
     const keep = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
     return { texts: keep(d.texts), rects: keep(d.rects) };
   });

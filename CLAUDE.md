@@ -5115,7 +5115,26 @@ Rules that live in both — the general-worker filter, the maintenance function
 keys, nursery-name matching — carry a comment in each copy saying so. Change
 one, change the other.
 
-## The culling incentive is timed by PALMS and asked by the ledger
+## Culling Monitoring is timed by PALMS and asked by the ledger
+
+**IT WAS CALLED THE CULLING INCENTIVE, AND THE KEYS DID NOT MOVE WITH THE
+NAME** — *"culling incentive 的名字换成culling monitoring"*. Only what a
+person READS changed: the tab in both languages (`Pemantauan Culling`), the
+payroll heading, the claim form's `CULLING MONITORING`, every message and
+every link that names the screen. What is STORED or ADDRESSED kept its
+spelling, because a label that takes its key with it reads every tick the
+office ever set as unset — the rule System Setting already follows:
+`cull_incentive` (the sub-tab id and the `?view=`), `cullIncentive` (the
+i18n KEY, its value is what moved), `MJMCullIncentive`, `cull-inc-*`,
+`shared_cull_incentive.js`, `nops_cull_incentive_checks` and
+`mjmnpayroll_cull_incentive_overrides`. **Nothing to run in the database.**
+
+Two wordings deliberately did NOT move and are worth knowing before anybody
+"finishes" the rename: the money column still reads **Incentive (RM)** and
+the claim's foot still reads **TOTAL INCENTIVE**, because the section is
+Culling Monitoring and what it pays is still an incentive. And the office's
+own quotes in these notes keep their original words — a quote that is
+edited is not a quote.
 
 A plot whose LATEST Saringan Anak Bibit → Transplanting run in PALMS took
 **15 days or fewer** earns **RM 20 a plot** to Rousell Wayne and to
@@ -5319,8 +5338,114 @@ What the rule asks, and must keep asking:
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 
+### The rule is the OFFICE'S, and it is DATED
+
+Who is paid and how much moved out of the code into two tables keyed on
+Settings (`shared/RUN_ME_cull_monitoring_rule_dated.sql`). The office drew
+the shape: a price on the BLOCK, a list of names under it with a remove on
+each, an Add, and the Field Conductor rows carrying a nursery — more than
+one per nursery where there is more than one.
+
+**A PRICE CHANGED TODAY DOES NOT MOVE LAST MONTH**, and that is the whole
+design rather than a detail of it — *"我什么时候改的价钱 是不会影响以前的
+月份的 例如我10月改RM50变40 9月份的还是RM50"*. So the rule is not one row
+saying what it is NOW, it is a rule with a HISTORY:
+
+- **the price** — the NEWEST rate row for that kind whose `from_month` is
+  not after the month being asked about;
+- **the people** — every row whose `from_month` is not after the month and
+  whose `until_month` is empty or AFTER it.
+
+`loadRule(supa, ym)` takes the month, and **both callers pass their own**:
+the claim passes `monthValue()`, the tab passes its `ym`. A reader that
+forgot would price September off October's rule.
+
+**REMOVE IS AN END DATE, and this is the one place the code does not do
+what the office literally asked for.** They said *"Remove直接删除就可以了
+错的话 我可以add回来"*, and on screen it IS a delete — the row goes, and Add
+puts it back. But a row deleted outright would take the person off
+SEPTEMBER too, which is the very thing the sentence above forbids. The one
+row that really is deleted is somebody added and removed in the SAME month:
+that row was never in force anywhere, so there is nothing to keep.
+
+**A NAME SWAPPED IS AN END AND A START**, for the same reason — editing it
+in place would rewrite the months that already paid the old one. A row that
+STARTED this month is corrected in place instead, having never been in
+force earlier; `wasName` / `wasNursery` / `from` ride on the draft so the
+save can tell which of the two it is looking at.
+
+**Months are `YYYY-MM`**, which is what both screens already use and what
+lets a plain text comparison answer which came first.
+
+**The first version of this file was NOT dated and the office ran it**, so
+the dated file is a MIGRATION as well as a create: it adds the columns, it
+gives the rate table an id where it was keyed on `kind` alone, and it turns
+the first version's marked removals into end dates at the month they were
+marked in. All guarded, so it does nothing on a database that starts here.
+Tested on the scratch Postgres against the shape the office actually had,
+not a fresh one — then run twice more to prove an edit survives.
+
+### What moves it is on SETTINGS, because none of it was on a screen
+
+The office asked for it in one line — *"在setting里面讲可能影响culling
+incentive的东西加进去"* — and the reason it is worth having is that **not one
+of these was visible anywhere**: the target of 15 days, the two names paid
+on every nursery, the three Field Conductors paid on their own, and the six
+other things that decide whether a plot is asked about at all. The office
+could not see that Florence is paid RM 20, or that a plot missing from
+Seedling Stock earns nobody anything.
+
+- **It reads the LIVE rule** (`MJMCullIncentive.RULE` / `TARGET_DAYS`),
+  never a second copy. A card restating RM 20 and 15 days is a card that
+  goes on saying so the day somebody changes them, and the test moves the
+  rule at run time and asserts the card moved with it.
+- **The TARGET is keyed here too, and it is ONE number.** It used to be a
+  const in `shared_palms.js`, and this file read a COPY of it at load —
+  `(global.MJMPalms && …TARGET_DAYS) || 15` — which quietly made the load
+  ORDER decide the answer: a page that read the rule before PALMS timed
+  every plot against a fallback 15 while the Motion Study beside it used
+  whatever PALMS said. This card used to print a red line warning about
+  exactly that.
+
+  **PALMS owns it, everything reads it LIVE, and the warning is gone
+  because nothing can drift any more.** `MJMPalms.TARGET_DAYS` is a GETTER
+  on the export, `setTargetDays` is the one writer, and
+  `MJMPalms.loadTarget(supa, ym)` brings in the office's. `loadRule` hands
+  it straight to PALMS, and the Motion Study — which loads PALMS and
+  nothing else — awaits `loadTarget` itself before it draws the label, or
+  it would print one number and measure against another.
+
+  It rides in the SAME dated table as the prices, as a third `kind`, so a
+  target changed in October leaves September timing against the one it
+  had. **Its unit is DAYS and not ringgit**, which the SQL says in as many
+  words and the check at the end prints as `target 15 days` — a line that
+  called it RM would be the one thing on that result somebody could act on
+  wrongly. A target under a day is refused: it is every plot off the
+  incentive at once, and nobody means to key it.
+
+  `CULL_TARGET_DAYS` in `npayroll_script.js` was a capture of it at script
+  load and was read by NOTHING — removed rather than made live.
+- **A card that cannot read the rule SAYS SO** and keeps nothing stale.
+  Stale rates on a card whose whole claim is that it shows the live ones is
+  worse than an empty card, because it looks answered.
+- **It cannot take Settings down with it.** It is reference and the three
+  blocks above it are what somebody opened Settings to key, so it renders
+  inside its own try — the batch page's rule for its trailing steps.
+- **AND IT IS THE FIRST THING THAT WOULD SHOW THE LOAD-ORDER TRAP.** The
+  rule takes its target off PALMS at load — `(global.MJMPalms &&
+  …TARGET_DAYS) || 15` — so a page that loads the rule BEFORE PALMS times
+  every plot against a fallback 15 while the Motion Study beside it uses
+  whatever PALMS says. Both are 15 today and nothing anywhere would say a
+  word if they stopped being. The card prints a red line when they differ.
+- **The corner link uses `.cm-set-open`, not `.lst-edit`.** `.lst-top` is
+  `position:relative` with its heading centred, so a control that does not
+  take itself out of the flow drops onto a second line under the title —
+  which is what this one did first. `.sched-dl` is the same pattern, and
+  `.lst-edit` is left meaning the Edit button.
+
 `tests/culling_incentive.cjs` drives BOTH pages: the Check on Work
-Maintenance, then the payroll fed exactly what those writes left behind.
+Maintenance, then the payroll fed exactly what those writes left behind —
+and the Settings card, including the rename and that the keys did not move.
 
 ## A -R plot is on no PALMS screen
 

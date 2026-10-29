@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=103">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=105">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -120,7 +120,7 @@
               <span data-i18n="tab.transplanting">Transplanting</span>
             </button>
             <button type="button" class="pn-subtab" id="pn-subtab-cull_incentive" onclick="switchPayrollView('cull_incentive')">
-              <span data-i18n="tab.cullIncentive">Culling Incentive</span>
+              <span data-i18n="tab.cullIncentive">Culling Monitoring</span>
             </button>
             <div class="pn-subgroup" data-i18n="tab.preNursery">Pre Nursery</div>
             <button type="button" class="pn-subtab" id="pn-subtab-seed_planting" onclick="switchPayrollView('seed_planting')">
@@ -606,6 +606,34 @@
           <button class="btn btn-primary" onclick="saveFertEdit()">Save</button>
         </div>
       </div>
+
+      <!-- WHAT MOVES CULLING MONITORING ———————————————————————
+           Every lever that decides who is paid this and how much, on one
+           card, because until now NOT ONE of them was on a screen: the
+           target of 15 days, the two names paid on every nursery, the
+           three Field Conductors paid on their own, and the four other
+           things that quietly decide whether a plot is asked about at all.
+
+           It is READ-ONLY and says where each one is decided. A panel that
+           shows a figure it cannot change is worth having on its own — the
+           office could not see that the target was 15 days, or that
+           Florence is paid RM 20 — and it is the right place to put the
+           editing the day they ask for it.
+
+           It reads the LIVE rule (MJMCullIncentive.RULE / TARGET_DAYS),
+           never a second copy of it. A card restating the rates is a card
+           that goes on reading RM 20 the day somebody changes them.
+
+           LAST on the page, after the three blocks somebody opens Settings
+           to key. Reference belongs behind the day's own tools. -->
+      <div class="card" style="padding:18px;margin-bottom:16px;">
+        <div class="lst-top">
+          <div class="set-h">Culling Monitoring — what moves it</div>
+          <a class="btn btn-sm cm-set-open" id="cm-set-link"
+             href="nursery_ops_maintenance.html?view=cull_incentive">Open Culling Monitoring &rarr;</a>
+        </div>
+        <div id="cm-set-body"></div>
+      </div>
     </div>
 
     </div><!-- /.sm-body -->
@@ -856,9 +884,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <!-- PALMS, and the culling incentive rule both this page and the payroll
      read. See shared_cull_incentive.js. -->
-<script src="../shared/shared_palms.js?v=5"></script>
-<script src="../shared/shared_cull_incentive.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=154"></script>
+<script src="../shared/shared_palms.js?v=6"></script>
+<script src="../shared/shared_cull_incentive.js?v=4"></script>
+<script src="plot_maintenance_script.js?v=156"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

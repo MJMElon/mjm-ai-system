@@ -1619,3 +1619,88 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .sp-names-warn{color:#92400e;background:var(--gold-bg,#fffbeb);border-color:var(--gold-border,#fcd34d);font-size:12px;font-weight:700;}
 .sp-pick{padding:6px 9px;border:1px solid var(--border,#d6dfd9);border-radius:8px;font:inherit;font-size:12.5px;min-width:200px;background:#fff;}
 #payroll-table .sp-checked{background:#ecfdf5;color:#15803d;border-color:#a7f3d0;font-weight:700;}
+/* ── CULLING MONITORING: WHAT MOVES IT ──────────────────────────────────
+   The office asked for the things that can affect it on Settings, and the
+   reason is that not one of them was on a screen: the 15-day target, the
+   two names paid on every nursery, the three Field Conductors paid on
+   their own, and the six other things that decide whether a plot is asked
+   about at all. Read-only, so it is laid out to be READ down rather than
+   keyed across: three columns, the middle one carrying a sentence.
+
+   The sentence column is the only elastic one — the same rule the Culling
+   Monitoring table on the payroll had to learn, where leaving the slack
+   unpinned handed it to whichever heading was longest. */
+/* The corner link sits where every other card's corner control does.
+   `.lst-top` is position:relative and the heading inside it is centred, so
+   a control that does not take itself out of the flow drops onto a second
+   line under the title -- which is what this one did first. `.sched-dl`
+   is the same pattern; `.lst-edit` is left meaning the Edit button. */
+.lst-top .cm-set-open { position:absolute; right:0; top:-4px; font-size:13px; }
+@media (max-width:560px) { .lst-top .cm-set-open { position:static; } }
+.cm-set-lead { font-size:13.5px; line-height:1.75; color:var(--text); margin:2px 0 14px; }
+.cm-set-lead b { color:var(--green-text); font-weight:800; }
+.cm-set-warn { font-size:12.5px; line-height:1.7; color:#c0392b; font-weight:600;
+               background:#fef2f2; border:1.5px solid #fecaca; border-radius:var(--r-sm);
+               padding:10px 12px; margin-bottom:14px; }
+.cm-set-grid { border:1.5px solid var(--border); border-radius:var(--r-sm); overflow:hidden; }
+.cm-set-head, .cm-set-row { display:grid; grid-template-columns:210px 1fr 215px; gap:10px;
+                            align-items:baseline; padding:9px 12px; }
+.cm-set-head { background:var(--green-pale,#f0f7f2); font-size:10px; font-weight:900;
+               letter-spacing:.1em; text-transform:uppercase; color:var(--green-text); }
+.cm-set-row + .cm-set-row, .cm-set-head + .cm-set-row { border-top:1px solid var(--border); }
+.cm-set-k { font-size:13px; font-weight:800; color:var(--text-head); }
+.cm-set-v { font-size:12.5px; line-height:1.65; color:var(--text); }
+.cm-set-v b { color:var(--green-text); font-weight:800; }
+.cm-set-w { font-size:11.5px; font-weight:700; color:var(--text-faint); }
+.cm-set-note { font-size:12px; line-height:1.7; color:var(--text-faint); margin-top:12px; }
+.cm-set-note code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:11.5px; }
+/* On a phone the WHERE column goes rather than shrinks: what it is and how
+   it moves the money are what somebody is reading this card for. */
+@media (max-width:640px) {
+  .cm-set-head, .cm-set-row { grid-template-columns:1fr 1fr; }
+  .cm-set-head > :nth-child(3), .cm-set-row > :nth-child(3) { display:none; }
+}
+
+/* ── THE TWO BLOCKS THE RULE IS KEYED IN ────────────────────────────────
+   The office drew it: a block per kind, the PRICE on the block and not on
+   the person, a list of names under it with a remove on each, and an Add.
+   The price sits in the block head for that reason -- two people on one
+   block cannot drift onto two different rates if there is only one box. */
+.cm-pay { border:1.5px solid var(--border); border-radius:var(--r-sm); overflow:hidden;
+          margin-bottom:12px; }
+.cm-pay-top { display:flex; align-items:center; justify-content:space-between; gap:10px;
+              padding:9px 12px; background:var(--green-pale,#f0f7f2); }
+.cm-pay-t { font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase;
+            color:var(--green-text); }
+.cm-pay-rate { font-size:12.5px; font-weight:700; color:var(--text); display:flex;
+               align-items:center; gap:6px; }
+.cm-pay-rate b { color:var(--green-text); font-weight:800; }
+.cm-pay-rate input { width:84px; height:32px; padding:0 8px; font-family:inherit; font-size:13px;
+                     font-weight:800; color:var(--text-head); background:#fff;
+                     border:1.5px solid var(--border); border-radius:var(--r-sm); }
+.cm-pay-rate input:focus { outline:none; border-color:var(--green-mid); }
+.cm-pay-row { display:grid; grid-template-columns:1fr 190px 34px; gap:10px; align-items:center;
+              padding:8px 12px; border-top:1px solid var(--border); }
+.cm-pay-none span { font-size:12.5px; color:#c0392b; font-weight:600; }
+.cm-pay .row-add { margin:8px 12px 10px; }
+.cm-pick { height:34px; padding:0 8px; font-family:inherit; font-size:13px; font-weight:700;
+           color:var(--text-head); background:#fff; border:1.5px solid var(--border);
+           border-radius:var(--r-sm); min-width:0; width:100%; }
+.cm-pick:focus { outline:none; border-color:var(--green-mid); }
+.cm-pick-n { font-weight:800; }
+.cm-x { width:30px; height:30px; border:1.5px solid var(--border); border-radius:var(--r-sm);
+        background:#fff; color:var(--text-faint); font-size:17px; line-height:1; cursor:pointer;
+        justify-self:end; }
+.cm-x:hover { border-color:#fca5a5; color:#c0392b; background:#fef2f2; }
+/* On a phone the nursery picker drops under the name rather than squeezing
+   both into half a row each. */
+@media (max-width:640px) {
+  .cm-pay-row { grid-template-columns:1fr 34px; }
+  .cm-pay-row > :nth-child(2) { grid-column:1 / 2; }
+}
+/* The target sits in the sentence it belongs to rather than in a block of
+   its own: it is not a price, it is the condition the prices are paid on. */
+.cm-days { width:62px; height:30px; padding:0 8px; font-family:inherit; font-size:13px;
+           font-weight:800; color:var(--text-head); background:#fff;
+           border:1.5px solid var(--border); border-radius:var(--r-sm); }
+.cm-days:focus { outline:none; border-color:var(--green-mid); }

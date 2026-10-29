@@ -35,10 +35,10 @@
 <script src="../shared/shared_people.js?v=1"></script>
 <!-- PALMS, for the culling incentive: how long each plot took from Saringan
      to Transplanting, timed the way the Motion Study times it. -->
-<script src="../shared/shared_palms.js?v=5"></script>
+<script src="../shared/shared_palms.js?v=6"></script>
 <!-- The culling incentive rule, shared with Work Maintenance where the plots
      are Checked. -->
-<script src="../shared/shared_cull_incentive.js?v=1"></script>
+<script src="../shared/shared_cull_incentive.js?v=4"></script>
 <!-- Which location a section sits in — Pre Nursery, Main Nursery, Estate.
      The same file System Setting's Location card and the Team Board read, so
      the Estate is kept off the maintenance sheets by one rule rather than by
@@ -262,11 +262,11 @@
       <div id="transpl-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
       <!-- The culling incentive — see renderCullIncentive in npayroll_script.js.
            The plots are gone through and Checked on Work Maintenance, Worker
-           Activity, Culling Incentive. This pays the Checked ones: the plots,
+           Activity, Culling Monitoring. This pays the Checked ones: the plots,
            and who that pays. -->
       <div id="cull-inc-wrap" style="margin-top:1.1rem;">
         <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:.6rem;padding:0 .2rem .4rem;">
-          <div class="bar-sub" style="font-weight:700;" id="cull-inc-head">Culling Incentive</div>
+          <div class="bar-sub" style="font-weight:700;" id="cull-inc-head">Culling Monitoring</div>
           <a class="btn btn-sm" id="cull-inc-link" href="../nursery_ops/nursery_ops_maintenance.html?view=cull_incentive">Check plots on Worker Activity &rarr;</a>
         </div>
         <!-- ONE table. It was two cards — the plots with their dates, then
@@ -571,7 +571,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=88"></script>
+<script src="npayroll_script.js?v=91"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

@@ -939,7 +939,7 @@ function payrollTotalsFor(type) {
 function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
-  /* The Culling Incentive's own buttons below the table; every other view
+  /* Culling Monitoring's own buttons below the table; every other view
      leaves it empty. */
   const extra = document.getElementById('payroll-extra');
   if (extra) extra.innerHTML = '';
@@ -1690,7 +1690,7 @@ async function toggleTransplantChecked(id) {
   }
 }
 
-/* ══ CULLING INCENTIVE — gone through here, paid on the payroll ══
+/* ══ CULLING MONITORING — gone through here, paid on the payroll ══
    The office asked for it to live beside the other piece work: *"把culling
    incentive全部搬到这里 under worker activity，这里只会显示plot，duration，
    日期，谁拿到 after check，然后payroll那边要link这里 然后在payroll才会有钱"*.
@@ -1768,7 +1768,12 @@ async function loadCullIncentiveForPayroll(ym) {
   })();
   const ov = CI.loadOverrides(_supabase, ym).then(r => { st.overrides = r.rows; st.overridesReady = r.ready; });
   const ck = CI.loadChecks(_supabase, ym).then(r => { st.checks = r.rows; st.checksReady = r.ready; });
-  await Promise.all([ledger, palms, ov, ck]);
+  /* Who is paid and how much is keyed on Settings now. Awaited with the
+     rest, because the tab names who earns each plot and a draw that landed
+     before the rule did would name the built-in list. */
+  const rl = CI.loadRule(_supabase, ym).then(r => { st.ruleReady = !!(r && r.ready); },
+                                        () => { st.ruleReady = false; });
+  await Promise.all([ledger, palms, ov, ck, rl]);
   _cullCache[ym] = st;
   _cullLoading[ym] = false;
   renderPayroll();
@@ -1812,9 +1817,9 @@ function renderCullIncentivePayroll() {
   const msg = (txt, colour) => {
     tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:${colour || 'var(--text-faint)'};font-size:13px;">${txt}</td></tr></tbody>`;
   };
-  if (!window.MJMCullIncentive) { msg('The culling incentive could not be loaded. Reload the page.', 'var(--danger,#c0392b)'); return; }
+  if (!window.MJMCullIncentive) { msg('The Culling Monitoring rule could not be loaded. Reload the page.', 'var(--danger,#c0392b)'); return; }
   if (!MJMCullIncentive.NURSERIES.includes(n)) {
-    msg('The culling incentive is paid on BNN, UNN 1 and UNN 2 plots. Pick one of those nurseries.');
+    msg('Culling Monitoring is paid on BNN, UNN 1 and UNN 2 plots. Pick one of those nurseries.');
     return;
   }
   if (_cullCache[ym] === undefined && !_cullLoading[ym]) loadCullIncentiveForPayroll(ym);
@@ -1978,7 +1983,7 @@ async function toggleCullChecked(plot) {
   }
   const r = cullIncentiveRows(n, ym).find(x => MJMCullIncentive.key(x.plot) === MJMCullIncentive.key(plot));
   if (!r) return;
-  if (r.check && !confirm(`Put ${r.plot} back to unchecked?\n\nIt comes OFF the culling incentive on the payroll until somebody checks it again.`)) return;
+  if (r.check && !confirm(`Put ${r.plot} back to unchecked?\n\nIt comes OFF Culling Monitoring on the payroll until somebody checks it again.`)) return;
   const was = st.checks.slice();
   const at = r.check ? null : new Date().toISOString();
   const by = at ? (window.currentUserEmail || _signingAs() || 'office') : null;
@@ -2063,7 +2068,7 @@ function openCullAdd() {
     const lab = 'display:block;font-size:11px;font-weight:700;color:var(--text-muted,#6b7280);margin:10px 0 4px;';
     const inp = 'width:100%;padding:9px 10px;border:1.5px solid var(--border,#d1d5db);border-radius:8px;font-size:13px;';
     el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
-      <div style="font-size:14px;font-weight:800;">Add a plot to the culling incentive</div>
+      <div style="font-size:14px;font-weight:800;">Add a plot to Culling Monitoring</div>
       <label style="${lab}">Plot</label><input id="ca-plot" style="${inp}" placeholder="B4">
       <!-- THE TWO LINES THAT FILL THEMSELVES KEEP THEIR ROOM WHETHER THEY
            SAY ANYTHING OR NOT. Both appear while somebody is reaching for
@@ -2199,7 +2204,7 @@ async function saveCullAdd() {
   const remark = String(el.querySelector('#ca-remark').value || '').trim();
   if (!plot) { alert('Which plot?'); return; }
   /* A -R plot is on no PALMS screen and on no incentive, by hand or not. */
-  if (CI.isReplant(plot)) { alert(plot + ' is a replant plot. The culling incentive is not paid on one.'); return; }
+  if (CI.isReplant(plot)) { alert(plot + ' is a replant plot. Culling Monitoring is not paid on one.'); return; }
   if (!start || !end) { alert('Key both days — the Saringan it started on and the day Transplanting ended.\n\nThat is the run, and it is what the rule is about.'); return; }
   if (end < start) { alert('Transplanting ended before the Saringan started. Check the two days.'); return; }
   const days = _cullAddDays();
@@ -4011,7 +4016,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Incentive', 'tab.seedPlanting':'Seed Planting', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -4179,7 +4184,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Insentif Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -9560,6 +9565,410 @@ function renderSetting() {
   renderCapacity();
   renderChemBoth();
   renderFertilisers();
+  /* Its own try: this card is REFERENCE, and the three blocks above it are
+     what somebody opened Settings to key. A reference panel that throws must
+     not take the capacities down with it — the same rule the batch page's
+     bootstrap follows for its trailing steps. */
+  try { renderCullMonitoringSetting(); }
+  catch (e) { console.warn('[maint] Culling Monitoring settings card:', e); }
+}
+
+/* ══ WHAT MOVES CULLING MONITORING ══════════════════════════════════════
+   The office asked for the things that can affect it to be on Settings, and
+   the reason is that NOT ONE of them was on a screen anywhere: the target
+   of 15 days, the two names paid on every nursery, the three Field
+   Conductors paid on their own, and the four other things that decide
+   whether a plot is even asked about.
+
+   THE LIVE RULE, NEVER A SECOND COPY. Every figure here is read off
+   `MJMCullIncentive` — a card restating RM 20 and 15 days is a card that
+   goes on saying so the day somebody changes them, which is the drift this
+   codebase keeps finding. That is also why it is read-only: the rates and
+   the target live in `shared/shared_cull_incentive.js`, so a box here that
+   looked editable would be a promise the page cannot keep. The day the
+   office wants them keyed it is a settings table and a paste of SQL, and
+   this card is where the boxes go.
+
+   AND IT CHECKS THE ONE THING THAT CAN SILENTLY DISAGREE. The rule reads
+   its target off PALMS at load — `(global.MJMPalms && …TARGET_DAYS) || 15`
+   — so a page that loads the rule BEFORE PALMS times every plot against a
+   fallback 15 while the Motion Study beside it uses whatever PALMS says.
+   Both are 15 today and nothing would say a word if they stopped being. */
+const CM_LEVERS = [
+  ['Which plots are asked about',
+   'Every plot with a Transplanted row dated in the month, read the way the Transplanting Report reads a date.',
+   'Batch Record — the ledger'],
+  ['Which nursery a plot is in',
+   'A plot the list cannot place is in no nursery, so it earns nobody anything.',
+   'Seedling Stock (shared_plots)'],
+  ['How long the plot took',
+   'PALMS times it, Saringan Anak Bibit to the last day Transplanting was closed — the Motion Study’s own measure.',
+   'PALMS — the plot log'],
+  ['A replant plot',
+   'A -R plot is on no PALMS screen and is never paid, by hand or otherwise.',
+   'The rule (fixed)'],
+  ['Added or removed by hand',
+   'One record per plot per month. Add counts a plot whatever PALMS says; Remove leaves one out.',
+   'Worker Activity → Culling Monitoring'],
+  ['Checked',
+   'Checking writes down the dates and the days the row READ, so a PALMS correction afterwards does not move money already agreed.',
+   'Worker Activity → Culling Monitoring'],
+];
+
+function renderCullMonitoringSetting() {
+  const box = document.getElementById('cm-set-body');
+  if (!box) return;
+  /* A CARD THAT CANNOT READ THE RULE SAYS SO, and does not leave the last
+     figures it managed to draw sitting there. Stale rates on a card whose
+     whole claim is that it shows the live ones is the worst thing it could
+     do — worse than being empty, because it looks answered. */
+  try { box.innerHTML = _cmSettingHtml(); }
+  catch (e) {
+    console.warn('[maint] Culling Monitoring settings card:', e);
+    box.innerHTML = '<div class="set-empty">The Culling Monitoring rule could not be read, '
+      + 'so this card cannot say what it is set to. Reload the page — and until it does, '
+      + 'do not take the last figures you saw here as current.</div>';
+  }
+}
+
+/* ══ EDITING THE RULE ═══════════════════════════════════════════════════
+   The office asked for it keyed rather than fixed in the code: add and
+   remove the admins, change either price, change a Field Conductor, and
+   more than one Field Conductor where a nursery has more than one.
+
+   ONE DRAFT, ONE SAVE, the same shape as the three blocks above it on this
+   page. Both prices and both lists are one decision — saving half of a rule
+   is not a thing anybody means to do.
+
+   REMOVE IS A RECORD AND NEVER A DELETE. `active` goes false and the row
+   stays, so there is a way back and a trail of what the rule has been. It
+   matters more here than usual, because Checked does NOT freeze who is paid
+   or the rate: a rule edited today re-prices a month already agreed. The
+   card says that where it is edited. */
+let cmDraft = null;        // null = not editing
+const _cmRateLive = { admin: null, fc: null };
+
+function _cmMoney(rm) {
+  return 'RM ' + (Number(rm) || 0).toLocaleString('en-MY',
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+/* The rate the RULE is actually using, read off the people it loaded rather
+   than kept a second time: one of them carries it, and a copy here is a
+   figure that goes stale the moment somebody saves. */
+function _cmRate(kind) {
+  const CI = window.MJMCullIncentive;
+  /* The target is PALMS's and is read live off it, not off a person. */
+  if (kind === 'target') return CI ? CI.TARGET_DAYS : 15;
+  const list = kind === 'admin' ? CI.RULE.everyPlot : CI.RULE.ownNursery;
+  if (list && list.length) return Number(list[0].rm) || 0;
+  return _cmRateLive[kind] != null ? _cmRateLive[kind] : (kind === 'admin' ? 20 : 50);
+}
+
+/* The register's own names, which is what the dropdown offers. A worker is
+   the register ROW, so a name keyed by hand that the register cannot place
+   is money leaving the claim with nothing saying it had gone. */
+function cmRegisterRows() {
+  /* `_registerRows` is the WHOLE register as read, which is what this needs:
+     `workers` on this page is the resolved per-nursery tick lists, and a
+     Field Conductor is not on anybody's tick list. */
+  return (Array.isArray(_registerRows) ? _registerRows : [])
+    .filter(w => w && w.full_name && w.active !== false);
+}
+function cmRegisterNames() {
+  return [...new Set(cmRegisterRows().map(w => String(w.full_name).trim()))]
+    .sort((a, b) => a.localeCompare(b));
+}
+function _cmWorkerId(name) {
+  const ws = cmRegisterRows();
+  const CI = window.MJMCullIncentive;
+  /* The claim's own resolver, so the id stored is the row the claim pays.
+     A name two rows both claim resolves to NEITHER -- picking one moves
+     somebody money that is not theirs. */
+  const m = CI && CI.resolveName ? CI.resolveName(name, ws) : { row: null };
+  return m.row ? m.row.id : null;
+}
+
+function cmEdit() {
+  const CI = window.MJMCullIncentive;
+  if (!CI || (CI.ruleSource && CI.ruleSource() !== 'office')) {
+    alert('This is the list built into the system.\n\n'
+        + 'Run shared/RUN_ME_cull_monitoring_rule.sql once in Supabase and it becomes '
+        + 'editable, seeded with exactly what is on screen.');
+    return;
+  }
+  /* `was*` and `from` ride on the draft so the save can tell what actually
+     MOVED, and whether the row it is moving was ever in force in an earlier
+     month. A name swapped on a row that started in January is January's
+     conductor being replaced, and January has to keep him. */
+  const take = (p, kind, nursery) => ({ id: p.id, kind, nursery,
+    name: p.name, workerId: p.workerId, from: p.from || '', active: true,
+    wasName: p.name, wasNursery: nursery });
+  cmDraft = {
+    rate: { admin: _cmRate('admin'), fc: _cmRate('fc'), target: _cmRate('target') },
+    people: (CI.RULE.everyPlot || []).map(p => take(p, 'admin', ''))
+      .concat((CI.RULE.ownNursery || []).map(p => take(p, 'fc', p.nursery)))
+  };
+  renderCullMonitoringSetting();
+}
+function cmCancel() { cmDraft = null; renderCullMonitoringSetting(); }
+function cmSetRate(kind, v) { if (cmDraft) cmDraft.rate[kind] = v === '' ? '' : Number(v); }
+function cmSetName(i, v) {
+  if (!cmDraft || !cmDraft.people[i]) return;
+  cmDraft.people[i].name = v;
+  cmDraft.people[i].workerId = _cmWorkerId(v);
+}
+function cmSetNursery(i, v) { if (cmDraft && cmDraft.people[i]) cmDraft.people[i].nursery = v; }
+function cmRemove(i) {
+  if (!cmDraft || !cmDraft.people[i]) return;
+  /* A row that was never saved is dropped; one that WAS is marked, because
+     taking somebody off the rule is a record and not a deletion. */
+  if (cmDraft.people[i].id == null) cmDraft.people.splice(i, 1);
+  else cmDraft.people[i].active = false;
+  renderCullMonitoringSetting();
+}
+function cmAdd(kind) {
+  if (!cmDraft) return;
+  const CI = window.MJMCullIncentive;
+  const names = cmRegisterNames();
+  if (!names.length) {
+    alert('The worker register has not loaded, so there is nobody to choose.\n\n'
+        + 'Reload the page and try again.');
+    return;
+  }
+  cmDraft.people.push({ id: null, kind, name: names[0], workerId: _cmWorkerId(names[0]),
+    nursery: kind === 'fc' ? ((CI.NURSERIES && CI.NURSERIES[0]) || 'BNN') : '', active: true });
+  renderCullMonitoringSetting();
+}
+
+/* THE MONTH AN EDIT STARTS FROM. Settings carries no month picker — it is
+   the one panel that is not about a month — so an edit starts from the one
+   it is being made in. */
+function cmMonth() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+const _CM_MONTHS = ['January','February','March','April','May','June','July',
+                    'August','September','October','November','December'];
+function _cmMonthName(ym) {
+  const [y, m] = String(ym || cmMonth()).split('-');
+  return (_CM_MONTHS[Number(m) - 1] || m) + ' ' + y;
+}
+
+async function cmSave() {
+  if (!cmDraft) return;
+  const d = cmDraft, M = cmMonth();
+  const bad = ['admin', 'fc'].filter(k => !(Number(d.rate[k]) >= 0));
+  if (bad.length) { alert('A price has to be a number, and not less than nought.'); return; }
+  /* A target of nought or less is every plot off the incentive at once, and
+     it is not a number anybody means to key. */
+  if (!(Number(d.rate.target) >= 1)) {
+    alert('The target has to be at least 1 day.\n\n'
+        + 'A target of nought would take every plot off Culling Monitoring.');
+    return;
+  }
+  /* A rule with nobody on it pays nobody, and it is the one save somebody
+     makes by accident -- the last Remove on a block. Said, and refused. */
+  const liveOf = (k) => d.people.filter(r => r.kind === k && r.active !== false);
+  if (!liveOf('admin').length && !liveOf('fc').length) {
+    alert('Nobody is on either list, so this would pay nobody at all.\n\n'
+        + 'Add somebody, or press Cancel.');
+    return;
+  }
+  const btn = document.getElementById('cm-save');
+  const was = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Saving…'; }
+  try {
+    const who = (typeof userEmail !== 'undefined' && userEmail) || '';
+    const CI = window.MJMCullIncentive;
+    const T = { rate: 'nops_cull_monitoring_rate', people: 'nops_cull_monitoring_people' };
+    const run = async (q) => { const r = await q; if (r.error) throw r.error; return r; };
+
+    /* ── THE PRICE ────────────────────────────────────────────────────
+       A price is not corrected, it is SUPERSEDED: a new row dated this
+       month, so every month before it goes on reading the one before.
+       Changing it twice in one month edits this month's row rather than
+       stacking two, because the second is not a different decision — it is
+       the same one, keyed again. */
+    const rates = (CI.ruleRates && CI.ruleRates()) || [];
+    for (const k of ['admin', 'fc', 'target']) {
+      const now = Number(d.rate[k]);
+      if (now === Number(_cmRate(k))) continue;                 // nothing changed
+      const mine = rates.find(r => r.kind === k && String(r.from_month) === M);
+      if (mine) await run(_supabase.from(T.rate)
+        .update({ rm: now, updated_by: who, updated_at: new Date().toISOString() }).eq('id', mine.id));
+      else await run(_supabase.from(T.rate)
+        .insert({ kind: k, from_month: M, rm: now, updated_by: who }));
+    }
+
+    /* ── THE PEOPLE ──────────────────────────────────────────────────
+       Every change is dated the same way. A row that STARTED this month was
+       never in force anywhere earlier, so it is simply corrected or
+       deleted; one that started before is ENDED at this month and a new row
+       takes over — which is what keeps September naming September's
+       conductor. */
+    const startedThisMonth = (p) => String(p.from || '') === M;
+    const end = (id) => run(_supabase.from(T.people).update({ until_month: M }).eq('id', id));
+    const add = (p) => run(_supabase.from(T.people).insert({
+      kind: p.kind, nursery: p.kind === 'fc' ? p.nursery : '',
+      worker_id: p.workerId == null ? null : p.workerId,
+      worker_name: p.name, from_month: M, created_by: who }));
+
+    for (const p of d.people) {
+      if (p.id == null) { if (p.active !== false) await add(p); continue; }
+      if (p.active === false) {
+        /* Removed. Added and removed in the same month is a mistake nobody
+           was ever paid for, so there is nothing to keep. */
+        if (startedThisMonth(p)) await run(_supabase.from(T.people).delete().eq('id', p.id));
+        else await end(p.id);
+        continue;
+      }
+      const moved = p.name !== p.wasName
+                 || (p.kind === 'fc' && p.nursery !== p.wasNursery);
+      if (!moved) continue;
+      if (startedThisMonth(p)) {
+        await run(_supabase.from(T.people).update({
+          worker_name: p.name, worker_id: p.workerId == null ? null : p.workerId,
+          nursery: p.kind === 'fc' ? p.nursery : '' }).eq('id', p.id));
+      } else {
+        await end(p.id);
+        await add(p);
+      }
+    }
+
+    /* Read it back rather than trusting the draft: what the rule is now is
+       what the database has, and a card drawn off the draft would show a
+       save that half-failed as a save that worked. */
+    await CI.loadRule(_supabase, M);
+    cmDraft = null;
+    /* The money is priced off the rule, so every month on screen is now
+       showing a figure worked out under the old one. */
+    _cullCache = {};
+    renderCullMonitoringSetting();
+  } catch (e) {
+    console.warn('[maint] Culling Monitoring rule not saved:', e);
+    alert('The rule was NOT saved.\n\n' + ((e && e.message) || e)
+        + '\n\nNothing on screen has been thrown away — press Save again, or Cancel.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = was; }
+  }
+}
+
+function _cmSettingHtml() {
+  const CI = window.MJMCullIncentive;
+  if (!CI) {
+    return '<div class="set-empty">The Culling Monitoring rule did not load, '
+      + 'so this page cannot say what it is set to. Reload the page.</div>';
+  }
+  const D = cmDraft;                       // non-null only while editing
+  const rate = (k) => D ? D.rate[k] : _cmRate(k);
+  const live = (k) => D ? D.people.filter(r => r.kind === k && r.active !== false)
+                        : (k === 'admin' ? CI.RULE.everyPlot : CI.RULE.ownNursery);
+
+  /* WHICH RULE IS ON SCREEN. It fails open, so a database that has not had
+     RUN_ME_cull_monitoring_rule.sql run goes on paying exactly what it paid
+     before — and a screen that did not say so would have the office
+     believing they had set rates that nothing reads. Said LOUDER than being
+     short, the rule this module already has a heading about. */
+  const src = CI.ruleSource ? CI.ruleSource() : 'built-in';
+  const banner = src === 'office' ? '' :
+    `<div class="cm-set-warn">This is the list built into the system, not one the office has
+      keyed — so nothing changed here can be saved and every plot is paying what it always
+      paid. Run <code>shared/RUN_ME_cull_monitoring_rule.sql</code> once in Supabase and this
+      card becomes editable, seeded with exactly what you see.</div>`;
+
+  /* THE DRIFT WARNING THAT USED TO BE HERE IS GONE, and that is the fix
+     rather than a removal: this card used to print a red line when PALMS
+     and Culling Monitoring disagreed about the target, because the rule
+     took a COPY of it at load and the load order decided the answer. There
+     is one number now — PALMS owns it, everything reads it live — so there
+     is nothing left that could disagree. */
+
+  const row = (what, now, where) =>
+    `<div class="cm-set-row"><span class="cm-set-k">${esc(what)}</span>`
+    + `<span class="cm-set-v">${now}</span>`
+    + `<span class="cm-set-w">${esc(where)}</span></div>`;
+
+  /* THE NAME IS A DROPDOWN OFF THE REGISTER, never a typed box: a worker is
+     the register ROW, and a name keyed by hand that the register cannot
+     place is money leaving the claim with nothing saying it had gone. A
+     name already on the rule that is NOT on the register keeps its place in
+     its own list and says so — it is the row somebody has to settle. */
+  const names = cmRegisterNames();
+  const picker = (r, i) => {
+    /* Which register row this name resolves to is the CLAIM's own rule --
+       the names on the rule are short and the register spells them out, so
+       an exact match alone marks five people the claim pays perfectly well
+       as strangers. */
+    const on = CI.resolveName ? (CI.resolveName(r.name, names, x => x).row || '') : '';
+    const opts = names.map(nm =>
+      `<option value="${esc(nm)}"${nm === on ? ' selected' : ''}>${esc(nm)}</option>`).join('');
+    const stray = on ? ''
+      : `<option value="${esc(r.name)}" selected>${esc(r.name)} — not on the register</option>`;
+    return `<select class="cm-pick" onchange="cmSetName(${i}, this.value)">${stray}${opts}</select>`;
+  };
+  const nurseryPick = (r, i) => {
+    const opts = (CI.NURSERIES.length ? CI.NURSERIES : ['BNN', 'UNN1', 'UNN2']).map(n =>
+      `<option value="${esc(n)}"${n === r.nursery ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    return `<select class="cm-pick cm-pick-n" onchange="cmSetNursery(${i}, this.value)">${opts}</select>`;
+  };
+
+  const block = (kind, title, perLine) => {
+    const rows = live(kind);
+    const body = rows.map((r) => {
+      const i = D ? D.people.indexOf(r) : -1;
+      const who = D ? picker(r, i) : `<span class="cm-set-k">${esc(r.name)}</span>`;
+      const where = kind === 'fc'
+        ? (D ? nurseryPick(r, i) : `<span class="cm-set-w">${esc(r.nursery)} only</span>`)
+        : `<span class="cm-set-w">Every nursery</span>`;
+      const cut = D ? `<button class="cm-x" title="Take off the rule"
+                        onclick="cmRemove(${i})">&times;</button>` : '<span></span>';
+      return `<div class="cm-pay-row">${who}${where}${cut}</div>`;
+    }).join('') || `<div class="cm-pay-row cm-pay-none"><span>Nobody is on this list, so it
+        pays nobody.</span><span></span><span></span></div>`;
+    const add = D ? `<button type="button" class="row-add" onclick="cmAdd('${kind}')">+ Add</button>` : '';
+    return `
+      <div class="cm-pay">
+        <div class="cm-pay-top"><span class="cm-pay-t">${esc(title)}</span>
+          <span class="cm-pay-rate">${D
+            ? `RM <input type="number" min="0" step="0.01" value="${esc(String(rate(kind)))}"
+                  oninput="cmSetRate('${kind}', this.value)">`
+            : `<b>${esc(_cmMoney(rate(kind)))}</b>`} <span>${esc(perLine)}</span></span>
+        </div>
+        ${body}${add}
+      </div>`;
+  };
+
+  const foot = D
+    ? `<div class="lst-foot" style="display:flex;"><button class="btn" onclick="cmCancel()">Cancel</button>
+         <button class="btn btn-primary" id="cm-save" onclick="cmSave()">Save</button></div>`
+    : (src === 'office'
+        ? `<div class="lst-foot" style="display:flex;"><button class="btn lst-edit" style="position:static;"
+             onclick="cmEdit()">&#9998; Edit</button></div>`
+        : '');
+
+  return `
+    <div class="cm-set-lead">A plot that went from Saringan Anak Bibit to the end of
+      Transplanting in ${D
+        ? `<input class="cm-days" type="number" min="1" step="1" value="${esc(String(D.rate.target))}"
+             oninput="cmSetRate('target', this.value)"> <b>days or fewer</b>`
+        : `<b>${esc(String(CI.TARGET_DAYS))} days or fewer</b>`} earns this.
+      Nothing is paid until the plot is <b>Checked</b> on Worker Activity.
+      ${D ? `<div class="cm-set-w" style="margin-top:6px;">This is the same target the
+        <b>Motion Study</b> measures against — one number, so the two cannot disagree.</div>` : ''}</div>
+    ${banner}
+    ${block('admin', 'Admin', 'a plot, every nursery')}
+    ${block('fc', 'Field Conductor', 'a plot, own nursery only')}
+    ${foot}
+    <div class="cm-set-note"><b>A change here starts from ${esc(_cmMonthName())} and
+      leaves every month before it alone.</b> Change the Field Conductor price from RM 50
+      to RM 40 today and September goes on paying RM 50, however many times it is
+      reopened — the rule is kept with the month it started in, and a month is priced by
+      the rule that was in force for it. A name swapped works the same way: the month
+      somebody was taken off keeps naming them up to it.</div>
+    <div class="cm-set-grid" style="margin-top:14px;">
+      <div class="cm-set-head"><span>What else moves it</span><span>How</span><span>Decided on</span></div>
+      ${CM_LEVERS.map(l => row(l[0], esc(l[1]), l[2])).join('')}
+    </div>`;
 }
 
 function renderCapacity() {
