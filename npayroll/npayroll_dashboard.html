@@ -151,6 +151,10 @@
       <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
       <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
       <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
+      <!-- Seed Planting is the Pre Nursery's own piece work. The figures are
+           keyed and CHECKED on Work Maintenance, Worker Activity, Seed
+           Planting; this prices the checked ones. -->
+      <button class="subtab"        data-sub="seedplant" onclick="switchSub('seedplant')">Seed Planting</button>
       <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
       <!-- Everything that is paid by the piece and is none of the three above.
            Its own sheet rather than a fourth guess at what to call it: the
@@ -299,6 +303,21 @@
       </div>
             <div class="verify-bar" id="vb-seedling"></div>
       <div class="card"><div class="tbl-wrap"><table id="seedling-table"></table></div></div>
+    </div>
+
+    <!-- ── Seed Planting ── -->
+    <div id="sub-seedplant" class="subpanel">
+      <div class="bar">
+        <div>
+          <div class="bar-title">Seed Planting — Salary Claim</div>
+          <div class="bar-sub" id="seedplant-sub"></div>
+        </div>
+        <div class="bar-actions">
+          <a class="btn btn-sm" href="../nursery_ops/nursery_ops_maintenance.html?view=seed_planting">Check batches on Worker Activity &rarr;</a>
+        </div>
+      </div>
+      <div class="card"><div class="tbl-wrap"><table id="seedplant-table"></table></div></div>
+      <div id="seedplant-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
     </div>
 
     <!-- ── Others ── -->
@@ -463,6 +482,7 @@
             <option value="seedlings">Seedlings Collection</option>
             <option value="maintenance">Work Maintenance</option>
             <option value="other">Other</option>
+            <option value="seed_planting">Seed Planting</option>
           </select></div>
         <div class="frow"><label>Status</label>
           <select id="rf-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
@@ -551,7 +571,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=87"></script>
+<script src="npayroll_script.js?v=88"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

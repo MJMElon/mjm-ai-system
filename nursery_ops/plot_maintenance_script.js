@@ -1836,14 +1836,10 @@ function renderCullIncentivePayroll() {
   const T = MJMCullIncentive.TARGET_DAYS;
   const q = s => esc(s).replace(/'/g, '&#39;');
 
-  const byHand = r => {
-    const o = r.override;
-    if (!o) return '';
-    const what = o.action === 'add' ? (r.manual ? 'Added by hand' : 'Counted by hand') : 'Taken out by hand';
-    const stamp = [o.created_by, o.created_at ? String(o.created_at).slice(0, 10) : ''].filter(Boolean).join(' · ');
-    return `<div style="font-size:10.5px;font-weight:700;color:${o.action === 'add' ? '#15803d' : '#b45309'};margin-top:2px;"
-      title="${esc([o.remark, stamp].filter(Boolean).join(' — '))}">${what}${o.remark ? ': ' + esc(o.remark) : ''}</div>`;
-  };
+  /* NO "Added by hand" LINE UNDER THE PLOT. The office asked for it off,
+     with its remark: *"不用show added by hand,包括 culling incentive那里的
+     remark"*. The record is still there, and its Delete button is what
+     tells a hand-added row apart. */
   const why = _cullWhy;
   const handBtn = r => {
     if (!mayHand || r.check) return '';
@@ -1898,7 +1894,7 @@ function renderCullIncentivePayroll() {
   qualify.forEach((r, i) => {
     h += `<tr${r.check ? '' : ' class="tp-row-held"'}>
       <td style="color:var(--text-faint);">${i + 1}</td>
-      <td class="plot-td">${esc(r.plot)}${byHand(r)}</td>
+      <td class="plot-td">${esc(r.plot)}</td>
       <td>${_cullPd(r.start)}</td>
       <td>${_cullPd(r.end)}</td>
       <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
@@ -1922,7 +1918,7 @@ function renderCullIncentivePayroll() {
     other.forEach(r => {
       h += `<tr style="opacity:.75;">
         <td></td>
-        <td class="plot-td">${esc(r.plot)}${byHand(r)}</td>
+        <td class="plot-td">${esc(r.plot)}</td>
         <td>${_cullPd(r.start)}</td>
         <td>${_cullPd(r.end)}</td>
         <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
@@ -2468,7 +2464,7 @@ async function loadSeedPlantingForPayroll(m) {
     const bs = rows.map(r => r.batch);
     const { data: sv, error: se } = bs.length
       ? await _supabase.from('nops_seed_planting_batch_workers')
-          .select('batch_name, month, planted_date, qty_planted, workers, updated_by, updated_at')
+          .select('*')
           .in('batch_name', bs)
       : await _supabase.from('nops_seed_planting_batch_workers').select('batch_name').limit(1);
     if (se) {
@@ -2502,12 +2498,13 @@ async function loadSeedPlantingForPayroll(m) {
     /* Batches by the month their own dates put them in, so the box can say
        where a batch is coming FROM, and the month a batch left can say
        where it went. */
-    const home = {};
+    const home = {}, homeQty = {};
     logs.forEach(l => {
       const b = String(l.batch_name || '').trim(), d = _spLogDate(l);
       if (b && d && (!home[b] || d < home[b])) home[b] = d;
+      if (b && d) homeQty[b] = (homeQty[b] || 0) + (Number(l.quantity_change) || 0);
     });
-    _spCache[m] = { rows, saved, names, prevNames, noTable, moved, noMoveTable, home };
+    _spCache[m] = { rows, saved, names, prevNames, noTable, moved, noMoveTable, home, homeQty };
   } catch (e) {
     _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
   } finally {
@@ -2575,7 +2572,7 @@ function renderSeedPlantingPayroll() {
   _spDrawNames(m, st);
   const payTh = (txt, w) =>
     `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
-  const span = 3 + wk.length + 1;
+  const span = 3 + wk.length + 2;
   let h = `<thead>
     <tr><th class="wk-th" colspan="${span}">${t('tab.seedPlanting')}</th></tr>
     <tr>
@@ -2584,6 +2581,7 @@ function renderSeedPlantingPayroll() {
       ${payTh(t('pay.qtyPlanted'), 100)}
       ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
       ${payTh(t('pay.spKeyed'), 120)}
+      ${payTh(t('pay.checked'), 132)}
     </tr></thead><tbody>`;
 
   const totals = {}; wk.forEach(w => totals[w] = 0);
@@ -2594,6 +2592,7 @@ function renderSeedPlantingPayroll() {
     rows.forEach((r, ri) => {
       const s = saved[r.key];
       const cells = (s && s.workers) || {};
+      const locked = !!(s && s.checked_at);
       qtyTotal += r.qty;
       const keyed = _spKeyed(s);
       wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
@@ -2603,15 +2602,16 @@ function renderSeedPlantingPayroll() {
         : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
       h += `<tr>
         <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
-        <td class="plot-td">${esc(r.batch)}${st.moved[r.batch] === m ? ` <span class="sp-moved-tag">${esc(t('pay.spAddedTag'))}</span>` : ''}</td>
+        <td class="plot-td">${esc(r.batch)}</td>
         <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
         ${wk.map((w, wi) => {
           const v = cells[w];
           return `<td class="sp-cell"><input type="number" min="0" step="1" inputmode="numeric" class="sp-in"
-            id="sp-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${noTable ? ' disabled' : ''}
+            id="sp-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${noTable || locked ? ' disabled' : ''}
             onchange="setSeedPlantingQty(${ri}, ${wi}, this.value)" aria-label="${esc(w)}"></td>`;
         }).join('')}
         <td style="white-space:nowrap;">${state}</td>
+        <td style="white-space:nowrap;">${_spCheckCell(ri, s, keyed, noTable)}</td>
       </tr>`;
     });
   }
@@ -2622,9 +2622,58 @@ function renderSeedPlantingPayroll() {
       <td class="th-left" colspan="2">${t('pay.totalCap')}</td>
       <td>${fig(qtyTotal)}</td>
       ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
-      <td>${fig(grand)}</td></tr>
+      <td>${fig(grand)}</td><td></td></tr>
   </tfoot>`;
   tbl.innerHTML = h;
+}
+
+/* CHECKED IS WHAT SENDS A ROW TO THE PAYROLL. The figures here are
+   quantities only; the Seed Planting tab on the Nursery Payroll prices the
+   CHECKED rows and nothing else, the same gate the Transplanting claim has.
+   A checked row is shut: its boxes are disabled, and the save refuses too,
+   because a box drawn before the tick is still on the screen. Uncheck to
+   correct it. */
+function _spCheckCell(ri, s, keyed, noTable) {
+  if (noTable) return '<span style="color:var(--text-faint);">—</span>';
+  if (s && s.checked_at) {
+    const when = new Date(s.checked_at).toLocaleDateString('en-MY');
+    return `<button type="button" class="btn btn-sm sp-checked" onclick="toggleSeedPlantingCheck(${ri})"
+      title="${esc(t('pay.spUncheckTip'))}">✓ ${esc(s.checked_by || '')} · ${esc(when)}</button>`;
+  }
+  if (!keyed) return '<span style="color:var(--text-faint);">—</span>';
+  return `<button type="button" class="btn btn-sm btn-primary" onclick="toggleSeedPlantingCheck(${ri})">${esc(t('pay.spCheck'))}</button>`;
+}
+
+async function toggleSeedPlantingCheck(ri) {
+  const m = getMonth(), st = _spCache[m];
+  if (!st || st.noTable || !_supabase) return;
+  const r = st.rows[ri];
+  const s = r && st.saved[r.key];
+  if (!r || !s) return;
+  const keyed = _spKeyed(s);
+  if (!s.checked_at) {
+    if (!keyed) return;
+    if (keyed !== r.qty && !confirm(t('pay.spCheckOff', { b: r.batch, k: keyed.toLocaleString(USAGE_LOCALE), q: r.qty.toLocaleString(USAGE_LOCALE) }))) return;
+  } else if (!confirm(t('pay.spUncheckQ', { b: r.batch }))) return;
+  /* Any figure still waiting in the debounce goes with the tick, so the
+     record that is agreed is the one on the screen. */
+  const tk = m + '|' + r.key;
+  if (_spSaveTimers[tk]) { clearTimeout(_spSaveTimers[tk]); delete _spSaveTimers[tk]; }
+  const was = { at: s.checked_at || null, by: s.checked_by || null };
+  const at = s.checked_at ? null : new Date().toISOString();
+  const by = at ? (window.currentUserEmail || _signingAs() || 'office') : null;
+  s.checked_at = at; s.checked_by = by;
+  renderPayroll();
+  const { error } = await _supabase.from('nops_seed_planting_batch_workers')
+    .upsert({ batch_name: r.batch, month: m, planted_date: r.date, qty_planted: r.qty,
+              workers: s.workers || {}, checked_at: at, checked_by: by,
+              updated_by: window.currentUserEmail || _signingAs() || 'office',
+              updated_at: new Date().toISOString() }, { onConflict: 'batch_name' });
+  if (error) {
+    s.checked_at = was.at; s.checked_by = was.by;
+    renderPayroll();
+    alert('That did not save, so nothing has changed:\n\n' + error.message);
+  }
 }
 
 /* The month's names, above the table: a chip per name with a cross, a box
@@ -2643,7 +2692,8 @@ function _spDrawNames(m, st) {
     <span class="sp-names-lbl">${esc(t('pay.spWorkers', { m }))}</span>
     ${chips || `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`}
     <span class="sp-names-add">
-      <input type="text" id="sp-new-name" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}"
+      ${_spWorkerSelect(st)}
+      <input type="text" id="sp-new-name-other" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}" style="display:none;"
         onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingWorker();}">
       <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingWorker()">+ ${esc(t('pay.spAdd'))}</button>
       ${copy}
@@ -2666,10 +2716,63 @@ function _spBatchBar(m, st) {
     ${chips || `<span class="sp-names-none">${esc(t('pay.spNoBatches'))}</span>`}
     ${out}
     <span class="sp-names-add">
-      <input type="text" id="sp-new-batch" maxlength="20" placeholder="${esc(t('pay.spBatchPh'))}"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingBatch();}">
+      ${_spBatchSelect(m, st)}
       <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingBatch()">+ ${esc(t('pay.spAddBatch'))}</button>
     </span></div>`;
+}
+
+/* ADD WORKER IS A DROPDOWN (*"add worker & add batch 用drop down的方式"*).
+   Everybody active on the payroll register, by section, since the Pre
+   Nursery crew is filed under whichever nursery they belong to; then last
+   month's names the register cannot place; and an Other that opens a box
+   for a name on neither. Names already on this month's list are left out. */
+function _spWorkerSelect(st) {
+  const have = new Set(st.names.map(w => w.toLowerCase()));
+  const bySec = {};
+  (_registerRows || []).forEach(r => {
+    const name = String(r.full_name || '').trim();
+    if (!name || r.active === false || r.rejected_at || have.has(name.toLowerCase())) return;
+    const sec = String(r.section || r.nursery || '').trim() || '—';
+    (bySec[sec] = bySec[sec] || new Set()).add(name);
+  });
+  const onReg = new Set(); Object.values(bySec).forEach(set => set.forEach(n => onReg.add(n.toLowerCase())));
+  const prev = st.prevNames.filter(w => !have.has(w.toLowerCase()) && !onReg.has(w.toLowerCase()));
+  const opt = n => `<option value="${esc(n)}">${esc(n)}</option>`;
+  const groups = Object.keys(bySec).sort().map(sec =>
+    `<optgroup label="${esc(sec)}">${[...bySec[sec]].sort((a, b) => a.localeCompare(b)).map(opt).join('')}</optgroup>`).join('');
+  return `<select id="sp-new-name" class="sp-pick" onchange="_spPickWorker(this.value)">
+    <option value="">${esc(t('pay.spPickWorker'))}</option>
+    ${groups}
+    ${prev.length ? `<optgroup label="${esc(t('pay.spLastMonth'))}">${prev.map(opt).join('')}</optgroup>` : ''}
+    <option value="__other">${esc(t('pay.spOtherName'))}</option>
+  </select>`;
+}
+function _spPickWorker(v) {
+  const box = document.getElementById('sp-new-name-other');
+  if (!box) return;
+  box.style.display = v === '__other' ? '' : 'none';
+  if (v === '__other') box.focus();
+}
+
+/* ADD BATCH IS A DROPDOWN of the batches planted in the two months before
+   this one -- the only ones a late planting can come from -- newest first,
+   with the day and the total, and where one already sits if it was moved. */
+function _spBatchSelect(m, st) {
+  const v = monthLabelToInput(m);
+  let opts = '';
+  if (v) {
+    const y = +v.slice(0, 4), mo = +v.slice(5, 7);
+    const from = new Date(y, mo - 3, 1), start = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-01`;
+    const end = `${v}-01`;
+    opts = Object.keys(st.home)
+      .filter(b => st.home[b] >= start && st.home[b] < end && st.moved[b] !== m)
+      .sort((a, b) => st.home[b] < st.home[a] ? -1 : st.home[b] > st.home[a] ? 1 : a.localeCompare(b, undefined, { numeric: true }))
+      .map(b => `<option value="${esc(b)}">${esc(b)} · ${esc(_spDay(st.home[b]))} · ${(st.homeQty[b] || 0).toLocaleString(USAGE_LOCALE)}${st.moved[b] ? ' (' + esc(st.moved[b]) + ')' : ''}</option>`)
+      .join('');
+  }
+  return `<select id="sp-new-batch" class="sp-pick">
+    <option value="">${esc(t(opts ? 'pay.spPickBatch' : 'pay.spNoLateBatch'))}</option>${opts}
+  </select>`;
 }
 
 /* Moving a batch changes two sheets, so every month read is thrown away
@@ -2685,10 +2788,10 @@ async function addSeedPlantingBatch() {
   if (!st || st.noMoveTable || !el || !_supabase) return;
   const b = el.value.trim();
   if (!b) { el.focus(); return; }
-  if (!st.home[b]) { alert(t('pay.spNoSuchBatch', { b })); el.select(); return; }
-  if (st.moved[b] === m) { alert(t('pay.spBatchHere', { b, m })); el.select(); return; }
+  if (!st.home[b]) { alert(t('pay.spNoSuchBatch', { b })); el.focus(); return; }
+  if (st.moved[b] === m) { alert(t('pay.spBatchHere', { b, m })); el.focus(); return; }
   const from = st.moved[b] || _spMonthOfDate(st.home[b]);
-  if (from === m) { alert(t('pay.spBatchHere', { b, m })); el.select(); return; }
+  if (from === m) { alert(t('pay.spBatchHere', { b, m })); el.focus(); return; }
   if (!confirm(t('pay.spMoveQ', { b, from, m }))) return;
   const { error } = await _supabase.from('nops_seed_planting_batch_month')
     .upsert({ batch_name: b, month: m,
@@ -2726,16 +2829,16 @@ function addSeedPlantingWorker() {
   const m = getMonth(), st = _spCache[m];
   const el = document.getElementById('sp-new-name');
   if (!st || st.noTable || !el) return;
-  const name = el.value.replace(/\s+/g, ' ').trim();
-  if (!name) { el.focus(); return; }
+  const other = document.getElementById('sp-new-name-other');
+  const raw = el.value === '__other' ? (other ? other.value : '') : el.value;
+  const name = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (!name) { (el.value === '__other' && other ? other : el).focus(); return; }
   if (st.names.some(w => w.toLowerCase() === name.toLowerCase())) {
-    alert(t('pay.spDup', { w: name })); el.select(); return;
+    alert(t('pay.spDup', { w: name })); return;
   }
   st.names.push(name);
   _spSaveNames(m);
   renderPayroll();
-  const again = document.getElementById('sp-new-name');
-  if (again) again.focus();
 }
 
 /* A name with figures against it is not taken off: its column would only
@@ -2777,6 +2880,11 @@ function setSeedPlantingQty(ri, wi, raw) {
   const { wk } = spWorkerColumns(st.rows, st.saved, st.names);
   const w = wk[wi];
   if (!r || !w) return;
+  if (st.saved[r.key] && st.saved[r.key].checked_at) {
+    alert(t('pay.spLocked', { b: r.batch }));
+    renderPayroll();
+    return;
+  }
   const s = st.saved[r.key] || (st.saved[r.key] = { batch_name: r.batch, month: m, workers: {} });
   s.planted_date = r.date;
   const n = String(raw).trim() === '' ? null : Math.max(0, Math.round(Number(raw)));
@@ -3909,13 +4017,19 @@ const I18N = {
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
-    'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.spAddedTag':'added by hand', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
+    'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
     'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
-    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Key the month\u2019s workers above, then how many each one planted; the last column says whether it adds up to the batch. Not on the payroll claim.',
+    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Seed Planting payroll, where it is priced.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
     'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
+    'pay.spPickWorker':'Pick a worker…', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
+    'pay.spPickBatch':'Pick a batch…', 'pay.spNoLateBatch':'No batch from the last two months',
+    'pay.spCheck':'Check', 'pay.spUncheckTip':'Checked — this row is on the Seed Planting payroll. Press to uncheck and correct it.',
+    'pay.spCheckOff':'Batch {b}: the workers add up to {k}, but {q} were planted.\n\nCheck it anyway? It goes to the payroll as keyed.',
+    'pay.spUncheckQ':'Uncheck batch {b}?\n\nIt comes off the Seed Planting payroll until somebody checks it again.',
+    'pay.spLocked':'Batch {b} is Checked, so it is on the payroll as it stands. Uncheck it first to change a figure.',
     'pay.spCopyPrev':'Use last month\u2019s names ({n})', 'pay.spDup':'{w} is already on this month\u2019s list.',
     'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
     'pay.spRemoveQ':'Remove {w} from the {m} list?',
@@ -4071,13 +4185,19 @@ const I18N = {
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
-    'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.spAddedTag':'ditambah sendiri', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
+    'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
     'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
     'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
-    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Isi pekerja bulan ini di atas, kemudian berapa yang ditanam setiap seorang; lajur terakhir menunjukkan sama ada jumlahnya sepadan. Tidak masuk tuntutan gaji.',
+    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Seed Planting, di mana ia diberi harga.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
     'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
+    'pay.spPickWorker':'Pilih pekerja…', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
+    'pay.spPickBatch':'Pilih batch…', 'pay.spNoLateBatch':'Tiada batch dari dua bulan lepas',
+    'pay.spCheck':'Semak', 'pay.spUncheckTip':'Disemak — baris ini dalam gaji Seed Planting. Tekan untuk nyahsemak dan betulkan.',
+    'pay.spCheckOff':'Batch {b}: jumlah pekerja {k}, tetapi {q} ditanam.\n\nSemak juga? Ia masuk gaji seperti diisi.',
+    'pay.spUncheckQ':'Nyahsemak batch {b}?\n\nIa keluar dari gaji Seed Planting sehingga disemak semula.',
+    'pay.spLocked':'Batch {b} sudah disemak, jadi ia dalam gaji seperti sekarang. Nyahsemak dahulu untuk menukar angka.',
     'pay.spCopyPrev':'Guna nama bulan lepas ({n})', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
     'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
     'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',

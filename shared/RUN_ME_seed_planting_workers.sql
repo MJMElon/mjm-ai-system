@@ -16,7 +16,18 @@
 --                                     per day. No longer read. Kept, not
 --                                     dropped, and row 6 counts what is in it.
 --
--- Nothing in the ledger is changed, and nothing reaches the payroll claim.
+-- CHECKED is what sends a batch to the payroll. Work Maintenance shows the
+-- quantities only, and the Nursery Payroll Seed Planting tab prices the
+-- checked batches at the Piece Rate filed under Seed Planting. This file
+-- adds that rate at RM 0.02 a seed, only if no Seed Planting rate exists,
+-- so a rate the office has already set is left alone.
+--
+-- A trigger takes the tick off a batch whose figures change after it was
+-- checked, whatever screen or hand made the change, because the figure
+-- that was agreed is no longer the one being paid. A write that changes
+-- the figures and sets the tick in one go is left alone.
+--
+-- Nothing in the ledger is changed.
 --
 -- Safe to run twice: everything is IF NOT EXISTS, and the policies are
 -- dropped by name and made again.
@@ -28,6 +39,9 @@
 --   4  policies on the three tables ........... 6 or more -- OK
 --   5  office logins that can save ............ N of N -- OK
 --   6  per tray figures from the first version  a number, read below
+--   7  the Checked columns .................... present -- OK
+--   8  the trigger that clears a stale tick ... present -- OK
+--   9  the Seed Planting piece rate ........... RM 0.02 a seed, or what the office set
 -- Row 5 is the proof. As every login holding Nursery Operation it writes,
 -- changes and deletes a record in each of the three tables and rolls the
 -- lot back, so nothing is left behind. Anything short of N of N names the
@@ -58,6 +72,30 @@ CREATE TABLE IF NOT EXISTS public.nops_seed_planting_batch_workers (
 
 CREATE INDEX IF NOT EXISTS nops_seed_planting_batch_workers_month
   ON public.nops_seed_planting_batch_workers (month);
+
+ALTER TABLE public.nops_seed_planting_batch_workers ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ;
+ALTER TABLE public.nops_seed_planting_batch_workers ADD COLUMN IF NOT EXISTS checked_by TEXT;
+
+CREATE OR REPLACE FUNCTION public.nops_seed_planting_clear_check()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $fn$
+BEGIN
+  IF OLD.checked_at IS NOT NULL
+     AND NEW.checked_at IS NOT DISTINCT FROM OLD.checked_at
+     AND (NEW.workers IS DISTINCT FROM OLD.workers
+          OR NEW.month IS DISTINCT FROM OLD.month) THEN
+    NEW.checked_at := NULL;
+    NEW.checked_by := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS nops_seed_planting_clear_check ON public.nops_seed_planting_batch_workers;
+CREATE TRIGGER nops_seed_planting_clear_check
+  BEFORE UPDATE ON public.nops_seed_planting_batch_workers
+  FOR EACH ROW EXECUTE FUNCTION public.nops_seed_planting_clear_check();
 
 CREATE TABLE IF NOT EXISTS public.nops_seed_planting_names (
   month        TEXT        PRIMARY KEY,
@@ -96,6 +134,22 @@ BEGIN
     END IF;
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO authenticated', t);
   END LOOP;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.mjmnpayroll_piece_rates') IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.mjmnpayroll_piece_rates WHERE category = 'seed_planting') THEN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'mjmnpayroll_piece_rates'
+                  AND column_name = 'group_code') THEN
+      INSERT INTO public.mjmnpayroll_piece_rates (job_desc, unit, rate, category, group_code, active, created_by, updated_by)
+        VALUES ('Seed Planting', 'seed', 0.02, 'seed_planting', 'PN', true, 'RUN_ME_seed_planting_workers', 'RUN_ME_seed_planting_workers');
+    ELSE
+      INSERT INTO public.mjmnpayroll_piece_rates (job_desc, unit, rate, category, active, created_by, updated_by)
+        VALUES ('Seed Planting', 'seed', 0.02, 'seed_planting', true, 'RUN_ME_seed_planting_workers', 'RUN_ME_seed_planting_workers');
+    END IF;
+  END IF;
 END $$;
 
 NOTIFY pgrst, 'reload schema';
@@ -209,4 +263,23 @@ UNION ALL
 SELECT 6, 'per tray figures from the first version (not shown any more)',
        (SELECT count(*) FROM public.nops_seed_planting_workers
          WHERE workers <> '{}'::jsonb)::text
+UNION ALL
+SELECT 7, 'the Checked columns',
+       CASE WHEN (SELECT count(*) FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'nops_seed_planting_batch_workers'
+                     AND column_name IN ('checked_at', 'checked_by')) = 2
+            THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END
+UNION ALL
+SELECT 8, 'the trigger that clears a stale tick',
+       CASE WHEN EXISTS (SELECT 1 FROM pg_trigger
+                          WHERE tgname = 'nops_seed_planting_clear_check' AND NOT tgisinternal)
+            THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END
+UNION ALL
+SELECT 9, 'the Seed Planting piece rate',
+       COALESCE((SELECT 'RM ' || trim_scale(rate)::text || ' a ' || COALESCE(unit, 'seed')
+                        || CASE WHEN active THEN '' ELSE ' (INACTIVE -- the tab uses RM 0.02)' END
+                   FROM public.mjmnpayroll_piece_rates
+                  WHERE category = 'seed_planting'
+                  ORDER BY active DESC, sort_order, id LIMIT 1),
+                'none -- the tab uses RM 0.02')
 ORDER BY n;
