@@ -41,7 +41,7 @@
         <div class="glass-panel p-6 rounded-[2rem] flex flex-col items-center gap-4 relative overflow-hidden border-l-[12px] border-emerald-500" id="main-title-panel">
             <div class="flex flex-col md:flex-row w-full items-center justify-between z-30 relative gap-4">
                 <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-emerald-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-5 py-3 rounded-xl transition-colors flex items-center gap-2 self-start md:self-auto shadow-sm relative z-40">
-                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
+                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back
                 </button>
                 <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-emerald-800 via-green-600 to-emerald-500 drop-shadow-sm pb-1 text-center relative z-40" style="word-spacing: 0.2em;">Customer Order Monitoring</h1>
                 <div class="hidden md:block w-[130px] relative z-40"></div>
@@ -49,8 +49,8 @@
 
             <div class="bg-slate-100/80 p-2 rounded-[20px] flex gap-2 z-30 shadow-inner w-full max-w-3xl overflow-x-auto border border-slate-200 backdrop-blur-md relative z-40">
                 <button class="tab-btn flex-1 active-do cursor-default">Delivery Note (DO)</button>
-                <button onclick="window.location.href='operation_ba.html'" class="tab-btn flex-1 hover:bg-yellow-50 hover:text-yellow-600">Borang Akuan (BA)</button>
-                <button onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
+                <button id="tab-ba" onclick="window.location.href='operation_ba.html'" class="tab-btn flex-1 hover:bg-yellow-50 hover:text-yellow-600">Borang Akuan (BA)</button>
+                <button id="tab-al" onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
             </div>
             <div id="title-animation-zone" class="absolute inset-0 w-full h-full pointer-events-none z-10"></div>
         </div>
@@ -1097,7 +1097,7 @@
 
         function openMissingDOModal(missingNum) {
             openDOModal(); const tbody = document.getElementById('bulk-do-tbody'); const rowId = 'row_' + Math.random().toString(36).substring(2, 9);
-            let alOptions = '<option value="">-- Link AL --</option>'; globalALs.filter(al => al._calc_balance > 0 && al.status !== 'Cancelled').forEach(al => { alOptions += `<option value="${al.al_number}">${al.al_number} (${(al.customer_name||'').substring(0,10)}.. Bal:${al._calc_balance})</option>`; }); 
+            let alOptions = '<option value="">-- Link AL --</option>'; globalALs.filter(al => al._calc_balance > 0 && al.status !== 'Cancelled' && al.status !== 'Closed').forEach(al => { alOptions += `<option value="${al.al_number}">${al.al_number} (${(al.customer_name||'').substring(0,10)}.. Bal:${al._calc_balance})</option>`; }); 
             let itemHtml = generateMiniItemHtml(rowId, 0, '', '', '', '');
             tbody.insertAdjacentHTML('beforeend', `<tr id="${rowId}" class="border-b border-emerald-100 bg-white"><td class="p-3"><div class="w-10 h-10 bg-slate-100 text-slate-400 rounded flex items-center justify-center text-[8px] font-bold">MANUAL</div></td><td class="p-3"><select id="al_${rowId}" class="input-style text-[10px] p-2 w-full">${alOptions}</select></td><td class="p-3"><input type="text" id="cust_${rowId}" value="" class="input-style text-[10px] p-2 w-full" placeholder="Customer"></td><td class="p-3"><input type="text" id="num_${rowId}" value="${missingNum}" class="input-style text-[10px] p-2 w-full font-bold text-emerald-700" placeholder="DO Number"></td><td class="p-3"><input type="date" id="date_${rowId}" value="" class="input-style text-[10px] p-2 w-full"></td><td class="p-3"><div id="items_container_${rowId}" class="flex flex-col gap-1" data-count="1">${itemHtml}</div><button onclick="addMiniItemRow('${rowId}')" class="text-[9px] font-bold text-emerald-600 mt-1 hover:underline">+ Add Item</button></td><td class="p-3"><input type="number" id="qty_${rowId}" value="0" class="input-style text-[10px] p-2 w-full font-black text-center text-emerald-600" readonly></td><td class="p-3 text-right"><button onclick="document.getElementById('${rowId}').remove();" class="text-red-400 hover:text-red-600 font-bold">✕</button></td></tr>`);
         }
@@ -1447,8 +1447,9 @@
             const doRec = globalDOs.find(d => String(d.id) === id);
             if (isDoLocked(doRec)) return alert('This DO is in a locked month (Month Lock Calendar, System Settings) and can\'t be deleted. Unlock that month if this was locked in error.');
 
-            const pin = prompt("Enter Master PIN to delete DO:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
+            // The Delete DO / BA tick decides. The Master PIN that used to follow
+            // was written into this page, readable by anybody with Inspect.
+            if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'delete')) return;
 
             if (!confirm("Are you sure you want to permanently DELETE this DO? This action cannot be undone and will restore the AL balance.")) return;
 
@@ -1548,7 +1549,7 @@
                             (deliv.items || []).forEach((i, idx) => { sumQty += (parseInt(i.quantity)||0); itemHtml += generateMiniItemHtml(rowId, idx, i.plot, i.breed, i.batch, i.quantity); itemCount++; });
                             if(itemCount === 0) itemHtml += generateMiniItemHtml(rowId, 0, '', '', '', ''); 
 
-                            let alOptions = '<option value="">-- Link AL --</option>'; let hasMatch = false; globalALs.filter(al => al._calc_balance > 0 && al.status !== 'Cancelled').forEach(al => { const custNameStr = al.customer_name || ''; const isMatch = deliv.customerName && custNameStr.toLowerCase().includes(deliv.customerName.toLowerCase().substring(0, 5)); if(isMatch) hasMatch = true; alOptions += `<option value="${al.al_number}" ${isMatch ? 'selected' : ''}>${al.al_number} (${custNameStr.substring(0,10)}.. Bal:${al._calc_balance})</option>`; }); 
+                            let alOptions = '<option value="">-- Link AL --</option>'; let hasMatch = false; globalALs.filter(al => al._calc_balance > 0 && al.status !== 'Cancelled' && al.status !== 'Closed').forEach(al => { const custNameStr = al.customer_name || ''; const isMatch = deliv.customerName && custNameStr.toLowerCase().includes(deliv.customerName.toLowerCase().substring(0, 5)); if(isMatch) hasMatch = true; alOptions += `<option value="${al.al_number}" ${isMatch ? 'selected' : ''}>${al.al_number} (${custNameStr.substring(0,10)}.. Bal:${al._calc_balance})</option>`; }); 
                             
                             let docPreview = file.type.includes('pdf') ? `<button onclick="viewBulkDoc('${rowId}')" class="w-10 h-10 bg-red-100 text-red-500 rounded flex items-center justify-center text-[10px] font-bold hover:bg-red-200 transition-colors">PDF</button>` : `<button onclick="viewBulkDoc('${rowId}')"><img src="${base64Data}" class="w-10 h-10 object-cover rounded shadow-sm hover:opacity-80"></button>`; 
                             
@@ -1703,6 +1704,7 @@
 <!-- Page-access guard: this page can be locked per user in the module's
      User Access (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script>
 (async () => {
@@ -1710,8 +1712,11 @@
     const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     await MJMAccess.load(_gc);
     if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
-      alert('You do not have access to Delivery Orders.');
+      alert('You do not have access to Customer Order Documentation.');
+      // DO, BA and AL open and lock together now — there is no sibling
+      // section left to fall through to.
       location.replace('operation_dashboard.html');
+      return;
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

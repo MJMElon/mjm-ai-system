@@ -8,8 +8,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js"></script>
+<script src="../shared/shared_palms.js?v=5"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -21,11 +22,6 @@
   .chip-done        { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
   .chip-cancelled   { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
   .chip-over        { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; }
-  /* ONE STAGE, SEVERAL OPEN ROWS — a log with a duplicate in it, not a plot
-     doing two things. Same mark and same words as the PALMS board. */
-  .st-dup { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px;
-            background:#fffaf0; border:1.5px solid #c98a16; color:#7a4e06;
-            font-weight:900; font-size:10px; line-height:1.5; cursor:help; vertical-align:middle; }
   .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border:none; cursor:pointer; transition:all .15s; }
   .btn-teal  { background:linear-gradient(135deg,#14b8a6,#0d9488); color:white; box-shadow:0 6px 14px -4px rgba(13,148,136,.4); }
   .btn-teal:hover { transform:translateY(-1px); }
@@ -88,9 +84,15 @@
 </head>
 <body>
 
-<div id="mjm-ribbon" data-brand="MJM Nursery AI System" data-center="PALMS"
-     data-sub="Plot Age Logging &amp; Manage System" data-logo="off"></div>
-<script src="../shared/shared_ribbon.js"></script>
+<!-- The compact bar the other nursery-ops pages wear: Back pill, centred
+     module name, NO badge. nursery_ops_seeds.html is the original; the big
+     shared ribbon came off at the office's request, so Sign Out lives on
+     the portal the Back pill leads to. -->
+<div id="mjm-ribbon" class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-[1fr_auto_1fr] items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm px-3">PALMS</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
 
 <div id="loading" class="max-w-[1150px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
 
@@ -778,23 +780,15 @@ function statusCell(plotName, st) {
   const openActs = MJMPalms.openActivities(PALMS_LOGS, unit);
   const many = openActs.length > 1;
   const curN = openActs.length === 1 ? openActs[0].n : null;
-  const dupes = open.length - openActs.length;
   const opts = MJMPalms.ACTIVITIES.map(a =>
     `<option value="${a.n}"${!many && a.n === curN ? ' selected' : ''}>${esc(a.name)}</option>`).join('');
   const names = openActs.map(a => a.name);
-  /* The duplicate is kept out of the count and not out of sight: the plot
-     carrying it is the one somebody has to tidy, and picking a stage closes
-     every open row, which is the tidying. */
-  const dupTag = dupes > 0
-    ? `<span class="st-dup" title="${esc(open.length + ' log entries are open on ' + names.join(' + ') +
-        '. That is one stage logged ' + open.length + ' times, not ' + open.length +
-        ' stages. Picking a stage closes every one of them.')}">×${open.length} open</span>`
-    : '';
+  /* No mark for a stage open twice — the office: "2 open 我也不要看到". */
   return `<select class="st-pick" data-st="${esc(plotName)}" data-cur="${curN == null ? '' : curN}">` +
     (many
       ? `<option value="" selected>${esc(openActs.length + ' running: ' + names.join(' + '))}</option>`
       : (curN == null ? '<option value="" selected>— nothing running —</option>' : '')) +
-    opts + '</select>' + dupTag;
+    opts + '</select>';
 }
 
 document.addEventListener('change', (e) => {

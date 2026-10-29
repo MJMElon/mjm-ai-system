@@ -13,7 +13,12 @@
 (function () {
   var su = null;
   try { su = JSON.parse(localStorage.getItem('mjm_user') || 'null'); } catch (e) {}
-  if (!su || !su.email) {
+  /* A Sales Web customer is not staff: the hub refuses one at sign-in and
+     never writes mjm_user for them, but a copy cached before that rule must
+     not open the training centre either. The hub shows the refusal.
+     (The rule itself is shared/shared_staff_gate.js.) */
+  var isCustomer = !!su && String(su.user_type || '').trim().toLowerCase() === 'customer';
+  if (!su || !su.email || isCustomer) {
     location.replace('../index.html');
     return;
   }

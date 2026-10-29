@@ -228,6 +228,28 @@ console.log('\n── 5. Nobody is stranded, and the back office still works ─
   checkTrue('and so does the auditor portal, which is how an admin reaches the tile',
             home.indexOf('ai.mjmnursery.com/index.html') >= 0);
 
+  /* "Visit 555 Auditor Portal" stood on the back office as a way across,
+     from when this page was the back DOOR of the portal. The portal has a
+     door of its own now, so a button pointing at it from here is the one
+     thing still saying the two are one place. The office asked for it to
+     go, and the rules it wore went with it — a style nothing wears is a
+     style the next person looks for a use of. */
+  /* ASKED OF THE MARKUP, NOT OF THE WORDS. The page explains the removal
+     in a comment, and a comment naming what went is the right thing for it
+     to do — a plain text search would read that explanation as the button
+     still being there. So the comments come out first and the rest is what
+     the browser actually gets. */
+  const code = admin.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  checkTrue('the Visit-the-portal button is gone from the back office',
+            code.indexOf('Visit 555 Auditor Portal') < 0 && code.indexOf('portal-btn') < 0);
+  check('and so are the three rules only it wore',
+        ['portal-btn', 'pb-home', 'pb-out'].filter(c => code.indexOf('.' + c) >= 0), []);
+  checkTrue('the note under the modules no longer offers it either',
+            code.indexOf('can open the auditor portal') < 0);
+  /* The way OUT must survive it, or the page is a room with no door. */
+  checkTrue('and the ribbon still reaches the hub, where both doors are',
+            admin.indexOf('ai.mjmnursery.com/index.html') >= 0);
+
   /* scan_admin.html carries every line of its own code inline, so a cached
      copy is the OLD routing for ever. It had no no-cache metas and the
      routing is the first thing that changed in it. */

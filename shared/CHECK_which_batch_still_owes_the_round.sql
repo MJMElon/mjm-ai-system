@@ -18,25 +18,74 @@
 -- count at 0 and no rows under it.
 --
 -- The last rows are a different question and are worth reading even
--- when the count is 0: an audit whose plot spelling matches no plot in
--- the ledger. Those are invisible to every list in the system.
+-- when the count is 0: an audit whose plot matches no plot the ledger
+-- has anything standing on. Those are invisible to every list in the
+-- system. On a healthy database there are none.
+--
+-- THE PLOT CODE IS PADDED ON BOTH SIDES BEFORE ANYTHING IS COMPARED,
+-- and this file did not do it until the padding was found to be the
+-- whole of a false finding. The board pads every plot it reads to two
+-- digits -- canonPlot in audit/audit_pending.js is the rule -- while the
+-- ledger writes B1 and the saved audit writes B01, so comparing them as
+-- typed matched NOTHING: every standing batch read as never audited and
+-- every real audit read as filed on a plot the ledger does not know.
+-- Both answers were false and both looked exactly like a finding. The
+-- SQL Editor cannot take a regular expression, so the letters come off
+-- with ltrim and the digits are padded with lpad, which does the same
+-- work.
 
-WITH live AS (
-  SELECT upper(btrim(plot_name))  AS plot,
-         upper(btrim(batch_name)) AS batch
-  FROM   shared_plot_batch_balance
-  WHERE  COALESCE(qty, 0) > 0
-    AND  btrim(COALESCE(plot_name, ''))  <> ''
-    AND  btrim(COALESCE(batch_name, '')) <> ''
+WITH allplots AS (
+  SELECT upper(btrim(plot_name)) AS raw FROM shared_plot_batch_balance
+   WHERE btrim(COALESCE(plot_name, '')) <> ''
+  UNION
+  SELECT upper(btrim(plot_name)) FROM shared_inventory_logs
+   WHERE btrim(COALESCE(plot_name, '')) <> ''
+  UNION
+  SELECT upper(btrim(plot)) FROM audit_plot_audits
+   WHERE btrim(COALESCE(plot, '')) <> ''
+  UNION
+  SELECT upper(btrim(plot)) FROM audit_height_records
+   WHERE btrim(COALESCE(plot, '')) <> ''
+),
+parts AS (
+  SELECT raw,
+         left(raw, length(raw) - length(ltrim(raw, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')))      AS alpha,
+         split_part(ltrim(raw, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), '-', 1)                   AS digits,
+         CASE WHEN position('-' IN ltrim(raw, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')) > 0
+              THEN '-' || split_part(ltrim(raw, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), '-', 2)
+              ELSE '' END                                        AS suffix,
+         length(ltrim(raw, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
+           - length(replace(ltrim(raw, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'), '-', ''))         AS dashes
+  FROM   allplots
+),
+canon AS (
+  SELECT raw,
+         CASE WHEN alpha = '' OR digits = ''
+                OR ltrim(digits, '0123456789') <> ''
+                OR dashes > 1
+                OR (suffix <> '' AND suffix <> '-R')
+              THEN raw
+              ELSE alpha
+                   || CASE WHEN length(digits) < 2
+                           THEN lpad(digits, 2, '0') ELSE digits END
+                   || suffix
+         END AS plot
+  FROM   parts
+),
+live AS (
+  SELECT c.plot, upper(btrim(b.batch_name)) AS batch
+  FROM   shared_plot_batch_balance b
+  JOIN   canon c ON c.raw = upper(btrim(b.plot_name))
+  WHERE  COALESCE(b.qty, 0) > 0
+    AND  btrim(COALESCE(b.batch_name, '')) <> ''
   GROUP BY 1, 2
 ),
 standing AS (
-  SELECT upper(btrim(l.plot_name))  AS plot,
-         upper(btrim(l.batch_name)) AS batch
+  SELECT c.plot, upper(btrim(l.batch_name)) AS batch
   FROM   shared_inventory_logs l
+  JOIN   canon c ON c.raw = upper(btrim(l.plot_name))
   WHERE  l.transaction_type IN ('Planted', 'Transplanted',
                                 'Transplanted_Premium', 'Transplanted_DoubleTone')
-    AND  btrim(COALESCE(l.plot_name, ''))  <> ''
     AND  btrim(COALESCE(l.batch_name, '')) <> ''
   GROUP BY 1, 2
 ),
@@ -44,20 +93,18 @@ work AS (
   SELECT s.plot, s.batch FROM standing s JOIN live v ON v.plot = s.plot AND v.batch = s.batch
 ),
 aud AS (
-  SELECT 'Plot Condition'::TEXT AS modul,
-         upper(btrim(plot))  AS plot,
-         upper(btrim(batch)) AS batch,
-         max(date)           AS last_date
-  FROM   audit_plot_audits
-  WHERE  date IS NOT NULL
+  SELECT 'Plot Condition'::TEXT AS modul, c.plot,
+         upper(btrim(a.batch)) AS batch, max(a.date) AS last_date
+  FROM   audit_plot_audits a
+  JOIN   canon c ON c.raw = upper(btrim(a.plot))
+  WHERE  a.date IS NOT NULL
   GROUP BY 1, 2, 3
   UNION ALL
-  SELECT 'Seedling Height'::TEXT,
-         upper(btrim(plot)),
-         upper(btrim(batch)),
-         max(date)
-  FROM   audit_height_records
-  WHERE  date IS NOT NULL
+  SELECT 'Seedling Height'::TEXT, c.plot,
+         upper(btrim(h.batch)), max(h.date)
+  FROM   audit_height_records h
+  JOIN   canon c ON c.raw = upper(btrim(h.plot))
+  WHERE  h.date IS NOT NULL
   GROUP BY 1, 2, 3
 ),
 moduls AS (

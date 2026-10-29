@@ -351,6 +351,19 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 .modal-close:hover{color:var(--red);}
 .modal-body{padding:18px 24px;}
 .modal-footer{padding:14px 24px 18px;border-top:1.5px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+
+/* The work editor is a table — every plot down, every week across — and the
+   office asked for it to take the WHOLE screen rather than a dialog's worth
+   of it, now that Next lets somebody work straight through a nursery's four
+   jobs without closing and reopening. No border, no radius, no margin round
+   it: it reads as the screen itself, not a box floating on top of it. */
+#we-modal .modal{width:100vw;max-width:100vw;height:100vh;max-height:100vh;
+  border:none;border-radius:0;}
+/* The vector icon on Cancel / Save & Sync / Next sits beside the word,
+   not above or below it — scoped to this footer alone rather than every
+   .btn on the page, which has plenty of icon-less buttons that must not
+   move. */
+#we-modal .modal-footer .btn{display:inline-flex;align-items:center;gap:6px;}
 .frow{margin-bottom:14px;}
 .frow label{display:block;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;}
 .frow input,.frow select,.frow textarea{width:100%;height:38px;padding:0 12px;background:var(--bg-page);color:var(--text-head);border:1.5px solid var(--border);border-radius:var(--r-sm);font-family:var(--font);font-size:13px;outline:none;transition:border-color 0.14s,box-shadow 0.14s;}
@@ -413,6 +426,24 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 .subtab-btn{font-family:var(--font);font-size:12px;font-weight:600;letter-spacing:.3px;color:var(--text-muted);background:transparent;border:none;cursor:pointer;padding:8px 16px;border-radius:var(--r-sm);transition:all .14s;white-space:nowrap;}
 .subtab-btn:hover{color:var(--text-body);background:var(--green-bg);}
 .subtab-btn.active{background:var(--green);color:#fff;box-shadow:0 2px 8px rgba(13,122,71,.3);}
+/* ── Approved / Rejected as TABS on the table ──
+   The pair sits directly on the top edge of the table card, under the
+   filter row: the active one is a WHITE tab with rounded top corners and
+   a green underline, overlapping the card's border by its own border
+   width so the two read as one piece with no gap — the same trick the
+   Sales Web policy chips use. The idle one is plain type beside it. */
+.rec-tabs{width:100%;background:transparent;border:none;border-radius:0;
+  padding:0 0 0 14px;gap:4px;margin-bottom:0;box-shadow:none;flex-wrap:nowrap;}
+.rec-tabs .subtab-btn{flex:0 0 auto;border:1.5px solid transparent;border-bottom:none;
+  border-radius:10px 10px 0 0;font-size:12.5px;font-weight:800;
+  color:var(--text-muted);padding:10px 20px;}
+.rec-tabs .subtab-btn:hover{color:var(--green-text);background:var(--green-bg);}
+.rec-tabs .subtab-btn.active{background:var(--bg-white);border-color:var(--border);
+  color:var(--green-text);position:relative;z-index:2;margin-bottom:-1.5px;
+  box-shadow:inset 0 -3px 0 var(--green);}
+.rec-tabs #recsec-btn-rejected.active{color:var(--red);
+  box-shadow:inset 0 -3px 0 var(--red);}
+.rec-tabs .subtab-btn.active .rec-part-count{color:#fff;background:var(--red);}
 /* A sub-view must never change the page width, or the header/metrics above it
    appear to rescale when switching between List and Analytics. Charts are
    responsive, so clipping any overflow here is safe. */
@@ -501,12 +532,25 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 /* Fixed 4-up grid (not auto-fit) so the headline cards keep the SAME size and
    layout whichever sub-view is open - the analytics charts change the available
    width, which previously made the cards reflow 4-up -> 3-up and resize. */
-.metrics-big{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px;}
-@media (max-width:900px){ .metrics-big{grid-template-columns:repeat(2,minmax(0,1fr));} }
+/* auto-fit, not a fixed four columns: the Work Records head draws THREE
+   cards and the old 4-column track left a dead quarter of the row beside
+   them. However many cards a head draws, they divide the full width and
+   land on one line. Sized down at the office's request. */
+.metrics-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
 @media (max-width:480px){ .metrics-big{grid-template-columns:1fr;} }
-.metrics-big .metric-card{padding:22px 24px;border-top-width:4px;}
-.metrics-big .mc-label{font-size:11px;letter-spacing:1.2px;margin-bottom:10px;}
-.metrics-big .mc-value{font-size:44px;line-height:1;}
+/* THIN: each card is one line — label, figure, and the sub-figure on the
+   right — instead of a stack, at the office's request. And each card is
+   WASHED in its own colour, or a thin white strip reads as just another
+   row of the white table under it — also their words. */
+.metrics-big .metric-card{display:flex;align-items:center;gap:12px;
+  padding:9px 16px;border-top-width:3px;}
+.metrics-big .mc-blue {background:var(--blue-bg); border-color:var(--blue-border); border-top-color:var(--blue);}
+.metrics-big .mc-amber{background:var(--gold-bg); border-color:var(--gold-border); border-top-color:#d97706;}
+.metrics-big .mc-red  {background:var(--red-bg);  border-color:var(--red-border);  border-top-color:var(--red);}
+.metrics-big .mc-green{background:var(--green-bg);border-color:var(--green-mid);  border-top-color:var(--green);}
+.metrics-big .mc-label{font-size:10.5px;letter-spacing:1.1px;margin-bottom:0;white-space:nowrap;}
+.metrics-big .mc-value{font-size:22px;line-height:1;}
+.metrics-big .mc-sub{margin-top:0;margin-left:auto;white-space:nowrap;text-align:right;}
 
 /* Page header — one bigger line: "Batu Niah Nursery — Apr 2026" */
 .page-hdr{margin-bottom:14px;}
@@ -554,6 +598,19 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 #recview-list .toolbar .filter-sel{font-size:13px;height:38px;}
 #recview-list .toolbar .btn{font-size:13px;padding:9px 16px;}
 #recview-list .toolbar input.filter-sel{height:38px;font-size:13px;}
+/* ONE LINE: the two selects share the row with the date box and the two
+   icon buttons, instead of each select taking a line of its own. The
+   select skin's wrapper carries width:100% INLINE (its own comment says
+   why), so only !important can size it here — the dosage cell learned
+   the same lesson. On a narrow screen the row is allowed to wrap again. */
+#recview-list .toolbar{flex-wrap:nowrap;}
+#recview-list .toolbar .cf-wrap{flex:1 1 220px !important;width:auto !important;min-width:150px;}
+#recview-list .toolbar select.filter-sel{width:100%;}
+#recview-list .toolbar input.filter-sel{flex:0 0 160px;}
+#recview-list .toolbar .btn-ico{display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;flex:0 0 38px;padding:0;}
+#recview-list .toolbar .btn-ico svg{width:17px;height:17px;}
+@media(max-width:900px){#recview-list .toolbar{flex-wrap:wrap;}}
 
 /* ─── CHECKED (verified) ROWS ─── */
 .btn-check{color:#065f46 !important;border-color:#a7f3d0 !important;background:#ecfdf5 !important;}
@@ -932,9 +989,10 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
   transition:background .13s,border-color .13s;}
 .sched-step:hover{background:#eaf7f0;border-color:var(--green);}
 
-#sched-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:16px;align-items:start;}
-@media (max-width:1100px){ #sched-summary{grid-template-columns:1fr;} }
+/* One nursery card per row — the office asked for the left/right split
+   gone, so a card is read top to bottom rather than hunted for across the
+   two columns it used to be able to land in. */
+#sched-summary{display:grid;grid-template-columns:1fr;gap:16px;align-items:start;}
 
 .ss-wrap{border:1.5px solid var(--border);border-radius:var(--r-md);
   background:var(--bg-white);overflow:hidden;min-width:0;}
@@ -1100,7 +1158,7 @@ th.ss-act,td.ss-act{width:1%;white-space:nowrap;padding-right:11px;}
    Left the other way round, two columns split 1,100px between them and the
    checkbox for B1 sat 400px from the word B1. */
 .we-table{table-layout:auto;width:auto;min-width:100%;}
-.we-table th.we-col,.we-table tbody td:not(.we-plot){width:132px;min-width:132px;}
+.we-table th.we-col,.we-table tbody td:not(.we-plot){width:152px;min-width:152px;}
 .we-table thead th{background:#f2f7f4;color:var(--text-muted);font-weight:800;font-size:10.5px;
   letter-spacing:.6px;text-transform:uppercase;padding:7px 8px;
   border-bottom:2px solid var(--border-strong);text-align:center;}
@@ -1120,11 +1178,13 @@ th.we-plot,td.we-plot{text-align:left;font-size:12.5px;font-weight:700;
 .we-table thead th.we-plot{background:#f2f7f4;z-index:3;vertical-align:middle;
   text-align:left;}
 
-.we-all{display:block;margin:4px auto 0;font-family:var(--font);font-size:10px;
-  font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--green-text);
-  background:var(--bg-white);border:1px solid var(--green-mid);border-radius:20px;
-  padding:2px 9px;cursor:pointer;}
-.we-all:hover{background:#eaf7f0;}
+/* An icon, not a rounded "all" pill — the office's own mark for it, a
+   square stack with the front one ticked, same shape language as every
+   other small square control on this sheet (.we-week-x, .we-col-n). */
+.we-all{display:grid;place-items:center;margin:4px auto 0;width:22px;height:22px;
+  padding:0;color:var(--green-text);background:var(--bg-white);
+  border:1.5px solid var(--green-mid);border-radius:6px;cursor:pointer;}
+.we-all:hover{background:#eaf7f0;border-color:var(--green);}
 
 /* Circular, matching .ss-tick on the Monthly Scheduled Work summary — the
    detailed sheet's own ticks used to be a rounded square, which read as a
@@ -1191,15 +1251,24 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    ══════════════════════════════════════════════════════════════ */
 .sm-frame{display:block;}
 .sm-body{min-width:0;}
+/* The menu is a FIXED rail on the left edge of the screen, flush and full
+   height under the sticky header bar, so the page gives its whole width to
+   the content and the padding below steps around the rail. The .page
+   container therefore stops centring itself on a desk — the rail owns the
+   left edge — and the content keeps its old cap through .sm-body instead.
+   Collapsed (.nav-hid) the rail narrows to the ICONS: the labels hide, the
+   buttons stay in the DOM and keep their ids, the icons say what each one
+   is. A menu that vanished entirely left a button floating in an empty
+   column with nothing to say what it opens, which is what the first
+   attempt at this did. */
 @media(min-width:768px){
-  .sm-frame{display:grid;grid-template-columns:212px minmax(0,1fr);
-    gap:24px;align-items:start;}
-  /* Pulled back to a rail. The bar itself stays — it keeps its background,
-     its border and its handle, and only the tabs go. A menu that vanishes
-     leaves a button floating in an empty column with nothing to say what it
-     opens, which is what the first attempt at this did. */
-  .sm-frame.nav-hid{grid-template-columns:46px minmax(0,1fr);gap:14px;}
-  .sm-frame.nav-hid #sm-nav nav{display:none;}
+  .page.sm-frame{max-width:none;margin:0;padding:20px 22px 20px 248px;
+    transition:padding-left .2s;}
+  .page.sm-frame.nav-hid{padding-left:94px;}
+  .sm-body{max-width:1720px;}
+  .sm-frame.nav-hid #sm-nav{width:62px;padding:12px 8px;}
+  .sm-frame.nav-hid #sm-nav .pn-tab{justify-content:center;gap:0;padding:11px 0;}
+  .sm-frame.nav-hid #sm-nav .pn-tab span{display:none;}
 }
 
 /* The handle, at the top of the bar it belongs to.
@@ -1209,58 +1278,96 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 @media(min-width:768px){
   .sm-nav-toggle{display:grid;place-items:center;margin:0 0 10px auto;padding:0;
     width:26px;height:28px;
-    border:1px solid #ccfbf1;border-radius:9px;background:#f0fdfa;
-    color:#0f766e;font-size:11px;line-height:1;cursor:pointer;
+    border:1px solid rgba(255,255,255,.3);border-radius:9px;
+    background:rgba(255,255,255,.12);
+    color:#fff;font-size:11px;line-height:1;cursor:pointer;
     transition:background .15s,color .15s;}
-  .sm-nav-toggle:hover{background:#ccfbf1;color:#115e59;}
+  .sm-nav-toggle:hover{background:rgba(255,255,255,.25);}
   /* On the rail it is the only thing there, so it sits in the middle. */
   .nav-hid .sm-nav-toggle{margin:0 auto;}
 }
 
+/* The menu: icon + name per row. The back link and the caption are gone —
+   the header bar's Back pill is the way out — and on a desk the bar is a
+   SOLID TEAL block with white rows, the active one highlighted, which is
+   the design the office handed over. The base colours here are the light
+   PHONE ones; the desktop media block below repaints them for the dark
+   bar, and must stay after this so it wins on order. */
 #sm-nav{display:block;}
-#sm-nav .pn-out{display:flex;align-items:center;gap:8px;padding:10px 13px;
-  border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569;
-  text-decoration:none;font-size:11px;font-weight:900;letter-spacing:.06em;
-  text-transform:uppercase;line-height:1.25;transition:background .15s,color .15s;}
-#sm-nav .pn-out:hover{background:#f1f5f9;color:#0f172a;}
-/* The panels, held apart from the way out by a rule rather than by
-   distance alone, so the bar reads as "leave" then "inside". */
-#sm-nav .pn-group{margin-top:14px;padding-top:14px;border-top:1px solid #ccfbf1;
-  display:flex;flex-direction:column;gap:4px;}
-#sm-nav .pn-cap{font-size:9.5px;font-weight:900;letter-spacing:.18em;
-  text-transform:uppercase;color:#5eead4;padding:0 4px 7px;line-height:1.4;}
-#sm-nav .pn-tab{display:block;width:100%;text-align:left;padding:10px 12px;
-  border-radius:12px;font-family:var(--font);font-size:12.5px;font-weight:800;
-  color:#0f766e;background:transparent;border:1px solid transparent;
+#sm-nav .pn-group{display:flex;flex-direction:column;gap:4px;}
+#sm-nav .pn-tab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:11px 12px;border-radius:12px;font-family:var(--font);font-size:12.5px;
+  font-weight:800;color:var(--green-text);background:transparent;border:1px solid transparent;
   line-height:1.25;cursor:pointer;transition:background .15s,color .15s;}
-#sm-nav .pn-tab:hover{background:#ccfbf1;}
-#sm-nav .pn-tab.is-on{background:#0f766e;color:#fff;}
-#sm-nav .pn-tab.is-on:hover{background:#115e59;}
-/* Stays put while the records scroll past it. 84px clears the ribbon, which
-   is sticky itself.
-
-   The height cap and its own scrollbar are what make "sticky" true rather
-   than nearly true: a bar taller than the window cannot stick — the browser
-   scrolls it until its bottom edge arrives, so the top of it walks off the
-   screen and the menu is gone exactly when somebody scrolling wants it. The
-   rail keeps its ground and paints itself, so it reads as a narrowed menu
-   rather than as a strip of page. */
+#sm-nav .pn-ico{width:18px;height:18px;flex-shrink:0;}
+#sm-nav .pn-tab:hover{background:var(--green-light);}
+#sm-nav .pn-tab.is-on{background:var(--green);color:#fff;}
+#sm-nav .pn-tab.is-on:hover{background:var(--green-hover);}
+/* Work Records' own two sub-views — Maintenance records / Performance —
+   mirrored from the in-panel subtabs-bar (switchRecordView keeps both in
+   step). Hidden by default: it only ever shows on the desk rail, and only
+   while Work Records is the open tab, via the sibling rule below. There is
+   no separate open/close state for it — switchTab's own is-on toggle on
+   the Work Records button IS what reveals it. */
+.pn-sub{display:none;}
+/* The rail itself: fixed to the viewport's left edge, from under the
+   sticky header bar (~65px tall) to the foot of the screen, with its own
+   scrollbar for the day it grows more rows than a laptop is tall. It is
+   painted in the THEME's green — var(--green), the same ink as every
+   primary button on the page — not a teal of its own. z-index below the
+   header bar (z-30), above the content. */
 @media(min-width:768px){
-  #sm-nav{position:sticky;top:84px;align-self:start;
-    max-height:calc(100vh - 104px);overflow-y:auto;overflow-x:hidden;
-    padding:10px;border:1px solid #e6f4f0;border-radius:14px;
-    background:var(--bg-white);}
+  #sm-nav{position:fixed;left:0;top:65px;bottom:0;width:212px;z-index:25;
+    overflow-y:auto;overflow-x:hidden;
+    padding:14px 12px;border:none;border-radius:0;
+    background:var(--green);box-shadow:2px 0 14px rgba(8,92,51,.18);
+    transition:width .2s;}
+  #sm-nav .pn-tab{color:rgba(255,255,255,.85);}
+  #sm-nav .pn-tab:hover{background:rgba(255,255,255,.12);color:#fff;}
+  #sm-nav .pn-tab.is-on{background:rgba(255,255,255,.24);color:#fff;}
+  #sm-nav .pn-tab.is-on:hover{background:rgba(255,255,255,.3);}
+  /* Revealed only while the Work Records tab above it is open — a CSS
+     sibling of .pn-tab.is-on, so switchTab's existing class toggle is the
+     only thing driving it. */
+  #sm-nav .pn-tab.is-on + .pn-sub{display:flex;flex-direction:column;gap:2px;
+    margin:2px 0 6px 30px;}
+  #sm-nav .pn-subtab{display:block;width:100%;text-align:left;
+    padding:7px 10px;border-radius:9px;border:1px solid transparent;
+    font-family:var(--font);font-size:11.5px;font-weight:700;
+    color:rgba(255,255,255,.65);background:transparent;cursor:pointer;
+    line-height:1.3;transition:background .15s,color .15s;}
+  #sm-nav .pn-subtab:hover{background:rgba(255,255,255,.1);color:#fff;}
+  #sm-nav .pn-subtab.active{background:rgba(255,255,255,.18);color:#fff;}
+  /* Worker Activity is two halves: the Main Nursery jobs and the Pre
+     Nursery's Seed Planting. A heading, not a button. */
+  #sm-nav .pn-subgroup{padding:8px 10px 2px;font-family:var(--font);
+    font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:rgba(255,255,255,.45);}
+  #sm-nav .pn-subgroup:first-child{padding-top:2px;}
+}
+/* Seed Planting: one number box per worker. */
+#payroll-table td.sp-cell{padding:3px 4px;}
+#payroll-table input.sp-in{width:100%;min-width:64px;box-sizing:border-box;
+  padding:5px 6px;border:1px solid var(--border,#d6dfd9);border-radius:7px;
+  font:inherit;font-size:12.5px;text-align:right;background:#fff;}
+#payroll-table input.sp-in:disabled{background:#f3f4f6;color:#9ca3af;}
+/* Icon-collapsed rail: no room for a label, let alone a sub-list under one. */
+.sm-frame.nav-hid #sm-nav .pn-sub{display:none !important;}
+/* Phone: the in-panel subtabs-bar is the only way to switch this, same as
+   it always was — the rail is a row of chips here, with no room under a
+   chip for a sub-list. */
+@media(max-width:767px){
+  #sm-nav .pn-sub{display:none !important;}
 }
 /* Phone: the column becomes a row above the content — a 212px column
-   beside a table on a 412px screen leaves neither of them usable. */
+   beside a table on a 412px screen leaves neither of them usable. The
+   chips keep the LIGHT colours: there is no teal block behind them here. */
 @media(max-width:767px){
-  #sm-nav .pn-group{margin-top:10px;padding-top:10px;flex-direction:row;
+  #sm-nav .pn-group{margin-top:10px;flex-direction:row;
     overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
   #sm-nav .pn-group::-webkit-scrollbar{display:none;}
-  #sm-nav .pn-cap{display:none;}
-  #sm-nav .pn-tab{width:auto;flex:0 0 auto;background:#f0fdfa;border-color:#99f6e4;
-    font-size:12px;padding:9px 13px;white-space:nowrap;}
-  #sm-nav .pn-out{justify-content:center;}
+  #sm-nav .pn-tab{width:auto;flex:0 0 auto;background:var(--green-bg);
+    border-color:var(--green-mid);font-size:12px;padding:9px 13px;white-space:nowrap;}
 }
 
 /* The head every panel shares: what the side bar chose, and the two
@@ -1367,8 +1474,13 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .we-week-x:hover{background:#fdecec;color:var(--red);border-color:var(--red);}
 /* The chemical for a column sits directly over the ticks it governs. */
 .we-col-l{font-size:10px;font-weight:900;letter-spacing:.6px;margin-bottom:4px;}
-.we-col-d{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;}
-.we-col-d .we-num{width:56px;height:26px;font-size:11.5px;}
+/* The dose sits BESIDE the chemical it measures, not under it — one row,
+   the select taking whatever room the dose box and its unit do not. */
+.we-col-row{display:flex;align-items:center;gap:3px;}
+.we-col-row .we-sel{flex:1 1 auto;width:auto;min-width:0;padding:0 3px;}
+.we-col-d{display:flex;align-items:center;gap:2px;flex:0 0 auto;}
+.we-col-d .we-num{width:34px;height:28px;padding:0 3px;font-size:11px;}
+.we-cfg-u{white-space:nowrap;}
 /* The activator under it is the second thing in the tank, not a second
    column, so it reads quieter and is fenced off by a rule rather than by a
    gap — a gap alone and the two pairs look like two columns of one. */
@@ -1490,3 +1602,19 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    nothing to do on it, which is the opposite of what this one wants. */
 #payroll-table tbody tr.tp-row-held > td{background:#fffbeb;}
 #payroll-table tbody tr.tp-row-held:hover > td{background:#fef3c7;}
+
+/* Seed Planting: the month's names, keyed by hand. */
+.sp-names{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px;
+  padding:10px 12px;background:#fff;border:1px solid var(--border,#d6dfd9);border-radius:var(--r-sm,10px);}
+.sp-names-lbl{font-size:12px;font-weight:800;color:var(--text,#1f2d27);margin-right:4px;}
+.sp-names-none{font-size:12px;color:var(--text-faint,#8a968f);}
+.sp-chip{display:inline-flex;align-items:center;gap:2px;padding:3px 4px 3px 10px;border-radius:999px;
+  background:#e8f0eb;color:#0d5c33;font-size:12px;font-weight:700;}
+.sp-chip-x{border:0;background:transparent;color:#0d5c33;cursor:pointer;font-size:15px;line-height:1;
+  padding:0 6px;border-radius:999px;}
+.sp-chip-x:hover{background:rgba(13,92,51,.12);}
+.sp-names-add{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-left:auto;}
+.sp-names-add input{padding:6px 9px;border:1px solid var(--border,#d6dfd9);border-radius:8px;font:inherit;font-size:12.5px;min-width:160px;}
+.sp-chip-sub{font-weight:600;font-size:10.5px;opacity:.7;margin-left:6px;}
+.sp-names-warn{color:#92400e;background:var(--gold-bg,#fffbeb);border-color:var(--gold-border,#fcd34d);font-size:12px;font-weight:700;}
+.sp-moved-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e;font-size:10px;font-weight:800;}

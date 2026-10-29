@@ -207,10 +207,23 @@ function plotCaps(nursery, plots, ticked){
    rounded again — 1950 mL is 1.95 L, and calling that 2 L would add half a
    litre the rule did not ask for. Two decimals is enough for any multiple
    of 50 mL; trailing zeros go, so 2000 mL reads "2 L" and not "2.00 L". */
+/* THE LOCALE IS PINNED, and it is the point of this function rather than a
+   detail of it. A bare toLocaleString reads the DEVICE's, which on a phone
+   is whatever the person set their handset to: this office screen read
+   4.4 kg and the Field Conductor's phone read 4,4 kg on the same dose, in
+   the same week. Two figures for one amount, and nothing on either screen
+   saying which is the real one.
+
+   'en-MY' is the spelling moneyFig on the salary claim already uses — the
+   one figure in this system that was always written deliberately — and the
+   phone pins the same name in src/lib/numberText.js. Change one, change the
+   other. */
+const USAGE_LOCALE = 'en-MY';
+
 function fmtUsage(totalAmount, unit){
   const big = totalAmount / 1000;
   const shown = Math.round(big * 100) / 100;
-  return shown.toLocaleString(undefined, { maximumFractionDigits: 2 })
+  return shown.toLocaleString(USAGE_LOCALE, { maximumFractionDigits: 2 })
        + (unit === 'gm' ? ' kg' : ' L');
 }
 /* Unit per chemical — used to auto-set mL/gm when one is selected. Reads
@@ -306,6 +319,16 @@ const PENCIL_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" 
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
   'aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 
+/* The office's own "select all" mark — a stack of boxes behind the one
+   that is ticked — in place of the round "all" pill every column header
+   used to carry. The button stays icon-only (its title says what it
+   does); a caption under it would not fit a 132px column repeated twice a
+   week. */
+const WE_ALL_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+  'aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2" opacity=".4"/>' +
+  '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M11 14.5l2 2 4-4"/></svg>';
+
 /* Every one of these lists is typed in by a person, and every one of them is
    printed straight back into innerHTML. A plot called B<img onerror=…> is
    unlikely; a fertiliser name with an ampersand in it is not. Defined up
@@ -386,7 +409,7 @@ function calcFertUsage(caps, fertName, doseGm, decimals = 2){
   if (!totalGm) return { kg:'—', bags:'—', totalGm:0 };
   // A whole number of 100 gm steps, so shown exactly rather than rounded on.
   const kgStr = (Math.round((totalGm / 1000) * 100) / 100)
-    .toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' kg';
+    .toLocaleString(USAGE_LOCALE, { maximumFractionDigits: 2 }) + ' kg';
   // Bags are not a step of anything, so this one still rounds UP: a bag
   // count rounded down is a lorry going back for one more bag.
   const bagsStr = info ? ceilTo(totalGm / info.bagSizeGm, decimals) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
@@ -588,6 +611,41 @@ let dbStateCache = {};   // `${nursery}_${month}` → saved schedule payload
 /* Admin of the "Nursery Operation Manage" module in User Access.
    Only admins may edit a record once it has been marked Checked. */
 let isNopsAdmin = false;
+
+/* ── MAY THIS PERSON OPEN SETTING ──────────────────────────────────────
+   The Setting tab was the module LEVEL and nothing else, so the tick the
+   office sets on User Access — "Open Setting (piece rates, plots,
+   workers)" — was written, shown as set on the screen, and read by
+   nothing. Somebody granted it saw no change at all, which is the fault
+   this codebase has a heading about: a permission saved and not obeyed
+   looks configured, and nobody finds out until somebody trusts it.
+
+   IT CONCLUDES EXACTLY WHAT THE SCREEN DRAWS, which is
+   effectiveActions() in shared/shared_module_access.js:
+
+     a saved row for this page is AUTHORITATIVE — the page must be open
+     and the function ticked, and that holds for an admin too, because an
+     admin the office has deliberately unticked is a decision and not an
+     oversight;
+
+     NO saved row is nobody having been asked, so the module level decides
+     — which is what governed this before the tick existed. `adminOnly` on
+     the action in nursery_ops_user_access.html is the other half of that
+     sentence, and the two are held together by a test rather than by
+     being written out twice.
+
+   Unreadable permissions fall back to `isNopsAdmin`, which is false when
+   the access load failed — the same safe default the tab has always had.
+   Failing OPEN here would hand the piece rates to everybody. */
+function maySetting() {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    const acts = p && p.nursery_ops_actions && p.nursery_ops_actions.maintenance;
+    if (acts) return !!acts.view && !!acts.setting;
+  } catch (_) { /* fall through to the module level */ }
+  return isNopsAdmin;
+}
 /* Plots added by the user via a schedule's "Add Row" (or Setting).
    Persisted in nops_maint_custom_plots and merged into NURSERY_PLOTS on load,
    so every existing renderer picks them up with no other changes. */
@@ -759,11 +817,15 @@ let _fieldUnpaired = {};
 
 function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
 
-function switchPayrollView(type, btn) {
+/* Worker Activity's six job sheets — chosen two ways now, same as Work
+   Record's list/chart: the panel's own sub-tab bar, and the side bar's
+   expandable entry. _syncSubNav (declared beside switchRecordView) is the
+   one place that keeps the two in step, by the type key alone. */
+const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive', 'seed_planting'];
+function switchPayrollView(type) {
   _payrollView = type;
-  const bar = btn ? btn.closest('.subtabs-bar') : null;
-  if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
+  _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
+  _syncSubNav('pn-subtab-', PAYROLL_VIEW_KEYS, type);
   renderPayroll();
 }
 
@@ -847,8 +909,8 @@ function capFmt(v) {
   if (!n) return '—';
   const r = Math.round(n * 100) / 100;
   return Number.isInteger(r)
-    ? r.toLocaleString()
-    : r.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    ? r.toLocaleString(USAGE_LOCALE)
+    : r.toLocaleString(USAGE_LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /* Capacity each worker earned on one work type: every ticked row hands its
@@ -877,8 +939,18 @@ function payrollTotalsFor(type) {
 function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
+  /* The Culling Incentive's own buttons below the table; every other view
+     leaves it empty. */
+  const extra = document.getElementById('payroll-extra');
+  if (extra) extra.innerHTML = '';
+  /* Seed Planting's names bar above the table; every other view leaves it
+     empty. */
+  const namesBar = document.getElementById('payroll-names');
+  if (namesBar) namesBar.innerHTML = '';
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
+  if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
+  if (_payrollView === 'seed_planting')     { renderSeedPlantingPayroll(); return; }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -1236,6 +1308,12 @@ const TP_JOBS = [
 ];
 const TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));
 
+/* Answered "nobody did this job". A database without the column answers
+   undefined for every row, so nothing is not-done and this tab reads
+   exactly as it did before -- which is the right way round: a record of
+   this kind cannot exist until the column does. */
+const tpNotDone = (rec) => !!(rec && rec.not_done);
+
 /* WHAT ONE WORKER DID ON ONE RECORD.
 
    SAME RULE as transplantFieldLines() in npayroll/npayroll_script.js, which
@@ -1251,6 +1329,15 @@ const TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));
    equally among the crew. */
 function tpShare(rec, w) {
   const job  = TP_JOB[rec.work_type];
+  /* A JOB NOBODY DID PAYS NOBODY. The conductor can answer a job with "not
+     done" -- a blanket spray on a plot where the grass never came -- and
+     that is an ordinary row of this table with an empty crew and `not_done`
+     set. See shared/RUN_ME_transplant_not_done.sql. The empty crew already
+     makes this nought; the flag is said as well because it is the answer
+     that decides, not the names left on the row, and a row hand-edited in
+     the Supabase dashboard could carry both. SAME GUARD as
+     transplantFieldLines in npayroll_script.js. */
+  if (tpNotDone(rec)) return 0;
   const crew = Array.isArray(rec.workers) ? rec.workers.filter(x => x && x.name) : [];
   if (!crew.length) return 0;
   return job && job.split
@@ -1292,13 +1379,26 @@ async function loadTransplantRecordsForPayroll(n, m) {
      falls back to the columns that have always been there and the tab says,
      in orange, that the gate is not installed. Showing the work is the safe
      direction; showing nothing is the one fault this tab cannot have. */
-  let { data, error } = await ask(TP_PAY_COLS + ', checked_at, checked_by');
-  if (error && /checked_at|checked_by/i.test(error.message || '')) {
-    _tpNoGate[key] = true;
-    ({ data, error } = await ask(TP_PAY_COLS));
-  } else if (!error) {
-    _tpNoGate[key] = false;
+  /* TWO OPTIONAL COLUMNS, AND POSTGREST NAMES ONLY THE FIRST ONE IT CANNOT
+     FIND -- so this is a ladder and not two ifs. `not_done` is the newer of
+     the two (RUN_ME_transplant_not_done.sql) and its absence needs no
+     warning: a not-done record cannot exist on a database without the
+     column, so every row reads as an ordinary one, which is the truth.
+     SAME LADDER as loadTransplantField in npayroll_script.js. */
+  let want = { nd: true, chk: true };
+  const build = () => TP_PAY_COLS
+    + (want.nd ? ', not_done' : '')
+    + (want.chk ? ', checked_at, checked_by' : '');
+  let { data, error } = await ask(build());
+  for (let i = 0; i < 2 && error; i++) {
+    const msg = String(error.message || '');
+    if (want.nd && /not_done/i.test(msg)) { want.nd = false; }
+    else if (want.chk && /checked_at|checked_by/i.test(msg)) {
+      want.chk = false; _tpNoGate[key] = true;
+    } else break;
+    ({ data, error } = await ask(build()));
   }
+  if (!error && want.chk) _tpNoGate[key] = false;
 
   _tpRecordsLoading[key] = false;
   if (error) {
@@ -1330,6 +1430,39 @@ function transplantingRows(n, m) {
           || String(a.work_type || '').localeCompare(String(b.work_type || ''));
     });
 }
+
+/* THE THREE ANSWERS the Transplanting sheet and its PDF both need, written
+   once so the paper cannot say something the screen does not.
+
+   Columns: the register's names FIRST, in their own order, then any name the
+   records carry that the register does not know -- see the note inside
+   renderTransplantingPayroll for why such a name still gets a column. */
+function tpWorkerColumns(n, rows) {
+  const reg = workers[n] || [];
+  const onRecords = [...new Set(rows.flatMap(r =>
+    (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
+  const extra = onRecords.filter(name => !reg.includes(name)).sort();
+  return { wk: reg.concat(extra), extra };
+}
+/* The record's own figure, which is what the claim quotes: the keyed
+   quantities where the job splits, the plot's source figure otherwise. */
+function tpRowCap(r) {
+  const job  = TP_JOB[r.work_type];
+  /* A JOB NOBODY DID HAS NO CAPACITY. The plot's own quantity is still on
+     the row -- that is what the job WOULD have been -- and quoting it
+     anywhere reads as capacity somebody worked. Tested HERE rather than in
+     each caller, so the screen, the PDF of the same sheet and anything
+     added later get it without knowing this rule exists. */
+  if (tpNotDone(r)) return 0;
+  const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
+  return job && job.split
+    ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
+    : Number(r.source_qty || 0);
+}
+/* WHERE THE GATE IS NOT INSTALLED, EVERY ROW IS AGREED -- because every row
+   is being paid. Reading the absent column as "not checked" would draw the
+   whole sheet held, under an orange line saying the opposite. */
+function tpAgreed(key, r) { return !!_tpNoGate[key] || !!r.checked_at; }
 
 function renderTransplantingPayroll() {
   const tbl = document.getElementById('payroll-table');
@@ -1375,11 +1508,7 @@ function renderTransplantingPayroll() {
      `pay.fieldNoColumn` exists to shout about on the other tabs. So the
      columns are the register's names FIRST, in their own order, and then
      any name the records carry that the register does not know. */
-  const reg = workers[n] || [];
-  const onRecords = [...new Set(rows.flatMap(r =>
-    (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
-  const extra = onRecords.filter(name => !reg.includes(name)).sort();
-  const wk = reg.concat(extra);
+  const { wk, extra } = tpWorkerColumns(n, rows);
 
   const payTh = (txt, w, cls) =>
     `<th class="${cls || ''}" style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
@@ -1397,11 +1526,8 @@ function renderTransplantingPayroll() {
     </tr></thead><tbody>`;
 
   const totals = {}; wk.forEach(w => totals[w] = 0);
-  let capTotal = 0, heldCap = 0, heldRows = 0;
-  /* WHERE THE GATE IS NOT INSTALLED, EVERY ROW IS AGREED -- because every row
-     is being paid. Reading the absent column as "not checked" would draw the
-     whole sheet held, under an orange line saying the opposite. */
-  const agreed = (r) => !!_tpNoGate[key] || !!r.checked_at;
+  let capTotal = 0, heldCap = 0, heldRows = 0, skipRows = 0;
+  const agreed = (r) => tpAgreed(key, r);
 
   if (!rows.length) {
     h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noTransplant')}</td></tr>`;
@@ -1410,22 +1536,34 @@ function renderTransplantingPayroll() {
       const job  = TP_JOB[r.work_type];
       const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
       const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
-      /* The record's own figure, which is what the claim quotes: the keyed
-         quantities where the job splits, the plot's source figure
-         otherwise. */
-      const rowCap = job && job.split
-        ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
-        : Number(r.source_qty || 0);
+      /* NOT DONE IS A THIRD STATE, not a held row and not an agreed one.
+         Held means the office has still to agree a figure; here there is no
+         figure to agree, so it is in NEITHER total -- adding it to the held
+         line would send somebody to tick a row that can never pay anybody.
+         SAME SPLIT as splitTransplantField in npayroll_script.js, which
+         keeps these rows out of both of the claim's lists. The CAPACITY is
+         nought from tpRowCap itself, so the PDF of this sheet gets that half
+         without knowing this rule exists. */
+      const skipped = tpNotDone(r);
+      const rowCap = tpRowCap(r);
       /* THE TOTAL IS WHAT THE CLAIM PAYS. A row nobody has agreed is not on
          the claim, so counting it in the foot here would hand the office a
          figure the claim does not quote and no way to see which. Held rows
          are added up on their own and said under it. */
-      if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
-      h += `<tr${agreed(r) ? '' : ' class="tp-row-held"'}>
+      if (skipped) skipRows++;
+      else if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+      h += `<tr${skipped ? ' class="tp-row-skipped" style="opacity:.72;"'
+                        : (agreed(r) ? '' : ' class="tp-row-held"')}>
         <td style="font-weight:600;white-space:nowrap;">${r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—'}</td>
         <td class="plot-td">${esc(r.plot_name || '—')}</td>
-        <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}</td>
-        <td>${rowCap ? rowCap.toLocaleString() : '—'}</td>
+        <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}${
+          skipped ? ` <span style="display:inline-block;margin-left:.3rem;padding:.05rem .35rem;`
+                  + `border:1px solid #cbd5e1;border-radius:.5rem;background:#f1f5f9;color:#475569;`
+                  + `font-size:10px;font-weight:800;letter-spacing:.04em;" title="${esc(t('pay.tpNotDoneWhy'))}">`
+                  + `${esc(t('pay.tpNotDoneTag'))}</span>` : ''}</td>
+        <td${skipped ? ' style="color:var(--text-faint);font-weight:600;"' : ''}>${
+          skipped ? esc(t('pay.tpNotDoneCell'))
+                  : (rowCap ? rowCap.toLocaleString() : '—')}</td>
         ${wk.map(w => {
           const on = byName[w];
           if (!on) return '<td></td>';
@@ -1463,6 +1601,17 @@ function renderTransplantingPayroll() {
       <td colspan="${wk.length + 2}" style="text-align:left;color:#92400e;font-weight:600;">
         ${t('pay.tpHeld').replace('{n}', heldRows)}</td></tr>`;
   }
+  /* AND A JOB NOBODY DID IS SAID TOO, in slate rather than amber: held work
+     is a question waiting for the office, and this is an answer that is
+     already given. A row in no total with nothing under the sheet saying so
+     is the one shape of short figure this file is most careful about. */
+  if (skipRows) {
+    h += `<tr class="jumlah-tr" style="background:#f8fafc;">
+      <td class="th-left" colspan="3" style="color:#475569;">${t('pay.tpNotDoneLabel')}</td>
+      <td style="color:#475569;">—</td>
+      <td colspan="${wk.length + 2}" style="text-align:left;color:#475569;font-weight:600;">
+        ${t('pay.tpNotDoneFoot').replace('{n}', skipRows)}</td></tr>`;
+  }
   h += `</tfoot>`;
   tbl.innerHTML = h;
 
@@ -1480,6 +1629,13 @@ function renderTransplantingPayroll() {
    anybody can tick and only an admin can untick is not a lock, it is a trap.
    Unticking takes nothing away -- it puts the row back where it was. */
 function _tpCheckCell(r, key) {
+  /* NOTHING TO AGREE ON A JOB NOBODY DID. A Check button here would offer
+     the office a tick that moves no money, and a ticked row that pays
+     nobody is the kind of thing somebody later reads as a fault. */
+  if (tpNotDone(r)) {
+    return `<span style="color:#475569;font-size:11px;font-weight:700;"
+      title="${esc(t('pay.tpNotDoneWhy'))}">${esc(t('pay.tpNotDoneLabel'))}</span>`;
+  }
   if (_tpNoGate[key]) {
     return `<span style="color:var(--text-faint);font-size:11px;"
       title="The Checked columns are not on this database yet — run shared/RUN_ME_transplant_checked.sql">—</span>`;
@@ -1532,6 +1688,573 @@ async function toggleTransplantChecked(id) {
     renderPayroll();
     alert('That did not save, so nothing has changed:\n\n' + error.message);
   }
+}
+
+/* ══ CULLING INCENTIVE — gone through here, paid on the payroll ══
+   The office asked for it to live beside the other piece work: *"把culling
+   incentive全部搬到这里 under worker activity，这里只会显示plot，duration，
+   日期，谁拿到 after check，然后payroll那边要link这里 然后在payroll才会有钱"*.
+
+   So this tab answers four things and no more — the plot, how long it took,
+   the two dates, and who earns it — and it carries the CHECK. There is no RM
+   on it on purpose: the money is the payroll's, and the payroll pays ONLY
+   the plots Checked here (npayroll_script.js, renderCullIncentive). Two
+   screens quoting the money is two places to keep in step.
+
+   The rule — which plots, how they are timed, who earns — is
+   shared/shared_cull_incentive.js, read by both pages. Do not re-implement
+   it here.
+
+   Three things in the shape:
+
+   - A plot that does NOT qualify is shown, under the ones that do, saying
+     why. A plot silently missing from an incentive list is the one nobody
+     asks about.
+   - CHECKED WRITES DOWN WHAT THE ROW READ. The dates and the days go into
+     nops_cull_incentive_checks with the tick, so a PALMS correction after
+     the office signed does not move money already agreed. Uncheck clears
+     the tick and the live answer comes back.
+   - A Checked plot cannot be added or removed by hand until it is
+     unchecked. Changing what was agreed starts with taking the agreement
+     back, or a payroll already priced moves under the person who priced it. */
+let _cullCache = {};          // ym → { transplanted, palms, overrides, checks, ... }
+let _cullLoading = {};
+
+function _cullYm() { return document.getElementById('global-month').value; }
+const _cullPd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
+
+/* WHY A PLOT IS NOT EARNING IT — the sentence in the NOT-earning list. At
+   file scope rather than inside the renderer so anything else that has to
+   name the reason says it in the same words: the Remove dialog did, until
+   the office asked for Remove to be one press with nothing to read. */
+function _cullWhy(r) {
+  const T = window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15;
+  if (r.override && r.override.action === 'remove') return 'Taken out by hand';
+  if (r.state === 'slow') return `Over ${T} days`;
+  if (r.state === 'open') return 'Transplanting not closed in PALMS';
+  if (r.state === 'unread') return 'PALMS not read';
+  return 'No Saringan in PALMS';
+}
+
+async function loadCullIncentiveForPayroll(ym) {
+  if (!_supabase || !window.MJMCullIncentive) return;
+  _cullLoading[ym] = true;
+  renderPayroll();
+  const CI = MJMCullIncentive;
+  const st = { transplanted: {}, ledgerRead: false, palms: null,
+               overrides: [], overridesReady: true, checks: [], checksReady: true };
+  const ledger = (async () => {
+    try {
+      const all = [];
+      for (let from = 0; ; from += 1000) {
+        const res = await _supabase.from('shared_inventory_logs')
+          .select('plot_name, remark, transaction_type, transaction_date, created_at')
+          .eq('transaction_type', 'Transplanted')
+          .order('id', { ascending: true }).range(from, from + 999);
+        if (res.error) throw res.error;
+        all.push(...(res.data || []));
+        if (!res.data || res.data.length < 1000) break;
+      }
+      st.transplanted = CI.indexTransplanted(all);
+      st.ledgerRead = true;
+    } catch (e) { console.warn('[maint] the transplanting ledger was not read:', (e && e.message) || e); }
+  })();
+  const palms = (async () => {
+    if (!window.MJMPalms) return;
+    try {
+      await MJMPalms.loadStages(_supabase);
+      st.palms = await MJMPalms.loadLogs(_supabase);
+    } catch (e) { console.warn('[maint] PALMS was not read:', (e && e.message) || e); st.palms = null; }
+  })();
+  const ov = CI.loadOverrides(_supabase, ym).then(r => { st.overrides = r.rows; st.overridesReady = r.ready; });
+  const ck = CI.loadChecks(_supabase, ym).then(r => { st.checks = r.rows; st.checksReady = r.ready; });
+  await Promise.all([ledger, palms, ov, ck]);
+  _cullCache[ym] = st;
+  _cullLoading[ym] = false;
+  renderPayroll();
+}
+
+function cullIncentiveRows(n, ym) {
+  const st = _cullCache[ym];
+  if (!st) return [];
+  return MJMCullIncentive.plots({ transplanted: st.transplanted, palms: st.palms,
+    overrides: st.overrides, checks: st.checks, ym, section: n });
+}
+
+/* Add and Remove change who is paid, so they carry the tick that changes
+   pay: an admin of this module, or Adjust Pay on the payroll Transplanting
+   sheet (where they lived until this moved). Asked again at the write. */
+function _cullMayHand() {
+  if (isNopsAdmin) return true;
+  try {
+    const p = (MJMAccess.permissions && MJMAccess.permissions()) || {};
+    const set = p.npayroll_actions && p.npayroll_actions.transpl;
+    if (set) return !!set.adjust;
+    return MJMAccess.isAdminOf && MJMAccess.isAdminOf('npayroll');
+  } catch (_) { return false; }
+}
+
+function renderCullIncentivePayroll() {
+  const tbl = document.getElementById('payroll-table');
+  if (!tbl) return;
+  const n = getNursery(), m = getMonth(), ym = _cullYm();
+  const line = document.getElementById('payroll-form-line');
+  if (line) line.textContent = `${t('tab.cullIncentive')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
+  const hint = document.getElementById('payroll-hint');
+  const off = document.getElementById('payroll-offreg');
+  if (off) off.style.display = 'none';
+  if (hint) {
+    hint.classList.remove('pay-hint-warn');
+    hint.textContent = `A plot whose Saringan Anak Bibit to Transplanting took ${window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15} days or fewer `
+      + `earns the incentive. Tick Checked once you have been through a plot: ONLY a checked plot is paid, `
+      + `and the amounts are worked out on the Nursery Payroll Transplanting sheet.`;
+  }
+  const msg = (txt, colour) => {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:${colour || 'var(--text-faint)'};font-size:13px;">${txt}</td></tr></tbody>`;
+  };
+  if (!window.MJMCullIncentive) { msg('The culling incentive could not be loaded. Reload the page.', 'var(--danger,#c0392b)'); return; }
+  if (!MJMCullIncentive.NURSERIES.includes(n)) {
+    msg('The culling incentive is paid on BNN, UNN 1 and UNN 2 plots. Pick one of those nurseries.');
+    return;
+  }
+  if (_cullCache[ym] === undefined && !_cullLoading[ym]) loadCullIncentiveForPayroll(ym);
+  if (_cullLoading[ym] || !_cullCache[ym]) { msg(t('pay.loading')); return; }
+
+  const st = _cullCache[ym];
+  const rows = cullIncentiveRows(n, ym);
+  const mayHand = _cullMayHand() && st.overridesReady;
+  /* A PLOT TAKEN OUT BY HAND IS OFF BOTH LISTS. The office asked for it in
+     the plainest words there are: *"我一按remove 就remove了 不要存在"*. It
+     was drawn in the NOT-earning list reading "Taken out by hand", which is
+     a row they had just said they did not want to see. The RECORD is still
+     written — that is what a Put back is made of — and the one line under
+     the table says how many went and offers it. */
+  const taken = rows.filter(r => r.override && r.override.action === 'remove');
+  const qualify = rows.filter(r => r.counts);
+  const other = rows.filter(r => !r.counts && !(r.override && r.override.action === 'remove'));
+  const who = MJMCullIncentive.whoEarns(n);
+  const T = MJMCullIncentive.TARGET_DAYS;
+  const q = s => esc(s).replace(/'/g, '&#39;');
+
+  const byHand = r => {
+    const o = r.override;
+    if (!o) return '';
+    const what = o.action === 'add' ? (r.manual ? 'Added by hand' : 'Counted by hand') : 'Taken out by hand';
+    const stamp = [o.created_by, o.created_at ? String(o.created_at).slice(0, 10) : ''].filter(Boolean).join(' · ');
+    return `<div style="font-size:10.5px;font-weight:700;color:${o.action === 'add' ? '#15803d' : '#b45309'};margin-top:2px;"
+      title="${esc([o.remark, stamp].filter(Boolean).join(' — '))}">${what}${o.remark ? ': ' + esc(o.remark) : ''}</div>`;
+  };
+  const why = _cullWhy;
+  const handBtn = r => {
+    if (!mayHand || r.check) return '';
+    if (r.override) {
+      const label = r.manual ? 'Delete' : (r.override.action === 'remove' ? 'Put back' : 'Undo');
+      return `<button class="btn btn-sm" onclick="cullDeleteOverride(${Number(r.override.id)})"
+        title="Delete the by-hand record — the plot goes back to what PALMS says">${label}</button>`;
+    }
+    /* REMOVE IS ON EVERY ROW, earning it or not, and it is ONE PRESS: no
+       dialog, no reason. The office: *"我一按remove 就remove了 不要存在 也不
+       用写remark"*. It was a dialog demanding a sentence, which is a form to
+       fill in for a row they simply did not want on the screen.
+
+       WHAT MAKES ONE PRESS SAFE is the Checked rule beside it: nothing is
+       paid until a plot is Checked, and a Checked plot REFUSES Remove until
+       somebody unchecks it. So no press here can move money — the worst it
+       can do is take a row off a list, and the line under the table puts it
+       back.
+
+       There is still NO button that PAYS a plot PALMS says is slow — the
+       office asked for that off ("count it 不用") and it stays off. Supplying
+       a run PALMS has not got is Add record, which times it like any
+       other. */
+    return `<button class="btn btn-sm" onclick="cullRemovePlot('${q(r.plot)}')"
+      title="Take this plot off the list for this month — Put back is under the table">Remove</button>`;
+  };
+  const checkCell = r => {
+    if (!st.checksReady) return `<span style="color:var(--text-faint);font-size:11px;"
+      title="The Checked table is not on this database yet — run shared/RUN_ME_cull_incentive_checked.sql">—</span>`;
+    if (r.check) {
+      const when = String(r.check.checked_at).slice(0, 10);
+      const by = r.check.checked_by ? ` by ${r.check.checked_by}` : '';
+      return `<span class="rec-checked-badge" title="Checked${esc(by)} on ${esc(when)} — the payroll pays this plot">✓ Checked</span>`
+        + `<button class="btn btn-sm" onclick="toggleCullChecked('${q(r.plot)}')"
+             title="Put this plot back to unchecked — it comes off the payroll until somebody checks it again">Uncheck</button>`;
+    }
+    return `<button class="btn btn-sm btn-check" onclick="toggleCullChecked('${q(r.plot)}')"
+      title="Mark as checked — ONLY a checked plot is paid on the payroll">✓ Check</button>`;
+  };
+  const payTh = (txt, w) => `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+  const head = `${payTh('No.', 40)}${payTh(t('pay.plot'), 84)}${payTh('Saringan started', 110)}
+    ${payTh('Transplanting ended', 110)}${payTh(`Duration (days)`, 90)}${payTh('Who gets it', 230)}`;
+  const span = 6 + 2;
+
+  let h = `<thead>
+    <tr><th class="wk-th" colspan="${span}">${t('tab.cullIncentive')} — Saringan to Transplanting within ${T} days</th></tr>
+    <tr>${head}${payTh('', 90)}${payTh(t('pay.checked'), 132)}</tr></thead><tbody>`;
+  if (!qualify.length) {
+    h += `<tr><td colspan="${span}" style="padding:1.4rem;text-align:center;color:var(--text-faint);">
+      No plot in ${esc(NURSERY_NAMES[n])} qualifies for ${esc(m)}${rows.length ? ' — see the plots below' : ''}.</td></tr>`;
+  }
+  qualify.forEach((r, i) => {
+    h += `<tr${r.check ? '' : ' class="tp-row-held"'}>
+      <td style="color:var(--text-faint);">${i + 1}</td>
+      <td class="plot-td">${esc(r.plot)}${byHand(r)}</td>
+      <td>${_cullPd(r.start)}</td>
+      <td>${_cullPd(r.end)}</td>
+      <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
+      <td style="text-align:left;">${who.map(esc).join(', ')}</td>
+      <td style="white-space:nowrap;">${handBtn(r)}</td>
+      <td style="white-space:nowrap;">${checkCell(r)}</td>
+    </tr>`;
+  });
+  const held = qualify.filter(r => !r.check).length;
+  h += `</tbody><tfoot><tr class="jumlah-tr">
+      <td class="th-left" colspan="5">${qualify.length - held} of ${qualify.length} plot${qualify.length === 1 ? '' : 's'} checked — sent to the payroll</td>
+      <td colspan="3" style="text-align:left;">${held ? `<span style="color:#92400e;font-weight:600;">${held} not checked yet — not paid</span>` : ''}</td>
+    </tr></tfoot>`;
+  if (other.length) {
+    h += `<tbody><tr><th class="wk-th" colspan="${span}" style="background:#f3f4f6;color:#6b7280;">Transplanted this month and NOT earning it</th></tr>`;
+    /* A row somebody has taken out by hand SINKS to the foot of this list.
+       It is still on the screen — nothing here vanishes with nothing saying
+       where it went — but the plots still to be looked at are the ones at
+       the top, which is what the list is read for. */
+    other.sort((a, b) => (a.override ? 1 : 0) - (b.override ? 1 : 0));
+    other.forEach(r => {
+      h += `<tr style="opacity:.75;">
+        <td></td>
+        <td class="plot-td">${esc(r.plot)}${byHand(r)}</td>
+        <td>${_cullPd(r.start)}</td>
+        <td>${_cullPd(r.end)}</td>
+        <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
+        <td style="text-align:left;color:#b45309;font-weight:700;">${esc(why(r))}</td>
+        <td style="white-space:nowrap;">${handBtn(r)}</td>
+        <td></td>
+      </tr>`;
+    });
+    h += `</tbody>`;
+  }
+  tbl.innerHTML = h;
+
+  /* The one button that is not on a row. It sits UNDER the table because
+     what it adds is a row at the top of it, and because a plot the ledger
+     never mentioned is the rarer of the two things done on this screen —
+     the common one is working down the list that is already there. */
+  const extra = document.getElementById('payroll-extra');
+  if (extra) {
+    /* THE ONE LINE THAT SAYS WHERE A REMOVED PLOT WENT. The rows are off
+       both lists, which is what the office asked for; this is not a row and
+       not a list, it is the way back from a mis-press — without it the only
+       undo would be the Supabase dashboard. */
+    const back = taken.length && mayHand
+      ? `<div style="margin-top:8px;font-size:11px;color:var(--text-faint);">
+           ${taken.length} taken off this month: ${taken.map(r =>
+             `<button class="btn btn-sm" onclick="cullDeleteOverride(${Number(r.override.id)})"
+                title="Put ${esc(r.plot)} back on the list">${esc(r.plot)} · Put back</button>`).join(' ')}
+         </div>`
+      : '';
+    extra.innerHTML = (mayHand
+      ? `<button class="btn btn-sm" id="cull-add-btn" onclick="openCullAdd()" style="margin-top:8px;"
+           title="Add a plot PALMS has no run for — you key the two days, and the ${T}-day rule still decides">+ Add record</button>`
+      : '') + back;
+  }
+
+  /* What makes the list wrong, or look wrong and is not. */
+  const notes = [];
+  if (st.palms === null) notes.push('PALMS could not be read, so no plot can be timed. Reload the page; if it stays, tell the office.');
+  else if (rows.length && !Object.keys(st.palms).length) notes.push('PALMS answered with no plot log at all — this login is probably not allowed to read it.');
+  if (!st.ledgerRead) notes.push('The transplanting ledger could not be read, so this month has no plots to time.');
+  if (!st.checksReady) notes.push('Checking a plot needs shared/RUN_ME_cull_incentive_checked.sql run once in Supabase. Until then nothing is paid.');
+  if (!st.overridesReady) notes.push('Adding or removing a plot by hand needs shared/RUN_ME_cull_incentive_checked.sql run once.');
+  if (off && notes.length) { off.style.display = ''; off.innerHTML = notes.map(esc).join('<br>'); }
+
+
+}
+
+/* The two writes are ONE plot-month record each, and the Check carries what
+   the row read. Optimistic with a rollback, the same shape
+   toggleTransplantChecked uses. */
+async function toggleCullChecked(plot) {
+  const n = getNursery(), ym = _cullYm(), st = _cullCache[ym];
+  if (!st || !_supabase) return;
+  if (!st.checksReady) {
+    alert('This database has not got the Checked table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
+    return;
+  }
+  const r = cullIncentiveRows(n, ym).find(x => MJMCullIncentive.key(x.plot) === MJMCullIncentive.key(plot));
+  if (!r) return;
+  if (r.check && !confirm(`Put ${r.plot} back to unchecked?\n\nIt comes OFF the culling incentive on the payroll until somebody checks it again.`)) return;
+  const was = st.checks.slice();
+  const at = r.check ? null : new Date().toISOString();
+  const by = at ? (window.currentUserEmail || _signingAs() || 'office') : null;
+  const row = { month: ym, plot: r.plot, section: r.section || n,
+    saringan_date: at ? (r.start || null) : null, transplant_date: at ? (r.end || null) : null,
+    days: at && r.days != null ? r.days : null, checked_at: at, checked_by: by };
+  st.checks = st.checks.filter(c => MJMCullIncentive.key(c.plot) !== MJMCullIncentive.key(r.plot)).concat(at ? [row] : []);
+  renderPayroll();
+  const { error } = await _supabase.from('nops_cull_incentive_checks').upsert(row, { onConflict: 'month,plot' });
+  if (error) {
+    st.checks = was;
+    renderPayroll();
+    alert('That did not save, so nothing has changed:\n\n' + error.message);
+  }
+}
+
+/* REMOVE IS ONE PRESS. No dialog and no reason: the office asked for that
+   in the plainest words there are — *"我一按remove 就remove了 不要存在 也不
+   用写remark"* — and they are right that a form to fill in is the wrong
+   shape for taking a row off a list.
+
+   IT IS SAFE TO BE ONE PRESS because of the rule beside it: a plot is paid
+   only once it is CHECKED, and a Checked plot refuses Remove until somebody
+   unchecks it. So no press here can move anybody's money. What it can do is
+   take a row off a list, and the line under the table puts it back.
+
+   It is still a RECORD and never a deletion — one `remove` row per plot per
+   month, carrying who and when. That record IS the Put back. */
+async function cullRemovePlot(plot) {
+  if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  const n = getNursery(), ym = _cullYm(), st = _cullCache[ym], CI = MJMCullIncentive;
+  if (!st || !st.overridesReady) {
+    alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
+    return;
+  }
+  const name = String(plot || '').trim().toUpperCase();
+  if (!name) return;
+  const row = cullIncentiveRows(n, ym).find(r => CI.key(r.plot) === CI.key(name));
+  /* The one refusal. Taking back an agreement starts with taking it back. */
+  if (row && row.check) { alert(name + ' is Checked. Uncheck it first, then remove it.'); return; }
+  const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
+    month: ym, plot: name, action: 'remove',
+    section: CI.sectionOfPlot(name) || n,
+    saringan_date: null, transplant_date: null, remark: null,
+    created_by: window.currentUserEmail || _signingAs() || null,
+    created_at: new Date().toISOString()
+  }, { onConflict: 'month,plot' });
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  await _cullReload(ym);
+}
+
+/* ════════════ ADD A PLOT BY HAND ════════════
+   The office asked for it back in one line: *"我要可以manual add record"*.
+
+   IT SUPPLIES THE RUN, IT DOES NOT WAIVE THE RULE. That is the whole of the
+   design, and it is what keeps it from being the "Count it" button the
+   office took off a day earlier ("count it 不用"). PALMS is where a run is
+   timed, and a plot can be missing one for reasons that have nothing to do
+   with the ground: the Saringan was never opened, the Transplanting was
+   never closed, a phone pushed an entry back. The office knows the two days
+   and keys them here — and the 15-day test then decides, exactly as it does
+   for every other plot. A run of 25 days keyed by hand is refused in the
+   dialog, naming the figure.
+
+   So there is still no button anywhere that pays a plot PALMS says is slow.
+
+   The row it makes is an ordinary one: it goes in the qualifying list
+   marked Added by hand, and it is NOT paid until somebody Checks it, like
+   every other plot. */
+let _cullAddEl = null;
+function openCullAdd() {
+  if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  const ym = _cullYm(), st = _cullCache[ym];
+  if (!st || !st.overridesReady) {
+    alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
+    return;
+  }
+  if (!_cullAddEl) {
+    const el = document.createElement('div');
+    el.id = 'cull-add';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(15,12,8,.5);z-index:9998;display:none;align-items:center;justify-content:center;padding:20px;';
+    const lab = 'display:block;font-size:11px;font-weight:700;color:var(--text-muted,#6b7280);margin:10px 0 4px;';
+    const inp = 'width:100%;padding:9px 10px;border:1.5px solid var(--border,#d1d5db);border-radius:8px;font-size:13px;';
+    el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="font-size:14px;font-weight:800;">Add a plot to the culling incentive</div>
+      <label style="${lab}">Plot</label><input id="ca-plot" style="${inp}" placeholder="B4">
+      <!-- THE TWO LINES THAT FILL THEMSELVES KEEP THEIR ROOM WHETHER THEY
+           SAY ANYTHING OR NOT. Both appear while somebody is reaching for
+           the next box — one on blur of the plot, one on a date change — so
+           a panel that grows around them moves the button out from under
+           the pointer, and the press lands on nothing. Reserving the line
+           is what stops that happening at all; the backdrop guard below is
+           the seatbelt. -->
+      <div id="ca-from" style="font-size:11px;color:var(--text-faint);margin-top:4px;min-height:15px;"></div>
+      <label style="${lab}">Nursery</label><select id="ca-sec" style="${inp}"></select>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;"><label style="${lab}">Saringan started</label><input id="ca-start" type="date" style="${inp}"></div>
+        <div style="flex:1;"><label style="${lab}">Transplanting ended</label><input id="ca-end" type="date" style="${inp}"></div>
+      </div>
+      <div id="ca-days" style="font-size:12px;font-weight:700;margin-top:8px;min-height:16px;"></div>
+      <label style="${lab}">Why (optional)</label><input id="ca-remark" style="${inp}" placeholder="PALMS was never closed for this plot">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+        <button class="btn" id="ca-cancel">Cancel</button><button class="btn btn-primary" id="ca-save">Add</button></div></div>`;
+    document.body.appendChild(el);
+    const close = () => { el.style.display = 'none'; };
+    /* THE BACKDROP CLOSES ON A CLICK THAT BEGAN ON THE BACKDROP, and that
+       `down` is not fussiness — it is a bug this dialog really had. Naming
+       the plot fills the two days in and writes a line under the box, so
+       the panel GROWS on blur; blur fires on mousedown, so the button
+       somebody was aiming at moves out from under the pointer and the
+       mouseup lands on the backdrop. The dialog shut on the press that was
+       meant to open the date picker, and everything keyed was gone.
+       Asking where the press STARTED fixes that, and the drag-out-of-a-
+       text-selection case with it. */
+    let down = false;
+    el.addEventListener('mousedown', e => { down = (e.target === el); });
+    el.addEventListener('click', e => { if (e.target === el && down) close(); });
+    el.querySelector('#ca-cancel').addEventListener('click', close);
+    el.querySelector('#ca-save').addEventListener('click', saveCullAdd);
+    /* The duration as it is keyed, so the refusal is never a surprise at
+       the end. It is MJMPalms.diffDays and not a second day count: two
+       pages timing one run two ways is how a plot is fast on one screen
+       and slow on the next. */
+    const show = () => {
+      const d = _cullAddDays();
+      const T = MJMCullIncentive.TARGET_DAYS;
+      const box = el.querySelector('#ca-days');
+      if (d == null) { box.textContent = ''; return; }
+      box.textContent = d <= T ? `${d} days — it qualifies` : `${d} days — over ${T}, this cannot be added`;
+      box.style.color = d <= T ? '#15803d' : '#c0392b';
+    };
+    const sI = el.querySelector('#ca-start'), eI = el.querySelector('#ca-end');
+    [sI, eI].forEach(i => {
+      i.addEventListener('change', show);
+      /* A day somebody KEYS stops being this dialog's to replace. Only a
+         programmatic set leaves the mark on, and that never fires input. */
+      i.addEventListener('input', () => { i.dataset.auto = ''; });
+    });
+    /* THE TWO DAYS ARE USUALLY IN PALMS ALREADY, and keying a date into a
+       dd/mm/yyyy box is the one thing on this screen somebody can fight for
+       a minute — the office did. So naming the plot FILLS them: the same
+       `runOf` the list itself is timed with, asked of one plot, so what is
+       keyed here is what the row would have read. Where PALMS has the
+       Saringan and no closed Transplanting — which is most of why a plot
+       needs this dialog at all — only the second day is left to key, and
+       the line says so.
+       It never writes over what somebody has TYPED: a day keyed by hand is
+       their answer, and the office correcting PALMS is half the point.
+
+       BUT A DAY THIS DIALOG FILLED IN BELONGS TO THE PLOT IT WAS FILLED
+       FOR. Keying one plot and then changing your mind left the first
+       plot's two days sitting under the second one's name — a record that
+       reads perfectly and is about the wrong ground. So the dialog
+       remembers which days are its own and drops them the moment the plot
+       changes. */
+    const fill = () => {
+      const plot = String(el.querySelector('#ca-plot').value || '').trim().toUpperCase();
+      const note = el.querySelector('#ca-from');
+      if (el.dataset.forPlot === plot) return;      // nothing new to look up
+      el.dataset.forPlot = plot;
+      [sI, eI].forEach(i => { if (i.dataset.auto === '1') { i.value = ''; i.dataset.auto = ''; } });
+      note.textContent = '';
+      show();
+      if (!plot || !window.MJMCullIncentive) return;
+      const CI = MJMCullIncentive;
+      const sec = CI.sectionOfPlot(plot);
+      if (sec) el.querySelector('#ca-sec').value = sec;
+      const st = _cullCache[_cullYm()];
+      const run = st ? CI.runOf(st.palms, plot, _cullYm() + '-31') : null;
+      if (!run || run.state === 'unread') return;
+      if (run.start && !sI.value) { sI.value = run.start; sI.dataset.auto = '1'; }
+      if (run.end && !eI.value) { eI.value = run.end; eI.dataset.auto = '1'; }
+      note.textContent = !run.start
+        ? `PALMS has no Saringan for ${plot} — key both days off the paper`
+        : run.end ? `From PALMS: ${plot} ${run.start} to ${run.end}`
+                  : `From PALMS: ${plot} started ${run.start} — Transplanting is not closed, so key the day it ended`;
+      show();
+    };
+    el.querySelector('#ca-plot').addEventListener('change', fill);
+    el.querySelector('#ca-plot').addEventListener('blur', fill);
+    _cullAddEl = el;
+  }
+  const el = _cullAddEl;
+  const n = getNursery();
+  /* No explaining line under the title — the office: "删掉 没必要". */
+  el.querySelector('#ca-sec').innerHTML = MJMCullIncentive.NURSERIES
+    .map(s => `<option value="${esc(s)}"${s === n ? ' selected' : ''}>${esc(NURSERY_NAMES[s] || s)}</option>`).join('');
+  el.querySelector('#ca-plot').value = '';
+  el.querySelector('#ca-start').value = '';
+  el.querySelector('#ca-end').value = '';
+  el.querySelector('#ca-start').dataset.auto = '';
+  el.querySelector('#ca-end').dataset.auto = '';
+  el.dataset.forPlot = '';
+  el.querySelector('#ca-days').textContent = '';
+  el.querySelector('#ca-from').textContent = '';
+  el.querySelector('#ca-remark').value = '';
+  el.style.display = 'flex';
+  setTimeout(() => el.querySelector('#ca-plot').focus(), 30);
+}
+
+/* The run as the dialog has it, or null where it cannot be timed. */
+function _cullAddDays() {
+  const el = _cullAddEl;
+  if (!el || !window.MJMPalms) return null;
+  const a = el.querySelector('#ca-start').value, b = el.querySelector('#ca-end').value;
+  if (!a || !b) return null;
+  const d = MJMPalms.diffDays(a, b);
+  return Number.isFinite(d) ? d : null;
+}
+
+async function saveCullAdd() {
+  if (!_cullMayHand()) return;
+  const el = _cullAddEl, ym = _cullYm(), CI = MJMCullIncentive;
+  const plot = String(el.querySelector('#ca-plot').value || '').trim().toUpperCase();
+  const section = String(el.querySelector('#ca-sec').value || '').trim();
+  const start = el.querySelector('#ca-start').value || '';
+  const end = el.querySelector('#ca-end').value || '';
+  const remark = String(el.querySelector('#ca-remark').value || '').trim();
+  if (!plot) { alert('Which plot?'); return; }
+  /* A -R plot is on no PALMS screen and on no incentive, by hand or not. */
+  if (CI.isReplant(plot)) { alert(plot + ' is a replant plot. The culling incentive is not paid on one.'); return; }
+  if (!start || !end) { alert('Key both days — the Saringan it started on and the day Transplanting ended.\n\nThat is the run, and it is what the rule is about.'); return; }
+  if (end < start) { alert('Transplanting ended before the Saringan started. Check the two days.'); return; }
+  const days = _cullAddDays();
+  if (days == null) { alert('PALMS could not be read, so the run cannot be timed. Reload the page and try again.'); return; }
+  if (days > CI.TARGET_DAYS) {
+    alert(`${plot} took ${days} days, which is over ${CI.TARGET_DAYS}.\n\n`
+      + 'Adding a plot by hand supplies the run PALMS has not got; it does not waive the rule.');
+    return;
+  }
+  /* The reason is OPTIONAL, like the Remove beside it — the office does not
+     want a form to fill in. The box stays because an added plot is the one
+     somebody asks about in three months, and the two days on the record
+     already say most of it. */
+  const already = cullIncentiveRows('', ym).find(r => CI.key(r.plot) === CI.key(plot) && r.override);
+  if (already && !confirm(`${plot} already carries a by-hand record this month.\n\nAdding replaces it.`)) return;
+  const btn = el.querySelector('#ca-save'); btn.disabled = true;
+  try {
+    const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').upsert({
+      month: ym, plot, action: 'add',
+      section: CI.sectionOf(section) || CI.sectionOfPlot(plot),
+      saringan_date: start, transplant_date: end, remark: remark || null,
+      created_by: window.currentUserEmail || _signingAs() || null,
+      created_at: new Date().toISOString()
+    }, { onConflict: 'month,plot' });
+    if (error) { alert('Could not save: ' + error.message); return; }
+    el.style.display = 'none';
+    await _cullReload(ym);
+  } finally { btn.disabled = false; }
+}
+
+async function cullDeleteOverride(id) {
+  if (!_cullMayHand()) return;
+  const ym = _cullYm(), st = _cullCache[ym];
+  const o = st && st.overrides.find(x => Number(x.id) === Number(id));
+  if (!o) return;
+  if (!confirm(`Delete the by-hand record for ${o.plot}?\n\nIt goes back to what PALMS says.`)) return;
+  const { error } = await _supabase.from('mjmnpayroll_cull_incentive_overrides').delete().eq('id', id);
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  await _cullReload(ym);
+}
+
+/* Re-read the two small tables and redraw. The ledger and PALMS are kept —
+   neither is changed by anything on this tab. */
+async function _cullReload(ym) {
+  const st = _cullCache[ym];
+  if (!st) { loadCullIncentiveForPayroll(ym); return; }
+  const [ov, ck] = await Promise.all([MJMCullIncentive.loadOverrides(_supabase, ym),
+                                      MJMCullIncentive.loadChecks(_supabase, ym)]);
+  st.overrides = ov.rows; st.overridesReady = ov.ready;
+  st.checks = ck.rows; st.checksReady = ck.ready;
+  renderPayroll();
 }
 
 function renderLoadingSeedlingsPayroll() {
@@ -1619,6 +2342,479 @@ function renderLoadingSeedlingsPayroll() {
   tbl.innerHTML = h;
 }
 
+/* ── Seed Planting (Pre Nursery) ─────────────────────────────────────────
+   The batch report's Seed Planting tab writes one `Planted` row per tray,
+   dated with the day keyed on that tab (`transaction_date`). Every one of
+   those dated inside the month on screen is counted here -- ONE ROW PER
+   BATCH, its whole planted quantity -- and each worker keys how many THEY
+   planted.
+
+   THE NAMES ARE KEYED BY HAND, A LIST PER MONTH. The office asked for it
+   ("这个月的工人名字需要manual key") -- the Pre Nursery crew is not on the
+   worker register as a section of its own, so the register cannot supply
+   them. nops_seed_planting_names holds one list per month, and a month with
+   none offers last month's to start from.
+
+   The ledger is READ and never written. What the office keys goes into
+   nops_seed_planting_batch_workers, one record per batch, with the figure
+   the ledger read when it was keyed (`qty_planted`) beside it.
+
+   It always reads the PRE NURSERY, whatever nursery is picked at the top:
+   seed planting is only ever done there.
+
+   NOT ON ANY CLAIM YET. The office asked for the record first -- nothing in
+   npayroll reads this table. */
+const SP_NURSERY = 'PN';
+const _spCache = {};      // month -> { rows, saved, names, prevNames, noTable }
+const _spLoading = {};
+const _spErr = {};
+const _spSaveTimers = {};
+const _spSaveErr = {};
+
+/* The date rule of the batch report and the Transplanting Report: the keyed
+   transaction_date, else a Date: in the remark, else the day it went in. */
+function _spLogDate(l) {
+  if (l.transaction_date) return String(l.transaction_date).slice(0, 10);
+  const r = String(l.remark || '');
+  const at = r.indexOf('Date:');
+  if (at >= 0) {
+    const d = r.slice(at + 5).trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  }
+  return l.created_at ? String(l.created_at).slice(0, 10) : null;
+}
+
+/* "Oct 2026" -> "2026-10", the shape a ledger date starts with. */
+function _spMonthPrefix(m) {
+  const v = monthLabelToInput(m);
+  return v || null;
+}
+
+/* Pure: the ledger's Planted rows in, one row per tray per day out, for the
+   month asked. Exposed so the test drives the real rule. */
+/* "2026-09-28" -> "Sep 2026", the month a date falls in. */
+function _spMonthOfDate(d) {
+  const y = String(d || '').slice(0, 4), mo = parseInt(String(d || '').slice(5, 7), 10);
+  return (y.length === 4 && mo >= 1 && mo <= 12) ? `${MONTH_ABBR[mo - 1]} ${y}` : null;
+}
+
+/* A BATCH CAN BE MOVED TO A LATER MONTH BY HAND. Seedlings sown at the very
+   end of a month -- 277 on 28 Sep -- come too late for that month to pay,
+   so the office puts the batch into the next one ("有时候太迟种的苗在当月
+   来不及进当月payroll"). `moved` is { batch: month }. A tray-day goes to the
+   month one of its batches was moved to, else to the month of its date, so
+   it is on ONE sheet and never two. */
+function seedPlantingMonthOf(row, moved) {
+  const mv = moved || {};
+  for (const b of row.batches) if (mv[b]) return mv[b];
+  return _spMonthOfDate(row.date);
+}
+
+/* ONE ROW PER BATCH. The trays are the batch report's business and none of
+   this sheet's -- "tray完全不用管 跟着batch 就可以了 直接show total planted
+   qty". The figure is the batch's whole planted quantity, every tray of it,
+   and the date is its planted date (the earliest, should its trays carry
+   more than one). */
+function seedPlantingRows(logs, m, moved) {
+  const by = {};
+  (logs || []).forEach(l => {
+    if (l.transaction_type && l.transaction_type !== 'Planted') return;
+    const d = _spLogDate(l);
+    const b = String(l.batch_name || '').trim();
+    if (!d || !b) return;
+    const row = by[b] || (by[b] = { key: b, batch: b, date: d, qty: 0, batches: [b] });
+    if (d < row.date) row.date = d;
+    row.qty += Number(l.quantity_change) || 0;
+  });
+  return Object.values(by).filter(r => seedPlantingMonthOf(r, moved) === m).sort((a, b) =>
+    a.date !== b.date ? (a.date < b.date ? -1 : 1)
+      : a.batch.localeCompare(b.batch, undefined, { numeric: true }));
+}
+
+async function loadSeedPlantingForPayroll(m) {
+  if (!_supabase) return;
+  _spLoading[m] = true; _spErr[m] = '';
+  renderPayroll();
+  try {
+    /* Every Planted row, paged: a request is capped at 1,000 rows, and the
+       date is filtered here because a row with no transaction_date still
+       has a day by the rule above. */
+    const logs = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await _supabase.from('shared_inventory_logs')
+        .select('id, transaction_type, batch_name, plot_name, quantity_change, transaction_date, created_at, remark')
+        .eq('transaction_type', 'Planted')
+        .order('id', { ascending: true })
+        .range(from, from + 999);
+      if (error) throw error;
+      logs.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    /* Batches moved to a month by hand. Read on its own: a database without
+       the table still shows every sheet by its dates. */
+    const moved = {};
+    let noMoveTable = false;
+    const { data: mv, error: me } = await _supabase.from('nops_seed_planting_batch_month')
+      .select('batch_name, month, created_by, created_at');
+    if (me) { noMoveTable = true; console.warn('[maint] seed planting batches read:', me.message); }
+    else (mv || []).forEach(r => { if (r.batch_name && r.month) moved[String(r.batch_name).trim()] = r.month; });
+    const rows = seedPlantingRows(logs, m, moved);
+
+    /* Asked by the BATCHES on this sheet, not by the month written on the
+       record: a batch keyed under September and then moved into October
+       keeps its figures. */
+    const saved = {};
+    let noTable = false;
+    const bs = rows.map(r => r.batch);
+    const { data: sv, error: se } = bs.length
+      ? await _supabase.from('nops_seed_planting_batch_workers')
+          .select('batch_name, month, planted_date, qty_planted, workers, updated_by, updated_at')
+          .in('batch_name', bs)
+      : await _supabase.from('nops_seed_planting_batch_workers').select('batch_name').limit(1);
+    if (se) {
+      /* A database that has not had the SQL run: the rows still show, the
+         boxes do not take anything, and the sheet says which file to run. */
+      noTable = true;
+      console.warn('[maint] seed planting read:', se.message);
+    } else {
+      const want = new Set(bs);
+      (sv || []).forEach(r => {
+        const k = String(r.batch_name || '').trim();
+        if (want.has(k)) saved[k] = r;
+      });
+    }
+    /* The month's names, and last month's to offer when this one has none. */
+    let names = [], prevNames = [];
+    if (!noTable) {
+      const prev = _spPrevMonth(m);
+      const { data: nm, error: ne } = await _supabase.from('nops_seed_planting_names')
+        .select('month, names').in('month', prev ? [m, prev] : [m]);
+      if (ne) {
+        noTable = true;
+        console.warn('[maint] seed planting names read:', ne.message);
+      } else {
+        (nm || []).forEach(r => {
+          const list = Array.isArray(r.names) ? r.names.map(x => String(x || '').trim()).filter(Boolean) : [];
+          if (r.month === m) names = list; else prevNames = list;
+        });
+      }
+    }
+    /* Batches by the month their own dates put them in, so the box can say
+       where a batch is coming FROM, and the month a batch left can say
+       where it went. */
+    const home = {};
+    logs.forEach(l => {
+      const b = String(l.batch_name || '').trim(), d = _spLogDate(l);
+      if (b && d && (!home[b] || d < home[b])) home[b] = d;
+    });
+    _spCache[m] = { rows, saved, names, prevNames, noTable, moved, noMoveTable, home };
+  } catch (e) {
+    _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
+  } finally {
+    _spLoading[m] = false;
+    renderPayroll();
+  }
+}
+
+/* "Oct 2026" -> "Sep 2026". */
+function _spPrevMonth(m) {
+  const v = monthLabelToInput(m);
+  if (!v) return null;
+  let y = parseInt(v.slice(0, 4), 10), mo = parseInt(v.slice(5, 7), 10) - 1;
+  if (mo < 1) { mo = 12; y--; }
+  return `${MONTH_ABBR[mo - 1]} ${y}`;
+}
+
+/* The month's names as keyed, then any name a row still carries a figure
+   for that is no longer on the list -- that figure would otherwise leave
+   the sheet with nothing saying so. */
+function spWorkerColumns(rows, saved, names) {
+  const wk = (names || []).slice();
+  const extra = [];
+  rows.forEach(r => {
+    const s = saved[r.key];
+    Object.keys((s && s.workers) || {}).forEach(w => {
+      if (!wk.includes(w) && !extra.includes(w)) extra.push(w);
+    });
+  });
+  return { wk: wk.concat(extra), extra };
+}
+
+function _spDay(d) { return String(d || "").split("-").reverse().join("/"); }
+
+function _spKeyed(s) {
+  return Object.values((s && s.workers) || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+}
+
+function renderSeedPlantingPayroll() {
+  const tbl = document.getElementById('payroll-table');
+  if (!tbl) return;
+  const m = getMonth();
+  const line = document.getElementById('payroll-form-line');
+  if (line) line.textContent = `${t('tab.seedPlanting')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
+  const off = document.getElementById('payroll-offreg');
+  if (off) { off.style.display = 'none'; }
+
+  if (_spCache[m] === undefined && !_spLoading[m] && !_spErr[m]) loadSeedPlantingForPayroll(m);
+  const st = _spCache[m];
+  const hint = document.getElementById('payroll-hint');
+  if (hint) {
+    const noTable = !!(st && st.noTable);
+    hint.textContent = noTable ? t('pay.spNoTable') : t('pay.spHint');
+    hint.classList.toggle('pay-hint-warn', noTable);
+  }
+  if (_spLoading[m] || !st) {
+    tbl.innerHTML = _spErr[m]
+      ? `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--danger,#c0392b);font-size:13px;">${esc(_spErr[m])}</td></tr></tbody>`
+      : `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.loading')}</td></tr></tbody>`;
+    return;
+  }
+
+  const { rows, saved, noTable } = st;
+  const { wk, extra } = spWorkerColumns(rows, saved, st.names);
+  _spDrawNames(m, st);
+  const payTh = (txt, w) =>
+    `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+  const span = 3 + wk.length + 1;
+  let h = `<thead>
+    <tr><th class="wk-th" colspan="${span}">${t('tab.seedPlanting')}</th></tr>
+    <tr>
+      ${payTh(t('pay.spPlantedDate'), 100)}
+      ${payTh(t('pay.batch'), 96)}
+      ${payTh(t('pay.qtyPlanted'), 100)}
+      ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
+      ${payTh(t('pay.spKeyed'), 120)}
+    </tr></thead><tbody>`;
+
+  const totals = {}; wk.forEach(w => totals[w] = 0);
+  let qtyTotal = 0;
+  if (!rows.length) {
+    h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.spNone', { m })}</td></tr>`;
+  } else {
+    rows.forEach((r, ri) => {
+      const s = saved[r.key];
+      const cells = (s && s.workers) || {};
+      qtyTotal += r.qty;
+      const keyed = _spKeyed(s);
+      wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
+      const diff = keyed - r.qty;
+      const state = !keyed ? '<span style="color:var(--text-faint);">—</span>'
+        : diff === 0 ? `<span style="color:#15803d;font-weight:700;">✓ ${keyed.toLocaleString(USAGE_LOCALE)}</span>`
+        : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
+      h += `<tr>
+        <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
+        <td class="plot-td">${esc(r.batch)}${st.moved[r.batch] === m ? ` <span class="sp-moved-tag">${esc(t('pay.spAddedTag'))}</span>` : ''}</td>
+        <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
+        ${wk.map((w, wi) => {
+          const v = cells[w];
+          return `<td class="sp-cell"><input type="number" min="0" step="1" inputmode="numeric" class="sp-in"
+            id="sp-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${noTable ? ' disabled' : ''}
+            onchange="setSeedPlantingQty(${ri}, ${wi}, this.value)" aria-label="${esc(w)}"></td>`;
+        }).join('')}
+        <td style="white-space:nowrap;">${state}</td>
+      </tr>`;
+    });
+  }
+  const grand = wk.reduce((a, w) => a + totals[w], 0);
+  const fig = v => v ? v.toLocaleString(USAGE_LOCALE) : '—';
+  h += `</tbody><tfoot>
+    <tr class="jumlah-tr">
+      <td class="th-left" colspan="2">${t('pay.totalCap')}</td>
+      <td>${fig(qtyTotal)}</td>
+      ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
+      <td>${fig(grand)}</td></tr>
+  </tfoot>`;
+  tbl.innerHTML = h;
+}
+
+/* The month's names, above the table: a chip per name with a cross, a box
+   and Add, and -- on a month with none -- last month's list in one press. */
+function _spDrawNames(m, st) {
+  const box = document.getElementById('payroll-names');
+  if (!box) return;
+  if (st.noTable) { box.innerHTML = ''; return; }
+  const chips = st.names.map((w, i) =>
+    `<span class="sp-chip">${esc(w)}<button type="button" class="sp-chip-x" title="${esc(t('pay.spRemove'))}"
+      onclick="removeSeedPlantingWorker(${i})" aria-label="${esc(t('pay.spRemove'))} ${esc(w)}">×</button></span>`).join('');
+  const copy = !st.names.length && st.prevNames.length
+    ? `<button type="button" class="btn btn-sm" onclick="useLastMonthSeedPlantingNames()">${esc(t('pay.spCopyPrev', { n: st.prevNames.length }))}</button>`
+    : '';
+  box.innerHTML = `<div class="sp-names">
+    <span class="sp-names-lbl">${esc(t('pay.spWorkers', { m }))}</span>
+    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`}
+    <span class="sp-names-add">
+      <input type="text" id="sp-new-name" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingWorker();}">
+      <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingWorker()">+ ${esc(t('pay.spAdd'))}</button>
+      ${copy}
+    </span></div>${_spBatchBar(m, st)}`;
+}
+
+/* Batches added to this month by hand, and the ones taken out of it. */
+function _spBatchBar(m, st) {
+  if (st.noMoveTable) return `<div class="sp-names sp-names-warn">${esc(t('pay.spNoMoveTable'))}</div>`;
+  const ins = Object.keys(st.moved).filter(b => st.moved[b] === m).sort();
+  const outs = Object.keys(st.moved).filter(b => st.moved[b] !== m && st.home[b] && _spMonthOfDate(st.home[b]) === m).sort();
+  const chips = ins.map(b =>
+    `<span class="sp-chip">${esc(b)}<span class="sp-chip-sub">${esc(t('pay.spPlantedOn', { d: _spDay(st.home[b] || '') }))}</span><button type="button" class="sp-chip-x" title="${esc(t('pay.spRemove'))}"
+      onclick="removeSeedPlantingBatch('${esc(b).replace(/'/g, "\\'")}')" aria-label="${esc(t('pay.spRemove'))} ${esc(b)}">×</button></span>`).join('');
+  const out = outs.length
+    ? `<span class="sp-names-none">${esc(t('pay.spMovedOut', { list: outs.map(b => b + ' → ' + st.moved[b]).join(', ') }))}</span>`
+    : '';
+  return `<div class="sp-names">
+    <span class="sp-names-lbl">${esc(t('pay.spBatches'))}</span>
+    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoBatches'))}</span>`}
+    ${out}
+    <span class="sp-names-add">
+      <input type="text" id="sp-new-batch" maxlength="20" placeholder="${esc(t('pay.spBatchPh'))}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingBatch();}">
+      <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingBatch()">+ ${esc(t('pay.spAddBatch'))}</button>
+    </span></div>`;
+}
+
+/* Moving a batch changes two sheets, so every month read is thrown away
+   and this one read again. */
+function _spReloadAll(m) {
+  Object.keys(_spCache).forEach(k => { delete _spCache[k]; });
+  loadSeedPlantingForPayroll(m);
+}
+
+async function addSeedPlantingBatch() {
+  const m = getMonth(), st = _spCache[m];
+  const el = document.getElementById('sp-new-batch');
+  if (!st || st.noMoveTable || !el || !_supabase) return;
+  const b = el.value.trim();
+  if (!b) { el.focus(); return; }
+  if (!st.home[b]) { alert(t('pay.spNoSuchBatch', { b })); el.select(); return; }
+  if (st.moved[b] === m) { alert(t('pay.spBatchHere', { b, m })); el.select(); return; }
+  const from = st.moved[b] || _spMonthOfDate(st.home[b]);
+  if (from === m) { alert(t('pay.spBatchHere', { b, m })); el.select(); return; }
+  if (!confirm(t('pay.spMoveQ', { b, from, m }))) return;
+  const { error } = await _supabase.from('nops_seed_planting_batch_month')
+    .upsert({ batch_name: b, month: m,
+              created_by: window.currentUserEmail || _signingAs() || 'office',
+              created_at: new Date().toISOString() }, { onConflict: 'batch_name' });
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  _spReloadAll(m);
+}
+
+async function removeSeedPlantingBatch(b) {
+  const m = getMonth(), st = _spCache[m];
+  if (!st || st.noMoveTable || !_supabase) return;
+  const back = _spMonthOfDate(st.home[b]);
+  if (!confirm(t('pay.spUnmoveQ', { b, m, back }))) return;
+  const { error } = await _supabase.from('nops_seed_planting_batch_month').delete().eq('batch_name', b);
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  _spReloadAll(m);
+}
+
+function _spSaveNames(m) {
+  const st = _spCache[m];
+  if (!_supabase || !st) return;
+  _supabase.from('nops_seed_planting_names')
+    .upsert({ month: m, names: st.names,
+              updated_by: window.currentUserEmail || _signingAs() || 'office',
+              updated_at: new Date().toISOString() }, { onConflict: 'month' })
+    .then(({ error }) => {
+      if (!error) return;
+      console.warn('[maint] seed planting names save failed:', error.message);
+      alert('The names did not save:\n\n' + error.message);
+    });
+}
+
+function addSeedPlantingWorker() {
+  const m = getMonth(), st = _spCache[m];
+  const el = document.getElementById('sp-new-name');
+  if (!st || st.noTable || !el) return;
+  const name = el.value.replace(/\s+/g, ' ').trim();
+  if (!name) { el.focus(); return; }
+  if (st.names.some(w => w.toLowerCase() === name.toLowerCase())) {
+    alert(t('pay.spDup', { w: name })); el.select(); return;
+  }
+  st.names.push(name);
+  _spSaveNames(m);
+  renderPayroll();
+  const again = document.getElementById('sp-new-name');
+  if (again) again.focus();
+}
+
+/* A name with figures against it is not taken off: its column would only
+   come back as a name off the list, and the figures with it. Clearing the
+   figures first is the decision, made where it can be seen. */
+function removeSeedPlantingWorker(i) {
+  const m = getMonth(), st = _spCache[m];
+  if (!st || st.noTable) return;
+  const w = st.names[i];
+  if (w == null) return;
+  const used = st.rows.filter(r => {
+    const s = st.saved[r.key];
+    return s && s.workers && Number(s.workers[w]) > 0;
+  }).length;
+  if (used) { alert(t('pay.spInUse', { w, n: used })); return; }
+  if (!confirm(t('pay.spRemoveQ', { w, m }))) return;
+  st.names.splice(i, 1);
+  _spSaveNames(m);
+  renderPayroll();
+}
+
+function useLastMonthSeedPlantingNames() {
+  const m = getMonth(), st = _spCache[m];
+  if (!st || st.noTable || st.names.length) return;
+  st.names = st.prevNames.slice();
+  _spSaveNames(m);
+  renderPayroll();
+}
+
+/* A figure keyed against one worker on one tray-day. Kept on the page at
+   once, written a moment later, and the sheet redrawn with the cursor put
+   back where it went -- a redraw inside `change` would otherwise throw away
+   the box the Tab key was moving to. */
+function setSeedPlantingQty(ri, wi, raw) {
+  const m = getMonth();
+  const st = _spCache[m];
+  if (!st || st.noTable) return;
+  const r = st.rows[ri];
+  const { wk } = spWorkerColumns(st.rows, st.saved, st.names);
+  const w = wk[wi];
+  if (!r || !w) return;
+  const s = st.saved[r.key] || (st.saved[r.key] = { batch_name: r.batch, month: m, workers: {} });
+  s.planted_date = r.date;
+  const n = String(raw).trim() === '' ? null : Math.max(0, Math.round(Number(raw)));
+  s.workers = Object.assign({}, s.workers || {});
+  if (n == null || !isFinite(n) || n === 0) delete s.workers[w]; else s.workers[w] = n;
+  s.qty_planted = r.qty;
+  persistSeedPlanting(m, r.key);
+  setTimeout(() => {
+    const focusId = document.activeElement && document.activeElement.id;
+    renderPayroll();
+    const el = focusId && document.getElementById(focusId);
+    if (el) { try { el.focus(); } catch (_) {} }
+  }, 0);
+}
+
+function persistSeedPlanting(m, key) {
+  if (!_supabase) return;
+  const tk = m + '|' + key;
+  clearTimeout(_spSaveTimers[tk]);
+  _spSaveTimers[tk] = setTimeout(() => {
+    delete _spSaveTimers[tk];
+    const s = (_spCache[m] && _spCache[m].saved[key]) || null;
+    if (!s) return;
+    _supabase.from('nops_seed_planting_batch_workers')
+      .upsert({ batch_name: s.batch_name, month: m, planted_date: s.planted_date,
+                qty_planted: s.qty_planted, workers: s.workers || {},
+                updated_by: window.currentUserEmail || _signingAs() || 'office',
+                updated_at: new Date().toISOString() },
+              { onConflict: 'batch_name' })
+      .then(({ error }) => {
+        if (!error) { delete _spSaveErr[tk]; return; }
+        _spSaveErr[tk] = error.message;
+        console.warn('[maint] seed planting save failed:', error.message);
+        alert('That figure did not save:\n\n' + error.message);
+      });
+  }, 600);
+}
+
 /* Print a piece rate at its real precision. Forcing 2 decimals showed a rate
    of 0.015 as "0.01" while the money column was still worked out from 0.015,
    so the form appeared not to add up. */
@@ -1648,16 +2844,27 @@ function _fmtRate(r) {
    which reads this same record. */
 function downloadPayrollPDF() {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const PW = 210, PH = 297, MARGIN = 25;
+  /* THE TAB ON SCREEN DECIDES WHAT IS PRINTED. Pressed on Transplanting it
+     printed the four maintenance sheets regardless, which is the office
+     asking for one thing and getting another -- "当我在transplanting的tab，
+     我要下载的是transplanting的资料". Transplanting is a wider sheet (a Work
+     column and a number in every worker cell, not a tick), so it takes the
+     wide page; the four tick sheets keep the tall one they have always had. */
+  const tpView = _payrollView === 'transplanting';
+  /* Seed Planting is the Pre Nursery's own sheet, a figure in every worker
+     cell like Transplanting, so it takes the wide page too. */
+  const spView = _payrollView === 'seed_planting';
+  const wide = tpView || spView;
+  const doc = new jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const PW = wide ? 297 : 210, PH = wide ? 210 : 297, MARGIN = 25;
   const CONTENT_W = PW - MARGIN * 2;      // 160 mm
   const MID = PW / 2;
 
-  const n = getNursery(), m = getMonth();
+  const n = spView ? SP_NURSERY : getNursery(), m = getMonth();
   const wk = workers[n] || [];
   const TYPES = ['pd', 'manuring', 'weeding', 'interrow'];
 
-  if (!wk.length) {
+  if (!wide && !wk.length) {
     alert(t('pay.noWorkers'));
     return;
   }
@@ -1768,6 +2975,233 @@ function downloadPayrollPDF() {
     return y + 9;
   }
 
+  /* THE TRANSPLANTING SHEET, as the tab draws it: Date, Plot, Work, Qty, a
+     column per worker carrying THEIR SHARE (not a tick -- the FC Portal
+     recorded who, and tpShare is how much), the row's capacity and whether
+     the office has Checked it. The totals are the CLAIM's -- agreed rows only
+     -- and what is held back is said under them, exactly as on screen. */
+  function drawTransplantingSheet() {
+    const key = _tpPayrollKey(n, m);
+    if (_tpRecordsCache[key] === undefined || _tpRecordsLoading[key]) {
+      alert(t('pay.loading'));
+      return;
+    }
+    if (_tpRecordsErr[key]) { alert(_tpRecordsErr[key]); return; }
+    const rows = transplantingRows(n, m);
+    const { wk: cols } = tpWorkerColumns(n, rows);
+    const agreed = (r) => tpAgreed(key, r);
+    const noGate = !!_tpNoGate[key];
+    const label = t('tab.transplanting');
+
+    const W_DATE = 20, W_PLOT = 13, W_WORK = 44, W_QTY = 18, W_PER = 20, W_CHK = 16;
+    const FIX = W_DATE + W_PLOT + W_WORK + W_QTY + W_PER + W_CHK;   // 131 of 247 mm
+    const per = Math.max(1, Math.floor((CONTENT_W - FIX) / 11));
+    const tchunks = [];
+    for (let i = 0; i < cols.length; i += per) tchunks.push(cols.slice(i, i + per));
+    if (!tchunks.length) tchunks.push([]);
+
+    tchunks.forEach((chunk, ci) => {
+      if (ci) doc.addPage();
+      const part = tchunks.length > 1
+        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
+        : '';
+      let y = titleBlock(label, part);
+      const wkW = chunk.length ? (CONTENT_W - FIX) / chunk.length : 0;
+      // A sheet with no names on it gives the room to Work rather than to nothing.
+      const workW = chunk.length ? W_WORK : W_WORK + (CONTENT_W - FIX);
+      const widths = [W_DATE, W_PLOT, workW, W_QTY, ...chunk.map(() => wkW), W_PER, W_CHK];
+      const xs = []; let x = MARGIN;
+      widths.forEach(w => { xs.push(x); x += w; });
+      const iPer = widths.length - 2, iChk = widths.length - 1;
+      const HEAD_H = headerHeightFor(chunk.length ? chunk : ['']);
+      const drawHead = () => {
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.date'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.plot'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.work'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[3], y, widths[3], HEAD_H, t('pay.qtyTransplant'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[4 + i], y, widths[4 + i], HEAD_H, w));
+        cell(xs[iPer], y, widths[iPer], HEAD_H, t('pay.perWorker'), { bold: true, size: 7, fill: HEAD_FILL });
+        cell(xs[iChk], y, widths[iChk], HEAD_H, t('pay.checked'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        y += HEAD_H;
+      };
+      drawHead();
+
+      const totals = {}; chunk.forEach(w => totals[w] = 0);
+      let capTotal = 0, heldCap = 0, heldRows = 0, skipRows = 0;
+      if (!rows.length) {
+        cell(MARGIN, y, CONTENT_W, 14, t('pay.noTransplant'), { size: 9 });
+        y += 14;
+      } else {
+        // Room under the last row for the total, the held-back line and the note.
+        const pageOf = payrollPlotPages(rows.map(r => ({ plot: r.plot_name })), {
+          rowH: ROW_H, floor: PH - MARGIN - 36, firstY: y, freshY: MARGIN + 27 + 9 + HEAD_H
+        });
+        rows.forEach((r, ri) => {
+          if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
+            doc.addPage();
+            y = titleBlock(label, part);
+            drawHead();
+          }
+          const job = TP_JOB[r.work_type];
+          const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
+          const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
+          const rowCap = tpRowCap(r);
+          /* A JOB NOBODY DID IS IN NEITHER TOTAL, the same third state the
+             screen draws. Its capacity is already nought, so without this
+             it would still add a ROW to the held count and the paper would
+             say "1 row is not Checked" about work nobody is ever going to
+             tick. */
+          const skipped = tpNotDone(r);
+          const ok = agreed(r);
+          if (skipped) skipRows++;
+          else if (ok) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+          const z = ri % 2 ? ZEBRA : null;
+          cell(xs[0], y, widths[0], ROW_H, r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—',
+               { size: 8, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, r.plot_name || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
+          cell(xs[2], y, widths[2], ROW_H, ((job && job.label) || r.jenis || r.work_type || '—')
+               + (skipped ? ` (${t('pay.tpNotDoneTag')})` : ''),
+               { size: 7.5, fill: z, align: 'left' });
+          cell(xs[3], y, widths[3], ROW_H,
+               skipped ? t('pay.tpNotDoneCell')
+                       : (rowCap ? rowCap.toLocaleString('en-MY') : '—'),
+               { size: skipped ? 6.5 : 8.5, nowrap: true, fill: z });
+          chunk.forEach((w, i) => {
+            const on = byName[w];
+            const share = on ? tpShare(r, on) : 0;
+            if (on && ok) totals[w] += share;
+            cell(xs[4 + i], y, widths[4 + i], ROW_H, on ? capFmt(share) : '', { size: 7.5, nowrap: true, fill: z });
+          });
+          cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(rowCap), { size: 8.5, bold: true, nowrap: true, fill: z });
+          /* NOTHING TO AGREE ON A JOB NOBODY DID, so the Checked column says
+             what it is rather than a tick or "Not checked" -- the same
+             choice _tpCheckCell makes on screen. */
+          if (skipped) cell(xs[iChk], y, widths[iChk], ROW_H, t('pay.tpNotDoneLabel'), { size: 6.5, nowrap: true, fill: z });
+          else if (noGate) cell(xs[iChk], y, widths[iChk], ROW_H, '—', { size: 8, fill: z });
+          else if (ok) { cell(xs[iChk], y, widths[iChk], ROW_H, '', { fill: z }); drawTick(xs[iChk], y, widths[iChk], ROW_H); }
+          else cell(xs[iChk], y, widths[iChk], ROW_H, 'Not checked', { size: 6.5, nowrap: true, fill: z });
+          y += ROW_H;
+        });
+      }
+
+      const grand = chunk.reduce((sm, w) => sm + totals[w], 0);
+      cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[3], y, widths[3], ROW_H + 1, capTotal ? capTotal.toLocaleString('en-MY') : '—',
+           { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[4 + i], y, widths[4 + i], ROW_H + 1, capFmt(totals[w]),
+           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iPer], y, widths[iPer], ROW_H + 1, capFmt(grand), { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      cell(xs[iChk], y, widths[iChk], ROW_H + 1, '', { fill: TOTAL_FILL });
+      y += ROW_H + 1;
+      /* Held back is NAMED on the paper as on the screen: a claim short of
+         work reads exactly like a quiet month. */
+      if (heldRows) {
+        const HELD = [255, 251, 235];
+        cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpHeldLabel'), { bold: true, size: 8.5, fill: HELD });
+        cell(xs[3], y, widths[3], ROW_H + 4, heldCap ? heldCap.toLocaleString('en-MY') : '—', { bold: true, size: 8.5, nowrap: true, fill: HELD });
+        cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
+             t('pay.tpHeld').replace('{n}', heldRows), { size: 6.5, fill: HELD, align: 'left' });
+        y += ROW_H + 4;
+      }
+      /* And a job nobody did, in grey rather than amber: held work is a
+         question waiting for the office, and this is an answer already
+         given. On the paper for the same reason as on the screen -- a row
+         in no total with nothing saying so is a figure that reads short. */
+      if (skipRows) {
+        const SKIP = [248, 250, 252];
+        cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpNotDoneLabel'), { bold: true, size: 8.5, fill: SKIP });
+        cell(xs[3], y, widths[3], ROW_H + 4, '—', { bold: true, size: 8.5, nowrap: true, fill: SKIP });
+        cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
+             t('pay.tpNotDoneFoot').replace('{n}', skipRows), { size: 6.5, fill: SKIP, align: 'left' });
+        y += ROW_H + 4;
+      }
+
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    });
+
+    doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
+  }
+
+  /* Seed Planting: one row per tray per day off the batch report, and what
+     each Pre Nursery worker keyed against it -- the sheet on screen, on
+     paper. */
+  function drawSeedPlantingSheet() {
+    const st = _spCache[m];
+    if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
+    const rows = st.rows, saved = st.saved;
+    const { wk: cols } = spWorkerColumns(rows, saved, st.names);
+    if (!cols.length) { alert(t('pay.spNoNames')); return; }
+    const label = t('tab.seedPlanting');
+    const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
+
+    const W_DATE = 24, W_BATCH = 24, W_QTY = 24, W_SUM = 26;
+    const FIX = W_DATE + W_BATCH + W_QTY + W_SUM;
+    const per = Math.max(1, Math.floor((CONTENT_W - FIX) / 12));
+    const chunks = [];
+    for (let i = 0; i < cols.length; i += per) chunks.push(cols.slice(i, i + per));
+
+    chunks.forEach((chunk, ci) => {
+      if (ci) doc.addPage();
+      const part = chunks.length > 1
+        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
+        : '';
+      let y = titleBlock(label, part);
+      const wkW = (CONTENT_W - FIX) / chunk.length;
+      const widths = [W_DATE, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
+      const xs = []; let x = MARGIN;
+      widths.forEach(w => { xs.push(x); x += w; });
+      const iSum = widths.length - 1;
+      const HEAD_H = headerHeightFor(chunk);
+      const drawHead = () => {
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.spPlantedDate'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.qtyPlanted'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[3 + i], y, widths[3 + i], HEAD_H, w));
+        cell(xs[iSum], y, widths[iSum], HEAD_H, t('pay.spKeyed'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        y += HEAD_H;
+      };
+      drawHead();
+
+      const totals = {}; chunk.forEach(w => totals[w] = 0);
+      let qtyTotal = 0, keyedTotal = 0;
+      if (!rows.length) {
+        cell(MARGIN, y, CONTENT_W, 14, t('pay.spNone', { m }), { size: 9 });
+        y += 14;
+      } else {
+        const floor = PH - MARGIN - 20;
+        rows.forEach((r, ri) => {
+          if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
+          const cells = (saved[r.key] && saved[r.key].workers) || {};
+          const keyed = _spKeyed(saved[r.key]);
+          qtyTotal += r.qty; keyedTotal += keyed;
+          const z = ri % 2 ? ZEBRA : null;
+          cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, r.batch, { size: 8.5, bold: true, nowrap: true, fill: z });
+          cell(xs[2], y, widths[2], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
+          chunk.forEach((w, i) => {
+            const v = Number(cells[w]) || 0;
+            totals[w] += v;
+            cell(xs[3 + i], y, widths[3 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
+          });
+          cell(xs[iSum], y, widths[iSum], ROW_H, fig(keyed) || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
+          y += ROW_H;
+        });
+      }
+      cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[2], y, widths[2], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1, fig(totals[w]) || '—',
+           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iSum], y, widths[iSum], ROW_H + 1, fig(keyedTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    });
+    doc.save(`Worker_Record_Seed_Planting_${m.replace(/\s+/g, '_')}.pdf`);
+  }
+
   /* Column widths for one chunk of workers. The three fixed columns and the
      per-worker total keep their size; the workers share what is left. */
   const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
@@ -1780,6 +3214,8 @@ function downloadPayrollPDF() {
   for (let i = 0; i < wk.length; i += maxPerPage) chunks.push(wk.slice(i, i + maxPerPage));
 
   const ROW_H = 8;
+  if (tpView) { drawTransplantingSheet(); return; }
+  if (spView) { drawSeedPlantingSheet(); return; }
   let firstPage = true;
 
   TYPES.forEach(type => {
@@ -1980,7 +3416,7 @@ function onRateInput(code, val) {
 /* Write all four rates for this nursery, then lock. */
 async function savePieceRates() {
   const n = getNursery();
-  if (!isNopsAdmin) { alert('Only an administrator can change piece rates.'); return; }
+  if (!maySetting()) { alert('You are not allowed to change piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
   if (rateLocked(n)) return;
   // Never write before the saved rates have arrived — otherwise a save made
   // during startup would push empty boxes over real values.
@@ -2034,7 +3470,7 @@ async function savePieceRates() {
 
 async function unlockPieceRates() {
   const n = getNursery();
-  if (!isNopsAdmin) { alert('Only an administrator can unlock piece rates.'); return; }
+  if (!maySetting()) { alert('You are not allowed to unlock piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
   if (!confirm(`Unlock the piece rates for ${NURSERY_NAMES[n]} so they can be edited?`)) return;
   if (_supabase) {
     const { error } = await _supabase.from('nops_maint_rate_lock')
@@ -2342,8 +3778,10 @@ let _dbReady     = false; // guards writes until the initial DB load lands
 function stateKey(n, m) { return `${n}_${m}`; }
 
 /* Tell the user when the schedule on screen was carried forward from an
-   earlier month and has not been saved for this one yet — otherwise a full
-   sheet looks like it was already set up for this month. */
+   earlier month and has not been saved for this one yet — otherwise the
+   weeks and chemicals look like they were already set up for this month.
+   The ticks are NOT part of what carried (see clearTicks) — every plot
+   opens unticked, so the notice says plan, never schedule. */
 function updateCarryNotice() {
   const box = document.getElementById('carry-notice');
   if (!box) return;
@@ -2351,7 +3789,7 @@ function updateCarryNotice() {
   const from = appState[n]?.[m]?._carriedFrom;
   if (!from) { box.style.display = 'none'; box.textContent = ''; return; }
   box.style.display = '';
-  box.innerHTML = `↩️ Carried forward from <b>${from}</b> — this is last month's schedule. ` +
+  box.innerHTML = `↩️ Weeks and chemicals carried forward from <b>${from}</b> — nothing is ticked yet. ` +
                   `Change anything and it saves as <b>${m}</b>'s own.`;
 }   // future DB row id (nursery+month)
 
@@ -2465,18 +3903,41 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.record':'Maintenance Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Maintenance Schedule', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Incentive', 'tab.seedPlanting':'Seed Planting', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
+    'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.spAddedTag':'added by hand', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
+    'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
+    'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
+    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Key the month\u2019s workers above, then how many each one planted; the last column says whether it adds up to the batch. Not on the payroll claim.',
+    'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
+    'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
+    'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
+    'pay.spCopyPrev':'Use last month\u2019s names ({n})', 'pay.spDup':'{w} is already on this month\u2019s list.',
+    'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
+    'pay.spRemoveQ':'Remove {w} from the {m} list?',
+    'pay.spBatches':'Batches added by hand:', 'pay.spNoBatches':'None. A batch planted too late for its own month can be added here.',
+    'pay.spBatchPh':'Batch no.', 'pay.spAddBatch':'Add batch', 'pay.spPlantedOn':'planted {d}',
+    'pay.spMovedOut':'Moved out of this month: {list}',
+    'pay.spNoSuchBatch':'Batch {b} has no Seed Planting on any batch report.',
+    'pay.spBatchHere':'Batch {b} is already on the {m} sheet.',
+    'pay.spMoveQ':'Move batch {b} from {from} to {m}?\n\nIt leaves the {from} sheet and is counted here instead. Figures already keyed go with it.',
+    'pay.spUnmoveQ':'Take batch {b} off {m}?\n\nIt goes back to {back}, the month it was planted in. Figures already keyed go with it.',
+    'pay.spNoMoveTable':'Batches cannot be added by hand yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase.',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
     'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. The crew itself is his answer and is changed on the FC Portal.',
     'pay.checked':'Checked',
     'pay.tpHeldLabel':'Held back',
     'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
     'pay.tpNoGate':'⚠ The Checked columns are not on this database yet, so every recorded row still reaches the salary claim. Run shared/RUN_ME_transplant_checked.sql in the Supabase SQL Editor.',
+    'pay.tpNotDoneTag':'NOT DONE',
+    'pay.tpNotDoneCell':'Nobody did it',
+    'pay.tpNotDoneWhy':'The Field Conductor recorded this job as not done — nobody carried it out, so there is nothing to check and nothing to pay. If it was done after all, he reopens the job on the FC Portal and ticks the crew.',
+    'pay.tpNotDoneLabel':'Not done',
+    'pay.tpNotDoneFoot':'{n} job(s) are recorded as NOT DONE — a blanket spray is not always needed, so a plot can genuinely never have one. They are in no total here and on no salary claim. That is the conductor’s answer, not a missing crew.',
     'pay.noDOs':'No Delivery Order has been issued for this nursery this month yet.',
     'pay.loadingHint':'Ticks come from the driver’s phone when the DO is signed, or from here if nobody has ticked it yet. Once saved, a row locks — only an admin can change it after that.',
     'pay.doLocked':'Locked — saved by {who} on {when}. Only an admin can change this.',
@@ -2604,18 +4065,41 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.record':'Rekod Kerja Penyelenggaraan', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Penyelenggaraan Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Insentif Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
+    'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.spAddedTag':'ditambah sendiri', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
+    'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
+    'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
+    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Isi pekerja bulan ini di atas, kemudian berapa yang ditanam setiap seorang; lajur terakhir menunjukkan sama ada jumlahnya sepadan. Tidak masuk tuntutan gaji.',
+    'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
+    'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
+    'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
+    'pay.spCopyPrev':'Guna nama bulan lepas ({n})', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
+    'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
+    'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',
+    'pay.spBatches':'Batch ditambah sendiri:', 'pay.spNoBatches':'Tiada. Batch yang ditanam terlalu lewat untuk bulannya boleh ditambah di sini.',
+    'pay.spBatchPh':'No. batch', 'pay.spAddBatch':'Tambah batch', 'pay.spPlantedOn':'ditanam {d}',
+    'pay.spMovedOut':'Dipindah keluar bulan ini: {list}',
+    'pay.spNoSuchBatch':'Batch {b} tiada Seed Planting dalam mana-mana laporan batch.',
+    'pay.spBatchHere':'Batch {b} sudah ada dalam {m}.',
+    'pay.spMoveQ':'Pindah batch {b} dari {from} ke {m}?\n\nIa keluar dari {from} dan dikira di sini. Angka yang sudah diisi ikut sekali.',
+    'pay.spUnmoveQ':'Keluarkan batch {b} dari {m}?\n\nIa kembali ke {back}, bulan ia ditanam. Angka yang sudah diisi ikut sekali.',
+    'pay.spNoMoveTable':'Batch belum boleh ditambah sendiri: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase.',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
     'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Senarai pekerja adalah jawapan beliau dan diubah di FC Portal.',
     'pay.checked':'Disemak',
     'pay.tpHeldLabel':'Ditahan',
     'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
     'pay.tpNoGate':'⚠ Lajur Disemak belum ada pada pangkalan data ini, jadi semua baris yang direkod masih masuk ke tuntutan gaji. Jalankan shared/RUN_ME_transplant_checked.sql di Supabase SQL Editor.',
+    'pay.tpNotDoneTag':'TIDAK DIBUAT',
+    'pay.tpNotDoneCell':'Tiada sesiapa buat',
+    'pay.tpNotDoneWhy':'Field Conductor merekodkan kerja ini sebagai tidak dibuat — tiada sesiapa melakukannya, jadi tiada apa untuk disemak dan tiada apa untuk dibayar. Jika ia ada dibuat, beliau membuka kerja itu semula di FC Portal dan menanda pekerjanya.',
+    'pay.tpNotDoneLabel':'Tidak dibuat',
+    'pay.tpNotDoneFoot':'{n} kerja direkod sebagai TIDAK DIBUAT — semburan rata tidak selalu diperlukan, jadi ada plot yang memang tidak pernah perlu. Ia tiada dalam mana-mana jumlah di sini dan tiada dalam tuntutan gaji. Itu jawapan conductor, bukan pekerja yang tertinggal.',
     'pay.noDOs':'Belum ada Delivery Order dikeluarkan untuk nurseri ini bulan ini.',
     'pay.loadingHint':'Tanda datang daripada telefon pemandu semasa DO ditandatangan, atau dari sini jika belum ditanda lagi. Setelah disimpan, baris dikunci — hanya admin boleh menukarnya selepas itu.',
     'pay.doLocked':'Dikunci — disimpan oleh {who} pada {when}. Hanya admin boleh menukarnya.',
@@ -2773,6 +4257,39 @@ function applyLang(){
   if (typeof renderAll === 'function') renderAll();
 }
 
+/* Flips every tick in a carried-forward state to false, without touching
+   the SHAPE those ticks sit in — how many weeks, how many rounds, how many
+   columns a round has, all of which come from the config (pdConfig,
+   manuringConfig, interrowConfig) and must stay exactly as carried, or a
+   tick typed against round 3 of a 3-round week has nowhere to land. Only
+   the leaves move; the plot keys, the week keys, the round arrays are
+   left as they were. */
+function clearTicks(s) {
+  if (s.pd) {
+    Object.values(s.pd).forEach(week => {
+      Object.keys(week || {}).forEach(p => { week[p] = { P: false, D: false }; });
+    });
+  }
+  if (s.manuring) {
+    Object.keys(s.manuring).forEach(p => {
+      s.manuring[p] = (s.manuring[p] || []).map(round => (round || []).map(() => false));
+    });
+  }
+  if (s.weeding) {
+    Object.keys(s.weeding).forEach(p => {
+      const rounds = s.weeding[p] || {};
+      const blank = {};
+      Object.keys(rounds).forEach(r => { blank[r] = false; });
+      s.weeding[p] = blank;
+    });
+  }
+  if (s.interrow) {
+    Object.keys(s.interrow).forEach(p => {
+      s.interrow[p] = (s.interrow[p] || []).map(round => (round || []).map(() => false));
+    });
+  }
+}
+
 function getState(nursery, month) {
   if (!appState[nursery]) appState[nursery] = {};
   if (!appState[nursery][month]) {
@@ -2787,9 +4304,18 @@ function getState(nursery, month) {
       return appState[nursery][month];
     }
     // Nothing saved for this month — start from the last month that was set,
-    // so a new month opens with the schedule already in place rather than
-    // blank. It stays a copy: nothing is written until someone ticks or saves,
-    // and the month it came from is untouched.
+    // so a new month opens with its weeks already dated and its chemicals
+    // already chosen rather than empty. It stays a copy: nothing is written
+    // until someone ticks or saves, and the month it came from is untouched.
+    //
+    // The TICKS do not come with it. A new month carrying last month's plan
+    // is a head start; a new month carrying last month's TICKS is a lie —
+    // every plot would open already marked done for work nobody has been
+    // near yet, which is what "This Month at a Glance" was showing for a
+    // month that had just been opened for the first time. clearTicks()
+    // resets every tick to false while leaving the shape (how many weeks,
+    // how many rounds, how many columns) exactly as the config dictates, so
+    // nothing downstream has to know this happened.
     const from = carryForwardFrom(nursery, month);
     if (from) {
       const inherited = loadPersistedState(nursery, from);   // already a deep copy
@@ -2797,8 +4323,10 @@ function getState(nursery, month) {
         migrateManuringShape(inherited, NURSERY_PLOTS[nursery]);
         migrateInterrowShape(inherited, NURSERY_PLOTS[nursery]);
         alignRoundsToWeeks(inherited, NURSERY_PLOTS[nursery]);
+        clearTicks(inherited);
         // Snapshot what was carried in, so nothing shows as "modified" until
-        // this month is actually changed.
+        // this month is actually changed. Taken AFTER clearing, so it is a
+        // snapshot of the blank ticks this month actually opens on.
         inherited._savedPd = JSON.parse(JSON.stringify(inherited.pd || {}));
         inherited._carriedFrom = from;
         appState[nursery][month] = inherited;
@@ -4424,13 +5952,18 @@ function autoSyncRecords() {
   renderRecords();
   persistRecords();
 }
-/* Show or hide the admin-only parts of the page. Called once MJMAccess has
+/* Show or hide the Setting side of the page. Called once MJMAccess has
    answered — until then the Setting tab stays hidden, which is the safe
-   default if the access check is slow or fails outright. */
+   default if the access check is slow or fails outright.
+
+   WHO MAY is maySetting(), not the module level: the office can tick
+   "Open Setting" for somebody who is not an admin of this module, and
+   that tick was being written and read by nothing. */
 function applyNopsAdminUI() {
+  const may = maySetting();
   const btn = document.getElementById('tab-btn-setting');
-  if (btn) btn.style.display = isNopsAdmin ? '' : 'none';
-  if (!isNopsAdmin) {
+  if (btn) btn.style.display = may ? '' : 'none';
+  if (!may) {
     // If a non-admin is sitting on Setting (restored tab, cached page), move
     // them back to Work Record rather than leaving the panel on screen.
     const panel = document.getElementById('tab-setting');
@@ -4497,13 +6030,88 @@ function toggleNav() {
   applyNav();
 }
 
+/* A table wide enough to need its worker columns — the payroll sheet grows
+   one per crew member, eight, ten, more — used to just sit there wider than
+   the content area, open the side bar and the only way to read the rest was
+   to drag it sideways. Nothing here is ever dropped to make room: a column
+   hidden to fit the screen is a figure hidden to fit the screen. So the
+   whole table is shrunk toward the wrapper's own width instead, with a CSS
+   transform rather than smaller type picked by hand, because the number of
+   columns — and so how much shrinking is needed — is different on every
+   nursery's sheet. Below TABLE_FIT_MIN_SCALE it stops shrinking and the
+   wrapper's own overflow-x:auto (already on every .tbl-wrap) takes back
+   over: type too small to read is worse than a scrollbar.
+
+   And the other direction: collapsing the side bar hands the content area
+   back a couple hundred pixels, and a table left at its natural size over
+   that spare width reads as unfinished — the office asked for it to use
+   the room rather than leave it blank. So a table NARROWER than its wrapper
+   is scaled UP too, capped at TABLE_FIT_MAX_SCALE so a four-plot nursery on
+   a wide monitor does not blow its type up past what is still a working
+   sheet. */
+const TABLE_FIT_MIN_SCALE = 0.62;
+const TABLE_FIT_MAX_SCALE = 1.4;
+
+function fitTableToWrap(wrap) {
+  if (!wrap) return;
+  const table = wrap.querySelector('table');
+  if (!table) return;
+  table.style.transform = '';
+  wrap.style.height = '';
+  wrap.style.overflowX = '';
+  // offsetParent is null on a hidden tab (display:none up the tree) — nothing
+  // to measure, and nothing left scaled from the last time it was open.
+  if (wrap.offsetParent === null) return;
+  const availW = wrap.clientWidth;
+  const naturalW = table.scrollWidth;
+  if (!availW || !naturalW) return;
+  let scale = availW / naturalW;
+  if (scale === 1) return;
+  // Too many columns to shrink to without losing legibility — the
+  // wrapper's own overflow-x:auto takes back over instead of this.
+  if (scale < TABLE_FIT_MIN_SCALE) return;
+  if (scale > TABLE_FIT_MAX_SCALE) scale = TABLE_FIT_MAX_SCALE;
+  const naturalH = table.scrollHeight;
+  table.style.transformOrigin = 'top left';
+  table.style.transform = `scale(${scale})`;
+  // The transform resizes what is PAINTED, not the table's own layout box —
+  // without these two the wrapper would still reserve the untransformed
+  // width and height, which on the way down is the overflow this exists to
+  // get rid of, and on the way up would leave the extra space clipped away
+  // rather than filled with the table it was just given to.
+  wrap.style.overflowX = 'hidden';
+  wrap.style.height = `${Math.ceil(naturalH * scale)}px`;
+}
+
+function fitAllTables() {
+  document.querySelectorAll('.tbl-wrap').forEach(fitTableToWrap);
+}
+
+/* Re-fit whenever a table's own content changes — a different nursery or
+   month redraws #payroll-table with a different worker count entirely —
+   and whenever the side bar's width does. The bar's width is CSS-animated
+   (.2s), so the new space is not there to measure until the transition
+   ends; fitting on the click itself would measure the space it is about to
+   leave. Window resize is the same question asked of the browser rather
+   than the menu. */
+document.querySelectorAll('.tbl-wrap').forEach((wrap) => {
+  try { new MutationObserver(() => fitTableToWrap(wrap)).observe(wrap, { childList: true, subtree: true }); }
+  catch (_) {}
+});
+document.addEventListener('transitionend', (e) => {
+  if (e.propertyName === 'padding-left') fitAllTables();
+});
+window.addEventListener('resize', fitAllTables);
+
 function switchTab(name, btn) {
-  // Setting holds piece rates and the worker list — admin only. The tab button
-  // is hidden for everyone else, but guard the switch too so a stale button, a
-  // restored tab or a console call can't get in either.
-  if (name === 'setting' && !isNopsAdmin) {
-    alert('Setting is for administrators only.\n\nAsk an admin if a plot capacity, ' +
-          'chemical or fertiliser needs changing.');
+  // Setting holds piece rates and the worker list, so it is the module
+  // admins and whoever the office has ticked "Open Setting" for. The tab
+  // button is hidden for everyone else, but guard the switch too so a stale
+  // button, a restored tab or a console call can't get in either.
+  if (name === 'setting' && !maySetting()) {
+    alert('Setting is not open to you.\n\nAsk an admin to tick "Open Setting" on '
+          + 'User Access, or to change the plot capacity, chemical or fertiliser '
+          + 'for you.');
     return;
   }
   document.querySelectorAll('#sm-nav .pn-tab').forEach(b=>b.classList.remove('is-on'));
@@ -4533,6 +6141,10 @@ function switchTab(name, btn) {
   if (name==='setting') renderSetting();
   if (name==='payroll') { renderPayroll(); refreshLinkedWorkers(); }
   try { syncToTopBtn(); } catch (_) {}
+  // A table that redraws while its tab is hidden never fires the content
+  // MutationObserver into anything visible to measure — becoming the active
+  // tab is itself the event that needs a fit here.
+  try { fitAllTables(); } catch (_) {}
 }
 
 /* ── BACK TO THE TOP ───────────────────────────────────────────────────
@@ -4565,14 +6177,29 @@ function syncToTopBtn() {
 window.addEventListener('scroll', syncToTopBtn, { passive: true });
 window.addEventListener('resize', syncToTopBtn, { passive: true });
 
-/* Work Record sub-views: the maintenance list and the analytics charts. */
-let _recordView = 'list';
-function switchRecordView(view, btn) {
-  _recordView = view;
-  document.querySelectorAll('.subtabs-bar .subtab-btn').forEach(b => {
-    if (b.id === 'subtab-list' || b.id === 'subtab-chart') b.classList.remove('active');
+/* A sub-view is chosen two ways now — the sub-tab bar inside the panel, and
+   the side bar's own expandable entry beside the group — so the function
+   that changes it is the one place that decides, reached from both, and
+   BOTH pairs of buttons are set from the key alone, never from a clicked
+   button's own reference. `ids` is exactly the set this call owns: without
+   that, clearing `.active` with a bare `#sm-nav .pn-subtab` selector would
+   also blank out a DIFFERENT tab's sub-nav the moment two of them exist
+   side by side in the same bar, which is what adding Worker Activity's
+   sub-nav alongside Work Record's would have done to it. */
+function _syncSubNav(prefix, ids, activeKey) {
+  ids.forEach((k) => {
+    const el = document.getElementById(prefix + k);
+    if (el) el.classList.toggle('active', k === activeKey);
   });
-  if (btn) btn.classList.add('active');
+}
+
+/* Work Record sub-views: the maintenance list and the performance charts. */
+let _recordView = 'list';
+const RECORD_VIEW_KEYS = ['list', 'chart'];
+function switchRecordView(view) {
+  _recordView = view;
+  _syncSubNav('subtab-', RECORD_VIEW_KEYS, view);
+  _syncSubNav('pn-subtab-', RECORD_VIEW_KEYS, view);
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
@@ -6017,8 +7644,7 @@ function renderRecords() {
         border-top:2px solid var(--green-mid);border-bottom:1px solid var(--green-mid);">
         📍 Plot ${plot}
         <span class="rec-group-sub" style="font-weight:400;color:var(--text-muted);margin-left:8px;">
-          ${recs.length} task${recs.length>1?'s':''} &nbsp;·&nbsp;
-          ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length} done
+          Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}
         </span>
       </td>
     </tr>`;
@@ -7633,6 +9259,16 @@ async function initDb() {
     const key = landing && landing.id.replace(/^tab-/, '');
     if (key) switchTab(key, navTabFor(key));
   } catch (_) {}
+  /* ?view=cull_incentive — the link the payroll Transplanting sheet carries,
+     so "check plots" lands on the plots and not on Work Records. Any of the
+     Worker Activity views can be named the same way. */
+  try {
+    const want = new URLSearchParams(location.search).get('view');
+    if (want && PAYROLL_VIEW_KEYS.includes(want)) {
+      switchTab('payroll', navTabFor('payroll'));
+      switchPayrollView(want);
+    }
+  } catch (_) {}
   // Whichever way the bar was left last time.
   try { applyNav(); } catch (_) {}
   /* The schedules build their dropdowns from `chemicals` and `fertilisers`,
@@ -8922,15 +10558,23 @@ function stockLabel(key) {
   return capNurseries().find(n => schedKey(n) === key) || key;
 }
 
+/* The nurseries this page knows, in the order the Work Schedule lists
+   them — the same list the Setting tab shows, for the same reason: the
+   nurseries this system has on record are the ones Seedling Stock has
+   plots for. Read once, by the summary AND by the Edit popup's own Next
+   button (see weNextTarget), so stepping through sections in the popup
+   visits nurseries in the same order a scroll down this tab would —
+   two readers of one list must not draw it in two different orders. */
+function scheduleNurseryNames() {
+  const names = capNurseries().filter(n => capPlots(n).length);
+  return names.length ? names : Object.keys(NURSERY_PLOTS);
+}
+
 function renderSchedSummary() {
   const box = document.getElementById('sched-summary');
   if (!box) return;
   const m = getMonth();
-  /* The same list the Setting tab shows, for the same reason: the nurseries
-     this system has on record are the ones Seedling Stock has plots for. */
-  const names = capNurseries().filter(n => capPlots(n).length);
-  const list = (names.length ? names : Object.keys(NURSERY_PLOTS))
-    .map(name => ({ label: name, key: schedKey(name) }));
+  const list = scheduleNurseryNames().map(name => ({ label: name, key: schedKey(name) }));
 
   if (!list.length) {
     box.innerHTML = '<div class="set-empty">No nurseries yet — they come from Seedling Stock.</div>';
@@ -9150,6 +10794,7 @@ function openWorkEditor(n, kind) {
   _we = { n, kind, before };
   document.getElementById('we-modal').classList.add('open');
   renderWorkEditor();
+  syncWeNextButton();
 }
 
 function closeWorkEditor() {
@@ -9160,20 +10805,86 @@ function closeWorkEditor() {
 /* Save is just "stop editing": every tick is already written. It publishes
    what is held rather than gathering it, so there is nothing here that could
    disagree with what the popup was showing. */
-/* Save both keeps the schedule and PUBLISHES it. The Schedule tab used to
-   carry a "Save Schedule" button whose only job was publishing the flat task
-   list the worker app reads (nops_maint_published); that button has gone, so
+/* Keeps the schedule and PUBLISHES it. The Schedule tab used to carry a
+   "Save Schedule" button whose only job was publishing the flat task list
+   the worker app reads (nops_maint_published); that button has gone, so
    this is where publishing happens — at the one moment somebody has said
    they are finished with a nursery's week. Without it the ticks would save
-   and the field would never be told. */
-function saveWorkEditor() {
-  if (_we) {
-    const n = _we.n, m = getMonth();
-    persistState(n, m);
-    try { saveSchedule(n, true); } catch (e) { console.warn('[maint] publish failed:', e); }
-  }
-  closeWorkEditor();
+   and the field would never be told.
+
+   Pulled out of saveWorkEditor so weNext() can do the same review-and-sync
+   on its way to the next section, rather than leaving every section but
+   the last one ticked but never published. */
+function syncCurrentWork() {
+  if (!_we) return;
+  const n = _we.n, m = getMonth();
+  persistState(n, m);
+  try { saveSchedule(n, true); } catch (e) { console.warn('[maint] publish failed:', e); }
   renderSchedSummary();
+}
+
+function saveWorkEditor() {
+  syncCurrentWork();
+  closeWorkEditor();
+}
+
+/* The nursery keys stepped through by Next — the same order the summary
+   lists them in, filtered to the ones actually on the schedule (a nursery
+   Seedling Stock knows and this page does not has nothing to open). */
+function weNurseryKeys() {
+  return scheduleNurseryNames().map(schedKey).filter(Boolean);
+}
+
+/* Where Next goes from here: the next work of this nursery, or — off the
+   end of WORKS — the first work of the next nursery. null off the end of
+   the whole list, which is what greys the button rather than wrapping
+   back to the start: looping silently back to a nursery already finished
+   reads as the list never ending. */
+function weNextTarget() {
+  if (!_we) return null;
+  const wi = WORK_KEYS.indexOf(_we.kind);
+  if (wi >= 0 && wi < WORK_KEYS.length - 1) return { n: _we.n, kind: WORK_KEYS[wi + 1] };
+  const keys = weNurseryKeys();
+  const ni = keys.indexOf(_we.n);
+  if (ni >= 0 && ni < keys.length - 1) return { n: keys[ni + 1], kind: WORK_KEYS[0] };
+  return null;
+}
+
+/* Says where Next is actually going, so the button reads "Next: Manuring"
+   rather than a bare "Next" that gives no hint it is about to leave the
+   nursery you are looking at. Greyed with a title saying why at the very
+   end, the same choice every other stepper on this page makes for the
+   same reason: a control that disappears is one people stop trusting to
+   be where it was. */
+function syncWeNextButton() {
+  const btn = document.getElementById('we-next');
+  const label = document.getElementById('we-next-label');
+  if (!btn || !label) return;
+  const target = weNextTarget();
+  if (!target) {
+    btn.disabled = true;
+    btn.title = 'This is the last section on the schedule';
+    label.textContent = 'Next';
+    return;
+  }
+  btn.disabled = false;
+  const work = WORKS.find(w => w.key === target.kind);
+  label.textContent = target.n === _we.n
+    ? `Next: ${work.label}`
+    : `Next: ${stockLabel(target.n)} · ${work.label}`;
+  btn.title = `Review and sync this section, then open ${label.textContent.replace(/^Next: /, '')}`;
+}
+
+/* Reviews and syncs the section on screen — same as Save & Sync — then
+   opens the next one instead of closing, so a nursery's four jobs (and the
+   next nursery's) can be worked straight through without a close-and-reopen
+   between each. */
+function weNext() {
+  if (!_we) return;
+  const target = weNextTarget();
+  if (!target) return;
+  syncCurrentWork();
+  openWorkEditor(target.n, target.kind);
 }
 
 function cancelWorkEditor() {
@@ -9750,18 +11461,24 @@ function renderWorkEditor() {
      answer. It is not: the answer differs between the two sprays and
      between rounds, and with no picker here the only place to change it
      was a sheet the Schedule tab no longer shows. */
+  /* The dose used to sit on a row of its own, under the chemical it
+     belongs to — a line the office never asked for, and one more thing to
+     scan down a column of twelve weeks to re-pair with its chemical. It is
+     beside the chemical now, on the one row, in .we-col-row. */
   const h3 = '<tr>' + weeks.map((w, i) => cols[i].map((c, k) =>
     `<th class="we-col${k === 0 && i ? ' grp' : ''}">` +
       `<div class="we-col-l">${esc(c.label)}</div>` +
-      (c.opts ? weSel(c.opts, c.val, c.onSel) : '') +
-      (c.opts ? `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
-                `<span class="we-cfg-u">${esc(c.unit || '')}</span></div>` : '') +
+      (c.opts ? `<div class="we-col-row">${weSel(c.opts, c.val, c.onSel)}` +
+                `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
+                `<span class="we-cfg-u">${esc(c.unit || '')}</span></div></div>` : '') +
       (c.opts2 ? `<div class="we-col-l we-col-l2">${esc(c.label2)}</div>` +
-                 weSel(c.opts2, c.val2, c.onSel2) +
+                 `<div class="we-col-row">${weSel(c.opts2, c.val2, c.onSel2)}` +
                  `<div class="we-col-d">${weNum(c.dose2, c.onDose2)}` +
-                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div>` : '') +
+                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div></div>` : '') +
       `<button type="button" class="we-all" onclick="weToggleAll('${kind}',${w.slot},${c.ci})" ` +
-      `title="Tick or clear every plot in this column">all</button>` +
+      `title="Tick or clear every plot in this column" aria-label="Select all plots in this column">` +
+      WE_ALL_ICON +
+      `</button>` +
     '</th>').join('')).join('') + '</tr>';
 
   const rows = plots.map(pl => '<tr><td class="we-plot">' + esc(pl) + '</td>' +

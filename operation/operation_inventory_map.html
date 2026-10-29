@@ -7,6 +7,33 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- STAFF ONLY. This page opened for any session at all; it now takes the
+     same gate as the other operation pages (shared_access.js), which also
+     refuses a Sales Web customer (shared_staff_gate.js). The page's own
+     loading waits on MJM_PAGE_GATE, so nothing is fetched or drawn for
+     somebody the gate turns away. -->
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
+<script src="../shared/shared_access.js"></script>
+<script>
+window.MJM_PAGE_GATE = (async () => {
+  try {
+    const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+    await MJMAccess.load(_gc);
+    if (!MJMAccess.user()) return false;   // no session: the page's own guard sends them on
+    if (!MJMAccess.canDoOperation('stock', 'map')) {
+      alert('You do not have access to the Inventory Map.');
+      location.replace('operation_dashboard.html');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    // Refused, held for a retry, or sent to the hub — the gate has said so.
+    console.warn('[page-guard]', e && e.message);
+    return false;
+  }
+})();
+</script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body { background-color: #f1f5f9; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
@@ -45,7 +72,7 @@
         <div class="glass-panel p-6 rounded-[2rem] flex flex-col items-center gap-4 relative overflow-hidden border-l-[12px] border-blue-500" id="main-title-panel">
             <div class="flex flex-col md:flex-row w-full items-center justify-between z-30 relative gap-4">
                 <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-5 py-3 rounded-xl transition-colors flex items-center gap-2 self-start md:self-auto shadow-sm relative z-40">
-                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
+                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back
                 </button>
                 <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-800 via-indigo-600 to-blue-500 drop-shadow-sm pb-1 text-center relative z-40" style="word-spacing: 0.2em;">Stock Inventory Live Map</h1>
                 <div class="hidden md:block w-[130px] relative z-40"></div>
@@ -210,7 +237,7 @@
             alert(`Opening details for Plot: ${plotName}\n\nLive Inventory Stock connections coming up next!`);
         }
 
-        _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else init(); });
+        _supabase.auth.getSession().then(async ({ data: { session } }) => { if (!session) { window.location.href = 'operation_dashboard.html'; return; } if (await window.MJM_PAGE_GATE) init(); });
     </script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.

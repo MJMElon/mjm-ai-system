@@ -98,19 +98,29 @@ let NURSERY_REGISTER = {};
 const nurseryCode = (name) =>
   String(name == null ? '' : name).replace(/[^a-z0-9]/gi, '').toUpperCase();
 
-/* Is this one a place maintenance work is done, or the Estate?
- 
-   The Estate is a section of the payroll register and a location on System
-   Setting, but it is not a nursery sheet — there are no plots on it and no
-   rounds to spray. Decided by shared_worker_locations.js, the file the Team
-   Board and the Location card already use, so all three agree about where a
-   section sits. Without that file loaded, everything in the register counts,
-   which is the old behaviour. */
+/* Is this one a place maintenance work is done?
+
+   The Estate and Admin are sections of the payroll register and locations
+   on System Setting, but neither is a nursery sheet — there are no plots on
+   either and no rounds to spray. Decided by shared_worker_locations.js, the
+   file the Team Board and the Location card already use, so all three agree
+   about where a section sits. Without that file loaded, everything in the
+   register counts, which is the old behaviour.
+
+   IT ASKS THE FLAG, NOT THE NAME. This used to read `loc.key !== 'estate'`,
+   which was right for exactly as long as the estate was the only place in
+   the company with no plots in it — Admin was the second, and on that test
+   it would have arrived as a nursery to be sprayed, with a maintenance
+   sheet and a claim. A location says whether work is done there; this does
+   not keep a list of the ones where it is not. */
 function isMaintNursery(code) {
   const L = window.MJMWorkerLocations;
+  if (L && typeof L.isMaintSection === 'function') return L.isMaintSection(code);
+  /* An older copy of the shared file, still cached on somebody's machine:
+     fall back to what it can answer, then to counting everything. */
   if (!L || typeof L.locationOf !== 'function') return true;
   const loc = L.locationOf(code);
-  return !!loc && loc.key !== 'estate';
+  return !!loc && loc.key !== 'estate' && loc.key !== 'admin';
 }
 
 async function loadNurseryRegister() {
@@ -551,7 +561,14 @@ function refreshPayrollTab() {
   if (s === 'monthly')  renderMonthly();
 }
 
-function closeModal(id) { $(id).classList.remove('open'); }
+function closeModal(id) {
+  $(id).classList.remove('open');
+  /* THE MAP IS DROPPED AS IT CLOSES, and it is done HERE because there are
+     three ways out — the cross, the backdrop and Esc — and a picture left
+     behind on one of them is a picture that flashes up under the next plot
+     somebody opens, for as long as the new one takes to arrive. */
+  if (id === 'map-modal') { const i = $('map-modal-img'); if (i) i.removeAttribute('src'); }
+}
 
 /* The section picker on this module's own entry forms. It lived in the Worker
    System block and moved out with it, which broke every form that fills one —
@@ -1110,9 +1127,13 @@ const cap2   = v => Math.round(Number(v || 0) * 100) / 100;
 const capFmt = v => {
   const n = cap2(v);
   if (!n) return '—';
+  /* The locale is NAMED, the way moneyFig above names it. A bare
+     toLocaleString reads the DEVICE's, and a claim opened on a phone set
+     to a comma-decimal language printed a capacity nobody could reconcile
+     against the sheet it came off. */
   return Number.isInteger(n)
-    ? n.toLocaleString()
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    ? n.toLocaleString('en-MY')
+    : n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 /* ════════════ TRANSPLANTING, AS THE FIELD RECORDED IT ════════════
@@ -1166,10 +1187,28 @@ const TRANSPLANT_JOB = Object.fromEntries(TRANSPLANT_JOBS.map(j => [j.key, j]));
 let transplantRowsAll = [];    // every row of the month, as the database holds them
 let transplantField = [];      // the rows the OFFICE HAS AGREED, which is what is paid
 let transplantHeld  = [];      // recorded, not agreed yet, so on no claim and said out loud
+let transplantNotDone = [];    // answered "nobody did this job", so on no claim ever
 let transplantGateOff = false; // this database has not got the Checked columns
 
 const TP_FIELD_COLS = 'work_date, nursery_name, plot_name, batch_name, work_type, '
   + 'jenis, schedule_month, source_qty, workers, total_qty';
+
+/* A JOB THAT WAS NOT DONE IS A RECORD, AND IT IS NOT HELD WORK.
+   A blanket spray is not always needed, so a conductor can answer the job
+   with "nobody did this" -- an ordinary row of the table with an EMPTY crew
+   and not_done set. See shared/RUN_ME_transplant_not_done.sql for why that
+   is a column and not a word in the remark.
+
+   It is kept out of BOTH lists rather than counted as held: held means the
+   office has still to agree a figure, and there is no figure here to agree.
+   Left in `transplantHeld` the claim would read "RM 0.00 is NOT on this
+   claim, 1 row has not been Checked" and send somebody to tick a row that
+   can never pay anybody. It is surfaced on the by-plot table instead, which
+   is where the work is listed rather than the money.
+
+   A database without the column answers undefined for every row, so nothing
+   is not-done and every reader behaves exactly as it did before. */
+const _tpNotDone = (rec) => !!(rec && rec.not_done);
 
 /* ONLY A CHECKED ROW REACHES THE CLAIM — the same rule, and the same words,
    as maintTotals further down this file.
@@ -1194,16 +1233,31 @@ const TP_FIELD_COLS = 'work_date, nursery_name, plot_name, batch_name, work_type
    the claim says so in red. A gate that cannot be read must not take a
    month's work off a claim — same reason access fails open. */
 async function loadTransplantField() {
-  transplantField = []; transplantHeld = []; transplantGateOff = false;
+  transplantField = []; transplantHeld = []; transplantNotDone = [];
+  transplantGateOff = false;
   const ask = (cols) => _supabase.from('nops_transplant_field_records')
     .select(cols)
     .eq('schedule_month', monthLabel(monthValue()))
     .then(r => r, (e) => ({ error: e || { message: 'unreachable' } }));
 
-  let res = await ask(TP_FIELD_COLS + ', checked_at, checked_by');
-  if (res && res.error && /checked_at|checked_by/i.test(res.error.message || '')) {
-    transplantGateOff = true;
-    res = await ask(TP_FIELD_COLS);
+  /* TWO OPTIONAL COLUMNS, AND POSTGREST NAMES ONLY THE FIRST ONE IT CANNOT
+     FIND -- so this is a ladder and not two ifs. Each refusal that names a
+     column drops that column and asks again; anything else is a real error
+     and is handed back. A column list is explicit here (it always has been,
+     to keep the read small), which is what makes the fallback necessary:
+     select('*') would answer whatever the database has. */
+  let want = { nd: true, chk: true };
+  const build = () => TP_FIELD_COLS
+    + (want.nd ? ', not_done' : '')
+    + (want.chk ? ', checked_at, checked_by' : '');
+  let res = await ask(build());
+  for (let i = 0; i < 2 && res && res.error; i++) {
+    const msg = String(res.error.message || '');
+    if (want.nd && /not_done/i.test(msg)) { want.nd = false; }
+    else if (want.chk && /checked_at|checked_by/i.test(msg)) {
+      want.chk = false; transplantGateOff = true;
+    } else break;
+    res = await ask(build());
   }
   // A database without the table is not an error here: the office ran the
   // payroll module before this button existed and must go on running it.
@@ -1236,13 +1290,18 @@ const _tpAgreed = (rec) => !!rec.checked_at || _tpVerifiedMonth(_tpSection(rec.n
    the rows land. Every reader goes through here first, so the answer is
    whatever is true when the question is asked. */
 function splitTransplantField() {
+  /* A job nobody did is taken out FIRST, before the tick is asked about: it
+     is on no claim whether or not anybody agreed it, so it belongs in
+     neither of the two lists the claim is built from. */
+  transplantNotDone = transplantRowsAll.filter(_tpNotDone);
+  const payable = transplantRowsAll.filter(r => !_tpNotDone(r));
   if (transplantGateOff) {
-    transplantField = transplantRowsAll.slice();
+    transplantField = payable.slice();
     transplantHeld  = [];
     return;
   }
-  transplantField = transplantRowsAll.filter(_tpAgreed);
-  transplantHeld  = transplantRowsAll.filter(r => !_tpAgreed(r));
+  transplantField = payable.filter(_tpAgreed);
+  transplantHeld  = payable.filter(r => !_tpAgreed(r));
 }
 
 /* "UNN 1" and "UNN1" are one nursery. shared_plots spells it with a space,
@@ -1323,6 +1382,11 @@ function transplantFieldLines(src) {
   transplantRateClash = {};
   (src || transplantField).forEach(rec => {
     const job = TRANSPLANT_JOB[rec.work_type];
+    /* NOT DONE PAYS NOBODY, said here as well as in the split above. The
+       crew on such a row is empty, so the next line already stops it -- but
+       a row hand-edited in the Supabase dashboard could carry both, and the
+       flag is the answer that decides, not the names left on it. */
+    if (_tpNotDone(rec)) return;
     const crew = Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : [];
     if (!crew.length) return;
     const rate = transplantRate(rec);
@@ -1391,6 +1455,8 @@ function transplantWorkdone(sec) {
   transplantField.forEach(rec => {
     const job = TRANSPLANT_JOB[rec.work_type];
     if (!job) return;
+    // Nothing was done, so there is no capacity to add to the job's total.
+    if (_tpNotDone(rec)) return;
     if (sec && !inSection(sec, _tpSection(rec.nursery_name))) return;
     out[job.key] += (job.split && rec.total_qty != null)
       ? (Number(rec.total_qty) || 0)
@@ -1479,6 +1545,24 @@ function transplantSectionNotes(secFilter) {
       + `Open it in the FC Portal under Maintenance → Transplanting Job and add who did the work.`);
   }
 
+  /* JOBS NOBODY DID. On no claim line and never going to be, which is the
+     answer rather than a fault -- but a claim that simply does not mention
+     them reads as work the office has not been shown. Named with the plot
+     and the job, because "a job was not done" is not something anybody can
+     check without both. */
+  const skipped = transplantNotDone.filter(r => here(_tpSection(r.nursery_name)));
+  if (skipped.length) {
+    const what = [...new Set(skipped.map(r => {
+      const job = TRANSPLANT_JOB[r.work_type];
+      return `${r.plot_name || '(no plot)'} — ${(job && job.label) || r.work_type}`;
+    }))];
+    notes.push(`${_plural(skipped.length, 'job')} on ${esc(secName(secFilter))}’s plots `
+      + `${skipped.length === 1 ? 'is' : 'are'} recorded as NOT DONE, so nothing is claimed `
+      + `for ${skipped.length === 1 ? 'it' : 'them'} — ${what.map(esc).join('; ')}. `
+      + `That is the Field Conductor’s answer and not a missing crew. If the work was done `
+      + `after all, he reopens the job in the FC Portal and ticks who did it.`);
+  }
+
   /* Work done on this nursery's plots whose lines went to another circle,
      because the register has those workers there. Named rather than left as
      a gap: the gap is the thing that reads as lost work. */
@@ -1518,6 +1602,19 @@ function transplantEmptyLead(secFilter) {
          + `on this claim. Tick Checked on Worker Record &rarr; Transplanting and the `
          + `rows arrive here as they are ticked.`;
   }
+  /* A MONTH WHOSE RECORDS ALL SAY "NOBODY DID IT" IS NOT AN EMPTY MONTH
+     either. The conductor answered every question put to him; the answer
+     was that the work was not needed. Telling him nothing was recorded is
+     the same wrong sentence as telling him his work never arrived. */
+  if (!transplantField.length && !transplantHeld.length && transplantNotDone.length) {
+    const mine = transplantNotDone.filter(r => !secFilter
+      || inSection(secFilter, _tpSection(r.nursery_name)));
+    const n = mine.length || transplantNotDone.length;
+    return `${_plural(n, 'transplanting job')} reached the office for ${month}`
+         + `${mine.length ? ` on ${here}’s plots` : ''}, and every one of them is recorded `
+         + `as NOT DONE — so there is nothing to claim. That is the conductor’s answer, `
+         + `not a missing crew.`;
+  }
   if (!transplantField.length) {
     return `No transplanting was recorded in the FC Portal for ${month} — in any nursery. `
          + `A conductor records it under Maintenance &rarr; Transplanting Job.`;
@@ -1556,13 +1653,31 @@ let transplantMaps = {};     // plotKey → [{ url, batch, date }], newest first
 async function loadTransplantMaps() {
   try {
     const res = await PlotMovement.fetchAll(() => _supabase.from('shared_inventory_logs')
-      .select('plot_name, batch_name, remark, transaction_date, created_at')
+      .select('plot_name, batch_name, remark, transaction_type, transaction_date, created_at')
+      /* `Transplant_Card` too, because that is where the map is NOW. The batch
+         report moved the drone map off the tray rows and onto a card, one per
+         plot per day (_t3WriteCard in operation_batch_detail.html) — so a map
+         uploaded since then was on no row this read asked for, and the table
+         drew an empty frame over a plot somebody had flown. A tray row that
+         still carries its own `MapUrl:` is read as it always was. A card is
+         quantity_change nought and is never counted as a transplant: only
+         `Transplanted` feeds the culling incentive below. */
       .in('transaction_type',
-          ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+          ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone', 'Transplant_Card'])
       .order('id', { ascending: true }));
     if (res.error) throw res.error;
     const by = {};
+    /* The same read answers the culling incentive's first question — which
+       plots were transplanted in a month — so it is indexed here rather than
+       read twice. Plain `Transplanted` only: the other two go into the
+       Premium Care and Double Tone TRAYS, and a tray has no Saringan to
+       Transplanting run to time. */
+    const tp = {};
     (res.data || []).forEach(l => {
+      if (l.transaction_type === 'Transplanted') {
+        const pk = _tpKey(l.plot_name), d = window.MJMCullIncentive ? MJMCullIncentive.logDate(l) : '';
+        if (pk && d) (tp[pk] || (tp[pk] = { plot: String(l.plot_name).trim(), dates: [] })).dates.push(d);
+      }
       const m = String(l.remark || '').match(/MapUrl:(\S+)/i);
       if (!m) return;
       const k = _tpKey(l.plot_name);
@@ -1580,6 +1695,8 @@ async function loadTransplantMaps() {
                    .filter(x => (seen.has(x.url) ? false : (seen.add(x.url), true)));
     });
     transplantMaps = by;
+    cullTransplanted = tp;
+    cullLedgerRead = true;
   } catch (e) {
     /* No maps is not no work. The table draws without the column rather than
        not at all, and says nothing it cannot answer. */
@@ -1628,8 +1745,39 @@ function mapsByBatch(plot, batches) {
   return all.slice();
 }
 
-/* One plot's maps, as something to open. A new tab rather than a box on this
-   page: that is what prints, which is half of what the map is wanted for. */
+/* THE MAP POPS OUT OVER THE TABLE. It used to open as a whole page of its
+   own, and the office asked for the lighter thing: *"我按的时候pop out就好
+   不用整页"*. Looking at a map is a glance — which plot is this, does it
+   match what the record says — and a page of its own turns a glance into
+   somewhere to leave and come back from.
+
+   WHAT THE NEW TAB WAS REALLY FOR MUST SURVIVE IT, and it is the easy half
+   to lose: the tab is where the browser PRINTS, and the reason to want a
+   drone map is to stand in the plot holding it. So the pop-out carries Open
+   in a new tab, and the thumbnail is still a real `<a href>` — a ctrl-click
+   or a middle-click opens the file as it always did, and so does the press
+   itself on a page where this script never ran.
+
+   A PDF MAP IS NOT POPPED OUT. The browser has a reader for one, with its
+   own print and page controls, and a PDF handed to an `<img>` shows nothing
+   at all. It keeps the tab and wears the document glyph it always wore, so
+   the two do not look alike while behaving differently. */
+function openMapBox(ev, url, plot, batch, when) {
+  /* A modified click is somebody asking for a tab on purpose. */
+  if (ev && (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button === 1)) return true;
+  const box = $('map-modal'), img = $('map-modal-img'), go = $('map-modal-open');
+  /* No pop-out on this page: the link stands, which is where it started. */
+  if (!box || !img || !go) return true;
+  if (ev) ev.preventDefault();
+  img.src = url;
+  img.alt = ['Drone map', plot, batch ? 'batch ' + batch : ''].filter(Boolean).join(' · ');
+  $('map-modal-title').textContent = 'Drone Map · ' + plot;
+  $('map-modal-sub').textContent = [batch ? 'Batch ' + batch : '', when].filter(Boolean).join(' · ');
+  go.href = url;
+  box.classList.add('open');
+  return false;
+}
+
 function mapCellHtml(plot, batches) {
   const maps = mapsByBatch(plot, batches);
   if (!maps.length) return '<span style="color:var(--text-faint);">—</span>';
@@ -1643,8 +1791,15 @@ function mapCellHtml(plot, batches) {
     const pdf = _isPdfUrl(m.url);
     const tip = ['Drone map', plot, m.batch ? 'batch ' + m.batch : '', m.date]
       .filter(Boolean).join(' \u00b7 ');
-    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}" href="${esc(m.url)}"
-      target="_blank" rel="noopener" title="${esc(tip)} — opens in a new tab, where it prints"
+    /* Quoted into an attribute, so the apostrophe closing the handler and
+       the angle bracket closing the tag both have to be seen off. */
+    const arg = (s) => esc(String(s == null ? '' : s)).replace(/'/g, '&#39;');
+    const pop = pdf ? '' : ` onclick="return openMapBox(event,'${arg(m.url)}',`
+      + `'${arg(plot)}','${arg(m.batch)}','${arg(m.date)}')"`;
+    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}"${pop} href="${esc(m.url)}"
+      target="_blank" rel="noopener" title="${esc(tip)} — ${pdf
+        ? 'opens in a new tab, where it prints'
+        : 'opens over the table; the pop-out has the tab it prints from'}"
       ${pdf ? '' : `style="background-image:url('${esc(m.url)}')"`}>${pdf ? '\u{1F4C4}' : ''}</a>
       <span class="tp-map-b">${label}</span></span>`;
   }).join('') + `</span>`;
@@ -1868,6 +2023,13 @@ function renderTransplantByPlot(secFilter) {
        keying is the office telling him his work never arrived. */
     const held = transplantHeld.filter(r => !secFilter
       || inSection(secFilter, _tpSection(r.nursery_name)));
+    /* AND A MONTH WHOSE JOBS WERE ALL ANSWERED "NOT DONE" is a third thing
+       again. Same care as the two sentences below it: say what is actually
+       known. "No transplanting job has been recorded" over a conductor who
+       answered every one of them is the office telling him his work never
+       arrived. */
+    const skipped = transplantNotDone.filter(r => !secFilter
+      || inSection(secFilter, _tpSection(r.nursery_name)));
     table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
       ${held.length
         ? (() => {
@@ -1876,7 +2038,32 @@ function renderTransplantByPlot(secFilter) {
                  + `${esc(monthLabelFull(monthValue()))} ${pl === 1 ? 'is' : 'are'} waiting to be `
                  + `Checked, so nothing is counted here yet.`;
           })()
-        : `Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabelFull(monthValue()))}.`}
+        /* "NOTHING TRANSPLANTED" IS A CLAIM ABOUT THE GROUND, AND THIS
+           PAGE CANNOT SEE THE GROUND. It reads
+           nops_transplant_field_records and nothing else, so an empty
+           month here means nobody has RECORDED any, which is a different
+           fact -- BNN took 3,448 seedlings in October 2026 and read
+           "Nothing transplanted in BNN" on this very line, which is what
+           sent the office looking for a fault in the claim rather than at
+           the four jobs nobody had keyed.
+           Same care as the held sentence above it: say what is actually
+           known, and say where the answer is given. */
+        : skipped.length
+          ? (() => {
+              /* NAMED, like the held sentence above it. "1 job is recorded
+                 as not done" without the plot is a fact nobody can check:
+                 the plot is what somebody walks to and the job is what they
+                 would be looking for. */
+              const where = [...new Set(skipped.map(r => r.plot_name).filter(Boolean))];
+              return `${_plural(skipped.length, 'job')} on ${esc(secName(secFilter))}’s plots for `
+                + `${esc(monthLabelFull(monthValue()))} ${skipped.length === 1 ? 'is' : 'are'} `
+                + `recorded as NOT DONE${where.length ? ' — ' + where.map(esc).join(', ') : ''}, `
+                + `and there is nothing else. Nothing is counted here because no work was `
+                + `carried out — that is the conductor’s answer, not a gap.`;
+            })()
+        : `No transplanting job has been recorded for ${esc(secName(secFilter))} in `
+          + `${esc(monthLabelFull(monthValue()))}. A plot that took seedlings is raised on `
+          + `the FC Portal, under Pending Verification, until its four jobs are keyed.`}
     </td></tr></tbody>`;
     $('transpl-plots-note').textContent = '';
     return;
@@ -1931,6 +2118,21 @@ function renderTransplantByPlot(secFilter) {
       + `not on this table and not in the total — ${heldPlots.length === 1 ? 'its' : 'their'} `
       + `rows have not been Checked on Worker Record &rarr; Transplanting yet.`);
   }
+  /* PLOTS WHOSE ONLY RECORD IS "NOT DONE". They are off the table for the
+     same reason the held ones are -- it counts what the claim pays -- and a
+     missing plot reads as a plot nothing happened in, which here would be
+     exactly the wrong conclusion: something happened, and it was somebody
+     answering the question. A plot with other jobs recorded is already on
+     the table and needs no line of its own. */
+  const skippedPlots = [...new Set(transplantNotDone
+    .filter(r => !secFilter || inSection(secFilter, _tpSection(r.nursery_name)))
+    .map(r => r.plot_name).filter(Boolean))]
+    .filter(pl => !rows.some(r => _tpKey(r.plot) === _tpKey(pl)));
+  if (skippedPlots.length) {
+    notes.push(`${skippedPlots.map(esc).join(', ')} ${skippedPlots.length === 1 ? 'is' : 'are'} `
+      + `not on this table: every job recorded on ${skippedPlots.length === 1 ? 'it' : 'them'} `
+      + `is marked NOT DONE, so no work was carried out and there is nothing to pay.`);
+  }
   const moved = rows.filter(r => r.disagrees);
   if (moved.length) {
     notes.push(`${moved.map(r => `${esc(r.plot)} (${r.disagrees.map(n => num(n)).join(' and ')})`).join(', ')
@@ -1949,6 +2151,224 @@ function renderTransplantByPlot(secFilter) {
       + `nobody, so ${noCrew.length === 1 ? 'it is' : 'they are'} on this table but on no claim line.`);
   }
   $('transpl-plots-note').innerHTML = notes.map(t =>
+    `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
+}
+
+/* ════════════ CULLING INCENTIVE ════════════
+   A plot that went from Saringan Anak Bibit to the end of Transplanting in
+   15 days or fewer earns an incentive: RM 20 a plot to Rousell Wayne and to
+   Florence, whatever the nursery, and RM 50 a plot to that nursery's own
+   Field Conductor. The rule — which plots, how they are timed, who earns —
+   is shared/shared_cull_incentive.js, and this file does not keep a copy.
+
+   THE PLOTS ARE GONE THROUGH ON WORK MAINTENANCE, AND ONLY PAID HERE. The
+   office moved it: *"把culling incentive全部搬到这里 under worker activity
+   ... payroll那边要link这里 然后在payroll才会有钱"*. So Worker Activity →
+   Culling Incentive shows the plot, the days, the dates and who earns it,
+   carries Add / Remove by hand, and carries the CHECK — and this sheet pays
+   the Checked plots and nothing else, at the dates and days they were
+   checked at.
+
+   A plot that qualifies and has not been Checked is NAMED under the table,
+   with the way to Worker Activity. Capacity held back is never silently
+   missing — a claim short of a plot reads exactly like a quiet month — and
+   the transplanting sheet above says the same of its own unchecked rows.
+
+   The people are matched to the worker register by name — every word of
+   the name here has to be in exactly one register name. A name that finds
+   nobody, or two people, is said under the table and is on no claim. */
+const CULL_INCENTIVE = window.MJMCullIncentive ? MJMCullIncentive.RULE : { everyPlot: [], ownNursery: [] };
+const CULL_TARGET_DAYS = window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15;
+const CULL_PAGE = '../nursery_ops/nursery_ops_maintenance.html?view=cull_incentive';
+
+let cullTransplanted = {};    // plotKey → { plot, dates[] }, every month, from loadTransplantMaps
+let cullLedgerRead = false;
+let cullPalmsLogs = null;     // MJMPalms logs by unit; null = could not be read
+let cullOverrides = [];       // this month's by-hand records (written on Work Maintenance)
+let cullChecks = [];          // this month's Checks (written on Work Maintenance)
+let cullChecksReady = true;   // false = the Checked table is not there yet
+
+async function loadCullChecks() {
+  if (!window.MJMCullIncentive) { cullChecksReady = false; return; }
+  const [ov, ck] = await Promise.all([MJMCullIncentive.loadOverrides(_supabase, monthValue()),
+                                      MJMCullIncentive.loadChecks(_supabase, monthValue())]);
+  cullOverrides = ov.rows;
+  cullChecks = ck.rows;
+  cullChecksReady = ck.ready;
+  if (!ck.ready) console.warn('[payroll] culling incentive checks not read:', ck.error && (ck.error.message || ck.error));
+}
+
+async function loadCullPalms() {
+  if (!window.MJMPalms) { cullPalmsLogs = null; return; }
+  try {
+    await MJMPalms.loadStages(_supabase);     // the office's stage names, best effort
+    cullPalmsLogs = await MJMPalms.loadLogs(_supabase);
+  } catch (e) {
+    console.warn('[payroll] PALMS could not be read for the culling incentive:', (e && e.message) || e);
+    cullPalmsLogs = null;
+  }
+}
+
+/* Every plot of the month, as Work Maintenance sees it, in the nursery picked. */
+function _cullAll(secFilter) {
+  if (!window.MJMCullIncentive) return [];
+  return MJMCullIncentive.plots({ transplanted: cullTransplanted, palms: cullPalmsLogs,
+      overrides: cullOverrides, checks: cullChecks, ym: monthValue() })
+    .filter(r => !secFilter || inSection(secFilter, r.section));
+}
+
+/* What is PAID: counted and Checked. Everything below reads this. */
+function cullIncentivePlots(secFilter) { return _cullAll(secFilter).filter(r => r.paid); }
+
+/* What would be paid once somebody Checks it on Work Maintenance. */
+function cullIncentiveHeld(secFilter) { return _cullAll(secFilter).filter(r => r.counts && !r.check); }
+
+/* One configured name to one register row — or to nobody, and why. */
+function cullWorker(name) {
+  const words = s => String(s || '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  const exact = workers.filter(w => _tpKey(w.full_name) === _tpKey(name));
+  if (exact.length === 1) return { w: exact[0] };
+  const want = words(name);
+  const hits = workers.filter(w => { const t = words(w.full_name); return want.every(x => t.includes(x)); });
+  if (hits.length === 1) return { w: hits[0] };
+  return { w: null, clash: hits.map(w => w.full_name) };
+}
+
+/* Who is paid what, off a list of PAID plots. With a nursery picked, only
+   that nursery's Field Conductor is on it — the other two have nothing here. */
+function cullIncentivePay(rows, secFilter) {
+  const ok = rows.filter(r => r.paid);
+  const out = [];
+  CULL_INCENTIVE.everyPlot.forEach(p => out.push({ ...p, rule: 'every', plots: ok }));
+  CULL_INCENTIVE.ownNursery
+    .filter(p => !secFilter || p.nursery === secFilter)
+    .forEach(p => out.push({ ...p, rule: 'own', plots: ok.filter(r => r.section === p.nursery) }));
+  return out.map(p => {
+    const m = cullWorker(p.name);
+    return { ...p, known: m.w, clash: m.clash || [], amount: p.plots.length * p.rm,
+             // The register's section where it knows them; the FC's own
+             // nursery otherwise, so the Monthly Payroll files them somewhere.
+             section: (m.w && m.w.section) || p.nursery || '' };
+  });
+}
+
+/* ONE TABLE, THE PLOT MERGED DOWN ITS OWN PEOPLE. It was two stacked cards —
+   the plots with their dates, and under it who they paid — and the office
+   read them and said *"这里合起来 不需要分两个 plot, started date, ended
+   date, days, person, RM"*.
+
+   They are the same six columns the claim form now carries, for the same
+   reason: the incentive is earned ONE PLOT AT A TIME, so the plot is the
+   row and the people are lines under it. On this screen the plot's four
+   facts — its two days, its duration — ride in the merged cell with it,
+   which is what the second table could never show beside a name.
+
+   What came OFF, and where it went rather than being lost:
+
+   - **Rule** (*"Every nursery · RM 20.00 / plot"*). The figure on the line
+     IS that rate, one plot at a time, so the column was the same answer
+     in words.
+   - **Checked plots** — that is the merged Plot cell now.
+   - **Checked** (who agreed it, when). The claim form settled this one
+     already: the dates, the days and the checker are how the office
+     DECIDED, and Worker Activity → Culling Incentive carries all of them,
+     one button away at the top of this very section.
+   - **Nursery.** The heading names it whenever a nursery is picked, and a
+     column repeating the heading on every row is the same answer twice. It
+     comes back as a line under the plot for **All Sections** ONLY, which
+     is the one case the heading cannot answer.
+   - **No.** The office listed six columns and this was not one of them.
+
+   **EVERY COLUMN IS GIVEN ITS SHARE, which is why the widths are per cent
+   where every other table on this page uses pixels.** Unpinned, the slack
+   all went to the two DATES — their headings are the longest words on the
+   row and auto layout hands the most room to the widest content — so a
+   90px date sat in 400px beside a plot squeezed into 131, and the office
+   said *"alignment 不对 有些太大有些太小"*. Pinning only the dates MOVES
+   the fault rather than fixing it: the surplus then lands on Person, 548px
+   for a name, which is the same picture the other way round. Six short
+   values cannot fill a table told to be 100% wide, so the surplus has to
+   go somewhere; per cent is what spreads it over all six instead of piling
+   it on one. Measured at 1,450px and again at 1,100 — the shape holds at
+   both, which neither pixel plan did.
+
+   **Auto layout, never table-layout:fixed.** The headings are nowrap, so a
+   fixed column narrower than its own heading would have the words run out
+   of the cell on a laptop; auto simply grows and .tbl-wrap scrolls.
+
+   And a design note NEVER goes inside the template literal: a comment
+   there is shipped markup, and one backtick in it ends the literal. That
+   is what happened writing this one, and the page died with
+   renderCullIncentive never defined. */
+function renderCullIncentive(secFilter) {
+  const table = $('cull-inc-plots');
+  if (!table) return;
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+  const monthTxt = monthLabelFull(monthValue());
+  const head = $('cull-inc-head');
+  if (head) head.textContent = `Culling Incentive — Checked plots — `
+    + `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthTxt}`;
+  const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
+
+  const rows = cullIncentivePlots(secFilter);
+  const pay = cullIncentivePay(rows, secFilter);
+  const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
+
+  /* Who each plot paid, and what it paid them — off the same `pay` the claim
+     form and the Monthly Payroll read, so a plot cannot pay one figure here
+     and another there. A plot that paid NOBODY still keeps its row: it is
+     Checked and on no claim line, which is the thing to see. */
+  const earners = (plot) => pay.filter(p => p.plots.some(q => q.plot === plot));
+  const personCell = (p) => p
+    ? `<td class="l" style="font-weight:700;color:var(--text-head);">${esc(p.known ? p.known.full_name : p.name)}${
+        p.known ? '' : '<span title="Not found on the worker register — this is not on the salary claim"'
+                     + ' style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+       <td class="money">${money(p.rm)}</td>`
+    : `<td class="l" style="color:var(--text-faint);">Nobody — on no claim line</td>
+       <td class="money" style="color:var(--text-faint);">${money(0)}</td>`;
+
+  table.innerHTML = rows.length ? `
+    <thead><tr>
+      <th class="l" style="width:15%;">Plot</th>
+      <th style="width:15%;">Saringan started</th>
+      <th style="width:16%;">Transplanting ended</th><th style="width:8%;">Days</th>
+      <th class="l" style="width:28%;">Person</th><th style="width:18%;">Incentive (RM)</th>
+    </tr></thead>
+    <tbody>${rows.map((r) => {
+      const who = earners(r.plot);
+      const span = Math.max(1, who.length);
+      /* The four plot cells are written ONCE, on the first line, and span
+         the rest — so the person column reads as a list under the plot
+         rather than the plot being repeated beside every name. */
+      const plotCells = `
+        <td class="l" rowspan="${span}" style="font-weight:800;color:var(--text-head);vertical-align:middle;">${esc(r.plot)}${
+          r.override ? `<div style="font-size:11px;color:#15803d;font-weight:700;">${r.manual ? 'Added' : 'Counted'} by hand${
+            r.override.remark ? ': ' + esc(r.override.remark) : ''}</div>` : ''}${
+          secFilter ? '' : `<div style="font-size:11px;color:var(--text-muted);font-weight:700;">${esc(r.section || '—')}</div>`}</td>
+        <td rowspan="${span}" style="vertical-align:middle;">${pd(r.start)}</td>
+        <td rowspan="${span}" style="vertical-align:middle;">${pd(r.end)}</td>
+        <td rowspan="${span}" style="font-weight:800;vertical-align:middle;">${r.days == null ? '—' : r.days}</td>`;
+      return (who.length ? who : [null]).map((p, k) =>
+        `<tr>${k === 0 ? plotCells : ''}${personCell(p)}</tr>`).join('');
+    }).join('')}</tbody>
+    <tfoot><tr><td class="l" colspan="5">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`
+    : `<tbody><tr><td class="empty">No plot in ${esc(secFilter ? secName(secFilter) : 'any nursery')} has been Checked for ${
+        esc(monthTxt)} yet, so nobody is paid this incentive. Plots are gone through on
+        <a href="${CULL_PAGE}">Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.</td></tr></tbody>`;
+
+  const notes = [];
+  if (!window.MJMCullIncentive) notes.push('The culling incentive rule did not load. Reload the page.');
+  if (!cullChecksReady) notes.push('The Checked table is not on this database yet, so nothing is paid. '
+             + 'Run shared/RUN_ME_cull_incentive_checked.sql once in Supabase.');
+  const held = cullIncentiveHeld(secFilter);
+  if (held.length) notes.push(`${held.map(r => esc(r.plot)).join(', ')} ${held.length === 1 ? 'qualifies' : 'qualify'} and `
+             + `${held.length === 1 ? 'has' : 'have'} not been Checked yet, so ${held.length === 1 ? 'it is' : 'they are'} not paid. `
+             + `<a href="${CULL_PAGE}">Check on Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.`);
+  else if (cullPalmsLogs === null && !rows.length) notes.push('PALMS could not be read, so this sheet cannot say whether any plot is waiting to be Checked.');
+  pay.filter(p => !p.known).forEach(p => notes.push(p.clash.length
+    ? `${esc(p.name)} matches more than one worker on the register (${p.clash.map(esc).join(', ')}), so ${money(p.amount)} is NOT on the salary claim.`
+    : `${esc(p.name)} is not on the worker register, so ${money(p.amount)} is NOT on the salary claim. Add them in Worker System.`));
+  $('cull-inc-note').innerHTML = notes.map(t =>
     `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
 }
 
@@ -2014,6 +2434,8 @@ function renderTransplantClaim() {
      month somebody needs to see the plots. */
   try { renderTransplantByPlot(secFilter); }
   catch (e) { console.warn('[payroll] the by-plot table could not be drawn:', e); }
+  try { renderCullIncentive(secFilter); }
+  catch (e) { console.warn('[payroll] the culling incentive could not be drawn:', e); }
 
   const lines = transplantFieldLines()
     .filter(l => !secFilter || inSection(secFilter, l.section));
@@ -3501,6 +3923,19 @@ function monthlyRows() {
     });
   }
 
+  /* The culling incentive, into Transplanting — it is that sheet's, and
+     priced there. Worked out over EVERY nursery and then filed under the
+     person's own section, because Rousell and Florence are paid for plots
+     in all three. A name the register cannot place is skipped here and said
+     on the sheet, same as a transplanting line. */
+  try {
+    cullIncentivePay(cullIncentivePlots(''), '').forEach(p => {
+      if (!p.known || !p.amount) return;
+      if (secFilter && (p.section || '') !== secFilter) return;
+      touch(p.known.full_name, p.section || '').transpl += p.amount;
+    });
+  } catch (e) { console.warn('[payroll] culling incentive left off the monthly payroll:', e); }
+
   // Keyed sheets.
   entries.filter(e => e.month === month).forEach(e => {
     const w = workers.find(x => x.id === e.worker_id);
@@ -3559,7 +3994,7 @@ function renderMonthly() {
       <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
 
   $('monthly-note').textContent =
-    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
+    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes the culling incentive; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
 }
 
 /* ════════════ PDF ════════════ */
@@ -3950,7 +4385,8 @@ async function _downloadTransplantPDF() {
   /* Nothing to claim AND nothing recorded is nothing to print. Records with
      nobody credited still print: the plot summary is the only page they ever
      appear on, and it is exactly the month somebody is looking for them. */
-  if (!names.length && !plotRows.length) {
+  const cullRows = cullIncentivePlots(sec);
+  if (!names.length && !plotRows.length && !cullRows.length) {
     alert('Nothing recorded for this nursery this month.'); return;
   }
 
@@ -4167,6 +4603,7 @@ async function _downloadTransplantPDF() {
   }
 
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
+  y = drawCullIncentive(doc, y, cullRows, cullIncentivePay(cullRows, sec));
 
   y = pdfVerifiedNote(doc, y, 'transpl', sec, CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
@@ -4284,6 +4721,112 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
     say(noCrew.map(r => r.plot).join(', ') + ' — names nobody, so on this summary '
       + 'but on no claim line above.');
   }
+  doc.setTextColor(0, 0, 0);
+  return y;
+}
+
+/* THE CULLING INCENTIVE, ON THE CLAIM FORM — ONE TABLE: the plot, who it
+   paid, how much. Same figures, same rule (cullIncentivePlots /
+   cullIncentivePay). Returns the y it finished at.
+
+   IT USED TO BE TWO TABLES AND A SENTENCE OF A HEADING. The first listed
+   every plot with its Saringan, its Transplanting, the days and who
+   checked it; the second paid them, under "CULLING INCENTIVE — WHO IT
+   PAYS", with a No. and a Rule column. The office read the printout and
+   said what a claim form is for: *"我只要看到 CULLING INCENTIVE 其他废话都
+   不用. 表格里面我只要看到人名 plot 和价钱"*.
+
+   They are right, and it is the same argument the Worker Record's by-plot
+   table already settled: a claim form is read by somebody adding up money
+   and signing it. The dates, the days and the checker are how the office
+   DECIDED, and that belongs on the screen where the deciding happens —
+   Worker Activity → Culling Incentive, which shows every one of them.
+
+   THEN THEY ASKED FOR IT THE OTHER WAY ROUND — *"我要plot 在前面 merge起来
+   中间人名 后面价钱"* — and that is not a reordering, it is the right
+   KEY. The incentive is earned ONE PLOT AT A TIME: a plot that came in
+   under the target pays RM 20 to each of the two, and RM 50 to that
+   nursery's own Field Conductor. So the plot is the thing, the people are
+   lines under it, and the plot is MERGED over its own lines rather than
+   spelt once per person.
+
+   Two things fall out of that, and both are improvements rather than
+   costs:
+
+   - **The money column now ADDS UP to the total.** Each figure is what
+     that plot paid that person, so somebody running down it reaches the
+     TOTAL INCENTIVE — where a column of per-person sums over a list of
+     plots did not say what any one plot was worth.
+   - **A person with no plot is not a row.** The table is a list of plots,
+     and a Field Conductor whose nursery had nothing Checked has no line
+     to be on. It read "none · RM 0.00" before, which is a row of nothing
+     on a form about money. Their nought is still in the total, where it
+     changes nothing.
+
+   A name the register cannot place keeps its mark on every line it is
+   on — that is money this claim does NOT pay, and dropping it would hide
+   the one fault the table can carry. */
+function drawCullIncentive(doc, y, rows, pay) {
+  if (!rows || !rows.length) return y;
+  const L = 25, RH = 8, H = 9, HF = [232, 236, 252], TF = [222, 228, 250];
+  const BOTTOM = 210 - ((RH + 1) + 6 + 4 + 3);
+  const COL = [50, 147, 50];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, L);
+
+  const heading = () => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+    doc.text('CULLING INCENTIVE', L, y + 6);
+    y += 9;
+    ['Plot', 'Person', 'Incentive (RM)'].forEach((t, i) => pdfCell(doc, X[i], y, COL[i], H, t,
+      { bold: true, size: 7.5, nowrap: true, fill: HF }));
+    y += H;
+  };
+
+  /* Who a plot paid, and what it paid them. Read off the same `pay` the
+     screen and the Monthly Payroll read, so a plot cannot pay one figure
+     here and another there. */
+  const runs = rows.map((r) => ({
+    plot: r.plot,
+    who: pay.filter((p) => p.plots.some((q) => q.plot === r.plot))
+      .map((p) => ({ name: p.known ? p.known.full_name : p.name + ' (NOT ON REGISTER)',
+                     rm: p.rm })),
+  })).filter((g) => g.who.length);
+  if (!runs.length) return y;
+
+  if (y + 9 + H + RH > BOTTOM) { doc.addPage(); y = 25; } else y += 4;
+  heading();
+  runs.forEach((g, i) => {
+    /* THE BREAK GOES BEFORE A RUN, never inside one — the rule the Worker
+       Record already follows for a plot, and here a break inside a run
+       would cut the merged cell in half. A run too tall for any page
+       splits at the page edge and NAMES THE PLOT AGAIN, which is the only
+       honest place for it; three people to a plot, it never comes up. */
+    let rest = g.who, whole = true;
+    while (rest.length) {
+      let room = Math.floor((BOTTOM - y) / RH);
+      if (room < rest.length && whole) { doc.addPage(); y = 25; heading(); room = Math.floor((BOTTOM - y) / RH); }
+      if (room < 1) { doc.addPage(); y = 25; heading(); room = Math.floor((BOTTOM - y) / RH); }
+      const take = rest.slice(0, Math.min(room, rest.length));
+      /* Striped by PLOT and not by row, because that is what the merged
+         cell is saying: one block is one plot. */
+      const z = i % 2 ? [250, 250, 253] : null;
+      pdfCell(doc, X[0], y, COL[0], RH * take.length, g.plot,
+              { bold: true, size: 8.5, nowrap: true, fill: z });
+      take.forEach((w, k) => {
+        pdfCell(doc, X[1], y + RH * k, COL[1], RH, w.name, { size: 8.5, nowrap: true, fill: z });
+        pdfCell(doc, X[2], y + RH * k, COL[2], RH, money(w.rm), { size: 8.5, nowrap: true, fill: z });
+      });
+      y += RH * take.length;
+      rest = rest.slice(take.length);
+      whole = false;
+    }
+  });
+
+  const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
+  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'TOTAL INCENTIVE',
+          { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[2], y, COL[2], RH + 1, money(grand), { bold: true, size: 9, nowrap: true, fill: TF });
+  y += RH + 1;
   doc.setTextColor(0, 0, 0);
   return y;
 }
@@ -4502,7 +5045,7 @@ function maintFieldCredits(nursery, monthLbl, wk) {
 /* ════════════ BOOT ════════════ */
 $('global-month').addEventListener('change', async () => {
   try { localStorage.setItem('npayroll_month', monthValue()); } catch (_) {}
-  await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj()]);
+  await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj(), loadCullChecks()]);
   refreshPayrollTab();
   if ($('tab-locks')) { try { renderLockCalendar(); } catch (_) {} }
 });
@@ -4511,9 +5054,20 @@ $('global-month').addEventListener('change', async () => {
    to be on this list and left with the Worker System, and a missing element
    here would have thrown before the page finished setting itself up — taking
    the whole payroll screen down over a dialog nobody had opened. */
-['rate-modal','entry-modal','adjust-modal'].forEach(id => {
+['rate-modal','entry-modal','adjust-modal','cull-add-modal','map-modal'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(id); });
+});
+
+/* Esc closes the MAP and nothing else. It is the one dialog here that holds
+   no keying: shutting it costs a press to reopen, where Esc over a half
+   filled form would be the work gone — which is why the other four are not
+   on this listener and must not be added to it without a guard of their
+   own. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const box = $('map-modal');
+  if (box && box.classList.contains('open')) closeModal('map-modal');
 });
 
 (async () => {
@@ -4546,7 +5100,8 @@ $('global-month').addEventListener('change', async () => {
        all read it, so everything after this should see the real list. */
     await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
-                       loadTransplantField(), loadEarnAdj(), loadTransplantMaps()]);
+                       loadTransplantField(), loadEarnAdj(), loadTransplantMaps(),
+                       loadCullPalms(), loadCullChecks()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and

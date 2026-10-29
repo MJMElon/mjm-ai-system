@@ -3,14 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Every line of this page's code is inline, so the PAGE is the deploy: without
+     these a browser holding yesterday's copy keeps it. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>PALMS Plot Status Map — Nursery Operation Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js"></script>
-<script src="../shared/shared_plot_map.js"></script>
+<script src="../shared/shared_palms.js?v=5"></script>
+<script src="../shared/shared_plot_map.js?v=2"></script>
 <script src="../shared/shared_plot_draw.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -130,6 +136,21 @@
   .pv-step-name { font-weight:900; color:#1e293b; flex:1 1 auto; min-width:0; }
   .pv-step-d { color:#64748b; font-weight:700; font-size:11.5px; white-space:nowrap; }
   .pv-step.now .pv-step-name { color:#0f766e; }
+  .pv-st-wrap { overflow-x:auto; }
+  .pv-st { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .pv-st th { font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8;
+    text-align:left; padding:4px 10px 6px 0; white-space:nowrap; border-bottom:1px solid #e2e8f0; }
+  .pv-st td { padding:6px 14px 6px 0; color:#334155; font-weight:700; white-space:nowrap; vertical-align:middle;
+    border-bottom:1px solid #f1f5f9; text-align:left; }
+  .pv-st th { background:none; }
+  .pv-st td:first-child, .pv-st th:first-child { width:30px; }
+  .pv-st tr:last-child td { border-bottom:none; }
+  .pv-st td.pv-st-name { font-weight:900; color:#1e293b; white-space:nowrap; text-align:left; }
+  .pv-st-by { font-size:11px; font-weight:700; color:#94a3b8; }
+  .pv-st th:nth-child(n+5), .pv-st td.pv-st-num { text-align:right; }
+  .pv-st th:nth-child(-n+4) { text-align:left; }
+  .pv-st tr.now td.pv-st-name { color:#0f766e; }
+  .pv-running { color:#0f766e; font-weight:900; }
   .pv-over { color:#e11d48; font-weight:900; }
   .pv-ahead { color:#059669; font-weight:900; }
   .pv-line { display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 12px; padding:5px 0; }
@@ -159,12 +180,6 @@
   /* The options themselves are drawn by the OS and cannot be centred, so
      they are left as they come — legible beats half-styled. */
   .st-pick option { text-align:left; font-weight:700; }
-  /* ONE STAGE, SEVERAL OPEN ROWS. Not a plot doing two things — a log that
-     has picked up a duplicate. The pill says the stage; this says the log
-     needs tidying, which is a different fact and belongs in its own mark. */
-  .st-dup { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px;
-            background:#fffaf0; border:1.5px solid #c98a16; color:#7a4e06;
-            font-weight:900; font-size:10px; line-height:1.5; cursor:help; vertical-align:middle; }
   .cf-was { background:#f8fafc; border:1.5px solid #e2e8f0; }
   .cf-now { background:#ecfdf5; border:1.5px solid #a7f3d0; }
   .cf-box { border-radius:14px; padding:12px 14px; }
@@ -177,9 +192,15 @@
 </head>
 <body>
 
-<div id="mjm-ribbon" data-brand="MJM Nursery AI System" data-center="PALMS"
-     data-sub="Plot Age Logging &amp; Manage System" data-logo="off"></div>
-<script src="../shared/shared_ribbon.js"></script>
+<!-- The compact bar the other nursery-ops pages wear: Back pill, centred
+     module name, NO badge. nursery_ops_seeds.html is the original; the big
+     shared ribbon came off at the office's request, so Sign Out lives on
+     the portal the Back pill leads to. -->
+<div id="mjm-ribbon" class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-[1fr_auto_1fr] items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm px-3">PALMS</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
 
 
 <div id="loading" class="max-w-[1040px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
@@ -583,7 +604,9 @@ function drawPvRound() {
        with the caption saying the round's beginning is not in the log rather
        than the screen saying "nothing recorded" over real work. */
     const partial = !cur && log.length > 0;
-    const es = (cur ? cur.entries : (partial ? log.slice() : [])).slice().reverse();
+    /* One stage logged in two parts back to back is ONE row — see
+       MJMPalms.mergeSpells. */
+    const es = MJMPalms.mergeSpells(cur ? cur.entries : (partial ? log.slice() : [])).reverse();
     const done = MJMPalms.lastRound(LOGS, u.key);
 
     const head =
@@ -603,32 +626,52 @@ function drawPvRound() {
       return head + '<div class="pv-round-s">Nothing recorded for this plot yet.</div>';
     }
 
-    return head + es.map((e) => {
+    /* A TABLE, one stage a line, so the dates can be read DOWN: every stage's
+       first and last day in its own column. It used to be a sentence per
+       stage with only the end date in it, set flush right in the middle of a
+       run of other words, so the one thing somebody opens a plot to find —
+       when did each job start and finish — had to be worked out backwards
+       from a day count. NEWEST AT THE TOP — the office asked for it that
+       way, the latest work being what somebody opens a plot to see — and
+       numbered by POSITION, the oldest at the foot being 1. The stage's own
+       number is not shown: it is a code for the kind of job, the name
+       beside it already says which, and two numbers in one circle that mean
+       different things is a circle nobody can read. */
+    const rows = es.map((e, i) => {
       const act = MJMPalms.actByN(e.actN);
       const ideal = e.ideal == null ? (act && act.days) : e.ideal;
-      let right;
+      let days, vs;
       if (!e.end) {
         const due = MJMPalms.addDays(e.start, ideal == null ? 0 : ideal);
         const left = MJMPalms.diffDays(MJMPalms.todayStr(), due);
-        right = 'since ' + MJMPalms.prettyD(e.start) + ' · ' +
-          (left < 0 ? '<span class="pv-over">' + (-left) + 'd over</span>'
-                    : '<span class="pv-ahead">' + left + 'd left</span>');
+        days = MJMPalms.diffDays(e.start, MJMPalms.todayStr()) + 'd so far';
+        vs = left < 0 ? '<span class="pv-over">' + (-left) + 'd over</span>'
+                      : '<span class="pv-ahead">' + left + 'd left</span>';
       } else {
         const took = MJMPalms.diffDays(e.start, e.end);
         const v = ideal == null ? null : took - Number(ideal);
-        right = MJMPalms.prettyD(e.end) + ' · ' + took + 'd' +
-          (v == null ? ''
-            : (v > 0 ? ' · <span class="pv-over">' + v + 'd over</span>'
-              : v < 0 ? ' · <span class="pv-ahead">' + (-v) + 'd ahead</span>'
-              : ' · on time'));
+        days = took + 'd';
+        vs = v == null ? '—'
+          : v > 0 ? '<span class="pv-over">' + v + 'd over</span>'
+          : v < 0 ? '<span class="pv-ahead">' + (-v) + 'd ahead</span>'
+          : 'on time';
       }
-      return '<div class="pv-step' + (e.end ? '' : ' now') + '">' +
-        '<span class="pv-step-n">' + e.actN + '</span>' +
-        '<span class="pv-step-name">' + esc(act ? act.name : 'Stage ' + e.actN) +
-          (e.by ? ' <span class="pv-round-s">· ' + esc(e.by) + '</span>' : '') + '</span>' +
-        '<span class="pv-step-d">' + right + '</span>' +
-        '</div>';
+      return '<tr class="' + (e.end ? '' : 'now') + '">' +
+        '<td><span class="pv-step-n">' + (es.length - i) + '</span></td>' +
+        '<td class="pv-st-name">' + esc(act ? act.name : 'Stage ' + e.actN) +
+          (e.by ? '<div class="pv-st-by">' + esc(e.by) + '</div>' : '') + '</td>' +
+        '<td>' + MJMPalms.prettyD(e.start) + '</td>' +
+        '<td>' + (e.end ? MJMPalms.prettyD(e.end) : '<span class="pv-running">running</span>') + '</td>' +
+        '<td class="pv-st-num">' + days + '</td>' +
+        '<td class="pv-st-num">' + (ideal == null ? '—' : ideal + 'd') + '</td>' +
+        '<td class="pv-st-num">' + vs + '</td>' +
+        '</tr>';
     }).join('');
+    return head +
+      '<div class="pv-st-wrap"><table class="pv-st">' +
+        '<thead><tr><th></th><th class="l">Stage</th><th>Start</th><th>End</th>' +
+        '<th>Days</th><th>Ideal</th><th>Result</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>';
   }).join('');
 }
 
@@ -645,7 +688,7 @@ async function loadHidden() {
       .select('plot_name, nursery_name, is_active').eq('is_active', false).order('plot_name');
     // No column means nothing can be hidden yet, which is not an error.
     if (res.error) { if (!/is_active/i.test(res.error.message || '')) throw res.error; return; }
-    HIDDEN = res.data || [];
+    HIDDEN = (res.data || []).filter((p) => !MJMPalms.isReplantPlot(p.plot_name));
   } catch (e) {
     console.warn('[palms] hidden plots not read:', (e && e.message) || e);
   }
@@ -779,7 +822,6 @@ function statusCell(unitKey, ln) {
      twice. One rule, asked once: openActivities. */
   const openActs = ln && ln.state !== 'none' ? MJMPalms.openActivities(LOGS, unitKey) : [];
   const curN = openActs.length === 1 ? openActs[0].n : null;
-  const dupes = cur.length - openActs.length;   // extra rows on a stage already named
   if (!CAN_UPDATE) {
     return '<td>' + esc(ln && ln.status ? ln.status : '—') + '</td>';
   }
@@ -811,20 +853,15 @@ function statusCell(unitKey, ln) {
   const tint = entry
     ? ' style="background:' + esc(entry.fill) + ';border-color:' + esc(entry.stroke) + '"'
     : '';
-  /* The duplicate is not hidden by the dedupe — it is only kept out of the
-     count. A plot whose log carries it is the plot somebody has to tidy, and
-     picking any stage closes every open row, which is the tidying. */
-  const dupTag = dupes > 0
-    ? '<span class="st-dup" title="' + esc(cur.length + ' log entries are open on ' + ln.status +
-        '. That is one stage logged ' + cur.length + ' times, not ' + cur.length +
-        ' stages. Picking a stage closes every one of them.') + '">×' + cur.length + ' open</span>'
-    : '';
+  /* No mark for a stage open twice — the office: "2 open 我也不要看到".
+     The cell names each stage once (openActivities) and that is all it
+     says; picking a stage still closes every open row underneath. */
   return '<td><select class="st-pick" data-st="' + esc(unitKey) + '" data-cur="' +
     (curN == null ? '' : curN) + '"' + (many ? '' : tint) + '>' +
     (many
       ? '<option value="" selected>' + esc(openActs.length + ' running: ' + ln.status) + '</option>'
       : (curN == null ? '<option value="" selected>— nothing running —</option>' : '')) +
-    opts + '</select>' + dupTag + '</td>';
+    opts + '</select></td>';
 }
 
 $('rows').addEventListener('click', (e) => {
@@ -938,7 +975,7 @@ $('cf-ok').addEventListener('click', async () => {
 
     /* Re-read rather than patch: last update, the new due date and the days
        left all come off the log, and the server is the record. */
-    LOGS = await MJMPalms.loadLogs(_supabase);
+    LOGS = MJMPalms.withoutReplant(await MJMPalms.loadLogs(_supabase));   // no -R plot on PALMS
     await MJMPalms.loadSaves(_supabase);
     btn.disabled = false;
     closeCf(false);
@@ -1033,7 +1070,7 @@ function render() {
        has to be in place by the time the log is parsed or the due dates are
        computed against the built-in eleven. */
     await MJMPalms.loadStages(_supabase);
-    LOGS = await MJMPalms.loadLogs(_supabase);
+    LOGS = MJMPalms.withoutReplant(await MJMPalms.loadLogs(_supabase));   // no -R plot on PALMS
     /* The daily reports, which is where "last update" comes from: a Field
        Conductor's Save records every plot in the nursery, changed or not, so
        an unchanged plot is still a plot somebody looked at today. Its own
@@ -1050,7 +1087,8 @@ function render() {
       onNurseryChange: renderTable,
       onPlotClick: openPlot,
     });
-    MAP_SCOPE = allowed ? { nurseries: visible } : {};
+    // No -R plots on PALMS — see isReplantPlot in shared_palms.js.
+    MAP_SCOPE = allowed ? { nurseries: visible, skipReplant: true } : { skipReplant: true };
     await MAP.load(_supabase, MAP_SCOPE);
     await loadAreas();
     await loadHidden();

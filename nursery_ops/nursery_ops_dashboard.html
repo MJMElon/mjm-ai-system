@@ -3,11 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- This page carries every line of its own CSS/JS inline, so the page IS
+     the deploy -- a browser holding yesterday's copy keeps it until one hard
+     reload, and every change this session (the chalkboard, the quote, the
+     hanging tiles) has been invisible to a cached tab for exactly that
+     reason. See CLAUDE.md, "A page that caches cannot deliver a fix". -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Nursery Operation Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_nelos.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
@@ -16,23 +25,114 @@
   body { background:#f0fdfa; margin:0; }
 
   /* Square tiles, laid out on a grid that fits as many as the width allows
-     and never fewer than two, so the set still reads as a set on a phone. */
-  .tool-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); }
-  .tool-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
-              aspect-ratio:1/1; padding:12px; border-radius:18px; text-align:center;
-              background:white; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:11px;
-              letter-spacing:.08em; text-transform:uppercase; text-decoration:none;
-              transition:transform .12s, background .15s, box-shadow .15s;
-              box-shadow:0 3px 10px rgba(13,148,136,.10); touch-action:none; user-select:none; }
+     and never fewer than two, so the set still reads as a set on a phone.
+     Capped at 150px rather than stretching to 1fr -- a row of five no
+     longer runs edge to edge under the board; it sits as its own compact
+     cluster, centred (justify-content below) under the middle of the
+     frame the way the office asked for, with the board's own wood showing
+     at both sides instead of the tiles claiming the whole width. auto-fit
+     instead of auto-fill: a fit-sized row with fewer than five tiles
+     showing (permissions can hide one) still collapses to just its own
+     content width rather than leaving a phantom empty column reserving
+     space nothing is drawn in. */
+  /* Row-gap is wider than column-gap on purpose: it is the clearance a
+     wrapped second row needs so its tiles' own hanging threads (20px, see
+     .tool-hang) never run into the row above. */
+  .tool-grid { display:grid; gap:26px 12px; grid-template-columns:repeat(auto-fit, minmax(132px, 150px));
+               justify-content:center; }
+  /* #tools' own gap to the board, in CSS rather than a Tailwind mt-* class —
+     .tool-hang's height below has to match this NUMBER exactly for the
+     pegs to land on the frame, and a Tailwind utility is one more place
+     that number could drift (or silently read as 0 if the CDN script is
+     ever blocked, which it was for every screenshot taken while building
+     this). */
+  #tools { margin-top:20px; }
+
+  /* A cut plank, not a white app tile: same linen-and-grain the chalkboard's
+     own frame is cut from, routed edge included (the layered inset
+     shadows). Every tile shares this ONE material — what tells the five
+     apart is the colour painted on, via --accent / --icon-bg set per tile
+     in the markup, the same custom-property convention the hub's own
+     module cards use (see index.html). */
+  .tool-btn { --accent:#0f766e; --icon-bg:rgba(15,118,110,.14);
+              position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px;
+              aspect-ratio:1/1; padding:12px; border-radius:11px; text-align:center;
+              background:
+                repeating-linear-gradient(180deg, rgba(120,80,40,.05) 0px, rgba(120,80,40,.05) 1px, transparent 1px, transparent 7px),
+                linear-gradient(165deg, #fdf8ee, #f1e3c6 94%);
+              border:2px solid #a9743f; color:var(--accent); font-weight:900; font-size:11px;
+              letter-spacing:.07em; text-transform:uppercase; text-decoration:none;
+              transition:transform .15s ease, box-shadow .15s ease;
+              transform-origin:50% -22px;
+              box-shadow:0 4px 10px rgba(91,58,30,.16),
+                         inset 0 1px 0 rgba(255,255,255,.55),
+                         inset 0 -3px 5px rgba(91,58,30,.14);
+              touch-action:none; user-select:none; }
   .tool-btn .tl { line-height:1.25; }
-  .tool-btn:hover { background:#ccfbf1; transform:translateY(-2px); }
+  .tool-ico { width:38px; height:38px; border-radius:10px; background:var(--icon-bg); color:var(--accent);
+              display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .tool-ico svg { width:21px; height:21px; }
+
+  /* Each tile hangs the way a picture frame actually does: ONE nail driven
+     into the board above, and the wire runs from it DOWN to two rings
+     mounted on the tile's own top corners — a V, not two parallel threads
+     each carrying their own nail. Threads/hardware are INSIDE .tool-btn
+     (not a wrapping element) so the tile stays a direct child of #tools —
+     the drag-reorder logic below walks #tools' children by .tool-btn and
+     a wrapper would break `target.parentElement === box`.
+
+     THE WIRE IS AN SVG, THE RINGS AND NAIL ARE NOT. The svg is stretched
+     to the tile's full width with preserveAspectRatio="none", which is
+     fine for a straight line (an affine stretch of a line is still a
+     line) and wrong for a circle (it would draw an ellipse) — so the two
+     rings and the nail are plain circular elements positioned by
+     percentage instead, sized the same regardless of how wide the tile
+     is. --tool-btn's own transform-origin (50%, 22px above the top)
+     matches the nail's position, so the hover sway pivots from the nail
+     itself, same as a real picture swings from where it is actually
+     hung. */
+  .tool-hang { position:absolute; left:0; right:0; bottom:100%; height:20px; pointer-events:none; }
+  /* left/right alone does not reliably size an <svg> -- it is a replaced
+     element and wants its own width/height, or it falls back to an
+     intrinsic size that does not match the tile, which is what was
+     throwing the V off-centre. width/height here are the fix; left/right
+     stay too, as the positioning (not sizing) half of the rule. */
+  .hang-wire { position:absolute; left:0; right:0; top:-4px; width:100%; height:22px; }
+  /* Black, not the chocolate brown this carried for one commit -- tried
+     both side by side (see the commit message) and chocolate blended into
+     the frame's own wood tone right where the wire meets it; black holds
+     its edge against both the dark frame above and the light tile below. */
+  .hang-wire path { fill:none; stroke:#1e1e1e; stroke-width:1.5; stroke-linecap:round; vector-effect:non-scaling-stroke; }
+  /* 23% / 77%, not the 50%-symmetric 27%/73% a single-nail-per-ring version
+     used — tuned so the gap WITHIN a tile's own pair of rings matches the
+     gap BETWEEN one tile's rings and the next tile's, at this grid's
+     actual column width (five equal ~177px columns on the usual desktop
+     width). Two rings close together with a wide gap to the next pair
+     read as pairs; evening the two gaps out is what reads as one tidy row
+     of boards along the whole board instead. */
+  .hang-ring { position:absolute; top:18px; width:7px; height:7px; border-radius:50%;
+               transform:translate(-50%,-50%);
+               border:1.4px solid #9a9ea4; background:radial-gradient(circle at 35% 30%, #f1f2f4, #c3c6ca 72%);
+               box-shadow:0 1px 1px rgba(0,0,0,.3); }
+  .hang-ring.is-left { left:23%; }
+  .hang-ring.is-right { left:77%; }
+  .hang-nail { position:absolute; left:50%; top:-4px; width:9px; height:9px; border-radius:50%;
+               transform:translate(-50%,-50%);
+               background:radial-gradient(circle at 32% 28%, #f1f2f4, #aeb2b8 55%, #5a5e64 100%);
+               box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 2px 2px rgba(0,0,0,.4); }
+
+  /* A nudge, not a button press — these are nailed up, not clickable tiles
+     floating free, so the hover answer is the sign swinging on its nails
+     rather than lifting off the page. */
+  @keyframes tool-sway { 0%, 100% { transform:rotate(-2.4deg); } 50% { transform:rotate(2.4deg); } }
+  .tool-btn:hover { animation:tool-sway 1s ease-in-out infinite; box-shadow:0 7px 16px rgba(91,58,30,.22),
+                    inset 0 1px 0 rgba(255,255,255,.55), inset 0 -3px 5px rgba(91,58,30,.14); }
   /* The one being carried follows the pointer and is lifted off the grid;
-     the gap it left stays open so the drop target is obvious. */
-  .tool-btn.dragging { opacity:.9; box-shadow:0 18px 40px -10px rgba(13,148,136,.45);
+     the gap it left stays open so the drop target is obvious. No sway while
+     it is literally in the hand. */
+  .tool-btn.dragging { opacity:.9; animation:none; box-shadow:0 18px 40px -10px rgba(91,58,30,.4);
                        transform:scale(1.04); z-index:30; position:relative; }
   .tool-btn.ghost { opacity:.25; }
-  .tool-btn-access { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
-  .tool-btn-access:hover { background:#ffe4e6; }
   .hidden { display:none !important; }
 
   /* ── Chalkboard ─────────────────────────────────────────── */
@@ -69,25 +169,19 @@
 
   .board-empty { text-align:center; font-family:'Caveat', cursive; font-size:26px; color:rgba(242,234,216,.55); padding:70px 10px; }
 
-  .chalk-tray { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding-top:12px;
+  .chalk-tray { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; margin-top:14px; padding-top:12px;
                 border-top:2px solid rgba(255,255,255,.12); }
-  .edit-chalk { display:inline-flex; align-items:center; gap:8px; padding:9px 18px; border-radius:12px;
-                background:#fdfaf2; color:#243d33; font-weight:900; font-size:11px; letter-spacing:.08em;
-                text-transform:uppercase; text-decoration:none; border:none; cursor:pointer;
-                box-shadow:0 5px 14px rgba(0,0,0,.3); transition:all .15s; }
-  .edit-chalk:hover { transform:translateY(-1px); background:white; }
   .last-update { font-family:'Caveat', cursive; font-size:18px; color:rgba(242,234,216,.7); }
 </style>
 </head>
 <body>
 
-<!-- Standardised MJM Nursery AI ribbon — see shared/shared_ribbon.js -->
-<div id="mjm-ribbon" data-brand="MJM Nursery AI System" data-center="Nursery Operation Manage"
-     data-center-scale="0.7" data-logo="off"></div>
+<!-- The standard MJM Nursery AI ribbon, with no centred module name — the
+     office picked this shape for this page: [AI] wordmark left, Welcome /
+     Portal / Sign Out right (see shared/shared_ribbon.js). The inner pages
+     (Seeds Control, Maintenance) keep their compact Back-pill bars. -->
+<div id="mjm-ribbon"></div>
 <script src="../shared/shared_ribbon.js"></script>
-
-<!-- The module names itself in the ribbon now, the way the Nelos pages do,
-     so the strip that used to repeat it under the bar has gone. -->
 
 <div id="loading" class="max-w-[980px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
 
@@ -106,7 +200,13 @@
         <button id="prev-month" class="nav-btn" title="Previous month's schedule">‹</button>
         <div class="flex-1">
           <div id="board-title" class="board-title">—</div>
-          <div class="board-sub">Nursery Work Schedule</div>
+          <!-- A rotating line of chalk rather than the module's own name —
+               the ribbon above already says "Nursery Operation Manage", so
+               repeating it here was spending the one line under the month on
+               nothing. weeklyQuote() picks one by the ISO week, so it is the
+               same quote for everybody looking at the board in a given week
+               and moves on its own with no admin screen to keep up. -->
+          <div id="board-sub" class="board-sub"></div>
         </div>
         <button id="next-month" class="nav-btn" title="Next month — set the following month's schedule">›</button>
       </div>
@@ -115,7 +215,6 @@
 
       <div class="chalk-tray">
         <span id="last-update" class="last-update">&nbsp;</span>
-        <a id="edit-btn" class="edit-chalk" href="nursery_ops_monthly.html">✏️ Edit Schedule</a>
       </div>
     </div>
   </div>
@@ -130,14 +229,50 @@
        things first — and the order is kept per browser rather than per
        account, because it is a convenience, not a setting worth a column in
        the database. -->
-  <div id="tools" class="tool-grid mt-7">
-    <a draggable="false" class="tool-btn" data-page="seeds"       href="nursery_ops_seeds.html"><span class="tl">Seeds Management</span></a>
-    <a draggable="false" class="tool-btn" data-page="maintenance" href="nursery_ops_maintenance.html"><span class="tl">Nursery Maintenance Schedule &amp; Work Record</span></a>
+  <div id="tools" class="tool-grid">
+    <a draggable="false" class="tool-btn" data-page="seeds" href="nursery_ops_seeds.html"
+       style="--accent:#15803d;--icon-bg:rgba(21,128,61,.14);">
+      <div class="tool-hang">
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
+      </div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20v-7"/><path d="M12 13c-4 0-6-2.5-6-6 4 0 6 1.5 6 6z"/><path d="M12 13c4 0 6-2.5 6-6-4 0-6 1.5-6 6z"/><path d="M6 20h12"/>
+      </svg></div>
+      <span class="tl">Seeds Control</span>
+    </a>
+    <a draggable="false" class="tool-btn" data-page="maintenance" href="nursery_ops_maintenance.html"
+       style="--accent:#0e7490;--icon-bg:rgba(14,116,144,.14);">
+      <div class="tool-hang">
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
+      </div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="5" width="16" height="15" rx="2.2"/><path d="M4 10h16"/><path d="M8 3v4M16 3v4"/><path d="M8.5 14.5l2.2 2.2 4.3-4.7"/>
+      </svg></div>
+      <span class="tl">Nursery Work &amp; Schedule</span>
+    </a>
     <!-- One way into PALMS. Life of Plot, the motion study and its settings
          are all readings of the same plot log, so they live behind this tile
          rather than as four separate ones that gave no hint they belonged
          together. The PALMS pages carry their own tab strip. -->
-    <a draggable="false" class="tool-btn" data-page="palms_board"  href="nursery_ops_palms_board.html"><span class="tl">PALMS</span></a>
+    <a draggable="false" class="tool-btn" data-page="palms_board" href="nursery_ops_palms_board.html"
+       style="--accent:#0f766e;--icon-bg:rgba(15,118,110,.14);">
+      <div class="tool-hang">
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
+      </div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21v-9.5"/><path d="M12 11.5c0-3 2.2-5 6.5-6-1.2 3.2-3.3 5.2-6.5 6z"/><path d="M12 11.5c0-3-2.2-5-6.5-6 1.2 3.2 3.3 5.2 6.5 6z"/><path d="M12 11.8c2.2-2 5-2.3 6.8-.6-1.8 1.7-4.6 2-6.8.6z"/><path d="M12 11.8c-2.2-2-5-2.3-6.8-.6 1.8 1.7 4.6 2 6.8.6z"/>
+      </svg></div>
+      <span class="tl">P.A.L.M.S</span>
+    </a>
     <!-- Stock Inventory is its OWN MODULE, reached from here rather than from
          the portal: somebody counting what is in the store is doing nursery
          operation work, and it was a tile on the front page away from
@@ -151,11 +286,34 @@
          door they were already through, and offering it only to bounce them
          at the other end is worse than not offering it. -->
     <a draggable="false" class="tool-btn hidden" data-page="stock" data-module="stock"
-       href="../stock/stock_dashboard.html"><span class="tl">Stock Inventory System</span></a>
+       href="../stock/stock_dashboard.html" style="--accent:#b45309;--icon-bg:rgba(180,83,9,.14);">
+      <div class="tool-hang">
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
+      </div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3.5" y="11" width="7.2" height="7.2" rx="1"/><rect x="13.3" y="11" width="7.2" height="7.2" rx="1"/><rect x="8.4" y="3.8" width="7.2" height="7.2" rx="1"/>
+      </svg></div>
+      <span class="tl">Nursery Stock Control</span>
+    </a>
     <!-- Shown only to users who may change other people's access. It carries
          a data-page like the rest so it drags and is remembered with them;
          being hidden is about the right to open it, not about where it sits. -->
-    <a draggable="false" class="tool-btn tool-btn-access hidden" data-page="user_access" id="user-access-btn" href="nursery_ops_user_access.html"><span class="tl">User Access</span></a>
+    <a draggable="false" class="tool-btn hidden" data-page="user_access" id="user-access-btn" href="nursery_ops_user_access.html"
+       style="--accent:#9f1239;--icon-bg:rgba(159,18,57,.14);">
+      <div class="tool-hang">
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
+      </div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-4.2 3.1-6.8 7-6.8s7 2.6 7 6.8"/>
+      </svg></div>
+      <span class="tl">User Access</span>
+    </a>
   </div>
 
   <p class="text-[11px] text-slate-400 text-center mt-8">
@@ -182,6 +340,40 @@ function shiftMonth(m, delta) {
 }
 const fmtDay = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-MY', { day:'numeric', month:'short' }) : '';
 
+/* ── The weekly quote on the chalkboard ───────────────────────────────
+   The module already names itself in the ribbon above ("Nursery Operation
+   Manage"), so the line under the month used to repeat it for nothing.
+   Picked by the ISO week number: the same line for everybody looking at
+   the board in a given week, and it moves to the next one on its own —
+   nobody has to open a screen and change it. */
+const BOARD_QUOTES = [
+  'Every seed believes in tomorrow.',
+  'Small, steady care grows the biggest nurseries.',
+  'Patience is the first lesson a nursery teaches.',
+  'Good work, planted well, grows on its own.',
+  'A tended plot never stays empty for long.',
+  'Roots first — everything else follows.',
+  'The best time to plant was yesterday. The next best time is today.',
+  'Steady hands grow strong nurseries.',
+  'What we nurture, grows.',
+  'Every plot tells the story of someone who cared.',
+  'Great nurseries are built one row at a time.',
+  'Care today is the harvest of tomorrow.',
+  'Growth is quiet work, done daily.',
+  'A well-kept nursery speaks for itself.',
+];
+function isoWeek(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+}
+function weeklyQuote() {
+  return BOARD_QUOTES[isoWeek(new Date()) % BOARD_QUOTES.length];
+}
+$('board-sub').textContent = weeklyQuote();
+
 function lineHtml(w) {
   const statusTxt = {
     planned:     '· planned',
@@ -202,7 +394,6 @@ function lineHtml(w) {
 
 async function loadBoard() {
   $('board-title').textContent = monthLabel(boardMonth);
-  $('edit-btn').href = 'nursery_ops_monthly.html?month=' + boardMonth;
   $('board-lines').innerHTML = '<div class="board-empty">loading…</div>';
   const { data, error } = await _supabase
     .from('nops_plot_works').select('*')
@@ -217,7 +408,7 @@ async function loadBoard() {
   const works = data || [];
   $('board-lines').innerHTML = works.length
     ? works.map(lineHtml).join('')
-    : '<div class="board-empty">nothing on the board for this month yet —<br>press “Edit Schedule” to set it ✏️</div>';
+    : '<div class="board-empty">nothing on the board for this month yet</div>';
 
   // "Last update by …" — latest touch across the month's rows.
   let latest = null;
@@ -368,10 +559,6 @@ $('next-month').addEventListener('click', () => { boardMonth = shiftMonth(boardM
       document.querySelectorAll('.tool-btn[data-module]').forEach(a => {
         if (MJMAccess.canAccess(a.dataset.module)) a.classList.remove('hidden');
       });
-      if (!may('schedule', 'edit_schedule')) {
-        const eb = document.getElementById('edit-btn');
-        if (eb) eb.style.display = 'none';
-      }
       if (MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
     } catch (_) { /* keep the dashboard usable */ }
 

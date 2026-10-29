@@ -311,17 +311,66 @@ const CAL_ROWS = [
   const fs = require('fs');
   const src = fs.readFileSync(require('path').join(__dirname, '..', 'operation',
                                                    'operation_batch_detail.html'), 'utf8');
-  // The saved list's own grid: the one whose last track is the 80px
-  // actions column AND whose first is a fraction (the others with an 80px
-  // in them are different tables).
+  /* The saved list's own grid: the one whose last track is the 90px actions
+     column AND whose first is a fraction (the others with a pixel track in
+     them are different tables).
+
+     It used to be eight columns wide with the plot, the day and the total
+     repeated down the side of every tray. They moved up onto the CARD head
+     when the list became one card per plot per day, so the tray grid is the
+     five that differ tray by tray -- see one_card_per_plot_per_day.cjs. The
+     TOTAL is no longer a track at all: it is one figure on the card, which
+     is the whole reason the cards exist. */
   const tracks = (src.match(/grid-cols-\[[^\]]+\]/g) || [])
-    .filter(t => /^grid-cols-\[[\d.]+fr_.*_80px\]$/.test(t));
-  check('header, rows and total all carry a track list', tracks.length >= 3, true);
-  check('and it is the same one everywhere', Array.from(new Set(tracks)).length, 1);
-  check('with eight columns', tracks[0].replace(/grid-cols-\[|\]/g, '').split('_').length, 8);
+    .filter(t => /^grid-cols-\[[\d.]+fr_.*_90px\]$/.test(t));
+  check('the header and the rows both carry a track list', tracks.length >= 2, true);
+  check('and it is the same one in both', Array.from(new Set(tracks)).length, 1);
+  check('with five columns', tracks[0].replace(/grid-cols-\[|\]/g, '').split('_').length, 5);
+  check('and the total is on the card instead', /id="t3-cardtotal-\$\{c\.i\}"/.test(src), true);
   check('the two new ones are Adjustment and Final Qty',
         /<span class="text-\[#a83020\]">Adjustment<\/span>/.test(src)
           && /<span class="text-\[#4a7a2e\]">Final Qty<\/span>/.test(src), true);
+
+  console.log('\nAnd the three figures in the foot SAY which they are');
+  /* The office asked, with the row on screen: 这三个是什么 - 1057 1057.
+     It read `TOTAL TRANSPLANTED  2 RECORDS  —  1,057  1,057`, which is the
+     adjustment, the qty and the final qty, in that order, with no words on
+     any of them. They never needed words while this was a grid: they sat
+     under the tab's own column headings. The cards took those headings down
+     INTO each card, and nothing put them back here.
+
+     The labels have to be the card's own, letter for letter, and in the
+     card's order -- a foot that totals a column under a different word, or
+     in a different place, is a figure somebody has to work out which column
+     it belongs to. */
+  const foot = await page.evaluate(() => {
+    const ids = ['t3-saved-total-qty', 't3-saved-total-adj', 't3-saved-total-final'];
+    const row = document.getElementById('t3-saved-total-qty')
+                  .closest('.border-t-2');
+    const figs = Array.from(row.querySelectorAll('[id^="t3-saved-total-"]'))
+                   .filter(e => ids.indexOf(e.id) >= 0);
+    return {
+      /* The order they are actually drawn in. */
+      order: figs.map(e => e.id),
+      /* Each figure's own label: the words beside it, inside its own block. */
+      labels: ids.map(id => {
+        const fig = document.getElementById(id);
+        const own = fig.parentElement;
+        return Array.from(own.children)
+          .filter(c => c !== fig).map(c => c.textContent.trim()).join(' ');
+      })
+    };
+  });
+  check('they are drawn in the card order — qty, adjustment, final',
+        foot.order.join(','),
+        't3-saved-total-qty,t3-saved-total-adj,t3-saved-total-final');
+  check('the qty total says Qty',        foot.labels[0], 'Qty');
+  check('the adjustment total says Adjustment', foot.labels[1], 'Adjustment');
+  check('the final total says Final Qty',      foot.labels[2], 'Final Qty');
+  /* And the words are the card headings and not a second set of wordings. */
+  checkTrue('each label is a card column heading, letter for letter',
+            foot.labels.every(l => new RegExp('<span class="text-\\[#[0-9a-f]{6}\\]">'
+              + l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '</span>').test(src)));
 
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

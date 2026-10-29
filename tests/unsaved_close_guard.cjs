@@ -336,6 +336,64 @@ const SEEDS_ROW = {
             await page.evaluate(() => (window.__TOASTS.slice(-1)[0] || {}).m || '')
               .then(m => /did not save/i.test(m) && /nothing has been lost/i.test(m)));
 
+  console.log('\nA SIGNED-OFF TAB CANNOT BE SAVED, by any route');
+  /* `.mjm-locked` greys every input and button with pointer-events:none.
+     That is a paint. It does not stop the keyboard, and it cannot stop a
+     CALL — which is exactly what this dialog makes. So verifying a report,
+     typing into it and pressing X then Leave rewrote it, with nobody's
+     signature moving. */
+  /* Carried on from the page already open, with Transplanting still dirty
+     from real typing above. Navigating here is refused: those dirty tabs
+     arm `beforeunload` and the browser aborts the load. */
+  await page.evaluate(() => window.closeUnsavedModal());
+
+  const locked = await page.evaluate(async () => {
+    const ran = [];
+    window.saveTransplantTab = function () { ran.push('saveTransplantTab'); window.showToast('Saved.', 'success'); };
+    window._trackTabSave('saveTransplantTab', 3);
+    document.getElementById('tab-3').classList.add('mjm-locked');
+    window.__TOASTS = [];
+    await window.saveTransplantTab();
+    return { ran, toasts: window.__TOASTS.slice(), dirty: window._dirtyTabNames() };
+  });
+  check('the real save never runs', locked.ran, []);
+  checkTrue('…and it says why, naming the tab',
+            /Transplanting/.test(locked.toasts[0].m) && /signed off and locked/i.test(locked.toasts[0].m));
+  checkTrue('…and where to clear it', /Unverify/i.test(locked.toasts[0].m));
+  /* An ERROR here means what it means everywhere: what you keyed is not in
+     the database. So the tab stays dirty and the close dialog goes on
+     offering Don't save, which is the right answer for a change that must
+     not be kept. */
+  check('…as an error, so the tab stays unsaved', locked.toasts[0].t, 'error');
+  check('…and it is still listed as unsaved', locked.dirty, ['Transplanting']);
+
+  const held = await page.evaluate(async () => {
+    window.__TOASTS = [];
+    window.closeBatchRecord();
+    await window.confirmCloseBatchRecord();
+    await new Promise(r => setTimeout(r, 400));
+    return { left: window.location.pathname.endsWith('operation_batch_record.html'),
+             open: !document.getElementById('unsaved-modal').classList.contains('hidden') };
+  });
+  check('pressing X and Leave does NOT rewrite a signed-off report', held.left, false);
+  check('…and the dialog is still there', held.open, true);
+
+  /* PRINT AND DOWNLOAD CHANGE NOTHING, and a verified sheet is the one most
+     worth having on paper. Greying them means unverifying a report to print
+     it, which is the opposite of what the lock is for. */
+  const reads = await page.evaluate(() => {
+    document.getElementById('tab-8').classList.add('mjm-locked');
+    const live = id => {
+      const b = document.getElementById(id);
+      return !!b && getComputedStyle(b).pointerEvents !== 'none';
+    };
+    return { print: live('print-t8-btn'), download: live('download-t8-pdf-btn'),
+             save: live('save-t8-btn') };
+  });
+  check('Print stays live on a locked report', reads.print, true);
+  check('…so does Download PDF', reads.download, true);
+  check('…and Save still looks locked, as well as being locked', reads.save, false);
+
   console.log('\nNo browser confirm box was used anywhere');
   check('not once', dialogs.length, 0);
 

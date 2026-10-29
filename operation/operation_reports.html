@@ -3,11 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- This page carries every line of its own report code inline, so the PAGE
+     is the deploy: a cached copy is yesterday's reports for ever. The three
+     metas are what "a page that caches cannot deliver a fix" in CLAUDE.md
+     prescribes; a browser already holding a stale copy still needs ONE hard
+     reload to pick them up. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Reports — MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_cf_select.js"></script>
 <!-- Is this batch finished? ONE rule, shared with the Batch Record list, so
@@ -552,7 +561,7 @@
   <div class="glass-panel p-6 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4 !border-[#3d2610]">
     <button onclick="window.location.href='operation_dashboard.html'" class="no-print text-[10px] font-bold text-[#8a7a68] hover:text-[#3d2610] uppercase tracking-widest bg-[#f8f4ec] hover:bg-[#e8dcc8] px-5 py-3 rounded-xl flex items-center gap-2 shadow-sm">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-      Back to Main Page
+      Back
     </button>
     <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]">📊 Operation Reports</h1>
     <button onclick="window.print()" class="no-print text-[10px] font-black text-white uppercase tracking-widest bg-[#3d2610] hover:bg-[#1a150d] px-5 py-3 rounded-xl shadow">Print / Export</button>
@@ -592,7 +601,11 @@ function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN
 // Same thousand-separator grouping as fmtNum, kept at 2 decimals — a
 // subtotal like RM 33390.00 read as one long unbroken run of digits;
 // toLocaleString groups it the same way fmtNum already groups quantities.
-function fmtMoney(n) { return (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// The locale is NAMED, like fmtDate above it. A bare toLocaleString reads
+// the DEVICE's, so this figure printed 33.390,00 on a machine set to a
+// language that writes decimals with a comma -- the same fault the
+// maintenance dose showed on a Field Conductor phone.
+function fmtMoney(n) { return (n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 async function loadBreeds() {
   const { data } = await _supabase.from('shared_breeds').select('name').order('name');
@@ -2068,7 +2081,7 @@ async function runSeedInReport() {
   const from  = document.getElementById('f-from').value;
   const to    = document.getElementById('f-to').value;
   const breed = document.getElementById('f-breed').value;
-  const selectedLocs = new Set(selectedNurseries());
+  const selectedLocs = new Set(nurseryFilter());
   const asAt = to || null;
 
   /* NO verifiedOnly here, deliberately. The Seed In Report answers what
@@ -2773,7 +2786,7 @@ async function runLifeOfPlot() {
   // Locations chips: nothing ticked = every location — the same rule every
   // other report reads these chips with. PN never matches a plot, so it is
   // simply inert here.
-  const selectedLocs = new Set(selectedNurseries());
+  const selectedLocs = new Set(nurseryFilter());
 
   const [logsRes, dosRes, alsRes, plotsRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
@@ -3159,24 +3172,25 @@ function _rememberReport(report) {
   try { localStorage.setItem(LAST_REPORT_KEY, report); } catch (e) { /* private mode, etc — just don't persist */ }
 }
 
-// Same idea for the "As At" date — picking one and refreshing used to
-// always land back on today regardless. Only remembers across a REFRESH;
-// switching report tabs still resets to today on purpose (see
-// syncReportDefaults()'s own comment — re-running the same report should
-// never clobber a date someone deliberately picked, but a fresh tab should
-// not inherit a stale one either).
-const LAST_DATE_KEY = 'mjm_reports_last_date';
-function _rememberDate(dateStr) {
-  try { localStorage.setItem(LAST_DATE_KEY, dateStr || ''); } catch (e) { /* private mode, etc — just don't persist */ }
+// The "As At" date is NOT remembered across visits any more — it was for a
+// while, and the office overruled it: "Always show today's date at as at
+// there." Opening the page and switching report tabs both land on today;
+// a date somebody picks still survives re-running the same report.
+// Today as LOCAL YYYY-MM-DD: toISOString() is UTC, which in Malaysia
+// (UTC+8) is still yesterday for the whole early morning — the house
+// _localISO rule (see CLAUDE.md on the audit cards).
+function _reportsLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // Same idea again, one level down — which Nursery Report sub-page (and its
 // own Culling Stage / Breed / Locations filters) was open. A refresh used
 // to always drop Seed In Report back to Summary Report with every filter
-// cleared, exactly the "always lands on today" bug the two remembers above
-// already fixed for the report tab and the date. Only restored on a
-// REFRESH (see bootstrap()) — switching sub-reports by hand still resets
-// via syncReportDefaults(), same asymmetry LAST_DATE_KEY already has.
+// cleared. Only restored on a REFRESH (see bootstrap()) — switching
+// sub-reports by hand still resets via syncReportDefaults(). The As At
+// date used to be remembered the same way; the office overruled that one
+// (always today), and only the date.
 const LAST_NURSERY_SUB_KEY = 'mjm_reports_last_nursery_sub';
 const LAST_CULLING_STAGE_KEY = 'mjm_reports_last_culling_stage';
 const LAST_BREED_KEY = 'mjm_reports_last_breed';
@@ -3374,6 +3388,29 @@ async function loadNurseryFilter() {
 function selectedNurseries() {
   return [...document.querySelectorAll('.f-nurs-cb:checked')].map(cb => cb.value);
 }
+/* What the report builders filter by — NOT the raw tick list above (that one
+   keeps feeding the localStorage remember/restore exactly as ticked).
+
+   The chips offer every nursery Seedling Stock names, plus PN — so a row can
+   resolve to a value NO chip carries: 'Unassigned', a plot the Seedling
+   Stock list cannot place (missing from it, or filed with no nursery). The
+   chips default to ALL ticked, and "ticked chips only" therefore dropped
+   those rows silently, for ever, with nothing on screen saying so — batch
+   256's N11 transplants were missing from the July Transplanting Report
+   while the batch report showed them, because N11 resolved to no nursery.
+
+   Every OFFERED chip ticked is not a narrowing — it is the default — so it
+   reads as no filter at all, the same as none ticked (the rule the Movement
+   Report already states for the empty set). Only a partial selection
+   filters, and a deliberately narrowed report may still leave an unplaced
+   plot out: that is a question about named locations. A chip hidden by
+   _cullingSyncPreNurseryChip() is not offered, so it does not count. */
+function nurseryFilter() {
+  const cbs = [...document.querySelectorAll('.f-nurs-cb')]
+    .filter(cb => !(cb.closest('.nursery-chip') || cb).classList.contains('hidden'));
+  const picked = cbs.filter(cb => cb.checked).map(cb => cb.value);
+  return picked.length === cbs.length ? [] : picked;
+}
 
 // Hides (and unticks) the Pre-Nursery Locations chip while Culling Report
 // is showing 2nd Culling or 3rd Culling — see syncFilterVisibility()'s own
@@ -3400,7 +3437,9 @@ function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
   if (DATE_KEYED_REPORTS.has(which)) {
     // f-from is derived from this in runReport() — nothing to set here.
-    document.getElementById('f-to').value = new Date().toISOString().slice(0, 10);
+    // LOCAL today, same reason as bootstrap(): toISOString is UTC and
+    // reads as yesterday in Malaysia until 8am.
+    document.getElementById('f-to').value = _reportsLocalISO();
   }
   // Plot is the more commonly checked default for both sections (see
   // buildMovementSection).
@@ -3979,7 +4018,7 @@ async function runMovementReportCombined() {
   // which section(s) actually render. Same rule Transplanting/Sales Listing
   // already use for these chips: nothing ticked means no filter at all, not
   // nothing to show — nothing ticked shows every location, both sections.
-  const pickedLocs = selectedNurseries();
+  const pickedLocs = nurseryFilter();
   const wantPre  = pickedLocs.length === 0 || pickedLocs.includes('PN');
   const wantMain = pickedLocs.length === 0 || pickedLocs.some(l => l !== 'PN');
 
@@ -4937,7 +4976,7 @@ async function runTransplantingReport() {
   const breed = document.getElementById('f-breed').value;
   const fromTs = from ? new Date(from).getTime() : -Infinity;
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
-  const selectedLocs = new Set(selectedNurseries());
+  const selectedLocs = new Set(nurseryFilter());
 
   const [logsRes, plotsRes, calRes, batchesRes] = await Promise.all([
     // Transplanted only — a move INTO a real main plot. Transplanted_Premium
@@ -5052,7 +5091,25 @@ async function runTransplantingReport() {
   // in shared_plots, so plotToLoc[...] would silently fall through to
   // "Unassigned". PRE_NURSERY_PLOTS is the same list runMovementReport
   // already uses to recognise them; label them "PN" instead.
-  const locOf = (plot) => PRE_NURSERY_PLOTS.includes(plot) ? 'PN' : (plotToLoc[plot] || 'Unassigned');
+  /* A plot matched on letters and digits only — "N 11", "n11" and "N11" are
+     one plot. Same rule as nurseryKey / plotKey everywhere else, and it
+     cannot merge two plots: different letters or digits give different keys.
+     ONE line on purpose — the test lifts a named const by its line (see
+     _losTrayKey). Not _mvPlotKey: that one is for DO free text and cuts at
+     the first space, which reads "N 11" as plot N. */
+  const _tpPlotKey = (p) => String(p == null ? '' : p).toUpperCase().split('').filter(c => (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')).join('');
+  // So a ledger row keyed while Seedling Stock spelled the plot another way
+  // (case, a stray space) still finds its nursery instead of falling through
+  // to Unassigned and out of a ticked-locations filter.
+  const locOfKey = {};
+  // A spelling with a real nursery wins over one without, whatever order the
+  // Seedling Stock rows arrived in.
+  Object.keys(plotToLoc).forEach(p => {
+    const k = _tpPlotKey(p);
+    if (!locOfKey[k] || locOfKey[k] === 'Unassigned') locOfKey[k] = plotToLoc[p];
+  });
+  const locOf = (plot) => PRE_NURSERY_PLOTS.includes(plot) ? 'PN'
+    : (plotToLoc[plot] || locOfKey[_tpPlotKey(plot)] || 'Unassigned');
   const inView = (r) => {
     const ts = r.date ? new Date(r.date).getTime() : NaN;
     // A row with no usable date at all can't be placed within a chosen
@@ -5141,6 +5198,15 @@ async function runTransplantingReport() {
     .sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _tpNatCmp(a.plot, c.plot))
     .map(a => ({ date: a.date, qty: a.qty, label: a.batch + ' · ' + a.plot }));
 
+  /* A plot Seedling Stock cannot place shows here as Unassigned rather than
+     vanishing — and the header NAMES it, because the cure is a row in the
+     Seedling Stock list (shared_plots) with its nursery filled in, not
+     anything on this page. A location note the report keeps to itself is a
+     row somebody keys again. */
+  const unplacedPlots = [...new Set(
+    rows.concat(amendInView).filter(r => r.nursery === 'Unassigned').map(r => r.plot)
+  )];
+
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = `
@@ -5151,7 +5217,7 @@ async function runTransplantingReport() {
         ${rows.length ? `<button type="button" onclick="papanTandaAll(this)"
           class="no-print text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border border-[#cfe3b4] bg-[#eef7e4] text-[#3f6b23] hover:bg-[#e3f0d4]"
           title="One signboard image per plot below, for the installation. Each is the plot, batch, breed, how many are standing in it and the two dates.">⬇ Papan Tanda · all ${fmtNum(rows.length)}</button>` : ''}
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} record${rows.length === 1 ? '' : 's'}${amendTip.length ? ' · ' + fmtNum(amendTip.length) + ' amendment' + (amendTip.length === 1 ? '' : 's') : ''}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} record${rows.length === 1 ? '' : 's'}${amendTip.length ? ' · ' + fmtNum(amendTip.length) + ' amendment' + (amendTip.length === 1 ? '' : 's') : ''}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}${unplacedPlots.length ? ` · <span class="text-[#b4541c]" title="Seedling Stock (shared_plots) has no nursery for ${unplacedPlots.join(', ')}, so these rows show their Location as Unassigned. File the plot under its nursery in Seedling Stock and this note goes away.">⚠ ${unplacedPlots.join(', ')} not placed by Seedling Stock</span>` : ''}</div>
         </div>
       </div>
       <div class="overflow-x-auto">
@@ -5224,7 +5290,7 @@ async function runCullingReport() {
   const breed = document.getElementById('f-breed').value;
   const fromTs = from ? new Date(from).getTime() : -Infinity;
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
-  const selectedLocs = new Set(selectedNurseries());
+  const selectedLocs = new Set(nurseryFilter());
 
   const [logsRes, plotsRes, batchesRes] = await Promise.all([
     fetchAllRows(() => {
@@ -5408,7 +5474,7 @@ async function runSalesListing() {
   const to   = document.getElementById('f-to').value;
   const fromTs = from ? new Date(from).getTime() : -Infinity;
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
-  const selectedLocs = new Set(selectedNurseries());
+  const selectedLocs = new Set(nurseryFilter());
 
   const [dosRes, alsRes, plotsRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_do_records')
@@ -5574,26 +5640,21 @@ async function bootstrap() {
     } catch (e) { /* private mode, etc — falls back to All Stages */ }
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // LOCAL today, never toISOString().slice(0,10) — that is UTC, which in
+  // Malaysia (UTC+8) is still YESTERDAY for the whole early morning, so the
+  // office opened the report at 8am and As At read the day before.
+  const todayStr = _reportsLocalISO();
   const fTo = document.getElementById('f-to');
-  // Restores whichever "As At" date was last picked, same idea as the
-  // report tab above — a refresh used to always land back on today even
-  // right after deliberately picking an earlier date. A malformed or
-  // future-dated value (a stale save, a clock change) falls back to today
-  // rather than feeding runReport() something it can't use.
-  let restoredDate = todayStr;
-  try {
-    const rememberedDate = localStorage.getItem(LAST_DATE_KEY);
-    if (rememberedDate && /^\d{4}-\d{2}-\d{2}$/.test(rememberedDate) && rememberedDate <= todayStr) {
-      restoredDate = rememberedDate;
-    }
-  } catch (e) { /* private mode, etc — falls back to today */ }
-  fTo.value = restoredDate;
+  // As At ALWAYS opens on today — the office asked for it in as many
+  // words ("Always show today's date at as at there"), overruling the
+  // earlier remember-across-refresh behaviour. A date somebody picks
+  // still survives re-running the SAME report (runReport never touches
+  // it); only opening the page, or switching report tabs, resets it.
+  fTo.value = todayStr;
   // Reports look at what has actually happened — future dates make no
   // sense. f-from is hidden and derived from f-to (see runReport()), so
   // only f-to needs a bound.
   fTo.max = todayStr;
-  fTo.addEventListener('change', () => _rememberDate(fTo.value));
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
   // Restores whichever Breed was last picked, loadBreeds() having just
   // built the option list fresh from shared_breeds — same "don't drop a

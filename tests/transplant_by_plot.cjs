@@ -31,14 +31,34 @@ function checkFalse(name, got) { check(name, !!got, false); }
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const _now  = new Date();
 const YM    = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
+/* TWO CONSTANTS, ONE MONTH, and they are not interchangeable.
+   MONTH is the KEY: nops_transplant_field_records.schedule_month is stored
+   short, and loadTransplantField looks a record up with .eq() on it.
+   MONTH_LABEL is what a heading says, because the office asked for the
+   month written out on anything somebody signs. One constant doing both
+   jobs is the trap this file fell into -- four heading checks failed over
+   "Oct 2026" where the page now reads "October 2026", with the figures
+   underneath them all correct. */
 const MONTH = `${MONTHS[_now.getMonth()]} ${_now.getFullYear()}`;
+const MONTH_FULL = ['January','February','March','April','May','June','July',
+                    'August','September','October','November','December'][_now.getMonth()];
+const MONTH_LABEL = `${MONTH_FULL} ${_now.getFullYear()}`;
 const JOBS  = ['blanket_spray', 'lining', 'polybag_fill', 'transplanting'];
 
+/* `checked_at` is on every row by default, and it has to be: ONLY A CHECKED
+   ROW REACHES THE CLAIM, so a fixture without it answers "3 plots are
+   waiting to be Checked, so nothing is counted here yet" and every
+   assertion about the table below fails over the gate rather than over the
+   thing it is asking about. The gate has its own tests
+   (the_transplant_claim_asks_the_office.cjs, transplant_claim_empty.cjs);
+   this file is about the SHARE and the by-plot table, so its rows are
+   agreed. A row that is deliberately held passes `checked_at: null`. */
 const rec = (o) => Object.assign({
   work_date: `${YM}-09`, nursery_name: 'UNN 2', plot_name: 'N3',
   batch_name: '252', work_type: 'transplanting', jenis: 'Memindah anak sawit ke polibeg besar',
   schedule_month: MONTH, source_qty: 6685, workers: [{ name: 'Ali Bin Hassan', qty: null }],
-  total_qty: null
+  total_qty: null,
+  checked_at: `${YM}-20T02:00:00Z`, checked_by: 'office@mjmnursery.com'
 }, o);
 
 /* N3 — the whole plot, all four jobs, every one carrying the plot's 6,685.
@@ -113,10 +133,15 @@ async function boot(browser, field, ledger) {
       save(name) { this.saved = name; }
     } };
     function makeQuery(table) {
-      const st = { eqs: [], single: false };
+      const st = { eqs: [], ins: [], single: false };
+      /* `.in()` is honoured, as PostgREST does: a stub that hands back every
+         row whatever was asked for passes a read that asks for the wrong
+         transaction types — which is exactly how a map on a Transplant_Card
+         row went missing off the table. */
       const rows = () => {
         let out = (window.__DB[table] || []).slice();
         st.eqs.forEach(([c, v]) => { out = out.filter((r) => String(r[c]) === String(v)); });
+        st.ins.forEach(([c, vs]) => { out = out.filter((r) => vs.map(String).includes(String(r[c]))); });
         return out;
       };
       const run = () => {
@@ -126,6 +151,7 @@ async function boot(browser, field, ledger) {
       const q = new Proxy({}, { get(_, p) {
         if (p === 'then') return (a, b) => Promise.resolve(run()).then(a, b);
         if (p === 'eq') return (c, v) => { st.eqs.push([c, v]); return q; };
+        if (p === 'in') return (c, vs) => { st.ins.push([c, vs || []]); return q; };
         if (p === 'maybeSingle' || p === 'single') return () => { st.single = true; return Promise.resolve(run()); };
         if (p === 'range') return () => Promise.resolve(run());
         if (p === 'insert' || p === 'upsert' || p === 'update' || p === 'delete')
@@ -220,7 +246,7 @@ const read = (page) => page.evaluate(() => {
     const t = await read(page);
 
     checkTrue('the section is headed with the nursery and the month',
-              t.head.includes('UNN2') && t.head.includes(MONTH));
+              t.head.includes('UNN2') && t.head.includes(MONTH_LABEL));
     check('the columns — the plot, its maps and the amount. No Batch column: '
         + 'the label under each thumbnail already says which batch that map is',
           t.cols, ['No.', 'Plot', 'Drone Map', 'Transplanted']);
@@ -237,7 +263,7 @@ const read = (page) => page.evaluate(() => {
 
     console.log('\nThe total under it');
     checkTrue('the footer is the nursery and the month',
-              t.foot[0][0].includes('UNN2') && t.foot[0][0].includes(MONTH));
+              t.foot[0][0].includes('UNN2') && t.foot[0][0].includes(MONTH_LABEL));
     check('IT IS THE PLOTS ADDED UP — 6,685 + 900 + 1,300', t.foot[0][1], '8,885');
     checkFalse('…not the four jobs added up, which would be four times the nursery',
                t.foot[0][1] === (6685 * 4 + 900 + 1300 * 2).toLocaleString());
@@ -262,9 +288,19 @@ const read = (page) => page.evaluate(() => {
     await pick(page, 'UNN1');
     const u = await read(page);
     check('no rows', u.body.length, 1);
+    /* IT SAYS NOBODY RECORDED ANY, NOT THAT NOTHING WAS TRANSPLANTED.
+       This page reads nops_transplant_field_records and nothing else, so
+       it cannot see the ground -- and it said "Nothing transplanted in
+       BNN" over a month BNN took 3,448 seedlings in, which sent the
+       office looking for a fault in the claim instead of at the four
+       jobs nobody had keyed. */
     checkTrue('…and it says which nursery and which month is empty',
-              /Nothing transplanted/i.test(u.body[0][0])
-              && u.body[0][0].includes('UNN1') && u.body[0][0].includes(MONTH));
+              /recorded/i.test(u.body[0][0])
+              && u.body[0][0].includes('UNN1') && u.body[0][0].includes(MONTH_LABEL));
+    check('…and it does NOT claim nothing was transplanted',
+          /nothing transplanted/i.test(u.body[0][0]), false);
+    checkTrue('…and it names where the four jobs are keyed',
+              /Pending Verification/i.test(u.body[0][0]));
     await page.close();
   }
 
@@ -319,7 +355,7 @@ const read = (page) => page.evaluate(() => {
               /TRANSPLANTING BY PLOT/.test(txt));
     checkTrue('…headed with the nursery and the month',
               pdf.lines.some((l) => /TRANSPLANTING BY PLOT/.test(l)
-                                 && /UNN2/.test(l) && l.includes(MONTH)));
+                                 && /UNN2/.test(l) && l.includes(MONTH_LABEL)));
     check('…its columns are the plot and the amount',
           ['No.', 'Plot', 'Transplanted'].filter((c) => pdf.lines.includes(c)),
           ['No.', 'Plot', 'Transplanted']);
@@ -385,7 +421,12 @@ const read = (page) => page.evaluate(() => {
     check('…the one flown for THIS batch, not the one from years ago',
           n3.links[0].href, 'https://files.test/maps/n3.jpg');
     checkTrue('…shown as the map itself', n3.links[0].bg.includes('n3.jpg'));
-    check('…opening in a new tab, which is where it prints', n3.links[0].tab, '_blank');
+    /* IT IS STILL A REAL LINK TO THE FILE. The press pops the map out over
+       the table now, but the href and the target stay: a ctrl-click or a
+       middle-click opens the file the way it always did, and on a page
+       where the script never ran the press itself still reaches it. */
+    check('…and still a real link to the file, for a ctrl-click and for no script',
+          n3.links[0].tab, '_blank');
     checkTrue('…and saying what it is', /Drone map/.test(n3.links[0].title)
                                      && /N3/.test(n3.links[0].title)
                                      && /252/.test(n3.links[0].title));
@@ -403,6 +444,90 @@ const read = (page) => page.evaluate(() => {
     const n7 = maps.find((m) => m.plot === 'N7');
     check('a batch nobody flew keeps its place, greyed, rather than leaving a '
         + 'gap that names nothing', [n7.links.length, n7.none, n7.labels], [0, 1, ['253']]);
+    await page.close();
+  }
+
+  console.log('\nPressing a map POPS IT OUT, and does not take the page');
+  {
+    /* The office, looking at the column: *"我按的时候pop out就好 不用整页"*.
+       Looking at a map is a glance, and a page of its own turns a glance
+       into somewhere to leave and come back from. */
+    const page = await boot(browser, FIELD);
+    await pick(page, 'UNN2');
+    const rowMap = (plot) => `#transpl-plots-table tbody tr:has(td:nth-child(2):text-is("${plot}")) a.tp-map`;
+    /* WAITED FOR, not glanced at. The first version of this check gave the
+       tab 120ms to appear and passed over the previous page, which opens
+       one every time — the PDF one below takes up to a second and a half
+       to arrive, so a short look proves only that nothing was quick. */
+    const tabFor = async (plot, ms) => {
+      const [p] = await Promise.all([
+        page.waitForEvent('popup', { timeout: ms }).catch(() => null),
+        page.locator(rowMap(plot)).first().click(),
+      ]);
+      return p;
+    };
+
+    const stray = await tabFor('N3', 2500);
+    if (stray) await stray.close();
+    /* Read null-safe on purpose: on a page with no pop-out at all this has
+       to come back as a clean FAIL naming what is missing, not as a throw
+       that takes the run down before it has said anything. */
+    const read = () => page.evaluate(() => {
+      const g = (id) => document.getElementById(id);
+      return { open: !!(g('map-modal') && g('map-modal').classList.contains('open')),
+               src: g('map-modal-img') ? g('map-modal-img').getAttribute('src') : null,
+               title: g('map-modal-title') ? g('map-modal-title').textContent : '',
+               sub: g('map-modal-sub') ? g('map-modal-sub').textContent : '',
+               go: g('map-modal-open') ? g('map-modal-open').getAttribute('href') : null };
+    });
+    const box = await read();
+    check('the pop-out opens on the map that was pressed',
+          [box.open, box.src], [true, 'https://files.test/maps/n3.jpg']);
+    checkTrue('…naming the plot and the batch, so two maps are not one picture',
+              /N3/.test(box.title) && /252/.test(box.sub));
+    /* THE HALF THAT IS EASY TO LOSE. The tab was never only a bigger view —
+       it is where the browser PRINTS, and standing in the plot holding the
+       map is what a drone map is for. */
+    check('…and Open in a new tab is on it, which is what prints',
+          box.go, 'https://files.test/maps/n3.jpg');
+    check('and the press took no page of its own — 不用整页', !!stray, false);
+
+    await page.keyboard.press('Escape');
+    /* The picture is dropped as it closes, or a slow map flashes up under
+       the next plot it was opened for. Done in closeModal, so all three
+       ways out — the cross, the backdrop and Esc — drop it. */
+    const shut = await read();
+    check('Esc closes it and the picture goes with it',
+          [box.open && !shut.open, shut.src], [true, null]);
+
+    const again = await tabFor('N3', 400);
+    if (again) await again.close();
+    await page.locator('#map-modal').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    check('and so does a press on the backdrop', (await read()).open, false);
+
+    /* A PDF HAS A READER ALREADY, with its own print and page controls, and
+       handed to an `<img>` it shows nothing at all. N9's is one. */
+    const p9 = await tabFor('N9', 2500);
+    check('a PDF map keeps its tab rather than being squeezed into a picture',
+          [!!p9, (await read()).open], [true, false]);
+    if (p9) await p9.close();
+    await page.close();
+  }
+
+  console.log('\nA map on the batch report CARD reaches the table');
+  {
+    /* N7 flown since the map moved onto the batch report's CARD: its tray
+       row carries none, and the card row (one per plot per day) does. */
+    const card = { plot_name: 'N7', batch_name: '253', transaction_type: 'Transplant_Card',
+      quantity_change: 0, transaction_date: `${YM}-09`, created_at: `${YM}-09T03:00:00Z`,
+      remark: `Transplant card. Date: ${YM}-09 MapUrl:https://files.test/maps/n7card.jpg DroneQty:900` };
+    const page = await boot(browser, FIELD, LEDGER.concat([card]));
+    await pick(page, 'UNN2');
+    const n7 = await page.$$eval('#transpl-plots-table tbody tr', (trs) => {
+      const tr = trs.find((t) => (t.children[1].textContent || '').trim() === 'N7');
+      return [...tr.children[2].querySelectorAll('a.tp-map')].map((a) => a.getAttribute('href'));
+    });
+    check('N7 shows the map uploaded on the card', n7, ['https://files.test/maps/n7card.jpg']);
     await page.close();
   }
 

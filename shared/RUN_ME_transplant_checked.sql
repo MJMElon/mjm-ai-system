@@ -29,9 +29,17 @@
 -- two do not obey. Same reasoning as previous_names on the worker register.
 --
 -- Only the fields that decide the MONEY clear it: the day, the plot, the
--- job, the month it is claimed in, the quantity and the crew. A remark, a
--- batch name or a nursery spelling corrected afterwards leaves the agreement
--- standing, because none of them moves a figure.
+-- job, the month it is claimed in, the quantity, the crew and whether the
+-- job was done at all. A remark, a batch name or a nursery spelling
+-- corrected afterwards leaves the agreement standing, because none of them
+-- moves a figure.
+--
+-- SHARED FUNCTION: nops_transplant_clear_check below is created by
+-- shared/RUN_ME_transplant_not_done.sql as well, word for word. Change one,
+-- change the other -- whichever of the two is run last is the one the
+-- database keeps. not_done is compared THROUGH to_jsonb rather than named
+-- as a column, so this body is valid on a database that has not had that
+-- file run and the order the two are run in does not matter.
 -- ════════════════════════════════════════════════════════════════════════
 
 ALTER TABLE nops_transplant_field_records
@@ -52,6 +60,7 @@ BEGIN
    OR NEW.source_qty     IS DISTINCT FROM OLD.source_qty
    OR NEW.total_qty      IS DISTINCT FROM OLD.total_qty
    OR NEW.workers        IS DISTINCT FROM OLD.workers
+   OR (to_jsonb(NEW) ->> 'not_done') IS DISTINCT FROM (to_jsonb(OLD) ->> 'not_done')
   THEN
     -- Only where the agreement was not part of this same write. An office
     -- correcting a figure AND agreeing it in one go has agreed what it
