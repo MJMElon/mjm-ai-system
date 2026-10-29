@@ -5658,7 +5658,15 @@ Three things in it:
   register rows, so nothing yet joins them to a person's month.
 - **No "added by hand" tag** on a moved batch, nor the "Added by hand"
   line and remark on Culling Incentive: *"不用show added by hand,包括 culling
-  incentive那里的remark"*. The records still carry them.
+  incentive那里的remark"*. The records still carry them. **It took a second
+  pass to finish**: the line came off the Work Maintenance tab and was left
+  on the NURSERY PAYROLL's Culling Monitoring table, where the office found
+  it and said 删掉 again. Same judgement in both places — that table is what
+  is being PAID, a plot added by hand is paid exactly like every other, and
+  how it came to be on the list is the DECIDING, which lives on Worker
+  Activity with the record, the remark, who made it and the button that
+  undoes it. The nursery line stays: that is which nursery the money comes
+  out of, which is a question about the claim.
 - **Before the SQL is run, the rows still show** with every box disabled,
   and the hint names the file to run. A sheet that went empty over a
   missing table would read as a month nobody planted.
