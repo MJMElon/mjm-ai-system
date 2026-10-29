@@ -1602,3 +1602,16 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    nothing to do on it, which is the opposite of what this one wants. */
 #payroll-table tbody tr.tp-row-held > td{background:#fffbeb;}
 #payroll-table tbody tr.tp-row-held:hover > td{background:#fef3c7;}
+
+/* Seed Planting: the month's names, keyed by hand. */
+.sp-names{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px;
+  padding:10px 12px;background:#fff;border:1px solid var(--border,#d6dfd9);border-radius:var(--r-sm,10px);}
+.sp-names-lbl{font-size:12px;font-weight:800;color:var(--text,#1f2d27);margin-right:4px;}
+.sp-names-none{font-size:12px;color:var(--text-faint,#8a968f);}
+.sp-chip{display:inline-flex;align-items:center;gap:2px;padding:3px 4px 3px 10px;border-radius:999px;
+  background:#e8f0eb;color:#0d5c33;font-size:12px;font-weight:700;}
+.sp-chip-x{border:0;background:transparent;color:#0d5c33;cursor:pointer;font-size:15px;line-height:1;
+  padding:0 6px;border-radius:999px;}
+.sp-chip-x:hover{background:rgba(13,92,51,.12);}
+.sp-names-add{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-left:auto;}
+.sp-names-add input{padding:6px 9px;border:1px solid var(--border,#d6dfd9);border-radius:8px;font:inherit;font-size:12.5px;min-width:160px;}

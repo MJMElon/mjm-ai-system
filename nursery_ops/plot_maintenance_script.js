@@ -943,6 +943,10 @@ function renderPayroll() {
      leaves it empty. */
   const extra = document.getElementById('payroll-extra');
   if (extra) extra.innerHTML = '';
+  /* Seed Planting's names bar above the table; every other view leaves it
+     empty. */
+  const namesBar = document.getElementById('payroll-names');
+  if (namesBar) namesBar.innerHTML = '';
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
@@ -2343,7 +2347,13 @@ function renderLoadingSeedlingsPayroll() {
    dated with the day keyed on that tab (`transaction_date`). Every one of
    those dated inside the month on screen is a row here -- one per TRAY per
    DAY, two batches sown into one tray on one day being one job -- and each
-   Pre Nursery worker keys how many THEY planted.
+   worker keys how many THEY planted.
+
+   THE NAMES ARE KEYED BY HAND, A LIST PER MONTH. The office asked for it
+   ("这个月的工人名字需要manual key") -- the Pre Nursery crew is not on the
+   worker register as a section of its own, so the register cannot supply
+   them. nops_seed_planting_names holds one list per month, and a month with
+   none offers last month's to start from.
 
    The ledger is READ and never written. What the office keys goes into
    nops_seed_planting_workers, one record per tray per day, with the figure
@@ -2355,7 +2365,7 @@ function renderLoadingSeedlingsPayroll() {
    NOT ON ANY CLAIM YET. The office asked for the record first -- nothing in
    npayroll reads this table. */
 const SP_NURSERY = 'PN';
-const _spCache = {};      // month -> { rows, saved, noTable }
+const _spCache = {};      // month -> { rows, saved, names, prevNames, noTable }
 const _spLoading = {};
 const _spErr = {};
 const _spSaveTimers = {};
@@ -2436,7 +2446,23 @@ async function loadSeedPlantingForPayroll(m) {
     } else {
       (sv || []).forEach(r => { saved[String(r.work_date).slice(0, 10) + '|' + r.tray] = r; });
     }
-    _spCache[m] = { rows, saved, noTable };
+    /* The month's names, and last month's to offer when this one has none. */
+    let names = [], prevNames = [];
+    if (!noTable) {
+      const prev = _spPrevMonth(m);
+      const { data: nm, error: ne } = await _supabase.from('nops_seed_planting_names')
+        .select('month, names').in('month', prev ? [m, prev] : [m]);
+      if (ne) {
+        noTable = true;
+        console.warn('[maint] seed planting names read:', ne.message);
+      } else {
+        (nm || []).forEach(r => {
+          const list = Array.isArray(r.names) ? r.names.map(x => String(x || '').trim()).filter(Boolean) : [];
+          if (r.month === m) names = list; else prevNames = list;
+        });
+      }
+    }
+    _spCache[m] = { rows, saved, names, prevNames, noTable };
   } catch (e) {
     _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
   } finally {
@@ -2445,11 +2471,20 @@ async function loadSeedPlantingForPayroll(m) {
   }
 }
 
-/* The register's Pre Nursery workers first, then any name saved on a row
-   that the register cannot place -- their figure would otherwise leave the
-   sheet with nothing saying so. */
-function spWorkerColumns(rows, saved) {
-  const wk = (workers[SP_NURSERY] || []).slice();
+/* "Oct 2026" -> "Sep 2026". */
+function _spPrevMonth(m) {
+  const v = monthLabelToInput(m);
+  if (!v) return null;
+  let y = parseInt(v.slice(0, 4), 10), mo = parseInt(v.slice(5, 7), 10) - 1;
+  if (mo < 1) { mo = 12; y--; }
+  return `${MONTH_ABBR[mo - 1]} ${y}`;
+}
+
+/* The month's names as keyed, then any name a row still carries a figure
+   for that is no longer on the list -- that figure would otherwise leave
+   the sheet with nothing saying so. */
+function spWorkerColumns(rows, saved, names) {
+  const wk = (names || []).slice();
   const extra = [];
   rows.forEach(r => {
     const s = saved[r.key];
@@ -2469,7 +2504,6 @@ function _spKeyed(s) {
 function renderSeedPlantingPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
-  resolveWorkers();
   const m = getMonth();
   const line = document.getElementById('payroll-form-line');
   if (line) line.textContent = `${t('tab.seedPlanting')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
@@ -2492,11 +2526,8 @@ function renderSeedPlantingPayroll() {
   }
 
   const { rows, saved, noTable } = st;
-  const { wk, extra } = spWorkerColumns(rows, saved);
-  if (!wk.length) {
-    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.noWorkers')}</td></tr></tbody>`;
-    return;
-  }
+  const { wk, extra } = spWorkerColumns(rows, saved, st.names);
+  _spDrawNames(m, st);
   const payTh = (txt, w) =>
     `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
   const span = 4 + wk.length + 1;
@@ -2553,6 +2584,86 @@ function renderSeedPlantingPayroll() {
   tbl.innerHTML = h;
 }
 
+/* The month's names, above the table: a chip per name with a cross, a box
+   and Add, and -- on a month with none -- last month's list in one press. */
+function _spDrawNames(m, st) {
+  const box = document.getElementById('payroll-names');
+  if (!box) return;
+  if (st.noTable) { box.innerHTML = ''; return; }
+  const chips = st.names.map((w, i) =>
+    `<span class="sp-chip">${esc(w)}<button type="button" class="sp-chip-x" title="${esc(t('pay.spRemove'))}"
+      onclick="removeSeedPlantingWorker(${i})" aria-label="${esc(t('pay.spRemove'))} ${esc(w)}">×</button></span>`).join('');
+  const copy = !st.names.length && st.prevNames.length
+    ? `<button type="button" class="btn btn-sm" onclick="useLastMonthSeedPlantingNames()">${esc(t('pay.spCopyPrev', { n: st.prevNames.length }))}</button>`
+    : '';
+  box.innerHTML = `<div class="sp-names">
+    <span class="sp-names-lbl">${esc(t('pay.spWorkers', { m }))}</span>
+    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`}
+    <span class="sp-names-add">
+      <input type="text" id="sp-new-name" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingWorker();}">
+      <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingWorker()">+ ${esc(t('pay.spAdd'))}</button>
+      ${copy}
+    </span></div>`;
+}
+
+function _spSaveNames(m) {
+  const st = _spCache[m];
+  if (!_supabase || !st) return;
+  _supabase.from('nops_seed_planting_names')
+    .upsert({ month: m, names: st.names,
+              updated_by: window.currentUserEmail || _signingAs() || 'office',
+              updated_at: new Date().toISOString() }, { onConflict: 'month' })
+    .then(({ error }) => {
+      if (!error) return;
+      console.warn('[maint] seed planting names save failed:', error.message);
+      alert('The names did not save:\n\n' + error.message);
+    });
+}
+
+function addSeedPlantingWorker() {
+  const m = getMonth(), st = _spCache[m];
+  const el = document.getElementById('sp-new-name');
+  if (!st || st.noTable || !el) return;
+  const name = el.value.replace(/\s+/g, ' ').trim();
+  if (!name) { el.focus(); return; }
+  if (st.names.some(w => w.toLowerCase() === name.toLowerCase())) {
+    alert(t('pay.spDup', { w: name })); el.select(); return;
+  }
+  st.names.push(name);
+  _spSaveNames(m);
+  renderPayroll();
+  const again = document.getElementById('sp-new-name');
+  if (again) again.focus();
+}
+
+/* A name with figures against it is not taken off: its column would only
+   come back as a name off the list, and the figures with it. Clearing the
+   figures first is the decision, made where it can be seen. */
+function removeSeedPlantingWorker(i) {
+  const m = getMonth(), st = _spCache[m];
+  if (!st || st.noTable) return;
+  const w = st.names[i];
+  if (w == null) return;
+  const used = st.rows.filter(r => {
+    const s = st.saved[r.key];
+    return s && s.workers && Number(s.workers[w]) > 0;
+  }).length;
+  if (used) { alert(t('pay.spInUse', { w, n: used })); return; }
+  if (!confirm(t('pay.spRemoveQ', { w, m }))) return;
+  st.names.splice(i, 1);
+  _spSaveNames(m);
+  renderPayroll();
+}
+
+function useLastMonthSeedPlantingNames() {
+  const m = getMonth(), st = _spCache[m];
+  if (!st || st.noTable || st.names.length) return;
+  st.names = st.prevNames.slice();
+  _spSaveNames(m);
+  renderPayroll();
+}
+
 /* A figure keyed against one worker on one tray-day. Kept on the page at
    once, written a moment later, and the sheet redrawn with the cursor put
    back where it went -- a redraw inside `change` would otherwise throw away
@@ -2562,7 +2673,7 @@ function setSeedPlantingQty(ri, wi, raw) {
   const st = _spCache[m];
   if (!st || st.noTable) return;
   const r = st.rows[ri];
-  const { wk } = spWorkerColumns(st.rows, st.saved);
+  const { wk } = spWorkerColumns(st.rows, st.saved, st.names);
   const w = wk[wi];
   if (!r || !w) return;
   const s = st.saved[r.key] || (st.saved[r.key] = { work_date: r.date, tray: r.tray, month: m, workers: {} });
@@ -2918,8 +3029,8 @@ function downloadPayrollPDF() {
     const st = _spCache[m];
     if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
     const rows = st.rows, saved = st.saved;
-    const { wk: cols } = spWorkerColumns(rows, saved);
-    if (!cols.length) { alert(t('pay.noWorkers')); return; }
+    const { wk: cols } = spWorkerColumns(rows, saved, st.names);
+    if (!cols.length) { alert(t('pay.spNoNames')); return; }
     const label = t('tab.seedPlanting');
     const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
 
@@ -3701,8 +3812,13 @@ const I18N = {
     'pay.tray':'Tray', 'pay.batch':'Batch', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
     'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
-    'pay.spHint':'Each row is a tray planted on that day, read from the batch report\u2019s Seed Planting. Key how many each worker planted; the last column says whether it adds up to the tray. Not on the payroll claim.',
+    'pay.spHint':'Each row is a tray planted on that day, read from the batch report\u2019s Seed Planting. Key the month\u2019s workers above, then how many each one planted; the last column says whether it adds up to the tray. Not on the payroll claim.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
+    'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
+    'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
+    'pay.spCopyPrev':'Use last month\u2019s names ({n})', 'pay.spDup':'{w} is already on this month\u2019s list.',
+    'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
+    'pay.spRemoveQ':'Remove {w} from the {m} list?',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
     'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. The crew itself is his answer and is changed on the FC Portal.',
     'pay.checked':'Checked',
@@ -3852,6 +3968,11 @@ const I18N = {
     'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
     'pay.spHint':'Setiap baris ialah dulang yang ditanam pada hari itu, dari Seed Planting laporan batch. Isi berapa yang ditanam setiap pekerja; lajur terakhir menunjukkan sama ada jumlahnya sepadan. Tidak masuk tuntutan gaji.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
+    'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
+    'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
+    'pay.spCopyPrev':'Guna nama bulan lepas ({n})', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
+    'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
+    'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
     'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Senarai pekerja adalah jawapan beliau dan diubah di FC Portal.',
     'pay.checked':'Disemak',
