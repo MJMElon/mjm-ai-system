@@ -149,12 +149,12 @@
          is a display name, not a rename of the thing itself. -->
     <nav class="subtabs">
       <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
-      <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
-      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
       <!-- Seed Planting is the Pre Nursery's own piece work. The figures are
            keyed and CHECKED on Work Maintenance, Worker Activity, Seed
            Planting; this prices the checked ones. -->
       <button class="subtab"        data-sub="seedplant" onclick="switchSub('seedplant')">Seed Planting</button>
+      <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
+      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
       <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
       <!-- Everything that is paid by the piece and is none of the three above.
            Its own sheet rather than a fourth guess at what to call it: the
@@ -571,7 +571,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=91"></script>
+<script src="npayroll_script.js?v=92"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
