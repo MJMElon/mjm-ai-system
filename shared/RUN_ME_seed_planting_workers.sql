@@ -1,33 +1,38 @@
 -- ============================================================================
 -- RUN_ME_seed_planting_workers.sql
 --
--- Work Maintenance, Worker Activity now has a Pre Nursery part with one tab,
--- Seed Planting. Its rows are read from the batch report (Seed Planting tab,
--- by its date): one row per tray per day. Each Pre Nursery worker keys how
--- many THEY planted, and this is the table that keeps what they keyed.
+-- Work Maintenance, Worker Activity, Pre Nursery, Seed Planting. Its rows
+-- are read from the batch report (Seed Planting tab, by its date): ONE ROW
+-- PER BATCH, with the batch total planted quantity. The office keys the
+-- month workers by hand, and each worker keys how many THEY planted.
 --
--- ONE record per tray per day: the tray, the day, the month it is shown
--- under, the figure the batch report read when it was keyed, and the
--- figures per worker as a list of name and number.
---
--- The worker NAMES are keyed by hand, one list per month, in a second
--- table, nops_seed_planting_names.
+-- Four tables, all made here:
+--   nops_seed_planting_batch_workers  the figures, one record per batch
+--   nops_seed_planting_names          the worker names, one list per month
+--   nops_seed_planting_batch_month    a batch moved to a later month by hand,
+--                                     for seedlings sown too late for their
+--                                     own month (277 on 28 Sep into October)
+--   nops_seed_planting_workers        the first version, one record per tray
+--                                     per day. No longer read. Kept, not
+--                                     dropped, and row 6 counts what is in it.
 --
 -- Nothing in the ledger is changed, and nothing reaches the payroll claim.
 --
 -- Safe to run twice: everything is IF NOT EXISTS, and the policies are
 -- dropped by name and made again.
 --
--- WHAT A GOOD RESULT LOOKS LIKE -- four rows:
---   1  the Seed Planting table ................ present -- OK
---   2  one record per tray per day ............ present -- OK
---   3  policies on the two tables ............. 4 or more -- OK
---   4  office logins that can save ............ N of N -- OK
---   5  the month names table .................. present -- OK
--- Row 4 is the proof. As every login holding Nursery Operation it writes a
--- record and a month of names, changes them, deletes them and rolls the lot
--- back, so nothing is left behind. Anything short of N of N names the login
--- and the reason.
+-- WHAT A GOOD RESULT LOOKS LIKE -- six rows:
+--   1  the per batch figures table ............ present -- OK
+--   2  the month names table .................. present -- OK
+--   3  the batch moved by hand table .......... present -- OK
+--   4  policies on the three tables ........... 6 or more -- OK
+--   5  office logins that can save ............ N of N -- OK
+--   6  per tray figures from the first version  a number, read below
+-- Row 5 is the proof. As every login holding Nursery Operation it writes,
+-- changes and deletes a record in each of the three tables and rolls the
+-- lot back, so nothing is left behind. Anything short of N of N names the
+-- login and the reason. Row 6 is 0 unless somebody keyed figures in the
+-- per tray version, and those are not shown on the new sheet.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.nops_seed_planting_workers (
@@ -41,13 +46,18 @@ CREATE TABLE IF NOT EXISTS public.nops_seed_planting_workers (
   updated_at   TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS nops_seed_planting_once
-  ON public.nops_seed_planting_workers (work_date, tray);
+CREATE TABLE IF NOT EXISTS public.nops_seed_planting_batch_workers (
+  batch_name    TEXT        PRIMARY KEY,
+  month         TEXT        NOT NULL,
+  planted_date  DATE,
+  qty_planted   NUMERIC,
+  workers       JSONB       NOT NULL DEFAULT '{}'::jsonb,
+  updated_by    TEXT,
+  updated_at    TIMESTAMPTZ DEFAULT now()
+);
 
-CREATE INDEX IF NOT EXISTS nops_seed_planting_month
-  ON public.nops_seed_planting_workers (month);
-
-ALTER TABLE public.nops_seed_planting_workers ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS nops_seed_planting_batch_workers_month
+  ON public.nops_seed_planting_batch_workers (month);
 
 CREATE TABLE IF NOT EXISTS public.nops_seed_planting_names (
   month        TEXT        PRIMARY KEY,
@@ -56,37 +66,41 @@ CREATE TABLE IF NOT EXISTS public.nops_seed_planting_names (
   updated_at   TIMESTAMPTZ DEFAULT now()
 );
 
-ALTER TABLE public.nops_seed_planting_names ENABLE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS public.nops_seed_planting_batch_month (
+  batch_name   TEXT        PRIMARY KEY,
+  month        TEXT        NOT NULL,
+  created_by   TEXT,
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.nops_seed_planting_batch_workers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nops_seed_planting_names         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nops_seed_planting_batch_month   ENABLE ROW LEVEL SECURITY;
 
 DO $$
+DECLARE t text;
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-              WHERE n.nspname = 'public' AND p.proname = '_mjm_close_table') THEN
-    PERFORM public._mjm_close_table('nops_seed_planting_workers', 'maint');
-    PERFORM public._mjm_close_table('nops_seed_planting_names', 'maint');
-  ELSE
-    DROP POLICY IF EXISTS "Authenticated read maint"  ON public.nops_seed_planting_names;
-    DROP POLICY IF EXISTS "Authenticated write maint" ON public.nops_seed_planting_names;
-    CREATE POLICY "Authenticated read maint"  ON public.nops_seed_planting_names
-      FOR SELECT TO authenticated USING (true);
-    CREATE POLICY "Authenticated write maint" ON public.nops_seed_planting_names
-      FOR ALL TO authenticated USING (true) WITH CHECK (true);
-    DROP POLICY IF EXISTS "Authenticated read maint"  ON public.nops_seed_planting_workers;
-    DROP POLICY IF EXISTS "Authenticated write maint" ON public.nops_seed_planting_workers;
-    CREATE POLICY "Authenticated read maint"  ON public.nops_seed_planting_workers
-      FOR SELECT TO authenticated USING (true);
-    CREATE POLICY "Authenticated write maint" ON public.nops_seed_planting_workers
-      FOR ALL TO authenticated USING (true) WITH CHECK (true);
-  END IF;
+  FOREACH t IN ARRAY ARRAY['nops_seed_planting_batch_workers',
+                           'nops_seed_planting_names',
+                           'nops_seed_planting_batch_month'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = 'public' AND p.proname = '_mjm_close_table') THEN
+      PERFORM public._mjm_close_table(t, 'maint');
+    ELSE
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'Authenticated read maint', t);
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'Authenticated write maint', t);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (true)',
+                     'Authenticated read maint', t);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL TO authenticated USING (true) WITH CHECK (true)',
+                     'Authenticated write maint', t);
+    END IF;
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO authenticated', t);
+  END LOOP;
 END $$;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.nops_seed_planting_workers TO authenticated;
-GRANT USAGE, SELECT ON SEQUENCE public.nops_seed_planting_workers_id_seq TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.nops_seed_planting_names TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
--- The proof: as each office login, save a record twice and delete it.
+-- The proof: as each office login, write each table twice and delete it.
 SELECT set_config('mjm.sp_pass', '0', false),
        set_config('mjm.sp_total', '0', false),
        set_config('mjm.sp_bad', '', false);
@@ -109,20 +123,17 @@ BEGIN
       PERFORM set_config('request.jwt.claims',
                          json_build_object('sub', p.id, 'role', 'authenticated')::text, true);
       SET LOCAL ROLE authenticated;
-      INSERT INTO public.nops_seed_planting_workers (work_date, tray, month, qty_planted, workers, updated_by)
-        VALUES (DATE '1900-01-01', 'PROBE', 'PROBE', 1, '{"probe": 1}'::jsonb, 'probe')
-        ON CONFLICT (work_date, tray)
-        DO UPDATE SET workers = EXCLUDED.workers, updated_at = now();
-      INSERT INTO public.nops_seed_planting_workers (work_date, tray, month, qty_planted, workers, updated_by)
-        VALUES (DATE '1900-01-01', 'PROBE', 'PROBE', 1, '{"probe": 2}'::jsonb, 'probe')
-        ON CONFLICT (work_date, tray)
-        DO UPDATE SET workers = EXCLUDED.workers, updated_at = now();
-      DELETE FROM public.nops_seed_planting_workers
-        WHERE work_date = DATE '1900-01-01' AND tray = 'PROBE';
+
+      INSERT INTO public.nops_seed_planting_batch_workers (batch_name, month, planted_date, qty_planted, workers, updated_by)
+        VALUES ('PROBE', 'PROBE', DATE '1900-01-01', 1, '{"probe": 1}'::jsonb, 'probe')
+        ON CONFLICT (batch_name) DO UPDATE SET workers = EXCLUDED.workers, updated_at = now();
+      INSERT INTO public.nops_seed_planting_batch_workers (batch_name, month, planted_date, qty_planted, workers, updated_by)
+        VALUES ('PROBE', 'PROBE', DATE '1900-01-01', 1, '{"probe": 2}'::jsonb, 'probe')
+        ON CONFLICT (batch_name) DO UPDATE SET workers = EXCLUDED.workers, updated_at = now();
+      DELETE FROM public.nops_seed_planting_batch_workers WHERE batch_name = 'PROBE';
       GET DIAGNOSTICS n = ROW_COUNT;
-      IF n <> 1 THEN
-        RAISE EXCEPTION 'mjm_probe_delete_saw_%', n;
-      END IF;
+      IF n <> 1 THEN RAISE EXCEPTION 'mjm_probe_figures_delete_saw_%', n; END IF;
+
       INSERT INTO public.nops_seed_planting_names (month, names, updated_by)
         VALUES ('PROBE', '["probe"]'::jsonb, 'probe')
         ON CONFLICT (month) DO UPDATE SET names = EXCLUDED.names, updated_at = now();
@@ -131,9 +142,18 @@ BEGIN
         ON CONFLICT (month) DO UPDATE SET names = EXCLUDED.names, updated_at = now();
       DELETE FROM public.nops_seed_planting_names WHERE month = 'PROBE';
       GET DIAGNOSTICS n = ROW_COUNT;
-      IF n <> 1 THEN
-        RAISE EXCEPTION 'mjm_probe_names_delete_saw_%', n;
-      END IF;
+      IF n <> 1 THEN RAISE EXCEPTION 'mjm_probe_names_delete_saw_%', n; END IF;
+
+      INSERT INTO public.nops_seed_planting_batch_month (batch_name, month, created_by)
+        VALUES ('PROBE', 'PROBE', 'probe')
+        ON CONFLICT (batch_name) DO UPDATE SET month = EXCLUDED.month, created_at = now();
+      INSERT INTO public.nops_seed_planting_batch_month (batch_name, month, created_by)
+        VALUES ('PROBE', 'PROBE TWO', 'probe')
+        ON CONFLICT (batch_name) DO UPDATE SET month = EXCLUDED.month, created_at = now();
+      DELETE FROM public.nops_seed_planting_batch_month WHERE batch_name = 'PROBE';
+      GET DIAGNOSTICS n = ROW_COUNT;
+      IF n <> 1 THEN RAISE EXCEPTION 'mjm_probe_moves_delete_saw_%', n; END IF;
+
       RAISE EXCEPTION 'mjm_probe_rollback';
     EXCEPTION WHEN OTHERS THEN
       IF SQLERRM = 'mjm_probe_rollback' THEN
@@ -157,31 +177,36 @@ BEGIN
   END LOOP;
 END $$;
 
-SELECT 1 AS n, 'the Seed Planting table' AS item,
-       CASE WHEN to_regclass('public.nops_seed_planting_workers') IS NOT NULL
+SELECT 1 AS n, 'the per batch figures table' AS item,
+       CASE WHEN to_regclass('public.nops_seed_planting_batch_workers') IS NOT NULL
             THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END AS result
 UNION ALL
-SELECT 2, 'one record per tray per day',
-       CASE WHEN EXISTS (SELECT 1 FROM pg_indexes
-                          WHERE schemaname = 'public' AND indexname = 'nops_seed_planting_once')
+SELECT 2, 'the month names table',
+       CASE WHEN to_regclass('public.nops_seed_planting_names') IS NOT NULL
             THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END
 UNION ALL
-SELECT 3, 'policies on the two tables',
+SELECT 3, 'the batch moved by hand table',
+       CASE WHEN to_regclass('public.nops_seed_planting_batch_month') IS NOT NULL
+            THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END
+UNION ALL
+SELECT 4, 'policies on the three tables',
        (SELECT count(*) FROM pg_policies
          WHERE schemaname = 'public'
-           AND tablename IN ('nops_seed_planting_workers', 'nops_seed_planting_names'))::text
+           AND tablename IN ('nops_seed_planting_batch_workers', 'nops_seed_planting_names',
+                             'nops_seed_planting_batch_month'))::text
        || CASE WHEN (SELECT count(*) FROM pg_policies
                       WHERE schemaname = 'public'
-                        AND tablename IN ('nops_seed_planting_workers', 'nops_seed_planting_names')) >= 4
+                        AND tablename IN ('nops_seed_planting_batch_workers', 'nops_seed_planting_names',
+                                          'nops_seed_planting_batch_month')) >= 6
                THEN ' -- OK' ELSE ' -- NOT OK' END
 UNION ALL
-SELECT 4, 'office logins that can save',
+SELECT 5, 'office logins that can save',
        current_setting('mjm.sp_pass') || ' of ' || current_setting('mjm.sp_total')
        || CASE WHEN current_setting('mjm.sp_pass') = current_setting('mjm.sp_total')
                THEN ' -- OK'
                ELSE ' -- NOT OK: ' || COALESCE(current_setting('mjm.sp_bad', true), '') END
 UNION ALL
-SELECT 5, 'the month names table',
-       CASE WHEN to_regclass('public.nops_seed_planting_names') IS NOT NULL
-            THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END
+SELECT 6, 'per tray figures from the first version (not shown any more)',
+       (SELECT count(*) FROM public.nops_seed_planting_workers
+         WHERE workers <> '{}'::jsonb)::text
 ORDER BY n;
