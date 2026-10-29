@@ -5251,6 +5251,15 @@ one job. The date rule is the Transplanting Report's: `transaction_date`,
 else a `Date:` in the remark, else `created_at`. `seedPlantingRows()` is the
 rule and it is pure, so the test drives it directly.
 
+**The NAMES are keyed by hand, one list per month** (*这个月的工人名字需要manual
+key*), in `nops_seed_planting_names`. They are not read from the worker
+register: the Pre Nursery crew is not filed there as a section of its own,
+and the register came back empty. A month with no list offers last month's
+in one press. A name with figures against it cannot be removed until those
+figures are cleared, because its column would only come back as a name off
+the list. A figure saved under a name that is no longer on the list still
+gets a column, marked ⚠.
+
 **Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
 The figures go into `nops_seed_planting_workers`, one record per tray per
 day (`shared/RUN_ME_seed_planting_workers.sql`), with the ledger figure

@@ -10,6 +10,9 @@
 -- under, the figure the batch report read when it was keyed, and the
 -- figures per worker as a list of name and number.
 --
+-- The worker NAMES are keyed by hand, one list per month, in a second
+-- table, nops_seed_planting_names.
+--
 -- Nothing in the ledger is changed, and nothing reaches the payroll claim.
 --
 -- Safe to run twice: everything is IF NOT EXISTS, and the policies are
@@ -18,11 +21,13 @@
 -- WHAT A GOOD RESULT LOOKS LIKE -- four rows:
 --   1  the Seed Planting table ................ present -- OK
 --   2  one record per tray per day ............ present -- OK
---   3  policies on the table .................. 2 or more -- OK
+--   3  policies on the two tables ............. 4 or more -- OK
 --   4  office logins that can save ............ N of N -- OK
+--   5  the month names table .................. present -- OK
 -- Row 4 is the proof. As every login holding Nursery Operation it writes a
--- record, changes it, deletes it and rolls the lot back, so nothing is left
--- behind. Anything short of N of N names the login and the reason.
+-- record and a month of names, changes them, deletes them and rolls the lot
+-- back, so nothing is left behind. Anything short of N of N names the login
+-- and the reason.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.nops_seed_planting_workers (
@@ -44,12 +49,28 @@ CREATE INDEX IF NOT EXISTS nops_seed_planting_month
 
 ALTER TABLE public.nops_seed_planting_workers ENABLE ROW LEVEL SECURITY;
 
+CREATE TABLE IF NOT EXISTS public.nops_seed_planting_names (
+  month        TEXT        PRIMARY KEY,
+  names        JSONB       NOT NULL DEFAULT '[]'::jsonb,
+  updated_by   TEXT,
+  updated_at   TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.nops_seed_planting_names ENABLE ROW LEVEL SECURITY;
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
               WHERE n.nspname = 'public' AND p.proname = '_mjm_close_table') THEN
     PERFORM public._mjm_close_table('nops_seed_planting_workers', 'maint');
+    PERFORM public._mjm_close_table('nops_seed_planting_names', 'maint');
   ELSE
+    DROP POLICY IF EXISTS "Authenticated read maint"  ON public.nops_seed_planting_names;
+    DROP POLICY IF EXISTS "Authenticated write maint" ON public.nops_seed_planting_names;
+    CREATE POLICY "Authenticated read maint"  ON public.nops_seed_planting_names
+      FOR SELECT TO authenticated USING (true);
+    CREATE POLICY "Authenticated write maint" ON public.nops_seed_planting_names
+      FOR ALL TO authenticated USING (true) WITH CHECK (true);
     DROP POLICY IF EXISTS "Authenticated read maint"  ON public.nops_seed_planting_workers;
     DROP POLICY IF EXISTS "Authenticated write maint" ON public.nops_seed_planting_workers;
     CREATE POLICY "Authenticated read maint"  ON public.nops_seed_planting_workers
@@ -61,6 +82,7 @@ END $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.nops_seed_planting_workers TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE public.nops_seed_planting_workers_id_seq TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.nops_seed_planting_names TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
@@ -101,6 +123,17 @@ BEGIN
       IF n <> 1 THEN
         RAISE EXCEPTION 'mjm_probe_delete_saw_%', n;
       END IF;
+      INSERT INTO public.nops_seed_planting_names (month, names, updated_by)
+        VALUES ('PROBE', '["probe"]'::jsonb, 'probe')
+        ON CONFLICT (month) DO UPDATE SET names = EXCLUDED.names, updated_at = now();
+      INSERT INTO public.nops_seed_planting_names (month, names, updated_by)
+        VALUES ('PROBE', '["probe", "probe two"]'::jsonb, 'probe')
+        ON CONFLICT (month) DO UPDATE SET names = EXCLUDED.names, updated_at = now();
+      DELETE FROM public.nops_seed_planting_names WHERE month = 'PROBE';
+      GET DIAGNOSTICS n = ROW_COUNT;
+      IF n <> 1 THEN
+        RAISE EXCEPTION 'mjm_probe_names_delete_saw_%', n;
+      END IF;
       RAISE EXCEPTION 'mjm_probe_rollback';
     EXCEPTION WHEN OTHERS THEN
       IF SQLERRM = 'mjm_probe_rollback' THEN
@@ -133,12 +166,13 @@ SELECT 2, 'one record per tray per day',
                           WHERE schemaname = 'public' AND indexname = 'nops_seed_planting_once')
             THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END
 UNION ALL
-SELECT 3, 'policies on the table',
+SELECT 3, 'policies on the two tables',
        (SELECT count(*) FROM pg_policies
-         WHERE schemaname = 'public' AND tablename = 'nops_seed_planting_workers')::text
+         WHERE schemaname = 'public'
+           AND tablename IN ('nops_seed_planting_workers', 'nops_seed_planting_names'))::text
        || CASE WHEN (SELECT count(*) FROM pg_policies
                       WHERE schemaname = 'public'
-                        AND tablename = 'nops_seed_planting_workers') >= 2
+                        AND tablename IN ('nops_seed_planting_workers', 'nops_seed_planting_names')) >= 4
                THEN ' -- OK' ELSE ' -- NOT OK' END
 UNION ALL
 SELECT 4, 'office logins that can save',
@@ -146,4 +180,8 @@ SELECT 4, 'office logins that can save',
        || CASE WHEN current_setting('mjm.sp_pass') = current_setting('mjm.sp_total')
                THEN ' -- OK'
                ELSE ' -- NOT OK: ' || COALESCE(current_setting('mjm.sp_bad', true), '') END
+UNION ALL
+SELECT 5, 'the month names table',
+       CASE WHEN to_regclass('public.nops_seed_planting_names') IS NOT NULL
+            THEN 'present -- OK' ELSE 'MISSING -- NOT OK' END
 ORDER BY n;
