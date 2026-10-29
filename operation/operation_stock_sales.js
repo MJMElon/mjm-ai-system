@@ -3142,7 +3142,11 @@
         const active = eligible.filter(o => !isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
         const past   = eligible.filter(o =>  isPastMonthOrder(o) && o.balance > 0);
 
-        updateAllocCounts(active.length, past.length);
+        // Each tab totals the figure its own cards show: Active cards show
+        // what is still to allocate, Past Due cards show what is uncollected.
+        const activeQty = active.reduce((s, o) => s + orderUnallocatedQty(o), 0);
+        const pastQty   = past.reduce((s, o) => s + (o.balance || 0), 0);
+        updateAllocCounts(active.length, past.length, activeQty, pastQty);
 
         const baseList = _allocTab === 'active' ? active : past;
         const showList = baseList.filter(matchesAllocSearch);
@@ -3162,12 +3166,13 @@
 
         body.innerHTML = showList.map(o => orderCardHtml(o, _allocTab)).join('');
 
-        if (_allocTab === 'active') {
-            body.querySelectorAll('.order-card[draggable="true"]').forEach(el => {
-                el.addEventListener('dragstart', onCardDragStart);
-                el.addEventListener('dragend',   onCardDragEnd);
-            });
-        }
+        // Both tabs: a past-due order still waiting to be allocated drags
+        // onto a matured-stock row exactly like a current one. The selector
+        // already scopes this to the cards orderCardHtml marked draggable.
+        body.querySelectorAll('.order-card[draggable="true"]').forEach(el => {
+            el.addEventListener('dragstart', onCardDragStart);
+            el.addEventListener('dragend',   onCardDragEnd);
+        });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -3287,9 +3292,13 @@
         });
     }
 
-    function updateAllocCounts(active, past) {
+    function updateAllocCounts(active, past, activeQty, pastQty) {
         document.getElementById('alloc-count-active').textContent = active;
         document.getElementById('alloc-count-past').textContent   = past;
+        const qa = document.getElementById('alloc-qty-active');
+        const qp = document.getElementById('alloc-qty-past');
+        if (qa) qa.textContent = (activeQty || 0).toLocaleString('en-MY') + ' pcs';
+        if (qp) qp.textContent = (pastQty   || 0).toLocaleString('en-MY') + ' pcs';
         const fab   = document.getElementById('alloc-fab');
         const badge = document.getElementById('alloc-fab-badge');
 
@@ -3328,11 +3337,14 @@
         const pctAlloc    = total ? Math.min(100, ((allocated + collected) / total) * 100) : 0;
         const fullyAlloc  = remaining === 0 && tab === 'active';
         const dateLabel   = o.orderDate ? o.orderDate.toLocaleDateString('en-MY', { day:'2-digit', month:'short' }) : '—';
-        const dragAttrs   = (tab === 'active' && remaining > 0)
+        // A past-due order drags for allocation exactly like a current one —
+        // the office asked for that in as many words. What decides is the
+        // same test on both tabs: is anything still unallocated.
+        const dragAttrs   = (remaining > 0)
             ? `draggable="true" data-order-id="${escapeHtml(o.id || '')}"`
             : '';
         const cls = (tab === 'past') ? 'order-card past-due' : (fullyAlloc ? 'order-card fully-allocated' : 'order-card');
-        const grip = (tab === 'active' && remaining > 0) ? '<span class="order-card-grip">⋮⋮</span>' : '';
+        const grip = (remaining > 0) ? '<span class="order-card-grip">⋮⋮</span>' : '';
 
         let qtyDisplay, qtySubLabel;
         if (tab === 'past') {
@@ -3346,9 +3358,16 @@
             qtySubLabel = 'pcs to allocate · of ' + total.toLocaleString();
         }
 
-        const remarkHtml = (tab === 'past')
-            ? `<div class="order-card-remark">⏳ Customer not yet collected — follow up reminder only</div>`
-            : '';
+        // The big figure on a past card is what is UNCOLLECTED (o.balance);
+        // a drop allocates what is UNALLOCATED (remaining), which is smaller
+        // once some of it already sits on a batch — so the remark names the
+        // figure the drag will actually move.
+        let remarkHtml = '';
+        if (tab === 'past') {
+            remarkHtml = remaining > 0
+                ? `<div class="order-card-remark">⏳ Not yet collected — drag onto a matured-stock row to allocate ${remaining.toLocaleString('en-MY')} pcs</div>`
+                : `<div class="order-card-remark">⏳ Fully allocated — waiting for the customer to collect</div>`;
+        }
 
         return `
             <div class="${cls}" ${dragAttrs}>
