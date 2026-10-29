@@ -262,6 +262,45 @@ const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x)
       'and neither new role walks onto the maintenance tick sheets');
 
     await page.close();
+
+    console.log('\n-- 6. an empty row and an empty orphan column are not drawn --');
+    {
+      /* EVERY ROLE THE LIST OFFERS NOW HAS A ROW, so Other holds one thing:
+         a role typed before the list existed. On a register nobody has keyed
+         free text into, it is a row of empty cells carrying a 0 under a
+         heading that means "a role nobody recognises" — a question about
+         nothing. And an ORPHAN column is its people: nobody can be added to
+         one, so an empty one is a heading reading "not in the nursery list"
+         over nothing at all. */
+      const p2 = await open(browser, port, { workers: [
+        { id: 1, full_name: 'Conductor One', section: 'BNN',   role: 'Field Conductor', active: true },
+        { id: 2, full_name: 'Ahmad Bin Ali', section: 'UNN1',  role: 'General Worker',  active: true },
+        { id: 3, full_name: 'Office Admin',  section: 'OTHERS', role: 'Admin',          active: true },
+        /* The live shape of an empty orphan: the section is not on any
+           nursery list and the one person left in it is inactive, so the
+           column has nobody to show. */
+        { id: 4, full_name: 'Moved Away',    section: 'ADMIN', role: 'Field Conductor', active: false },
+      ] });
+      is(await rowNames(p2),
+        ['Estate Manager', 'Admin', 'FC', 'Assistant FC', 'Water Pump Operator',
+         'Workers', 'Gardener', 'Driver'],
+        'no Other row where no role is unrecognised');
+      const c2 = await colNames(p2);
+      yes(!c2.some((c) => /not in the nursery list/i.test(c)),
+        'and no column for a section with nobody in it');
+      yes(c2.includes('Others') && c2.includes('Estate'),
+        'while the company own sections keep their columns, empty or not');
+
+      /* Show inactive brings the person back, so the column comes with them
+         — the one standing there is still somebody to be moved. */
+      await p2.click('#w-show-inactive');
+      await p2.waitForTimeout(120);
+      const c3 = await colNames(p2);
+      yes(c3.some((c) => /not in the nursery list/i.test(c)),
+        'ticking Show inactive brings the orphan column back with its person');
+      is(await inRow(p2, 'Other'), null, 'and the Other row is still not drawn');
+      await p2.close();
+    }
   } finally {
     await browser.close();
     server.close();

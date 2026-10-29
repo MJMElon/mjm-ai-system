@@ -3081,6 +3081,25 @@ Nothing else in either system was keyed on the old code — it is not a
 maintenance nursery, so neither the tick sheets nor the salary claim have
 ever counted it.
 
+**AN EMPTY ROW AND AN EMPTY ORPHAN COLUMN ARE NOT DRAWN**, and both follow
+from the rows above rather than being a tidy-up. Once every role the list
+offers has a row, **Other** holds one thing — a role typed before the list
+existed — so on a register nobody has keyed free text into it is a row of
+empty cells carrying a 0 under a heading that means *a role nobody
+recognises*: a question about nothing. It comes back the day one turns up,
+and it is still the row that offers no Add.
+
+The same sentence about a COLUMN, one word different. `addOrphanSections`
+draws one for a section the nursery list does not hold, and **nobody can
+ever be added to one** — so an empty one is a heading reading *"ADMIN — not
+in the nursery list"* over nothing at all, which is what the office was
+looking at after the SQL moved the last two people out of it. The company's
+own sections keep their column standing empty, because that is where
+somebody IS added, and the orphans carry an `orphan: true` mark so the
+board can tell the two apart without a second copy of the section list. A
+worker hidden by Show inactive takes the column with them and brings it
+back, because the one standing there is still somebody to be moved.
+
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 
