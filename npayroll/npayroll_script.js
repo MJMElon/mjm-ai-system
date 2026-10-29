@@ -2265,7 +2265,7 @@ function renderTransplantByPlot(secFilter) {
     `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
 }
 
-/* ════════════ CULLING INCENTIVE ════════════
+/* ════════════ CULLING MONITORING ════════════
    A plot that went from Saringan Anak Bibit to the end of Transplanting in
    15 days or fewer earns an incentive: RM 20 a plot to Rousell Wayne and to
    Florence, whatever the nursery, and RM 50 a plot to that nursery's own
@@ -2275,7 +2275,7 @@ function renderTransplantByPlot(secFilter) {
    THE PLOTS ARE GONE THROUGH ON WORK MAINTENANCE, AND ONLY PAID HERE. The
    office moved it: *"把culling incentive全部搬到这里 under worker activity
    ... payroll那边要link这里 然后在payroll才会有钱"*. So Worker Activity →
-   Culling Incentive shows the plot, the days, the dates and who earns it,
+   Culling Monitoring shows the plot, the days, the dates and who earns it,
    carries Add / Remove by hand, and carries the CHECK — and this sheet pays
    the Checked plots and nothing else, at the dates and days they were
    checked at.
@@ -2289,7 +2289,6 @@ function renderTransplantByPlot(secFilter) {
    the name here has to be in exactly one register name. A name that finds
    nobody, or two people, is said under the table and is on no claim. */
 const CULL_INCENTIVE = window.MJMCullIncentive ? MJMCullIncentive.RULE : { everyPlot: [], ownNursery: [] };
-const CULL_TARGET_DAYS = window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15;
 const CULL_PAGE = '../nursery_ops/nursery_ops_maintenance.html?view=cull_incentive';
 
 let cullTransplanted = {};    // plotKey → { plot, dates[] }, every month, from loadTransplantMaps
@@ -2301,8 +2300,15 @@ let cullChecksReady = true;   // false = the Checked table is not there yet
 
 async function loadCullChecks() {
   if (!window.MJMCullIncentive) { cullChecksReady = false; return; }
+  /* THE RULE COMES IN WITH THE CHECKS, and it has to: who is paid and how
+     much is the office's now, keyed on Settings, and pricing a claim off
+     the built-in list while they believe they set the rates is the fault
+     this module already has a heading about. It fails open — a database
+     without the tables keeps paying exactly what it paid before — so the
+     SCREEN is what has to say which rule it is on. */
   const [ov, ck] = await Promise.all([MJMCullIncentive.loadOverrides(_supabase, monthValue()),
-                                      MJMCullIncentive.loadChecks(_supabase, monthValue())]);
+                                      MJMCullIncentive.loadChecks(_supabase, monthValue()),
+                                      MJMCullIncentive.loadRule(_supabase, monthValue())]);
   cullOverrides = ov.rows;
   cullChecks = ck.rows;
   cullChecksReady = ck.ready;
@@ -2336,13 +2342,12 @@ function cullIncentiveHeld(secFilter) { return _cullAll(secFilter).filter(r => r
 
 /* One configured name to one register row — or to nobody, and why. */
 function cullWorker(name) {
-  const words = s => String(s || '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
-  const exact = workers.filter(w => _tpKey(w.full_name) === _tpKey(name));
-  if (exact.length === 1) return { w: exact[0] };
-  const want = words(name);
-  const hits = workers.filter(w => { const t = words(w.full_name); return want.every(x => t.includes(x)); });
-  if (hits.length === 1) return { w: hits[0] };
-  return { w: null, clash: hits.map(w => w.full_name) };
+  /* THE RULE LIVES IN shared_cull_incentive.js AND THIS IS NOT A SECOND
+     COPY OF IT. The dropdown on Settings offers whatever this resolves to,
+     so a name the office picked and a name the claim cannot find would be
+     two answers to one question. */
+  const m = MJMCullIncentive.resolveName(name, workers);
+  return { w: m.row, clash: m.clash };
 }
 
 /* Who is paid what, off a list of PAID plots. With a nursery picked, only
@@ -2382,7 +2387,7 @@ function cullIncentivePay(rows, secFilter) {
    - **Checked plots** — that is the merged Plot cell now.
    - **Checked** (who agreed it, when). The claim form settled this one
      already: the dates, the days and the checker are how the office
-     DECIDED, and Worker Activity → Culling Incentive carries all of them,
+     DECIDED, and Worker Activity → Culling Monitoring carries all of them,
      one button away at the top of this very section.
    - **Nursery.** The heading names it whenever a nursery is picked, and a
      column repeating the heading on every row is the same answer twice. It
@@ -2417,7 +2422,7 @@ function renderCullIncentive(secFilter) {
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const monthTxt = monthLabelFull(monthValue());
   const head = $('cull-inc-head');
-  if (head) head.textContent = `Culling Incentive — Checked plots — `
+  if (head) head.textContent = `Culling Monitoring — Checked plots — `
     + `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthTxt}`;
   const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
 
@@ -2465,16 +2470,16 @@ function renderCullIncentive(secFilter) {
     <tfoot><tr><td class="l" colspan="5">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`
     : `<tbody><tr><td class="empty">No plot in ${esc(secFilter ? secName(secFilter) : 'any nursery')} has been Checked for ${
         esc(monthTxt)} yet, so nobody is paid this incentive. Plots are gone through on
-        <a href="${CULL_PAGE}">Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.</td></tr></tbody>`;
+        <a href="${CULL_PAGE}">Work Maintenance &rarr; Worker Activity &rarr; Culling Monitoring</a>.</td></tr></tbody>`;
 
   const notes = [];
-  if (!window.MJMCullIncentive) notes.push('The culling incentive rule did not load. Reload the page.');
+  if (!window.MJMCullIncentive) notes.push('The Culling Monitoring rule did not load. Reload the page.');
   if (!cullChecksReady) notes.push('The Checked table is not on this database yet, so nothing is paid. '
              + 'Run shared/RUN_ME_cull_incentive_checked.sql once in Supabase.');
   const held = cullIncentiveHeld(secFilter);
   if (held.length) notes.push(`${held.map(r => esc(r.plot)).join(', ')} ${held.length === 1 ? 'qualifies' : 'qualify'} and `
              + `${held.length === 1 ? 'has' : 'have'} not been Checked yet, so ${held.length === 1 ? 'it is' : 'they are'} not paid. `
-             + `<a href="${CULL_PAGE}">Check on Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.`);
+             + `<a href="${CULL_PAGE}">Check on Work Maintenance &rarr; Worker Activity &rarr; Culling Monitoring</a>.`);
   else if (cullPalmsLogs === null && !rows.length) notes.push('PALMS could not be read, so this sheet cannot say whether any plot is waiting to be Checked.');
   pay.filter(p => !p.known).forEach(p => notes.push(p.clash.length
     ? `${esc(p.name)} matches more than one worker on the register (${p.clash.map(esc).join(', ')}), so ${money(p.amount)} is NOT on the salary claim.`
@@ -4105,7 +4110,7 @@ function renderMonthly() {
       <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
 
   $('monthly-note').textContent =
-    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes the culling incentive; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
+    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes Culling Monitoring; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
 }
 
 /* ════════════ PDF ════════════ */
@@ -4836,7 +4841,7 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
   return y;
 }
 
-/* THE CULLING INCENTIVE, ON THE CLAIM FORM — ONE TABLE: the plot, who it
+/* CULLING MONITORING, ON THE CLAIM FORM — ONE TABLE: the plot, who it
    paid, how much. Same figures, same rule (cullIncentivePlots /
    cullIncentivePay). Returns the y it finished at.
 
@@ -4851,7 +4856,7 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
    table already settled: a claim form is read by somebody adding up money
    and signing it. The dates, the days and the checker are how the office
    DECIDED, and that belongs on the screen where the deciding happens —
-   Worker Activity → Culling Incentive, which shows every one of them.
+   Worker Activity → Culling Monitoring, which shows every one of them.
 
    THEN THEY ASKED FOR IT THE OTHER WAY ROUND — *"我要plot 在前面 merge起来
    中间人名 后面价钱"* — and that is not a reordering, it is the right
@@ -4886,7 +4891,7 @@ function drawCullIncentive(doc, y, rows, pay) {
 
   const heading = () => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-    doc.text('CULLING INCENTIVE', L, y + 6);
+    doc.text('CULLING MONITORING', L, y + 6);
     y += 9;
     ['Plot', 'Person', 'Incentive (RM)'].forEach((t, i) => pdfCell(doc, X[i], y, COL[i], H, t,
       { bold: true, size: 7.5, nowrap: true, fill: HF }));

@@ -10,7 +10,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js?v=5"></script>
+<script src="../shared/shared_palms.js?v=6"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -446,6 +446,13 @@ function fillMonths() {
     $('f-from').innerHTML = actOptions; $('f-from').value = String(FROM);
     $('f-to').innerHTML = actOptions;   $('f-to').value = String(TO);
     $('f-act').innerHTML = actOptions;  $('f-act').value = String(ACT);
+    /* THE TARGET IS THE OFFICE'S NOW, keyed on Work Maintenance, Settings,
+       Culling Monitoring -- and it is the SAME number this page measures
+       against, which is why it is read rather than printed as 15. It fails
+       open: no table or no answer leaves it at what it already was. Awaited
+       before the label and before the rows, or the page draws one number
+       and times against another. */
+    try { await MJMPalms.loadTarget(_supabase); } catch (_) {}
     $('target-days').textContent = MJMPalms.TARGET_DAYS;
 
     $('f-nursery').addEventListener('change', (e) => {
