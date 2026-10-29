@@ -421,7 +421,12 @@ const read = (page) => page.evaluate(() => {
     check('…the one flown for THIS batch, not the one from years ago',
           n3.links[0].href, 'https://files.test/maps/n3.jpg');
     checkTrue('…shown as the map itself', n3.links[0].bg.includes('n3.jpg'));
-    check('…opening in a new tab, which is where it prints', n3.links[0].tab, '_blank');
+    /* IT IS STILL A REAL LINK TO THE FILE. The press pops the map out over
+       the table now, but the href and the target stay: a ctrl-click or a
+       middle-click opens the file the way it always did, and on a page
+       where the script never ran the press itself still reaches it. */
+    check('…and still a real link to the file, for a ctrl-click and for no script',
+          n3.links[0].tab, '_blank');
     checkTrue('…and saying what it is', /Drone map/.test(n3.links[0].title)
                                      && /N3/.test(n3.links[0].title)
                                      && /252/.test(n3.links[0].title));
@@ -439,6 +444,73 @@ const read = (page) => page.evaluate(() => {
     const n7 = maps.find((m) => m.plot === 'N7');
     check('a batch nobody flew keeps its place, greyed, rather than leaving a '
         + 'gap that names nothing', [n7.links.length, n7.none, n7.labels], [0, 1, ['253']]);
+    await page.close();
+  }
+
+  console.log('\nPressing a map POPS IT OUT, and does not take the page');
+  {
+    /* The office, looking at the column: *"我按的时候pop out就好 不用整页"*.
+       Looking at a map is a glance, and a page of its own turns a glance
+       into somewhere to leave and come back from. */
+    const page = await boot(browser, FIELD);
+    await pick(page, 'UNN2');
+    const rowMap = (plot) => `#transpl-plots-table tbody tr:has(td:nth-child(2):text-is("${plot}")) a.tp-map`;
+    /* WAITED FOR, not glanced at. The first version of this check gave the
+       tab 120ms to appear and passed over the previous page, which opens
+       one every time — the PDF one below takes up to a second and a half
+       to arrive, so a short look proves only that nothing was quick. */
+    const tabFor = async (plot, ms) => {
+      const [p] = await Promise.all([
+        page.waitForEvent('popup', { timeout: ms }).catch(() => null),
+        page.locator(rowMap(plot)).first().click(),
+      ]);
+      return p;
+    };
+
+    const stray = await tabFor('N3', 2500);
+    if (stray) await stray.close();
+    /* Read null-safe on purpose: on a page with no pop-out at all this has
+       to come back as a clean FAIL naming what is missing, not as a throw
+       that takes the run down before it has said anything. */
+    const read = () => page.evaluate(() => {
+      const g = (id) => document.getElementById(id);
+      return { open: !!(g('map-modal') && g('map-modal').classList.contains('open')),
+               src: g('map-modal-img') ? g('map-modal-img').getAttribute('src') : null,
+               title: g('map-modal-title') ? g('map-modal-title').textContent : '',
+               sub: g('map-modal-sub') ? g('map-modal-sub').textContent : '',
+               go: g('map-modal-open') ? g('map-modal-open').getAttribute('href') : null };
+    });
+    const box = await read();
+    check('the pop-out opens on the map that was pressed',
+          [box.open, box.src], [true, 'https://files.test/maps/n3.jpg']);
+    checkTrue('…naming the plot and the batch, so two maps are not one picture',
+              /N3/.test(box.title) && /252/.test(box.sub));
+    /* THE HALF THAT IS EASY TO LOSE. The tab was never only a bigger view —
+       it is where the browser PRINTS, and standing in the plot holding the
+       map is what a drone map is for. */
+    check('…and Open in a new tab is on it, which is what prints',
+          box.go, 'https://files.test/maps/n3.jpg');
+    check('and the press took no page of its own — 不用整页', !!stray, false);
+
+    await page.keyboard.press('Escape');
+    /* The picture is dropped as it closes, or a slow map flashes up under
+       the next plot it was opened for. Done in closeModal, so all three
+       ways out — the cross, the backdrop and Esc — drop it. */
+    const shut = await read();
+    check('Esc closes it and the picture goes with it',
+          [box.open && !shut.open, shut.src], [true, null]);
+
+    const again = await tabFor('N3', 400);
+    if (again) await again.close();
+    await page.locator('#map-modal').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    check('and so does a press on the backdrop', (await read()).open, false);
+
+    /* A PDF HAS A READER ALREADY, with its own print and page controls, and
+       handed to an `<img>` it shows nothing at all. N9's is one. */
+    const p9 = await tabFor('N9', 2500);
+    check('a PDF map keeps its tab rather than being squeezed into a picture',
+          [!!p9, (await read()).open], [true, false]);
+    if (p9) await p9.close();
     await page.close();
   }
 

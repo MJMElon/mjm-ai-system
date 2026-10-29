@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- The page is the deploy: the tick list below lives in it, so a cached
+     copy goes on offering yesterday's labels and yesterday's functions.
+     These three are the only lever, the site being GitHub Pages with no
+     build step and nowhere to set a header. One hard reload per machine
+     to pick them up in the first place. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>User Access — Nursery Operation Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
@@ -40,7 +48,18 @@ MJMModuleAccess.init({
         { key:'add_record',   label:'Add & edit work records', desc:'Key in a maintenance job, or change one already keyed' },
         { key:'tick_schedule',label:'Tick and save the schedule', desc:'Set which plots are treated in each week of the month' },
         { key:'worker_record',label:'Tick the Worker Record', desc:'Mark which worker did which job, feeding the salary claim' },
-        { key:'setting',      label:'Open Setting (piece rates, plots, workers)', desc:'Change piece rates, add plots — the money side of the module',
+        /* THE LABEL IS WHAT THE TAB ACTUALLY HOLDS, and it took a wrong one
+           to learn that. It read "Open Setting (piece rates, plots,
+           workers)", which was true when it was written and has not been for
+           a while: the PIECE RATES moved to Payroll → Settings → Piece Rate,
+           on their own permission, and the WORKERS come off the payroll
+           register through the Worker System board. The Setting tab is plot
+           capacity, the chemical list and the fertiliser list, and nothing
+           else. The office ticked this expecting rates, opened the tab and
+           said so — a label naming two screens it does not open sends
+           somebody looking for a fault that is not there. */
+        { key:'setting',      label:'Open Setting (plot capacity, chemicals, fertilisers)',
+          desc:'Change what a plot holds and the chemical and fertiliser lists. Piece rates are in Payroll → Settings',
           adminOnly:true, highlight:true, chip:'Maintenance Setting' }
       ]},
     { key:'motion', label:'Motion Study Settings', desc:'Standard timings used to plan the work',

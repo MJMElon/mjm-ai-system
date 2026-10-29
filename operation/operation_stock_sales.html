@@ -94,6 +94,10 @@
         /* Maturity table */
         .mat-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
         .mat-table thead th{background:#f1f5f9;color:#334155;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:11px 10px;text-align:left;border-bottom:2px solid #cbd5e1;position:sticky;top:0;z-index:1;}
+        /* The numeric headings carry .text-right in the markup, but the rule
+           above is more specific than the Tailwind class, so they sat LEFT
+           over right-aligned figures. Same fix .ph-table already carries. */
+        .mat-table thead th.text-right{text-align:right;}
         .mat-table tbody td{padding:11px 10px;border-bottom:1px solid #eef2f6;color:#1e293b;font-weight:600;vertical-align:middle;}
         .mat-table tbody tr{transition:background .12s;}
         .mat-table tbody tr:nth-child(even){background:#fbfcfe;}

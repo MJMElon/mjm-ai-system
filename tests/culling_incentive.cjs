@@ -1,4 +1,4 @@
-/* The culling incentive: gone through and Checked on Work Maintenance,
+/* Culling Monitoring: gone through and Checked on Work Maintenance,
    paid on the payroll Transplanting sheet.
 
    A plot that went from Saringan Anak Bibit to the end of Transplanting in
@@ -8,7 +8,7 @@
    about are the ones the LEDGER transplanted in the month; the time comes
    from PALMS, the plot's LATEST run.
 
-   The office moved it: Worker Activity -> Culling Incentive shows the plot,
+   The office moved it: Worker Activity -> Culling Monitoring shows the plot,
    the days, the dates and who earns it, and carries the Check; the payroll
    pays the CHECKED plots and nothing else. This drives BOTH real pages with
    a ledger and a PALMS log built to hit every way a plot can come out:
@@ -188,7 +188,7 @@ async function boot(browser, db, where) {
   }
   if (where === 'maint') {
     await page.goto('http://localhost:8777/nursery_ops/nursery_ops_maintenance.html?view=cull_incentive', { waitUntil: 'load' });
-    await page.waitForFunction(() => /Culling Incentive/.test((document.getElementById('payroll-table') || {}).textContent || '')
+    await page.waitForFunction(() => /Culling Monitoring/.test((document.getElementById('payroll-table') || {}).textContent || '')
       && document.getElementById('tab-payroll').classList.contains('active'), { timeout: 20000 });
     return { page, errs };
   }
@@ -196,7 +196,8 @@ async function boot(browser, db, where) {
   await page.waitForFunction(() => typeof window.renderCullIncentive === 'function', { timeout: 20000 });
   await page.click('[data-sub="transpl"]');
   await page.waitForFunction(() => {
-    const t = document.getElementById('cull-inc-pay');
+    /* ONE table now — `cull-inc-pay` was the second card and is gone. */
+    const t = document.getElementById('cull-inc-plots');
     return t && (t.textContent || '').trim().length > 0;
   }, { timeout: 15000 });
   return { page, errs };
@@ -215,12 +216,33 @@ const payOf = (page, sec) => page.evaluate((s) =>
   const db = { mjmnpayroll_workers: REGISTER, shared_inventory_logs: LEDGER,
                fcportal_palms_plot_logs: PALMS };
 
-  console.log('— Work Maintenance: Worker Activity -> Culling Incentive');
+  console.log('— Work Maintenance: Worker Activity -> Culling Monitoring');
   const m = await boot(browser, db, 'maint');
   const mp = m.page;
   check('the payroll link lands on the tab, BNN picked',
     await mp.evaluate(() => [document.getElementById('pn-subtab-cull_incentive').classList.contains('active'), getNursery()]),
     [true, 'BNN']);
+
+  /* THE NAME IS CULLING MONITORING, AND THE KEYS DID NOT MOVE WITH IT.
+     The office: *"culling incentive 的名字换成culling monitoring"*. A label
+     that took its key with it would read every tick the office has ever set
+     as unset -- the same rule System Setting followed when Scan and Delivery
+     Order were renamed. So the tab's own id, the ?view= it is reached by and
+     both tables keep the spelling they are stored under. */
+  check('the tab reads Culling Monitoring, in both languages, and no Incentive left',
+    await mp.evaluate(() => {
+      const el = document.querySelector('[data-i18n="tab.cullIncentive"]');
+      const en = el.textContent.trim();
+      /* The toggle is 'bm', not 'ms' -- the page's own spelling. */
+      const was = currentLang;
+      setLang('bm'); const ms = el.textContent.trim(); setLang(was);
+      return [en, ms, /Culling Incentive/i.test(document.body.textContent)];
+    }),
+    ['Culling Monitoring', 'Pemantauan Culling', false]);
+  check('…and the KEY it is stored and reached under did not move',
+    await mp.evaluate(() => [!!document.getElementById('pn-subtab-cull_incentive'),
+      /view=cull_incentive/.test(document.getElementById('cm-set-link').getAttribute('href'))]),
+    [true, true]);
   check('BNN: every plot transplanted this month, timed off its latest run, nothing checked yet',
     await rowsOf(mp),
     [['B1', true, 13, false], ['B2', false, 19, false], ['B3', true, 14, false], ['B4', false, null, false],
@@ -382,9 +404,11 @@ const payOf = (page, sec) => page.evaluate((s) =>
   check('it is on the list, timed, counted — and NOT paid until somebody Checks it',
     (await rowsOf(mp)).find(r => r[0] === 'B9'), ['B9', true, 9, false]);
   txt = await tableText(mp);
-  check('the row says it was added by hand, and the plot count moved with it',
-    [/B9Added by hand: PALMS was never closed for this plot/.test(txt),
-     /2 of 3 plots checked/.test(txt)], [true, true]);
+  /* No "Added by hand" line under the plot, nor its remark: the office
+     asked for both off. The record still carries them (checked above). */
+  check('the row carries no "Added by hand" line, and the plot count moved with it',
+    [/Added by hand/.test(txt), /PALMS was never closed/.test(txt),
+     /2 of 3 plots checked/.test(txt)], [false, false, true]);
   /* Delete puts it back to what PALMS says — which here is nothing at all,
      the ledger never having mentioned B9. */
   await mp.evaluate(() => {
@@ -404,6 +428,237 @@ const payOf = (page, sec) => page.evaluate((s) =>
     ['mjmnpayroll_cull_incentive_overrides', 'nops_cull_incentive_checks']);
   check('no prompt, no page error', m.errs.filter(e => /^PROMPT|^(?!ALERT)/.test(e)), []);
   if (process.env.SHOT) await mp.locator('#tab-payroll').screenshot({ path: process.env.SHOT });
+
+  /* ── SETTINGS: WHAT MOVES CULLING MONITORING ──────────────────────────
+     The office asked for the things that can affect it to be on Settings,
+     and the reason is that NOT ONE of them was on a screen: the target of
+     15 days, the two names paid on every nursery, and the three Field
+     Conductors paid on their own. */
+  console.log('— Settings: what moves Culling Monitoring');
+  const cm = await mp.evaluate(() => {
+    isNopsAdmin = true; switchTab('setting');
+    const b = document.getElementById('cm-set-body');
+    return { txt: (b.textContent || '').replace(/\s+/g, ' ').trim(),
+             rows: b.querySelectorAll('.cm-set-row').length,
+             notes: b.querySelectorAll('.cm-set-note').length };
+  });
+  check('it names every person the rule pays, and the price of each block',
+    [/Rousell Wayne/.test(cm.txt), /Florence/.test(cm.txt), /Lalu Aenal/.test(cm.txt),
+     /Akbar/.test(cm.txt), /Azhar/.test(cm.txt),
+     /ADMIN/i.test(cm.txt), /FIELD CONDUCTOR/i.test(cm.txt),
+     /RM 20\.00/.test(cm.txt), /RM 50\.00/.test(cm.txt)],
+    [true, true, true, true, true, true, true, true, true]);
+  check('…the target, and that nothing is paid before it is Checked',
+    [/15 days or fewer/.test(cm.txt), /Checked/.test(cm.txt)], [true, true]);
+  /* AND NOTHING ELSE. The card carried a six-row reference table under the
+     two blocks -- which plots are asked about, Seedling Stock, PALMS, a -R
+     plot, by hand, Checked -- and the office took it off in one line
+     (这里不用show). None of the six is a lever anybody keys here, so they
+     are six rows to read past on a card that exists to be keyed. The dated
+     line went with them from the VIEW: it says what Save will do, so it is
+     drawn beside Save and nowhere else (asserted in edit mode below). */
+  check('…and nothing else: no reference table, and no dated line to read past',
+    [cm.rows, cm.notes, /Seedling Stock/.test(cm.txt), /replant/i.test(cm.txt),
+     /What else moves it/i.test(cm.txt), /leaves every month before it alone/.test(cm.txt)],
+    [0, 0, false, false, false, false]);
+
+  /* IT SAYS WHICH RULE IT IS ON. The tables are not on this fixture, so the
+     rule fell back to the one built into the file -- and a card that did
+     not say so would have the office believing they had set rates that
+     nothing reads. Loud, and no Edit button over a list that cannot save. */
+  check('without the tables it pays what it always paid, says so, and offers no Edit',
+    await mp.evaluate(() => [MJMCullIncentive.ruleSource(),
+      /built into the system/.test(document.getElementById('cm-set-body').textContent),
+      /RUN_ME_cull_monitoring_rule\.sql/.test(document.getElementById('cm-set-body').textContent),
+      document.querySelectorAll('#cm-set-body .cm-pick, #cm-set-body .cm-x').length,
+      MJMCullIncentive.RULE.everyPlot.length, MJMCullIncentive.RULE.ownNursery.length]),
+    ['built-in', true, true, 0, 2, 3]);
+
+  /* AND THE EDIT IS THE OFFICE'S SKETCH: a price on the BLOCK, a list of
+     names under it with a remove on each, an Add, and the Field Conductor
+     rows carrying a nursery. More than one per nursery is allowed -- they
+     asked for it. */
+  const ed = await mp.evaluate(() => {
+    MJMCullIncentive.ruleSource = () => 'office';
+    MJMCullIncentive.RULE.everyPlot.forEach((p, i) => { p.id = 100 + i; });
+    MJMCullIncentive.RULE.ownNursery.forEach((p, i) => { p.id = 200 + i; });
+    renderCullMonitoringSetting();
+    const hadEdit = /Edit/.test(document.getElementById('cm-set-body').textContent);
+    cmEdit();
+    const b = document.getElementById('cm-set-body');
+    return { hadEdit, picks: b.querySelectorAll('.cm-pick:not(.cm-pick-n)').length,
+             nurseryPicks: b.querySelectorAll('.cm-pick-n').length,
+             removes: b.querySelectorAll('.cm-x').length,
+             rates: [...b.querySelectorAll('.cm-pay-rate input')].map(i => i.value),
+             adds: [...b.querySelectorAll('.row-add')].length,
+             dated: /leaves every month before it alone/.test(b.textContent) };
+  });
+  check('Edit opens the office\u2019s own shape: one price a block, a row a person',
+    [ed.hadEdit, ed.rates, ed.picks, ed.nurseryPicks, ed.removes, ed.adds],
+    [true, ['20', '50'], 5, 3, 5, 2]);
+  check('\u2026and the dated line is said HERE, where the decision is made',
+    ed.dated, true);
+  /* SHOT_CM gives the office the card as it stands, both states: what they
+     see on opening Settings, and what Edit opens. */
+  if (process.env.SHOT_CM) {
+    const card = mp.locator('#cm-set-body').locator('xpath=..');
+    await card.screenshot({ path: process.env.SHOT_CM.replace('.png', '_edit.png') });
+    await mp.evaluate(() => cmCancel());
+    await card.screenshot({ path: process.env.SHOT_CM });
+    await mp.evaluate(() => cmEdit());
+  }
+
+  /* THE NAME IS A DROPDOWN OFF THE REGISTER, and it preselects through the
+     CLAIM's own resolver -- the rule says "Florence" and the register says
+     "Florence Anak Jugah", so an exact match alone would mark five people
+     the claim pays perfectly well as strangers to it. */
+  check('the dropdown offers the register, and resolves a short name to its row',
+    await mp.evaluate(() => {
+      const sel = document.querySelectorAll('#cm-set-body .cm-pick:not(.cm-pick-n)');
+      const first = sel[0], florence = sel[1];
+      return [[...first.options].map(o => o.value).includes('Rousell Wayne'),
+              florence.value, [...florence.options].some(o => /not on the register/.test(o.textContent))];
+    }),
+    [true, 'Florence Anak Jugah', false]);
+
+  check('Add puts a row on the block it was pressed on, Remove takes one off',
+    await mp.evaluate(() => {
+      cmAdd('fc');
+      const after = document.querySelectorAll('#cm-set-body .cm-pick-n').length;
+      cmRemove(cmDraft.people.findIndex(p => p.id == null));
+      const back = document.querySelectorAll('#cm-set-body .cm-pick-n').length;
+      /* A row that WAS saved is marked, never spliced -- taking somebody off
+         the rule is a record, and that is the way back. */
+      const i = cmDraft.people.findIndex(p => p.id === 200);
+      cmRemove(i);
+      return [after, back, cmDraft.people.length, cmDraft.people[i].active,
+              document.querySelectorAll('#cm-set-body .cm-pick-n').length];
+    }),
+    [4, 3, 5, false, 2]);
+
+  check('a rule with nobody on it is refused, not saved as paying nobody',
+    await mp.evaluate(async () => {
+      const keep = cmDraft.people.slice();
+      cmDraft.people.forEach(p => { p.active = false; });
+      window.__WRITES = [];
+      await cmSave();
+      const wrote = window.__WRITES.filter(w => /cull_monitoring/.test(w[1])).length;
+      cmDraft.people = keep; cmDraft.people.forEach(p => { p.active = true; });
+      return [wrote, !!cmDraft];
+    }),
+    [0, true]);
+  /* ── A PRICE CHANGED TODAY DOES NOT MOVE LAST MONTH ──────────────────
+     The office: *"我什么时候改的价钱 是不会影响以前的月份的 例如我10月改
+     RM50变40 9月份的还是RM50"*. So the rule is not one row saying what it
+     is NOW, it is a rule with a HISTORY, and a month is priced by the rule
+     that was in force FOR THAT MONTH.
+
+     Driven through the SHIPPED loader against rows of the shape the table
+     actually holds -- the whole question is which rows it picks for a
+     month, and a restatement here would prove nothing. */
+  const dated = await mp.evaluate(async () => {
+    const RATES = [
+      { id: 1, kind: 'admin', from_month: '2000-01', rm: 20 },
+      { id: 2, kind: 'fc',    from_month: '2000-01', rm: 50 },
+      { id: 3, kind: 'fc',    from_month: '2026-10', rm: 40 }   // changed in October
+    ];
+    const PEOPLE = [
+      { id: 11, kind: 'admin', nursery: '',     worker_name: 'Rousell Wayne', from_month: '2000-01', until_month: null },
+      { id: 12, kind: 'fc',    nursery: 'UNN2', worker_name: 'Azhar',         from_month: '2000-01', until_month: '2026-10' },
+      { id: 13, kind: 'fc',    nursery: 'UNN2', worker_name: 'Someone New',   from_month: '2026-10', until_month: null },
+      { id: 14, kind: 'fc',    nursery: 'BNN',  worker_name: 'Added in Nov',  from_month: '2026-11', until_month: null }
+    ];
+    const supa = { from: (t) => ({ select: () => Promise.resolve(
+      { data: t === 'nops_cull_monitoring_rate' ? RATES : PEOPLE, error: null }) }) };
+    const CI = window.MJMCullIncentive;
+    const read = async (ym) => {
+      await CI.loadRule(supa, ym);
+      return { fc: (CI.RULE.ownNursery[0] || {}).rm,
+               admin: (CI.RULE.everyPlot[0] || {}).rm,
+               who: CI.RULE.ownNursery.map(p => p.name).sort() };
+    };
+    return { sep: await read('2026-09'), oct: await read('2026-10'), nov: await read('2026-11') };
+  });
+  check('September keeps RM 50 after the price is changed in October',
+    [dated.sep.fc, dated.oct.fc, dated.nov.fc], [50, 40, 40]);
+  check('…and a price nobody changed is the same in every month',
+    [dated.sep.admin, dated.oct.admin, dated.nov.admin], [20, 20, 20]);
+  check('a Field Conductor swapped in October still names the old one in September',
+    [dated.sep.who, dated.oct.who, dated.nov.who],
+    [['Azhar'], ['Someone New'], ['Added in Nov', 'Someone New']]);
+  /* The month a row ENDS in is the first month it is off, and the month it
+     STARTS in is the first month it is on -- both ends exclusive-of-before,
+     or a conductor is paid twice over in the month of the swap. */
+  check('nobody is counted twice in the month of a swap', dated.oct.who.length, 1);
+
+  /* ── THE TARGET IS ONE NUMBER, AND THE OFFICE KEYS IT ────────────────
+     15 days used to be fixed in shared_palms.js, and Culling Monitoring
+     took a COPY of it at load -- so the load ORDER decided the answer and
+     this card carried a red line warning that the two might disagree.
+     There is one number now: PALMS owns it, everything reads it live, and
+     the warning is gone because nothing can drift. */
+  check('PALMS owns the target and the rule reads it LIVE, not a copy',
+    await mp.evaluate(() => {
+      const was = MJMPalms.TARGET_DAYS;
+      MJMPalms.setTargetDays(12);
+      const seen = [MJMCullIncentive.TARGET_DAYS, MJMPalms.TARGET_DAYS];
+      MJMPalms.setTargetDays(was);
+      return seen.concat([MJMCullIncentive.TARGET_DAYS, was]);
+    }),
+    [12, 12, 15, 15]);
+  check('…so the card no longer carries a line about the two disagreeing',
+    await mp.evaluate(() => {
+      /* Not while EDITING: the lead carries the box then, not the
+         sentence, and the box shows the draft rather than the live one. */
+      cmCancel();
+      const was = MJMPalms.TARGET_DAYS;
+      MJMPalms.setTargetDays(12); renderCullMonitoringSetting();
+      const txt = document.getElementById('cm-set-body').textContent;
+      MJMPalms.setTargetDays(was); renderCullMonitoringSetting();
+      return [/12 days or fewer/.test(txt), /have to be the same number/.test(txt)];
+    }),
+    [true, false]);
+  /* A target of nought is every plot off the incentive at once, and it is
+     not a number anybody means to key. */
+  check('a target under a day is refused, and nothing is written',
+    await mp.evaluate(async () => {
+      cmEdit();
+      cmDraft.rate.target = 0;
+      window.__WRITES = [];
+      await cmSave();
+      const wrote = window.__WRITES.filter(w => /cull_monitoring/.test(w[1])).length;
+      const still = !!cmDraft;
+      cmCancel();
+      return [wrote, still];
+    }),
+    [0, true]);
+  /* And it is DATED like the prices: a target changed in October leaves
+     September timing against the one it had. */
+  check('the target is dated too, so September keeps the target it had',
+    await mp.evaluate(async () => {
+      const RATES = [
+        { id: 1, kind: 'admin',  from_month: '2000-01', rm: 20 },
+        { id: 2, kind: 'fc',     from_month: '2000-01', rm: 50 },
+        { id: 3, kind: 'target', from_month: '2000-01', rm: 15 },
+        { id: 4, kind: 'target', from_month: '2026-10', rm: 12 }
+      ];
+      const PEOPLE = [{ id: 11, kind: 'admin', nursery: '', worker_name: 'A',
+                        from_month: '2000-01', until_month: null }];
+      const supa = { from: (t) => ({ select: () => Promise.resolve(
+        { data: t === 'nops_cull_monitoring_rate' ? RATES : PEOPLE, error: null }) }) };
+      const was = MJMPalms.TARGET_DAYS;
+      await MJMCullIncentive.loadRule(supa, '2026-09');
+      const sep = MJMCullIncentive.TARGET_DAYS;
+      await MJMCullIncentive.loadRule(supa, '2026-10');
+      const oct = MJMCullIncentive.TARGET_DAYS;
+      MJMPalms.setTargetDays(was);
+      return [sep, oct];
+    }),
+    [15, 12]);
+
+  await mp.evaluate(() => { cmCancel(); });
+
+  await mp.evaluate(() => switchTab('payroll'));
 
   // What Work Maintenance left in the database is what the payroll reads.
   const left = await mp.evaluate(() => ({
@@ -427,15 +682,77 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [['Rousell Wayne', 40], ['Florence Anak Jugah', 40], ['Lalu Aenal Mashuri', 50],
      ['Akbar Cahaya', 0], ['Muhamad Azhar', 50]]);
   const screen = await page.evaluate(() => {
+    const el = document.getElementById('cull-inc-plots');
     const t = (id) => (document.getElementById(id).textContent || '').replace(/\s+/g, ' ').trim();
-    return { plots: t('cull-inc-plots'), pay: t('cull-inc-pay'),
+    return { plots: t('cull-inc-plots'),
+             /* ONE table now, so the second id must be GONE — a card left
+                on the page that the renderer no longer writes is an empty
+                box under a sheet about money. */
+             second: !!document.getElementById('cull-inc-pay'),
+             cols: [...el.querySelectorAll('thead th')].map(h => h.textContent.trim()),
+             /* The WIDTHS as the browser settled them, not as they were
+                asked for: the complaint was about what is on screen. */
+             widths: [...el.querySelectorAll('thead th')].map(h => Math.round(h.getBoundingClientRect().width)),
+             spans: [...el.querySelectorAll('tbody td[rowspan]')]
+               .map(td => [td.textContent.trim().split('\n')[0], Number(td.getAttribute('rowspan'))]),
+             bodyRows: el.querySelectorAll('tbody tr').length,
              note: document.getElementById('cull-inc-note').innerHTML,
              link: (document.getElementById('cull-inc-link') || {}).getAttribute ? document.getElementById('cull-inc-link').getAttribute('href') : null,
              add: !!document.getElementById('cull-inc-add'), modal: !!document.getElementById('cull-add-modal') };
   });
-  check('the screen lists the checked plots with who checked them',
-    [/B1.*Elon Ting/.test(screen.plots), /B3|B7/.test(screen.plots)], [true, false]);
-  check('the screen total is the BNN incentive, RM 90.00', /TOTAL INCENTIVE.*90\.00/.test(screen.pay), true);
+  /* ONE TABLE, SIX COLUMNS, THE PLOT MERGED — *"这里合起来 不需要分两个
+     plot, started date, ended date, days, person, RM"*. */
+  check('one table, and the second one is gone', screen.second, false);
+  check('the six columns the office asked for, in their order', screen.cols,
+    ['Plot', 'Saringan started', 'Transplanting ended', 'Days', 'Person', 'Incentive (RM)']);
+  /* BNN has one Checked plot paying three people, so the plot and its two
+     days and its duration are four cells spanning three rows each — asked
+     of the rowspan, because a list of words cannot tell a merged cell from
+     the plot written out three times. */
+  check('the plot and its dates are ONE cell each, three rows tall',
+    [screen.spans.length, screen.spans.every(([, n]) => n === 3), screen.bodyRows],
+    [4, true, 3]);
+  check('the plot, its run and the three people are on the one table',
+    [/B1/.test(screen.plots), /13/.test(screen.plots), /Rousell Wayne/.test(screen.plots),
+     /Lalu Aenal/.test(screen.plots), /B3|B7/.test(screen.plots)],
+    [true, true, true, true, false]);
+  /* The RM on a line is what that plot paid that person, so the column adds
+     up to the total — 20 + 20 + 50. */
+  check('the money is per plot per person, and the total is under it',
+    [(screen.plots.match(/RM 20\.00/g) || []).length, /RM 50\.00/.test(screen.plots),
+     /TOTAL INCENTIVE.*90\.00/.test(screen.plots)],
+    [2, true, true]);
+  /* NO COLUMN TAKES THE SLACK ON ITS OWN — *"alignment 不对 有些太大有些
+     太小"*. Auto layout hands the most room to the widest content, which
+     is the two long date HEADINGS, so a 90px date sat in 400px beside a
+     plot squeezed into 131. Pinning only the dates moved the surplus onto
+     Person (548px for a name) rather than fixing it.
+
+     Asked of the RENDERED widths, because that is what the office was
+     looking at; a check on the style attribute passes over a column the
+     browser then stretched anyway. And asked as a RATIO, not in pixels —
+     a pixel floor passes or fails on the harness window rather than on
+     the layout. */
+  {
+    const w = screen.widths;
+    /* A DATE IS NEVER THE WIDEST COLUMN ON THE ROW. That is the office's
+       picture stated as a rule: the widest should be the one carrying the
+       longest VALUE (a name), never one carrying the longest HEADING.
+       A looser form of this — "nothing takes a third of the table" —
+       passed over the broken layout at 28% and proved nothing. */
+    const widest = w.indexOf(Math.max(...w));
+    check('the widest column is the one with the longest value on it, not a date',
+      [w.length, widest], [6, 4]);
+    check('neither date is wider than the name beside it, nor than the plot by half',
+      [w[1] <= w[4], w[2] <= w[4], w[1] < w[0] * 1.5, w[2] < w[0] * 1.5],
+      [true, true, true, true]);
+  }
+  /* Rule, Checked plots, Checked and Nursery came off. The checker is on
+     Worker Activity, one button away at the top of this section. */
+  check('and nothing the office struck off is still on it',
+    [/Every nursery/.test(screen.plots), /Checked plots/.test(screen.plots),
+     /Elon Ting/.test(screen.plots), /Nursery/.test(screen.cols.join(' '))],
+    [false, false, false, false]);
   check('the plots waiting to be checked are named, with the way there',
     [/B3 qualifies and has not been Checked yet/.test(screen.note),
      /nursery_ops_maintenance\.html\?view=cull_incentive/.test(screen.note)], [true, true]);
@@ -461,10 +778,10 @@ const payOf = (page, sec) => page.evaluate((s) =>
      office read the printout and said it: *"我只要看到 CULLING INCENTIVE
      其他废话都不用. 表格里面我只要看到人名 plot 和价钱"*. The dates, the
      days and who checked it are how the office DECIDED, and they are all
-     on Worker Activity → Culling Incentive, which is where the deciding
+     on Worker Activity → Culling Monitoring, which is where the deciding
      happens. A claim form is read by somebody adding up and signing. */
   check('one heading, and no sentence after it',
-    [/CULLING INCENTIVE/.test(pdf), /SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)],
+    [/CULLING MONITORING/.test(pdf), /SARINGAN/.test(pdf), /WHO IT PAYS/.test(pdf)],
     [true, false, false]);
   check('the plot, the name and the money — and nothing else',
     [/B1/.test(pdf), /Rousell Wayne/.test(pdf), /RM 20\.00/.test(pdf),
@@ -483,7 +800,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
      cannot tell a merged cell from three cells carrying the same word. */
   /* Everything from the heading down, and on ITS page — the claim form
      above it has tables of its own and a column of money at its own x. */
-  const at = drawn.texts.find(t => t.t === 'CULLING INCENTIVE') || { y: 1e9, p: -1 };
+  const at = drawn.texts.find(t => t.t === 'CULLING MONITORING') || { y: 1e9, p: -1 };
   const mine = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
   const texts = mine(drawn.texts), rects = mine(drawn.rects);
   const head = ['Plot', 'Person', 'Incentive (RM)'].map(w =>
@@ -520,7 +837,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
   await page.waitForFunction(() => window.__PDFS.length && window.__PDFS[0].saved, { timeout: 10000 }).catch(() => {});
   const all = await page.evaluate(() => {
     const d = window.__PDFS[0] || { texts: [], rects: [] };
-    const at = d.texts.find(t => t.t === 'CULLING INCENTIVE') || { y: 1e9, p: -1 };
+    const at = d.texts.find(t => t.t === 'CULLING MONITORING') || { y: 1e9, p: -1 };
     const keep = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
     return { texts: keep(d.texts), rects: keep(d.rects) };
   });

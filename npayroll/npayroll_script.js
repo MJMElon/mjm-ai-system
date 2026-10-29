@@ -98,19 +98,29 @@ let NURSERY_REGISTER = {};
 const nurseryCode = (name) =>
   String(name == null ? '' : name).replace(/[^a-z0-9]/gi, '').toUpperCase();
 
-/* Is this one a place maintenance work is done, or the Estate?
- 
-   The Estate is a section of the payroll register and a location on System
-   Setting, but it is not a nursery sheet — there are no plots on it and no
-   rounds to spray. Decided by shared_worker_locations.js, the file the Team
-   Board and the Location card already use, so all three agree about where a
-   section sits. Without that file loaded, everything in the register counts,
-   which is the old behaviour. */
+/* Is this one a place maintenance work is done?
+
+   The Estate and Admin are sections of the payroll register and locations
+   on System Setting, but neither is a nursery sheet — there are no plots on
+   either and no rounds to spray. Decided by shared_worker_locations.js, the
+   file the Team Board and the Location card already use, so all three agree
+   about where a section sits. Without that file loaded, everything in the
+   register counts, which is the old behaviour.
+
+   IT ASKS THE FLAG, NOT THE NAME. This used to read `loc.key !== 'estate'`,
+   which was right for exactly as long as the estate was the only place in
+   the company with no plots in it — Admin was the second, and on that test
+   it would have arrived as a nursery to be sprayed, with a maintenance
+   sheet and a claim. A location says whether work is done there; this does
+   not keep a list of the ones where it is not. */
 function isMaintNursery(code) {
   const L = window.MJMWorkerLocations;
+  if (L && typeof L.isMaintSection === 'function') return L.isMaintSection(code);
+  /* An older copy of the shared file, still cached on somebody's machine:
+     fall back to what it can answer, then to counting everything. */
   if (!L || typeof L.locationOf !== 'function') return true;
   const loc = L.locationOf(code);
-  return !!loc && loc.key !== 'estate';
+  return !!loc && loc.key !== 'estate' && loc.key !== 'admin';
 }
 
 async function loadNurseryRegister() {
@@ -480,7 +490,7 @@ function applyPageAccess() {
       if (b) b.style.display = 'none';
     }
   });
-  const payrollSubs = ['maint', 'transpl', 'seedling', 'other', 'monthly'];
+  const payrollSubs = ['maint', 'transpl', 'seedling', 'seedplant', 'other', 'monthly'];
   if (!payrollSubs.some(may)) {
     const b = $('icon-btn-payroll');
     if (b) b.style.display = 'none';
@@ -547,11 +557,129 @@ function refreshPayrollTab() {
   if (s === 'maint')    renderMaint();
   if (s === 'transpl')  renderEntries('transplanting');
   if (s === 'seedling') renderEntries('seedlings');
+  if (s === 'seedplant') renderSeedPlanting();
   if (s === 'other')    renderEntries('other');
   if (s === 'monthly')  renderMonthly();
 }
 
-function closeModal(id) { $(id).classList.remove('open'); }
+/* ════════════ SEED PLANTING ════════════
+   The Pre Nursery's seed planting, priced. The figures are keyed on Work
+   Maintenance, Worker Activity, Seed Planting -- one record per BATCH, each
+   worker keying how many seeds they planted -- and only a batch somebody has
+   CHECKED there reaches this claim. A batch keyed and not checked is NAMED
+   under the table, because a claim short of work reads exactly like a quiet
+   month. This page writes nothing.
+
+   The rate is the Piece Rate row filed under Seed Planting (category
+   seed_planting). With none set it is RM 0.02 a seed, the figure the office
+   gave, and the note says it is the default rather than a setting. */
+const SEED_PLANTING_DEFAULT_RATE = 0.02;
+const _seedPlant = { month: null, rows: null, err: '', at: 0, loading: false };
+
+function seedPlantingRate() {
+  const set = (rates || []).filter(r => r.active !== false && r.category === 'seed_planting');
+  if (set.length) return { rate: Number(set[0].rate) || 0, from: set[0].job_desc || 'Piece Rate', many: set.length > 1 };
+  return { rate: SEED_PLANTING_DEFAULT_RATE, from: null, many: false };
+}
+
+/* Pure: the month's records in, the claim out. Exposed for the test. */
+function seedPlantingClaim(recs, rate) {
+  const checked = (recs || []).filter(r => r.checked_at)
+    .sort((a, b) => String(a.planted_date || '').localeCompare(String(b.planted_date || ''))
+      || String(a.batch_name).localeCompare(String(b.batch_name), undefined, { numeric: true }));
+  const held = (recs || []).filter(r => !r.checked_at
+    && Object.values(r.workers || {}).some(v => Number(v) > 0));
+  const people = {};
+  checked.forEach(r => Object.entries(r.workers || {}).forEach(([w, v]) => {
+    const n = Number(v) || 0;
+    if (!n) return;
+    const p = people[w] || (people[w] = { name: w, byBatch: {}, qty: 0 });
+    p.byBatch[r.batch_name] = (p.byBatch[r.batch_name] || 0) + n;
+    p.qty += n;
+  }));
+  const list = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));
+  list.forEach(p => { p.amount = Math.round(p.qty * rate * 100) / 100; });
+  return { batches: checked.map(r => r.batch_name), checked, held, people: list,
+           qty: list.reduce((a, p) => a + p.qty, 0),
+           amount: list.reduce((a, p) => a + p.amount, 0) };
+}
+
+async function loadSeedPlanting(month) {
+  _seedPlant.loading = true; _seedPlant.month = month; _seedPlant.err = '';
+  const { data, error } = await _supabase.from('nops_seed_planting_batch_workers')
+    .select('*').eq('month', month);
+  _seedPlant.loading = false; _seedPlant.at = Date.now();
+  if (_seedPlant.month !== month) return;          // the month moved on while asking
+  if (error) { _seedPlant.rows = []; _seedPlant.err = error.message || String(error); }
+  else _seedPlant.rows = data || [];
+  if (activeSub() === 'seedplant') renderSeedPlanting(true);
+}
+
+function renderSeedPlanting(fromLoad) {
+  const tbl = $('seedplant-table'), note = $('seedplant-note'), sub = $('seedplant-sub');
+  if (!tbl) return;
+  const month = maintMonthLabel(monthValue());
+  if (sub) sub.textContent = `Pre Nursery — ${monthLabelFull(monthValue())}`;
+  /* Read again on every visit: the checks are made on another page, and a
+     tab that showed what it read an hour ago would be a claim missing the
+     batch somebody has just checked. */
+  if (!fromLoad && !_seedPlant.loading) { loadSeedPlanting(month); }
+  if (_seedPlant.month !== month || _seedPlant.rows === null) {
+    tbl.innerHTML = '<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-light);">Loading…</td></tr></tbody>';
+    if (note) note.textContent = '';
+    return;
+  }
+  if (_seedPlant.err) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:#b91c1c;">Could not read the Seed Planting records: ${esc(_seedPlant.err)}</td></tr></tbody>`;
+    if (note) note.textContent = 'If this says the table does not exist, run shared/RUN_ME_seed_planting_workers.sql in Supabase.';
+    return;
+  }
+  const r = seedPlantingRate();
+  const c = seedPlantingClaim(_seedPlant.rows, r.rate);
+  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
+  let h = `<thead><tr>
+      <th style="text-align:left;">Worker</th>
+      ${c.batches.map(b => `<th>Batch ${esc(b)}</th>`).join('')}
+      <th>Seeds planted</th><th>Rate</th><th>Amount</th>
+    </tr></thead><tbody>`;
+  if (!c.people.length) {
+    h += `<tr><td colspan="${4 + c.batches.length}" style="padding:1.6rem;text-align:center;color:var(--text-light);">${
+      c.held.length ? 'Nothing is Checked yet for ' + esc(monthLabelFull(monthValue())) + '.'
+                    : 'No seed planting was keyed for ' + esc(monthLabelFull(monthValue())) + '.'}</td></tr>`;
+  } else {
+    c.people.forEach(p => {
+      h += `<tr><td style="text-align:left;font-weight:700;">${esc(p.name)}</td>
+        ${c.batches.map(b => `<td>${fig(p.byBatch[b])}</td>`).join('')}
+        <td style="font-weight:700;">${fig(p.qty)}</td>
+        <td>${rateTxt(r.rate)}</td>
+        <td style="font-weight:700;">${money(p.amount)}</td></tr>`;
+    });
+  }
+  const perBatch = b => c.people.reduce((a, p) => a + (p.byBatch[b] || 0), 0);
+  h += `</tbody><tfoot><tr class="total-row">
+      <td style="text-align:left;">Total</td>
+      ${c.batches.map(b => `<td>${fig(perBatch(b))}</td>`).join('')}
+      <td>${fig(c.qty)}</td><td></td><td>${money(c.amount)}</td>
+    </tr></tfoot>`;
+  tbl.innerHTML = h;
+  if (note) {
+    const bits = [];
+    bits.push(r.from
+      ? `Rate: ${rateTxt(r.rate)} a seed, from Piece Rate (${esc(r.from)})${r.many ? ' — more than one Seed Planting rate is active, the first is used' : ''}.`
+      : `Rate: ${rateTxt(r.rate)} a seed, the default. Set it on Settings → Piece Rate with Used For "Seed Planting".`);
+    if (c.held.length) bits.push(`<b style="color:#b45309;">Not on this claim:</b> batch ${c.held.map(x => esc(x.batch_name)).join(', ')} ${c.held.length === 1 ? 'is' : 'are'} keyed and not yet Checked on Work Maintenance.`);
+    note.innerHTML = bits.join('<br>');
+  }
+}
+
+function closeModal(id) {
+  $(id).classList.remove('open');
+  /* THE MAP IS DROPPED AS IT CLOSES, and it is done HERE because there are
+     three ways out — the cross, the backdrop and Esc — and a picture left
+     behind on one of them is a picture that flashes up under the next plot
+     somebody opens, for as long as the new one takes to arrive. */
+  if (id === 'map-modal') { const i = $('map-modal-img'); if (i) i.removeAttribute('src'); }
+}
 
 /* The section picker on this module's own entry forms. It lived in the Worker
    System block and moved out with it, which broke every form that fills one —
@@ -1728,8 +1856,39 @@ function mapsByBatch(plot, batches) {
   return all.slice();
 }
 
-/* One plot's maps, as something to open. A new tab rather than a box on this
-   page: that is what prints, which is half of what the map is wanted for. */
+/* THE MAP POPS OUT OVER THE TABLE. It used to open as a whole page of its
+   own, and the office asked for the lighter thing: *"我按的时候pop out就好
+   不用整页"*. Looking at a map is a glance — which plot is this, does it
+   match what the record says — and a page of its own turns a glance into
+   somewhere to leave and come back from.
+
+   WHAT THE NEW TAB WAS REALLY FOR MUST SURVIVE IT, and it is the easy half
+   to lose: the tab is where the browser PRINTS, and the reason to want a
+   drone map is to stand in the plot holding it. So the pop-out carries Open
+   in a new tab, and the thumbnail is still a real `<a href>` — a ctrl-click
+   or a middle-click opens the file as it always did, and so does the press
+   itself on a page where this script never ran.
+
+   A PDF MAP IS NOT POPPED OUT. The browser has a reader for one, with its
+   own print and page controls, and a PDF handed to an `<img>` shows nothing
+   at all. It keeps the tab and wears the document glyph it always wore, so
+   the two do not look alike while behaving differently. */
+function openMapBox(ev, url, plot, batch, when) {
+  /* A modified click is somebody asking for a tab on purpose. */
+  if (ev && (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button === 1)) return true;
+  const box = $('map-modal'), img = $('map-modal-img'), go = $('map-modal-open');
+  /* No pop-out on this page: the link stands, which is where it started. */
+  if (!box || !img || !go) return true;
+  if (ev) ev.preventDefault();
+  img.src = url;
+  img.alt = ['Drone map', plot, batch ? 'batch ' + batch : ''].filter(Boolean).join(' · ');
+  $('map-modal-title').textContent = 'Drone Map · ' + plot;
+  $('map-modal-sub').textContent = [batch ? 'Batch ' + batch : '', when].filter(Boolean).join(' · ');
+  go.href = url;
+  box.classList.add('open');
+  return false;
+}
+
 function mapCellHtml(plot, batches) {
   const maps = mapsByBatch(plot, batches);
   if (!maps.length) return '<span style="color:var(--text-faint);">—</span>';
@@ -1743,8 +1902,15 @@ function mapCellHtml(plot, batches) {
     const pdf = _isPdfUrl(m.url);
     const tip = ['Drone map', plot, m.batch ? 'batch ' + m.batch : '', m.date]
       .filter(Boolean).join(' \u00b7 ');
-    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}" href="${esc(m.url)}"
-      target="_blank" rel="noopener" title="${esc(tip)} — opens in a new tab, where it prints"
+    /* Quoted into an attribute, so the apostrophe closing the handler and
+       the angle bracket closing the tag both have to be seen off. */
+    const arg = (s) => esc(String(s == null ? '' : s)).replace(/'/g, '&#39;');
+    const pop = pdf ? '' : ` onclick="return openMapBox(event,'${arg(m.url)}',`
+      + `'${arg(plot)}','${arg(m.batch)}','${arg(m.date)}')"`;
+    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}"${pop} href="${esc(m.url)}"
+      target="_blank" rel="noopener" title="${esc(tip)} — ${pdf
+        ? 'opens in a new tab, where it prints'
+        : 'opens over the table; the pop-out has the tab it prints from'}"
       ${pdf ? '' : `style="background-image:url('${esc(m.url)}')"`}>${pdf ? '\u{1F4C4}' : ''}</a>
       <span class="tp-map-b">${label}</span></span>`;
   }).join('') + `</span>`;
@@ -2099,7 +2265,7 @@ function renderTransplantByPlot(secFilter) {
     `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
 }
 
-/* ════════════ CULLING INCENTIVE ════════════
+/* ════════════ CULLING MONITORING ════════════
    A plot that went from Saringan Anak Bibit to the end of Transplanting in
    15 days or fewer earns an incentive: RM 20 a plot to Rousell Wayne and to
    Florence, whatever the nursery, and RM 50 a plot to that nursery's own
@@ -2109,7 +2275,7 @@ function renderTransplantByPlot(secFilter) {
    THE PLOTS ARE GONE THROUGH ON WORK MAINTENANCE, AND ONLY PAID HERE. The
    office moved it: *"把culling incentive全部搬到这里 under worker activity
    ... payroll那边要link这里 然后在payroll才会有钱"*. So Worker Activity →
-   Culling Incentive shows the plot, the days, the dates and who earns it,
+   Culling Monitoring shows the plot, the days, the dates and who earns it,
    carries Add / Remove by hand, and carries the CHECK — and this sheet pays
    the Checked plots and nothing else, at the dates and days they were
    checked at.
@@ -2123,7 +2289,6 @@ function renderTransplantByPlot(secFilter) {
    the name here has to be in exactly one register name. A name that finds
    nobody, or two people, is said under the table and is on no claim. */
 const CULL_INCENTIVE = window.MJMCullIncentive ? MJMCullIncentive.RULE : { everyPlot: [], ownNursery: [] };
-const CULL_TARGET_DAYS = window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15;
 const CULL_PAGE = '../nursery_ops/nursery_ops_maintenance.html?view=cull_incentive';
 
 let cullTransplanted = {};    // plotKey → { plot, dates[] }, every month, from loadTransplantMaps
@@ -2135,8 +2300,15 @@ let cullChecksReady = true;   // false = the Checked table is not there yet
 
 async function loadCullChecks() {
   if (!window.MJMCullIncentive) { cullChecksReady = false; return; }
+  /* THE RULE COMES IN WITH THE CHECKS, and it has to: who is paid and how
+     much is the office's now, keyed on Settings, and pricing a claim off
+     the built-in list while they believe they set the rates is the fault
+     this module already has a heading about. It fails open — a database
+     without the tables keeps paying exactly what it paid before — so the
+     SCREEN is what has to say which rule it is on. */
   const [ov, ck] = await Promise.all([MJMCullIncentive.loadOverrides(_supabase, monthValue()),
-                                      MJMCullIncentive.loadChecks(_supabase, monthValue())]);
+                                      MJMCullIncentive.loadChecks(_supabase, monthValue()),
+                                      MJMCullIncentive.loadRule(_supabase, monthValue())]);
   cullOverrides = ov.rows;
   cullChecks = ck.rows;
   cullChecksReady = ck.ready;
@@ -2170,13 +2342,12 @@ function cullIncentiveHeld(secFilter) { return _cullAll(secFilter).filter(r => r
 
 /* One configured name to one register row — or to nobody, and why. */
 function cullWorker(name) {
-  const words = s => String(s || '').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
-  const exact = workers.filter(w => _tpKey(w.full_name) === _tpKey(name));
-  if (exact.length === 1) return { w: exact[0] };
-  const want = words(name);
-  const hits = workers.filter(w => { const t = words(w.full_name); return want.every(x => t.includes(x)); });
-  if (hits.length === 1) return { w: hits[0] };
-  return { w: null, clash: hits.map(w => w.full_name) };
+  /* THE RULE LIVES IN shared_cull_incentive.js AND THIS IS NOT A SECOND
+     COPY OF IT. The dropdown on Settings offers whatever this resolves to,
+     so a name the office picked and a name the claim cannot find would be
+     two answers to one question. */
+  const m = MJMCullIncentive.resolveName(name, workers);
+  return { w: m.row, clash: m.clash };
 }
 
 /* Who is paid what, off a list of PAID plots. With a nursery picked, only
@@ -2197,66 +2368,118 @@ function cullIncentivePay(rows, secFilter) {
   });
 }
 
+/* ONE TABLE, THE PLOT MERGED DOWN ITS OWN PEOPLE. It was two stacked cards —
+   the plots with their dates, and under it who they paid — and the office
+   read them and said *"这里合起来 不需要分两个 plot, started date, ended
+   date, days, person, RM"*.
+
+   They are the same six columns the claim form now carries, for the same
+   reason: the incentive is earned ONE PLOT AT A TIME, so the plot is the
+   row and the people are lines under it. On this screen the plot's four
+   facts — its two days, its duration — ride in the merged cell with it,
+   which is what the second table could never show beside a name.
+
+   What came OFF, and where it went rather than being lost:
+
+   - **Rule** (*"Every nursery · RM 20.00 / plot"*). The figure on the line
+     IS that rate, one plot at a time, so the column was the same answer
+     in words.
+   - **Checked plots** — that is the merged Plot cell now.
+   - **Checked** (who agreed it, when). The claim form settled this one
+     already: the dates, the days and the checker are how the office
+     DECIDED, and Worker Activity → Culling Monitoring carries all of them,
+     one button away at the top of this very section.
+   - **Nursery.** The heading names it whenever a nursery is picked, and a
+     column repeating the heading on every row is the same answer twice. It
+     comes back as a line under the plot for **All Sections** ONLY, which
+     is the one case the heading cannot answer.
+   - **No.** The office listed six columns and this was not one of them.
+
+   **EVERY COLUMN IS GIVEN ITS SHARE, which is why the widths are per cent
+   where every other table on this page uses pixels.** Unpinned, the slack
+   all went to the two DATES — their headings are the longest words on the
+   row and auto layout hands the most room to the widest content — so a
+   90px date sat in 400px beside a plot squeezed into 131, and the office
+   said *"alignment 不对 有些太大有些太小"*. Pinning only the dates MOVES
+   the fault rather than fixing it: the surplus then lands on Person, 548px
+   for a name, which is the same picture the other way round. Six short
+   values cannot fill a table told to be 100% wide, so the surplus has to
+   go somewhere; per cent is what spreads it over all six instead of piling
+   it on one. Measured at 1,450px and again at 1,100 — the shape holds at
+   both, which neither pixel plan did.
+
+   **Auto layout, never table-layout:fixed.** The headings are nowrap, so a
+   fixed column narrower than its own heading would have the words run out
+   of the cell on a laptop; auto simply grows and .tbl-wrap scrolls.
+
+   And a design note NEVER goes inside the template literal: a comment
+   there is shipped markup, and one backtick in it ends the literal. That
+   is what happened writing this one, and the page died with
+   renderCullIncentive never defined. */
 function renderCullIncentive(secFilter) {
-  const table = $('cull-inc-plots'), payT = $('cull-inc-pay');
-  if (!table || !payT) return;
+  const table = $('cull-inc-plots');
+  if (!table) return;
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const monthTxt = monthLabelFull(monthValue());
   const head = $('cull-inc-head');
-  if (head) head.textContent = `Culling Incentive — Checked plots — `
+  if (head) head.textContent = `Culling Monitoring — Checked plots — `
     + `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthTxt}`;
   const pd = d => (d && window.MJMPalms) ? MJMPalms.prettyD(d) : (d || '—');
 
   const rows = cullIncentivePlots(secFilter);
-  table.innerHTML = rows.length ? `
-    <thead><tr>
-      <th style="width:44px;">No.</th><th class="l">Plot</th><th>Nursery</th>
-      <th>Saringan started</th><th>Transplanting ended</th><th style="width:70px;">Days</th>
-      <th class="l">Checked</th>
-    </tr></thead>
-    <tbody>${rows.map((r, i) => `
-      <tr>
-        <td style="color:var(--text-faint);">${i + 1}</td>
-        <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}${
-          r.override ? `<div style="font-size:11px;color:#15803d;font-weight:700;">${r.manual ? 'Added' : 'Counted'} by hand${
-            r.override.remark ? ': ' + esc(r.override.remark) : ''}</div>` : ''}</td>
-        <td>${esc(r.section || '—')}</td>
-        <td>${pd(r.start)}</td>
-        <td>${pd(r.end)}</td>
-        <td style="font-weight:800;">${r.days == null ? '—' : r.days}</td>
-        <td class="l" style="font-size:12px;">${esc([whoName(r.check.checked_by), fmtStamp(r.check.checked_at)].filter(Boolean).join(' · '))}</td>
-      </tr>`).join('')}</tbody>`
-    : `<tbody><tr><td class="empty">No plot in ${esc(secFilter ? secName(secFilter) : 'any nursery')} has been Checked for ${
-        esc(monthTxt)} yet, so nobody is paid this incentive. Plots are gone through on
-        <a href="${CULL_PAGE}">Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.</td></tr></tbody>`;
-
   const pay = cullIncentivePay(rows, secFilter);
   const grand = pay.filter(p => p.known).reduce((s, p) => s + p.amount, 0);
-  payT.innerHTML = `
+
+  /* Who each plot paid, and what it paid them — off the same `pay` the claim
+     form and the Monthly Payroll read, so a plot cannot pay one figure here
+     and another there. A plot that paid NOBODY still keeps its row: it is
+     Checked and on no claim line, which is the thing to see. */
+  const earners = (plot) => pay.filter(p => p.plots.some(q => q.plot === plot));
+  const personCell = (p) => p
+    ? `<td class="l" style="font-weight:700;color:var(--text-head);">${esc(p.known ? p.known.full_name : p.name)}${
+        p.known ? '' : '<span title="Not found on the worker register — this is not on the salary claim"'
+                     + ' style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+       <td class="money">${money(p.rm)}</td>`
+    : `<td class="l" style="color:var(--text-faint);">Nobody — on no claim line</td>
+       <td class="money" style="color:var(--text-faint);">${money(0)}</td>`;
+
+  table.innerHTML = rows.length ? `
     <thead><tr>
-      <th style="width:44px;">No.</th><th class="l">Person</th><th>Rule</th>
-      <th class="l">Checked plots</th><th style="width:130px;">Incentive (RM)</th>
+      <th class="l" style="width:15%;">Plot</th>
+      <th style="width:15%;">Saringan started</th>
+      <th style="width:16%;">Transplanting ended</th><th style="width:8%;">Days</th>
+      <th class="l" style="width:28%;">Person</th><th style="width:18%;">Incentive (RM)</th>
     </tr></thead>
-    <tbody>${pay.map((p, i) => `
-      <tr>
-        <td style="color:var(--text-faint);">${i + 1}</td>
-        <td class="l" style="font-weight:700;color:var(--text-head);">${esc(p.known ? p.known.full_name : p.name)}${
-          p.known ? '' : '<span title="Not found on the worker register — this is not on the salary claim" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
-        <td>${p.rule === 'every' ? `Every nursery · ${money(p.rm)} / plot`
-                                 : `${esc(p.nursery)} only · ${money(p.rm)} / plot`}</td>
-        <td class="l">${p.plots.length ? p.plots.map(r => esc(r.plot)).join(', ') : '<span style="color:var(--text-faint);">none</span>'}</td>
-        <td class="money">${money(p.amount)}</td>
-      </tr>`).join('')}</tbody>
-    <tfoot><tr><td class="l" colspan="4">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`;
+    <tbody>${rows.map((r) => {
+      const who = earners(r.plot);
+      const span = Math.max(1, who.length);
+      /* The four plot cells are written ONCE, on the first line, and span
+         the rest — so the person column reads as a list under the plot
+         rather than the plot being repeated beside every name. */
+      const plotCells = `
+        <td class="l" rowspan="${span}" style="font-weight:800;color:var(--text-head);vertical-align:middle;">${esc(r.plot)}${
+          r.override ? `<div style="font-size:11px;color:#15803d;font-weight:700;">${r.manual ? 'Added' : 'Counted'} by hand${
+            r.override.remark ? ': ' + esc(r.override.remark) : ''}</div>` : ''}${
+          secFilter ? '' : `<div style="font-size:11px;color:var(--text-muted);font-weight:700;">${esc(r.section || '—')}</div>`}</td>
+        <td rowspan="${span}" style="vertical-align:middle;">${pd(r.start)}</td>
+        <td rowspan="${span}" style="vertical-align:middle;">${pd(r.end)}</td>
+        <td rowspan="${span}" style="font-weight:800;vertical-align:middle;">${r.days == null ? '—' : r.days}</td>`;
+      return (who.length ? who : [null]).map((p, k) =>
+        `<tr>${k === 0 ? plotCells : ''}${personCell(p)}</tr>`).join('');
+    }).join('')}</tbody>
+    <tfoot><tr><td class="l" colspan="5">TOTAL INCENTIVE — on the salary claim</td><td>${money(grand)}</td></tr></tfoot>`
+    : `<tbody><tr><td class="empty">No plot in ${esc(secFilter ? secName(secFilter) : 'any nursery')} has been Checked for ${
+        esc(monthTxt)} yet, so nobody is paid this incentive. Plots are gone through on
+        <a href="${CULL_PAGE}">Work Maintenance &rarr; Worker Activity &rarr; Culling Monitoring</a>.</td></tr></tbody>`;
 
   const notes = [];
-  if (!window.MJMCullIncentive) notes.push('The culling incentive rule did not load. Reload the page.');
+  if (!window.MJMCullIncentive) notes.push('The Culling Monitoring rule did not load. Reload the page.');
   if (!cullChecksReady) notes.push('The Checked table is not on this database yet, so nothing is paid. '
              + 'Run shared/RUN_ME_cull_incentive_checked.sql once in Supabase.');
   const held = cullIncentiveHeld(secFilter);
   if (held.length) notes.push(`${held.map(r => esc(r.plot)).join(', ')} ${held.length === 1 ? 'qualifies' : 'qualify'} and `
              + `${held.length === 1 ? 'has' : 'have'} not been Checked yet, so ${held.length === 1 ? 'it is' : 'they are'} not paid. `
-             + `<a href="${CULL_PAGE}">Check on Work Maintenance &rarr; Worker Activity &rarr; Culling Incentive</a>.`);
+             + `<a href="${CULL_PAGE}">Check on Work Maintenance &rarr; Worker Activity &rarr; Culling Monitoring</a>.`);
   else if (cullPalmsLogs === null && !rows.length) notes.push('PALMS could not be read, so this sheet cannot say whether any plot is waiting to be Checked.');
   pay.filter(p => !p.known).forEach(p => notes.push(p.clash.length
     ? `${esc(p.name)} matches more than one worker on the register (${p.clash.map(esc).join(', ')}), so ${money(p.amount)} is NOT on the salary claim.`
@@ -3887,7 +4110,7 @@ function renderMonthly() {
       <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
 
   $('monthly-note').textContent =
-    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes the culling incentive; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
+    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes Culling Monitoring; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
 }
 
 /* ════════════ PDF ════════════ */
@@ -4618,7 +4841,7 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
   return y;
 }
 
-/* THE CULLING INCENTIVE, ON THE CLAIM FORM — ONE TABLE: the plot, who it
+/* CULLING MONITORING, ON THE CLAIM FORM — ONE TABLE: the plot, who it
    paid, how much. Same figures, same rule (cullIncentivePlots /
    cullIncentivePay). Returns the y it finished at.
 
@@ -4633,7 +4856,7 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
    table already settled: a claim form is read by somebody adding up money
    and signing it. The dates, the days and the checker are how the office
    DECIDED, and that belongs on the screen where the deciding happens —
-   Worker Activity → Culling Incentive, which shows every one of them.
+   Worker Activity → Culling Monitoring, which shows every one of them.
 
    THEN THEY ASKED FOR IT THE OTHER WAY ROUND — *"我要plot 在前面 merge起来
    中间人名 后面价钱"* — and that is not a reordering, it is the right
@@ -4668,7 +4891,7 @@ function drawCullIncentive(doc, y, rows, pay) {
 
   const heading = () => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-    doc.text('CULLING INCENTIVE', L, y + 6);
+    doc.text('CULLING MONITORING', L, y + 6);
     y += 9;
     ['Plot', 'Person', 'Incentive (RM)'].forEach((t, i) => pdfCell(doc, X[i], y, COL[i], H, t,
       { bold: true, size: 7.5, nowrap: true, fill: HF }));
@@ -4947,9 +5170,20 @@ $('global-month').addEventListener('change', async () => {
    to be on this list and left with the Worker System, and a missing element
    here would have thrown before the page finished setting itself up — taking
    the whole payroll screen down over a dialog nobody had opened. */
-['rate-modal','entry-modal','adjust-modal','cull-add-modal'].forEach(id => {
+['rate-modal','entry-modal','adjust-modal','cull-add-modal','map-modal'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(id); });
+});
+
+/* Esc closes the MAP and nothing else. It is the one dialog here that holds
+   no keying: shutting it costs a press to reopen, where Esc over a half
+   filled form would be the work gone — which is why the other four are not
+   on this listener and must not be added to it without a guard of their
+   own. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const box = $('map-modal');
+  if (box && box.classList.contains('open')) closeModal('map-modal');
 });
 
 (async () => {
@@ -5018,8 +5252,8 @@ $('global-month').addEventListener('change', async () => {
     if (tab === 'rates') tab = 'locks';
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
-    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'other', 'monthly']) || sub;
-    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','other','monthly']),
+    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'seedplant', 'other', 'monthly']) || sub;
+    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','seedplant','other','monthly']),
                       workers: may('workers'), locks: may('rates') || may('locks') };
     if (!tabOpen[tab]) tab = ['payroll','workers','locks'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);

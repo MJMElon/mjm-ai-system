@@ -3031,10 +3031,77 @@ already probes for the PIN, the photo and the two dates.
 real browser, as an admin and as a plain auditor, and asserts no DELETE is
 ever sent and that no `prompt` is ever raised.
 
-**The page carries every line of its own code inline and has no no-cache
-metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
-holding yesterday's copy keeps it until one hard reload. Add the three the
-day somebody needs a fix here in a hurry.
+**The page carries nearly every line of its own code inline**, so the PAGE
+is mostly the deploy: the shared files it loads carry a `?v=`, and
+everything else in it does not. It was written up here with no no-cache
+metas and the note said to add the three the day somebody needed a fix in a
+hurry — **that day came**, and it carries them now. One hard reload per
+machine to pick them up, and it stays fresh by itself after that.
+
+### A row for every role, and Others is the one column that is not a place
+
+The board drew four rows — FC, Assistant FC, Water Pump Operator, Workers —
+and swept everybody else into **Other**. Driver and Gardener were real roles
+on the register the whole time, so four people sat under a heading that
+means *a role nobody recognises* over roles the list names. And Other is the
+one row that **cannot be added to** — adding there would have to invent a
+role — so a Driver could not be put on the board at all, which is the
+question the office actually asked.
+
+So the rows are Estate Manager, Admin, FC, Assistant FC, Water Pump
+Operator, Workers, Gardener, Driver, and then Other. Three things in it:
+
+- **`ROLES` and `BOARD_ROLES` are one list in two shapes**, and the test
+  asserts every board row is a role the form can set: a row nobody can be
+  given is a row nobody can be added to.
+- **The dropdown reads in the order the board draws its rows**, so somebody
+  who has just read the board finds the role where they expect it.
+- **Neither new role is general nursery work.** `isKnownRole` answers yes
+  for them, which is what keeps them off the Work Maintenance tick sheets —
+  and `ROLES` has a SECOND COPY in `FC-Portal/src/modules/maintenance/
+  helpers.js` that the same rule reads. Change one, change the other.
+
+**And the column they stand in is OTHERS, which was ADMIN for a day.** The
+section below this one is the whole story of that column — a place with no
+plots in it, `maint: false`, offered by the Location card, last on the
+board. It shipped carrying the word **Admin**, and the rows above took that
+word away from it: a column headed Admin beside a ROW headed Admin is one
+word answering two questions, *where* and *what*. Admin is the job. The
+place is simply not-a-nursery, so it is **Others**, and it is the only
+column on the board that is not somewhere on the ground.
+
+`shared/RUN_ME_worker_section_others.sql` moves the two people who were
+filed under the old code, and is the only thing that puts a worker there.
+It deliberately **does not touch anybody's role**: both are keyed Field
+Conductor, and whether that is right is a question about those two people,
+answered on their own record. A file of SQL deciding somebody's job title
+is the one thing that repair must not do.
+
+Nothing else in either system was keyed on the old code — it is not a
+maintenance nursery, so neither the tick sheets nor the salary claim have
+ever counted it.
+
+**AN EMPTY ROW AND AN EMPTY ORPHAN COLUMN ARE NOT DRAWN**, and both follow
+from the rows above rather than being a tidy-up. Once every role the list
+offers has a row, **Other** holds one thing — a role typed before the list
+existed — so on a register nobody has keyed free text into it is a row of
+empty cells carrying a 0 under a heading that means *a role nobody
+recognises*: a question about nothing. It comes back the day one turns up,
+and it is still the row that offers no Add.
+
+The same sentence about a COLUMN, one word different. `addOrphanSections`
+draws one for a section the nursery list does not hold, and **nobody can
+ever be added to one** — so an empty one is a heading reading *"ADMIN — not
+in the nursery list"* over nothing at all, which is what the office was
+looking at after the SQL moved the last two people out of it. The company's
+own sections keep their column standing empty, because that is where
+somebody IS added, and the orphans carry an `orphan: true` mark so the
+board can tell the two apart without a second copy of the section list. A
+worker hidden by Show inactive takes the column with them and brings it
+back, because the one standing there is still somebody to be moved.
+
+`tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
+checks fail on the previous page.
 
 ## The Worker Record reads the conductor's transplanting, and writes ONE column
 
@@ -3551,9 +3618,94 @@ no DELETE is ever sent. **`nelos_user_setting.html` now carries the three
 no-cache metas**, for the reason every settings page that is being changed
 needs them.
 
+### The fourth time: Open Setting was written, shown as set, and read by nothing
+
+A normal-level user was granted **Open Setting (piece rates, plots,
+workers)** on the Nursery Maintenance module. It saved, it drew as ticked
+on User Access afterwards, and she opened the page to find no Setting tab
+at all. *"Why i allow this user to access the open setting but this user
+still didnt see anything from her side?"*
+
+Because the Setting tab asked ONE question — `isAdminOf('nursery_ops')`,
+the module LEVEL — in all four of its gates: the tab button, `switchTab`,
+and the two piece-rate writes. A tick that is not a module level could
+never move any of them, so `nursery_ops_actions.maintenance.setting` was
+written by the access screen and read by nothing at all.
+
+`maySetting()` in `plot_maintenance_script.js` is the read now, and the
+rule it obeys is the SCREEN's own — `effectiveActions()` in
+`shared_module_access.js`:
+
+- **A saved row is authoritative**, and for an admin too. An admin the
+  office has deliberately unticked is a decision, not an oversight, and a
+  screen drawing a tick off over a gate that allows it is the worst kind of
+  wrong, because it looks configured.
+- **No saved row is nobody having been asked**, so the module level decides
+  — what governed this before the tick existed. **That is the case a plain
+  `canDo()` gets wrong**: absent means yes to every action there, so
+  switching the gate to it would have handed the piece rates to every
+  normal user nobody has configured. `adminOnly:true` on the action in
+  `nursery_ops_user_access.html` is the other half of that sentence.
+- **It does NOT fail open.** Failing open is right for a door somebody
+  already held; this is the money side of the module, and unreadable
+  permissions fall back to the module level — which is false when the
+  access load failed, the same safe default the tab has always had.
+
+**`isNopsAdmin` answers two OTHER questions and both were left alone** —
+overriding a locked DO, and handing out culling incentive. Widening the
+flag instead of adding a function would have given those away to anybody
+ticked for piece rates, which is not what the tick says.
+
+`tests/the_open_setting_tick_is_obeyed.cjs` drives the same six saved rows
+through BOTH readers, lifted out of the shipped files, and fails where they
+disagree. On the previous code it says it in the office's own terms: *the
+screen draws true and the page opens false*. It also runs against a version
+that has no `maySetting` at all rather than throwing — what the previous
+code DID is the whole argument for the change.
+
+### And then the office opened the tab and said 我没看到
+
+Obeying the tick is what made the LABEL worth reading, and the label was
+wrong on two of its three words. It said *Open Setting (piece rates, plots,
+workers)*, which is what the tab held when it was written. The tab holds
+**three sections and nothing else** — Plot Capacity, the Chemical List and
+the Fertiliser List — because:
+
+- **the PIECE RATES moved to Payroll → Settings → Piece Rate**, on that
+  screen's own `rates` permission, and
+- **the WORKERS come off the payroll register** through the Worker System
+  board; `_localWorkers` on this page is only a fallback and its remove
+  button is on Worker Record.
+
+So the office ticked it expecting rates, opened the tab, found capacity and
+two chemical lists, and went looking for a fault that was not there. **A
+label naming two screens a tab does not open is a permission that lies in
+the other direction** — the gate obeys it perfectly and the person is still
+sent to the wrong place. It now reads *Open Setting (plot capacity,
+chemicals, fertilisers)* and its description says where the rates are.
+
+**And two of the four gates repointed above are DEAD CODE.**
+`renderRateActions` draws into `#setting-rate-actions`, which occurs
+**nowhere** in `nursery_ops_maintenance.html`, and its only caller
+`onRateInput` is called by nothing — so `savePieceRates` and
+`unlockPieceRates` are unreachable from that page. The fix still worked,
+because the tab button and `switchTab` are the live two. What it means for
+the paragraph above is one correction: *"this is the money side of the
+module"* is no longer the reason the gate fails CLOSED. The reason that
+stands is that the tab sets the plot capacity and the chemical lists, which
+is what every dosage on the schedule is worked out from — wrong in a way
+nobody keyed.
+
+Worth knowing before touching the test: its section 5 used to allow 900
+characters between `key:'maintenance'` and `key:'setting'`, and the comment
+explaining all of the above pushed them apart — **a check about the KEY
+failed on a change that altered nothing it was about**, which is the
+pin-the-spelling trap this file already names. It slices the page's own
+block out and asks whether the key is inside it.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
-It has happened three times in this codebase. A screen writes a setting, the
+It has happened four times in this codebase now. A screen writes a setting, the
 thing it governs never reads it, and the screen goes on showing it as set. It
 looks configured. Nobody finds out until somebody trusts it.
 
@@ -3734,6 +3886,63 @@ which is the only honest place and also what stops it looking for ever for a
 page it would fit on. `payrollPlotPages` is pure — rows in, page numbers out
 — so the rule is driven directly instead of being inferred from a PDF.
 
+## A drone map POPS OUT, and the tab it printed from goes with it
+
+The thumbnail on the Transplanting by-plot table used to open the picture as
+a whole page of its own, and the office asked for the lighter thing: *"我按
+的时候pop out就好 不用整页"*. They are right about what the press is for —
+looking at a map there is a GLANCE (which plot is this, does it match the
+record), and a page of its own turns a glance into somewhere to leave and
+come back from.
+
+**WHAT THE NEW TAB WAS REALLY FOR IS THE EASY HALF TO LOSE.** The tab was
+never only a bigger view: it is where the browser PRINTS, and the reason to
+want a drone map at all is to stand in the plot holding it. The old comment
+in `mapCellHtml` said exactly that and it is still true, so:
+
+- **The pop-out carries Open in a new tab**, which is the printing door.
+- **The thumbnail is still a real `<a href>`** with its `target`. A
+  ctrl-click or a middle-click opens the file as it always did, `openMapBox`
+  steps aside for a modified click, and on a page where the script never ran
+  the press itself still reaches the map. The pop-out is an enhancement over
+  a link that works, not a replacement for one.
+
+**A PDF MAP IS NOT POPPED OUT.** The browser has a reader for one, with its
+own print and page controls, and a PDF handed to an `<img>` shows nothing at
+all. It keeps the tab and wears the document glyph it always wore, so the
+two do not look alike while behaving differently.
+
+Three smaller things, each a way this goes quietly wrong:
+
+- **It is sized to the WINDOW, not to `.modal`.** That class is 540px wide
+  because it is a form width, and a map in a column of form controls is the
+  thumbnail again only bigger. The picture is `contain` and never `cover`:
+  the edge of a plot is the part somebody is comparing against what is in
+  front of them, and a crop takes exactly that away.
+- **The picture is dropped as it CLOSES, and that is done in `closeModal`**
+  rather than in the handler — there are three ways out (the cross, the
+  backdrop, Esc) and a picture left behind on one of them flashes up under
+  the next plot somebody opens, for as long as the new one takes to arrive.
+- **Esc closes the MAP and nothing else.** It is the one dialog on that page
+  holding no keying, so shutting it costs a press to reopen; Esc over a half
+  filled form is the work gone. The other four are deliberately not on that
+  listener.
+
+`tests/transplant_by_plot.cjs` drives the real page, and the check the
+office actually asked for is **the absence of a tab**: it clicks the map and
+WAITS on `popup` the way the PDF check does. The first version gave it 120ms
+and passed over the previous page, which opens one every time — the PDF's
+own tab takes up to a second and a half to arrive, so a short look proves
+only that nothing was quick. Five of its checks fail on the previous page.
+
+**And the fixture's `MAP_PNG` is 8 × 8**, which is right for a test about
+attributes and wrong for looking at the thing: a screenshot taken against it
+shows a dot in a collapsed band and reads as a broken layout. Swap it for a
+real-sized picture before judging the sizing by eye — and remember the route
+rule while doing it, because `files.test` is already routed further down
+`boot` and **routes match in REVERSE registration order**, so a second one
+added above it never fires.
+
 ## A column list typed out in a row is a list that will be wrong
 
 The Work Maintenance claim form laid itself out with eleven numbers:
@@ -3809,9 +4018,14 @@ arrive — not across the site because a test would be tidier.
 **`nursery_ops_maintenance.html` now carries them**, and the day it was
 written up as the one to remember is the day it needed them: the office asked
 for the dosage box and the Save button on the Setting tab, and without the
-metas that page would have gone on asking for the old `?v=` for ever. Two
-pages are still unguarded — `nursery_ops_user_access.html` and
-`operation_batch_detail.html` — and the test prints them every run.
+metas that page would have gone on asking for the old `?v=` for ever.
+**`nursery_ops_user_access.html` now carries them too**, for the same reason
+one page along: the tick list lives in that page, so a cached copy goes on
+offering yesterday's labels — and the label on *Open Setting* was the thing
+being corrected. **Five pages are still unguarded** — the two PALMS pages,
+Life of Plot, `operation_delivery.html` and `operation_settings.html` — and
+the test prints them every run, so do not trust the list in this paragraph
+over the one the test gives you.
 
 **Any new page that loads a script with `?v=` needs all three** to be
 deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is
@@ -3921,6 +4135,58 @@ removed will contain the words.** The comment where the Visit button stood
 names the button and the three rules, which is exactly what that comment is
 for — and a plain text search read it as the button still being there. The
 test strips the comments first and asks about the markup the browser gets.
+
+### And then the portal gave up its door too
+
+The back office lost its way across first. The portal kept its ribbon back
+arrow — out to the MJM AI hub, or to `audit_admin.html` for an admin, aimed
+at run time by `aimBack()` — and the office asked for that to go as well:
+*"remove the back button in auditor portal. so the auditor portal will
+become an individual webpage. It only link the data back to auditor portal
+manage webpage."*
+
+So **neither page now carries a door into the other**, and that is the whole
+shape of it. What joins them is the DATA: every audit saved on the portal
+lands in the back office — its history, its alert board, its monthly report
+— and that is the half that matters. A link was only ever the thing still
+saying the two are one place.
+
+Three things in it:
+
+- **THE LEFT CELL STAYS, as `.fcr-spacer`.** The ribbon is
+  `grid-template-columns:1fr auto 1fr` with the brand `justify-self:center`
+  in the middle cell, so the empty cell is what balances the right-hand
+  cluster and keeps the wordmark on the bar's real centre line. Delete the
+  anchor outright and the brand becomes the first grid item and slides
+  left; `display:none` collapses the cell and does the same. **This was not
+  invented** — `audit_admin.html` has carried exactly that span since it
+  was written, with a comment saying why, and the mobile rule
+  `.fcr-spacer{grid-area:1/1}` already existed. Copy the page that already
+  solved it.
+- **WHAT IT COSTS.** An admin standing on the portal reaches the manage
+  page through the hub tile *Nursery Audit System*, not from here. One door
+  per page is the point of it, and it is the same trade the back office
+  already made.
+- **`aimBack()` is now a no-op on everything that renders.** It guards on a
+  missing anchor and returns, and the only markup left is on
+  `audit_nursery_select.html`, which redirects in its own head and never
+  draws. It stays because that forwarder could be un-cancelled — but its
+  comment now SAYS it is dead, because a comment asserting a live rule over
+  code that cannot run is how the next person spends an hour.
+
+`tests/the_portal_is_a_page_of_its_own.cjs` holds all of it and strips the
+comments first, for the reason the section above names — the comment where
+the arrow stood quotes the office's own sentence, which a plain text search
+reads as the arrow still being there. Four of its checks fail on the
+previous code. It also asks that **no other anchor** on the page leaves for
+the hub or the back office: an arrow removed while a pill elsewhere still
+leaves is not a page of its own, which is the thinner-copy fault this file
+is full of.
+
+**`audit_sw.js` precaches `audit_home.html`** — `VER` moved to
+`mjm-26102801` — and `audit_ribbon.js` changed, so its `?v=` moved on all
+**four** pages that load it, not only the one being edited. Two of them
+were still on `20260824b`, which would have gone on serving the old file.
 
 ## System Setting governs BOTH portals, and it was filed under one of them
 
@@ -4781,6 +5047,72 @@ without anybody listing it: no figure left on the device locale, no second
 pin anywhere, every caller importing the one formatter, and the dates
 untouched. On the previous code it names all 51 sites.
 
+## Others is a column on the Team Board, and a section is THREE files
+
+The office asked for a column on the Worker System board for the people who
+work for the company rather than at a nursery. A column is a SECTION, and a
+section is not one thing in one file:
+
+| | |
+|---|---|
+| `scan/scan_workers.html` | draws the column |
+| `scan/scan_system_setting.html` | the Location card offers it |
+| `npayroll/npayroll_script.js` | decides whether work is done there |
+
+Two of those had their own copy of what a section is, and the copies are
+the whole of what made this more than one line.
+
+**The Location card kept the word UNE written down separately.** Both
+screens get the nurseries from `operation_nurseries`; what is left is the
+sections that are NOT nurseries, which the table will never hand over, so
+each screen added its own. A section added to the board alone would have
+drawn a column that the card reported as **"Not in a location"** — set up
+on one screen and a fault on the next. `OFF_NURSERY` in
+`shared/shared_worker_locations.js` is that list now, and both read it.
+
+**And the payroll asked "is this location not the estate".** That was
+right for exactly as long as the estate was the only place in the company
+with no plots in it. This column is the second, and on that test the office
+staff arrive as a nursery to be sprayed: a maintenance sheet, a column of
+plots and a claim. A location carries **`maint: true/false`** now and
+`isMaintSection()` asks the flag, so a third non-field location added next
+year does not quietly become a nursery. Section 4 of the test drives the
+old rule beside the new one, because a flag-versus-name argument is only
+settled by what it actually moves.
+
+Three smaller things:
+
+- **A code in NO location still answers NO** to `isMaintSection`, which is
+  what the payroll has always done and is deliberately kept: the claim
+  offers a nursery to be ticked and signed, and one nothing can place is a
+  sheet nobody can reconcile. It shows on the Location card under "Not in a
+  location", where somebody can see it. The first version of the shared
+  helper answered YES there and would have moved a claim nobody asked to
+  move.
+- **Others comes last**, after the nurseries and the estate — the board
+  reads left to right from the seedlings outwards.
+- **It is called OTHERS and not ADMIN**, and the rename is the rule, not a
+  wording preference: the day the board grew a row per role, Admin became a
+  JOB, and a place cannot wear the same word. See the section above.
+- **It arrives as a LOCATION, not through the fallback.** `boardColumns()`
+  gives any unrecognised section a column of its own, which would have
+  drawn the heading too — but that fallback is a safety net for a nursery
+  read that went wrong, and leaning on it for a section the company decided
+  to have is how the board and the card come to disagree again. The test
+  asserts the column count matches the locations.
+
+**The shared file was loaded with no `?v=` on all four pages**, and two of
+them had no no-cache metas either — so this change lived entirely in a file
+every browser was entitled to keep. Both are fixed; one hard reload per
+machine picks up the metas, and after that those pages stay fresh.
+
+`tests/others_is_a_column_and_not_a_nursery.cjs` holds all of it and ends by
+driving the REAL board in a REAL browser with somebody filed under OTHERS —
+a column that is right in `boardColumns()` and missing on the board is the
+exact shape this file exists to catch. Its band check compares the headings
+as WRITTEN, because they are uppercased in CSS and `innerText` hands back
+what the stylesheet did.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
@@ -4792,7 +5124,26 @@ Rules that live in both — the general-worker filter, the maintenance function
 keys, nursery-name matching — carry a comment in each copy saying so. Change
 one, change the other.
 
-## The culling incentive is timed by PALMS and asked by the ledger
+## Culling Monitoring is timed by PALMS and asked by the ledger
+
+**IT WAS CALLED THE CULLING INCENTIVE, AND THE KEYS DID NOT MOVE WITH THE
+NAME** — *"culling incentive 的名字换成culling monitoring"*. Only what a
+person READS changed: the tab in both languages (`Pemantauan Culling`), the
+payroll heading, the claim form's `CULLING MONITORING`, every message and
+every link that names the screen. What is STORED or ADDRESSED kept its
+spelling, because a label that takes its key with it reads every tick the
+office ever set as unset — the rule System Setting already follows:
+`cull_incentive` (the sub-tab id and the `?view=`), `cullIncentive` (the
+i18n KEY, its value is what moved), `MJMCullIncentive`, `cull-inc-*`,
+`shared_cull_incentive.js`, `nops_cull_incentive_checks` and
+`mjmnpayroll_cull_incentive_overrides`. **Nothing to run in the database.**
+
+Two wordings deliberately did NOT move and are worth knowing before anybody
+"finishes" the rename: the money column still reads **Incentive (RM)** and
+the claim's foot still reads **TOTAL INCENTIVE**, because the section is
+Culling Monitoring and what it pays is still an incentive. And the office's
+own quotes in these notes keep their original words — a quote that is
+edited is not a quote.
 
 A plot whose LATEST Saringan Anak Bibit → Transplanting run in PALMS took
 **15 days or fewer** earns **RM 20 a plot** to Rousell Wayne and to
@@ -4935,11 +5286,186 @@ What the rule asks, and must keep asking:
   and page. **Counted by WHERE they are, not by how many calls there
   were**: `pdfCell` draws a fill and then a border, so a striped block
   records the same cell twice and a plain count reads two plots.
+- **AND THE SCREEN IS ONE TABLE TOO, the same six columns.** It was two
+  stacked cards — the plots with their dates, then who they paid — and the
+  office read them and asked for the same merge: *"这里合起来 不需要分两个
+  plot, started date, ended date, days, person, RM"*. On the screen the
+  plot's four facts (its two days and its duration) ride in the merged
+  `rowspan` cell with it, which is what the second table could never show
+  beside a name. `cull-inc-pay` is GONE from the markup, not left empty.
+
+  Four columns came off, and each went somewhere rather than being lost:
+
+  - **Rule** (*"Every nursery · RM 20.00 / plot"*) — the figure on the
+    line IS that rate, one plot at a time, so it was the same answer in
+    words.
+  - **Checked plots** — that is the merged Plot cell now.
+  - **Checked** (who agreed it, when) — the claim form had already settled
+    this one: it is how the office DECIDED, and Worker Activity → Culling
+    Incentive carries it, one button away at the top of this section.
+  - **Nursery** — the heading names it whenever a nursery is picked, so a
+    column would be the same answer twice. It comes back as a muted line
+    under the plot for **All Sections** only, which is the one case the
+    heading cannot answer.
+
+  **A plot that paid NOBODY still keeps its row**, reading *"Nobody — on
+  no claim line"*. It is Checked and on no claim, which is exactly the
+  thing to see; dropping it would be the quiet month this file keeps
+  guarding against.
+
+  The screen half is asked of the **`rowspan`** for the same reason the
+  paper half is asked of the geometry: four cells of three, and three body
+  rows, is the only way to tell a merged cell from the plot written out
+  three times.
+
+  **AND THE WIDTHS ARE PER CENT, where every other table on this page uses
+  pixels.** Left unpinned, the slack all went to the two DATES — auto
+  layout hands the most room to the widest content, and their HEADINGS are
+  the longest words on the row — so a 90px date sat in 400px beside a plot
+  squeezed into 131, and the office said *"alignment 不对 有些太大有些太
+  小"*. **Pinning only the dates MOVES the fault**: the surplus then lands
+  on Person, 548px for a name, which is the same picture the other way
+  round. Six short values cannot fill a table told to be 100% wide, so the
+  surplus has to go somewhere, and per cent is what spreads it over all
+  six. Measured at 1,450px and again at 1,100 before choosing — the shape
+  holds at both, which neither pixel plan did.
+
+  **Auto layout, never `table-layout:fixed`.** The headings are `nowrap`,
+  so a fixed column narrower than its own heading runs the words out of
+  the cell on a laptop; auto grows and `.tbl-wrap` scrolls.
+
+  The test asks the RENDERED widths, and asks the office's own picture:
+  **a date is never the widest column on the row** — the widest should be
+  the one carrying the longest VALUE, never the longest heading. A looser
+  form of that ("nothing takes a third of the table") passed over the
+  broken layout at 28% and proved nothing.
+
+  **A design note NEVER goes inside the template literal.** A comment
+  there is shipped markup, and one backtick in it ends the literal — which
+  is what happened writing the note above, and the page died with
+  `renderCullIncentive` never defined and nothing on screen saying why.
 - It goes into the Monthly Payroll's Transplanting column, under each
   person's register section, and onto the claim PDF — Checked plots only.
 
+### The rule is the OFFICE'S, and it is DATED
+
+Who is paid and how much moved out of the code into two tables keyed on
+Settings (`shared/RUN_ME_cull_monitoring_rule_dated.sql`). The office drew
+the shape: a price on the BLOCK, a list of names under it with a remove on
+each, an Add, and the Field Conductor rows carrying a nursery — more than
+one per nursery where there is more than one.
+
+**A PRICE CHANGED TODAY DOES NOT MOVE LAST MONTH**, and that is the whole
+design rather than a detail of it — *"我什么时候改的价钱 是不会影响以前的
+月份的 例如我10月改RM50变40 9月份的还是RM50"*. So the rule is not one row
+saying what it is NOW, it is a rule with a HISTORY:
+
+- **the price** — the NEWEST rate row for that kind whose `from_month` is
+  not after the month being asked about;
+- **the people** — every row whose `from_month` is not after the month and
+  whose `until_month` is empty or AFTER it.
+
+`loadRule(supa, ym)` takes the month, and **both callers pass their own**:
+the claim passes `monthValue()`, the tab passes its `ym`. A reader that
+forgot would price September off October's rule.
+
+**REMOVE IS AN END DATE, and this is the one place the code does not do
+what the office literally asked for.** They said *"Remove直接删除就可以了
+错的话 我可以add回来"*, and on screen it IS a delete — the row goes, and Add
+puts it back. But a row deleted outright would take the person off
+SEPTEMBER too, which is the very thing the sentence above forbids. The one
+row that really is deleted is somebody added and removed in the SAME month:
+that row was never in force anywhere, so there is nothing to keep.
+
+**A NAME SWAPPED IS AN END AND A START**, for the same reason — editing it
+in place would rewrite the months that already paid the old one. A row that
+STARTED this month is corrected in place instead, having never been in
+force earlier; `wasName` / `wasNursery` / `from` ride on the draft so the
+save can tell which of the two it is looking at.
+
+**Months are `YYYY-MM`**, which is what both screens already use and what
+lets a plain text comparison answer which came first.
+
+**The first version of this file was NOT dated and the office ran it**, so
+the dated file is a MIGRATION as well as a create: it adds the columns, it
+gives the rate table an id where it was keyed on `kind` alone, and it turns
+the first version's marked removals into end dates at the month they were
+marked in. All guarded, so it does nothing on a database that starts here.
+Tested on the scratch Postgres against the shape the office actually had,
+not a fresh one — then run twice more to prove an edit survives.
+
+### What moves it is on SETTINGS, because none of it was on a screen
+
+The office asked for it in one line — *"在setting里面讲可能影响culling
+incentive的东西加进去"* — and the reason it is worth having is that **not one
+of these was visible anywhere**: the target of 15 days, the two names paid
+on every nursery, and the three Field Conductors paid on their own. The
+office could not see that Florence is paid RM 20.
+
+**IT IS THE KEYING AND NOTHING ELSE, and the six rows that went are the
+instructive part.** The card opened as a REFERENCE panel: under the two
+blocks it carried a six-row table — which plots are asked about (the
+ledger), which nursery a plot is in (Seedling Stock), how long it took
+(PALMS), a -R plot, added or removed by hand, Checked — each saying where
+it is decided. The office read it and said *"这里不用show"*, and they are
+right twice over. **None of the six is a lever anybody keys**, so they were
+six rows to read past sitting above the two boxes that ARE keyed; and every
+one of them is a rule with a heading of its own in this file, which is
+where an explanation belongs. The heading moved with the card — it read
+*"what moves it"* and reads **"the rule"** — because a heading promising a
+list the card no longer carries is a heading somebody has to ask about.
+
+**The DATED line is drawn only while EDITING.** It says what Save will
+actually do, so it belongs beside the Save button; a paragraph that is only
+true of an edit has no business on a screen with no edit on it. That is why
+the test asks for it in BOTH directions — absent in the view, present once
+`cmEdit()` has run — rather than only checking it is gone.
+
+- **It reads the LIVE rule** (`MJMCullIncentive.RULE` / `TARGET_DAYS`),
+  never a second copy. A card restating RM 20 and 15 days is a card that
+  goes on saying so the day somebody changes them, and the test moves the
+  rule at run time and asserts the card moved with it.
+- **The TARGET is keyed here too, and it is ONE number.** It used to be a
+  const in `shared_palms.js`, and this file read a COPY of it at load —
+  `(global.MJMPalms && …TARGET_DAYS) || 15` — which quietly made the load
+  ORDER decide the answer: a page that read the rule before PALMS timed
+  every plot against a fallback 15 while the Motion Study beside it used
+  whatever PALMS said. This card used to print a red line warning about
+  exactly that.
+
+  **PALMS owns it, everything reads it LIVE, and the warning is gone
+  because nothing can drift any more.** `MJMPalms.TARGET_DAYS` is a GETTER
+  on the export, `setTargetDays` is the one writer, and
+  `MJMPalms.loadTarget(supa, ym)` brings in the office's. `loadRule` hands
+  it straight to PALMS, and the Motion Study — which loads PALMS and
+  nothing else — awaits `loadTarget` itself before it draws the label, or
+  it would print one number and measure against another.
+
+  It rides in the SAME dated table as the prices, as a third `kind`, so a
+  target changed in October leaves September timing against the one it
+  had. **Its unit is DAYS and not ringgit**, which the SQL says in as many
+  words and the check at the end prints as `target 15 days` — a line that
+  called it RM would be the one thing on that result somebody could act on
+  wrongly. A target under a day is refused: it is every plot off the
+  incentive at once, and nobody means to key it.
+
+  `CULL_TARGET_DAYS` in `npayroll_script.js` was a capture of it at script
+  load and was read by NOTHING — removed rather than made live.
+- **A card that cannot read the rule SAYS SO** and keeps nothing stale.
+  Stale rates on a card whose whole claim is that it shows the live ones is
+  worse than an empty card, because it looks answered.
+- **It cannot take Settings down with it.** It is a rule set once and the
+  three blocks above it are the day's own work, so it renders inside its
+  own try — the batch page's rule for its trailing steps.
+- **The corner link uses `.cm-set-open`, not `.lst-edit`.** `.lst-top` is
+  `position:relative` with its heading centred, so a control that does not
+  take itself out of the flow drops onto a second line under the title —
+  which is what this one did first. `.sched-dl` is the same pattern, and
+  `.lst-edit` is left meaning the Edit button.
+
 `tests/culling_incentive.cjs` drives BOTH pages: the Check on Work
-Maintenance, then the payroll fed exactly what those writes left behind.
+Maintenance, then the payroll fed exactly what those writes left behind —
+and the Settings card, including the rename and that the keys did not move.
 
 ## A -R plot is on no PALMS screen
 
@@ -4970,3 +5496,78 @@ B4-R2 both go; a split area is judged by its plot.
   because a phone can be holding a list cached before this.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
+
+## Worker Activity is two parts, and Seed Planting is the Pre Nursery one
+
+The office asked for Worker Activity to read as two parts: **Main Nursery**
+(the seven sheets that were there) and **Pre Nursery**, which has one,
+**Seed Planting**. The two headings are `.pn-subgroup` lines inside the
+existing `.pn-sub` list, and they are headings, not buttons.
+
+**The rows are the batch report's, ONE PER BATCH.** Seed Planting on the
+batch page writes one `Planted` row per tray, dated with the day keyed on
+that tab. This sheet adds a batch's trays together and shows the TOTAL
+planted, against the batch's planted date. The office was explicit:
+*tray完全不用管 跟着batch 就可以了 直接show total planted qty*. The first
+version had a row per tray per day, and its table (`nops_seed_planting_workers`)
+is kept but no longer read. The date rule is the Transplanting Report's:
+`transaction_date`, else a `Date:` in the remark, else `created_at`.
+`seedPlantingRows()` is the rule and it is pure, so the test drives it
+directly.
+
+**A batch can be ADDED TO A LATER MONTH by hand.** Seedlings sown on the
+last days of a month come too late for that month's payroll. 277 was sown on
+28 Sep and is October's work. `nops_seed_planting_batch_month` holds one
+month per batch, and `seedPlantingMonthOf` sends the batch there and ONLY
+there: it leaves the month its date would have put it in, and that month
+says where it went (*Moved out of this month: 277 → Oct 2026*). A batch on
+two sheets would be counted twice. Figures are kept by BATCH, so whatever
+was keyed goes with it. Taking the batch off deletes the move and nothing
+else.
+
+**The NAMES are one list per month**, in `nops_seed_planting_names`, picked
+from a DROPDOWN (*add worker & add batch 用drop down的方式*): everybody active
+on the payroll register, by section — the Pre Nursery crew is filed under
+whichever nursery they belong to, so the PN section alone came back empty —
+then last month's names the register cannot place, then an Other that opens
+a box. Add batch is a dropdown of the batches planted in the two months
+before this one, newest first. A month with no list offers last month's
+in one press. A name with figures against it cannot be removed until those
+figures are cleared, because its column would only come back as a name off
+the list. A figure saved under a name that is no longer on the list still
+gets a column, marked ⚠.
+
+**Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
+The figures go into `nops_seed_planting_batch_workers`, one record per
+batch (`shared/RUN_ME_seed_planting_workers.sql`), with the ledger figure
+saved beside them. The ledger is only read. The last column but one says
+whether what was keyed adds up to the batch.
+
+Three things in it:
+
+- **It always reads the Pre Nursery**, whatever nursery is picked at the
+  top. Seed planting is only done there.
+- **CHECKED IS WHAT PAYS IT, and the money is on the PAYROLL only.** *"图一只
+  show qty, after checked, 这份表格会flow 去图二, 新加一个tab - seed
+  planting"*, then *"tab里面才会有价钱"*. Work Maintenance shows quantities
+  and a Check per batch; a checked batch is shut (boxes disabled, and the
+  save refuses too). The Nursery Payroll's **Seed Planting** tab
+  (`renderSeedPlanting`, `seedPlantingClaim`) prices the CHECKED batches,
+  each worker's own seeds times the rate, and NAMES the batches keyed and not
+  checked. The rate is the Piece Rate row with Used For *Seed Planting*
+  (`category = 'seed_planting'`), seeded at **RM 0.02 a seed** by the SQL only
+  where none exists; with none at all the tab uses 0.02 and says it is the
+  default. A trigger (`nops_seed_planting_clear_check`) takes the tick off a
+  batch whose figures change after it was checked, from any screen.
+  **It is not on the Monthly Payroll yet**: the names are hand-picked, not
+  register rows, so nothing yet joins them to a person's month.
+- **No "added by hand" tag** on a moved batch, nor the "Added by hand"
+  line and remark on Culling Incentive: *"不用show added by hand,包括 culling
+  incentive那里的remark"*. The records still carry them.
+- **Before the SQL is run, the rows still show** with every box disabled,
+  and the hint names the file to run. A sheet that went empty over a
+  missing table would read as a month nobody planted.
+
+`tests/seed_planting_is_pre_nursery.cjs` holds the sidebar, the date rule,
+the sheet, the Check, the dropdowns, the PDF and the no-table state;
+`tests/seed_planting_is_paid_when_checked.cjs` holds the payroll tab.

@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=99">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=105">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -100,6 +100,7 @@
                above. switchPayrollView(type) is the one function that keeps
                this and the panel's own sub-tab bar in step. -->
           <div class="pn-sub">
+            <div class="pn-subgroup" data-i18n="tab.mainNursery">Main Nursery</div>
             <button type="button" class="pn-subtab active" id="pn-subtab-pd" onclick="switchPayrollView('pd')">
               <span data-i18n="tab.pd">P &amp; D — Spraying</span>
             </button>
@@ -119,7 +120,11 @@
               <span data-i18n="tab.transplanting">Transplanting</span>
             </button>
             <button type="button" class="pn-subtab" id="pn-subtab-cull_incentive" onclick="switchPayrollView('cull_incentive')">
-              <span data-i18n="tab.cullIncentive">Culling Incentive</span>
+              <span data-i18n="tab.cullIncentive">Culling Monitoring</span>
+            </button>
+            <div class="pn-subgroup" data-i18n="tab.preNursery">Pre Nursery</div>
+            <button type="button" class="pn-subtab" id="pn-subtab-seed_planting" onclick="switchPayrollView('seed_planting')">
+              <span data-i18n="tab.seedPlanting">Seed Planting</span>
             </button>
           </div>
           <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)">
@@ -459,6 +464,7 @@
         <!-- One form covering all four work types, not just the open sub-tab. -->
         <button class="btn" style="font-size:12px;" onclick="downloadPayrollPDF()" data-i18n="btn.claimPdf">⬇ Salary Claim Form (PDF)</button>
       </div>
+      <div id="payroll-names"></div>
       <div class="card"><div class="tbl-wrap"><table class="sched-table" id="payroll-table"></table></div></div>
       <div id="payroll-offreg" style="display:none;font-size:11.5px;font-weight:700;color:#92400e;background:var(--gold-bg);border:1.5px solid var(--gold-border);border-radius:var(--r-sm);padding:9px 12px;margin-top:8px;"></div>
       <div id="payroll-hint" style="font-size:11px;color:var(--text-faint);margin-top:8px;"></div>
@@ -599,6 +605,36 @@
           <button class="btn" onclick="cancelFertEdit()">Cancel</button>
           <button class="btn btn-primary" onclick="saveFertEdit()">Save</button>
         </div>
+      </div>
+
+      <!-- THE CULLING MONITORING RULE ———————————————————————
+           Who is paid this and how much, keyed, because until now NOT ONE
+           of it was on a screen: the target of 15 days, the two names paid
+           on every nursery, and the three Field Conductors paid on their
+           own. The office could not see that the target was 15 days, or
+           that Florence is paid RM 20.
+
+           It reads the LIVE rule (MJMCullIncentive.RULE / TARGET_DAYS),
+           never a second copy of it. A card restating the rates is a card
+           that goes on reading RM 20 the day somebody changes them.
+
+           IT WAS A REFERENCE PANEL FIRST, and the heading moved with the
+           card rather than being left behind: it read "what moves it" over
+           a six-row table naming the ledger, Seedling Stock, PALMS, a -R
+           plot, by hand and Checked. The office took that table off in one
+           line (这里不用show) — none of the six is a lever anybody keys —
+           and a heading promising a list the card no longer carries is a
+           heading somebody has to ask about.
+
+           LAST on the page, after the three blocks somebody opens Settings
+           to key: this one is a rule set once, not the day's own work. -->
+      <div class="card" style="padding:18px;margin-bottom:16px;">
+        <div class="lst-top">
+          <div class="set-h">Culling Monitoring — the rule</div>
+          <a class="btn btn-sm cm-set-open" id="cm-set-link"
+             href="nursery_ops_maintenance.html?view=cull_incentive">Open Culling Monitoring &rarr;</a>
+        </div>
+        <div id="cm-set-body"></div>
       </div>
     </div>
 
@@ -850,9 +886,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <!-- PALMS, and the culling incentive rule both this page and the payroll
      read. See shared_cull_incentive.js. -->
+<<<<<<< HEAD
 <script src="../shared/shared_palms.js?v=5"></script>
 <script src="../shared/shared_cull_incentive.js?v=1"></script>
 <script src="plot_maintenance_script.js?v=150"></script>
+=======
+<script src="../shared/shared_palms.js?v=6"></script>
+<script src="../shared/shared_cull_incentive.js?v=4"></script>
+<script src="plot_maintenance_script.js?v=157"></script>
+>>>>>>> origin/main
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
