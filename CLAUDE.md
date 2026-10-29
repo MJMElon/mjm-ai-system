@@ -2451,10 +2451,54 @@ already probes for the PIN, the photo and the two dates.
 real browser, as an admin and as a plain auditor, and asserts no DELETE is
 ever sent and that no `prompt` is ever raised.
 
-**The page carries every line of its own code inline and has no no-cache
-metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
-holding yesterday's copy keeps it until one hard reload. Add the three the
-day somebody needs a fix here in a hurry.
+**The page carries every line of its own code inline**, so the PAGE is the
+deploy and there is no `?v=` to bump. It was written up here with no
+no-cache metas and the note said to add the three the day somebody needed a
+fix in a hurry — **that day came**, and it carries them now. One hard reload
+per machine to pick them up, and it stays fresh by itself after that.
+
+### A row for every role, and Others is the one column that is not a place
+
+The board drew four rows — FC, Assistant FC, Water Pump Operator, Workers —
+and swept everybody else into **Other**. Driver and Gardener were real roles
+on the register the whole time, so four people sat under a heading that
+means *a role nobody recognises* over roles the list names. And Other is the
+one row that **cannot be added to** — adding there would have to invent a
+role — so a Driver could not be put on the board at all, which is the
+question the office actually asked.
+
+So the rows are Estate Manager, Admin, FC, Assistant FC, Water Pump
+Operator, Workers, Gardener, Driver, and then Other. Three things in it:
+
+- **`ROLES` and `BOARD_ROLES` are one list in two shapes**, and the test
+  asserts every board row is a role the form can set: a row nobody can be
+  given is a row nobody can be added to.
+- **The dropdown reads in the order the board draws its rows**, so somebody
+  who has just read the board finds the role where they expect it.
+- **Neither new role is general nursery work.** `isKnownRole` answers yes
+  for them, which is what keeps them off the Work Maintenance tick sheets —
+  and `ROLES` has a SECOND COPY in `FC-Portal/src/modules/maintenance/
+  helpers.js` that the same rule reads. Change one, change the other.
+
+**OTHERS is a column, and it is the only one that is not a place.** Two
+office staff were filed under a section called **ADMIN**, which is in no
+nursery list and never will be, so `addOrphanSections` gave them a column
+headed *"ADMIN — not in the nursery list"* — which reads as a fault rather
+than as an answer. Admin is a JOB, and it is a row now; the column they
+stand in is simply the one for people who work for the company rather than
+at a nursery. `shared/RUN_ME_worker_section_others.sql` moves them and is
+the only thing that puts a worker there. It deliberately **does not touch
+anybody's role**: both are keyed Field Conductor, and whether that is right
+is a question about those two people, answered on their own record. A file
+of SQL deciding somebody's job title is the one thing that repair must not
+do.
+
+Nothing else in either system is keyed on the section ADMIN — it is not a
+maintenance nursery, so neither the tick sheets nor the salary claim have
+ever counted it.
+
+`tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
+checks fail on the previous page.
 
 ## The Worker Record reads the conductor's transplanting, and writes ONE column
 

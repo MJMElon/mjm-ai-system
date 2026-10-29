@@ -3,6 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- THE PAGE IS THE DEPLOY. This one carries every line of its own code
+     inline, so there is no `?v=` to bump: a browser holding yesterday's copy
+     keeps yesterday's board until somebody hard-reloads. It was written up as
+     a known exposure and the note said to add these three the day somebody
+     needed a fix here in a hurry. That day is the day the office asked for
+     four new rows and a column renamed and then went looking for them.
+     GitHub Pages has no build step and no header to set -- these are the
+     only lever. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Worker System — 555 FC Portal</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -332,17 +343,29 @@ const KEEP_NURSERIES = LOC.KEEP_NURSERIES;
 /* Estate is a location with one section, and it comes last, after the
    nurseries.
 
-   Driver is no longer offered. It was a section without a place — drivers
-   belong to no nursery — and the column stood empty on a board that is about
-   where people work. It is still a ROLE, which is what it always described;
-   a driver is filed under the nursery he drives for and appears in that
-   column's Other row.
+   Driver is no longer offered AS A SECTION. It was a section without a
+   place — drivers belong to no nursery — and the column stood empty on a
+   board that is about where people work. It is still a ROLE, which is what
+   it always described; a driver is filed under the nursery he drives for
+   and has a row of his own down the side.
 
    Nobody is lost by this. addOrphanSections() below gives any section a
    worker is actually filed under its column back, labelled as not in the
    nursery list, so a row still saying Driver keeps that person visible until
    somebody moves them. */
-const FIXED_SECTIONS = [{ code:'UNE', name:'UNE' }];
+/* OTHERS IS NOT A PLACE, and it is the one column on this board that is not.
+
+   Two office staff were filed under a section called ADMIN, which is in no
+   nursery list and never will be — so the board headed their column
+   "ADMIN — not in the nursery list", which reads as a fault rather than as
+   an answer. Admin is a JOB, and it is a ROLE ROW now; the column they
+   stand in is simply the one for people who work for the company rather
+   than at a nursery. `shared/RUN_ME_worker_section_others.sql` is what moves
+   them, and it is the only thing that puts a worker here. */
+const FIXED_SECTIONS = [
+  { code:'UNE',    name:'UNE'    },
+  { code:'OTHERS', name:'Others' }
+];
 let SECTIONS = [
   { code:'PN',   name:'PN — Pre Nursery'  },
   { code:'BNN',  name:'BNN — Batu Niah'   },
@@ -413,14 +436,24 @@ function addOrphanSections() {
   if (extra.length) setSections(SECTIONS.concat(extra));
 }
 
-/* The roles a worker can hold. One list, offered in every section. */
+/* The roles a worker can hold. One list, offered in every section, IN THE
+   ORDER THE BOARD DRAWS ITS ROWS — so somebody who has just read the board
+   finds the role where they expect it in the form.
+
+   SECOND COPY in FC-Portal/src/modules/maintenance/helpers.js, which says so
+   in its own comment. Change one, change the other: that list is what
+   `isKnownRole` asks there, and a role known here and unknown there is a
+   worker who lands on the maintenance tick sheets on one side of the system
+   and not the other. */
 const ROLES = [
+  'Estate Manager',
+  'Admin',
   'Field Conductor',
   'Assistant Field Conductor',
   'Water Pump Operator',
   'General Worker',
-  'Driver',
-  'Gardener'
+  'Gardener',
+  'Driver'
 ];
 /* Of those, the ones the Work Maintenance tick sheets take. Anything else on
    the list is a known role and is simply not general nursery work — a Gardener
@@ -790,16 +823,29 @@ function boardColumns() {
   return cols;
 }
 
-/* The rows, in the order the yard talks about them. */
+/* The rows, in the order the yard talks about them: the two that answer for
+   the company above the ones that answer for a nursery, then the gang, then
+   the two trades that work across all of them.
+
+   DRIVER AND GARDENER HAVE ROWS OF THEIR OWN NOW. They were real roles on
+   the list and had no row, so the four people holding them sat in Other —
+   which is where a role nobody recognises goes, and theirs were recognised
+   perfectly well. A row somebody can be added to is also the only way to add
+   one: see the Add button below. */
 const BOARD_ROLES = [
+  { key: 'Estate Manager',            label: 'Estate Manager'      },
+  { key: 'Admin',                     label: 'Admin'               },
   { key: 'Field Conductor',           label: 'FC'                  },
   { key: 'Assistant Field Conductor', label: 'Assistant FC'        },
   { key: 'Water Pump Operator',       label: 'Water Pump Operator' },
-  { key: 'General Worker',            label: 'Workers'             }
+  { key: 'General Worker',            label: 'Workers'             },
+  { key: 'Gardener',                  label: 'Gardener'            },
+  { key: 'Driver',                    label: 'Driver'              }
 ];
-/* Driver, Gardener, a role typed before the list existed, or none at all.
-   A row for them, because the alternative is a worker who is on the
-   register and nowhere on the board. */
+/* A role typed before the list existed, or none at all. A row for them,
+   because the alternative is a worker who is on the register and nowhere on
+   the board. It should be EMPTY on a register nobody has keyed free text
+   into, and a name appearing in it is the thing to go and look at. */
 const BOARD_OTHER = '(other)';
 
 function boardRoleOf(w) {
