@@ -43,7 +43,38 @@ async function boot(browser, db) {
   page.on('pageerror', (e) => errs.push(e.message));
   await page.addInitScript((seed) => {
     window.__DB = seed;
-    window.jspdf = { jsPDF: class { constructor() {} } };
+    window.__PDFS = [];
+    /* A STRICT jsPDF, lifted from claim_form_fits_its_jobs.cjs. The stub here
+       used to be `class { constructor() {} }`, which takes anything — and a
+       stub that takes anything signs off a form that cannot be drawn, which
+       is the fault that left the Work Maintenance claim unprintable for
+       however long it took the office to need a printout. Every co-ordinate
+       is a finite number or the call is refused, the way the real library
+       refuses it. */
+    const fin = (v) => typeof v === 'number' && isFinite(v);
+    function guard(method, args) {
+      args.forEach((a, i) => {
+        if (!fin(a)) throw new Error('Invalid arguments passed to jsPDF.' + method
+                                   + ' (argument ' + (i + 1) + ' is ' + String(a) + ')');
+      });
+    }
+    window.jspdf = { jsPDF: class {
+      constructor(o) { this.opt = o; this.page = 1; this.lines = []; this.rects = [];
+                       this.saved = null; this.printed = false; window.__PDFS.push(this); }
+      setFont() {} setFontSize(n) { this._s = n; } setTextColor() {}
+      setFillColor() {} setDrawColor() {} setLineWidth() {}
+      rect(x, y, w, h) { guard('rect', [x, y, w, h]); this.rects.push({ x, y, w, h, page: this.page }); }
+      roundedRect(x, y, w, h, rx, ry) { guard('roundedRect', [x, y, w, h, rx, ry]); }
+      line(a, b, c, d) { guard('line', [a, b, c, d]); }
+      addPage() { this.page++; }
+      getTextWidth(t) { return String(t).length * (this._s || 9) * 0.5; }
+      splitTextToSize(t) { return [String(t)]; }
+      text(t, x, y) { guard('text', [x, y]); this.lines.push({ t: String(t), x, y, page: this.page }); }
+      addImage(im, fmt, x, y, w, h) { guard('addImage', [x, y, w, h]); }
+      autoPrint() { this.printed = true; }
+      output() { return 'blob:stub'; }
+      save(name) { this.saved = name; }
+    } };
     function makeQuery(table) {
       const st = { eqs: [], single: false };
       const run = () => {
@@ -108,12 +139,23 @@ async function boot(browser, db) {
   return { page, errs };
 }
 
+/* THE BATCH CELL CARRIES TWO LINES — the batch and the day it was planted —
+   so its textContent runs them together ("Batch 27728 Sep"). The day is read
+   on its own rather than tidied out of the way: it is the fact the rows are
+   SORTED by, and a check that threw it away would pass over a sheet that had
+   stopped showing it. */
 const read = (page) => page.evaluate(() => {
   const t = document.getElementById('seedplant-table');
+  const cells = (tr) => [...tr.children].map((td, i) => {
+    if (i !== 0 || !td.classList.contains('sp-batch')) return td.textContent.trim();
+    const day = td.querySelector('.sp-day');
+    return (day ? td.textContent.replace(day.textContent, '') : td.textContent).trim();
+  });
   return {
     head: [...t.querySelectorAll('thead th')].map(th => th.textContent.trim()),
-    body: [...t.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim())),
-    foot: [...t.querySelectorAll('tfoot td')].map(td => td.textContent.trim()),
+    body: [...t.querySelectorAll('tbody tr')].map(cells),
+    days: [...t.querySelectorAll('tbody .sp-day')].map(d => d.textContent.trim()),
+    foot: [...t.querySelectorAll('tfoot tr')].map(cells),
     note: document.getElementById('seedplant-note').textContent.replace(/\s+/g, ' ').trim()
   };
 });
@@ -127,26 +169,130 @@ const read = (page) => page.evaluate(() => {
     [...document.querySelectorAll('.subtab')].map(b => b.dataset.sub)),
     ['maint', 'seedplant', 'transpl', 'seedling', 'monthly', 'other']);
 
-  // ── 2. Only the checked batches, priced at RM 0.02 a seed ──
+  /* ── 2. A BATCH A ROW, A PLANTER A COLUMN ───────────────────────────────
+     *"我要横向的 batch是row 工人是column"*. It was drawn the other way up —
+     a worker a row, a column per batch — and at fifteen planters over three
+     batches that is a tall sheet of dashes, because a batch is planted by
+     four or five of them. Turned round it is three rows of fifteen, which is
+     what the office is reading: the batch is the thing being agreed. */
   let v = await read(a.page);
-  check('a column per CHECKED batch, then seeds, rate and amount', v.head,
-    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate', 'Amount']);
-  check('each worker their own seeds, times RM 0.02', v.body, [
-    ['Ani',  '—',     '2,000', '2,000', 'RM 0.02', 'RM 40.00'],
-    ['Rina', '1,760', '—',     '1,760', 'RM 0.02', 'RM 35.20'],
-    ['Siti', '2,000', '1,000', '3,000', 'RM 0.02', 'RM 60.00']]);
-  check('the total adds up', v.foot, ['Total', '3,760', '3,000', '6,760', '', 'RM 135.20']);
+  check('a column per PLANTER, with the batch down the side', v.head,
+    ['Batch', 'Ani', 'Rina', 'Siti', 'Seeds planted', 'Rate', 'Amount']);
+  check('a row per CHECKED batch, its own total, times RM 0.02', v.body, [
+    ['Batch 277', '—',     '1,760', '2,000', '3,760', 'RM 0.02', 'RM 75.20'],
+    ['Batch 278', '2,000', '—',     '1,000', '3,000', 'RM 0.02', 'RM 60.00']]);
+  check('…and the planted day rides under the batch, which is what they sort on',
+    v.days, ['28 Sep', '05 Oct']);
+  /* TWO FOOT ROWS, because the turn MOVED THE MONEY. Each planter's pay was
+     a cell on their own row and is the foot of their column now — a sheet
+     that only totalled the seeds would have taken the one figure this claim
+     exists to pay off the screen altogether. */
+  check('the foot carries each planter’s seeds AND their money', v.foot, [
+    ['Total seeds', '2,000', '1,760', '3,000', '6,760', '', 'RM 135.20'],
+    ['Amount (RM)', 'RM 40.00', 'RM 35.20', 'RM 60.00', '', '', '']]);
+  check('…and the Amount row adds up to the grand total above it',
+    await a.page.evaluate(() => {
+      const f = document.querySelectorAll('#seedplant-table tfoot tr');
+      /* A sheet with ONE foot row has no Amount row to add up, which is the
+         thing this check is about — so it answers rather than throwing. */
+      if (f.length < 2) return ['no Amount row', 'no Amount row'];
+      const rm = s => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
+      const paid = [...f[1].children].slice(1).reduce((s, td) => s + rm(td.textContent), 0);
+      return [Math.round(paid * 100) / 100, rm(f[0].children[f[0].children.length - 1].textContent)];
+    }),
+    [135.2, 135.2]);
   check('the unchecked batch is named, not paid', /Not on this claim: batch 279 is keyed and not yet Checked/.test(v.note), true);
   check('with no rate set the default is said to be the default', /RM 0.02 a seed, the default/.test(v.note), true);
   check('this page writes nothing', await a.page.evaluate(() => (window.__WRITES || []).filter(w => w.startsWith('nops_seed'))), []);
+
+  /* ── 2b. THE VERIFY STRIP AND THE TWO BUTTONS ───────────────────────────
+     The office asked for both in the line that asked for the turn. The strip
+     is the one every other claim sheet carries; the scope is the PRE NURSERY
+     and not "all sections", because seed planting is only ever done there
+     and a strip offering a choice that does not exist is a question. */
+  check('the sheet has a verify strip, scoped to the Pre Nursery',
+    await a.page.evaluate(() => {
+      const el = document.getElementById('vb-seedplant');
+      /* Null-safe for the same reason the PDF reader below is: a sheet with
+         no strip at all has to FAIL this check, not kill the run. */
+      return [!!el, el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : 'no strip'];
+    }),
+    [true, 'Open — Seed Planting · the Pre Nursery · ' +
+      (() => { const d = new Date(); const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+               return `${M[d.getMonth()]} ${d.getFullYear()}`; })() +
+      '\u2714 Verify & lock']);
+  check('…and Print and Download are both offered',
+    await a.page.evaluate(() => [
+      !!document.querySelector('#sub-seedplant [onclick="printSeedPlantingPDF()"]'),
+      !!document.querySelector('#sub-seedplant [onclick="downloadSeedPlantingPDF()"]')]),
+    [true, true]);
+  /* ── 2c. THE CLAIM FORM, AND IT IS THE SAME TABLE ───────────────────────
+     One builder, two buttons — Download saves it, Print calls the browser's
+     own dialog on the same document. Two drawings of one report drift, and a
+     printed sheet that disagrees with the file beside it is a difference
+     nobody can explain afterwards, which is the Seed Audit sheet's rule. */
+  /* Null-safe: on a page with no such builder this has to read as a FAILED
+     check and not as a crash in the harness — what the previous code DID is
+     the whole argument for the change. */
+  const pdfOf = (page, fn) => page.evaluate((f) => {
+    window.__PDFS.length = 0;
+    if (typeof window[f] !== 'function') return null;
+    window[f]();
+    const d = window.__PDFS[0];
+    return d ? { saved: d.saved, printed: d.printed, fmt: d.opt && d.opt.format,
+                 lines: d.lines.map(l => l.t) } : null;
+  }, fn);
+  const dl = await pdfOf(a.page, 'downloadSeedPlantingPDF');
+  check('Download draws the form and names the file',
+    [!!dl, dl && /^Salary_Claim_Seed_Planting_/.test(dl.saved || ''), dl && dl.printed],
+    [true, true, false]);
+  check('…and it is the turned-round table: a batch a row, a planter a column',
+    dl && [dl.lines.includes('Batch'), dl.lines.includes('Siti'),
+           dl.lines.includes('Batch 277  ·  28 Sep'),
+           dl.lines.includes('Total seeds'), dl.lines.includes('Amount (RM)'),
+           dl.lines.includes('RM 135.20')],
+    [true, true, true, true, true, true]);
+  check('…the unchecked batch is named on the paper too',
+    dl && dl.lines.some(t => /Not on this claim: batch 279/.test(t)), true);
+  const pr = await pdfOf(a.page, 'printSeedPlantingPDF');
+  check('Print draws the SAME document and saves nothing',
+    [pr && pr.printed, pr && pr.saved, JSON.stringify(pr && pr.lines) === JSON.stringify(dl && dl.lines)],
+    [true, null, true]);
+  check('…and three planters still fit landscape A4', dl && dl.fmt, 'a4');
   check('no page errors', a.errs, []);
+  /* SHOT gives the office the sheet as it stands. */
+  if (process.env.SHOT) await a.page.locator('#sub-seedplant').screenshot({ path: process.env.SHOT });
   await a.page.close();
+
+  /* ── 2d. A CREW TOO WIDE FOR A4 GETS A WIDER SHEET ──────────────────────
+     A column per planter is a width decided by how many people worked that
+     month. At 30 of them an A4 landscape column is under 6mm, which pdfCell
+     would shrink a name into four point type to fit — a grid nobody can
+     read. The floor is the column, and the PAPER moves. */
+  const many = {};
+  for (let i = 0; i < 30; i++) many['Planter ' + String(i + 1).padStart(2, '0')] = 100;
+  const w = await boot(browser, { mjmnpayroll_piece_rates: [],
+    nops_seed_planting_batch_workers: [{ batch_name: '280', month: MONTH_KEY,
+      planted_date: '2026-10-08', qty_planted: 3000, workers: many,
+      checked_at: '2026-10-29T02:00:00Z', checked_by: 'office' }] });
+  const wide = await pdfOf(w.page, 'downloadSeedPlantingPDF');
+  check('30 planters take a wider page, and every column clears the floor',
+    [!!wide && Array.isArray(wide.fmt), !!wide && wide.fmt[0] > 297,
+     !!wide && Math.round((wide.fmt[0] - 50 - 104) / 30) >= 11],
+    [true, true, true]);
+  check('…and it still draws: no jsPDF argument is NaN', w.errs, []);
+  await w.page.close();
 
   // ── 3. A rate set on Piece Rate is the one used ──
   const b = await boot(browser, { nops_seed_planting_batch_workers: RECS,
     mjmnpayroll_piece_rates: [{ id: 9, job_desc: 'Seed Planting', unit: 'seed', rate: 0.025, category: 'seed_planting', group_code: 'PN', active: true, sort_order: 0 }] });
   v = await read(b.page);
-  check('the Piece Rate row prices it', [v.body[2][4], v.body[2][5], v.foot[5]], ['RM 0.025', 'RM 75.00', 'RM 169.00']);
+  /* `at` rather than indexing straight in: a sheet of a different shape has
+     to fail this as a named check and not take the run down with it. */
+  const at = (grid, i, j) => ((grid || [])[i] || [])[j];
+  check('the Piece Rate row prices it',
+    [at(v.body, 0, 5), at(v.body, 0, 6), at(v.foot, 0, 6), at(v.foot, 1, 3)],
+    ['RM 0.025', 'RM 94.00', 'RM 169.00', 'RM 75.00']);
   check('…and the note names where the rate came from', /from Piece Rate \(Seed Planting\)/.test(v.note), true);
   await b.page.close();
 

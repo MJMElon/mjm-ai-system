@@ -599,7 +599,34 @@ function seedPlantingClaim(recs, rate) {
   }));
   const list = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));
   list.forEach(p => { p.amount = Math.round(p.qty * rate * 100) / 100; });
-  return { batches: checked.map(r => r.batch_name), checked, held, people: list,
+  /* THE BATCH IS THE ROW AND THE WORKER IS THE COLUMN — *"我要横向的 batch是
+     row 工人是column"*. The claim used to be drawn the other way up, a worker
+     a row with a column per batch, and at fifteen planters over three batches
+     that is a tall narrow sheet whose rows are nearly all dashes: a batch is
+     planted by four or five of them and the rest of its column is empty.
+     Turned round it is three rows of fifteen, which is what the office is
+     actually reading — the batch is the thing they are agreeing.
+
+     Both views are built here rather than one being derived from the other on
+     the page, because a screen and a PDF working the transpose out separately
+     is two chances to get it wrong. `rows` is the batch view and `people` is
+     the per-person money the claim actually pays, which is the FOOT of the
+     table now rather than its rows and must not be lost in the turn. */
+  const seen = {};
+  const rows = [];
+  checked.forEach(r => {
+    const row = seen[r.batch_name] || (seen[r.batch_name] = { batch: r.batch_name,
+      date: r.planted_date || '', byWorker: {}, qty: 0 });
+    if (!row._in) { row._in = true; rows.push(row); }
+    Object.entries(r.workers || {}).forEach(([w, v]) => {
+      const n = Number(v) || 0;
+      if (!n) return;
+      row.byWorker[w] = (row.byWorker[w] || 0) + n;
+      row.qty += n;
+    });
+  });
+  rows.forEach(r => { delete r._in; r.amount = Math.round(r.qty * rate * 100) / 100; });
+  return { batches: checked.map(r => r.batch_name), checked, held, people: list, rows,
            qty: list.reduce((a, p) => a + p.qty, 0),
            amount: list.reduce((a, p) => a + p.amount, 0) };
 }
@@ -637,29 +664,51 @@ function renderSeedPlanting(fromLoad) {
   const r = seedPlantingRate();
   const c = seedPlantingClaim(_seedPlant.rows, r.rate);
   const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
+  /* A BATCH A ROW, A WORKER A COLUMN. The planted day rides UNDER the batch
+     rather than taking a column of its own — the rows are sorted by it, so a
+     reader needs it to see why they are in this order, and the merged-cell
+     line `renderCullIncentive` puts the nursery on is the shape this page
+     already has for a fact that belongs to the row it is in. */
+  const names = c.people.map(p => p.name);
+  const dayTxt = (d) => {
+    if (!d) return '';
+    const t = new Date(d);
+    return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+  };
   let h = `<thead><tr>
-      <th style="text-align:left;">Worker</th>
-      ${c.batches.map(b => `<th>Batch ${esc(b)}</th>`).join('')}
+      <th style="text-align:left;">Batch</th>
+      ${names.map(n => `<th>${esc(n)}</th>`).join('')}
       <th>Seeds planted</th><th>Rate</th><th>Amount</th>
     </tr></thead><tbody>`;
-  if (!c.people.length) {
-    h += `<tr><td colspan="${4 + c.batches.length}" style="padding:1.6rem;text-align:center;color:var(--text-light);">${
+  if (!c.rows.length) {
+    h += `<tr><td colspan="${4 + names.length}" style="padding:1.6rem;text-align:center;color:var(--text-light);">${
       c.held.length ? 'Nothing is Checked yet for ' + esc(monthLabelFull(monthValue())) + '.'
                     : 'No seed planting was keyed for ' + esc(monthLabelFull(monthValue())) + '.'}</td></tr>`;
   } else {
-    c.people.forEach(p => {
-      h += `<tr><td style="text-align:left;font-weight:700;">${esc(p.name)}</td>
-        ${c.batches.map(b => `<td>${fig(p.byBatch[b])}</td>`).join('')}
-        <td style="font-weight:700;">${fig(p.qty)}</td>
+    c.rows.forEach(row => {
+      const d = dayTxt(row.date);
+      h += `<tr><td class="sp-batch" style="text-align:left;font-weight:700;">Batch ${esc(row.batch)}${
+          d ? `<div class="sp-day" style="font-size:11px;color:var(--text-light);font-weight:600;">${esc(d)}</div>` : ''}</td>
+        ${names.map(n => `<td>${fig(row.byWorker[n])}</td>`).join('')}
+        <td style="font-weight:700;">${fig(row.qty)}</td>
         <td>${rateTxt(r.rate)}</td>
-        <td style="font-weight:700;">${money(p.amount)}</td></tr>`;
+        <td style="font-weight:700;">${money(row.amount)}</td></tr>`;
     });
   }
-  const perBatch = b => c.people.reduce((a, p) => a + (p.byBatch[b] || 0), 0);
+  /* TWO FOOT ROWS, because turning the table round moved the money. Each
+     worker's pay was a cell on their own row; it is the column foot now, and
+     a sheet that only totalled the seeds would have taken the one figure the
+     claim exists to pay off the screen. The seeds row carries the grand total
+     of both, so the Amount row under it has something to add up to. */
+  const perWorker = n => (c.people.find(p => p.name === n) || {});
   h += `</tbody><tfoot><tr class="total-row">
-      <td style="text-align:left;">Total</td>
-      ${c.batches.map(b => `<td>${fig(perBatch(b))}</td>`).join('')}
+      <td style="text-align:left;">Total seeds</td>
+      ${names.map(n => `<td>${fig(perWorker(n).qty)}</td>`).join('')}
       <td>${fig(c.qty)}</td><td></td><td>${money(c.amount)}</td>
+    </tr><tr class="total-row">
+      <td style="text-align:left;">Amount (RM)</td>
+      ${names.map(n => `<td>${money(perWorker(n).amount || 0)}</td>`).join('')}
+      <td></td><td></td><td></td>
     </tr></tfoot>`;
   tbl.innerHTML = h;
   if (note) {
@@ -3675,6 +3724,23 @@ function renderMaint() {
    own, so it is verified whole. */
 const LOCK_SHEETS = {
   maint:    { label: 'Work Maintenance',     scope: () => $('maint-nursery').value || '' },
+  /* SEED PLANTING HAS NO SCOPE, and that is the truth about it rather than a
+     gap: it is only ever done in the Pre Nursery, so the tab has no section
+     picker to read and the sheet is one thing a month. An empty scope is
+     already what a saved row means by "the whole sheet" — Monthly Payroll
+     has always been stored that way.
+
+     WHAT VERIFYING HERE DOES, said plainly because this page WRITES NOTHING:
+     it is the office's signature on the claim, and it closes nothing on this
+     screen because there is nothing on this screen to close. The figures are
+     keyed and Checked on Work Maintenance, which this lock does not reach —
+     so a batch unchecked there after this is signed still moves the claim.
+     Freezing it would mean a snapshot, the way `maint` does, and that is a
+     bigger change than the office asked for; the day a signed claim is found
+     to have moved is the day to do it. `shared/CHECK_...` is not owed
+     either — `mjmnpayroll_verifications.sheet` is plain TEXT with no CHECK
+     constraint on it, so a new sheet name needs nothing run. */
+  seedplant: { label: 'Seed Planting',       scope: () => '' },
   transpl:  { label: 'Transplanting',        scope: () => $('transpl-section').value || '' },
   seedling: { label: 'Seedlings Collection', scope: () => $('seedling-section').value || '' },
   other:    { label: 'Others',               scope: () => $('other-section').value || '' },
@@ -3691,6 +3757,10 @@ function scopeLabel(sheet, scope) {
   if (scope) return NURSERY_FULL[scope] || scope;
   if (sheet === 'monthly') return 'the whole month';
   if (sheet === 'maint')   return 'every nursery';
+  /* Seed planting is only ever done in the Pre Nursery, so its empty scope
+     is not "all sections" — a strip reading that over a sheet with one
+     place on it invites the question of which others there are. */
+  if (sheet === 'seedplant') return 'the Pre Nursery';
   return 'all sections';
 }
 
@@ -4150,7 +4220,7 @@ function pdfGuard(what, fn) {
   } catch (e) { pdfFailed(what, e); }
 }
 
-function pdfDoc(orientation) {
+function pdfDoc(orientation, format) {
   /* jsPDF comes off a CDN. On a nursery office connection that request is
      the one thing on the page that can quietly fail, and without this the
      next line is "cannot destructure property jsPDF of undefined" — which
@@ -4160,7 +4230,13 @@ function pdfDoc(orientation) {
                   + 'reload the page (Ctrl or Cmd + Shift + R).');
   }
   const { jsPDF } = window.jspdf;
-  return new jsPDF({ orientation: orientation || 'portrait', unit: 'mm', format: 'a4' });
+  /* `format` is additive and defaults to A4, so every caller that names only
+     an orientation gets exactly the page it always got. Seed Planting is the
+     one sheet whose width is decided by how many people worked that month —
+     a column per planter — so it is the one that may ask for a wider sheet
+     rather than shrink the names to nothing. */
+  return new jsPDF({ orientation: orientation || 'portrait', unit: 'mm',
+                     format: format || 'a4' });
 }
 /* Shared cell drawer — centred both ways, shrunk to fit, never wrapping a number. */
 function pdfCell(doc, x, y, w, h, text, o) {
@@ -4295,6 +4371,148 @@ function pdfFooterNote(doc, y, centerX, rightX, gap) {
   doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(110, 110, 110);
   if (rightX) doc.text(TXT, rightX, y + dy, { align: 'right' });
   else        doc.text(TXT, centerX || 105, y + dy, { align: 'center' });
+}
+
+/* ── THE SEED PLANTING CLAIM, ON PAPER ───────────────────────────────────
+   The office asked for a print button and for the table turned round in the
+   same sentence, so the paper is the turned-round table: a BATCH a row, a
+   PLANTER a column, the batch total, the rate and what that batch paid —
+   and the two foot rows carrying each planter's seeds and each planter's
+   money, which is what the claim is signed for.
+
+   ONE BUILDER, TWO BUTTONS. Download saves it and Print loads it into a
+   hidden iframe and calls the browser's own dialog — the Seed Audit sheet's
+   rule, and the reason is the same: two drawings of one report drift, and a
+   printed sheet that disagrees with the file beside it is a difference
+   nobody can explain afterwards. A popup blocker eating a print is a button
+   that does nothing, which is why it is an iframe and not a new tab.
+
+   THE PAGE IS AS WIDE AS THE CREW. Fifteen planters over 247mm of landscape
+   A4 is a column under 10mm, which `pdfCell` would shrink a name into four
+   point type to fit; past that the form is a grid nobody can read. So the
+   worker columns have a FLOOR and the paper grows to meet it rather than
+   the type shrinking to fit the paper. A4 landscape holds the ordinary
+   month; a crew big enough to need more gets a wider sheet, which a printer
+   scales down once instead of the form being illegible by construction. */
+function downloadSeedPlantingPDF() {
+  return pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF('save'));
+}
+function printSeedPlantingPDF() {
+  return pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF('print'));
+}
+function _seedPlantingPDF(how) {
+  if (!mayDo('seedplant', 'export',
+      'You do not have permission to download the salary claim form.')) return;
+  if (_seedPlant.rows === null) { alert('The Seed Planting records are still loading.'); return; }
+  if (_seedPlant.err) { alert('The Seed Planting records could not be read:\n\n' + _seedPlant.err); return; }
+  const r = seedPlantingRate();
+  const c = seedPlantingClaim(_seedPlant.rows, r.rate);
+  if (!c.rows.length) {
+    alert(c.held.length
+      ? 'No batch has been Checked on Work Maintenance for this month, so there is nothing to claim yet.'
+      : 'No seed planting was keyed for this month.');
+    return;
+  }
+  const names = c.people.map(p => p.name);
+
+  /* The fixed columns first, then what is left divided between the
+     planters — the same "count the columns off the list, never type them
+     out" rule the other two claim forms follow, for the reason this file
+     has a heading about. */
+  const MARGIN = 25, W_BATCH = 30, W_SEEDS = 26, W_RATE = 20, W_AMT = 28;
+  const FIXED = W_BATCH + W_SEEDS + W_RATE + W_AMT;
+  const MIN_W = 11;                       // a planter column narrower than this cannot hold a name
+  const A4L_W = 297;
+  const needed = MARGIN * 2 + FIXED + names.length * MIN_W;
+  const PAGE_W = Math.max(A4L_W, Math.ceil(needed));
+  const PAGE_H = 210;
+  const doc = pdfDoc('landscape', PAGE_W === A4L_W ? 'a4' : [PAGE_W, PAGE_H]);
+  const W_P = (PAGE_W - MARGIN * 2 - FIXED) / names.length;
+  const COL = [W_BATCH].concat(names.map(() => W_P)).concat([W_SEEDS, W_RATE, W_AMT]);
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
+  const I_SEEDS = 1 + names.length, I_RATE = I_SEEDS + 1, I_AMT = I_SEEDS + 2;
+  const CONTENT_R = MARGIN + COL.reduce((s, w) => s + w, 0), CENTER_X = PAGE_W / 2;
+  const HF = [232, 236, 252], TF = [222, 228, 250];
+
+  /* The head band is TALL, and it has to be: a name in a 11mm column wraps
+     to two or three lines, and a band sized for one would clip the rest. */
+  const HEAD_H = 20, ROW_H = 11, FOOT_H = 10;
+  const monthTxt = monthLabelFull(monthValue());
+  let y = pdfTitle(doc, ['SALARY CLAIM FORM — SEED PLANTING', 'Pre Nursery',
+                         `Month ${monthTxt}`],
+                   { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
+  pdfCell(doc, X[0], y, COL[0], HEAD_H, 'Batch', { bold: true, size: 8.5, fill: HF });
+  names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], HEAD_H, n,
+                                  { bold: true, size: 7, fill: HF }));
+  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], HEAD_H, 'Seeds planted', { bold: true, size: 7.5, fill: HF });
+  pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  HEAD_H, 'Rate', { bold: true, size: 7.5, fill: HF });
+  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   HEAD_H, 'Amount (RM)', { bold: true, size: 7.5, fill: HF });
+  y += HEAD_H;
+
+  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
+  const dayTxt = (d) => {
+    if (!d) return '';
+    const t = new Date(d);
+    return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+  };
+  c.rows.forEach(row => {
+    const d = dayTxt(row.date);
+    pdfCell(doc, X[0], y, COL[0], ROW_H, 'Batch ' + row.batch + (d ? '  ·  ' + d : ''),
+            { bold: true, size: 8 });
+    names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], ROW_H,
+                                    fig(row.byWorker[n]), { size: 7.5, nowrap: true }));
+    pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], ROW_H, fig(row.qty), { bold: true, size: 8, nowrap: true });
+    pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  ROW_H, rateTxt(r.rate), { size: 7.5, nowrap: true });
+    pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   ROW_H, money(row.amount), { bold: true, size: 8, nowrap: true });
+    y += ROW_H;
+  });
+
+  /* The two foot rows the screen carries, for the same reason: turning the
+     table round moved each planter's pay out of their row and into the foot
+     of their column, and a claim form without it is a claim form that does
+     not say what anybody is owed. */
+  const per = n => (c.people.find(p => p.name === n) || {});
+  pdfCell(doc, X[0], y, COL[0], FOOT_H, 'Total seeds', { bold: true, size: 8, fill: TF });
+  names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], FOOT_H, fig(per(n).qty),
+                                  { bold: true, size: 7.5, nowrap: true, fill: TF }));
+  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], FOOT_H, fig(c.qty), { bold: true, size: 8, nowrap: true, fill: TF });
+  pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  FOOT_H, '', { fill: TF });
+  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   FOOT_H, money(c.amount), { bold: true, size: 8, nowrap: true, fill: TF });
+  y += FOOT_H;
+  pdfCell(doc, X[0], y, COL[0], FOOT_H, 'Amount (RM)', { bold: true, size: 8, fill: TF });
+  names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], FOOT_H, money(per(n).amount || 0),
+                                  { bold: true, size: 7, nowrap: true, fill: TF }));
+  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], FOOT_H, '', { fill: TF });
+  pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  FOOT_H, '', { fill: TF });
+  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   FOOT_H, '', { fill: TF });
+  y += FOOT_H;
+
+  /* A batch keyed and NOT Checked is named on the paper as well as on the
+     screen. A claim short of work reads exactly like a quiet month, and the
+     sheet that gets filed is the one somebody reads months later. */
+  if (c.held.length) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(180, 83, 9);
+    doc.text('Not on this claim: batch ' + c.held.map(x => x.batch_name).join(', ')
+           + (c.held.length === 1 ? ' is' : ' are') + ' keyed and not yet Checked on Work Maintenance.',
+             MARGIN, y + 6);
+    y += 6;
+  }
+  y = pdfVerifiedNote(doc, y, 'seedplant', '', CONTENT_R);
+  pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
+
+  const file = `Salary_Claim_Seed_Planting_${monthTxt.replace(/\s+/g, '_')}.pdf`;
+  if (how !== 'print') { doc.save(file); return; }
+  /* Print, the Seed Audit sheet's way: autoPrint, then the blob into a
+     hidden iframe. A new tab is what a popup blocker eats. */
+  doc.autoPrint();
+  const url = doc.output('bloburl');
+  const old = document.getElementById('seedplant-print-frame');
+  if (old) old.remove();
+  const f = document.createElement('iframe');
+  f.id = 'seedplant-print-frame';
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  f.src = url;
+  document.body.appendChild(f);
 }
 
 function downloadMaintPDF() {
