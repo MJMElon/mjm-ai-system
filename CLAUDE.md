@@ -3100,6 +3100,26 @@ board can tell the two apart without a second copy of the section list. A
 worker hidden by Show inactive takes the column with them and brings it
 back, because the one standing there is still somebody to be moved.
 
+**AND THE NAME SHOUTS, while the RECORD keeps its spelling.** The register
+is keyed by whoever keyed it, so Wisnu, Lalu Aenal Mashuri and ROUSELL WAYNE
+sat in one column in three different cases and the grid read as three fonts
+rather than one board — *"the font not standardize, looks messy"*. It is one
+line of CSS on the chip name (`text-transform:uppercase`) and deliberately
+NOT a rewrite of the name: a stored name shouted once is shouted for ever,
+the next save writes it that way, and `previous_names` fills with a
+correction nobody made. Same rule the papan tanda already follows — the row
+keeps the real spelling, it is only the board that shouts.
+
+Two things fall out:
+
+- **The form still opens on what was keyed.** `#wf-name` is an input and the
+  transform is on the chip, so correcting a name is correcting the name and
+  not undoing a paint.
+- **`innerText` IS the transform** — the trap this file already names — so
+  every check about a name reads `textContent`, and section 6 of the test is
+  the one place that wants `innerText`, because what the office is looking at
+  is exactly what it asks about.
+
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 

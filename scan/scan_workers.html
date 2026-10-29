@@ -91,7 +91,17 @@
            object-fit: cover; background: #ede9fe; display: grid;
            place-items: center; font-size: 9px; font-weight: 900;
            color: #7c3aed; letter-spacing: .02em; overflow: hidden; }
-  .wchip > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The name SHOUTS, and the record keeps its real spelling. The register is
+     keyed by whoever keyed it, so "Wisnu", "Lalu Aenal Mashuri" and "ROUSELL
+     WAYNE" sit in one column in three different cases and the grid reads as
+     three fonts. Same rule the papan tanda follows: the row keeps the real
+     spelling, it is only the board that shouts. It is text-transform and
+     never the stored name — nothing is rewritten, the form still opens on
+     what was keyed, and `textContent` still answers it (`innerText` does
+     NOT: it hands back what the stylesheet did, which is the trap this
+     repository already has a heading about). */
+  .wchip > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                             text-transform: uppercase; }
   .wchip-off .wface { filter: grayscale(1); opacity: .7; }
 
   /* ── The photo on the form ── */

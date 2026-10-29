@@ -261,9 +261,40 @@ const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x)
     is(onSheet, [false, false],
       'and neither new role walks onto the maintenance tick sheets');
 
+    console.log('\n-- 6. the name SHOUTS, and the record keeps its spelling --');
+    {
+      /* The register is keyed by whoever keyed it, so "Sahrun", "Ahmad Bin
+         Ali" and "ROUSELL WAYNE" sat in one column in three different cases
+         and the grid read as three fonts. It is TEXT-TRANSFORM and nothing
+         else: the stored name is untouched, which is what lets the form go
+         on opening what was keyed.
+
+         `innerText` hands back what the STYLESHEET did -- the trap this
+         repository already has a heading about -- so this is the one check
+         in the file that wants it, and every other check here reads
+         `textContent` and is what proves the record did not move. */
+      const look = await page.evaluate(() => {
+        const span = [...document.querySelectorAll('#worker-board .wchip > span:last-child')]
+          .find((x) => x.textContent.trim() === 'Ahmad Bin Ali');
+        if (!span) return null;
+        return { tf: getComputedStyle(span).textTransform,
+                 shown: span.innerText.trim(), stored: span.textContent.trim() };
+      });
+      is(look && look.tf, 'uppercase', 'the chip name is uppercased by the stylesheet');
+      is(look && look.shown, 'AHMAD BIN ALI', 'so the board reads it in capitals');
+      is(look && look.stored, 'Ahmad Bin Ali', 'while the markup still carries the name as keyed');
+
+      /* A name REWRITTEN rather than painted would come back shouting here,
+         and the next save would store it that way for good. */
+      await page.evaluate(() => openWorker(7));
+      await page.waitForTimeout(120);
+      is(await page.inputValue('#wf-name'), 'Ahmad Bin Ali',
+        'and the form opens on the real spelling, not the shouted one');
+    }
+
     await page.close();
 
-    console.log('\n-- 6. an empty row and an empty orphan column are not drawn --');
+    console.log('\n-- 7. an empty row and an empty orphan column are not drawn --');
     {
       /* EVERY ROLE THE LIST OFFERS NOW HAS A ROW, so Other holds one thing:
          a role typed before the list existed. On a register nobody has keyed
