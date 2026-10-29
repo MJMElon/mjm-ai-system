@@ -1629,13 +1629,23 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    Seedling Stock, PALMS, a -R plot, by hand, Checked — and the office took
    it off in one line (这里不用show). None of the six is a lever anybody
    keys, so they were six rows to read past above the two that are. */
-/* The corner link sits where every other card's corner control does.
-   `.lst-top` is position:relative and the heading inside it is centred, so
-   a control that does not take itself out of the flow drops onto a second
-   line under the title -- which is what this one did first. `.sched-dl`
-   is the same pattern; `.lst-edit` is left meaning the Edit button. */
+/* The corner control sits where every other card's does. `.lst-top` is
+   position:relative and the heading inside it is centred, so a control
+   that does not take itself out of the flow drops onto a second line under
+   the title -- which is what this one did first. `.sched-dl` is the same
+   pattern; `.lst-edit` is left meaning the Edit button.
+
+   IT WAS THE "Open Culling Monitoring" LINK and it is EDIT now, which the
+   office asked for off the foot (edit 移动到右上角). The class outlived the
+   link because it is the PATTERN and not that one door -- and on a phone
+   it goes back into the flow, where a button pinned to a corner narrower
+   than the heading lands on top of the words. */
 .lst-top .cm-set-open { position:absolute; right:0; top:-4px; font-size:13px; }
 @media (max-width:560px) { .lst-top .cm-set-open { position:static; } }
+/* The slot the renderer fills. It is EMPTY in two of the three states, and
+   an empty div in a grid cell is still a cell -- zero height keeps it from
+   moving the heading off the line it shares. */
+#cm-set-corner:empty { display:none; }
 /* `.cm-set-lead` was the sentence the target was keyed inside -- "A plot
    that went from Saringan Anak Bibit to the end of Transplanting in [15]
    days or fewer earns this." The office asked it off (删掉) and the figure

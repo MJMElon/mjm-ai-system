@@ -5521,11 +5521,34 @@ is a database that could not answer, a read that came back EMPTY is a rule
 nobody has keyed, and only the second names a file. `ruleError()` tells
 them apart — `loadRule` leaves it set on the first and null on the second.
 
-**The corner link is gone.** It read *"Open Culling Monitoring →"*: this
-card is the RULE, the tab is the month's plots, and that is a different job
-reached from Worker Activity where the rest of that work is. `.cm-set-open`
-stays in the stylesheet as the pattern for a corner control on a centred
-`.lst-top`.
+**The corner link is gone, and EDIT took its place.** It read *"Open
+Culling Monitoring →"*: this card is the RULE, the tab is the month's
+plots, and that is a different job reached from Worker Activity where the
+rest of that work is. Then the office asked for Edit up there off the foot
+(*"edit 移动到右上角"*), which is where every other card on the page puts
+its corner control, so `.cm-set-open` was never the LINK — it is the
+pattern, and it outlived the door it was written for.
+
+Three things in that move:
+
+- **`#cm-set-corner` is an EMPTY SLOT the renderer fills**, never a button
+  written into the markup. Whether Edit may be offered at all depends on
+  the rule having been READ, so the one function that knows that has to be
+  the one that draws it — a button sitting in the page is on screen before
+  the answer is in, over a list nothing can save, and `cmEdit` refusing it
+  with an alert is a button that looks live and is not.
+- **The corner is empty while EDITING.** Cancel and Save are a pair that
+  commits what was keyed and they belong under the last thing keyed; an
+  Edit still in the corner over an open form is a third button for a state
+  with no third thing to do. So the foot is empty in the view state and the
+  corner is empty in the edit state, which is the whole shape of it.
+- **On a phone it goes back into the flow** (`position:static` under
+  560px), where `.lst-top` is a centred column — a control pinned to a
+  corner narrower than the heading lands on top of the words.
+
+The test asks for Edit in `.lst-top` **and asserts it is NOT in the body**:
+a check that only looked for the word anywhere on the card would pass just
+as green with it still at the foot.
 
 **And the standing sentence on the TAB went with it** — *"A plot whose
 Saringan Anak Bibit to Transplanting took 15 days or fewer earns the
@@ -5572,11 +5595,11 @@ sheet's sentence sitting over these plots.
 - **It cannot take Settings down with it.** It is a rule set once and the
   three blocks above it are the day's own work, so it renders inside its
   own try — the batch page's rule for its trailing steps.
-- **The corner link uses `.cm-set-open`, not `.lst-edit`.** `.lst-top` is
-  `position:relative` with its heading centred, so a control that does not
-  take itself out of the flow drops onto a second line under the title —
-  which is what this one did first. `.sched-dl` is the same pattern, and
-  `.lst-edit` is left meaning the Edit button.
+- **The corner control uses `.cm-set-open`, not `.lst-edit`.** `.lst-top`
+  is `position:relative` with its heading centred, so a control that does
+  not take itself out of the flow drops onto a second line under the title
+  — which is what this one did first. `.sched-dl` is the same pattern, and
+  `.lst-edit` is left meaning the Edit button on the other cards.
 
 `tests/culling_incentive.cjs` drives BOTH pages: the Check on Work
 Maintenance, then the payroll fed exactly what those writes left behind —
