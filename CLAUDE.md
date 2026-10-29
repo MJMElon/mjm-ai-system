@@ -3587,6 +3587,46 @@ screen draws true and the page opens false*. It also runs against a version
 that has no `maySetting` at all rather than throwing — what the previous
 code DID is the whole argument for the change.
 
+### And then the office opened the tab and said 我没看到
+
+Obeying the tick is what made the LABEL worth reading, and the label was
+wrong on two of its three words. It said *Open Setting (piece rates, plots,
+workers)*, which is what the tab held when it was written. The tab holds
+**three sections and nothing else** — Plot Capacity, the Chemical List and
+the Fertiliser List — because:
+
+- **the PIECE RATES moved to Payroll → Settings → Piece Rate**, on that
+  screen's own `rates` permission, and
+- **the WORKERS come off the payroll register** through the Worker System
+  board; `_localWorkers` on this page is only a fallback and its remove
+  button is on Worker Record.
+
+So the office ticked it expecting rates, opened the tab, found capacity and
+two chemical lists, and went looking for a fault that was not there. **A
+label naming two screens a tab does not open is a permission that lies in
+the other direction** — the gate obeys it perfectly and the person is still
+sent to the wrong place. It now reads *Open Setting (plot capacity,
+chemicals, fertilisers)* and its description says where the rates are.
+
+**And two of the four gates repointed above are DEAD CODE.**
+`renderRateActions` draws into `#setting-rate-actions`, which occurs
+**nowhere** in `nursery_ops_maintenance.html`, and its only caller
+`onRateInput` is called by nothing — so `savePieceRates` and
+`unlockPieceRates` are unreachable from that page. The fix still worked,
+because the tab button and `switchTab` are the live two. What it means for
+the paragraph above is one correction: *"this is the money side of the
+module"* is no longer the reason the gate fails CLOSED. The reason that
+stands is that the tab sets the plot capacity and the chemical lists, which
+is what every dosage on the schedule is worked out from — wrong in a way
+nobody keyed.
+
+Worth knowing before touching the test: its section 5 used to allow 900
+characters between `key:'maintenance'` and `key:'setting'`, and the comment
+explaining all of the above pushed them apart — **a check about the KEY
+failed on a change that altered nothing it was about**, which is the
+pin-the-spelling trap this file already names. It slices the page's own
+block out and asks whether the key is inside it.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened four times in this codebase now. A screen writes a setting, the
@@ -3902,9 +3942,14 @@ arrive — not across the site because a test would be tidier.
 **`nursery_ops_maintenance.html` now carries them**, and the day it was
 written up as the one to remember is the day it needed them: the office asked
 for the dosage box and the Save button on the Setting tab, and without the
-metas that page would have gone on asking for the old `?v=` for ever. Two
-pages are still unguarded — `nursery_ops_user_access.html` and
-`operation_batch_detail.html` — and the test prints them every run.
+metas that page would have gone on asking for the old `?v=` for ever.
+**`nursery_ops_user_access.html` now carries them too**, for the same reason
+one page along: the tick list lives in that page, so a cached copy goes on
+offering yesterday's labels — and the label on *Open Setting* was the thing
+being corrected. **Five pages are still unguarded** — the two PALMS pages,
+Life of Plot, `operation_delivery.html` and `operation_settings.html` — and
+the test prints them every run, so do not trust the list in this paragraph
+over the one the test gives you.
 
 **Any new page that loads a script with `?v=` needs all three** to be
 deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is

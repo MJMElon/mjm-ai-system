@@ -206,9 +206,21 @@ console.log('\n-- 5. The tick the screen offers is the key the page reads --');
 {
   /* A case nobody would catch by looking: the screen writing `settings`
      and the page reading `setting` saves cleanly, shows as set, and does
-     nothing -- which is this fault exactly, one letter along. */
+     nothing -- which is this fault exactly, one letter along.
+
+     IT IS THE BLOCK THAT IS ASKED, NEVER A DISTANCE. The first version
+     allowed 900 characters between the two keys, and a comment added to
+     that block -- explaining what the tab actually holds -- pushed them
+     apart and failed a check about nothing it was about. The page block
+     runs from its own key to the next one. */
+  const mAt = SCREEN.indexOf("key:'maintenance'");
+  /* A page sits at one indent and its actions two deeper, so the newline
+     is part of the delimiter -- without it the first ACTION closes the
+     block and the one being asked about is outside it. */
+  const nextPage = SCREEN.indexOf("\n    { key:'", mAt + 1);
+  const MBLOCK = mAt < 0 ? '' : SCREEN.slice(mAt, nextPage < 0 ? SCREEN.length : nextPage);
   is('the screen offers a "setting" action under maintenance',
-     /key:'maintenance'[\s\S]{0,900}key:'setting'/.test(SCREEN), true);
+     MBLOCK.includes("key:'setting'"), true);
   is('and declares it admin-only, which is what "no saved row" falls back to',
      /key:'setting'[\s\S]{0,300}adminOnly:true/.test(SCREEN), true);
   is('the page reads that exact key',
