@@ -1338,7 +1338,19 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
     line-height:1.3;transition:background .15s,color .15s;}
   #sm-nav .pn-subtab:hover{background:rgba(255,255,255,.1);color:#fff;}
   #sm-nav .pn-subtab.active{background:rgba(255,255,255,.18);color:#fff;}
+  /* Worker Activity is two halves: the Main Nursery jobs and the Pre
+     Nursery's Seed Planting. A heading, not a button. */
+  #sm-nav .pn-subgroup{padding:8px 10px 2px;font-family:var(--font);
+    font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:rgba(255,255,255,.45);}
+  #sm-nav .pn-subgroup:first-child{padding-top:2px;}
 }
+/* Seed Planting: one number box per worker. */
+#payroll-table td.sp-cell{padding:3px 4px;}
+#payroll-table input.sp-in{width:100%;min-width:64px;box-sizing:border-box;
+  padding:5px 6px;border:1px solid var(--border,#d6dfd9);border-radius:7px;
+  font:inherit;font-size:12.5px;text-align:right;background:#fff;}
+#payroll-table input.sp-in:disabled{background:#f3f4f6;color:#9ca3af;}
 /* Icon-collapsed rail: no room for a label, let alone a sub-list under one. */
 .sm-frame.nav-hid #sm-nav .pn-sub{display:none !important;}
 /* Phone: the in-panel subtabs-bar is the only way to switch this, same as

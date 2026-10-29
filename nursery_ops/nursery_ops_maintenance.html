@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=99">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=100">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -100,6 +100,7 @@
                above. switchPayrollView(type) is the one function that keeps
                this and the panel's own sub-tab bar in step. -->
           <div class="pn-sub">
+            <div class="pn-subgroup" data-i18n="tab.mainNursery">Main Nursery</div>
             <button type="button" class="pn-subtab active" id="pn-subtab-pd" onclick="switchPayrollView('pd')">
               <span data-i18n="tab.pd">P &amp; D — Spraying</span>
             </button>
@@ -120,6 +121,10 @@
             </button>
             <button type="button" class="pn-subtab" id="pn-subtab-cull_incentive" onclick="switchPayrollView('cull_incentive')">
               <span data-i18n="tab.cullIncentive">Culling Incentive</span>
+            </button>
+            <div class="pn-subgroup" data-i18n="tab.preNursery">Pre Nursery</div>
+            <button type="button" class="pn-subtab" id="pn-subtab-seed_planting" onclick="switchPayrollView('seed_planting')">
+              <span data-i18n="tab.seedPlanting">Seed Planting</span>
             </button>
           </div>
           <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)">
@@ -852,7 +857,7 @@
      read. See shared_cull_incentive.js. -->
 <script src="../shared/shared_palms.js?v=5"></script>
 <script src="../shared/shared_cull_incentive.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=150"></script>
+<script src="plot_maintenance_script.js?v=151"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
