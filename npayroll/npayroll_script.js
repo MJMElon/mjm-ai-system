@@ -490,7 +490,7 @@ function applyPageAccess() {
       if (b) b.style.display = 'none';
     }
   });
-  const payrollSubs = ['maint', 'transpl', 'seedling', 'seedplant', 'other', 'monthly'];
+  const payrollSubs = ['maint', 'seedplant', 'transpl', 'seedling', 'other', 'monthly'];
   if (!payrollSubs.some(may)) {
     const b = $('icon-btn-payroll');
     if (b) b.style.display = 'none';
@@ -5252,8 +5252,8 @@ document.addEventListener('keydown', (e) => {
     if (tab === 'rates') tab = 'locks';
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
-    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'seedplant', 'other', 'monthly']) || sub;
-    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','seedplant','other','monthly']),
+    if (!may(sub)) sub = firstOpen(['maint', 'seedplant', 'transpl', 'seedling', 'other', 'monthly']) || sub;
+    const tabOpen = { payroll: !!firstOpen(['maint','seedplant','transpl','seedling','other','monthly']),
                       workers: may('workers'), locks: may('rates') || may('locks') };
     if (!tabOpen[tab]) tab = ['payroll','workers','locks'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);

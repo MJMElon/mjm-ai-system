@@ -123,9 +123,9 @@ const read = (page) => page.evaluate(() => {
 
   // ── 1. The tab is there, between Loading Seedlings and Monthly Payroll ──
   const a = await boot(browser, { nops_seed_planting_batch_workers: RECS, mjmnpayroll_piece_rates: [] });
-  check('a Seed Planting tab sits after Loading Seedlings', await a.page.evaluate(() =>
+  check('the Seed Planting tab sits before Transplanting', await a.page.evaluate(() =>
     [...document.querySelectorAll('.subtab')].map(b => b.dataset.sub)),
-    ['maint', 'transpl', 'seedling', 'seedplant', 'monthly', 'other']);
+    ['maint', 'seedplant', 'transpl', 'seedling', 'monthly', 'other']);
 
   // ── 2. Only the checked batches, priced at RM 0.02 a seed ──
   let v = await read(a.page);
