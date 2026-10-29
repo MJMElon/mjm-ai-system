@@ -1590,11 +1590,43 @@
                 };
             });
 
+            // ── One real order, one row ──────────────────────────────────
+            // Six orders sit in salesweb_customer_orders TWICE — once keyed
+            // with a leading "#" and once without — and every reader then
+            // counted the order twice: the Customer Orders drawer showed two
+            // identical draggable 6DS520 cards of 2,580 pcs each, and the
+            // Collection tab's Balance total carried 5,160 for one 2,580
+            // order. Same rule as the batch list and the Seeds In form: one
+            // order per normalised number, the NEWEST row wins, and the
+            // survivor says so on its card (dupRows) rather than hiding it.
+            // allIds keeps every duplicate's row id so an allocation written
+            // against EITHER row still counts against the one order —
+            // allocsForOrder reads it.
+            {
+                const byNorm = {};
+                allCustomerOrders.forEach(o => {
+                    const k = normOrderKey(o.orderNumber) || ('id:' + o.id);
+                    (byNorm[k] = byNorm[k] || []).push(o);
+                });
+                allCustomerOrders = Object.values(byNorm).map(group => {
+                    group.sort((a, b) =>
+                        ((b.orderDate instanceof Date ? b.orderDate.getTime() : 0) -
+                         (a.orderDate instanceof Date ? a.orderDate.getTime() : 0)));
+                    const keep = group[0];
+                    keep.dupRows = group.length;
+                    keep.allIds  = group.map(g => g.id);
+                    return keep;
+                });
+            }
+
             // Weekly Collection — only a booking belonging to an
             // order that still has balance left to collect counts, same
             // rule the Booking tab and the month "pending pickup" card
             // below apply. Built after allCustomerOrders so each day's
             // booked qty can be checked against its order's balance.
+            // (And after the dedupe above, or a duplicated order's booked
+            // qty would be summed twice — bookByOrderNumberByDay is keyed
+            // on the order number both rows share.)
             allBookingsByDate = {};
             allCustomerOrders.forEach(o => {
                 if ((Number(o.balance) || 0) <= 0) return;
@@ -3074,13 +3106,19 @@
         return batchAllocations.filter(a => a.batch_name === b && a.plot_name === p);
     }
 
-    function allocsForOrder(orderId) {
-        if (!orderId) return [];
-        return batchAllocations.filter(a => a.order_id === orderId);
+    // Takes the order OBJECT where the caller has one — a deduplicated
+    // order carries allIds (every salesweb row id the one real order was
+    // keyed under), and an allocation dropped against EITHER row id has to
+    // count against it. A bare id still works for a caller with nothing
+    // else in hand.
+    function allocsForOrder(order) {
+        if (!order) return [];
+        const ids = (typeof order === 'object') ? (order.allIds || [order.id]) : [order];
+        return batchAllocations.filter(a => ids.includes(a.order_id));
     }
 
     function orderUnallocatedQty(o) {
-        const allocated = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        const allocated = allocsForOrder(o).reduce((s, a) => s + (a.allocated_qty || 0), 0);
         return Math.max(0, (o.totalQty || 0) - (o.totalCollected || 0) - allocated);
     }
 
@@ -3092,7 +3130,20 @@
     }
 
     function isAllocatableStatus(o) {
-        return o.rawStatus !== 'Cancelled' && o.rawStatus !== 'Pending Payment';
+        // MIRRORS THE COLLECTION TAB'S OWN ROW FILTER, because the office
+        // reconciles the drawer against that list: any order it shows with
+        // a balance has to be on one of the drawer's tabs. The old rule
+        // excluded every 'Pending Payment' row, which silently kept two
+        // CREDIT-terms orders — 66,589 pcs between them — off the drawer
+        // while the Collection tab showed them with their balances. Credit
+        // is the invoice flow: the order is real and allocatable before
+        // the payment lands. Cash + unpaid stays hidden, same as there.
+        const isCash   = (o.paymentMethod || 'cash') === 'cash';
+        const isUnpaid = o.rawStatus === 'Pending Payment' || o.derivedStatus === 'Pending Payment';
+        if (isCash && isUnpaid) return false;
+        if (o.rawStatus === 'Cancelled' || o.alCancelled) return false;
+        if (o.rawStatus === 'Closed'    || o.alClosed)    return false;
+        return true;
     }
 
     let _allocSearch = '';
@@ -3138,13 +3189,22 @@
             return;
         }
 
+        // EVERY order the Collection tab shows with a balance is on one of
+        // the two tabs — the office reconciles the drawer against that
+        // list, and 15 current-month orders that were already fully
+        // allocated used to vanish from here entirely, which read as
+        // orders the drawer had lost. A fully allocated one shows as a ✓
+        // card (Active) or a waiting-on-collection card (Past Due); only
+        // what is still unallocated drags.
         const eligible = allCustomerOrders.filter(isAllocatableStatus);
-        const active = eligible.filter(o => !isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
-        const past   = eligible.filter(o =>  isPastMonthOrder(o) && o.balance > 0);
+        const active = eligible.filter(o => !isPastMonthOrder(o) && (o.balance || 0) > 0);
+        const past   = eligible.filter(o =>  isPastMonthOrder(o) && (o.balance || 0) > 0);
 
-        // Each tab totals the figure its own cards show: Active cards show
-        // what is still to allocate, Past Due cards show what is uncollected.
-        const activeQty = active.reduce((s, o) => s + orderUnallocatedQty(o), 0);
+        // Both tabs total the same thing: seedlings a customer is still
+        // owed (the Balance column of the Collection tab), so Active +
+        // Past Due adds up to what that list says is outstanding. What is
+        // left to ALLOCATE is each card's own figure.
+        const activeQty = active.reduce((s, o) => s + (o.balance || 0), 0);
         const pastQty   = past.reduce((s, o) => s + (o.balance || 0), 0);
         updateAllocCounts(active.length, past.length, activeQty, pastQty);
 
@@ -3157,7 +3217,7 @@
                 msg = `🔎 No orders match "${_allocSearch}"`;
             } else {
                 msg = _allocTab === 'active'
-                    ? '✅ All current orders are fully allocated'
+                    ? '✅ No current-month orders with a balance to collect'
                     : '✅ No past-month uncollected orders';
             }
             body.innerHTML = `<div class="alloc-drawer-empty">${msg}</div>`;
@@ -3331,7 +3391,7 @@
 
     function orderCardHtml(o, tab) {
         const remaining   = orderUnallocatedQty(o);
-        const allocated   = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        const allocated   = allocsForOrder(o).reduce((s, a) => s + (a.allocated_qty || 0), 0);
         const total       = o.totalQty || 0;
         const collected   = o.totalCollected || 0;
         const pctAlloc    = total ? Math.min(100, ((allocated + collected) / total) * 100) : 0;
@@ -3369,6 +3429,20 @@
                 : `<div class="order-card-remark">⏳ Fully allocated — waiting for the customer to collect</div>`;
         }
 
+        // A duplicated keying is counted ONCE and said, never hidden —
+        // the same rule as the Seed Received cell's "⚠ 2 reception rows":
+        // a figure that silently drops a row is how the row stays there
+        // for ever. 6DS520 is the live case, keyed once as #6DS520 too.
+        const dupNote = (o.dupRows || 1) > 1
+            ? `<div class="order-card-dup">⚠ Keyed ${o.dupRows} times in Customer Orders — counted once</div>`
+            : '';
+        // Cash + unpaid never reaches the drawer, so a Pending Payment
+        // card here is the credit (invoice) flow — worth saying, because
+        // the office is allocating stock ahead of the payment landing.
+        const payNote = (o.rawStatus === 'Pending Payment' || o.derivedStatus === 'Pending Payment')
+            ? `<div class="order-card-dup">💳 Payment pending — credit terms</div>`
+            : '';
+
         return `
             <div class="${cls}" ${dragAttrs}>
                 ${grip}
@@ -3380,6 +3454,8 @@
                 </div>
                 <div class="order-card-progress"><div class="order-card-progress-bar${pctAlloc >= 100 ? ' full' : ''}" style="width:${pctAlloc}%;"></div></div>
                 ${remarkHtml}
+                ${dupNote}
+                ${payNote}
             </div>`;
     }
 
