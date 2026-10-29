@@ -821,7 +821,7 @@ function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
    Record's list/chart: the panel's own sub-tab bar, and the side bar's
    expandable entry. _syncSubNav (declared beside switchRecordView) is the
    one place that keeps the two in step, by the type key alone. */
-const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive'];
+const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive', 'seed_planting'];
 function switchPayrollView(type) {
   _payrollView = type;
   _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
@@ -946,6 +946,7 @@ function renderPayroll() {
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
+  if (_payrollView === 'seed_planting')     { renderSeedPlantingPayroll(); return; }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -2337,6 +2338,270 @@ function renderLoadingSeedlingsPayroll() {
   tbl.innerHTML = h;
 }
 
+/* ── Seed Planting (Pre Nursery) ─────────────────────────────────────────
+   The batch report's Seed Planting tab writes one `Planted` row per tray,
+   dated with the day keyed on that tab (`transaction_date`). Every one of
+   those dated inside the month on screen is a row here -- one per TRAY per
+   DAY, two batches sown into one tray on one day being one job -- and each
+   Pre Nursery worker keys how many THEY planted.
+
+   The ledger is READ and never written. What the office keys goes into
+   nops_seed_planting_workers, one record per tray per day, with the figure
+   the ledger read when it was keyed (`qty_planted`) beside it.
+
+   It always reads the PRE NURSERY, whatever nursery is picked at the top:
+   seed planting is only ever done there.
+
+   NOT ON ANY CLAIM YET. The office asked for the record first -- nothing in
+   npayroll reads this table. */
+const SP_NURSERY = 'PN';
+const _spCache = {};      // month -> { rows, saved, noTable }
+const _spLoading = {};
+const _spErr = {};
+const _spSaveTimers = {};
+const _spSaveErr = {};
+
+/* The date rule of the batch report and the Transplanting Report: the keyed
+   transaction_date, else a Date: in the remark, else the day it went in. */
+function _spLogDate(l) {
+  if (l.transaction_date) return String(l.transaction_date).slice(0, 10);
+  const r = String(l.remark || '');
+  const at = r.indexOf('Date:');
+  if (at >= 0) {
+    const d = r.slice(at + 5).trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  }
+  return l.created_at ? String(l.created_at).slice(0, 10) : null;
+}
+
+/* "Oct 2026" -> "2026-10", the shape a ledger date starts with. */
+function _spMonthPrefix(m) {
+  const v = monthLabelToInput(m);
+  return v || null;
+}
+
+/* Pure: the ledger's Planted rows in, one row per tray per day out, for the
+   month asked. Exposed so the test drives the real rule. */
+function seedPlantingRows(logs, m) {
+  const pre = _spMonthPrefix(m);
+  const by = {};
+  (logs || []).forEach(l => {
+    if (l.transaction_type && l.transaction_type !== 'Planted') return;
+    const d = _spLogDate(l);
+    if (!pre || !d || d.slice(0, 7) !== pre) return;
+    const tray = String(l.plot_name || '').trim();
+    if (!tray) return;
+    const k = d + '|' + tray;
+    const row = by[k] || (by[k] = { key: k, date: d, tray, qty: 0, batches: [] });
+    row.qty += Number(l.quantity_change) || 0;
+    const b = String(l.batch_name || '').trim();
+    if (b && !row.batches.includes(b)) row.batches.push(b);
+  });
+  return Object.values(by).sort((a, b) =>
+    a.date !== b.date ? (a.date < b.date ? -1 : 1)
+      : a.tray.localeCompare(b.tray, undefined, { numeric: true }));
+}
+
+async function loadSeedPlantingForPayroll(m) {
+  if (!_supabase) return;
+  _spLoading[m] = true; _spErr[m] = '';
+  renderPayroll();
+  try {
+    /* Every Planted row, paged: a request is capped at 1,000 rows, and the
+       date is filtered here because a row with no transaction_date still
+       has a day by the rule above. */
+    const logs = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await _supabase.from('shared_inventory_logs')
+        .select('id, transaction_type, batch_name, plot_name, quantity_change, transaction_date, created_at, remark')
+        .eq('transaction_type', 'Planted')
+        .order('id', { ascending: true })
+        .range(from, from + 999);
+      if (error) throw error;
+      logs.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    const rows = seedPlantingRows(logs, m);
+
+    const saved = {};
+    let noTable = false;
+    const { data: sv, error: se } = await _supabase.from('nops_seed_planting_workers')
+      .select('work_date, tray, month, qty_planted, workers, updated_by, updated_at')
+      .eq('month', m);
+    if (se) {
+      /* A database that has not had the SQL run: the rows still show, the
+         boxes do not take anything, and the sheet says which file to run. */
+      noTable = true;
+      console.warn('[maint] seed planting read:', se.message);
+    } else {
+      (sv || []).forEach(r => { saved[String(r.work_date).slice(0, 10) + '|' + r.tray] = r; });
+    }
+    _spCache[m] = { rows, saved, noTable };
+  } catch (e) {
+    _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
+  } finally {
+    _spLoading[m] = false;
+    renderPayroll();
+  }
+}
+
+/* The register's Pre Nursery workers first, then any name saved on a row
+   that the register cannot place -- their figure would otherwise leave the
+   sheet with nothing saying so. */
+function spWorkerColumns(rows, saved) {
+  const wk = (workers[SP_NURSERY] || []).slice();
+  const extra = [];
+  rows.forEach(r => {
+    const s = saved[r.key];
+    Object.keys((s && s.workers) || {}).forEach(w => {
+      if (!wk.includes(w) && !extra.includes(w)) extra.push(w);
+    });
+  });
+  return { wk: wk.concat(extra), extra };
+}
+
+function _spDay(d) { return String(d || "").split("-").reverse().join("/"); }
+
+function _spKeyed(s) {
+  return Object.values((s && s.workers) || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+}
+
+function renderSeedPlantingPayroll() {
+  const tbl = document.getElementById('payroll-table');
+  if (!tbl) return;
+  resolveWorkers();
+  const m = getMonth();
+  const line = document.getElementById('payroll-form-line');
+  if (line) line.textContent = `${t('tab.seedPlanting')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
+  const off = document.getElementById('payroll-offreg');
+  if (off) { off.style.display = 'none'; }
+
+  if (_spCache[m] === undefined && !_spLoading[m] && !_spErr[m]) loadSeedPlantingForPayroll(m);
+  const st = _spCache[m];
+  const hint = document.getElementById('payroll-hint');
+  if (hint) {
+    const noTable = !!(st && st.noTable);
+    hint.textContent = noTable ? t('pay.spNoTable') : t('pay.spHint');
+    hint.classList.toggle('pay-hint-warn', noTable);
+  }
+  if (_spLoading[m] || !st) {
+    tbl.innerHTML = _spErr[m]
+      ? `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--danger,#c0392b);font-size:13px;">${esc(_spErr[m])}</td></tr></tbody>`
+      : `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.loading')}</td></tr></tbody>`;
+    return;
+  }
+
+  const { rows, saved, noTable } = st;
+  const { wk, extra } = spWorkerColumns(rows, saved);
+  if (!wk.length) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.noWorkers')}</td></tr></tbody>`;
+    return;
+  }
+  const payTh = (txt, w) =>
+    `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+  const span = 4 + wk.length + 1;
+  let h = `<thead>
+    <tr><th class="wk-th" colspan="${span}">${t('tab.seedPlanting')}</th></tr>
+    <tr>
+      ${payTh(t('pay.date'), 92)}
+      ${payTh(t('pay.tray'), 72)}
+      ${payTh(t('pay.batch'), 96)}
+      ${payTh(t('pay.qtyPlanted'), 100)}
+      ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
+      ${payTh(t('pay.spKeyed'), 120)}
+    </tr></thead><tbody>`;
+
+  const totals = {}; wk.forEach(w => totals[w] = 0);
+  let qtyTotal = 0;
+  if (!rows.length) {
+    h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.spNone', { m })}</td></tr>`;
+  } else {
+    rows.forEach((r, ri) => {
+      const s = saved[r.key];
+      const cells = (s && s.workers) || {};
+      qtyTotal += r.qty;
+      const keyed = _spKeyed(s);
+      wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
+      const diff = keyed - r.qty;
+      const state = !keyed ? '<span style="color:var(--text-faint);">—</span>'
+        : diff === 0 ? `<span style="color:#15803d;font-weight:700;">✓ ${keyed.toLocaleString(USAGE_LOCALE)}</span>`
+        : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
+      h += `<tr>
+        <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
+        <td class="plot-td">${esc(r.tray)}</td>
+        <td>${esc(r.batches.join(', ') || '—')}</td>
+        <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
+        ${wk.map((w, wi) => {
+          const v = cells[w];
+          return `<td class="sp-cell"><input type="number" min="0" step="1" inputmode="numeric" class="sp-in"
+            id="sp-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${noTable ? ' disabled' : ''}
+            onchange="setSeedPlantingQty(${ri}, ${wi}, this.value)" aria-label="${esc(w)}"></td>`;
+        }).join('')}
+        <td style="white-space:nowrap;">${state}</td>
+      </tr>`;
+    });
+  }
+  const grand = wk.reduce((a, w) => a + totals[w], 0);
+  const fig = v => v ? v.toLocaleString(USAGE_LOCALE) : '—';
+  h += `</tbody><tfoot>
+    <tr class="jumlah-tr">
+      <td class="th-left" colspan="3">${t('pay.totalCap')}</td>
+      <td>${fig(qtyTotal)}</td>
+      ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
+      <td>${fig(grand)}</td></tr>
+  </tfoot>`;
+  tbl.innerHTML = h;
+}
+
+/* A figure keyed against one worker on one tray-day. Kept on the page at
+   once, written a moment later, and the sheet redrawn with the cursor put
+   back where it went -- a redraw inside `change` would otherwise throw away
+   the box the Tab key was moving to. */
+function setSeedPlantingQty(ri, wi, raw) {
+  const m = getMonth();
+  const st = _spCache[m];
+  if (!st || st.noTable) return;
+  const r = st.rows[ri];
+  const { wk } = spWorkerColumns(st.rows, st.saved);
+  const w = wk[wi];
+  if (!r || !w) return;
+  const s = st.saved[r.key] || (st.saved[r.key] = { work_date: r.date, tray: r.tray, month: m, workers: {} });
+  const n = String(raw).trim() === '' ? null : Math.max(0, Math.round(Number(raw)));
+  s.workers = Object.assign({}, s.workers || {});
+  if (n == null || !isFinite(n) || n === 0) delete s.workers[w]; else s.workers[w] = n;
+  s.qty_planted = r.qty;
+  persistSeedPlanting(m, r.key);
+  setTimeout(() => {
+    const focusId = document.activeElement && document.activeElement.id;
+    renderPayroll();
+    const el = focusId && document.getElementById(focusId);
+    if (el) { try { el.focus(); } catch (_) {} }
+  }, 0);
+}
+
+function persistSeedPlanting(m, key) {
+  if (!_supabase) return;
+  const tk = m + '|' + key;
+  clearTimeout(_spSaveTimers[tk]);
+  _spSaveTimers[tk] = setTimeout(() => {
+    delete _spSaveTimers[tk];
+    const s = (_spCache[m] && _spCache[m].saved[key]) || null;
+    if (!s) return;
+    _supabase.from('nops_seed_planting_workers')
+      .upsert({ work_date: s.work_date, tray: s.tray, month: m,
+                qty_planted: s.qty_planted, workers: s.workers || {},
+                updated_by: window.currentUserEmail || _signingAs() || 'office',
+                updated_at: new Date().toISOString() },
+              { onConflict: 'work_date,tray' })
+      .then(({ error }) => {
+        if (!error) { delete _spSaveErr[tk]; return; }
+        _spSaveErr[tk] = error.message;
+        console.warn('[maint] seed planting save failed:', error.message);
+        alert('That figure did not save:\n\n' + error.message);
+      });
+  }, 600);
+}
+
 /* Print a piece rate at its real precision. Forcing 2 decimals showed a rate
    of 0.015 as "0.01" while the money column was still worked out from 0.015,
    so the form appeared not to add up. */
@@ -2373,16 +2638,20 @@ function downloadPayrollPDF() {
      column and a number in every worker cell, not a tick), so it takes the
      wide page; the four tick sheets keep the tall one they have always had. */
   const tpView = _payrollView === 'transplanting';
-  const doc = new jsPDF({ orientation: tpView ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
-  const PW = tpView ? 297 : 210, PH = tpView ? 210 : 297, MARGIN = 25;
+  /* Seed Planting is the Pre Nursery's own sheet, a figure in every worker
+     cell like Transplanting, so it takes the wide page too. */
+  const spView = _payrollView === 'seed_planting';
+  const wide = tpView || spView;
+  const doc = new jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const PW = wide ? 297 : 210, PH = wide ? 210 : 297, MARGIN = 25;
   const CONTENT_W = PW - MARGIN * 2;      // 160 mm
   const MID = PW / 2;
 
-  const n = getNursery(), m = getMonth();
+  const n = spView ? SP_NURSERY : getNursery(), m = getMonth();
   const wk = workers[n] || [];
   const TYPES = ['pd', 'manuring', 'weeding', 'interrow'];
 
-  if (!tpView && !wk.length) {
+  if (!wide && !wk.length) {
     alert(t('pay.noWorkers'));
     return;
   }
@@ -2642,6 +2911,86 @@ function downloadPayrollPDF() {
     doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
+  /* Seed Planting: one row per tray per day off the batch report, and what
+     each Pre Nursery worker keyed against it -- the sheet on screen, on
+     paper. */
+  function drawSeedPlantingSheet() {
+    const st = _spCache[m];
+    if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
+    const rows = st.rows, saved = st.saved;
+    const { wk: cols } = spWorkerColumns(rows, saved);
+    if (!cols.length) { alert(t('pay.noWorkers')); return; }
+    const label = t('tab.seedPlanting');
+    const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
+
+    const W_DATE = 22, W_TRAY = 16, W_BATCH = 30, W_QTY = 22, W_SUM = 26;
+    const FIX = W_DATE + W_TRAY + W_BATCH + W_QTY + W_SUM;
+    const per = Math.max(1, Math.floor((CONTENT_W - FIX) / 12));
+    const chunks = [];
+    for (let i = 0; i < cols.length; i += per) chunks.push(cols.slice(i, i + per));
+
+    chunks.forEach((chunk, ci) => {
+      if (ci) doc.addPage();
+      const part = chunks.length > 1
+        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
+        : '';
+      let y = titleBlock(label, part);
+      const wkW = (CONTENT_W - FIX) / chunk.length;
+      const widths = [W_DATE, W_TRAY, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
+      const xs = []; let x = MARGIN;
+      widths.forEach(w => { xs.push(x); x += w; });
+      const iSum = widths.length - 1;
+      const HEAD_H = headerHeightFor(chunk);
+      const drawHead = () => {
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.date'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.tray'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[3], y, widths[3], HEAD_H, t('pay.qtyPlanted'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[4 + i], y, widths[4 + i], HEAD_H, w));
+        cell(xs[iSum], y, widths[iSum], HEAD_H, t('pay.spKeyed'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        y += HEAD_H;
+      };
+      drawHead();
+
+      const totals = {}; chunk.forEach(w => totals[w] = 0);
+      let qtyTotal = 0, keyedTotal = 0;
+      if (!rows.length) {
+        cell(MARGIN, y, CONTENT_W, 14, t('pay.spNone', { m }), { size: 9 });
+        y += 14;
+      } else {
+        const floor = PH - MARGIN - 20;
+        rows.forEach((r, ri) => {
+          if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
+          const cells = (saved[r.key] && saved[r.key].workers) || {};
+          const keyed = _spKeyed(saved[r.key]);
+          qtyTotal += r.qty; keyedTotal += keyed;
+          const z = ri % 2 ? ZEBRA : null;
+          cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, r.tray, { size: 8.5, bold: true, nowrap: true, fill: z });
+          cell(xs[2], y, widths[2], ROW_H, r.batches.join(', ') || '—', { size: 7.5, fill: z });
+          cell(xs[3], y, widths[3], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
+          chunk.forEach((w, i) => {
+            const v = Number(cells[w]) || 0;
+            totals[w] += v;
+            cell(xs[4 + i], y, widths[4 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
+          });
+          cell(xs[iSum], y, widths[iSum], ROW_H, fig(keyed) || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
+          y += ROW_H;
+        });
+      }
+      cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[3], y, widths[3], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[4 + i], y, widths[4 + i], ROW_H + 1, fig(totals[w]) || '—',
+           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iSum], y, widths[iSum], ROW_H + 1, fig(keyedTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    });
+    doc.save(`Worker_Record_Seed_Planting_${m.replace(/\s+/g, '_')}.pdf`);
+  }
+
   /* Column widths for one chunk of workers. The three fixed columns and the
      per-worker total keep their size; the workers share what is left. */
   const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
@@ -2655,6 +3004,7 @@ function downloadPayrollPDF() {
 
   const ROW_H = 8;
   if (tpView) { drawTransplantingSheet(); return; }
+  if (spView) { drawSeedPlantingSheet(); return; }
   let firstPage = true;
 
   TYPES.forEach(type => {
@@ -3342,12 +3692,17 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Incentive', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Incentive', 'tab.seedPlanting':'Seed Planting', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
+    'pay.tray':'Tray', 'pay.batch':'Batch', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
+    'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
+    'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
+    'pay.spHint':'Each row is a tray planted on that day, read from the batch report\u2019s Seed Planting. Key how many each worker planted; the last column says whether it adds up to the tray. Not on the payroll claim.',
+    'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
     'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. The crew itself is his answer and is changed on the FC Portal.',
     'pay.checked':'Checked',
@@ -3486,12 +3841,17 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Insentif Culling', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Insentif Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
+    'pay.tray':'Dulang', 'pay.batch':'Batch', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
+    'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
+    'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
+    'pay.spHint':'Setiap baris ialah dulang yang ditanam pada hari itu, dari Seed Planting laporan batch. Isi berapa yang ditanam setiap pekerja; lajur terakhir menunjukkan sama ada jumlahnya sepadan. Tidak masuk tuntutan gaji.',
+    'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
     'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Senarai pekerja adalah jawapan beliau dan diubah di FC Portal.',
     'pay.checked':'Disemak',

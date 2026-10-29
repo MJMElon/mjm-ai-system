@@ -5235,3 +5235,37 @@ B4-R2 both go; a split area is judged by its plot.
   because a phone can be holding a list cached before this.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
+
+## Worker Activity is two parts, and Seed Planting is the Pre Nursery one
+
+The office asked for Worker Activity to read as two parts: **Main Nursery**
+(the seven sheets that were there) and **Pre Nursery**, which has one,
+**Seed Planting**. The two headings are `.pn-subgroup` lines inside the
+existing `.pn-sub` list, and they are headings, not buttons.
+
+**The rows are the batch report's, by the batch report's date.** Seed
+Planting on the batch page writes one `Planted` row per tray, dated with the
+day keyed on that tab. Every one dated inside the month on screen is a row
+here, one per TRAY per DAY, so two batches sown into one tray on one day are
+one job. The date rule is the Transplanting Report's: `transaction_date`,
+else a `Date:` in the remark, else `created_at`. `seedPlantingRows()` is the
+rule and it is pure, so the test drives it directly.
+
+**Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
+The figures go into `nops_seed_planting_workers`, one record per tray per
+day (`shared/RUN_ME_seed_planting_workers.sql`), with the ledger figure
+saved beside them. The ledger is only read. The last column says whether
+what was keyed adds up to the tray.
+
+Three things in it:
+
+- **It always reads the Pre Nursery**, whatever nursery is picked at the
+  top. Seed planting is only done there.
+- **It is on no claim.** The office asked for the record first (*先不要*).
+  Nothing in `npayroll/` reads the table. Linking it is a separate change.
+- **Before the SQL is run, the rows still show** with every box disabled,
+  and the hint names the file to run. A sheet that went empty over a
+  missing table would read as a month nobody planted.
+
+`tests/seed_planting_is_pre_nursery.cjs` holds the sidebar, the date rule,
+the sheet, the save, the PDF and the no-table state.
