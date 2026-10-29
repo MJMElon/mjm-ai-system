@@ -505,8 +505,15 @@ const payOf = (page, sec) => page.evaluate((s) =>
       /No rule has been keyed yet/.test(document.getElementById('cm-set-body').textContent),
       /RUN_ME_cull_monitoring_rule_dated\.sql/.test(document.getElementById('cm-set-body').textContent),
       document.querySelectorAll('#cm-set-body .cm-pick, #cm-set-body .cm-x').length,
+      /* The CORNER is where Edit lives now, so that is where "no Edit" has
+         to be asked -- a card with no rule to save must offer no door into
+         one, and `cmEdit` refusing with an alert is a button that looks
+         live and is not. */
+      /* Null-safe: on a page with no corner slot at all this has to read
+         as a FAILED CHECK and not as a crash in the harness. */
+      ((document.getElementById('cm-set-corner') || {}).textContent || '').trim(),
       MJMCullIncentive.RULE.everyPlot.length, MJMCullIncentive.RULE.ownNursery.length]),
-    ['built-in', true, true, 0, 2, 3]);
+    ['built-in', true, true, 0, '', 2, 3]);
   /* IT IS ONE LINE, AND IT NAMES THE FILE THAT IS ACTUALLY RUN. The banner
      was four lines telling the office to run `RUN_ME_cull_monitoring_rule
      .sql` -- the superseded undated half -- and it was on screen only
@@ -530,10 +537,21 @@ const payOf = (page, sec) => page.evaluate((s) =>
     MJMCullIncentive.RULE.everyPlot.forEach((p, i) => { p.id = 100 + i; });
     MJMCullIncentive.RULE.ownNursery.forEach((p, i) => { p.id = 200 + i; });
     renderCullMonitoringSetting();
-    const hadEdit = /Edit/.test(document.getElementById('cm-set-body').textContent);
+    /* EDIT IS IN THE CORNER NOW (edit 移动到右上角), so it is asked for in
+       `.lst-top` and NOT in the body -- and the body is asked too, because
+       a check that only looked for the word anywhere on the card would
+       pass just as green with it still at the foot. */
+    const top = document.querySelector('.lst-top #cm-set-corner');
+    const hadEdit = !!(top && /Edit/.test(top.textContent));
+    const editAtFoot = /Edit/.test(document.getElementById('cm-set-body').textContent);
     cmEdit();
     const b = document.getElementById('cm-set-body');
-    return { hadEdit, picks: b.querySelectorAll('.cm-pick:not(.cm-pick-n)').length,
+    return { hadEdit, editAtFoot,
+             /* …and the corner is EMPTY while editing: Cancel and Save are
+                the pair at the foot, and a third button for a state with no
+                third thing to do is a trap. */
+             cornerWhileEditing: ((document.getElementById('cm-set-corner') || {}).textContent || '').trim(),
+             picks: b.querySelectorAll('.cm-pick:not(.cm-pick-n)').length,
              nurseryPicks: b.querySelectorAll('.cm-pick-n').length,
              removes: b.querySelectorAll('.cm-x').length,
              /* The target box is in a bar of its own and is NOT a price --
@@ -547,6 +565,8 @@ const payOf = (page, sec) => page.evaluate((s) =>
   check('Edit opens the office\u2019s own shape: one price a block, a row a person',
     [ed.hadEdit, ed.rates, ed.picks, ed.nurseryPicks, ed.removes, ed.adds],
     [true, ['20', '50'], 5, 3, 5, 2]);
+  check('\u2026and Edit is in the CORNER, not at the foot, and goes while editing',
+    [ed.hadEdit, ed.editAtFoot, ed.cornerWhileEditing], [true, false, '']);
   check('\u2026and the target is keyed in its own bar, not inside a sentence',
     ed.target, '15');
   check('\u2026and the dated line is said HERE, where the decision is made',
@@ -759,10 +779,11 @@ const payOf = (page, sec) => page.evaluate((s) =>
               MJMCullIncentive.RULE.everyPlot.length, MJMCullIncentive.RULE.ownNursery.length];
     }),
     ['office', true, true, true, true, 1, 1]);
-  check('…so there IS an Edit button, and no banner over a rule they keyed',
+  check('…so there IS an Edit button, in the corner, and no banner over a rule they keyed',
     await sp.evaluate(() => {
       const b = document.getElementById('cm-set-body');
-      return [/Edit/.test(b.textContent), !!b.querySelector('.cm-set-warn'),
+      const c = document.querySelector('.lst-top #cm-set-corner .cm-set-open');
+      return [!!(c && /Edit/.test(c.textContent)), !!b.querySelector('.cm-set-warn'),
               /RUN_ME_/.test(b.textContent)];
     }),
     [true, false, false]);

@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=106">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=107">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -636,11 +636,24 @@
            plots, which is a different job on a different tab, reached from
            Worker Activity where the rest of that work is. A door nobody
            asked for on a card that is set once a year is one more thing to
-           read past. `.cm-set-open` is kept in the stylesheet -- it is the
-           pattern for a corner control on `.lst-top`, which is centred. -->
+           read past.
+
+           WHAT THE CORNER HOLDS NOW IS EDIT, which the office asked for up
+           here off the foot. `#cm-set-corner` is an EMPTY SLOT the renderer
+           fills, rather than a button written into the markup: whether Edit
+           may be offered at all depends on the rule having been read, so
+           the one function that knows that has to be the one that draws it
+           -- a button sitting in the page would be on screen before the
+           answer was in, over a rule nothing can save. It is empty while
+           EDITING, where Cancel and Save are the pair and they belong
+           together at the end of the form. `.cm-set-open` is the stylesheet
+           pattern it wears: `.lst-top` centres its heading, so a corner
+           control has to take itself out of the flow or it drops onto a
+           second line under the title. -->
       <div class="card" style="padding:18px;margin-bottom:16px;">
         <div class="lst-top">
           <div class="set-h">Culling Monitoring</div>
+          <div id="cm-set-corner"></div>
         </div>
         <div id="cm-set-body"></div>
       </div>
@@ -896,7 +909,7 @@
      read. See shared_cull_incentive.js. -->
 <script src="../shared/shared_palms.js?v=6"></script>
 <script src="../shared/shared_cull_incentive.js?v=4"></script>
-<script src="plot_maintenance_script.js?v=158"></script>
+<script src="plot_maintenance_script.js?v=159"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

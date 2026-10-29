@@ -9695,19 +9695,45 @@ function renderSetting() {
    it — a card that gave up for good over one refusal is a card that stays
    wrong until the page is reloaded. */
 let _cmRuleAsked = '';
+/* THE CORNER HOLDS EDIT, and it is drawn by the same call as the body.
+   Two rules it has to keep, and both are why it is not simply written into
+   the markup:
+
+   IT IS OFFERED ONLY ONCE THE RULE HAS BEEN READ. A button in the page is
+   on screen before the answer is in, over a list nothing can save — and
+   `cmEdit` would refuse it with an alert, which is a button that looks
+   live and is not.
+
+   AND IT IS EMPTY WHILE EDITING. Cancel and Save are the pair at the foot;
+   an Edit still sitting in the corner over an open form is a third button
+   for a state that has no third thing to do. */
+function _cmCornerHtml() {
+  const CI = window.MJMCullIncentive;
+  const src = CI && CI.ruleSource ? CI.ruleSource() : 'built-in';
+  if (cmDraft || src !== 'office') return '';
+  return `<button class="btn btn-sm cm-set-open" onclick="cmEdit()">&#9998; Edit</button>`;
+}
+
 function renderCullMonitoringSetting() {
   const box = document.getElementById('cm-set-body');
   if (!box) return;
+  const corner = document.getElementById('cm-set-corner');
   /* A CARD THAT CANNOT READ THE RULE SAYS SO, and does not leave the last
      figures it managed to draw sitting there. Stale rates on a card whose
      whole claim is that it shows the live ones is the worst thing it could
-     do — worse than being empty, because it looks answered. */
-  try { box.innerHTML = _cmSettingHtml(); }
+     do — worse than being empty, because it looks answered. The corner is
+     cleared on that route too: an Edit button over a card that could not
+     say what it is set to is the worst button on the page. */
+  try {
+    box.innerHTML = _cmSettingHtml();
+    if (corner) corner.innerHTML = _cmCornerHtml();
+  }
   catch (e) {
     console.warn('[maint] Culling Monitoring settings card:', e);
     box.innerHTML = '<div class="set-empty">The Culling Monitoring rule could not be read, '
       + 'so this card cannot say what it is set to. Reload the page — and until it does, '
       + 'do not take the last figures you saw here as current.</div>';
+    if (corner) corner.innerHTML = '';
   }
   const CI = window.MJMCullIncentive;
   const M = cmMonth();
@@ -10054,13 +10080,17 @@ function _cmSettingHtml() {
          off keeps naming them up to it.</div>`
     : '';
 
+  /* EDIT IS IN THE CORNER and Cancel/Save are at the FOOT, which is not an
+     inconsistency: Edit is how you get INTO the form and sits with the
+     heading, where every other card on this page puts its corner control;
+     Cancel and Save are a pair that commits what was keyed, and they belong
+     under the last thing keyed. The office asked for the move in one line
+     (edit 移动到右上角) and the foot is empty in the view state because of
+     it — there is nothing else down there. */
   const foot = D
     ? `<div class="lst-foot" style="display:flex;"><button class="btn" onclick="cmCancel()">Cancel</button>
          <button class="btn btn-primary" id="cm-save" onclick="cmSave()">Save</button></div>`
-    : (src === 'office'
-        ? `<div class="lst-foot" style="display:flex;"><button class="btn lst-edit" style="position:static;"
-             onclick="cmEdit()">&#9998; Edit</button></div>`
-        : '');
+    : '';
 
   /* THE TARGET IS A BAR LIKE THE TWO PRICES, and that is what the office
      asking for the sentence to go actually settled. It lived inside a line
