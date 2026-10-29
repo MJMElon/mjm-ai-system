@@ -2345,9 +2345,9 @@ function renderLoadingSeedlingsPayroll() {
 /* ── Seed Planting (Pre Nursery) ─────────────────────────────────────────
    The batch report's Seed Planting tab writes one `Planted` row per tray,
    dated with the day keyed on that tab (`transaction_date`). Every one of
-   those dated inside the month on screen is a row here -- one per TRAY per
-   DAY, two batches sown into one tray on one day being one job -- and each
-   worker keys how many THEY planted.
+   those dated inside the month on screen is counted here -- ONE ROW PER
+   BATCH, its whole planted quantity -- and each worker keys how many THEY
+   planted.
 
    THE NAMES ARE KEYED BY HAND, A LIST PER MONTH. The office asked for it
    ("这个月的工人名字需要manual key") -- the Pre Nursery crew is not on the
@@ -2356,7 +2356,7 @@ function renderLoadingSeedlingsPayroll() {
    none offers last month's to start from.
 
    The ledger is READ and never written. What the office keys goes into
-   nops_seed_planting_workers, one record per tray per day, with the figure
+   nops_seed_planting_batch_workers, one record per batch, with the figure
    the ledger read when it was keyed (`qty_planted`) beside it.
 
    It always reads the PRE NURSERY, whatever nursery is picked at the top:
@@ -2392,24 +2392,43 @@ function _spMonthPrefix(m) {
 
 /* Pure: the ledger's Planted rows in, one row per tray per day out, for the
    month asked. Exposed so the test drives the real rule. */
-function seedPlantingRows(logs, m) {
-  const pre = _spMonthPrefix(m);
+/* "2026-09-28" -> "Sep 2026", the month a date falls in. */
+function _spMonthOfDate(d) {
+  const y = String(d || '').slice(0, 4), mo = parseInt(String(d || '').slice(5, 7), 10);
+  return (y.length === 4 && mo >= 1 && mo <= 12) ? `${MONTH_ABBR[mo - 1]} ${y}` : null;
+}
+
+/* A BATCH CAN BE MOVED TO A LATER MONTH BY HAND. Seedlings sown at the very
+   end of a month -- 277 on 28 Sep -- come too late for that month to pay,
+   so the office puts the batch into the next one ("有时候太迟种的苗在当月
+   来不及进当月payroll"). `moved` is { batch: month }. A tray-day goes to the
+   month one of its batches was moved to, else to the month of its date, so
+   it is on ONE sheet and never two. */
+function seedPlantingMonthOf(row, moved) {
+  const mv = moved || {};
+  for (const b of row.batches) if (mv[b]) return mv[b];
+  return _spMonthOfDate(row.date);
+}
+
+/* ONE ROW PER BATCH. The trays are the batch report's business and none of
+   this sheet's -- "tray完全不用管 跟着batch 就可以了 直接show total planted
+   qty". The figure is the batch's whole planted quantity, every tray of it,
+   and the date is its planted date (the earliest, should its trays carry
+   more than one). */
+function seedPlantingRows(logs, m, moved) {
   const by = {};
   (logs || []).forEach(l => {
     if (l.transaction_type && l.transaction_type !== 'Planted') return;
     const d = _spLogDate(l);
-    if (!pre || !d || d.slice(0, 7) !== pre) return;
-    const tray = String(l.plot_name || '').trim();
-    if (!tray) return;
-    const k = d + '|' + tray;
-    const row = by[k] || (by[k] = { key: k, date: d, tray, qty: 0, batches: [] });
-    row.qty += Number(l.quantity_change) || 0;
     const b = String(l.batch_name || '').trim();
-    if (b && !row.batches.includes(b)) row.batches.push(b);
+    if (!d || !b) return;
+    const row = by[b] || (by[b] = { key: b, batch: b, date: d, qty: 0, batches: [b] });
+    if (d < row.date) row.date = d;
+    row.qty += Number(l.quantity_change) || 0;
   });
-  return Object.values(by).sort((a, b) =>
+  return Object.values(by).filter(r => seedPlantingMonthOf(r, moved) === m).sort((a, b) =>
     a.date !== b.date ? (a.date < b.date ? -1 : 1)
-      : a.tray.localeCompare(b.tray, undefined, { numeric: true }));
+      : a.batch.localeCompare(b.batch, undefined, { numeric: true }));
 }
 
 async function loadSeedPlantingForPayroll(m) {
@@ -2431,20 +2450,38 @@ async function loadSeedPlantingForPayroll(m) {
       logs.push(...(data || []));
       if (!data || data.length < 1000) break;
     }
-    const rows = seedPlantingRows(logs, m);
+    /* Batches moved to a month by hand. Read on its own: a database without
+       the table still shows every sheet by its dates. */
+    const moved = {};
+    let noMoveTable = false;
+    const { data: mv, error: me } = await _supabase.from('nops_seed_planting_batch_month')
+      .select('batch_name, month, created_by, created_at');
+    if (me) { noMoveTable = true; console.warn('[maint] seed planting batches read:', me.message); }
+    else (mv || []).forEach(r => { if (r.batch_name && r.month) moved[String(r.batch_name).trim()] = r.month; });
+    const rows = seedPlantingRows(logs, m, moved);
 
+    /* Asked by the BATCHES on this sheet, not by the month written on the
+       record: a batch keyed under September and then moved into October
+       keeps its figures. */
     const saved = {};
     let noTable = false;
-    const { data: sv, error: se } = await _supabase.from('nops_seed_planting_workers')
-      .select('work_date, tray, month, qty_planted, workers, updated_by, updated_at')
-      .eq('month', m);
+    const bs = rows.map(r => r.batch);
+    const { data: sv, error: se } = bs.length
+      ? await _supabase.from('nops_seed_planting_batch_workers')
+          .select('batch_name, month, planted_date, qty_planted, workers, updated_by, updated_at')
+          .in('batch_name', bs)
+      : await _supabase.from('nops_seed_planting_batch_workers').select('batch_name').limit(1);
     if (se) {
       /* A database that has not had the SQL run: the rows still show, the
          boxes do not take anything, and the sheet says which file to run. */
       noTable = true;
       console.warn('[maint] seed planting read:', se.message);
     } else {
-      (sv || []).forEach(r => { saved[String(r.work_date).slice(0, 10) + '|' + r.tray] = r; });
+      const want = new Set(bs);
+      (sv || []).forEach(r => {
+        const k = String(r.batch_name || '').trim();
+        if (want.has(k)) saved[k] = r;
+      });
     }
     /* The month's names, and last month's to offer when this one has none. */
     let names = [], prevNames = [];
@@ -2462,7 +2499,15 @@ async function loadSeedPlantingForPayroll(m) {
         });
       }
     }
-    _spCache[m] = { rows, saved, names, prevNames, noTable };
+    /* Batches by the month their own dates put them in, so the box can say
+       where a batch is coming FROM, and the month a batch left can say
+       where it went. */
+    const home = {};
+    logs.forEach(l => {
+      const b = String(l.batch_name || '').trim(), d = _spLogDate(l);
+      if (b && d && (!home[b] || d < home[b])) home[b] = d;
+    });
+    _spCache[m] = { rows, saved, names, prevNames, noTable, moved, noMoveTable, home };
   } catch (e) {
     _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
   } finally {
@@ -2530,12 +2575,11 @@ function renderSeedPlantingPayroll() {
   _spDrawNames(m, st);
   const payTh = (txt, w) =>
     `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
-  const span = 4 + wk.length + 1;
+  const span = 3 + wk.length + 1;
   let h = `<thead>
     <tr><th class="wk-th" colspan="${span}">${t('tab.seedPlanting')}</th></tr>
     <tr>
-      ${payTh(t('pay.date'), 92)}
-      ${payTh(t('pay.tray'), 72)}
+      ${payTh(t('pay.spPlantedDate'), 100)}
       ${payTh(t('pay.batch'), 96)}
       ${payTh(t('pay.qtyPlanted'), 100)}
       ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
@@ -2559,8 +2603,7 @@ function renderSeedPlantingPayroll() {
         : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
       h += `<tr>
         <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
-        <td class="plot-td">${esc(r.tray)}</td>
-        <td>${esc(r.batches.join(', ') || '—')}</td>
+        <td class="plot-td">${esc(r.batch)}${st.moved[r.batch] === m ? ` <span class="sp-moved-tag">${esc(t('pay.spAddedTag'))}</span>` : ''}</td>
         <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
         ${wk.map((w, wi) => {
           const v = cells[w];
@@ -2576,7 +2619,7 @@ function renderSeedPlantingPayroll() {
   const fig = v => v ? v.toLocaleString(USAGE_LOCALE) : '—';
   h += `</tbody><tfoot>
     <tr class="jumlah-tr">
-      <td class="th-left" colspan="3">${t('pay.totalCap')}</td>
+      <td class="th-left" colspan="2">${t('pay.totalCap')}</td>
       <td>${fig(qtyTotal)}</td>
       ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
       <td>${fig(grand)}</td></tr>
@@ -2604,7 +2647,65 @@ function _spDrawNames(m, st) {
         onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingWorker();}">
       <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingWorker()">+ ${esc(t('pay.spAdd'))}</button>
       ${copy}
+    </span></div>${_spBatchBar(m, st)}`;
+}
+
+/* Batches added to this month by hand, and the ones taken out of it. */
+function _spBatchBar(m, st) {
+  if (st.noMoveTable) return `<div class="sp-names sp-names-warn">${esc(t('pay.spNoMoveTable'))}</div>`;
+  const ins = Object.keys(st.moved).filter(b => st.moved[b] === m).sort();
+  const outs = Object.keys(st.moved).filter(b => st.moved[b] !== m && st.home[b] && _spMonthOfDate(st.home[b]) === m).sort();
+  const chips = ins.map(b =>
+    `<span class="sp-chip">${esc(b)}<span class="sp-chip-sub">${esc(t('pay.spPlantedOn', { d: _spDay(st.home[b] || '') }))}</span><button type="button" class="sp-chip-x" title="${esc(t('pay.spRemove'))}"
+      onclick="removeSeedPlantingBatch('${esc(b).replace(/'/g, "\\'")}')" aria-label="${esc(t('pay.spRemove'))} ${esc(b)}">×</button></span>`).join('');
+  const out = outs.length
+    ? `<span class="sp-names-none">${esc(t('pay.spMovedOut', { list: outs.map(b => b + ' → ' + st.moved[b]).join(', ') }))}</span>`
+    : '';
+  return `<div class="sp-names">
+    <span class="sp-names-lbl">${esc(t('pay.spBatches'))}</span>
+    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoBatches'))}</span>`}
+    ${out}
+    <span class="sp-names-add">
+      <input type="text" id="sp-new-batch" maxlength="20" placeholder="${esc(t('pay.spBatchPh'))}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingBatch();}">
+      <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingBatch()">+ ${esc(t('pay.spAddBatch'))}</button>
     </span></div>`;
+}
+
+/* Moving a batch changes two sheets, so every month read is thrown away
+   and this one read again. */
+function _spReloadAll(m) {
+  Object.keys(_spCache).forEach(k => { delete _spCache[k]; });
+  loadSeedPlantingForPayroll(m);
+}
+
+async function addSeedPlantingBatch() {
+  const m = getMonth(), st = _spCache[m];
+  const el = document.getElementById('sp-new-batch');
+  if (!st || st.noMoveTable || !el || !_supabase) return;
+  const b = el.value.trim();
+  if (!b) { el.focus(); return; }
+  if (!st.home[b]) { alert(t('pay.spNoSuchBatch', { b })); el.select(); return; }
+  if (st.moved[b] === m) { alert(t('pay.spBatchHere', { b, m })); el.select(); return; }
+  const from = st.moved[b] || _spMonthOfDate(st.home[b]);
+  if (from === m) { alert(t('pay.spBatchHere', { b, m })); el.select(); return; }
+  if (!confirm(t('pay.spMoveQ', { b, from, m }))) return;
+  const { error } = await _supabase.from('nops_seed_planting_batch_month')
+    .upsert({ batch_name: b, month: m,
+              created_by: window.currentUserEmail || _signingAs() || 'office',
+              created_at: new Date().toISOString() }, { onConflict: 'batch_name' });
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  _spReloadAll(m);
+}
+
+async function removeSeedPlantingBatch(b) {
+  const m = getMonth(), st = _spCache[m];
+  if (!st || st.noMoveTable || !_supabase) return;
+  const back = _spMonthOfDate(st.home[b]);
+  if (!confirm(t('pay.spUnmoveQ', { b, m, back }))) return;
+  const { error } = await _supabase.from('nops_seed_planting_batch_month').delete().eq('batch_name', b);
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  _spReloadAll(m);
 }
 
 function _spSaveNames(m) {
@@ -2676,7 +2777,8 @@ function setSeedPlantingQty(ri, wi, raw) {
   const { wk } = spWorkerColumns(st.rows, st.saved, st.names);
   const w = wk[wi];
   if (!r || !w) return;
-  const s = st.saved[r.key] || (st.saved[r.key] = { work_date: r.date, tray: r.tray, month: m, workers: {} });
+  const s = st.saved[r.key] || (st.saved[r.key] = { batch_name: r.batch, month: m, workers: {} });
+  s.planted_date = r.date;
   const n = String(raw).trim() === '' ? null : Math.max(0, Math.round(Number(raw)));
   s.workers = Object.assign({}, s.workers || {});
   if (n == null || !isFinite(n) || n === 0) delete s.workers[w]; else s.workers[w] = n;
@@ -2698,12 +2800,12 @@ function persistSeedPlanting(m, key) {
     delete _spSaveTimers[tk];
     const s = (_spCache[m] && _spCache[m].saved[key]) || null;
     if (!s) return;
-    _supabase.from('nops_seed_planting_workers')
-      .upsert({ work_date: s.work_date, tray: s.tray, month: m,
+    _supabase.from('nops_seed_planting_batch_workers')
+      .upsert({ batch_name: s.batch_name, month: m, planted_date: s.planted_date,
                 qty_planted: s.qty_planted, workers: s.workers || {},
                 updated_by: window.currentUserEmail || _signingAs() || 'office',
                 updated_at: new Date().toISOString() },
-              { onConflict: 'work_date,tray' })
+              { onConflict: 'batch_name' })
       .then(({ error }) => {
         if (!error) { delete _spSaveErr[tk]; return; }
         _spSaveErr[tk] = error.message;
@@ -3034,8 +3136,8 @@ function downloadPayrollPDF() {
     const label = t('tab.seedPlanting');
     const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
 
-    const W_DATE = 22, W_TRAY = 16, W_BATCH = 30, W_QTY = 22, W_SUM = 26;
-    const FIX = W_DATE + W_TRAY + W_BATCH + W_QTY + W_SUM;
+    const W_DATE = 24, W_BATCH = 24, W_QTY = 24, W_SUM = 26;
+    const FIX = W_DATE + W_BATCH + W_QTY + W_SUM;
     const per = Math.max(1, Math.floor((CONTENT_W - FIX) / 12));
     const chunks = [];
     for (let i = 0; i < cols.length; i += per) chunks.push(cols.slice(i, i + per));
@@ -3047,17 +3149,16 @@ function downloadPayrollPDF() {
         : '';
       let y = titleBlock(label, part);
       const wkW = (CONTENT_W - FIX) / chunk.length;
-      const widths = [W_DATE, W_TRAY, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
+      const widths = [W_DATE, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
       const xs = []; let x = MARGIN;
       widths.forEach(w => { xs.push(x); x += w; });
       const iSum = widths.length - 1;
       const HEAD_H = headerHeightFor(chunk);
       const drawHead = () => {
-        cell(xs[0], y, widths[0], HEAD_H, t('pay.date'), { bold: true, size: 8.5, fill: HEAD_FILL });
-        cell(xs[1], y, widths[1], HEAD_H, t('pay.tray'), { bold: true, size: 8.5, fill: HEAD_FILL });
-        cell(xs[2], y, widths[2], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
-        cell(xs[3], y, widths[3], HEAD_H, t('pay.qtyPlanted'), { bold: true, size: 7.5, fill: HEAD_FILL });
-        chunk.forEach((w, i) => vHeaderCell(xs[4 + i], y, widths[4 + i], HEAD_H, w));
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.spPlantedDate'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.qtyPlanted'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[3 + i], y, widths[3 + i], HEAD_H, w));
         cell(xs[iSum], y, widths[iSum], HEAD_H, t('pay.spKeyed'), { bold: true, size: 7.5, fill: HEAD_FILL });
         y += HEAD_H;
       };
@@ -3077,21 +3178,20 @@ function downloadPayrollPDF() {
           qtyTotal += r.qty; keyedTotal += keyed;
           const z = ri % 2 ? ZEBRA : null;
           cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
-          cell(xs[1], y, widths[1], ROW_H, r.tray, { size: 8.5, bold: true, nowrap: true, fill: z });
-          cell(xs[2], y, widths[2], ROW_H, r.batches.join(', ') || '—', { size: 7.5, fill: z });
-          cell(xs[3], y, widths[3], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, r.batch, { size: 8.5, bold: true, nowrap: true, fill: z });
+          cell(xs[2], y, widths[2], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
           chunk.forEach((w, i) => {
             const v = Number(cells[w]) || 0;
             totals[w] += v;
-            cell(xs[4 + i], y, widths[4 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
+            cell(xs[3 + i], y, widths[3 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
           });
           cell(xs[iSum], y, widths[iSum], ROW_H, fig(keyed) || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
           y += ROW_H;
         });
       }
-      cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
-      cell(xs[3], y, widths[3], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
-      chunk.forEach((w, i) => cell(xs[4 + i], y, widths[4 + i], ROW_H + 1, fig(totals[w]) || '—',
+      cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[2], y, widths[2], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1, fig(totals[w]) || '—',
            { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
       cell(xs[iSum], y, widths[iSum], ROW_H + 1, fig(keyedTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
 
@@ -3809,16 +3909,24 @@ const I18N = {
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
-    'pay.tray':'Tray', 'pay.batch':'Batch', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
+    'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.spAddedTag':'added by hand', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
     'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
-    'pay.spHint':'Each row is a tray planted on that day, read from the batch report\u2019s Seed Planting. Key the month\u2019s workers above, then how many each one planted; the last column says whether it adds up to the tray. Not on the payroll claim.',
+    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Key the month\u2019s workers above, then how many each one planted; the last column says whether it adds up to the batch. Not on the payroll claim.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
     'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
     'pay.spCopyPrev':'Use last month\u2019s names ({n})', 'pay.spDup':'{w} is already on this month\u2019s list.',
     'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
     'pay.spRemoveQ':'Remove {w} from the {m} list?',
+    'pay.spBatches':'Batches added by hand:', 'pay.spNoBatches':'None. A batch planted too late for its own month can be added here.',
+    'pay.spBatchPh':'Batch no.', 'pay.spAddBatch':'Add batch', 'pay.spPlantedOn':'planted {d}',
+    'pay.spMovedOut':'Moved out of this month: {list}',
+    'pay.spNoSuchBatch':'Batch {b} has no Seed Planting on any batch report.',
+    'pay.spBatchHere':'Batch {b} is already on the {m} sheet.',
+    'pay.spMoveQ':'Move batch {b} from {from} to {m}?\n\nIt leaves the {from} sheet and is counted here instead. Figures already keyed go with it.',
+    'pay.spUnmoveQ':'Take batch {b} off {m}?\n\nIt goes back to {back}, the month it was planted in. Figures already keyed go with it.',
+    'pay.spNoMoveTable':'Batches cannot be added by hand yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase.',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
     'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. The crew itself is his answer and is changed on the FC Portal.',
     'pay.checked':'Checked',
@@ -3963,16 +4071,24 @@ const I18N = {
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
-    'pay.tray':'Dulang', 'pay.batch':'Batch', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
+    'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.spAddedTag':'ditambah sendiri', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
     'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
     'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
-    'pay.spHint':'Setiap baris ialah dulang yang ditanam pada hari itu, dari Seed Planting laporan batch. Isi berapa yang ditanam setiap pekerja; lajur terakhir menunjukkan sama ada jumlahnya sepadan. Tidak masuk tuntutan gaji.',
+    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Isi pekerja bulan ini di atas, kemudian berapa yang ditanam setiap seorang; lajur terakhir menunjukkan sama ada jumlahnya sepadan. Tidak masuk tuntutan gaji.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
     'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
     'pay.spCopyPrev':'Guna nama bulan lepas ({n})', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
     'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
     'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',
+    'pay.spBatches':'Batch ditambah sendiri:', 'pay.spNoBatches':'Tiada. Batch yang ditanam terlalu lewat untuk bulannya boleh ditambah di sini.',
+    'pay.spBatchPh':'No. batch', 'pay.spAddBatch':'Tambah batch', 'pay.spPlantedOn':'ditanam {d}',
+    'pay.spMovedOut':'Dipindah keluar bulan ini: {list}',
+    'pay.spNoSuchBatch':'Batch {b} tiada Seed Planting dalam mana-mana laporan batch.',
+    'pay.spBatchHere':'Batch {b} sudah ada dalam {m}.',
+    'pay.spMoveQ':'Pindah batch {b} dari {from} ke {m}?\n\nIa keluar dari {from} dan dikira di sini. Angka yang sudah diisi ikut sekali.',
+    'pay.spUnmoveQ':'Keluarkan batch {b} dari {m}?\n\nIa kembali ke {back}, bulan ia ditanam. Angka yang sudah diisi ikut sekali.',
+    'pay.spNoMoveTable':'Batch belum boleh ditambah sendiri: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase.',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
     'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Senarai pekerja adalah jawapan beliau dan diubah di FC Portal.',
     'pay.checked':'Disemak',

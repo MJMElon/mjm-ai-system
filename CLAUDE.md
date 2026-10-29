@@ -5288,13 +5288,26 @@ The office asked for Worker Activity to read as two parts: **Main Nursery**
 **Seed Planting**. The two headings are `.pn-subgroup` lines inside the
 existing `.pn-sub` list, and they are headings, not buttons.
 
-**The rows are the batch report's, by the batch report's date.** Seed
-Planting on the batch page writes one `Planted` row per tray, dated with the
-day keyed on that tab. Every one dated inside the month on screen is a row
-here, one per TRAY per DAY, so two batches sown into one tray on one day are
-one job. The date rule is the Transplanting Report's: `transaction_date`,
-else a `Date:` in the remark, else `created_at`. `seedPlantingRows()` is the
-rule and it is pure, so the test drives it directly.
+**The rows are the batch report's, ONE PER BATCH.** Seed Planting on the
+batch page writes one `Planted` row per tray, dated with the day keyed on
+that tab. This sheet adds a batch's trays together and shows the TOTAL
+planted, against the batch's planted date. The office was explicit:
+*tray完全不用管 跟着batch 就可以了 直接show total planted qty*. The first
+version had a row per tray per day, and its table (`nops_seed_planting_workers`)
+is kept but no longer read. The date rule is the Transplanting Report's:
+`transaction_date`, else a `Date:` in the remark, else `created_at`.
+`seedPlantingRows()` is the rule and it is pure, so the test drives it
+directly.
+
+**A batch can be ADDED TO A LATER MONTH by hand.** Seedlings sown on the
+last days of a month come too late for that month's payroll. 277 was sown on
+28 Sep and is October's work. `nops_seed_planting_batch_month` holds one
+month per batch, and `seedPlantingMonthOf` sends the batch there and ONLY
+there: it leaves the month its date would have put it in, and that month
+says where it went (*Moved out of this month: 277 → Oct 2026*). A batch on
+two sheets would be counted twice. Figures are kept by BATCH, so whatever
+was keyed goes with it. Taking the batch off deletes the move and nothing
+else.
 
 **The NAMES are keyed by hand, one list per month** (*这个月的工人名字需要manual
 key*), in `nops_seed_planting_names`. They are not read from the worker
@@ -5306,8 +5319,8 @@ the list. A figure saved under a name that is no longer on the list still
 gets a column, marked ⚠.
 
 **Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
-The figures go into `nops_seed_planting_workers`, one record per tray per
-day (`shared/RUN_ME_seed_planting_workers.sql`), with the ledger figure
+The figures go into `nops_seed_planting_batch_workers`, one record per
+batch (`shared/RUN_ME_seed_planting_workers.sql`), with the ledger figure
 saved beside them. The ledger is only read. The last column says whether
 what was keyed adds up to the tray.
 
