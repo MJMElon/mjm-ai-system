@@ -5390,10 +5390,27 @@ not a fresh one — then run twice more to prove an edit survives.
 The office asked for it in one line — *"在setting里面讲可能影响culling
 incentive的东西加进去"* — and the reason it is worth having is that **not one
 of these was visible anywhere**: the target of 15 days, the two names paid
-on every nursery, the three Field Conductors paid on their own, and the six
-other things that decide whether a plot is asked about at all. The office
-could not see that Florence is paid RM 20, or that a plot missing from
-Seedling Stock earns nobody anything.
+on every nursery, and the three Field Conductors paid on their own. The
+office could not see that Florence is paid RM 20.
+
+**IT IS THE KEYING AND NOTHING ELSE, and the six rows that went are the
+instructive part.** The card opened as a REFERENCE panel: under the two
+blocks it carried a six-row table — which plots are asked about (the
+ledger), which nursery a plot is in (Seedling Stock), how long it took
+(PALMS), a -R plot, added or removed by hand, Checked — each saying where
+it is decided. The office read it and said *"这里不用show"*, and they are
+right twice over. **None of the six is a lever anybody keys**, so they were
+six rows to read past sitting above the two boxes that ARE keyed; and every
+one of them is a rule with a heading of its own in this file, which is
+where an explanation belongs. The heading moved with the card — it read
+*"what moves it"* and reads **"the rule"** — because a heading promising a
+list the card no longer carries is a heading somebody has to ask about.
+
+**The DATED line is drawn only while EDITING.** It says what Save will
+actually do, so it belongs beside the Save button; a paragraph that is only
+true of an edit has no business on a screen with no edit on it. That is why
+the test asks for it in BOTH directions — absent in the view, present once
+`cmEdit()` has run — rather than only checking it is gone.
 
 - **It reads the LIVE rule** (`MJMCullIncentive.RULE` / `TARGET_DAYS`),
   never a second copy. A card restating RM 20 and 15 days is a card that
@@ -5428,15 +5445,9 @@ Seedling Stock earns nobody anything.
 - **A card that cannot read the rule SAYS SO** and keeps nothing stale.
   Stale rates on a card whose whole claim is that it shows the live ones is
   worse than an empty card, because it looks answered.
-- **It cannot take Settings down with it.** It is reference and the three
-  blocks above it are what somebody opened Settings to key, so it renders
-  inside its own try — the batch page's rule for its trailing steps.
-- **AND IT IS THE FIRST THING THAT WOULD SHOW THE LOAD-ORDER TRAP.** The
-  rule takes its target off PALMS at load — `(global.MJMPalms &&
-  …TARGET_DAYS) || 15` — so a page that loads the rule BEFORE PALMS times
-  every plot against a fallback 15 while the Motion Study beside it uses
-  whatever PALMS says. Both are 15 today and nothing anywhere would say a
-  word if they stopped being. The card prints a red line when they differ.
+- **It cannot take Settings down with it.** It is a rule set once and the
+  three blocks above it are the day's own work, so it renders inside its
+  own try — the batch page's rule for its trailing steps.
 - **The corner link uses `.cm-set-open`, not `.lst-edit`.** `.lst-top` is
   `position:relative` with its heading centred, so a control that does not
   take itself out of the flow drops onto a second line under the title —

@@ -432,15 +432,15 @@ const payOf = (page, sec) => page.evaluate((s) =>
   /* ── SETTINGS: WHAT MOVES CULLING MONITORING ──────────────────────────
      The office asked for the things that can affect it to be on Settings,
      and the reason is that NOT ONE of them was on a screen: the target of
-     15 days, the two names paid on every nursery, the three Field
-     Conductors paid on their own, and the six other things that decide
-     whether a plot is asked about at all. */
+     15 days, the two names paid on every nursery, and the three Field
+     Conductors paid on their own. */
   console.log('— Settings: what moves Culling Monitoring');
   const cm = await mp.evaluate(() => {
     isNopsAdmin = true; switchTab('setting');
     const b = document.getElementById('cm-set-body');
     return { txt: (b.textContent || '').replace(/\s+/g, ' ').trim(),
-             rows: b.querySelectorAll('.cm-set-row').length };
+             rows: b.querySelectorAll('.cm-set-row').length,
+             notes: b.querySelectorAll('.cm-set-note').length };
   });
   check('it names every person the rule pays, and the price of each block',
     [/Rousell Wayne/.test(cm.txt), /Florence/.test(cm.txt), /Lalu Aenal/.test(cm.txt),
@@ -450,10 +450,17 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [true, true, true, true, true, true, true, true, true]);
   check('…the target, and that nothing is paid before it is Checked',
     [/15 days or fewer/.test(cm.txt), /Checked/.test(cm.txt)], [true, true]);
-  check('…and the six other things that move it, each saying where it is decided',
-    [cm.rows, /Seedling Stock/.test(cm.txt), /PALMS/.test(cm.txt),
-     /replant/i.test(cm.txt), /ledger/.test(cm.txt)],
-    [6, true, true, true, true]);
+  /* AND NOTHING ELSE. The card carried a six-row reference table under the
+     two blocks -- which plots are asked about, Seedling Stock, PALMS, a -R
+     plot, by hand, Checked -- and the office took it off in one line
+     (这里不用show). None of the six is a lever anybody keys here, so they
+     are six rows to read past on a card that exists to be keyed. The dated
+     line went with them from the VIEW: it says what Save will do, so it is
+     drawn beside Save and nowhere else (asserted in edit mode below). */
+  check('…and nothing else: no reference table, and no dated line to read past',
+    [cm.rows, cm.notes, /Seedling Stock/.test(cm.txt), /replant/i.test(cm.txt),
+     /What else moves it/i.test(cm.txt), /leaves every month before it alone/.test(cm.txt)],
+    [0, 0, false, false, false, false]);
 
   /* IT SAYS WHICH RULE IT IS ON. The tables are not on this fixture, so the
      rule fell back to the one built into the file -- and a card that did
@@ -483,11 +490,23 @@ const payOf = (page, sec) => page.evaluate((s) =>
              nurseryPicks: b.querySelectorAll('.cm-pick-n').length,
              removes: b.querySelectorAll('.cm-x').length,
              rates: [...b.querySelectorAll('.cm-pay-rate input')].map(i => i.value),
-             adds: [...b.querySelectorAll('.row-add')].length };
+             adds: [...b.querySelectorAll('.row-add')].length,
+             dated: /leaves every month before it alone/.test(b.textContent) };
   });
   check('Edit opens the office\u2019s own shape: one price a block, a row a person',
     [ed.hadEdit, ed.rates, ed.picks, ed.nurseryPicks, ed.removes, ed.adds],
     [true, ['20', '50'], 5, 3, 5, 2]);
+  check('\u2026and the dated line is said HERE, where the decision is made',
+    ed.dated, true);
+  /* SHOT_CM gives the office the card as it stands, both states: what they
+     see on opening Settings, and what Edit opens. */
+  if (process.env.SHOT_CM) {
+    const card = mp.locator('#cm-set-body').locator('xpath=..');
+    await card.screenshot({ path: process.env.SHOT_CM.replace('.png', '_edit.png') });
+    await mp.evaluate(() => cmCancel());
+    await card.screenshot({ path: process.env.SHOT_CM });
+    await mp.evaluate(() => cmEdit());
+  }
 
   /* THE NAME IS A DROPDOWN OFF THE REGISTER, and it preselects through the
      CLAIM's own resolver -- the rule says "Florence" and the register says

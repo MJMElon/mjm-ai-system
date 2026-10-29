@@ -9576,44 +9576,23 @@ function renderSetting() {
 /* ══ WHAT MOVES CULLING MONITORING ══════════════════════════════════════
    The office asked for the things that can affect it to be on Settings, and
    the reason is that NOT ONE of them was on a screen anywhere: the target
-   of 15 days, the two names paid on every nursery, the three Field
-   Conductors paid on their own, and the four other things that decide
-   whether a plot is even asked about.
+   of 15 days, the two names paid on every nursery, and the three Field
+   Conductors paid on their own.
 
    THE LIVE RULE, NEVER A SECOND COPY. Every figure here is read off
    `MJMCullIncentive` — a card restating RM 20 and 15 days is a card that
    goes on saying so the day somebody changes them, which is the drift this
-   codebase keeps finding. That is also why it is read-only: the rates and
-   the target live in `shared/shared_cull_incentive.js`, so a box here that
-   looked editable would be a promise the page cannot keep. The day the
-   office wants them keyed it is a settings table and a paste of SQL, and
-   this card is where the boxes go.
+   codebase keeps finding.
 
-   AND IT CHECKS THE ONE THING THAT CAN SILENTLY DISAGREE. The rule reads
-   its target off PALMS at load — `(global.MJMPalms && …TARGET_DAYS) || 15`
-   — so a page that loads the rule BEFORE PALMS times every plot against a
-   fallback 15 while the Motion Study beside it uses whatever PALMS says.
-   Both are 15 today and nothing would say a word if they stopped being. */
-const CM_LEVERS = [
-  ['Which plots are asked about',
-   'Every plot with a Transplanted row dated in the month, read the way the Transplanting Report reads a date.',
-   'Batch Record — the ledger'],
-  ['Which nursery a plot is in',
-   'A plot the list cannot place is in no nursery, so it earns nobody anything.',
-   'Seedling Stock (shared_plots)'],
-  ['How long the plot took',
-   'PALMS times it, Saringan Anak Bibit to the last day Transplanting was closed — the Motion Study’s own measure.',
-   'PALMS — the plot log'],
-  ['A replant plot',
-   'A -R plot is on no PALMS screen and is never paid, by hand or otherwise.',
-   'The rule (fixed)'],
-  ['Added or removed by hand',
-   'One record per plot per month. Add counts a plot whatever PALMS says; Remove leaves one out.',
-   'Worker Activity → Culling Monitoring'],
-  ['Checked',
-   'Checking writes down the dates and the days the row READ, so a PALMS correction afterwards does not move money already agreed.',
-   'Worker Activity → Culling Monitoring'],
-];
+   IT IS THE KEYING AND NOTHING ELSE. It carried a six-row reference table
+   underneath — which plots are asked about, which nursery a plot is in, how
+   PALMS times it, a -R plot, by hand, Checked — and the office read it and
+   said in one line: 这里不用show. They are right about what a settings card
+   is for: every one of those six is a rule in the code with a heading of its
+   own in CLAUDE.md, not a lever anybody keys, and a table of six things
+   nobody can change sitting under the two boxes they CAN is six rows that
+   have to be read past every time. The explanation of them stays where an
+   explanation belongs, which is here and in CLAUDE.md. */
 
 function renderCullMonitoringSetting() {
   const box = document.getElementById('cm-set-body');
@@ -9883,11 +9862,6 @@ function _cmSettingHtml() {
      is one number now — PALMS owns it, everything reads it live — so there
      is nothing left that could disagree. */
 
-  const row = (what, now, where) =>
-    `<div class="cm-set-row"><span class="cm-set-k">${esc(what)}</span>`
-    + `<span class="cm-set-v">${now}</span>`
-    + `<span class="cm-set-w">${esc(where)}</span></div>`;
-
   /* THE NAME IS A DROPDOWN OFF THE REGISTER, never a typed box: a worker is
      the register ROW, and a name keyed by hand that the register cannot
      place is money leaving the claim with nothing saying it had gone. A
@@ -9938,6 +9912,21 @@ function _cmSettingHtml() {
       </div>`;
   };
 
+  /* SAID WHERE THE DECISION IS MADE, and nowhere else. This is what Save
+     will actually DO — it starts the change at this month and leaves every
+     month before it alone — so it belongs beside the Save button and not
+     under a card somebody is only reading. The office took it off the view
+     in the same line they took the reference table off (这里不用show), and a
+     paragraph that is only true of an edit has no business on a screen with
+     no edit on it. */
+  const dated = D
+    ? `<div class="cm-set-note"><b>Saving starts the change at ${esc(_cmMonthName())} and
+         leaves every month before it alone.</b> Change the Field Conductor price from
+         RM 50 to RM 40 today and September goes on paying RM 50, however many times it
+         is reopened. A name swapped works the same way: the month somebody was taken
+         off keeps naming them up to it.</div>`
+    : '';
+
   const foot = D
     ? `<div class="lst-foot" style="display:flex;"><button class="btn" onclick="cmCancel()">Cancel</button>
          <button class="btn btn-primary" id="cm-save" onclick="cmSave()">Save</button></div>`
@@ -9958,17 +9947,8 @@ function _cmSettingHtml() {
     ${banner}
     ${block('admin', 'Admin', 'a plot, every nursery')}
     ${block('fc', 'Field Conductor', 'a plot, own nursery only')}
-    ${foot}
-    <div class="cm-set-note"><b>A change here starts from ${esc(_cmMonthName())} and
-      leaves every month before it alone.</b> Change the Field Conductor price from RM 50
-      to RM 40 today and September goes on paying RM 50, however many times it is
-      reopened — the rule is kept with the month it started in, and a month is priced by
-      the rule that was in force for it. A name swapped works the same way: the month
-      somebody was taken off keeps naming them up to it.</div>
-    <div class="cm-set-grid" style="margin-top:14px;">
-      <div class="cm-set-head"><span>What else moves it</span><span>How</span><span>Decided on</span></div>
-      ${CM_LEVERS.map(l => row(l[0], esc(l[1]), l[2])).join('')}
-    </div>`;
+    ${dated}
+    ${foot}`;
 }
 
 function renderCapacity() {
