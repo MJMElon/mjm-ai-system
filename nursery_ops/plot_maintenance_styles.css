@@ -1617,4 +1617,5 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .sp-names-add input{padding:6px 9px;border:1px solid var(--border,#d6dfd9);border-radius:8px;font:inherit;font-size:12.5px;min-width:160px;}
 .sp-chip-sub{font-weight:600;font-size:10.5px;opacity:.7;margin-left:6px;}
 .sp-names-warn{color:#92400e;background:var(--gold-bg,#fffbeb);border-color:var(--gold-border,#fcd34d);font-size:12px;font-weight:700;}
-.sp-moved-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e;font-size:10px;font-weight:800;}
+.sp-pick{padding:6px 9px;border:1px solid var(--border,#d6dfd9);border-radius:8px;font:inherit;font-size:12.5px;min-width:200px;background:#fff;}
+#payroll-table .sp-checked{background:#ecfdf5;color:#15803d;border-color:#a7f3d0;font-weight:700;}

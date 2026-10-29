@@ -490,7 +490,7 @@ function applyPageAccess() {
       if (b) b.style.display = 'none';
     }
   });
-  const payrollSubs = ['maint', 'transpl', 'seedling', 'other', 'monthly'];
+  const payrollSubs = ['maint', 'transpl', 'seedling', 'seedplant', 'other', 'monthly'];
   if (!payrollSubs.some(may)) {
     const b = $('icon-btn-payroll');
     if (b) b.style.display = 'none';
@@ -557,8 +557,119 @@ function refreshPayrollTab() {
   if (s === 'maint')    renderMaint();
   if (s === 'transpl')  renderEntries('transplanting');
   if (s === 'seedling') renderEntries('seedlings');
+  if (s === 'seedplant') renderSeedPlanting();
   if (s === 'other')    renderEntries('other');
   if (s === 'monthly')  renderMonthly();
+}
+
+/* ════════════ SEED PLANTING ════════════
+   The Pre Nursery's seed planting, priced. The figures are keyed on Work
+   Maintenance, Worker Activity, Seed Planting -- one record per BATCH, each
+   worker keying how many seeds they planted -- and only a batch somebody has
+   CHECKED there reaches this claim. A batch keyed and not checked is NAMED
+   under the table, because a claim short of work reads exactly like a quiet
+   month. This page writes nothing.
+
+   The rate is the Piece Rate row filed under Seed Planting (category
+   seed_planting). With none set it is RM 0.02 a seed, the figure the office
+   gave, and the note says it is the default rather than a setting. */
+const SEED_PLANTING_DEFAULT_RATE = 0.02;
+const _seedPlant = { month: null, rows: null, err: '', at: 0, loading: false };
+
+function seedPlantingRate() {
+  const set = (rates || []).filter(r => r.active !== false && r.category === 'seed_planting');
+  if (set.length) return { rate: Number(set[0].rate) || 0, from: set[0].job_desc || 'Piece Rate', many: set.length > 1 };
+  return { rate: SEED_PLANTING_DEFAULT_RATE, from: null, many: false };
+}
+
+/* Pure: the month's records in, the claim out. Exposed for the test. */
+function seedPlantingClaim(recs, rate) {
+  const checked = (recs || []).filter(r => r.checked_at)
+    .sort((a, b) => String(a.planted_date || '').localeCompare(String(b.planted_date || ''))
+      || String(a.batch_name).localeCompare(String(b.batch_name), undefined, { numeric: true }));
+  const held = (recs || []).filter(r => !r.checked_at
+    && Object.values(r.workers || {}).some(v => Number(v) > 0));
+  const people = {};
+  checked.forEach(r => Object.entries(r.workers || {}).forEach(([w, v]) => {
+    const n = Number(v) || 0;
+    if (!n) return;
+    const p = people[w] || (people[w] = { name: w, byBatch: {}, qty: 0 });
+    p.byBatch[r.batch_name] = (p.byBatch[r.batch_name] || 0) + n;
+    p.qty += n;
+  }));
+  const list = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));
+  list.forEach(p => { p.amount = Math.round(p.qty * rate * 100) / 100; });
+  return { batches: checked.map(r => r.batch_name), checked, held, people: list,
+           qty: list.reduce((a, p) => a + p.qty, 0),
+           amount: list.reduce((a, p) => a + p.amount, 0) };
+}
+
+async function loadSeedPlanting(month) {
+  _seedPlant.loading = true; _seedPlant.month = month; _seedPlant.err = '';
+  const { data, error } = await _supabase.from('nops_seed_planting_batch_workers')
+    .select('*').eq('month', month);
+  _seedPlant.loading = false; _seedPlant.at = Date.now();
+  if (_seedPlant.month !== month) return;          // the month moved on while asking
+  if (error) { _seedPlant.rows = []; _seedPlant.err = error.message || String(error); }
+  else _seedPlant.rows = data || [];
+  if (activeSub() === 'seedplant') renderSeedPlanting(true);
+}
+
+function renderSeedPlanting(fromLoad) {
+  const tbl = $('seedplant-table'), note = $('seedplant-note'), sub = $('seedplant-sub');
+  if (!tbl) return;
+  const month = maintMonthLabel(monthValue());
+  if (sub) sub.textContent = `Pre Nursery — ${monthLabelFull(monthValue())}`;
+  /* Read again on every visit: the checks are made on another page, and a
+     tab that showed what it read an hour ago would be a claim missing the
+     batch somebody has just checked. */
+  if (!fromLoad && !_seedPlant.loading) { loadSeedPlanting(month); }
+  if (_seedPlant.month !== month || _seedPlant.rows === null) {
+    tbl.innerHTML = '<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-light);">Loading…</td></tr></tbody>';
+    if (note) note.textContent = '';
+    return;
+  }
+  if (_seedPlant.err) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:#b91c1c;">Could not read the Seed Planting records: ${esc(_seedPlant.err)}</td></tr></tbody>`;
+    if (note) note.textContent = 'If this says the table does not exist, run shared/RUN_ME_seed_planting_workers.sql in Supabase.';
+    return;
+  }
+  const r = seedPlantingRate();
+  const c = seedPlantingClaim(_seedPlant.rows, r.rate);
+  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
+  let h = `<thead><tr>
+      <th style="text-align:left;">Worker</th>
+      ${c.batches.map(b => `<th>Batch ${esc(b)}</th>`).join('')}
+      <th>Seeds planted</th><th>Rate</th><th>Amount</th>
+    </tr></thead><tbody>`;
+  if (!c.people.length) {
+    h += `<tr><td colspan="${4 + c.batches.length}" style="padding:1.6rem;text-align:center;color:var(--text-light);">${
+      c.held.length ? 'Nothing is Checked yet for ' + esc(monthLabelFull(monthValue())) + '.'
+                    : 'No seed planting was keyed for ' + esc(monthLabelFull(monthValue())) + '.'}</td></tr>`;
+  } else {
+    c.people.forEach(p => {
+      h += `<tr><td style="text-align:left;font-weight:700;">${esc(p.name)}</td>
+        ${c.batches.map(b => `<td>${fig(p.byBatch[b])}</td>`).join('')}
+        <td style="font-weight:700;">${fig(p.qty)}</td>
+        <td>${rateTxt(r.rate)}</td>
+        <td style="font-weight:700;">${money(p.amount)}</td></tr>`;
+    });
+  }
+  const perBatch = b => c.people.reduce((a, p) => a + (p.byBatch[b] || 0), 0);
+  h += `</tbody><tfoot><tr class="total-row">
+      <td style="text-align:left;">Total</td>
+      ${c.batches.map(b => `<td>${fig(perBatch(b))}</td>`).join('')}
+      <td>${fig(c.qty)}</td><td></td><td>${money(c.amount)}</td>
+    </tr></tfoot>`;
+  tbl.innerHTML = h;
+  if (note) {
+    const bits = [];
+    bits.push(r.from
+      ? `Rate: ${rateTxt(r.rate)} a seed, from Piece Rate (${esc(r.from)})${r.many ? ' — more than one Seed Planting rate is active, the first is used' : ''}.`
+      : `Rate: ${rateTxt(r.rate)} a seed, the default. Set it on Settings → Piece Rate with Used For "Seed Planting".`);
+    if (c.held.length) bits.push(`<b style="color:#b45309;">Not on this claim:</b> batch ${c.held.map(x => esc(x.batch_name)).join(', ')} ${c.held.length === 1 ? 'is' : 'are'} keyed and not yet Checked on Work Maintenance.`);
+    note.innerHTML = bits.join('<br>');
+  }
 }
 
 function closeModal(id) {
@@ -5136,8 +5247,8 @@ document.addEventListener('keydown', (e) => {
     if (tab === 'rates') tab = 'locks';
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
-    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'other', 'monthly']) || sub;
-    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','other','monthly']),
+    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'seedplant', 'other', 'monthly']) || sub;
+    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','seedplant','other','monthly']),
                       workers: may('workers'), locks: may('rates') || may('locks') };
     if (!tabOpen[tab]) tab = ['payroll','workers','locks'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);

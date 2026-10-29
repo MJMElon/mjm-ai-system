@@ -383,9 +383,11 @@ const payOf = (page, sec) => page.evaluate((s) =>
   check('it is on the list, timed, counted — and NOT paid until somebody Checks it',
     (await rowsOf(mp)).find(r => r[0] === 'B9'), ['B9', true, 9, false]);
   txt = await tableText(mp);
-  check('the row says it was added by hand, and the plot count moved with it',
-    [/B9Added by hand: PALMS was never closed for this plot/.test(txt),
-     /2 of 3 plots checked/.test(txt)], [true, true]);
+  /* No "Added by hand" line under the plot, nor its remark: the office
+     asked for both off. The record still carries them (checked above). */
+  check('the row carries no "Added by hand" line, and the plot count moved with it',
+    [/Added by hand/.test(txt), /PALMS was never closed/.test(txt),
+     /2 of 3 plots checked/.test(txt)], [false, false, true]);
   /* Delete puts it back to what PALMS says — which here is nothing at all,
      the ledger never having mentioned B9. */
   await mp.evaluate(() => {

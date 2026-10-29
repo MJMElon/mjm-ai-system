@@ -5361,10 +5361,13 @@ two sheets would be counted twice. Figures are kept by BATCH, so whatever
 was keyed goes with it. Taking the batch off deletes the move and nothing
 else.
 
-**The NAMES are keyed by hand, one list per month** (*这个月的工人名字需要manual
-key*), in `nops_seed_planting_names`. They are not read from the worker
-register: the Pre Nursery crew is not filed there as a section of its own,
-and the register came back empty. A month with no list offers last month's
+**The NAMES are one list per month**, in `nops_seed_planting_names`, picked
+from a DROPDOWN (*add worker & add batch 用drop down的方式*): everybody active
+on the payroll register, by section — the Pre Nursery crew is filed under
+whichever nursery they belong to, so the PN section alone came back empty —
+then last month's names the register cannot place, then an Other that opens
+a box. Add batch is a dropdown of the batches planted in the two months
+before this one, newest first. A month with no list offers last month's
 in one press. A name with figures against it cannot be removed until those
 figures are cleared, because its column would only come back as a name off
 the list. A figure saved under a name that is no longer on the list still
@@ -5373,18 +5376,34 @@ gets a column, marked ⚠.
 **Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
 The figures go into `nops_seed_planting_batch_workers`, one record per
 batch (`shared/RUN_ME_seed_planting_workers.sql`), with the ledger figure
-saved beside them. The ledger is only read. The last column says whether
-what was keyed adds up to the tray.
+saved beside them. The ledger is only read. The last column but one says
+whether what was keyed adds up to the batch.
 
 Three things in it:
 
 - **It always reads the Pre Nursery**, whatever nursery is picked at the
   top. Seed planting is only done there.
-- **It is on no claim.** The office asked for the record first (*先不要*).
-  Nothing in `npayroll/` reads the table. Linking it is a separate change.
+- **CHECKED IS WHAT PAYS IT, and the money is on the PAYROLL only.** *"图一只
+  show qty, after checked, 这份表格会flow 去图二, 新加一个tab - seed
+  planting"*, then *"tab里面才会有价钱"*. Work Maintenance shows quantities
+  and a Check per batch; a checked batch is shut (boxes disabled, and the
+  save refuses too). The Nursery Payroll's **Seed Planting** tab
+  (`renderSeedPlanting`, `seedPlantingClaim`) prices the CHECKED batches,
+  each worker's own seeds times the rate, and NAMES the batches keyed and not
+  checked. The rate is the Piece Rate row with Used For *Seed Planting*
+  (`category = 'seed_planting'`), seeded at **RM 0.02 a seed** by the SQL only
+  where none exists; with none at all the tab uses 0.02 and says it is the
+  default. A trigger (`nops_seed_planting_clear_check`) takes the tick off a
+  batch whose figures change after it was checked, from any screen.
+  **It is not on the Monthly Payroll yet**: the names are hand-picked, not
+  register rows, so nothing yet joins them to a person's month.
+- **No "added by hand" tag** on a moved batch, nor the "Added by hand"
+  line and remark on Culling Incentive: *"不用show added by hand,包括 culling
+  incentive那里的remark"*. The records still carry them.
 - **Before the SQL is run, the rows still show** with every box disabled,
   and the hint names the file to run. A sheet that went empty over a
   missing table would read as a month nobody planted.
 
 `tests/seed_planting_is_pre_nursery.cjs` holds the sidebar, the date rule,
-the sheet, the save, the PDF and the no-table state.
+the sheet, the Check, the dropdowns, the PDF and the no-table state;
+`tests/seed_planting_is_paid_when_checked.cjs` holds the payroll tab.

@@ -141,6 +141,9 @@ async function boot(browser, opts) {
     // The register says nothing about the Pre Nursery: the sheet must not care.
     _linkedRows.PN = [];
     _localWorkers.PN = ['Register Person'];
+    _registerRows = [{ full_name: 'Siti', section: 'PN', active: true }, { full_name: 'Ani', section: 'PN', active: true },
+                     { full_name: 'Nur Aina', section: 'UNN1', active: true }, { full_name: 'Gone', section: 'PN', active: false },
+                     { full_name: 'Turned down', section: 'BNN', active: true, rejected_at: '2026-10-01' }];
     const btn = [...document.querySelectorAll('#sm-nav .pn-tab')].find(b => /switchTab\('payroll'/.test(b.getAttribute('onclick')));
     btn.click();
     switchPayrollView('seed_planting');
@@ -198,12 +201,13 @@ const sheetOf = (page) => page.evaluate(() => {
   // ── 3. The sheet ──
   let sh = await sheetOf(page);
   check('it reads the Pre Nursery', /Seed Planting \(/.test(sh.line) && /Oct 2026/.test(sh.line), true);
-  check('no tray column: planted date, batch, total, a column per name keyed for the month, a saved name off it flagged',
-    sh.head, ['Planted date', 'Batch', 'Qty planted', 'Siti', 'Rina', 'Old Name ⚠', 'Keyed by workers']);
-  check('rows carry the planted date, the batch, its total and the figures keyed', sh.body,
-    [['05/10/2026', '278', '3,000', '2000', '1000', '_', '✓ 3,000'],
-     ['20/10/2026', '279', '800', '500', '_', '200', '700 · short by 100']]);
-  check('the foot totals the batches and each worker', sh.foot.slice(1), ['3,800', '2,500', '1,000', '200', '3,700']);
+  check('no tray column: planted date, batch, total, a column per name keyed for the month, a saved name off it flagged, and Checked',
+    sh.head, ['Planted date', 'Batch', 'Qty planted', 'Siti', 'Rina', 'Old Name ⚠', 'Keyed by workers', 'Checked']);
+  check('rows carry the planted date, the batch, its total and the figures keyed -- and no money', sh.body,
+    [['05/10/2026', '278', '3,000', '2000', '1000', '_', '✓ 3,000', 'Check'],
+     ['20/10/2026', '279', '800', '500', '_', '200', '700 · short by 100', 'Check']]);
+  check('nothing on the sheet is priced', /RM/.test(await page.evaluate(() => document.getElementById('payroll-table').textContent)), false);
+  check('the foot totals the batches and each worker', sh.foot.slice(1, 6), ['3,800', '2,500', '1,000', '200', '3,700']);
 
   // ── 4. Keying a figure saves one record per batch ──
   await page.fill('#sp-1-1', '100');
@@ -213,47 +217,68 @@ const sheetOf = (page) => page.evaluate(() => {
     await page.evaluate(() => window.__WRITES.map(x => [x.row.batch_name, x.row.month, x.row.planted_date, x.row.qty_planted, x.row.workers, x.opt && x.opt.onConflict])),
     [['279', 'Oct 2026', '2026-10-20', 800, { Siti: 500, 'Old Name': 200, Rina: 100 }, 'batch_name']]);
   check('…and the row redraws as adding up', await page.evaluate(() =>
-    document.querySelector('#payroll-table tbody tr:nth-child(2) td:last-child').textContent.trim()), '✓ 800');
+    document.querySelector('#payroll-table tbody tr:nth-child(2) td:nth-last-child(2)').textContent.trim()), '✓ 800');
 
-  // ── 5. The names, keyed by hand ──
+  // ── 4b. Checked is what sends a batch to the payroll ──
+  await page.evaluate(() => toggleSeedPlantingCheck(0));
+  await page.waitForTimeout(300);
+  const chk = await page.evaluate(() => {
+    const w = window.__WRITES.slice(-1)[0];
+    return { batch: w.row.batch_name, at: !!w.row.checked_at, by: w.row.checked_by, workers: w.row.workers,
+             boxes: [...document.querySelectorAll('#payroll-table tbody tr:nth-child(1) input.sp-in')].every(i => i.disabled),
+             cell: document.querySelector('#payroll-table tbody tr:nth-child(1) td:last-child').textContent.trim() };
+  });
+  check('Check writes the tick on the batch with its figures', [chk.batch, chk.at, chk.by, chk.workers],
+    ['278', true, 'Elon Ting', { Siti: 2000, Rina: 1000 }]);
+  check('…and the checked row is shut and says who', [chk.boxes, /^✓ Elon Ting/.test(chk.cell)], [true, true]);
+  await page.evaluate(() => setSeedPlantingQty(0, 0, '5'));
+  await page.waitForTimeout(800);
+  check('a figure on a checked batch is refused, not saved', [/Batch 278 is Checked/.test(dialogs.pop() || ''),
+    await page.evaluate(() => window.__WRITES.filter(x => x.row.batch_name === '278').length)], [true, 1]);
+  await page.evaluate(() => toggleSeedPlantingCheck(0));
+  await page.waitForTimeout(300);
+  check('Uncheck asks first, and clears the tick', [/^confirm: Uncheck batch 278/.test(dialogs.pop() || ''),
+    await page.evaluate(() => window.__WRITES.slice(-1)[0].row.checked_at)], [true, null]);
+
+  // ── 5. The names, from a dropdown ──
   const bar = await page.evaluate(() => [...document.querySelectorAll('#payroll-names .sp-chip')].map(c => c.firstChild.textContent));
   check('the month list is drawn above the table', bar.slice(0, 2), ['Siti', 'Rina']);
-  await page.fill('#sp-new-name', '  Nur   Aina ');
-  await page.press('#sp-new-name', 'Enter');
+  const opts = await page.evaluate(() => [...document.querySelectorAll('#sp-new-name optgroup')].map(g =>
+    g.label + ': ' + [...g.querySelectorAll('option')].map(o => o.value).join(',')));
+  check('Add worker is a dropdown of the active register by section, without names already on the list',
+    opts, ['PN: Ani', 'UNN1: Nur Aina', 'Last month: Ana,Budi']);
+  await page.evaluate(() => { const s = document.getElementById('sp-new-name'); s.value = 'Nur Aina'; addSeedPlantingWorker(); });
   await page.waitForTimeout(200);
-  check('Add puts the name on the list and saves the month, tidied',
+  check('picking one adds it and saves the month',
     await page.evaluate(() => window.__NAMES.map(x => [x.row.month, x.row.names, x.opt && x.opt.onConflict])),
     [['Oct 2026', ['Siti', 'Rina', 'Nur Aina'], 'month']]);
-  await page.fill('#sp-new-name', 'siti');
-  await page.press('#sp-new-name', 'Enter');
+  await page.evaluate(() => {
+    const s = document.getElementById('sp-new-name'); s.value = '__other'; _spPickWorker('__other');
+    document.getElementById('sp-new-name-other').value = '  Pak   Long ';
+    addSeedPlantingWorker();
+  });
   await page.waitForTimeout(200);
-  check('the same name twice is refused', [dialogs.pop(), await page.evaluate(() => window.__NAMES.length)],
-    ['alert: siti is already on this month’s list.', 1]);
+  check('Other opens a box for a name on no list, tidied', await page.evaluate(() => _spCache['Oct 2026'].names),
+    ['Siti', 'Rina', 'Nur Aina', 'Pak Long']);
   await page.evaluate(() => removeSeedPlantingWorker(0));
-  check('a name with figures is not removed', [/Siti has figures on 2 row/.test(dialogs.pop() || ''),
-    await page.evaluate(() => _spCache['Oct 2026'].names)], [true, ['Siti', 'Rina', 'Nur Aina']]);
+  check('a name with figures is not removed', /Siti has figures on 2 row/.test(dialogs.pop() || ''), true);
 
-  // ── 6. 277, sown on 28 Sep, added to October by hand ──
-  await page.fill('#sp-new-batch', '999');
-  await page.press('#sp-new-batch', 'Enter');
-  await page.waitForTimeout(200);
-  check('a batch with no Seed Planting is refused', [dialogs.pop(), await page.evaluate(() => window.__MOVES.length)],
-    ['alert: Batch 999 has no Seed Planting on any batch report.', 0]);
-  await page.fill('#sp-new-batch', '278');
-  await page.press('#sp-new-batch', 'Enter');
-  await page.waitForTimeout(200);
-  check('a batch already on the sheet is refused', dialogs.pop(), 'alert: Batch 278 is already on the Oct 2026 sheet.');
-  await page.fill('#sp-new-batch', '277');
-  await page.press('#sp-new-batch', 'Enter');
+  // ── 6. 277, sown on 28 Sep, added to October from a dropdown ──
+  check('Add batch offers the last two months, newest first, with the day and the total',
+    await page.evaluate(() => [...document.querySelectorAll('#sp-new-batch option')].map(o => o.textContent.trim())),
+    ['Pick a batch…', '277 · 28/09/2026 · 3,760']);
+  await page.evaluate(() => { document.getElementById('sp-new-batch').value = '277'; addSeedPlantingBatch(); });
   await page.waitForTimeout(700);
   check('the office is asked, naming both months', /^confirm: Move batch 277 from Sep 2026 to Oct 2026\?/.test(dialogs.pop() || ''), true);
   check('…and one record says 277 belongs to October',
     await page.evaluate(() => window.__MOVES.map(x => [x.op, x.row && x.row.batch_name, x.row && x.row.month, x.opt && x.opt.onConflict])),
     [['upsert', '277', 'Oct 2026', 'batch_name']]);
   sh = await sheetOf(page);
-  check('277 is on October, first, with its whole total and marked as added',
-    sh.body.map(r => r.slice(0, 3)), [['28/09/2026', '277 added by hand', '3,760'], ['05/10/2026', '278', '3,000'], ['20/10/2026', '279', '800']]);
+  check('277 is on October, first, with its whole total, and NO "added by hand" tag',
+    sh.body.map(r => r.slice(0, 3)), [['28/09/2026', '277', '3,760'], ['05/10/2026', '278', '3,000'], ['20/10/2026', '279', '800']]);
   check('…and the bar names it with the day it was planted', sh.bars.includes('277planted 28/09/2026') || sh.bars.includes('277 planted 28/09/2026'), true);
+  check('…and the dropdown no longer offers it', await page.evaluate(() =>
+    [...document.querySelectorAll('#sp-new-batch option')].map(o => o.value)), ['']);
 
   // September now says where 277 went, rather than losing it quietly.
   await page.evaluate(() => { document.getElementById('global-month').value = '2026-09'; renderPayroll(); });
@@ -314,7 +339,7 @@ const sheetOf = (page) => page.evaluate(() => {
     offer: [...document.querySelectorAll('#payroll-names button')].map(b => b.textContent.trim()).find(x => /last month/i.test(x)) || ''
   }));
   check('no names yet: the batches still show, with no worker columns', [empty.rows, empty.cols],
-    [2, ['Planted date', 'Batch', 'Qty planted', 'Keyed by workers']]);
+    [2, ['Planted date', 'Batch', 'Qty planted', 'Keyed by workers', 'Checked']]);
   check('…and last month is offered, counted', empty.offer, 'Use last month’s names (2)');
   await c.page.evaluate(() => useLastMonthSeedPlantingNames());
   await c.page.waitForTimeout(200);
