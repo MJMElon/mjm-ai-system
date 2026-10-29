@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=105">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=106">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -628,11 +628,16 @@
 
            LAST on the page, after the three blocks somebody opens Settings
            to key: this one is a rule set once, not the day's own work. -->
+      <!-- NO CORNER LINK. It read "Open Culling Monitoring →" and the office
+           asked for it off: this card is the RULE and the tab is the month's
+           plots, which is a different job on a different tab, reached from
+           Worker Activity where the rest of that work is. A door nobody
+           asked for on a card that is set once a year is one more thing to
+           read past. `.cm-set-open` is kept in the stylesheet -- it is the
+           pattern for a corner control on `.lst-top`, which is centred. -->
       <div class="card" style="padding:18px;margin-bottom:16px;">
         <div class="lst-top">
           <div class="set-h">Culling Monitoring — the rule</div>
-          <a class="btn btn-sm cm-set-open" id="cm-set-link"
-             href="nursery_ops_maintenance.html?view=cull_incentive">Open Culling Monitoring &rarr;</a>
         </div>
         <div id="cm-set-body"></div>
       </div>
@@ -886,15 +891,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <!-- PALMS, and the culling incentive rule both this page and the payroll
      read. See shared_cull_incentive.js. -->
-<<<<<<< HEAD
-<script src="../shared/shared_palms.js?v=5"></script>
-<script src="../shared/shared_cull_incentive.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=150"></script>
-=======
 <script src="../shared/shared_palms.js?v=6"></script>
 <script src="../shared/shared_cull_incentive.js?v=4"></script>
-<script src="plot_maintenance_script.js?v=157"></script>
->>>>>>> origin/main
+<script src="plot_maintenance_script.js?v=158"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

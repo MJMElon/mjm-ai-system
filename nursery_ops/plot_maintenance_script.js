@@ -1880,12 +1880,18 @@ function renderCullIncentivePayroll() {
   const hint = document.getElementById('payroll-hint');
   const off = document.getElementById('payroll-offreg');
   if (off) off.style.display = 'none';
-  if (hint) {
-    hint.classList.remove('pay-hint-warn');
-    hint.textContent = `A plot whose Saringan Anak Bibit to Transplanting took ${window.MJMCullIncentive ? MJMCullIncentive.TARGET_DAYS : 15} days or fewer `
-      + `earns the incentive. Tick Checked once you have been through a plot: ONLY a checked plot is paid, `
-      + `and the amounts are worked out on the Nursery Payroll Transplanting sheet.`;
-  }
+  /* NO STANDING SENTENCE. It explained the rule and the Check in three
+     lines over a table that says both — the plots are listed BECAUSE they
+     made the target, the Check button is on every row and says so in its
+     title, and the Settings card carries the rule itself. The office read
+     it and said 删掉.
+
+     IT IS CLEARED AND NOT LEFT ALONE. `#payroll-hint` is shared with the
+     four other sheets on this tab, and every one of them writes a sentence
+     into it — so a tab switch that only stopped writing would leave the
+     Transplanting or the Work Maintenance hint sitting over these plots,
+     which is worse than the sentence that went. */
+  if (hint) { hint.classList.remove('pay-hint-warn'); hint.textContent = ''; }
   const msg = (txt, colour) => {
     tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:${colour || 'var(--text-faint)'};font-size:13px;">${txt}</td></tr></tbody>`;
   };
@@ -9668,6 +9674,27 @@ function renderSetting() {
    have to be read past every time. The explanation of them stays where an
    explanation belongs, which is here and in CLAUDE.md. */
 
+/* THE CARD HAS TO READ THE RULE ITSELF, and not reading it was the whole
+   of why the office could not key anything. `loadRule` was called in ONE
+   place — `_loadCullIncentive`, which runs when the Culling Monitoring
+   sub-tab of Worker Activity is opened — so a person who went straight to
+   Settings had a card drawn over a rule nobody had fetched. `ruleSource()`
+   答 'built-in', which is what that answer MEANS: nobody asked. The card
+   then drew the list compiled into the file (short names: Florence, Akbar),
+   put a red banner over it telling them to run a file they had already run,
+   and offered NO EDIT BUTTON. 为什么改不到 — because the one screen the rule
+   is keyed on was the one screen that never read it.
+
+   SO THE READ BELONGS WITH THE DRAW. It draws at once off whatever is in
+   hand, asks the database, and draws again. Two draws rather than an empty
+   card while it waits: the figures are what somebody opened this for, and
+   a blank where a rate belongs reads as a rate of nothing.
+
+   `_cmRuleAsked` is per month and stops it asking on every tab switch; it
+   is cleared on a save, which re-reads anyway. A FAILED read does not set
+   it — a card that gave up for good over one refusal is a card that stays
+   wrong until the page is reloaded. */
+let _cmRuleAsked = '';
 function renderCullMonitoringSetting() {
   const box = document.getElementById('cm-set-body');
   if (!box) return;
@@ -9682,6 +9709,16 @@ function renderCullMonitoringSetting() {
       + 'so this card cannot say what it is set to. Reload the page — and until it does, '
       + 'do not take the last figures you saw here as current.</div>';
   }
+  const CI = window.MJMCullIncentive;
+  const M = cmMonth();
+  /* Never while EDITING: a read landing under a half-keyed draft would
+     redraw the card and throw away what somebody had typed. */
+  if (cmDraft || !CI || !CI.loadRule || !_supabase || _cmRuleAsked === M) return;
+  _cmRuleAsked = M;
+  CI.loadRule(_supabase, M).then(
+    (r) => { if (!cmDraft) renderCullMonitoringSetting();
+             if (!(r && r.ready)) _cmRuleAsked = ''; },
+    (e) => { console.warn('[maint] Culling Monitoring rule not read:', e); _cmRuleAsked = ''; });
 }
 
 /* ══ EDITING THE RULE ═══════════════════════════════════════════════════
@@ -9744,8 +9781,11 @@ function _cmWorkerId(name) {
 function cmEdit() {
   const CI = window.MJMCullIncentive;
   if (!CI || (CI.ruleSource && CI.ruleSource() !== 'office')) {
-    alert('This is the list built into the system.\n\n'
-        + 'Run shared/RUN_ME_cull_monitoring_rule.sql once in Supabase and it becomes '
+    /* Names the DATED file, which is the one that is run now -- the earlier
+       undated one was superseded and pointing at it is how somebody comes to
+       run the wrong half. */
+    alert('This is the list built into the system, so there is nothing keyed to change.\n\n'
+        + 'Run shared/RUN_ME_cull_monitoring_rule_dated.sql once in Supabase and it becomes '
         + 'editable, seeded with exactly what is on screen.');
     return;
   }
@@ -9917,17 +9957,30 @@ function _cmSettingHtml() {
   const live = (k) => D ? D.people.filter(r => r.kind === k && r.active !== false)
                         : (k === 'admin' ? CI.RULE.everyPlot : CI.RULE.ownNursery);
 
-  /* WHICH RULE IS ON SCREEN. It fails open, so a database that has not had
-     RUN_ME_cull_monitoring_rule.sql run goes on paying exactly what it paid
-     before — and a screen that did not say so would have the office
-     believing they had set rates that nothing reads. Said LOUDER than being
-     short, the rule this module already has a heading about. */
+  /* WHICH RULE IS ON SCREEN, IN ONE LINE. It fails open, so a database that
+     cannot answer goes on paying exactly what it paid before — and a card
+     that did not say so would have the office believing they had keyed
+     rates nothing reads.
+
+     IT WAS FOUR LINES AND THE OFFICE HAD RUN THE FILE IT NAMED. It was on
+     screen for one reason only: the card never read the rule (see
+     `renderCullMonitoringSetting`), so it was telling them to run a file
+     they had already run, over a list they had already replaced. 这种废话
+     全部删掉 — and the honest half of it survives as ONE line, said only
+     when it is true, which after the read is fixed is almost never.
+
+     THE TWO CASES ARE NOT THE SAME and only one of them names a file. A
+     read that FAILED is a database that could not answer; a read that came
+     back EMPTY is a rule nobody has keyed. `ruleError()` is what tells them
+     apart — `loadRule` leaves it set on the first and null on the second. */
   const src = CI.ruleSource ? CI.ruleSource() : 'built-in';
-  const banner = src === 'office' ? '' :
-    `<div class="cm-set-warn">This is the list built into the system, not one the office has
-      keyed — so nothing changed here can be saved and every plot is paying what it always
-      paid. Run <code>shared/RUN_ME_cull_monitoring_rule.sql</code> once in Supabase and this
-      card becomes editable, seeded with exactly what you see.</div>`;
+  const readErr = CI.ruleError ? CI.ruleError() : null;
+  const banner = src === 'office' ? '' : (readErr
+    ? `<div class="cm-set-warn">The keyed rule could not be read, so nothing here can be
+        saved. This is what the system was paying before.</div>`
+    : `<div class="cm-set-warn">No rule has been keyed yet, so this is what the system was
+        paying before. Run <code>shared/RUN_ME_cull_monitoring_rule_dated.sql</code> once in
+        Supabase.</div>`);
 
   /* THE DRIFT WARNING THAT USED TO BE HERE IS GONE, and that is the fix
      rather than a removal: this card used to print a red line when PALMS
@@ -10009,16 +10062,36 @@ function _cmSettingHtml() {
              onclick="cmEdit()">&#9998; Edit</button></div>`
         : '');
 
+  /* THE TARGET IS A BAR LIKE THE TWO PRICES, and that is what the office
+     asking for the sentence to go actually settled. It lived inside a line
+     of prose — "A plot that went from Saringan Anak Bibit to the end of
+     Transplanting in [15] days or fewer earns this. Nothing is paid until
+     the plot is Checked on Worker Activity." — which is two sentences of
+     explanation wrapped round the one figure that is keyed. Deleting the
+     sentence outright would take the box with it and the target would stop
+     being keyable, so it moves into the shape the rest of the card already
+     has: a heading on the left, the figure on the right, its unit beside
+     it. Three bars, three things keyed, no prose.
+
+     It keeps the Motion Study line in EDIT only: somebody about to change
+     the target is the one person who has to know it is the same number. */
+  const targetBar = `
+      <div class="cm-pay cm-pay-solo">
+        <div class="cm-pay-top"><span class="cm-pay-t">Target</span>
+          <span class="cm-pay-rate">${D
+            ? `<input class="cm-days" type="number" min="1" step="1" value="${esc(String(D.rate.target))}"
+                 oninput="cmSetRate('target', this.value)">`
+            : `<b>${esc(String(CI.TARGET_DAYS))}</b>`}
+            <span>days or fewer, Saringan Anak Bibit to Transplanting</span></span>
+        </div>
+        ${D ? `<div class="cm-pay-row cm-pay-note"><span>The same target the
+          <b>Motion Study</b> measures against — one number, so the two cannot
+          disagree.</span><span></span><span></span></div>` : ''}
+      </div>`;
+
   return `
-    <div class="cm-set-lead">A plot that went from Saringan Anak Bibit to the end of
-      Transplanting in ${D
-        ? `<input class="cm-days" type="number" min="1" step="1" value="${esc(String(D.rate.target))}"
-             oninput="cmSetRate('target', this.value)"> <b>days or fewer</b>`
-        : `<b>${esc(String(CI.TARGET_DAYS))} days or fewer</b>`} earns this.
-      Nothing is paid until the plot is <b>Checked</b> on Worker Activity.
-      ${D ? `<div class="cm-set-w" style="margin-top:6px;">This is the same target the
-        <b>Motion Study</b> measures against — one number, so the two cannot disagree.</div>` : ''}</div>
     ${banner}
+    ${targetBar}
     ${block('admin', 'Admin', 'a plot, every nursery')}
     ${block('fc', 'Field Conductor', 'a plot, own nursery only')}
     ${dated}

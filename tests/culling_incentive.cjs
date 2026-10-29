@@ -136,6 +136,11 @@ async function boot(browser, db, where) {
           (window.__WRITES = window.__WRITES || []).push(['delete', table, st.eqs.slice()]);
           return { data: [], error: null };
         }
+        /* READS are recorded as well as writes: a card that goes back to
+           the database on every tab switch answers correctly and costs a
+           round trip each time somebody looks at Settings, which nothing
+           on screen would ever say. */
+        (window.__READS = window.__READS || []).push(table);
         const o = rows(); return st.single ? { data: o[0] || null, error: null } : { data: o, error: null };
       };
       const q = new Proxy({}, { get(_, p) {
@@ -185,6 +190,19 @@ async function boot(browser, db, where) {
   for (const host of ['**/cdn.jsdelivr.net/**', '**/cdnjs.cloudflare.com/**',
                       '**/fonts.googleapis.com/**', '**/fonts.gstatic.com/**']) {
     await page.route(host, (r) => r.fulfill({ status: 200, body: '' }));
+  }
+  /* STRAIGHT TO SETTINGS, and never through ?view=cull_incentive. That is
+     the whole point of this landing: opening the Culling Monitoring tab
+     calls `_loadCullIncentive`, which reads the rule -- so every check
+     written against the 'maint' landing has the rule in hand before the
+     Settings card is ever drawn, and could not have caught the card not
+     reading it. Somebody going to Settings first is who found it. */
+  if (where === 'setting') {
+    await page.goto('http://localhost:8777/nursery_ops/nursery_ops_maintenance.html', { waitUntil: 'load' });
+    await page.waitForFunction(() => typeof window.renderCullMonitoringSetting === 'function'
+      && document.getElementById('cm-set-body'), { timeout: 20000 });
+    await page.evaluate(() => { isNopsAdmin = true; switchTab('setting'); });
+    return { page, errs };
   }
   if (where === 'maint') {
     await page.goto('http://localhost:8777/nursery_ops/nursery_ops_maintenance.html?view=cull_incentive', { waitUntil: 'load' });
@@ -239,10 +257,14 @@ const payOf = (page, sec) => page.evaluate((s) =>
       return [en, ms, /Culling Incentive/i.test(document.body.textContent)];
     }),
     ['Culling Monitoring', 'Pemantauan Culling', false]);
+  /* The corner link that used to be asked here is gone -- the office asked
+     for it off the Settings card -- so the KEY is asked of the sub-tab and
+     of the ?view= the page answers, which is what it was ever proving. */
   check('…and the KEY it is stored and reached under did not move',
     await mp.evaluate(() => [!!document.getElementById('pn-subtab-cull_incentive'),
-      /view=cull_incentive/.test(document.getElementById('cm-set-link').getAttribute('href'))]),
-    [true, true]);
+      !document.getElementById('cm-set-link'),
+      /cull_incentive/.test(document.getElementById('pn-subtab-cull_incentive').id)]),
+    [true, true, true]);
   check('BNN: every plot transplanted this month, timed off its latest run, nothing checked yet',
     await rowsOf(mp),
     [['B1', true, 13, false], ['B2', false, 19, false], ['B3', true, 14, false], ['B4', false, null, false],
@@ -440,6 +462,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
     const b = document.getElementById('cm-set-body');
     return { txt: (b.textContent || '').replace(/\s+/g, ' ').trim(),
              rows: b.querySelectorAll('.cm-set-row').length,
+             bars: b.querySelectorAll('.cm-pay-top').length,
              notes: b.querySelectorAll('.cm-set-note').length };
   });
   check('it names every person the rule pays, and the price of each block',
@@ -448,8 +471,19 @@ const payOf = (page, sec) => page.evaluate((s) =>
      /ADMIN/i.test(cm.txt), /FIELD CONDUCTOR/i.test(cm.txt),
      /RM 20\.00/.test(cm.txt), /RM 50\.00/.test(cm.txt)],
     [true, true, true, true, true, true, true, true, true]);
-  check('…the target, and that nothing is paid before it is Checked',
-    [/15 days or fewer/.test(cm.txt), /Checked/.test(cm.txt)], [true, true]);
+  /* THE TARGET IS A BAR OF ITS OWN, like the two prices. It was keyed
+     inside a sentence of prose -- "A plot that went from Saringan Anak
+     Bibit to the end of Transplanting in [15] days or fewer earns this.
+     Nothing is paid until the plot is Checked on Worker Activity." -- and
+     the office asked the prose off (删掉). The figure had to keep a home or
+     the target would stop being keyable, so it took the shape the card
+     already had: three bars, three things keyed, no sentences. */
+  check('…the target is its own bar, and the prose round it is gone',
+    [/TARGET/i.test(cm.txt), /15 days or fewer/.test(cm.txt),
+     cm.bars,
+     /A plot that went from Saringan/.test(cm.txt),
+     /Nothing is paid until the plot is/.test(cm.txt)],
+    [true, true, 3, false, false]);
   /* AND NOTHING ELSE. The card carried a six-row reference table under the
      two blocks -- which plots are asked about, Seedling Stock, PALMS, a -R
      plot, by hand, Checked -- and the office took it off in one line
@@ -468,11 +502,24 @@ const payOf = (page, sec) => page.evaluate((s) =>
      nothing reads. Loud, and no Edit button over a list that cannot save. */
   check('without the tables it pays what it always paid, says so, and offers no Edit',
     await mp.evaluate(() => [MJMCullIncentive.ruleSource(),
-      /built into the system/.test(document.getElementById('cm-set-body').textContent),
-      /RUN_ME_cull_monitoring_rule\.sql/.test(document.getElementById('cm-set-body').textContent),
+      /No rule has been keyed yet/.test(document.getElementById('cm-set-body').textContent),
+      /RUN_ME_cull_monitoring_rule_dated\.sql/.test(document.getElementById('cm-set-body').textContent),
       document.querySelectorAll('#cm-set-body .cm-pick, #cm-set-body .cm-x').length,
       MJMCullIncentive.RULE.everyPlot.length, MJMCullIncentive.RULE.ownNursery.length]),
     ['built-in', true, true, 0, 2, 3]);
+  /* IT IS ONE LINE, AND IT NAMES THE FILE THAT IS ACTUALLY RUN. The banner
+     was four lines telling the office to run `RUN_ME_cull_monitoring_rule
+     .sql` -- the superseded undated half -- and it was on screen only
+     because the card never read the rule, so it was saying it over a rule
+     they had already keyed. 这种废话全部删掉. */
+  check('…in one line, and not the four that named the superseded file',
+    await mp.evaluate(() => {
+      const w = document.querySelector('#cm-set-body .cm-set-warn');
+      return [w ? w.textContent.replace(/\s+/g, ' ').trim().length < 170 : false,
+              /card becomes editable, seeded/.test(document.getElementById('cm-set-body').textContent),
+              /RUN_ME_cull_monitoring_rule\.sql/.test(document.getElementById('cm-set-body').innerHTML)];
+    }),
+    [true, false, false]);
 
   /* AND THE EDIT IS THE OFFICE'S SKETCH: a price on the BLOCK, a list of
      names under it with a remove on each, an Add, and the Field Conductor
@@ -489,25 +536,21 @@ const payOf = (page, sec) => page.evaluate((s) =>
     return { hadEdit, picks: b.querySelectorAll('.cm-pick:not(.cm-pick-n)').length,
              nurseryPicks: b.querySelectorAll('.cm-pick-n').length,
              removes: b.querySelectorAll('.cm-x').length,
-             rates: [...b.querySelectorAll('.cm-pay-rate input')].map(i => i.value),
+             /* The target box is in a bar of its own and is NOT a price --
+                asked for separately, or a check about two rates quietly
+                becomes a check about three boxes. */
+             rates: [...b.querySelectorAll('.cm-pay-rate input:not(.cm-days)')].map(i => i.value),
+             target: (b.querySelector('.cm-days') || {}).value,
              adds: [...b.querySelectorAll('.row-add')].length,
              dated: /leaves every month before it alone/.test(b.textContent) };
   });
   check('Edit opens the office\u2019s own shape: one price a block, a row a person',
     [ed.hadEdit, ed.rates, ed.picks, ed.nurseryPicks, ed.removes, ed.adds],
     [true, ['20', '50'], 5, 3, 5, 2]);
+  check('\u2026and the target is keyed in its own bar, not inside a sentence',
+    ed.target, '15');
   check('\u2026and the dated line is said HERE, where the decision is made',
     ed.dated, true);
-  /* SHOT_CM gives the office the card as it stands, both states: what they
-     see on opening Settings, and what Edit opens. */
-  if (process.env.SHOT_CM) {
-    const card = mp.locator('#cm-set-body').locator('xpath=..');
-    await card.screenshot({ path: process.env.SHOT_CM.replace('.png', '_edit.png') });
-    await mp.evaluate(() => cmCancel());
-    await card.screenshot({ path: process.env.SHOT_CM });
-    await mp.evaluate(() => cmEdit());
-  }
-
   /* THE NAME IS A DROPDOWN OFF THE REGISTER, and it preselects through the
      CLAIM's own resolver -- the rule says "Florence" and the register says
      "Florence Anak Jugah", so an exact match alone would mark five people
@@ -613,7 +656,11 @@ const payOf = (page, sec) => page.evaluate((s) =>
       cmCancel();
       const was = MJMPalms.TARGET_DAYS;
       MJMPalms.setTargetDays(12); renderCullMonitoringSetting();
-      const txt = document.getElementById('cm-set-body').textContent;
+      /* The figure and its unit are separate elements in the bar, so the
+         text is read with its whitespace collapsed -- a markup change that
+         moved the line break would otherwise fail a check about PALMS. */
+      const txt = (document.getElementById('cm-set-body').textContent || '')
+        .replace(/\s+/g, ' ');
       MJMPalms.setTargetDays(was); renderCullMonitoringSetting();
       return [/12 days or fewer/.test(txt), /have to be the same number/.test(txt)];
     }),
@@ -657,6 +704,93 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [15, 12]);
 
   await mp.evaluate(() => { cmCancel(); });
+
+  /* ── THE CARD READS THE RULE ITSELF ───────────────────────────────────
+     THE FAULT THIS SECTION EXISTS FOR, in the office's own words: 为什么改
+     不到. They had run the SQL, the rule was in the database, and the
+     Settings card drew the list compiled into the FILE -- short names,
+     RM 20 / RM 50 / 15 days whatever they had keyed -- put a red banner
+     over it telling them to run a file they had already run, and offered
+     NO EDIT BUTTON.
+
+     `loadRule` was called in ONE place: `_loadCullIncentive`, which runs
+     when the Culling Monitoring sub-tab of Worker Activity is opened. So
+     the one screen the rule is KEYED on was the one screen that never read
+     it, and `ruleSource()` answered 'built-in' -- which is what that answer
+     means: nobody asked.
+
+     EVERY CHECK ABOVE IS BLIND TO IT, and that is the lesson rather than an
+     aside: they all run on the 'maint' landing, which goes through
+     ?view=cull_incentive and therefore has the rule in hand before the card
+     is drawn at all. A fixture that always walks in through the other door
+     cannot see a door that does not open. So this one lands on Settings and
+     touches nothing else. */
+  console.log('— Settings: the card reads the rule itself');
+  const RULE_DB = Object.assign({}, db, {
+    nops_cull_monitoring_rate: [
+      { id: 1, kind: 'admin',  from_month: '2000-01', rm: 25 },
+      { id: 2, kind: 'fc',     from_month: '2000-01', rm: 55 },
+      { id: 3, kind: 'target', from_month: '2000-01', rm: 12 }],
+    nops_cull_monitoring_people: [
+      { id: 11, kind: 'admin', nursery: '', worker_id: 1, worker_name: 'Rousell Wayne',
+        from_month: '2000-01', until_month: null },
+      { id: 12, kind: 'fc', nursery: 'BNN', worker_id: 3, worker_name: 'Lalu Aenal Mashuri',
+        from_month: '2000-01', until_month: null }]
+  });
+  const sg = await boot(browser, RULE_DB, 'setting');
+  const sp = sg.page;
+  /* It draws at once off what is in hand and draws AGAIN when the database
+     answers, so the check waits for the second draw rather than for a tick
+     of the clock -- a fixed wait passes or fails on how fast the harness
+     is that morning. */
+  /* The wait is CAUGHT, so a card that never reads the rule fails as the
+     named check below rather than killing the run with a timeout -- the
+     failure has to read as 为什么改不到, not as a harness that hung. */
+  await sp.waitForFunction(() => window.MJMCullIncentive
+    && MJMCullIncentive.ruleSource() === 'office', { timeout: 8000 })
+    .catch(() => {});
+  check('opening Settings alone reads the keyed rule — no other tab touched',
+    await sp.evaluate(() => {
+      const b = document.getElementById('cm-set-body');
+      const txt = (b.textContent || '').replace(/\s+/g, ' ').trim();
+      return [MJMCullIncentive.ruleSource(),
+              /RM 25\.00/.test(txt), /RM 55\.00/.test(txt), /12 days or fewer/.test(txt),
+              /Lalu Aenal Mashuri/.test(txt),
+              MJMCullIncentive.RULE.everyPlot.length, MJMCullIncentive.RULE.ownNursery.length];
+    }),
+    ['office', true, true, true, true, 1, 1]);
+  check('…so there IS an Edit button, and no banner over a rule they keyed',
+    await sp.evaluate(() => {
+      const b = document.getElementById('cm-set-body');
+      return [/Edit/.test(b.textContent), !!b.querySelector('.cm-set-warn'),
+              /RUN_ME_/.test(b.textContent)];
+    }),
+    [true, false, false]);
+  /* THE TARGET REACHED PALMS, which is the half a card-only fix would
+     miss: one number, so the Motion Study measures against what was keyed
+     here and not against the 15 compiled into the file. */
+  check('…and the keyed target reached PALMS, so the two cannot disagree',
+    await sp.evaluate(() => [MJMPalms.TARGET_DAYS, MJMCullIncentive.TARGET_DAYS]),
+    [12, 12]);
+  /* AND IT ASKS ONCE. A read fired on every tab switch is a card that goes
+     back to the database each time somebody looks at Settings. */
+  check('…it asks once, not on every tab switch',
+    await sp.evaluate(async () => {
+      const before = window.__READS.filter(t => t === 'nops_cull_monitoring_people').length;
+      switchTab('capacity'); switchTab('setting'); switchTab('capacity'); switchTab('setting');
+      await new Promise(r => setTimeout(r, 120));
+      return [before, window.__READS.filter(t => t === 'nops_cull_monitoring_people').length];
+    }),
+    [1, 1]);
+  check('no page error on the Settings landing', sg.errs, []);
+  if (process.env.SHOT_CM) {
+    const card = sp.locator('#cm-set-body').locator('xpath=..');
+    await card.screenshot({ path: process.env.SHOT_CM });
+    await sp.evaluate(() => cmEdit());
+    await card.screenshot({ path: process.env.SHOT_CM.replace('.png', '_edit.png') });
+    await sp.evaluate(() => cmCancel());
+  }
+  await sp.close();
 
   await mp.evaluate(() => switchTab('payroll'));
 
