@@ -3703,6 +3703,24 @@ failed on a change that altered nothing it was about**, which is the
 pin-the-spelling trap this file already names. It slices the page's own
 block out and asks whether the key is inside it.
 
+## Closing many Solved cases is ONE write, and only of what is still Solved
+
+*"我要可以一次过close 多多case"*. On the Nelos **Solved** tab, for a login
+that may close, each row carries a box in its Created cell (not a column of
+its own, so the grid of the other tabs does not move), Select all takes
+every case the filtered list shows across its pages, and one dialog —
+never a `confirm()` — names the cases and takes ONE remark for them all.
+
+- **One update, `.in('id', …).eq('status','resolved')`**, and the count is
+  what came BACK. A case somebody reopened or closed since the list was
+  drawn is theirs and is left alone, and the toast says how many.
+- **A tick only stands for a row the list can show.** Leaving the tab, or a
+  filter taking a row off, drops it, so Close cannot reach a case nobody
+  can see ticked.
+- Same `close_remark` fallback as closing one case.
+
+`tests/close_many_cases_at_once.cjs`.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened four times in this codebase now. A screen writes a setting, the

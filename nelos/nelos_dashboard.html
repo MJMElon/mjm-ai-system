@@ -268,6 +268,27 @@
                      text-transform:uppercase; color:#bc4996; padding:5px 11px; border-radius:999px; }
   .narrowed button:hover { background:#fcf5fa; }
 
+  /* Closing many at once: only on the Solved tab, and only for somebody
+     who may close. The boxes sit in the Created cell rather than in a
+     column of their own, so the grid every other tab draws does not move. */
+  .bulk { display:flex; align-items:center; gap:12px; padding:9px 18px;
+          background:#f2fbf6; border-bottom:1.5px solid #d1fae5;
+          font-size:11px; font-weight:800; color:#065f46; }
+  .bulk label { display:flex; align-items:center; gap:7px; cursor:pointer; }
+  .bulk button { margin-left:auto; border:0; background:#065f46; color:#fff; cursor:pointer;
+                 font-family:inherit; font-size:9.5px; font-weight:900; letter-spacing:.07em;
+                 text-transform:uppercase; padding:7px 13px; border-radius:999px; }
+  .bulk button:hover:not(:disabled) { background:#047857; }
+  .bulk button:disabled { opacity:.4; cursor:default; }
+  .pick { width:17px; height:17px; accent-color:#065f46; cursor:pointer; margin:0; }
+  .td-when .pick { margin-bottom:7px; }
+  .tr.is-picked { background:#f6fdf9; }
+  .bc-list { max-height:240px; overflow:auto; border:1.5px solid #ecfdf5; border-radius:12px;
+             padding:6px 10px; margin-bottom:12px; }
+  .bc-row { display:flex; gap:10px; padding:5px 0; font-size:12px; border-bottom:1px solid #f3faf6; }
+  .bc-row:last-child { border-bottom:0; }
+  .bc-no { font-weight:900; color:#065f46; min-width:74px; }
+
   /* ── Search, in the list's own head ──────────────────────────
      The one filter that cannot live in a column, because it looks across
      all of them. Everything else moved into the headings. */
@@ -525,6 +546,12 @@
       <button type="button" id="narrowed-x">Clear filters</button>
     </div>
 
+    <div class="bulk hidden" id="bulk">
+      <label><input type="checkbox" class="pick" id="bulk-all"> Select all</label>
+      <span id="bulk-n"></span>
+      <button type="button" id="bulk-go" disabled>Close selected</button>
+    </div>
+
     <div class="th">
       <span>Created</span>
       <span>Case No</span>
@@ -631,6 +658,32 @@
       <!-- Only for somebody whose ticks include closing. Solving says the
            work is done; closing accepts it — usually a different person. -->
       <button id="s-close-case" class="m-go m-go-x hidden">Close Case</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Closing many solved cases at once ──────────────────────
+     The same close the double tick does, once per case named here, with
+     ONE remark for all of them. Never a confirm(): the list of what is
+     about to be closed is the thing to read before pressing. -->
+<div id="bulk-scrim" class="scrim hidden">
+  <div class="sheet">
+    <div class="m-head">
+      <div class="m-title"><span id="bc-heading">Close Cases</span></div>
+      <button id="bc-x" class="m-x" aria-label="Close">&times;</button>
+    </div>
+    <div class="m-body">
+      <div id="bc-list" class="bc-list"></div>
+      <div class="m-sec">
+        <div class="m-sec-h">Close Case Remark</div>
+        <textarea id="bc-remark" class="inp" rows="3"
+                  placeholder="Optional — goes on every case closed here."></textarea>
+      </div>
+      <div id="bc-err" class="s-err hidden"></div>
+    </div>
+    <div class="m-foot">
+      <button id="bc-cancel" class="m-cancel">Cancel</button>
+      <button id="bc-go" class="m-go m-go-x">Close</button>
     </div>
   </div>
 </div>
@@ -972,9 +1025,11 @@ function rowHtml(c) {
   const shown = rows.slice(0, DETAIL_CAP);
 
   return `
-    <div class="tr ${isOverdue(c) ? 'is-overdue' : ''}" data-case="${esc(c.id)}">
+    <div class="tr ${isOverdue(c) ? 'is-overdue' : ''}${bulkOn() && closePicks.has(String(c.id)) ? ' is-picked' : ''}" data-case="${esc(c.id)}">
 
       <div class="td-stack td-when">
+        ${bulkOn() ? `<input type="checkbox" class="pick" data-pick="${esc(c.id)}"
+           aria-label="Select ${esc(c.case_no || 'case')} to close"${closePicks.has(String(c.id)) ? ' checked' : ''}>` : ''}
         <span class="cell-cap">Created</span>
         <span class="when-d">${esc(when.toLocaleDateString('en-MY',
           { day:'numeric', month:'short', year:'numeric' }))}</span>
@@ -1199,6 +1254,95 @@ function render() {
       if (b.dataset.act === 'solve') return openSolve(c);
       if (b.dataset.act === 'del')   return deleteCase(c, b);
     }));
+
+  /* A tick only ever stands for a row this list can show: one that left
+     the Solved tab, or that a filter has taken off the list, is dropped,
+     so Close never reaches a case nobody can see ticked. */
+  const showable = new Set(rows.map(c => String(c.id)));
+  [...closePicks].forEach(id => { if (!bulkOn() || !showable.has(id)) closePicks.delete(id); });
+  $('list').querySelectorAll('[data-pick]').forEach(b =>
+    b.addEventListener('change', () => {
+      if (b.checked) closePicks.add(b.dataset.pick); else closePicks.delete(b.dataset.pick);
+      b.closest('.tr')?.classList.toggle('is-picked', b.checked);
+      syncBulk(rows);
+    }));
+  syncBulk(rows);
+}
+
+/* ── Closing many at once ─────────────────────────────────────────
+   The office: "我要可以一次过close 多多case". A Solved case has always
+   been closed one double tick at a time; on the Solved tab each row now
+   carries a box, Select all takes every case the list is showing (every
+   page of it, filters and search applied), and one dialog closes them. */
+const closePicks = new Set();
+const bulkOn = () => tab === 'resolved' && !!rights.may_close;
+
+function syncBulk(rows) {
+  const on = bulkOn() && rows.length > 0;
+  $('bulk').classList.toggle('hidden', !on);
+  if (!on) return;
+  const n = closePicks.size;
+  const all = $('bulk-all');
+  all.checked = n > 0 && n === rows.length;
+  all.indeterminate = n > 0 && n < rows.length;
+  $('bulk-n').textContent = n ? `${n} of ${rows.length} selected` : '';
+  $('bulk-go').disabled = n === 0;
+  $('bulk-go').textContent = n ? `Close ${n} case${n === 1 ? '' : 's'}` : 'Close selected';
+}
+
+function openBulkClose() {
+  const picked = allCases.filter(c => closePicks.has(String(c.id)));
+  if (!picked.length) return;
+  $('bc-heading').textContent = `Close ${picked.length} case${picked.length === 1 ? '' : 's'}`;
+  $('bc-list').innerHTML = picked.map(c =>
+    `<div class="bc-row"><span class="bc-no">${esc(c.case_no || '')}</span><span>${esc(c.title || '')}</span></div>`).join('');
+  $('bc-remark').value = '';
+  $('bc-err').classList.add('hidden');
+  $('bc-go').textContent = `Close ${picked.length} case${picked.length === 1 ? '' : 's'}`;
+  $('bc-go').disabled = false;
+  $('bulk-scrim').classList.remove('hidden');
+}
+function closeBulkClose() { $('bulk-scrim').classList.add('hidden'); }
+function bcErr(msg) { const e = $('bc-err'); e.textContent = msg; e.classList.toggle('hidden', !msg); }
+
+/* ONE write for all of them, and it only takes a case that is STILL
+   Solved — somebody may have reopened or closed one since this list was
+   drawn, and that answer is theirs. What came back is what is counted. */
+async function closeSelected() {
+  if (!rights.may_close) { bcErr('This login may not close cases.'); return; }
+  const ids = allCases.filter(c => closePicks.has(String(c.id))).map(c => c.id);
+  if (!ids.length) { closeBulkClose(); return; }
+  const btn = $('bc-go');
+  btn.disabled = true; bcErr('');
+  const now = new Date().toISOString();
+  const patch = {
+    status: 'closed',
+    close_remark: $('bc-remark').value.trim() || null,
+    closed_by: me.name, closed_at: now,
+    updated_by: me.name, updated_at: now
+  };
+  const send = () => _supabase.from('nelos_cases').update(patch)
+    .in('id', ids).eq('status', 'resolved').select('id');
+  let { data, error } = await send();
+  // Same fallback as closing one: a database without the remark column
+  // still closes them, and says the remark was not kept.
+  let missingColumn = false;
+  if (error && /close_remark/.test(error.message || '')) {
+    missingColumn = true;
+    delete patch.close_remark;
+    ({ data, error } = await send());
+  }
+  btn.disabled = false;
+  if (error) { bcErr('Could not close them — ' + error.message); return; }
+  const done = (data || []).length;
+  const left = ids.length - done;
+  closePicks.clear();
+  closeBulkClose();
+  toast(`${done} case${done === 1 ? '' : 's'} closed.`
+    + (left ? ` ${left} ${left === 1 ? 'was' : 'were'} no longer Solved and left as ${left === 1 ? 'it was' : 'they were'}.` : '')
+    + (missingColumn ? ' Run migration_nelos_close_remark.sql to keep the remark.' : ''),
+    left ? false : undefined);
+  await loadCases();
 }
 
 /* Which page numbers to draw. All of them while there are few; otherwise
@@ -2318,6 +2462,17 @@ $('solve-close').addEventListener('click', closeSolve);
 $('s-cancel').addEventListener('click', closeSolve);
 $('s-save').addEventListener('click', saveSolve);
 $('s-close-case').addEventListener('click', closeCase);
+$('bulk-go').addEventListener('click', openBulkClose);
+$('bulk-all').addEventListener('change', () => {
+  const rows = visibleCases();
+  if ($('bulk-all').checked) rows.forEach(c => closePicks.add(String(c.id)));
+  else closePicks.clear();
+  render();
+});
+$('bc-x').addEventListener('click', closeBulkClose);
+$('bc-cancel').addEventListener('click', closeBulkClose);
+$('bc-go').addEventListener('click', closeSelected);
+$('bulk-scrim').addEventListener('click', e => { if (e.target === $('bulk-scrim')) closeBulkClose(); });
 /* Tapping the dimmed area behind the sheet closes it, the way the eye
    expects — but only the area, not a click that started inside. */
 $('solve-scrim').addEventListener('click', e => {
@@ -2335,7 +2490,7 @@ $('s-photo').addEventListener('change', function () {
   paintSolveShots();
 });
 $('new-scrim').addEventListener('click', e => { if (e.target === $('new-scrim')) closeNew(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNew(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeNew(); closeBulkClose(); } });
 
 /* Any filter change starts at the top again: page 7 of the old list is
    nowhere in particular in the new one. */
