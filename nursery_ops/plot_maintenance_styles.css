@@ -1636,8 +1636,10 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    is the same pattern; `.lst-edit` is left meaning the Edit button. */
 .lst-top .cm-set-open { position:absolute; right:0; top:-4px; font-size:13px; }
 @media (max-width:560px) { .lst-top .cm-set-open { position:static; } }
-.cm-set-lead { font-size:13.5px; line-height:1.75; color:var(--text); margin:2px 0 14px; }
-.cm-set-lead b { color:var(--green-text); font-weight:800; }
+/* `.cm-set-lead` was the sentence the target was keyed inside -- "A plot
+   that went from Saringan Anak Bibit to the end of Transplanting in [15]
+   days or fewer earns this." The office asked it off (删掉) and the figure
+   moved into a bar of its own, so the class went with the prose. */
 .cm-set-warn { font-size:12.5px; line-height:1.7; color:#c0392b; font-weight:600;
                background:#fef2f2; border:1.5px solid #fecaca; border-radius:var(--r-sm);
                padding:10px 12px; margin-bottom:14px; }
@@ -1651,11 +1653,17 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    a style nothing wears is a style the next person spends five minutes
    looking for a use of, the rule the audit back-office move already made. */
 
-/* ── THE TWO BLOCKS THE RULE IS KEYED IN ────────────────────────────────
-   The office drew it: a block per kind, the PRICE on the block and not on
-   the person, a list of names under it with a remove on each, and an Add.
-   The price sits in the block head for that reason -- two people on one
-   block cannot drift onto two different rates if there is only one box. */
+/* ── THE THREE BLOCKS THE RULE IS KEYED IN ──────────────────────────────
+   The office drew the two price ones: a block per kind, the PRICE on the
+   block and not on the person, a list of names under it with a remove on
+   each, and an Add. The price sits in the block head for that reason --
+   two people on one block cannot drift onto two different rates if there
+   is only one box.
+
+   THE TARGET IS THE THIRD and wears the same bar with no rows under it
+   (`.cm-pay-solo`). It was keyed inside a sentence of prose until the
+   office asked the prose off; the figure had to keep a home, and the
+   home the card already had is this one. */
 .cm-pay { border:1.5px solid var(--border); border-radius:var(--r-sm); overflow:hidden;
           margin-bottom:12px; }
 .cm-pay-top { display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -1672,6 +1680,13 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .cm-pay-row { display:grid; grid-template-columns:1fr 190px 34px; gap:10px; align-items:center;
               padding:8px 12px; border-top:1px solid var(--border); }
 .cm-pay-none span { font-size:12.5px; color:#c0392b; font-weight:600; }
+/* A note INSIDE a block, which `.cm-pay-none` is not: that one is red,
+   because a block paying nobody is a fault, and a line explaining the
+   target is not. */
+.cm-pay-note span { font-size:12px; color:var(--text-faint); font-weight:600; }
+.cm-pay-note b { color:var(--green-text); font-weight:800; }
+/* The target bar has no rows, so nothing under it needs a top border. */
+.cm-pay-solo { margin-bottom:12px; }
 .cm-pay .row-add { margin:8px 12px 10px; }
 .cm-pick { height:34px; padding:0 8px; font-family:inherit; font-size:13px; font-weight:700;
            color:var(--text-head); background:#fff; border:1.5px solid var(--border);

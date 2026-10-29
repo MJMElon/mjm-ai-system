@@ -5420,6 +5420,39 @@ of these was visible anywhere**: the target of 15 days, the two names paid
 on every nursery, and the three Field Conductors paid on their own. The
 office could not see that Florence is paid RM 20.
 
+#### THE ONE SCREEN THE RULE IS KEYED ON WAS THE ONE SCREEN THAT NEVER READ IT
+
+*"为什么改不到"*. They had run the SQL, the rule was in the database, and the
+Settings card drew the list compiled into the FILE — the short names,
+Florence and Akbar, not the register's own spelling — put a red banner over
+it telling them to run a file they had already run, and offered **NO EDIT
+BUTTON**.
+
+`loadRule` was called in exactly one place: `_loadCullIncentive`, which runs
+when the Culling Monitoring sub-tab of Worker Activity is opened. Somebody
+who went straight to Settings had a card drawn over a rule nobody had
+fetched, and `ruleSource()` answered `built-in` — **which is what that
+answer means: nobody asked.** Not "there is nothing keyed".
+
+So **the read belongs with the draw**. `renderCullMonitoringSetting` draws
+at once off whatever is in hand, asks the database, and draws again — two
+draws rather than a blank card while it waits, because a space where a rate
+belongs reads as a rate of nothing. `_cmRuleAsked` is per month so it does
+not ask on every tab switch, is cleared on a save (which re-reads anyway),
+and **is NOT set by a failed read** — a card that gave up for good over one
+refusal stays wrong until somebody reloads the page. The read is skipped
+entirely while `cmDraft` is set: an answer landing under a half-keyed draft
+would redraw the card and throw away what somebody had typed.
+
+**EVERY CHECK IN THE FILE WAS BLIND TO IT, and that is the lesson.** They
+all booted through `?view=cull_incentive`, which opens the tab that reads
+the rule — so the fixture always had it in hand before the card was drawn.
+**A test that always walks in through the other door cannot see a door that
+does not open.** `tests/culling_incentive.cjs` now has a `'setting'`
+landing that goes to the plain page and touches nothing else; eight of its
+checks fail on the previous code, the first of them in the office's own
+terms (`built-in`, and no Edit button).
+
 **IT IS THE KEYING AND NOTHING ELSE, and the six rows that went are the
 instructive part.** The card opened as a REFERENCE panel: under the two
 blocks it carried a six-row table — which plots are asked about (the
@@ -5438,6 +5471,43 @@ actually do, so it belongs beside the Save button; a paragraph that is only
 true of an edit has no business on a screen with no edit on it. That is why
 the test asks for it in BOTH directions — absent in the view, present once
 `cmEdit()` has run — rather than only checking it is gone.
+
+**THE PROSE WENT NEXT, AND THE TARGET HAD TO KEEP A HOME.** What was left
+above the blocks was a sentence — *"A plot that went from Saringan Anak
+Bibit to the end of Transplanting in [15] days or fewer earns this. Nothing
+is paid until the plot is Checked on Worker Activity."* — and the office
+asked for it off (*"删掉"*), along with the four-line banner and the corner
+link. **The 15 was keyed inside that sentence**, so deleting it outright
+would have taken the box with it and the target would have stopped being
+keyable. It moves into the shape the card already had: a bar with the
+heading on the left and the figure on the right, beside the two prices.
+**Three bars, three things keyed, no prose.** The Motion Study line rides
+in that bar in EDIT only — somebody about to change the target is the one
+person who has to know it is the same number.
+
+**The BANNER survives as one line and only where it is true**, which after
+the read is fixed is almost never. It had been four lines naming
+`RUN_ME_cull_monitoring_rule.sql` — the superseded undated half — over a
+rule the office had already keyed, which is the whole reason it read as
+废话. And **the two cases it covers are not the same**: a read that FAILED
+is a database that could not answer, a read that came back EMPTY is a rule
+nobody has keyed, and only the second names a file. `ruleError()` tells
+them apart — `loadRule` leaves it set on the first and null on the second.
+
+**The corner link is gone.** It read *"Open Culling Monitoring →"*: this
+card is the RULE, the tab is the month's plots, and that is a different job
+reached from Worker Activity where the rest of that work is. `.cm-set-open`
+stays in the stylesheet as the pattern for a corner control on a centred
+`.lst-top`.
+
+**And the standing sentence on the TAB went with it** — *"A plot whose
+Saringan Anak Bibit to Transplanting took 15 days or fewer earns the
+incentive. Tick Checked once you have been through a plot…"*. The table
+says both: the plots are listed BECAUSE they made the target, and the Check
+button is on every row with the rule in its title. `#payroll-hint` is
+CLEARED rather than left alone — it is shared with the four other sheets on
+that tab, and a renderer that merely stopped writing would leave another
+sheet's sentence sitting over these plots.
 
 - **It reads the LIVE rule** (`MJMCullIncentive.RULE` / `TARGET_DAYS`),
   never a second copy. A card restating RM 20 and 15 days is a card that
