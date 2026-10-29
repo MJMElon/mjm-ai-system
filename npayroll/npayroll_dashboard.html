@@ -312,10 +312,27 @@
           <div class="bar-title">Seed Planting — Salary Claim</div>
           <div class="bar-sub" id="seedplant-sub"></div>
         </div>
+        <!-- ONE BUILDER, TWO BUTTONS — see _seedPlantingPDF. Print is what
+             the office asked for; the download icon is what the three claim
+             sheets beside this one carry, and a tab that offered only one of
+             them would be the odd one on a row of four. -->
         <div class="bar-actions">
           <a class="btn btn-sm" href="../nursery_ops/nursery_ops_maintenance.html?view=seed_planting">Check batches on Worker Activity &rarr;</a>
+          <button class="btn btn-sm" onclick="printSeedPlantingPDF()" title="Print the Salary Claim Form">&#128424; Print</button>
+          <button class="btn btn-icon-dl" onclick="downloadSeedPlantingPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
       </div>
+      <div class="verify-bar" id="vb-seedplant"></div>
+      <!-- A BATCH A ROW, A PLANTER A COLUMN — *"我要横向的 batch是row 工人是
+           column"*. The money each planter is owed moved out of their row and
+           into the foot of their column with the turn; `renderSeedPlanting`
+           says why there are two foot rows rather than one. -->
       <div class="card"><div class="tbl-wrap"><table id="seedplant-table"></table></div></div>
       <div id="seedplant-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
     </div>
@@ -571,7 +588,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=93"></script>
+<script src="npayroll_script.js?v=94"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

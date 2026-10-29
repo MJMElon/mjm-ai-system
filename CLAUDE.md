@@ -5699,6 +5699,57 @@ Three things in it:
   batch whose figures change after it was checked, from any screen.
   **It is not on the Monthly Payroll yet**: the names are hand-picked, not
   register rows, so nothing yet joins them to a person's month.
+
+  **A BATCH IS A ROW AND A PLANTER IS A COLUMN** — *"这里也要有verified
+  button 和 print button，我要横向的 batch是row 工人是column"*, one line
+  asking for all three. The claim was drawn the other way up, a worker a row
+  with a column per batch, and at fifteen planters over three batches that is
+  a tall sheet that is nearly all dashes: a batch is planted by four or five
+  of them and the rest of its column is empty. Turned round it is three rows
+  of fifteen, which is what the office is actually reading — **the batch is
+  the thing they are agreeing.** The planted day rides UNDER the batch rather
+  than taking a column, because the rows are sorted by it.
+
+  **THE TURN MOVED THE MONEY, and that is the half to get right.** Each
+  planter's pay was a cell on their own row; it is the FOOT of their column
+  now, so the table has **two foot rows** — Total seeds and Amount (RM) —
+  and a sheet that had only totalled the seeds would have taken the one
+  figure this claim exists to pay off the screen altogether. The seeds row
+  carries the grand total of both, so the Amount row under it has something
+  to add up to, and the test asserts it does.
+
+  **Both views are built in `seedPlantingClaim`** (`rows` is the batch view,
+  `people` is the per-person money), never transposed on the page: a screen
+  and a PDF working the turn out separately is two chances to get it wrong.
+
+  **ONE BUILDER, TWO BUTTONS** — `_seedPlantingPDF('save'|'print')`, the Seed
+  Audit sheet's rule, because two drawings of one report drift. Print is what
+  the office asked for and goes through a hidden iframe (a popup blocker eats
+  a new tab); the download icon is what the three claim sheets beside this
+  one carry. **THE PAGE IS AS WIDE AS THE CREW**: fifteen planters over
+  247mm of landscape A4 is a column under 10mm, which `pdfCell` would shrink
+  a name into four-point type to fit. The column has a FLOOR and the PAPER
+  moves — `pdfDoc` takes a `format` now, defaulting to A4 so every other
+  caller is untouched.
+
+  **AND IT HAS THE VERIFY STRIP**, `seedplant` in `LOCK_SHEETS` with an
+  EMPTY scope: seed planting is only ever done in the Pre Nursery, so there
+  is no section to read, and `scopeLabel` says *the Pre Nursery* rather than
+  *all sections* — a strip offering a choice that does not exist is a
+  question. **Nothing to run in the database**:
+  `mjmnpayroll_verifications.sheet` is plain TEXT with no CHECK constraint,
+  so a new sheet name needs nothing. **What verifying here does NOT do** is
+  freeze the claim: this page writes nothing, the figures are Checked on
+  Work Maintenance where this lock does not reach, so a batch unchecked
+  there after signing still moves it. `maint` solves that with a snapshot
+  and this does not — the day a signed claim is found to have moved is the
+  day to add one.
+
+  **The test's jsPDF stub was `class { constructor() {} }`**, which takes
+  anything — and a stub that takes anything signs off a form that cannot be
+  drawn, which is exactly how the Work Maintenance claim stayed unprintable.
+  It is the strict one from `claim_form_fits_its_jobs.cjs` now. 14 checks
+  fail on the previous code.
 - **No "added by hand" tag** on a moved batch, nor the "Added by hand"
   line and remark on Culling Incentive: *"不用show added by hand,包括 culling
   incentive那里的remark"*. The records still carry them. **It took a second
