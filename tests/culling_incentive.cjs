@@ -298,6 +298,20 @@ const payOf = (page, sec) => page.evaluate((s) =>
      ['B3', 'BNN', D(2), D(16), 14, true, 'Elon Ting']]);
   txt = await tableText(mp);
   check('2 of 3 checked, B7 still held', /2 of 3 plots checked/.test(txt) && /1 not checked yet/.test(txt), true);
+  /* THE BADGE NAMES THE PERSON — *"在这里 checked改成check的人的名字"*. The
+     word CHECKED was the same on every row of every month and said nothing
+     the green pill does not; WHO went through the plot and agreed it is the
+     one thing that cell can carry which is nowhere else on the screen.
+
+     Asked of the badge and not of the row, because the row also carries the
+     Uncheck button and a search of the whole cell would pass on the word
+     "Uncheck". The stored value is untouched — the check above reads it
+     straight out of the database — and it is only the DISPLAY that resolves
+     an email to a name. */
+  check('the Checked badge names who checked it, not the word CHECKED',
+    await mp.evaluate(() => [...document.querySelectorAll('#payroll-table .rec-checked-badge')]
+      .map(b => b.textContent.trim())),
+    ['\u2713 Elon Ting', '\u2713 Elon Ting']);
 
   console.log('— by hand: Check, Remove, and Add');
   /* THERE IS STILL NO BUTTON THAT PAYS A SLOW PLOT. The office took Count it
@@ -966,11 +980,58 @@ const payOf = (page, sec) => page.evaluate((s) =>
     [/B1/.test(pdf), /Rousell Wayne/.test(pdf), /RM 20\.00/.test(pdf),
      /TOTAL INCENTIVE/.test(pdf), /RM 90\.00/.test(pdf)],
     [true, true, true, true, true]);
-  check('no dates, no days, no checker, and no Rule column',
+  /* NO CHECKER COLUMN. The checker IS on the form now — see the next check —
+     but as a LINE where a signature goes, never as a column against every
+     row, which is the dates-and-days table the office took off. */
+  check('no dates, no days, no checker column, and no Rule column',
     [/CHECKED Elon Ting/.test(pdf), /Every nursery,/.test(pdf),
      /Saringan/.test(pdf), /Transplanting ended/.test(pdf)],
     [false, false, false, false]);
   check('and a plot nobody checked is still off it', / B7 /.test(pdf), false);
+  /* WHO CHECKED IT, BESIDE WHO VERIFIED IT — *"所以每次print出来 就可以显示
+     check by谁 verify by 谁"*. Two different signatures: Checked is somebody
+     going through a row and agreeing the figure, which is what puts it on
+     the claim at all, and Verified is the office signing the whole sheet
+     afterwards. The form carried only the second, so the person who actually
+     went through the plots was nowhere on the paper. */
+  check('the paper names who CHECKED it as well as who verified it',
+    [drawn.texts.some(t => /^Checked by .*Elon Ting/.test(t.t)),
+     drawn.texts.some(t => /^(Verified by |Not yet verified)/.test(t.t))],
+    [true, true]);
+  /* AND THE TWO LINES HAVE ROOM. The table's page floor is a SUM of what
+     goes under it — the TOTAL row, the lines, the footer note — and it was
+     written when there was one line. Left at one, a table that filled a
+     page would put the footer at 213 on a page 210 tall, which the printer
+     trims off: the file looks right and the paper has lost the signature.
+     The fixture has three plots and cannot reach the floor, so the real
+     drawer is driven DIRECTLY with enough to fill several pages. */
+  check('a long table still leaves room for both lines and the footer',
+    await page.evaluate(() => {
+      if (typeof drawCullIncentive !== 'function') return 'no drawer';
+      const keep = window.__PDFS.length;      // these docs are not the claim form
+      /* SWEPT, never one size. Where the table ends on its last page is
+         decided by how many plots there are, and only ONE count in the
+         sweep lands the TOTAL row hard against the floor — which is the
+         case this is about. A single fixture passes over it by luck. */
+      let worst = 0, pages = 0;
+      for (let n = 1; n <= 40; n++) {
+        const rows = [], pay = [];
+        for (let i = 0; i < n; i++) rows.push({ plot: 'P' + i, paid: true });
+        ['A', 'B', 'C'].forEach((w) => pay.push({ name: w, known: { full_name: w },
+          rm: 20, amount: 20 * n, plots: rows }));
+        const doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        let y = drawCullIncentive(doc, 25, rows, pay);
+        y = pdfCheckedNote(doc, y, [{ by: 'x@y', at: '2026-10-20T00:00:00Z' }], 272);
+        y = pdfVerifiedNote(doc, y, 'transpl', 'BNN', 272);
+        pdfFooterNote(doc, y, 148.5, 272, 4);
+        /* Everything drawn, boxes and type alike, on a page 210 tall. */
+        worst = Math.max(worst, ...doc.rects.map(r => r.y + r.h), ...doc.texts.map(t => t.y));
+        pages = Math.max(pages, doc.page);
+      }
+      window.__PDFS.length = keep;
+      return [pages > 1, Math.round(worst * 10) / 10 <= 210];
+    }),
+    [true, true]);
 
   /* THE PLOT IS FIRST, AND IT IS MERGED OVER ITS OWN PEOPLE — *"我要plot
      在前面 merge起来 中间人名 后面价钱"*. BNN has one Checked plot, B1,
@@ -980,7 +1041,11 @@ const payOf = (page, sec) => page.evaluate((s) =>
   /* Everything from the heading down, and on ITS page — the claim form
      above it has tables of its own and a column of money at its own x. */
   const at = drawn.texts.find(t => t.t === 'CULLING MONITORING') || { y: 1e9, p: -1 };
-  const mine = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
+  /* EVERYTHING FROM THE HEADING ON, ACROSS PAGES — not just the heading's
+     own page. This table breaks onto a second page as soon as a nursery has
+     a few plots, and a filter pinned to one page quietly drops the plots
+     that broke over: the check then reads a short table as a correct one. */
+  const mine = (a) => a.filter(o => o.p > at.p || (o.p === at.p && o.y >= at.y));
   const texts = mine(drawn.texts), rects = mine(drawn.rects);
   const head = ['Plot', 'Person', 'Incentive (RM)'].map(w =>
     (texts.find(t => t.t === w) || { x: -1 }).x);
@@ -1017,7 +1082,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
   const all = await page.evaluate(() => {
     const d = window.__PDFS[0] || { texts: [], rects: [] };
     const at = d.texts.find(t => t.t === 'CULLING MONITORING') || { y: 1e9, p: -1 };
-    const keep = (a) => a.filter(o => o.p === at.p && o.y >= at.y);
+    const keep = (a) => a.filter(o => o.p > at.p || (o.p === at.p && o.y >= at.y));
     return { texts: keep(d.texts), rects: keep(d.rects) };
   });
   const money2 = all.texts.filter(t => Math.abs(t.x - 247) < 0.01 && /^RM /.test(t.t)).map(t => t.t);

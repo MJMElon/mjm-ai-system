@@ -139,22 +139,22 @@ async function boot(browser, db) {
   return { page, errs };
 }
 
-/* THE BATCH CELL CARRIES TWO LINES — the batch and the day it was planted —
-   so its textContent runs them together ("Batch 27728 Sep"). The day is read
-   on its own rather than tidied out of the way: it is the fact the rows are
-   SORTED by, and a check that threw it away would pass over a sheet that had
-   stopped showing it. */
+/* THE BATCH HEADING CARRIES TWO LINES — the batch and the day it was
+   planted — so its textContent runs them together ("Batch 27728 Sep"). The
+   day is read on its own rather than tidied out of the way: it is the fact
+   the COLUMNS are ordered by, and a check that threw it away would pass over
+   a sheet that had stopped showing it. */
 const read = (page) => page.evaluate(() => {
   const t = document.getElementById('seedplant-table');
-  const cells = (tr) => [...tr.children].map((td, i) => {
-    if (i !== 0 || !td.classList.contains('sp-batch')) return td.textContent.trim();
-    const day = td.querySelector('.sp-day');
-    return (day ? td.textContent.replace(day.textContent, '') : td.textContent).trim();
+  const cells = (tr) => [...tr.children].map(td => td.textContent.trim());
+  const heads = [...t.querySelectorAll('thead th')].map(th => {
+    const day = th.querySelector('.sp-day');
+    return (day ? th.textContent.replace(day.textContent, '') : th.textContent).trim();
   });
   return {
-    head: [...t.querySelectorAll('thead th')].map(th => th.textContent.trim()),
+    head: heads,
     body: [...t.querySelectorAll('tbody tr')].map(cells),
-    days: [...t.querySelectorAll('tbody .sp-day')].map(d => d.textContent.trim()),
+    days: [...t.querySelectorAll('thead .sp-day')].map(d => d.textContent.trim()),
     foot: [...t.querySelectorAll('tfoot tr')].map(cells),
     note: document.getElementById('seedplant-note').textContent.replace(/\s+/g, ' ').trim()
   };
@@ -169,36 +169,34 @@ const read = (page) => page.evaluate(() => {
     [...document.querySelectorAll('.subtab')].map(b => b.dataset.sub)),
     ['maint', 'seedplant', 'transpl', 'seedling', 'monthly', 'other']);
 
-  /* ── 2. A BATCH A ROW, A PLANTER A COLUMN ───────────────────────────────
-     *"我要横向的 batch是row 工人是column"*. It was drawn the other way up —
-     a worker a row, a column per batch — and at fifteen planters over three
-     batches that is a tall sheet of dashes, because a batch is planted by
-     four or five of them. Turned round it is three rows of fifteen, which is
-     what the office is reading: the batch is the thing being agreed. */
+  /* ── 2. A PLANTER A ROW, A BATCH A COLUMN ───────────────────────────────
+     It was turned over for a day — *"我要横向的 batch是row 工人是column"* —
+     and the office looked at it and asked for it back in the plainest words
+     there are: *"算了做回之前的 batch和人名交换"*. They are the ones reading
+     it. The one thing kept from the turn is the planted DAY, which moved up
+     into the batch's own heading: the columns are in date order and the day
+     is what says why. */
   let v = await read(a.page);
-  check('a column per PLANTER, with the batch down the side', v.head,
-    ['Batch', 'Ani', 'Rina', 'Siti', 'Seeds planted', 'Rate', 'Amount']);
-  check('a row per CHECKED batch, its own total, times RM 0.02', v.body, [
-    ['Batch 277', '—',     '1,760', '2,000', '3,760', 'RM 0.02', 'RM 75.20'],
-    ['Batch 278', '2,000', '—',     '1,000', '3,000', 'RM 0.02', 'RM 60.00']]);
-  check('…and the planted day rides under the batch, which is what they sort on',
+  check('a column per BATCH, with the worker down the side', v.head,
+    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate', 'Amount']);
+  check('a row per PLANTER, their own total, times RM 0.02', v.body, [
+    ['Ani',  '—',     '2,000', '2,000', 'RM 0.02', 'RM 40.00'],
+    ['Rina', '1,760', '—',     '1,760', 'RM 0.02', 'RM 35.20'],
+    ['Siti', '2,000', '1,000', '3,000', 'RM 0.02', 'RM 60.00']]);
+  check('…and the planted day rides in the batch HEADING, which is what the columns order on',
     v.days, ['28 Sep', '05 Oct']);
-  /* TWO FOOT ROWS, because the turn MOVED THE MONEY. Each planter's pay was
-     a cell on their own row and is the foot of their column now — a sheet
-     that only totalled the seeds would have taken the one figure this claim
-     exists to pay off the screen altogether. */
-  check('the foot carries each planter’s seeds AND their money', v.foot, [
-    ['Total seeds', '2,000', '1,760', '3,000', '6,760', '', 'RM 135.20'],
-    ['Amount (RM)', 'RM 40.00', 'RM 35.20', 'RM 60.00', '', '', '']]);
-  check('…and the Amount row adds up to the grand total above it',
+  check('one foot row: each batch’s total, the grand total and the money', v.foot, [
+    ['Total', '3,760', '3,000', '6,760', '', 'RM 135.20']]);
+  check('…and the Amount column adds up to the total in the foot',
     await a.page.evaluate(() => {
-      const f = document.querySelectorAll('#seedplant-table tfoot tr');
-      /* A sheet with ONE foot row has no Amount row to add up, which is the
-         thing this check is about — so it answers rather than throwing. */
-      if (f.length < 2) return ['no Amount row', 'no Amount row'];
       const rm = s => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
-      const paid = [...f[1].children].slice(1).reduce((s, td) => s + rm(td.textContent), 0);
-      return [Math.round(paid * 100) / 100, rm(f[0].children[f[0].children.length - 1].textContent)];
+      const rows = [...document.querySelectorAll('#seedplant-table tbody tr')];
+      const paid = rows.reduce((s, tr) => s + rm(tr.children[tr.children.length - 1].textContent), 0);
+      const f = document.querySelector('#seedplant-table tfoot tr');
+      /* Answers rather than throwing: a sheet with no foot has to FAIL this
+         as a named check, not take the run down. */
+      if (!f) return [Math.round(paid * 100) / 100, 'no foot'];
+      return [Math.round(paid * 100) / 100, rm(f.children[f.children.length - 1].textContent)];
     }),
     [135.2, 135.2]);
   check('the unchecked batch is named, not paid', /Not on this claim: batch 279 is keyed and not yet Checked/.test(v.note), true);
@@ -246,40 +244,68 @@ const read = (page) => page.evaluate(() => {
   check('Download draws the form and names the file',
     [!!dl, dl && /^Salary_Claim_Seed_Planting_/.test(dl.saved || ''), dl && dl.printed],
     [true, true, false]);
-  check('…and it is the turned-round table: a batch a row, a planter a column',
-    dl && [dl.lines.includes('Batch'), dl.lines.includes('Siti'),
-           dl.lines.includes('Batch 277  ·  28 Sep'),
-           dl.lines.includes('Total seeds'), dl.lines.includes('Amount (RM)'),
+  check('…and the paper is the screen’s table: a planter a row, a batch a column',
+    dl && [dl.lines.includes('Worker'), dl.lines.includes('Siti'),
+           dl.lines.includes('Batch 277\n28 Sep'),
+           dl.lines.includes('Total'), dl.lines.includes('Amount (RM)'),
            dl.lines.includes('RM 135.20')],
     [true, true, true, true, true, true]);
+  /* WHO CHECKED IT, beside who verified it — *"所以每次print出来 就可以显示
+     check by谁 verify by 谁"*. They are two different signatures and the form
+     carried only the second. A line, never a column: the office already took
+     the dates-and-days table off this kind of form. */
+  check('…and the paper says who CHECKED it as well as who verified it',
+    dl && [dl.lines.some(t => /^Checked by /.test(t)),
+           dl.lines.some(t => /^(Verified by |Not yet verified)/.test(t))],
+    [true, true]);
   check('…the unchecked batch is named on the paper too',
     dl && dl.lines.some(t => /Not on this claim: batch 279/.test(t)), true);
   const pr = await pdfOf(a.page, 'printSeedPlantingPDF');
   check('Print draws the SAME document and saves nothing',
     [pr && pr.printed, pr && pr.saved, JSON.stringify(pr && pr.lines) === JSON.stringify(dl && dl.lines)],
     [true, null, true]);
-  check('…and three planters still fit landscape A4', dl && dl.fmt, 'a4');
+  check('…and two batches still fit portrait A4', dl && dl.fmt, 'a4');
   check('no page errors', a.errs, []);
   /* SHOT gives the office the sheet as it stands. */
   if (process.env.SHOT) await a.page.locator('#sub-seedplant').screenshot({ path: process.env.SHOT });
   await a.page.close();
 
-  /* ── 2d. A CREW TOO WIDE FOR A4 GETS A WIDER SHEET ──────────────────────
-     A column per planter is a width decided by how many people worked that
-     month. At 30 of them an A4 landscape column is under 6mm, which pdfCell
-     would shrink a name into four point type to fit — a grid nobody can
-     read. The floor is the column, and the PAPER moves. */
+  /* ── 2d. A CREW TOO TALL FOR ONE PAGE GETS A SECOND, WITH ITS HEADINGS ──
+     The sheet grows DOWN now: a planter is a row and a month can be worked
+     by thirty of them. A second page of figures under no column headings is
+     a page of numbers nobody can place, so the head is drawn again on every
+     page — the rule the Work Maintenance and Transplanting claims already
+     follow.
+
+     AND NOTHING IS DRAWN INTO THE FOOTER BAND. That is the fault the Seed
+     Audit sheet had to be corrected for after the office found a row eaten
+     off the foot of page one, and it reads identically on paper: the row is
+     there in the file and the printer trims it. */
   const many = {};
   for (let i = 0; i < 30; i++) many['Planter ' + String(i + 1).padStart(2, '0')] = 100;
   const w = await boot(browser, { mjmnpayroll_piece_rates: [],
     nops_seed_planting_batch_workers: [{ batch_name: '280', month: MONTH_KEY,
       planted_date: '2026-10-08', qty_planted: 3000, workers: many,
       checked_at: '2026-10-29T02:00:00Z', checked_by: 'office' }] });
-  const wide = await pdfOf(w.page, 'downloadSeedPlantingPDF');
-  check('30 planters take a wider page, and every column clears the floor',
-    [!!wide && Array.isArray(wide.fmt), !!wide && wide.fmt[0] > 297,
-     !!wide && Math.round((wide.fmt[0] - 50 - 104) / 30) >= 11],
-    [true, true, true]);
+  const tall = await w.page.evaluate(() => {
+    window.__PDFS.length = 0;
+    if (typeof window.downloadSeedPlantingPDF !== 'function') return null;
+    window.downloadSeedPlantingPDF();
+    const d = window.__PDFS[0];
+    if (!d) return null;
+    const pages = Math.max(...d.rects.map(r => r.page), ...d.lines.map(l => l.page));
+    /* "Worker" is the first heading of the head band, so one per page is
+       one head band per page. */
+    const heads = d.lines.filter(l => l.t === 'Worker').map(l => l.page);
+    /* The floor is 297 − 34. A cell drawn past it is in the band the
+       signature and the footer note own. */
+    const past = d.rects.filter(r => r.y + r.h > 297 - 34 + 0.01).length;
+    return { pages, heads, past, fmt: d.opt && d.opt.format };
+  });
+  check('30 planters run onto a second page, and the headings go with them',
+    tall && [tall.pages >= 2, tall.heads.length === tall.pages, tall.past],
+    [true, true, 0]);
+  check('…and two batches still fit the ordinary page', tall && tall.fmt, 'a4');
   check('…and it still draws: no jsPDF argument is NaN', w.errs, []);
   await w.page.close();
 
@@ -291,8 +317,8 @@ const read = (page) => page.evaluate(() => {
      to fail this as a named check and not take the run down with it. */
   const at = (grid, i, j) => ((grid || [])[i] || [])[j];
   check('the Piece Rate row prices it',
-    [at(v.body, 0, 5), at(v.body, 0, 6), at(v.foot, 0, 6), at(v.foot, 1, 3)],
-    ['RM 0.025', 'RM 94.00', 'RM 169.00', 'RM 75.00']);
+    [at(v.body, 0, 4), at(v.body, 0, 5), at(v.foot, 0, 5), at(v.foot, 0, 3)],
+    ['RM 0.025', 'RM 50.00', 'RM 169.00', '6,760']);
   check('…and the note names where the rate came from', /from Piece Rate \(Seed Planting\)/.test(v.note), true);
   await b.page.close();
 

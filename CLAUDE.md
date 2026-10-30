@@ -5162,6 +5162,82 @@ Rules that live in both — the general-worker filter, the maintenance function
 keys, nursery-name matching — carry a comment in each copy saying so. Change
 one, change the other.
 
+## A tick is a SIGNATURE, so it says who — and the paper says it twice
+
+Two sentences, a minute apart, and the second is what makes the first worth
+having: *"在这里 checked改成check的人的名字"*, then *"所以每次print出来 就
+可以显示check by谁 verify by 谁"*.
+
+**THE BADGE WAS THE SAME WORD ON EVERY ROW OF EVERY MONTH.** `✓ CHECKED`
+beside a green tick says what the green tick says. WHO went through the plot
+and agreed it is the one thing that cell can carry which is nowhere else on
+the screen — and it was in the database the whole time, in `checked_by`,
+read by nothing but a hover.
+
+**IT IS STORED AS AN EMAIL AND MUST NOT BE SHOWN AS ONE.** Every "by
+<person>" in this system is an account, because that is what identifies one;
+a Checked badge reading `esther.wong@mjmnursery.com` is harder to read than
+one reading `Esther Wong`, and it puts a working address on a screen the
+office shares and prints. `shared/shared_people.js` is the one resolver and
+the payroll module has read it through `whoName()` since it was written —
+**this page simply never loaded it**, which is why three badges showed the
+raw address. `_maintWho` / `_maintWhen` are its two display helpers here.
+
+- **It FAILS OPEN**, which is what lets it be leaned on: a profile table
+  that cannot be read hands back what it was given, so the badge says the
+  address rather than saying nothing. An empty green pill reads as a fault.
+- **THE STORED ROW NEVER CHANGES.** Only the display. The test reads the
+  written row straight out of the database beside the badge, so a resolver
+  that started rewriting what it resolves would be caught.
+- **The badge must not WRAP** (`white-space:nowrap`). A pill broken over two
+  lines round "Esther Wong Sze Qi" reads as a fault rather than a signature;
+  the cell widens instead, which the table can afford.
+- **Three badges, one rule** — Culling Monitoring, Transplanting, and the
+  Seed Planting Check button, which had been printing the email since it was
+  written. Change one, change the others.
+
+### Checked and Verified are TWO signatures, and the claim carried one
+
+`pdfVerifiedNote` has said *"Verified by X on <when>"* at the foot of every
+claim form since it was written. Nothing said who CHECKED it — and Checked
+is the signature that decides whether a row is on the claim AT ALL, where
+Verified is the office signing the sheet afterwards. So the person who
+actually went through the rows was nowhere on the paper they are being asked
+to trust. `pdfCheckedNote` is its twin, drawn immediately above it.
+
+- **IT IS A LINE AND NEVER A COLUMN.** The office has already settled that
+  once, about this exact table: *"我只要看到 CULLING INCENTIVE 其他废话都不
+  用. 表格里面我只要看到人名 plot 和价钱"*. A checker against every row is
+  the dates-and-days table they took off; the line says the same thing where
+  a signature belongs.
+- **It takes the RECORDS the form printed**, never a second read of its own.
+  The Transplanting claim passes its `lines` (which is why `checked_by` and
+  `checked_at` now ride on a line) concatenated with the Culling Monitoring
+  plots' own checks — two screens, two possible checkers, one list. A second
+  walk scoped its own way is how a signature comes to name somebody whose
+  work is not on the page.
+- **Several checkers are all named**, and the stamp is then said as the LAST
+  one rather than pinned to a name it does not belong to. One checker keeps
+  the plain "on <when>".
+- **Nothing checked draws nothing**, y handed back untouched, so a form with
+  no Checked gate is the form it always was.
+
+**AND A SECOND LINE NEEDED 6mm NOBODY HAD RESERVED.** `drawCullIncentive`'s
+page floor is a SUM of what goes under the table — the TOTAL row, the notes,
+the footer — and it was written when there was one note. Left at one, the
+worst case puts the footer at **212 on a page 210 tall**: the file looks
+perfect and the printer trims the signature off. The check that found it
+SWEEPS the plot count 1 to 40 rather than driving one fixture, because only
+one count in that range lands the TOTAL row hard against the floor and a
+single fixture passes over it by luck — the same lesson the Seed Audit
+sheet's 38-to-43-bag window already taught.
+
+**And the test's own page filter was the second half of it.** Every check on
+that table filtered to the heading's page; widening the reserve broke the
+table onto a second page sooner, and two correct checks started reading a
+short table as a complete one. It takes everything from the heading ON,
+across pages, now.
+
 ## Culling Monitoring is timed by PALMS and asked by the ledger
 
 **IT WAS CALLED THE CULLING INCENTIVE, AND THE KEYS DID NOT MOVE WITH THE
@@ -5700,37 +5776,43 @@ Three things in it:
   **It is not on the Monthly Payroll yet**: the names are hand-picked, not
   register rows, so nothing yet joins them to a person's month.
 
-  **A BATCH IS A ROW AND A PLANTER IS A COLUMN** — *"这里也要有verified
-  button 和 print button，我要横向的 batch是row 工人是column"*, one line
-  asking for all three. The claim was drawn the other way up, a worker a row
-  with a column per batch, and at fifteen planters over three batches that is
-  a tall sheet that is nearly all dashes: a batch is planted by four or five
-  of them and the rest of its column is empty. Turned round it is three rows
-  of fifteen, which is what the office is actually reading — **the batch is
-  the thing they are agreeing.** The planted day rides UNDER the batch rather
-  than taking a column, because the rows are sorted by it.
+  **A WORKER IS A ROW AND A BATCH IS A COLUMN, AND IT WAS TURNED OVER FOR A
+  DAY.** The office asked for the turn and the two buttons in one line —
+  *"这里也要有verified button 和 print button，我要横向的 batch是row 工人是
+  column"* — so the claim was redrawn with a batch down the side. They looked
+  at it and asked for it back in the plainest words there are: *"算了做回之前
+  的 batch和人名交换"*. They are the ones reading it; that is their call to
+  make, and the buttons were not retracted.
 
-  **THE TURN MOVED THE MONEY, and that is the half to get right.** Each
-  planter's pay was a cell on their own row; it is the FOOT of their column
-  now, so the table has **two foot rows** — Total seeds and Amount (RM) —
-  and a sheet that had only totalled the seeds would have taken the one
-  figure this claim exists to pay off the screen altogether. The seeds row
-  carries the grand total of both, so the Amount row under it has something
-  to add up to, and the test asserts it does.
+  **The one thing kept from the turn is the planted DAY**, which moved up
+  into the batch's own HEADING. The columns are in date order and the day is
+  what says why — a fact about a whole column, in the place a fact about a
+  whole column belongs.
 
-  **Both views are built in `seedPlantingClaim`** (`rows` is the batch view,
-  `people` is the per-person money), never transposed on the page: a screen
-  and a PDF working the turn out separately is two chances to get it wrong.
+  **`seedPlantingClaim` returns BOTH shapes** — `people` is the rows and
+  `rows` is the per-batch figures behind the columns (the heading's day, the
+  foot's total). Built in the one function rather than one being worked out
+  again on the page: a screen and a PDF deriving the same thing separately is
+  two chances to get it wrong, which is the whole reason the turn and its
+  reversal were each one edit.
 
   **ONE BUILDER, TWO BUTTONS** — `_seedPlantingPDF('save'|'print')`, the Seed
   Audit sheet's rule, because two drawings of one report drift. Print is what
   the office asked for and goes through a hidden iframe (a popup blocker eats
   a new tab); the download icon is what the three claim sheets beside this
-  one carry. **THE PAGE IS AS WIDE AS THE CREW**: fifteen planters over
-  247mm of landscape A4 is a column under 10mm, which `pdfCell` would shrink
-  a name into four-point type to fit. The column has a FLOOR and the PAPER
-  moves — `pdfDoc` takes a `format` now, defaulting to A4 so every other
-  caller is untouched.
+  one carry.
+
+  **THE SHEET GROWS DOWN NOW, SO THE HEAD IS REPEATED.** A planter is a row
+  and a month can be worked by thirty of them; a second page of figures under
+  no column headings is a page of numbers nobody can place. `drawHead()` is
+  called on every page, the rule the Work Maintenance and Transplanting
+  claims already follow, and **nothing is drawn into the footer band** — the
+  fault the Seed Audit sheet had to be corrected for after the office found a
+  row eaten off the foot of page one. It reads identically on paper: the row
+  is in the file and the printer trims it. It still widens SIDEWAYS if it has
+  to, a dozen batches being a column narrower than its own heading —
+  `pdfDoc` takes a `format`, defaulting to A4 so every other caller is
+  untouched.
 
   **AND IT HAS THE VERIFY STRIP**, `seedplant` in `LOCK_SHEETS` with an
   EMPTY scope: seed planting is only ever done in the Pre Nursery, so there

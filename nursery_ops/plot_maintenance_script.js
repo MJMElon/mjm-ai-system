@@ -337,6 +337,34 @@ const esc = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/* ── A PERSON'S NAME, NOT THEIR EMAIL ADDRESS ──────────────────────────
+   Every "by <person>" in this system is STORED as an email, because that
+   is what identifies an account — `toggleCullChecked` writes
+   `window.currentUserEmail` and so does every other tick on this page. It
+   must not be DISPLAYED as one: a Checked badge reading
+   "esther.wong@mjmnursery.com" is harder to read than one reading "Esther
+   Wong", and it puts a working address on a screen the office shares.
+
+   `shared/shared_people.js` is the one resolver and it is what the payroll
+   module already reads through `whoName()`. It FAILS OPEN, which is the
+   whole reason it can be leaned on here: a profile table that cannot be
+   read hands back what it was given, so the badge says the email rather
+   than saying nothing. The STORED ROW NEVER CHANGES — only the display. */
+function _maintWho(v) {
+  if (!v) return '';
+  try { return (typeof MJMPeople !== 'undefined' ? MJMPeople.name(v) : v) || v; }
+  catch (_) { return v; }
+}
+/* The day a tick was made. Written out rather than left as the stored
+   ISO string: 2026-10-28 is a key and "28 Oct 2026" is a date, and this
+   cell is read by somebody looking at a month. */
+function _maintWhen(t) {
+  if (!t) return '';
+  const d = new Date(t);
+  if (isNaN(d)) return String(t).slice(0, 10);
+  return d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 /* ── One source for the chemicals and the fertilisers ──────────────────
    These were two hardcoded catalogues — CHEMICAL_CATEGORIES and
    FERTILIZER_INFO — which the Setting page could not edit and the
@@ -1713,9 +1741,13 @@ function _tpCheckCell(r, key) {
       title="The Checked columns are not on this database yet — run shared/RUN_ME_transplant_checked.sql">—</span>`;
   }
   if (r.checked_at) {
-    const when = String(r.checked_at).slice(0, 10);
-    const who  = r.checked_by ? ` by ${r.checked_by}` : '';
-    return `<span class="rec-checked-badge" title="Checked${esc(who)} on ${esc(when)} — this row is what the salary claim pays on">✓ Checked</span>`
+    /* The badge names the person, the same as Culling Monitoring's — see
+       the comment there. One word on every row of every month said nothing
+       a green tick does not. */
+    const when = _maintWhen(r.checked_at);
+    const who  = _maintWho(r.checked_by);
+    return `<span class="rec-checked-badge"
+          title="Checked${who ? ' by ' + esc(who) : ''} on ${esc(when)} — this row is what the salary claim pays on">✓ ${esc(who || 'Checked')}</span>`
       + `<button class="btn btn-sm" onclick="toggleTransplantChecked(${r.id})"
            title="Put this row back to unchecked — it comes off the salary claim until somebody checks it again">Uncheck</button>`;
   }
@@ -1953,9 +1985,20 @@ function renderCullIncentivePayroll() {
     if (!st.checksReady) return `<span style="color:var(--text-faint);font-size:11px;"
       title="The Checked table is not on this database yet — run shared/RUN_ME_cull_incentive_checked.sql">—</span>`;
     if (r.check) {
-      const when = String(r.check.checked_at).slice(0, 10);
-      const by = r.check.checked_by ? ` by ${r.check.checked_by}` : '';
-      return `<span class="rec-checked-badge" title="Checked${esc(by)} on ${esc(when)} — the payroll pays this plot">✓ Checked</span>`
+      /* THE BADGE NAMES THE PERSON, not the word CHECKED — *"在这里 checked
+         改成check的人的名字"*. The word was the same on every row of every
+         month and said nothing a green tick does not; who went through this
+         plot and agreed it is the one thing the cell can carry that nobody
+         can get anywhere else on the screen, and it is what the printed
+         claim now signs with.
+
+         A row checked before the name could be resolved, or by a login with
+         no profile, falls back to "Checked" rather than to a blank badge —
+         an empty green pill reads as a fault. */
+      const when = _maintWhen(r.check.checked_at);
+      const who = _maintWho(r.check.checked_by);
+      return `<span class="rec-checked-badge"
+            title="Checked${who ? ' by ' + esc(who) : ''} on ${esc(when)} — the payroll pays this plot">✓ ${esc(who || 'Checked')}</span>`
         + `<button class="btn btn-sm" onclick="toggleCullChecked('${q(r.plot)}')"
              title="Put this plot back to unchecked — it comes off the payroll until somebody checks it again">Uncheck</button>`;
     }
@@ -2719,9 +2762,14 @@ function renderSeedPlantingPayroll() {
 function _spCheckCell(ri, s, keyed, noTable) {
   if (noTable) return '<span style="color:var(--text-faint);">—</span>';
   if (s && s.checked_at) {
-    const when = new Date(s.checked_at).toLocaleDateString('en-MY');
+    /* The NAME, not the stored email — this button has shown
+       `checked_by` raw since it was written, which is an address on a
+       screen the office shares. `_maintWho` fails open, so a profile
+       table that cannot be read hands the address back rather than
+       leaving the button blank. */
+    const when = _maintWhen(s.checked_at);
     return `<button type="button" class="btn btn-sm sp-checked" onclick="toggleSeedPlantingCheck(${ri})"
-      title="${esc(t('pay.spUncheckTip'))}">✓ ${esc(s.checked_by || '')} · ${esc(when)}</button>`;
+      title="${esc(t('pay.spUncheckTip'))}">✓ ${esc(_maintWho(s.checked_by) || 'Checked')} · ${esc(when)}</button>`;
   }
   if (!keyed) return '<span style="color:var(--text-faint);">—</span>';
   return `<button type="button" class="btn btn-sm btn-primary" onclick="toggleSeedPlantingCheck(${ri})">${esc(t('pay.spCheck'))}</button>`;
@@ -9355,6 +9403,15 @@ async function initDb() {
         isNopsAdmin = MJMAccess.isAdminOf('nursery_ops');
       } catch (e) { console.warn('[maint] access load failed:', e); }
       applyNopsAdminUI();
+    }
+    /* The profile names behind every stored "by <email>" on this page.
+       NOT awaited: it is a display nicety and a screen must not wait on
+       it, and every reader (`_maintWho`) falls back to what it was given
+       until the answer lands. The ticks are redrawn on the next render
+       either way. */
+    if (typeof MJMPeople !== 'undefined') {
+      MJMPeople.load(_supabase).then(() => { try { renderPayroll(); } catch (_) {} },
+                                     () => {});
     }
     const [stRes, recRes, qtyRes, cpRes, prRes, wkRes, regRes, payRes, lockRes] = await Promise.all([
       _supabase.from('nops_maint_state').select('nursery, month, payload'),
