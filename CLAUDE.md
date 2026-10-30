@@ -120,6 +120,51 @@ The Nursery Movement Report and the phone's batch list still subtract the 2nd
 culling, because they answer "what is standing", which is a different
 question. That difference is deliberate and is written out in that file.
 
+### It SUBTRACTED and could not say so, which reads the same as not subtracting
+
+The office looked at a P & D Spraying row and said *"2nd cull的记录没被
+consider"*. It was considered — the culling had come off exactly as the rule
+above says — and the row had no way to prove it. **A figure with the culling
+deducted and a figure with no culling to deduct are the same number on
+screen**, so a working rule and a broken one are indistinguishable, and the
+only way to tell was to open the batch report and do the arithmetic.
+
+`linkedQty` had the figure the whole time (`cull2`), and used it for ONE
+sentence: the interrow line saying why that row reads higher. The other two
+cases said nothing.
+
+**`cull2Off`** is what was taken off, on every job but interrow. One line,
+muted, under the figure: *2nd culling taken off: 273 seedlings.*
+
+**`cull2Later` is the half that actually bites**, and it is a fact rather
+than a fault. A culling dated AFTER the work day is correctly left out —
+those seedlings were standing when somebody sprayed — so the figure reads
+high and nothing anywhere said why. It is now named, in amber, with the day
+it is dated: *A 2nd culling of 273 is dated 05 Sep 2026, after this work, so
+it is NOT in the figure above.*
+
+**IT IS NOT IN THE ARITHMETIC AND MUST NOT BE.** The loop counts it while
+skipping it, which is the whole point: the number does not move, the screen
+stops being silent. `cull2LaterOn` is the EARLIEST one left out — the next
+thing that would move this figure if the work date were a day later.
+
+**And the reason a culling lands on a day nobody chose:** `saveTab5` writes
+the row as soon as a Dead figure is keyed and **does not require the Cull
+Date**, so the remark reads `CullDate: ` with nothing after it. `logDate`
+then falls through `transaction_date` → the remark → **`created_at`, the day
+somebody pressed Save**, which can be weeks after the work. That is how a
+correct rule comes to look like a broken one.
+
+`shared/CHECK_what_date_a_2nd_culling_lands_on.sql` is the size of it: every
+2nd culling row, the day it counts on, and which of the three the day came
+from — the `created_at` fallbacks sorted FIRST, because those are the only
+ones sitting on a day nobody chose. Key the Cull Date on Tab 5 and every
+quantity on that plot settles by itself.
+
+The new checks at the end of `tests/interrow_keeps_cull2.cjs` drive the real
+`linkedQty` and the real modal over B5's own 6,788 and 273; **8 of its 25
+fail on the previous code**.
+
 ## A tab's sync must never run twice at once
 
 The batch detail tabs all have one shape: clear the tab's array, `await` two

@@ -341,6 +341,80 @@ const table = (page) => page.evaluate(() =>
     await page.close();
   }
 
+  /* ── WHAT THE 2ND CULLING DID TO THE FIGURE, SAID OUT LOUD ─────────────
+     The office looked at a P & D row and said *"2nd cull的记录没被consider"*.
+     It WAS considered — the 273 had been taken off — and the row had no way
+     to say so: a figure with the culling deducted and a figure with no
+     culling to deduct are the same number on screen.
+
+     And the other half is the one that actually bites. A culling dated AFTER
+     the work day is correctly left out (those seedlings were standing when
+     somebody sprayed), so the figure reads high and nothing anywhere says
+     why. A 2nd culling saved with no Cull Date falls back to the day it was
+     KEYED, which can be weeks after the work — which is exactly how a
+     correct rule comes to look like a broken one. */
+  console.log('\nThe figure says what the 2nd culling did to it');
+  {
+    const page = await boot(browser);
+    const ask = (plot, batch, date, jenis) => page.evaluate(([p2, b, d, j]) => {
+      const l = PlotMovement.linkedQty(p2, b, d, PlotMovement.qtyOpts({ jenis: j }));
+      /* Null-safe: a shape without these fields has to read as a FAILED
+         check and not as a crash in the harness. */
+      return l ? [l.qty, l.cull2Off || 0, l.cull2Later || 0, l.cull2LaterOn || null,
+                  !!l.keptCull2] : 'no link';
+    }, [plot, batch, date, jenis]);
+
+    check('an ordinary job on 13 Sep: the 273 came off, and it says so',
+          await ask('B5', '', '2026-09-13', PD), [6515, 273, 0, null, false]);
+    check('interrow on the same day: kept in, and nothing was taken off',
+          await ask('B5', '', '2026-09-13', IR), [6788, 0, 0, null, true]);
+    /* THE OFFICE'S OWN COMPLAINT, from the other side. 02 Sep is before the
+       culling, so the figure is right and the row must say the culling is
+       dated later rather than leaving somebody to wonder. */
+    check('a job dated BEFORE the culling names it, and leaves it out',
+          await ask('B5', '', '2026-09-02', PD), [6788, 0, 273, '2026-09-05', false]);
+    /* keptCull2 is FALSE here and that is right: there was nothing to keep.
+       The culling had not happened, so interrow is not holding anything in —
+       the same answer the 02 Sep row gives in the section above. */
+    check('…and interrow says the same, with nothing kept in because none had happened',
+          await ask('B5', '', '2026-09-02', IR), [6788, 0, 273, '2026-09-05', false]);
+    /* Two batches on one plot, both culled: the figure carries the sum. */
+    check('two batches, both culled, add up', await ask('B6', '', '2026-09-13', PD),
+          [5350, 150, 0, null, false]);
+    check('…and one batch named takes only its own', await ask('B6', '300', '2026-09-13', PD),
+          [3900, 100, 0, null, false]);
+    /* NO DATE KEYED stands at today, which is after everything, so nothing
+       is left out — the figure a row with "-" in its date box shows. */
+    check('a row with no date yet has nothing dated after it',
+          await ask('B5', '', '-', PD), [6515, 273, 0, null, false]);
+
+    /* And on the SCREEN, which is where the office was reading it. */
+    const hint = (date) => page.evaluate((d) => {
+      const r = records.find((x) => x.plot === 'B5' && x.jenis
+                                 === 'Penyemburan racun kulat dan serangga');
+      openRecModal(r);
+      if (d) {
+        const el = document.getElementById('rf-tarikh');
+        el.value = d; el.dispatchEvent(new Event('change', { bubbles: true }));
+        refreshLinkedQty();
+      }
+      return (document.getElementById('rf-qty-link').textContent || '')
+        .replace(/\s+/g, ' ').trim();
+    }, date);
+
+    const after = await hint(null);
+    check('the row says the culling was taken off, and by how much',
+          /2nd culling taken off: 273 seedlings/.test(after), true);
+    if (process.env.SHOT) await page.locator('#rec-modal .modal').screenshot({ path: process.env.SHOT });
+    const before = await hint('2026-09-02');
+    check('and a work day BEFORE it says the culling is dated later',
+          [/A 2nd culling of 273 is dated 05 Sep 2026, after this work/.test(before),
+           /NOT in the figure above/.test(before),
+           /taken off/.test(before)],
+          [true, true, false]);
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);
