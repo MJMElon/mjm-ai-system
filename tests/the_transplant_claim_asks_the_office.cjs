@@ -330,18 +330,43 @@ console.log('\n── 7. the sheet totals what the claim pays ──');
   yes(/pay\.tpHeld/.test(r), 'and the held capacity is named under the total');
   yes(/_tpCheckCell\(r, key\)/.test(r), 'every row carries the tick cell');
   /* The cell itself, driven. */
+  /* MJMPeople is the real resolver the page loads beside this file: every
+     "by <person>" is STORED as an email and must not be SHOWN as one. The
+     two display helpers are lifted rather than restated, so a change to
+     either is driven here. */
   const ctx = { esc: (v) => String(v == null ? '' : v), _tpNoGate: {},
-                t: (k) => k };
+                t: (k) => k,
+                MJMPeople: { name: (v) => v === 'office@mjm' ? 'Siti Rahmah' : v } };
   vm.createContext(ctx);
   vm.runInContext(lineOf(SHEET, /^const tpNotDone = .*$/m) + '\n'
+    + lift(SHEET, 'function _maintWho(v)') + '\n'
+    + lift(SHEET, 'function _maintWhen(t)') + '\n'
     + lift(SHEET, 'function _tpCheckCell(r, key)')
     + '\n;globalThis.__cell = _tpCheckCell;', ctx);
   const cell = vm.runInContext('__cell', ctx);
   yes(/✓ Check</.test(cell({ id: 1, checked_at: null }, 'k')), 'an unagreed row offers Check');
   const on = cell({ id: 1, checked_at: '2026-10-20T02:00:00Z', checked_by: 'office@mjm' }, 'k');
-  yes(/✓ Checked/.test(on) && /Uncheck/.test(on),
+  yes(/rec-checked-badge/.test(on) && /Uncheck/.test(on),
       'an agreed row says so and offers Uncheck to whoever could check');
-  yes(/office@mjm/.test(on) && /2026-10-20/.test(on), 'with who agreed it and when');
+  /* THE BADGE NAMES THE PERSON, not the word CHECKED and not their email
+     address — *"在这里 checked改成check的人的名字"*, asked of Culling
+     Monitoring and true of this badge for the same reason. */
+  yes(/✓ Siti Rahmah/.test(on) && !/office@mjm</.test(on),
+      'and it names the PERSON, not the address the tick is stored under');
+  yes(/20 Oct 2026/.test(on), 'with the day it was agreed, written out');
+  /* IT FAILS OPEN. A profile table that cannot be read must leave the badge
+     saying the stored value rather than saying nothing — an empty green
+     pill reads as a fault. */
+  const noNames = { esc: ctx.esc, _tpNoGate: {}, t: ctx.t };
+  vm.createContext(noNames);
+  vm.runInContext(lineOf(SHEET, /^const tpNotDone = .*$/m) + '\n'
+    + lift(SHEET, 'function _maintWho(v)') + '\n'
+    + lift(SHEET, 'function _maintWhen(t)') + '\n'
+    + lift(SHEET, 'function _tpCheckCell(r, key)')
+    + '\n;globalThis.__cell = _tpCheckCell;', noNames);
+  yes(/✓ office@mjm/.test(vm.runInContext('__cell', noNames)(
+        { id: 1, checked_at: '2026-10-20T02:00:00Z', checked_by: 'office@mjm' }, 'k')),
+      'and with no resolver at all it says what is stored, never nothing');
   /* A JOB NOBODY DID HAS NOTHING TO AGREE. A Check button over it would
      offer a tick that moves no money, and a ticked row that pays nobody is
      what somebody later reads as a fault. */

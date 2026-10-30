@@ -599,24 +599,23 @@ function seedPlantingClaim(recs, rate) {
   }));
   const list = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));
   list.forEach(p => { p.amount = Math.round(p.qty * rate * 100) / 100; });
-  /* THE BATCH IS THE ROW AND THE WORKER IS THE COLUMN — *"我要横向的 batch是
-     row 工人是column"*. The claim used to be drawn the other way up, a worker
-     a row with a column per batch, and at fifteen planters over three batches
-     that is a tall narrow sheet whose rows are nearly all dashes: a batch is
-     planted by four or five of them and the rest of its column is empty.
-     Turned round it is three rows of fifteen, which is what the office is
-     actually reading — the batch is the thing they are agreeing.
+  /* A WORKER IS THE ROW AND A BATCH IS THE COLUMN, which is the way round
+     this sheet was first drawn. It was turned over for a day — *"我要横向的
+     batch是row 工人是column"* — and the office looked at it and asked for it
+     back in the plainest words there are: *"算了做回之前的 batch和人名交换"*.
+     They are the ones reading it; that is their call to make.
 
-     Both views are built here rather than one being derived from the other on
-     the page, because a screen and a PDF working the transpose out separately
-     is two chances to get it wrong. `rows` is the batch view and `people` is
-     the per-person money the claim actually pays, which is the FOOT of the
-     table now rather than its rows and must not be lost in the turn. */
+     `batches` is the COLUMN list and `rows` the per-batch figures behind
+     those columns — the planted day in the heading, and the batch total in
+     the foot. Both are built here rather than one being worked out again on
+     the page, because a screen and a PDF deriving the same thing separately
+     is two chances to get it wrong. */
   const seen = {};
   const rows = [];
   checked.forEach(r => {
     const row = seen[r.batch_name] || (seen[r.batch_name] = { batch: r.batch_name,
-      date: r.planted_date || '', byWorker: {}, qty: 0 });
+      date: r.planted_date || '', by: r.checked_by || '', at: r.checked_at || '',
+      byWorker: {}, qty: 0 });
     if (!row._in) { row._in = true; rows.push(row); }
     Object.entries(r.workers || {}).forEach(([w, v]) => {
       const n = Number(v) || 0;
@@ -626,7 +625,7 @@ function seedPlantingClaim(recs, rate) {
     });
   });
   rows.forEach(r => { delete r._in; r.amount = Math.round(r.qty * rate * 100) / 100; });
-  return { batches: checked.map(r => r.batch_name), checked, held, people: list, rows,
+  return { batches: rows.map(r => r.batch), checked, held, people: list, rows,
            qty: list.reduce((a, p) => a + p.qty, 0),
            amount: list.reduce((a, p) => a + p.amount, 0) };
 }
@@ -664,51 +663,41 @@ function renderSeedPlanting(fromLoad) {
   const r = seedPlantingRate();
   const c = seedPlantingClaim(_seedPlant.rows, r.rate);
   const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
-  /* A BATCH A ROW, A WORKER A COLUMN. The planted day rides UNDER the batch
-     rather than taking a column of its own — the rows are sorted by it, so a
-     reader needs it to see why they are in this order, and the merged-cell
-     line `renderCullIncentive` puts the nursery on is the shape this page
-     already has for a fact that belongs to the row it is in. */
-  const names = c.people.map(p => p.name);
+  /* A WORKER A ROW, A BATCH A COLUMN — the office asked for it back.
+     The planted day rides UNDER the batch in its own HEADING, which is the
+     one thing the turn is worth keeping: the columns are in date order, so a
+     reader needs the day to see why they are in that order, and a heading is
+     where a fact about a whole column belongs. */
   const dayTxt = (d) => {
     if (!d) return '';
     const t = new Date(d);
     return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
   };
   let h = `<thead><tr>
-      <th style="text-align:left;">Batch</th>
-      ${names.map(n => `<th>${esc(n)}</th>`).join('')}
+      <th style="text-align:left;">Worker</th>
+      ${c.rows.map(b => {
+        const d = dayTxt(b.date);
+        return `<th>Batch ${esc(b.batch)}${d ? `<div class="sp-day" style="font-size:10px;font-weight:600;opacity:.75;">${esc(d)}</div>` : ''}</th>`;
+      }).join('')}
       <th>Seeds planted</th><th>Rate</th><th>Amount</th>
     </tr></thead><tbody>`;
-  if (!c.rows.length) {
-    h += `<tr><td colspan="${4 + names.length}" style="padding:1.6rem;text-align:center;color:var(--text-light);">${
+  if (!c.people.length) {
+    h += `<tr><td colspan="${4 + c.rows.length}" style="padding:1.6rem;text-align:center;color:var(--text-light);">${
       c.held.length ? 'Nothing is Checked yet for ' + esc(monthLabelFull(monthValue())) + '.'
                     : 'No seed planting was keyed for ' + esc(monthLabelFull(monthValue())) + '.'}</td></tr>`;
   } else {
-    c.rows.forEach(row => {
-      const d = dayTxt(row.date);
-      h += `<tr><td class="sp-batch" style="text-align:left;font-weight:700;">Batch ${esc(row.batch)}${
-          d ? `<div class="sp-day" style="font-size:11px;color:var(--text-light);font-weight:600;">${esc(d)}</div>` : ''}</td>
-        ${names.map(n => `<td>${fig(row.byWorker[n])}</td>`).join('')}
-        <td style="font-weight:700;">${fig(row.qty)}</td>
+    c.people.forEach(p => {
+      h += `<tr><td style="text-align:left;font-weight:700;">${esc(p.name)}</td>
+        ${c.rows.map(b => `<td>${fig(p.byBatch[b.batch])}</td>`).join('')}
+        <td style="font-weight:700;">${fig(p.qty)}</td>
         <td>${rateTxt(r.rate)}</td>
-        <td style="font-weight:700;">${money(row.amount)}</td></tr>`;
+        <td style="font-weight:700;">${money(p.amount)}</td></tr>`;
     });
   }
-  /* TWO FOOT ROWS, because turning the table round moved the money. Each
-     worker's pay was a cell on their own row; it is the column foot now, and
-     a sheet that only totalled the seeds would have taken the one figure the
-     claim exists to pay off the screen. The seeds row carries the grand total
-     of both, so the Amount row under it has something to add up to. */
-  const perWorker = n => (c.people.find(p => p.name === n) || {});
   h += `</tbody><tfoot><tr class="total-row">
-      <td style="text-align:left;">Total seeds</td>
-      ${names.map(n => `<td>${fig(perWorker(n).qty)}</td>`).join('')}
+      <td style="text-align:left;">Total</td>
+      ${c.rows.map(b => `<td>${fig(b.qty)}</td>`).join('')}
       <td>${fig(c.qty)}</td><td></td><td>${money(c.amount)}</td>
-    </tr><tr class="total-row">
-      <td style="text-align:left;">Amount (RM)</td>
-      ${names.map(n => `<td>${money(perWorker(n).amount || 0)}</td>`).join('')}
-      <td></td><td></td><td></td>
     </tr></tfoot>`;
   tbl.innerHTML = h;
   if (note) {
@@ -1575,6 +1564,13 @@ function transplantFieldLines(src) {
            "they are filed under UNN 1" can only say "nothing happened". */
         plotSection: _tpSection(rec.nursery_name),
         nursery: rec.nursery_name || '',
+        /* Who agreed this row, carried on the LINE rather than looked up
+           again off the records — the claim form names the checkers of what
+           it actually printed, and the lines are what it prints. A second
+           walk of `transplantField` scoped its own way is how a signature
+           comes to name somebody whose work is not on the page. */
+        checked_by: rec.checked_by || '',
+        checked_at: rec.checked_at || '',
         job_desc: (job && job.label) || rec.jenis || rec.work_type,
         plot: rec.plot_name,
         qty,
@@ -4343,6 +4339,54 @@ function calibrationText(capD, rmD) {
 
    A caller that passes nothing keeps the old placement, so a new sheet is
    never silently laid out to a right edge it did not ask for. */
+/* WHO CHECKED IT, drawn immediately above who VERIFIED it — *"所以每次print
+   出来 就可以显示check by谁 verify by 谁"*.
+
+   They are two different signatures and the form has only ever carried one.
+   CHECKED is somebody going through a row and agreeing the figure, which is
+   what puts it on the claim at all; VERIFIED is the office signing the whole
+   sheet afterwards. A printed claim that named only the second left the
+   person who actually went through the rows nowhere on the paper they are
+   being asked to trust.
+
+   IT IS A LINE AND NOT A COLUMN, which the office has already settled once:
+   *"我只要看到 CULLING INCENTIVE 其他废话都不用. 表格里面我只要看到人名 plot
+   和价钱"*. A checker column against every row is the dates-and-days table
+   they took off this form; the line says the same thing in the place a
+   signature belongs.
+
+   Three things in it:
+
+   - **It takes the records, never a second read.** The rows it is told about
+     are the rows the table above it was drawn from, so the line cannot name
+     a checker for work the form did not print.
+   - **A SHEET CHECKED BY SEVERAL PEOPLE NAMES THEM ALL**, and then the stamp
+     is said as the LAST one rather than being pinned to a name it does not
+     belong to. One checker keeps the plain "on <when>".
+   - **Nothing checked draws nothing** and the y is handed back untouched, so
+     a form with no Checked gate on it is exactly the form it always was. */
+function pdfCheckedNote(doc, y, recs, rightX) {
+  const list = (recs || []).filter(r => r && (r.at || r.checked_at));
+  if (!list.length) return y;
+  const names = [];
+  let last = '';
+  list.forEach(r => {
+    const raw = r.by || r.checked_by || '';
+    const who = raw ? whoName(raw) : '';
+    if (who && names.indexOf(who) < 0) names.push(who);
+    const at = String(r.at || r.checked_at || '');
+    if (at > last) last = at;
+  });
+  let line;
+  if (!names.length) line = 'Checked — the checker is not recorded.';
+  else if (names.length === 1) line = `Checked by ${names[0]} on ${fmtStamp(last)}`;
+  else line = `Checked by ${names.join(', ')} — last on ${fmtStamp(last)}`;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 60);
+  if (rightX) doc.text(line, rightX, y + 6, { align: 'right' });
+  else        doc.text(line, 25, y + 6);
+  return y + 6;
+}
+
 function pdfVerifiedNote(doc, y, sheet, scope, rightX) {
   let line = 'Not yet verified.';
   try {
@@ -4374,11 +4418,15 @@ function pdfFooterNote(doc, y, centerX, rightX, gap) {
 }
 
 /* ── THE SEED PLANTING CLAIM, ON PAPER ───────────────────────────────────
-   The office asked for a print button and for the table turned round in the
-   same sentence, so the paper is the turned-round table: a BATCH a row, a
-   PLANTER a column, the batch total, the rate and what that batch paid —
-   and the two foot rows carrying each planter's seeds and each planter's
-   money, which is what the claim is signed for.
+   The paper is the screen's own table: a PLANTER a row, a BATCH a column,
+   that planter's seeds, the rate and what they are owed — with the foot row
+   carrying each batch's total and the money the claim is signed for.
+
+   IT WAS DRAWN THE OTHER WAY UP FOR A DAY, a batch a row and a planter a
+   column, and the office asked for it back: *"算了做回之前的 batch和人名交
+   换"*. The one thing kept from the turn is the planted day under each
+   batch HEADING — the columns are in date order and the day is what says
+   why.
 
    ONE BUILDER, TWO BUTTONS. Download saves it and Print loads it into a
    hidden iframe and calls the browser's own dialog — the Seed Audit sheet's
@@ -4387,13 +4435,18 @@ function pdfFooterNote(doc, y, centerX, rightX, gap) {
    nobody can explain afterwards. A popup blocker eating a print is a button
    that does nothing, which is why it is an iframe and not a new tab.
 
-   THE PAGE IS AS WIDE AS THE CREW. Fifteen planters over 247mm of landscape
-   A4 is a column under 10mm, which `pdfCell` would shrink a name into four
-   point type to fit; past that the form is a grid nobody can read. So the
-   worker columns have a FLOOR and the paper grows to meet it rather than
-   the type shrinking to fit the paper. A4 landscape holds the ordinary
-   month; a crew big enough to need more gets a wider sheet, which a printer
-   scales down once instead of the form being illegible by construction. */
+   THE SHEET GROWS DOWN, so the head is REPEATED. Fifteen planters is
+   fifteen rows and a crew can be bigger; a second page of figures under no
+   column headings is a page of numbers nobody can place. `drawHead()` is
+   called on every page, the same rule the Work Maintenance and Transplanting
+   claims already follow.
+
+   AND IT GROWS SIDEWAYS ONLY IF IT HAS TO. A month is three or four
+   batches, which portrait A4 holds easily; a month with a dozen would
+   squeeze each column under the width of a figure, which `pdfCell` answers
+   by shrinking the type until nobody can read it. So a batch column has a
+   FLOOR and the paper widens to meet it, which a printer scales down once
+   instead of the form being illegible by construction. */
 function downloadSeedPlantingPDF() {
   return pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF('save'));
 }
@@ -4407,84 +4460,83 @@ function _seedPlantingPDF(how) {
   if (_seedPlant.err) { alert('The Seed Planting records could not be read:\n\n' + _seedPlant.err); return; }
   const r = seedPlantingRate();
   const c = seedPlantingClaim(_seedPlant.rows, r.rate);
-  if (!c.rows.length) {
+  if (!c.people.length) {
     alert(c.held.length
       ? 'No batch has been Checked on Work Maintenance for this month, so there is nothing to claim yet.'
       : 'No seed planting was keyed for this month.');
     return;
   }
-  const names = c.people.map(p => p.name);
+  const cols = c.rows;                                  // one per batch, in date order
 
   /* The fixed columns first, then what is left divided between the
-     planters — the same "count the columns off the list, never type them
+     batches — the same "count the columns off the list, never type them
      out" rule the other two claim forms follow, for the reason this file
      has a heading about. */
-  const MARGIN = 25, W_BATCH = 30, W_SEEDS = 26, W_RATE = 20, W_AMT = 28;
-  const FIXED = W_BATCH + W_SEEDS + W_RATE + W_AMT;
-  const MIN_W = 11;                       // a planter column narrower than this cannot hold a name
-  const A4L_W = 297;
-  const needed = MARGIN * 2 + FIXED + names.length * MIN_W;
-  const PAGE_W = Math.max(A4L_W, Math.ceil(needed));
-  const PAGE_H = 210;
-  const doc = pdfDoc('landscape', PAGE_W === A4L_W ? 'a4' : [PAGE_W, PAGE_H]);
-  const W_P = (PAGE_W - MARGIN * 2 - FIXED) / names.length;
-  const COL = [W_BATCH].concat(names.map(() => W_P)).concat([W_SEEDS, W_RATE, W_AMT]);
+  const MARGIN = 20, W_NAME = 46, W_SEEDS = 26, W_RATE = 18, W_AMT = 26;
+  const FIXED = W_NAME + W_SEEDS + W_RATE + W_AMT;
+  const MIN_W = 20;                       // a batch column narrower than this cannot hold its heading
+  const A4P_W = 210;
+  const needed = MARGIN * 2 + FIXED + cols.length * MIN_W;
+  const PAGE_W = Math.max(A4P_W, Math.ceil(needed));
+  const PAGE_H = 297;
+  const doc = pdfDoc('portrait', PAGE_W === A4P_W ? 'a4' : [PAGE_W, PAGE_H]);
+  const W_B = (PAGE_W - MARGIN * 2 - FIXED) / cols.length;
+  const COL = [W_NAME].concat(cols.map(() => W_B)).concat([W_SEEDS, W_RATE, W_AMT]);
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
-  const I_SEEDS = 1 + names.length, I_RATE = I_SEEDS + 1, I_AMT = I_SEEDS + 2;
+  const I_SEEDS = 1 + cols.length, I_RATE = I_SEEDS + 1, I_AMT = I_SEEDS + 2;
   const CONTENT_R = MARGIN + COL.reduce((s, w) => s + w, 0), CENTER_X = PAGE_W / 2;
   const HF = [232, 236, 252], TF = [222, 228, 250];
 
-  /* The head band is TALL, and it has to be: a name in a 11mm column wraps
-     to two or three lines, and a band sized for one would clip the rest. */
-  const HEAD_H = 20, ROW_H = 11, FOOT_H = 10;
+  const HEAD_H = 16, ROW_H = 9, FOOT_H = 10;
+  /* The floor every page stops at, so no row is drawn under the signature
+     and the footer note — the rule the Seed Audit sheet had to learn when
+     the office found a row eaten off the foot of page one. */
+  const FLOOR = PAGE_H - 34;
   const monthTxt = monthLabelFull(monthValue());
-  let y = pdfTitle(doc, ['SALARY CLAIM FORM — SEED PLANTING', 'Pre Nursery',
-                         `Month ${monthTxt}`],
-                   { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
-  pdfCell(doc, X[0], y, COL[0], HEAD_H, 'Batch', { bold: true, size: 8.5, fill: HF });
-  names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], HEAD_H, n,
-                                  { bold: true, size: 7, fill: HF }));
-  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], HEAD_H, 'Seeds planted', { bold: true, size: 7.5, fill: HF });
-  pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  HEAD_H, 'Rate', { bold: true, size: 7.5, fill: HF });
-  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   HEAD_H, 'Amount (RM)', { bold: true, size: 7.5, fill: HF });
-  y += HEAD_H;
-
-  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
   const dayTxt = (d) => {
     if (!d) return '';
     const t = new Date(d);
     return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
   };
-  c.rows.forEach(row => {
-    const d = dayTxt(row.date);
-    pdfCell(doc, X[0], y, COL[0], ROW_H, 'Batch ' + row.batch + (d ? '  ·  ' + d : ''),
-            { bold: true, size: 8 });
-    names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], ROW_H,
-                                    fig(row.byWorker[n]), { size: 7.5, nowrap: true }));
-    pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], ROW_H, fig(row.qty), { bold: true, size: 8, nowrap: true });
-    pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  ROW_H, rateTxt(r.rate), { size: 7.5, nowrap: true });
-    pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   ROW_H, money(row.amount), { bold: true, size: 8, nowrap: true });
+
+  let y = pdfTitle(doc, ['SALARY CLAIM FORM — SEED PLANTING', 'Pre Nursery',
+                         `Month ${monthTxt}`],
+                   { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
+  const drawHead = (top) => {
+    pdfCell(doc, X[0], top, COL[0], HEAD_H, 'Worker', { bold: true, size: 8.5, fill: HF });
+    cols.forEach((b, i) => {
+      const d = dayTxt(b.date);
+      pdfCell(doc, X[1 + i], top, COL[1 + i], HEAD_H,
+              'Batch ' + b.batch + (d ? '\n' + d : ''), { bold: true, size: 8, fill: HF });
+    });
+    pdfCell(doc, X[I_SEEDS], top, COL[I_SEEDS], HEAD_H, 'Seeds planted', { bold: true, size: 8, fill: HF });
+    pdfCell(doc, X[I_RATE],  top, COL[I_RATE],  HEAD_H, 'Rate', { bold: true, size: 8, fill: HF });
+    pdfCell(doc, X[I_AMT],   top, COL[I_AMT],   HEAD_H, 'Amount (RM)', { bold: true, size: 8, fill: HF });
+    return top + HEAD_H;
+  };
+  y = drawHead(y);
+
+  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
+  c.people.forEach(p => {
+    /* The foot row has to fit under the last body row, or the totals open a
+       page of their own under no heading at all. */
+    if (y + ROW_H > FLOOR) { doc.addPage(); y = drawHead(25); }
+    pdfCell(doc, X[0], y, COL[0], ROW_H, p.name, { bold: true, size: 8 });
+    cols.forEach((b, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], ROW_H,
+                                   fig(p.byBatch[b.batch]), { size: 8, nowrap: true }));
+    pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], ROW_H, fig(p.qty), { bold: true, size: 8, nowrap: true });
+    pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  ROW_H, rateTxt(r.rate), { size: 8, nowrap: true });
+    pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   ROW_H, money(p.amount), { bold: true, size: 8, nowrap: true });
     y += ROW_H;
   });
 
-  /* The two foot rows the screen carries, for the same reason: turning the
-     table round moved each planter's pay out of their row and into the foot
-     of their column, and a claim form without it is a claim form that does
-     not say what anybody is owed. */
-  const per = n => (c.people.find(p => p.name === n) || {});
-  pdfCell(doc, X[0], y, COL[0], FOOT_H, 'Total seeds', { bold: true, size: 8, fill: TF });
-  names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], FOOT_H, fig(per(n).qty),
-                                  { bold: true, size: 7.5, nowrap: true, fill: TF }));
-  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], FOOT_H, fig(c.qty), { bold: true, size: 8, nowrap: true, fill: TF });
+  if (y + FOOT_H > FLOOR) { doc.addPage(); y = drawHead(25); }
+  pdfCell(doc, X[0], y, COL[0], FOOT_H, 'Total', { bold: true, size: 8.5, fill: TF });
+  cols.forEach((b, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], FOOT_H, fig(b.qty),
+                                 { bold: true, size: 8, nowrap: true, fill: TF }));
+  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], FOOT_H, fig(c.qty), { bold: true, size: 8.5, nowrap: true, fill: TF });
   pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  FOOT_H, '', { fill: TF });
-  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   FOOT_H, money(c.amount), { bold: true, size: 8, nowrap: true, fill: TF });
-  y += FOOT_H;
-  pdfCell(doc, X[0], y, COL[0], FOOT_H, 'Amount (RM)', { bold: true, size: 8, fill: TF });
-  names.forEach((n, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], FOOT_H, money(per(n).amount || 0),
-                                  { bold: true, size: 7, nowrap: true, fill: TF }));
-  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], FOOT_H, '', { fill: TF });
-  pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  FOOT_H, '', { fill: TF });
-  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   FOOT_H, '', { fill: TF });
+  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   FOOT_H, money(c.amount), { bold: true, size: 8.5, nowrap: true, fill: TF });
   y += FOOT_H;
 
   /* A batch keyed and NOT Checked is named on the paper as well as on the
@@ -4497,6 +4549,7 @@ function _seedPlantingPDF(how) {
              MARGIN, y + 6);
     y += 6;
   }
+  y = pdfCheckedNote(doc, y, c.rows, CONTENT_R);
   y = pdfVerifiedNote(doc, y, 'seedplant', '', CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
 
@@ -4514,7 +4567,6 @@ function _seedPlantingPDF(how) {
   f.src = url;
   document.body.appendChild(f);
 }
-
 function downloadMaintPDF() {
   return pdfGuard('Work Maintenance salary claim form', _downloadMaintPDF);
 }
@@ -4951,6 +5003,15 @@ async function _downloadTransplantPDF() {
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
   y = drawCullIncentive(doc, y, cullRows, cullIncentivePay(cullRows, sec));
 
+  /* The checkers of BOTH halves of this form. The transplanting rows and the
+     Culling Monitoring plots are checked on two different screens and may be
+     checked by two different people, so they are one list and the line names
+     whoever is on it. Only what this form PRINTED is counted — the rows that
+     reached the claim — so the signature cannot name somebody whose work is
+     still being held back. */
+  y = pdfCheckedNote(doc, y,
+        lines.concat(cullRows.map(r => r.check || null)),
+        CONTENT_R);
   y = pdfVerifiedNote(doc, y, 'transpl', sec, CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
 
@@ -5115,7 +5176,13 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
 function drawCullIncentive(doc, y, rows, pay) {
   if (!rows || !rows.length) return y;
   const L = 25, RH = 8, H = 9, HF = [232, 236, 252], TF = [222, 228, 250];
-  const BOTTOM = 210 - ((RH + 1) + 6 + 4 + 3);
+  /* THE FLOOR RESERVES WHAT GOES UNDER THE TABLE, and it is a sum rather
+     than a round number: the TOTAL row (RH + 1), the CHECKED line, the
+     VERIFIED line, the footer note, and 3 of slack. There were TWO lines
+     under it from the day the form learned to say who checked it as well as
+     who verified it — a reserve left at one would put the footer at 213 on a
+     page 210 tall, which the printer simply trims. */
+  const BOTTOM = 210 - ((RH + 1) + 6 + 6 + 4 + 3);
   const COL = [50, 147, 50];
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, L);
 
