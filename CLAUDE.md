@@ -1714,61 +1714,28 @@ from this one.
 Section 7 and section 8 of `tests/the_screen_lock_is_asked_again.cjs` hold the
 parking and the twelve hours.
 
-### The stall band is drawn on a screen NOBODY CAN SEE
+### B10 is the proof that the app records, and nothing was changed
 
-The office put two pictures side by side — another app covering the whole plot
-in hundreds of zigzags, and ours, **one straight red line corner to corner,
-33 m** — and asked why ours does not run. Then they said the thing that
-settles what it is: **只有B10的正常.** B10 reads 1.63 km, 2.59 km, 2.07 km,
-2.40 km, hundreds of fixes each, off the SAME code on the SAME app. **So the
-app records.** What differs is the walk, not the code.
+Kept because the next person will be shown the same screenshot. The office put
+two pictures side by side — another app covering the whole plot in hundreds of
+zigzags, and ours, **one straight red line corner to corner, 33 m** — and asked
+why ours does not run. Then they said the thing that settles it: **只有B10的
+正常.** B10 reads 1.63 km, 2.59 km, 2.07 km, 2.40 km, hundreds of fixes each,
+off the SAME code on the SAME app.
 
-**The band was already there and was never going to help.** It goes up 45
-seconds after the positions stop — behind a dark screen, which is the only
-circumstance it exists for — and the next fix, the one that arrives when the
-phone comes back out of a pocket, CLEARS it. By the time anybody is looking
-again there is nothing left but `33 m · 2 fixes`, which reads exactly like a
-short walk. **A walk that was not recorded and a walk that was short are the
-same picture**, and nothing anywhere could tell them apart.
+**So the app records, and the code is not the fault.** What differs is the
+walk: a 33 m straight line is two fixes minutes apart, which is the phone
+asleep in a pocket. The section above is the whole of why that cannot be
+fixed — a browser STOPS giving positions when the page is not on screen, the
+wake lock only stops the screen turning ITSELF off, and only a native app can
+walk a track with the screen dark.
 
-**The evidence is inside the track the whole time.** `t` on a point is seconds
-since the walk started, so two fixes 430 seconds apart are 430 seconds the
-phone was not listening through — a walk in the open gives a position every
-second or two. So it is said AFTERWARDS, in three places off two functions in
-`track/track.js`:
-
-- **`longestGapS(points)`** where the points are in hand — the map, under the
-  figures, once the walk is OVER. While it runs the stall band is the one that
-  speaks; two bands saying the same thing at once is how both come to be
-  ignored.
-- **`gapIsCertain(points, seconds)`** where they are not. The list read leaves
-  `gps_track` behind on purpose (a thousand points a row is most of a nursery's
-  signal), so a card has the COUNT and the two STAMPS — and those are enough
-  **exactly** rather than nearly: n fixes leave n−1 gaps covering the whole
-  walk, so if the walk divided by those gaps is already 45 seconds, **at least
-  one of them is**. It cannot be otherwise. Nearly is not good enough and never
-  is here: a mark that guessed would land on honest short walks, and then it is
-  a mark nobody reads on the day it means something.
-
-It rides on the RecordCard row and on the office's VerifyHub row, which is
-where somebody looks at a straight line and asks why.
-
-**WHAT IT DOES NOT DO IS MAKE THE FIXES ARRIVE.** Nothing can — the section
-above this one is the whole of it, and it has not changed: a browser STOPS
-giving positions when the page is not on screen, the wake lock only stops the
-screen turning ITSELF off, and only a native app can walk a track with the
-screen dark. The walk has to be made with the screen on and the map in front.
-What changed is that the phone now SAYS so, on the walk and on the row, instead
-of handing back a tidy straight line.
-
-`shared/CHECK_why_a_track_is_a_straight_line.sql` is the same arithmetic asked
-of every record at once: how long each walk ran for how few fixes, sleeping
-ones first, with who walked it. **It is the only thing that tells the two cases
-apart** — the distance never could.
-
-`Barcode_Counter/tests/a_walk_with_a_hole_says_so.cjs` drives the shipped
-functions over the office's own rows, B10's included; all 38 of its checks fail
-on the previous code.
+**A warning WAS built and then taken back out at the office own request** —
+`longestGapS` / `gapIsCertain` on the track, an amber band on the map once a
+walk was over, a ⚠ gap mark on the record row, and a CHECK file. It said
+nothing the office did not already know and it marked rows they are not going
+to re-walk, so: *也是不要 全部维持*. The diagnosis is the part worth keeping;
+the screens are as they were. Do not re-build it without being asked.
 
 ## Which nursery a record is in: the PLOT decides
 
