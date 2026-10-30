@@ -4326,6 +4326,12 @@ const I18N = {
     'link.basis':'movement report closing balance',
     'link.negative':'Batch report nets to {x} here — check that plot\'s records.',
     'link.interrow':'Interrow keeps the 2nd culling in — {x} culled seedlings counted, because their rows are still sprayed.',
+    /* The other half of the sentence above, which was never said. A figure
+       with the culling deducted and a figure with no culling to deduct read
+       the same on screen, so the office could not tell a working rule from a
+       broken one and said so. */
+    'link.cull2Off':'2nd culling taken off: {x} seedlings.',
+    'link.cull2Later':'A 2nd culling of {x} is dated {d}, after this work, so it is NOT in the figure above. Check its Cull Date on the batch report if that looks wrong.',
     /* Piece rate save / lock */
     'rate.saveLock':'Save & Lock', 'rate.unlock':'Unlock to edit',
     'rate.lockedMsg':'Locked — these rates are in use by Monthly Payroll.',
@@ -4488,6 +4494,8 @@ const I18N = {
     'link.basis':'baki akhir laporan pergerakan',
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
+    'link.cull2Off':'Pembuangan ke-2 ditolak: {x} anak benih.',
+    'link.cull2Later':'Pembuangan ke-2 sebanyak {x} bertarikh {d}, selepas kerja ini, jadi ia TIDAK termasuk dalam angka di atas. Semak Cull Date pada laporan batch jika itu nampak salah.',
     /* Simpan / kunci kadar upah */
     'rate.saveLock':'Simpan & Kunci', 'rate.unlock':'Buka untuk sunting',
     'rate.lockedMsg':'Terkunci — kadar ini sedang digunakan oleh Gaji Bulanan.',
@@ -8577,9 +8585,33 @@ function refreshLinkedQty() {
     : ` <button type="button" class="btn btn-sm lnk-use" onclick="useLinkedQty()">${t('link.useLink')}</button>`;
   const warn = link.raw < 0
     ? `<br><span style="color:#a83020;">${t('link.negative').replace('{x}', numMY(link.raw))}</span>` : '';
+  /* WHAT THE 2ND CULLING DID TO THIS FIGURE, said out loud — *"2nd cull的记
+     录没被consider"*. The figure took the culling off exactly as it always
+     had, and the row could not say so: a quantity with the culling deducted
+     and a quantity with no culling to deduct are the same number on screen,
+     so there was no way to tell a working rule from a broken one.
+
+     Three sentences, and the third is the one the office was asking for:
+
+       · INTERROW keeps it standing, which it has always said;
+       · every other job TOOK IT OFF, and now names how much;
+       · a culling dated AFTER the work day is not in the figure at all, and
+         that is correct — those seedlings were standing when somebody
+         sprayed — but it is a fact somebody has to be told, not one to
+         leave them to discover by comparing two screens.
+
+     The third is amber because it is the one that may want looking at: a
+     2nd culling saved with no CullDate falls back to the day it was KEYED,
+     which can be weeks after the work. */
   const plus = link.keptCull2
-    ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', numMY(link.cull2))}</span>` : '';
-  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${warn}`;
+    ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', numMY(link.cull2))}</span>`
+    : (link.cull2Off
+        ? `<br><span style="color:var(--text-muted);">${t('link.cull2Off').replace('{x}', numMY(link.cull2Off))}</span>` : '');
+  const later = link.cull2Later
+    ? `<br><span style="color:#a16207;">${t('link.cull2Later')
+        .replace('{x}', numMY(link.cull2Later))
+        .replace('{d}', esc(_maintWhen(link.cull2LaterOn) || link.cull2LaterOn))}</span>` : '';
+  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${later}${warn}`;
 }
 
 /* Put the row back on the live linked figure. The box is what decides, so
