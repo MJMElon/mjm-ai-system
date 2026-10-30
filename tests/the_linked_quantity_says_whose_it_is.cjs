@@ -57,6 +57,21 @@ async function boot(browser) {
     window.__DB = {
       shared_inventory_logs: ledger,
       shared_do_records: [],
+      /* Two VERIFIED phone records, on a plot no nursery claims so they
+         pair with nothing — the test points a row at them by id, which is
+         what applyFieldRecords does and the only thing the hint reads. */
+      nops_maint_field_records: [
+        { id: 77, work_date: '2026-10-03', plot_name: 'ZZ', work_type: 'pd',
+          jenis: 'Penyemburan racun kulat dan serangga', chemical: 'Antracol',
+          batch_name: '268', week_no: 1, schedule_month: 'Oct 2026', qty: 2353,
+          worked_by: ['Akbar'], reported_by: 'Akbar',
+          verified_at: '2026-10-04T00:00:00Z' },
+        { id: 78, work_date: '2026-10-03', plot_name: 'ZZ', work_type: 'pd',
+          jenis: 'Penyemburan racun kulat dan serangga', chemical: 'Antracol',
+          batch_name: '268', week_no: 1, schedule_month: 'Oct 2026', qty: 2353,
+          worked_by: ['Lalu Aenal'], reported_by: 'Lalu Aenal',
+          verified_at: '2026-10-04T00:00:00Z' }
+      ],
       /* One offstage row on a plot no nursery claims: an EMPTY list leaves
          the page showing its own demo seed, whose chemicals collide with
          what this test keys. */
@@ -162,6 +177,11 @@ const hintFor = (page, row) => page.evaluate((r) => {
   rec.qty = r.qty;
   rec.batch = '268';
   if (r.mark) rec[r.mark] = 1;
+  /* The records the row was filled FROM. applyFieldRecords sets this and
+     nothing else does, off the verified list — so a name in the hint is
+     somebody a Field Conductor has agreed. */
+  delete rec._fieldIds;
+  if (r.fieldIds) rec._fieldIds = r.fieldIds;
   openRecModal(rec);
   const box = document.getElementById('rf-qty-link');
   return {
@@ -186,15 +206,33 @@ const hintFor = (page, row) => page.evaluate((r) => {
         live.useBtn, false);
 
   console.log('\n— whose figure is in the box');
-  /* THE ONE THE OFFICE WAS LOOKING AT. The field reported 2,353 and
+  /* THE ONE THE OFFICE WAS LOOKING AT. A phone record carried 2,353 and
      applyFieldRecords filled the empty cell with it; the screen called it
      theirs, so they went looking for last month. */
   const field = await hintFor(page, { qty: 2353, mark: '_fromFieldQty' });
-  check('a figure the FIELD reported is not called yours',
-        [/the field reported 2,353/.test(field.text), /your/i.test(field.text)],
+  check('a figure from a PHONE RECORD is not called yours',
+        [/from a verified phone record/.test(field.text), /your/i.test(field.text)],
         [true, false]);
   check('…and it still names the linked figure beside it',
         /Linked value is 2,353/.test(field.text), true);
+  /* AND IT NAMES THE PERSON WHERE IT CAN — *"田间报上来的 — 这是谁 只有我
+     可以填"*. "The field" is not a person, and the row already knows which
+     records it was filled from. A screen that can answer that question and
+     does not is the screen that made them ask it. */
+  const named = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77] });
+  check('a phone record names WHO saved it',
+        [/by Akbar/.test(named.text), /the field/i.test(named.text)],
+        [true, false]);
+  /* Two workers on one job is two records and one row, so it is a LIST. */
+  const two = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77, 78] });
+  check('…and two records on one row name both, once each',
+        /by Akbar, Lalu Aenal/.test(two.text), true);
+  /* A record the page cannot see — a month moved on, a read that failed —
+     falls back to the sentence with no name rather than to "by ". */
+  const gone = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [999] });
+  check('…and an id nothing matches says it without a name',
+        [/from a verified phone record/.test(gone.text), /\bby\b/.test(gone.text)],
+        [true, false]);
 
   const hand = await hintFor(page, { qty: 2000, mark: '_qtyByHand' });
   check('a figure somebody KEYED is still called theirs',
@@ -258,7 +296,7 @@ const hintFor = (page, row) => page.evaluate((r) => {
         ['Oct 2026']);
 
   if (process.env.SHOT) {
-    await hintFor(page, { qty: 2353, mark: '_fromFieldQty' });
+    await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77] });
     await page.locator('#rec-modal .modal').screenshot({ path: process.env.SHOT });
   }
   await page.close();

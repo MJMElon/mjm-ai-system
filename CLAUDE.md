@@ -257,14 +257,51 @@ screen could say.
 that box, and the hint called all three the office's own:
 
 - somebody KEYED it (`_qtyByHand`), which really is theirs;
-- the FIELD reported it and `applyFieldRecords` filled the empty cell from a
-  worker's own verified record (`_fromFieldQty`) — the rule in the section
-  below, working exactly as intended;
+- a maintenance record saved ON A PHONE filled the empty cell
+  (`_fromFieldQty`) — the rule in the section below, working exactly as
+  intended;
 - it was saved before either mark existed, so **nothing knows**.
 
 A screen telling somebody they typed a figure they never typed is what sent
 them looking for last month. It now says which, and the third case says only
 that the figure is saved rather than guessing at a person.
+
+### "THE FIELD" IS NOT A PERSON, so the box names one
+
+The first wording of the middle case read *"the field reported {y}"*, and the
+office asked the only question it leaves: *"田间报上来的 — 这是谁 只有我可以
+填"*.
+
+**They are right about their own screen**, and that is the point. Nobody else
+types into that box. What fills it without anybody typing is a maintenance
+record saved on a PHONE — the FC Portal and the Worker Portal both write
+`nops_maint_field_records` — and then VERIFIED by a Field Conductor;
+`loadFieldRecords` reads the verified ones only, so until somebody presses
+Verify it reaches no cell at all. Typing is not the only way a figure gets
+there, and the screen had never said so in words anybody uses.
+
+**The row already knew who.** `_fieldIds` are the records it was filled from,
+set by `applyFieldRecords` and by nothing else, and each record carries
+`reported_by`. `_fieldWho(row)` resolves them through `_maintWho` like every
+other "by <person>" here. **A screen that can answer a question and instead
+prints an abstraction is the screen that made somebody ask it.**
+
+Three things in it:
+
+- **It is a LIST.** One row can be three workers on one job, so three
+  records; distinct, in id order.
+- **A record the page cannot see falls back to the sentence with NO name**
+  rather than to a dangling "by " — a month moved on, or a read that failed,
+  and the id matches nothing in `fieldRecords`.
+- **The word is PHONE, not "field".** Both portals write that table, so
+  naming one of them would be wrong half the time, and *field* named nothing
+  the office recognised.
+
+**AND THE REPLY THAT PROMPTED IT WAS A GUESS.** The stored figure and the
+link were the same number, and that coincidence was reported to the office as
+"almost certainly" the phone-record case. It is not knowable from here — this
+environment cannot reach Supabase, which is exactly why the check below
+exists. Hand over the check; do not narrate a likely cause as a finding.
 
 **The "being typed right now" test is `saveRec`'s own** — the box against
 what is stored — so the sentence cannot say one thing while the save does

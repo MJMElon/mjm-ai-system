@@ -4304,12 +4304,23 @@ const I18N = {
     'link.asAt':'as at {x}', 'link.today':'standing today — no date picked yet',
     'link.willUse':'{x} will be used',
     'link.overridden':'Linked value is {x} — your {y} overrides it',
-    /* The same sentence about a figure NOBODY here typed. The field reported
-       it and applyFieldRecords filled the empty cell from the worker own
-       verified record, so calling it "yours" is the screen inventing an
-       answer. The third is for a row saved before either mark existed, where
-       nothing knows who put it there and the sentence says so. */
-    'link.fieldQty':'Linked value is {x} — the field reported {y}, and that is being used',
+    /* The same sentence about a figure NOBODY here typed. It was saved on a
+       PHONE -- the FC Portal or the Worker Portal, both of which write
+       nops_maint_field_records -- and a Field Conductor verified it, which
+       is what let applyFieldRecords fill the empty cell with it.
+
+       IT NAMES THE PERSON WHERE IT CAN. The first wording said "the field
+       reported it", and the office asked the only question that leaves:
+       "这是谁 只有我可以填". They are right that nobody else types into that
+       box; the answer is that typing is not the only way a figure gets
+       there. A screen that can name who saved the record and instead says
+       "the field" has made the reader ask.
+
+       The last is for a row saved before either mark existed, where nothing
+       knows who put it there and the sentence says exactly that rather than
+       guessing at a person. */
+    'link.fieldQtyWho':'Linked value is {x} — {y} is from a phone record by {w}, verified',
+    'link.fieldQty':'Linked value is {x} — {y} is from a verified phone record',
     'link.savedQty':'Linked value is {x} — the saved {y} is being used',
     'link.useLink':'Use the linked amount',
     'link.basis':'movement report closing balance',
@@ -4470,7 +4481,8 @@ const I18N = {
     'link.asAt':'pada {x}', 'link.today':'baki semasa — tarikh belum dipilih',
     'link.willUse':'{x} akan digunakan',
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
-    'link.fieldQty':'Nilai dari laporan ialah {x} — lapangan melaporkan {y}, dan itu yang digunakan',
+    'link.fieldQtyWho':'Nilai dari laporan ialah {x} — {y} dari rekod telefon oleh {w}, disahkan',
+    'link.fieldQty':'Nilai dari laporan ialah {x} — {y} dari rekod telefon yang disahkan',
     'link.savedQty':'Nilai dari laporan ialah {x} — {y} yang tersimpan digunakan',
     'link.useLink':'Guna nilai pautan',
     'link.basis':'baki akhir laporan pergerakan',
@@ -8454,6 +8466,30 @@ function openRecModal(pre) {
   document.getElementById('rec-modal').classList.add('open');
 }
 
+/* WHO SAVED THE PHONE RECORDS THIS ROW WAS FILLED FROM.
+
+   `_fieldIds` is set by `applyFieldRecords` and by nothing else, off records
+   `loadFieldRecords` has already filtered to the VERIFIED ones — so a name
+   here is somebody whose work a Field Conductor has agreed, never a draft
+   sitting on a handset.
+
+   One row can be several records (three workers on one job), so it is a
+   LIST, distinct and in the order the ids are in. The email is resolved to
+   a name the same way every other "by <person>" on this page is, and it
+   fails open to the stored value for the same reason. */
+function _fieldWho(row) {
+  const ids = Array.isArray(row && row._fieldIds) ? row._fieldIds : [];
+  if (!ids.length) return '';
+  const names = [];
+  ids.forEach((id) => {
+    const rec = (fieldRecords || []).find((f) => f && String(f.id) === String(id));
+    if (!rec) return;
+    const who = _maintWho(rec.reported_by || '');
+    if (who && names.indexOf(who) < 0) names.push(who);
+  });
+  return names.join(', ');
+}
+
 /* Live preview of the linked quantity while the record is being keyed, so the
    number is visible before saving rather than only after. */
 function refreshLinkedQty() {
@@ -8509,14 +8545,26 @@ function refreshLinkedQty() {
   const was   = editRecId ? (records || []).find(r => r && r.id === editRecId) : null;
   const stored = was && (was.qty === 0 || was.qty) ? String(was.qty) : '';
   const mine   = !was || typed !== stored || was._qtyByHand;
+  /* AND IT NAMES THE PERSON, because "the field" is not a person. The office
+     read that sentence and asked the only question it leaves — *"田间报上来
+     的 — 这是谁 只有我可以填"*. They are right that nobody else types into
+     THIS box; what fills it without anybody typing is a maintenance record
+     saved ON A PHONE (the FC Portal and the Worker Portal both write
+     `nops_maint_field_records`) and then VERIFIED by a Field Conductor.
+     Until somebody presses Verify it reaches no cell at all.
+
+     So the row already knows: `_fieldIds` are the records it was filled
+     from, and each one carries who reported it. A screen that can name them
+     and instead says "the field" is making the reader ask. */
   const headKey = typed === '' ? 'link.willUse'
                 : mine              ? 'link.overridden'
-                : was._fromFieldQty ? 'link.fieldQty'
+                : was._fromFieldQty ? (_fieldWho(was) ? 'link.fieldQtyWho' : 'link.fieldQty')
                 : 'link.savedQty';
   const head  = typed === ''
     ? t('link.willUse').replace('{x}', `<b style="color:var(--green-text);">${numMY(link.qty)}</b>`)
     : t(headKey).replace('{x}', `<b>${numMY(link.qty)}</b>`)
-                .replace('{y}', numMY(Number(typed)));
+                .replace('{y}', numMY(Number(typed)))
+                .replace('{w}', esc(_fieldWho(was)));
   /* THE REFRESH IS A PRESS, not a thing to work out. The office asked for a
      row to go back to the linked amount — *"每个月请直接刷新变成linked
      amount"* — and the only way to do it was to know that emptying the box
