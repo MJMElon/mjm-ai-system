@@ -235,6 +235,69 @@ counted: another month is normal and says nothing, while a row with **no**
 month is on no claim at all and is named under the total.
 `tests/claim_asks_the_month.cjs` holds it.
 
+## A box that says "yours" about a figure nobody here typed
+
+The office opened an OCTOBER record and read
+
+    Linked value is 2,353 — your 2,353 overrides it
+
+and asked, in one line: *"10月是新的月份 手打的2353是不是上个月的record？
+每个月请直接刷新变成linked amount"*.
+
+**IT WAS NOT SEPTEMBER'S, and that half was already right.** October's rows
+are built fresh — `autoSyncRecords` generates every one with `qty:null` and
+matches only rows stamped with the month on screen — so a figure keyed into
+September cannot ride into October. `tests/records_are_per_month.cjs` has
+driven exactly that across the boundary since the month rule was written, and
+it is green. **The answer to a question like this is a test run, not a
+reading**: the whole reason the office had to ask is that nothing on the
+screen could say.
+
+**WHAT WAS WRONG IS THE WORD "your".** Three different things put a figure in
+that box, and the hint called all three the office's own:
+
+- somebody KEYED it (`_qtyByHand`), which really is theirs;
+- the FIELD reported it and `applyFieldRecords` filled the empty cell from a
+  worker's own verified record (`_fromFieldQty`) — the rule in the section
+  below, working exactly as intended;
+- it was saved before either mark existed, so **nothing knows**.
+
+A screen telling somebody they typed a figure they never typed is what sent
+them looking for last month. It now says which, and the third case says only
+that the figure is saved rather than guessing at a person.
+
+**The "being typed right now" test is `saveRec`'s own** — the box against
+what is stored — so the sentence cannot say one thing while the save does
+another. Typing over a field figure reads as yours the moment it is typed,
+which is also when it becomes yours.
+
+**THE REFRESH IS A PRESS NOW.** *"每个月请直接刷新变成linked amount"* — and
+the only way to put a row back on the link was to know that emptying the box
+does it, which no screen says. **Use the linked amount** empties it, so there
+is ONE rule and not two: the save then marks the cell as the office's own
+answer, which is what stops the next field sync quietly refilling it. That
+mark is the existing contract and not a new one — `_qtyByHand` has always
+meant that an empty cell somebody emptied is their answer too.
+
+It is offered only on a row that HAS an override. A button that would change
+nothing is how a screen teaches people its buttons do nothing.
+
+**And `numMY` pins the locale on that box.** The three figures in the hint
+were bare `toLocaleString` calls — part of the 584 this file already says are
+owed a sweep — and this one prints a plot of 6,515 as `6.515` on a handset,
+which reads as six and a half. The sweep is still owed; these three are done
+because they are the lines the change touched.
+
+`shared/CHECK_which_rows_are_not_on_the_link.sql` answers the office's
+question for EVERY month at once rather than one row at a time: every row
+carrying a stored quantity, and which of the three put it there. A run of
+*from the field* is the field doing its job; a run of *saved earlier* in a
+recent month is what to open, because nothing recorded who keyed it.
+
+`tests/the_linked_quantity_says_whose_it_is.cjs` drives the real modal over
+the real `shared_plot_movement` with the office's own 2,353; five of its
+eleven checks fail on the previous code, the first in their own terms.
+
 ## The field fills an empty cell. It never writes over a full one.
 
 A verified field record fills a row's date, batch and quantity. It used to

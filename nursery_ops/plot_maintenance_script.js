@@ -220,6 +220,15 @@ function plotCaps(nursery, plots, ticked){
    other. */
 const USAGE_LOCALE = 'en-MY';
 
+/* A plain seedling count on the same pin. The owed sweep of this page's bare
+   toLocaleString calls is still owed; this is the one the linked-quantity box
+   uses, and a plot of 6,515 printing as 6.515 on a handset is the same fault
+   as the dose above, reading as six and a half. */
+function numMY(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? v.toLocaleString(USAGE_LOCALE) : '';
+}
+
 function fmtUsage(totalAmount, unit){
   const big = totalAmount / 1000;
   const shown = Math.round(big * 100) / 100;
@@ -4295,6 +4304,14 @@ const I18N = {
     'link.asAt':'as at {x}', 'link.today':'standing today — no date picked yet',
     'link.willUse':'{x} will be used',
     'link.overridden':'Linked value is {x} — your {y} overrides it',
+    /* The same sentence about a figure NOBODY here typed. The field reported
+       it and applyFieldRecords filled the empty cell from the worker own
+       verified record, so calling it "yours" is the screen inventing an
+       answer. The third is for a row saved before either mark existed, where
+       nothing knows who put it there and the sentence says so. */
+    'link.fieldQty':'Linked value is {x} — the field reported {y}, and that is being used',
+    'link.savedQty':'Linked value is {x} — the saved {y} is being used',
+    'link.useLink':'Use the linked amount',
     'link.basis':'movement report closing balance',
     'link.negative':'Batch report nets to {x} here — check that plot\'s records.',
     'link.interrow':'Interrow keeps the 2nd culling in — {x} culled seedlings counted, because their rows are still sprayed.',
@@ -4453,6 +4470,9 @@ const I18N = {
     'link.asAt':'pada {x}', 'link.today':'baki semasa — tarikh belum dipilih',
     'link.willUse':'{x} akan digunakan',
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
+    'link.fieldQty':'Nilai dari laporan ialah {x} — lapangan melaporkan {y}, dan itu yang digunakan',
+    'link.savedQty':'Nilai dari laporan ialah {x} — {y} yang tersimpan digunakan',
+    'link.useLink':'Guna nilai pautan',
     'link.basis':'baki akhir laporan pergerakan',
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
@@ -8467,15 +8487,61 @@ function refreshLinkedQty() {
   const scope = link.allBatches ? t('link.allBatches').replace('{x}', list)
                                 : t('link.someBatches').replace('{x}', list);
   const when  = link.asOf ? t('link.asAt').replace('{x}', _tarikhDisplay(link.asOf)) : t('link.today');
+  /* WHOSE FIGURE IS IN THE BOX. It used to say "your {y} overrides it" about
+     every number sitting there, whoever put it there — and three different
+     things can put one there:
+
+       · somebody KEYED it, which really is theirs;
+       · the FIELD reported it, and applyFieldRecords filled the empty cell
+         from a worker's own verified record;
+       · it was saved before either mark existed, so nothing knows.
+
+     Calling the second one "yours" is the screen telling the office they
+     typed a figure they never typed — which is exactly what it did: they
+     read "your 2,353 overrides it" on an October row and asked whether it
+     was September's. It was not (October's rows are built fresh, and
+     `records_are_per_month.cjs` drives that), but nothing on the screen
+     could say so.
+
+     The test for "being typed right now" is the SAME one `saveRec` uses to
+     decide whether to mark the cell — the box against what is stored — so
+     the sentence cannot say one thing while the save does another. */
+  const was   = editRecId ? (records || []).find(r => r && r.id === editRecId) : null;
+  const stored = was && (was.qty === 0 || was.qty) ? String(was.qty) : '';
+  const mine   = !was || typed !== stored || was._qtyByHand;
+  const headKey = typed === '' ? 'link.willUse'
+                : mine              ? 'link.overridden'
+                : was._fromFieldQty ? 'link.fieldQty'
+                : 'link.savedQty';
   const head  = typed === ''
-    ? t('link.willUse').replace('{x}', `<b style="color:var(--green-text);">${link.qty.toLocaleString()}</b>`)
-    : t('link.overridden').replace('{x}', `<b>${link.qty.toLocaleString()}</b>`)
-                          .replace('{y}', Number(typed).toLocaleString());
+    ? t('link.willUse').replace('{x}', `<b style="color:var(--green-text);">${numMY(link.qty)}</b>`)
+    : t(headKey).replace('{x}', `<b>${numMY(link.qty)}</b>`)
+                .replace('{y}', numMY(Number(typed)));
+  /* THE REFRESH IS A PRESS, not a thing to work out. The office asked for a
+     row to go back to the linked amount — *"每个月请直接刷新变成linked
+     amount"* — and the only way to do it was to know that emptying the box
+     puts the link back, which no screen says.
+
+     Emptying it is still exactly what it does, so there is one rule and not
+     two: the save then marks the cell as the office's own answer, which is
+     what stops the next field sync quietly refilling it. */
+  const undo = typed === '' ? ''
+    : ` <button type="button" class="btn btn-sm lnk-use" onclick="useLinkedQty()">${t('link.useLink')}</button>`;
   const warn = link.raw < 0
-    ? `<br><span style="color:#a83020;">${t('link.negative').replace('{x}', link.raw.toLocaleString())}</span>` : '';
+    ? `<br><span style="color:#a83020;">${t('link.negative').replace('{x}', numMY(link.raw))}</span>` : '';
   const plus = link.keptCull2
-    ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', link.cull2.toLocaleString())}</span>` : '';
-  box.innerHTML = `🔗 ${head}<br>${scope}, ${when} · ${t('link.basis')}${plus}${warn}`;
+    ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', numMY(link.cull2))}</span>` : '';
+  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${warn}`;
+}
+
+/* Put the row back on the live linked figure. The box is what decides, so
+   emptying it IS the refresh — see the comment above. */
+function useLinkedQty() {
+  const el = document.getElementById('rf-qty');
+  if (!el) return;
+  el.value = '';
+  refreshLinkedQty();
+  el.focus();
 }
 function closeRecModal(){ document.getElementById('rec-modal').classList.remove('open'); }
 function editRec(id){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); openRecModal(r); }
