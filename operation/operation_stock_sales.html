@@ -345,7 +345,12 @@
         .reserv-chip-x:hover{background:#fca5a5;color:white;}
         .reserv-empty{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1.5px dashed #cbd5e1;border-radius:9px;background:#fafbfc;font-size:9px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}
         .reserv-empty-emoji{font-size:11px;line-height:1;}
-        .reserv-empty-finished{border-style:solid;background:#f1f5f9;color:#64748b;}
+        /* A Finished row's empty allocation cell is a plain grey block — the
+           office asked for the lock icon and its sentence to go. min-height
+           keeps it the size of the Drop card here cell beside it, since it
+           no longer has text to hold it open. The status pill one column
+           over is what says why it is closed. */
+        .reserv-empty-finished{border-style:solid;border-color:#e2e8f0;background:#e9edf2;min-height:31px;cursor:default;}
 
         /* Inventory map plot labels */
         .invmap-plot-shape{transition:all .2s ease-in-out;cursor:pointer;}
@@ -971,7 +976,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=10"></script>
+<script src="operation_stock_sales.js?v=11"></script>
 <!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
 <div class="ci-modal" id="ci-upload-modal">
     <div class="ci-modal-card">

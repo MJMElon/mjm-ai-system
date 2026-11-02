@@ -1200,7 +1200,7 @@
                         <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
                     </div>`).join('')}</div>`
                 : matFinished
-                    ? `<div class="reserv-empty reserv-empty-finished"><span class="reserv-empty-emoji">🔒</span><span>Finished — no new allocations</span></div>`
+                    ? `<div class="reserv-empty reserv-empty-finished"></div>`
                     : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
 
             const html = `
