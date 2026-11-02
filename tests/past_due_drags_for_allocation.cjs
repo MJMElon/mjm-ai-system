@@ -62,7 +62,10 @@ const server = http.createServer((req, res) => {
      F  — this month, 999 ordered, CASH, Pending Payment      -> on no tab.
      G  — September, 400 ordered, 400 COLLECTED (balance 0), 300 allocated
           -> off the drawer AND its allocation is SPENT: hidden from the
-          maturity table and its Reserved total. */
+          maturity table and its Reserved total.
+     H  — September, 500 ordered, 200 COLLECTED, 400 allocated
+          -> the chip reserves only the 300 still owed: the collected part
+          "will flow to DO deducted column" and must leave the card. */
 const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
 (function(){
  window.__inserts=[];
@@ -76,7 +79,8 @@ const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
    {id:'C',order_number:'ORD-C',customer_name:'GAMMA PLANTATION',billing_name:null,total:2000,status:'Processing',created_at:'2026-09-10T02:00:00',payment_terms:'cash',collected_qty:null,collected_at:null},
    {id:'E',order_number:'ORD-E',customer_name:'BINTULU LUMBER DEVELOPMENT',billing_name:null,total:10000,status:'Pending Payment',created_at:'2026-07-01T02:00:00',payment_terms:'credit',collected_qty:null,collected_at:null},
    {id:'F',order_number:'ORD-F',customer_name:'CASH UNPAID TRADING',billing_name:null,total:9990,status:'Pending Payment',created_at:'2026-10-20T02:00:00',payment_terms:'cash',collected_qty:null,collected_at:null},
-   {id:'G',order_number:'ORD-G',customer_name:'GOLDEN HARVEST COLLECTED',billing_name:null,total:4000,status:'Paid',created_at:'2026-09-05T02:00:00',payment_terms:'cash',collected_qty:400,collected_at:'2026-10-10T02:00:00'}
+   {id:'G',order_number:'ORD-G',customer_name:'GOLDEN HARVEST COLLECTED',billing_name:null,total:4000,status:'Paid',created_at:'2026-09-05T02:00:00',payment_terms:'cash',collected_qty:400,collected_at:'2026-10-10T02:00:00'},
+   {id:'H',order_number:'ORD-H',customer_name:'SEBIT PARTIAL SDN BHD',billing_name:null,total:5000,status:'Paid',created_at:'2026-09-20T02:00:00',payment_terms:'cash',collected_qty:200,collected_at:'2026-10-12T02:00:00'}
   ],
   salesweb_order_items:[
    {order_id:'A',quantity:300,unit_price:10,subtotal:3000},
@@ -86,13 +90,15 @@ const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
    {order_id:'C',quantity:200,unit_price:10,subtotal:2000},
    {order_id:'E',quantity:1000,unit_price:10,subtotal:10000},
    {order_id:'F',quantity:999,unit_price:10,subtotal:9990},
-   {order_id:'G',quantity:400,unit_price:10,subtotal:4000}
+   {order_id:'G',quantity:400,unit_price:10,subtotal:4000},
+   {order_id:'H',quantity:500,unit_price:10,subtotal:5000}
   ],
   shared_batch_customer_allocations:[
    {id:'d1',batch_name:'250',plot_name:'U1',order_id:'D',order_number:'ORD-D',customer_name:'DELTA ESTATES',allocated_qty:150},
    {id:'b1',batch_name:'250',plot_name:'U1',order_id:'B2',order_number:'#ORD-B',customer_name:'BUKIT IMPAS AGRO SDN BHD',allocated_qty:100},
    {id:'c1',batch_name:'250',plot_name:'U1',order_id:'C',order_number:'ORD-C',customer_name:'GAMMA PLANTATION',allocated_qty:200},
-   {id:'g1',batch_name:'250',plot_name:'U1',order_id:'G',order_number:'ORD-G',customer_name:'GOLDEN HARVEST COLLECTED',allocated_qty:300}
+   {id:'g1',batch_name:'250',plot_name:'U1',order_id:'G',order_number:'ORD-G',customer_name:'GOLDEN HARVEST COLLECTED',allocated_qty:300},
+   {id:'h1',batch_name:'250',plot_name:'U1',order_id:'H',order_number:'ORD-H',customer_name:'SEBIT PARTIAL SDN BHD',allocated_qty:400}
   ],
   salesweb_order_collections:[], shared_collection_bookings:[], shared_al_orders:[],
   shared_inventory_logs:[], shared_plots:[], shared_plot_allocations:[],
@@ -152,14 +158,14 @@ const check = (ok, m) => { console.log((ok ? '  ok  ' : ' FAIL ') + m); if (!ok)
   });
 
   await page.goto(`http://127.0.0.1:${port}/operation/operation_stock_sales.html`, { waitUntil: 'domcontentloaded' });
-  // Eight salesweb rows load; the dedupe folds B/B2 into one order.
-  await page.waitForFunction('typeof allCustomerOrders !== "undefined" && allCustomerOrders.length >= 7 && batchAllocations.length === 4', null, { timeout: 15000 });
+  // Nine salesweb rows load; the dedupe folds B/B2 into one order.
+  await page.waitForFunction('typeof allCustomerOrders !== "undefined" && allCustomerOrders.length >= 8 && batchAllocations.length === 5', null, { timeout: 15000 });
   check(page.url().includes('operation_stock_sales'), 'page loaded without bouncing to the portal');
   const dedup = await page.evaluate(() => ({
     n: allCustomerOrders.length,
     b: (allCustomerOrders.find(o => o.id === 'B' || o.id === 'B2') || {}),
   }));
-  check(dedup.n === 7, `eight salesweb rows fold to seven real orders (got ${dedup.n})`);
+  check(dedup.n === 8, `nine salesweb rows fold to eight real orders (got ${dedup.n})`);
   check(dedup.b.id === 'B' && dedup.b.dupRows === 2, `the newer ORD-B row wins and knows it was keyed twice (got id ${dedup.b.id}, dupRows ${dedup.b.dupRows})`);
 
   // ── 1. The tabs hold only orders still owed allocation, and total them ───
@@ -225,19 +231,28 @@ const check = (ok, m) => { console.log((ok ? '  ok  ' : ' FAIL ') + m); if (!ok)
     const g = allocIsSpent(batchAllocations.find(a => a.id === 'g1'));
     const d = allocIsSpent(batchAllocations.find(a => a.id === 'd1'));
     const b = orderForAlloc(batchAllocations.find(a => a.id === 'b1'));
+    const hLive = allocLiveQty(batchAllocations.find(a => a.id === 'h1'));
+    const hSpent = allocIsSpent(batchAllocations.find(a => a.id === 'h1'));
+    const dLive = allocLiveQty(batchAllocations.find(a => a.id === 'd1'));
+    const orphanLive = allocLiveQty({ allocated_qty: 123, order_id: 'nobody', order_number: '' });
+    const rowSum = allocsForBatch('250||U1').reduce((s, a) => s + allocLiveQty(a), 0);
     // The balance coming back (a cancelled DO) brings the reservation
     // back by itself — hidden, never deleted.
     const ordG = allCustomerOrders.find(o => o.id === 'G');
     ordG.balance = 200;
     const live2 = allocsForBatch('250||U1').map(a => a.id).sort();
     ordG.balance = 0;
-    return { live1, live2, g, d, bId: b && b.id };
+    return { live1, live2, g, d, bId: b && b.id, hLive, hSpent, dLive, orphanLive, rowSum };
   });
   check(spent.g === true, 'an allocation whose order balance is 0 is SPENT');
   check(spent.d === false, 'one whose order is merely fully allocated (still owed) is not');
-  check(spent.live1.join(',') === 'b1,c1,d1', `allocsForBatch hides the spent chip and keeps the owed ones — Reserved Qty and the drop balance read the same door (got ${spent.live1.join(',')})`);
-  check(spent.live2.join(',') === 'b1,c1,d1,g1', 'and the reservation comes BACK by itself when the balance returns — hidden, never deleted');
+  check(spent.live1.join(',') === 'b1,c1,d1,h1', `allocsForBatch hides the spent chip and keeps the owed ones — Reserved Qty and the drop balance read the same door (got ${spent.live1.join(',')})`);
+  check(spent.live2.join(',') === 'b1,c1,d1,g1,h1', 'and the reservation comes BACK by itself when the balance returns — hidden, never deleted');
   check(spent.bId === 'B', 'an allocation saved against the duplicate keying still finds its order');
+  check(spent.hSpent === false && spent.hLive === 300, `a PARTIALLY collected order's chip reserves only what is still owed — 400 dragged, 200 collected, 300 on the card (got ${spent.hLive})`);
+  check(spent.dLive === 150, 'an uncollected allocation keeps its full figure');
+  check(spent.orphanLive === 123, 'an allocation no order can explain keeps its stored figure — nothing can judge it');
+  check(spent.rowSum === 750, `Reserved Qty sums the LIVE figures: 100 + 200 + 150 + 300 (got ${spent.rowSum})`);
 
   // ── 5. The drop writes the remainder and the card disappears ─────────────
   const drop = await page.evaluate(async () => {

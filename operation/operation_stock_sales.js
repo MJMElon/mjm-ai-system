@@ -1164,7 +1164,9 @@
         function buildRow(r, history) {
             const alloc = plotAllocations[r.key] || { plot_status: 'no_status', reserved_for: '', reserved_qty: 0, premium: false };
             const rowAllocs = allocsForBatch(r.key);
-            const allocSum  = rowAllocs.reduce((s, a) => s + (a.allocated_qty || 0), 0);
+            // Reserved Qty counts what is still OWED, not what was dragged —
+            // the collected part of an order already sits in DO Deducted.
+            const allocSum  = rowAllocs.reduce((s, a) => s + allocLiveQty(a), 0);
             const collected = r.doDeducted || 0;
             // Plot-R only — what left the plot WITHOUT a DO (culled, or
             // moved on to another plot). Kept separate from `collected` so
@@ -1192,13 +1194,20 @@
             const matFinished = status === 'finished';
 
             const reservHtml = rowAllocs.length
-                ? `<div class="reserv-stack">${rowAllocs.map(a => `
-                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(a.order_number || '')} — drag chip to move to another row">
+                ? `<div class="reserv-stack">${rowAllocs.map(a => {
+                    const live = allocLiveQty(a);
+                    const collected = (Number(a.allocated_qty) || 0) - live;
+                    const tip = (a.order_number || '') +
+                        (collected > 0 ? ` — ${collected.toLocaleString('en-MY')} collected, already in DO Deducted` : '') +
+                        ' — drag chip to move to another row';
+                    return `
+                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(tip)}">
                         <span class="reserv-chip-grip">⋮⋮</span>
                         <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
-                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
+                        <span class="reserv-chip-qty">${live.toLocaleString('en-MY')}</span>
                         <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
-                    </div>`).join('')}</div>`
+                    </div>`;
+                }).join('')}</div>`
                 : matFinished
                     ? `<div class="reserv-empty reserv-empty-finished"></div>`
                     : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
@@ -3136,6 +3145,23 @@
         return !!o && (Number(o.balance) || 0) <= 0;
     }
 
+    // What a chip still RESERVES: the stored quantity, capped at what the
+    // customer is still owed. "Remove the customer from the card column
+    // as they will flow to DO deducted column" — a collection lands in DO
+    // Deducted, so the part collected must leave the reservation or the
+    // same seedlings are taken off the row twice. A partial collection
+    // shrinks the chip to the remainder; a full one takes the card off
+    // entirely (allocIsSpent). Nothing is written: cancel the DO and the
+    // balance comes back, and the chip grows back to its stored figure by
+    // itself. An allocation no order can explain keeps its stored
+    // quantity — nothing can judge it, and it has its × beside it.
+    function allocLiveQty(a) {
+        const stored = Number(a && a.allocated_qty) || 0;
+        const o = orderForAlloc(a);
+        if (!o) return stored;
+        return Math.min(stored, Math.max(0, Number(o.balance) || 0));
+    }
+
     function allocsForBatch(batchKey) {
         const [b, p] = batchKey.split('||');
         return batchAllocations.filter(a =>
@@ -3532,7 +3558,9 @@
         if (!alloc) return;
         _draggingAlloc = {
             id: allocId,
-            qty: alloc.allocated_qty || 0,
+            // The LIVE quantity, not the stored one — moving a chip moves
+            // what is still owed, and the write lands at that figure.
+            qty: allocLiveQty(alloc),
             sourceBatch: alloc.batch_name || '',
             sourcePlot:  alloc.plot_name  || '',
             customer:    alloc.customer_name || '',
