@@ -222,10 +222,22 @@ function transplantExtraSections() {
    the extra circles follow what is actually filed rather than what was
    filed when the page opened. */
 function renderClaimPickers() {
-  renderClaimPills('maint-nursery-pills',   'maint-nursery',   maintExtraNurseries(),
-                   () => renderMaint());
+  const nExtras = maintExtraNurseries();
+  /* Work Maintenance's own circles AND Loading Seedlings' are two rows of
+     pills bound to the SAME select (#maint-nursery) — there is only one
+     nursery scope for this sheet, because Loading Seedlings is one of its
+     five jobs (see MAINT_TYPES) and verifying one verifies the other.
+     Picking a pill in either row has to move both, or the two screens
+     would read as two different nurseries for one sheet. */
+  renderClaimPills('maint-nursery-pills',   'maint-nursery', nExtras, onMaintNurseryPicked);
+  renderClaimPills('loading-nursery-pills', 'maint-nursery', nExtras, onMaintNurseryPicked);
   renderClaimPills('transpl-section-pills', 'transpl-section', transplantExtraSections(),
                    () => renderEntries('transplanting'));
+}
+function onMaintNurseryPicked() {
+  renderClaimPickers();
+  renderMaint();
+  renderLoading();
 }
 
 /* Kept as its own name because loadNurseryRegister calls it: the register
@@ -542,11 +554,18 @@ function refreshPayrollTab() {
   /* Every strip, not only the visible one. They are cheap, the month picker
      changes all five at once, and a stale strip on the sub-tab somebody
      switches to is exactly the thing that invites them to start keying into
-     a month that is shut. */
-  try { Object.keys(LOCK_SHEETS).forEach(renderVerifyBar); } catch (_) {}
+     a month that is shut. Array.forEach's own second argument is the INDEX,
+     so this cannot be `forEach(renderVerifyBar)` — that would hand
+     renderVerifyBar a number as its targetId. #vb-loading is a second copy
+     of 'maint''s own bar (see renderVerifyBar's comment), so it is drawn
+     here too rather than waiting for renderLoading(). */
+  try {
+    Object.keys(LOCK_SHEETS).forEach(s => renderVerifyBar(s));
+    renderVerifyBar('maint', 'vb-loading');
+  } catch (_) {}
   if (s === 'maint')    renderMaint();
   if (s === 'transpl')  renderEntries('transplanting');
-  if (s === 'seedling') renderEntries('seedlings');
+  if (s === 'seedling') { renderLoading(); renderEntries('seedlings'); }
   if (s === 'other')    renderEntries('other');
   if (s === 'monthly')  renderMonthly();
 }
@@ -930,7 +949,11 @@ async function _calSave(sheet, page, section, name, code, amount, worked) {
 function redrawClaim(page) {
   const wrap = document.querySelector(`#sub-${page} .tbl-wrap`);
   const x = wrap ? wrap.scrollLeft : 0;
-  if (page === 'maint') renderMaint(); else renderTransplantClaim();
+  /* Loading Seedlings calibrates the SAME 'maint' sheet (it is one of
+     MAINT_TYPES' five jobs, see loadingJob()) through its own screen, so a
+     cent stepped there has to redraw both — whichever is on screen, and
+     the other the next time it is opened. */
+  if (page === 'maint') { renderMaint(); renderLoading(); } else renderTransplantClaim();
   const after = document.querySelector(`#sub-${page} .tbl-wrap`);
   if (after) after.scrollLeft = x;
 }
@@ -2227,6 +2250,15 @@ function renderEntries(category) {
     if (wrap) wrap.classList.toggle('hidden', !list.length);
     if (!list.length) { $('transpl-keyed-table').innerHTML = ''; return; }
   }
+  /* Loading Seedlings' own claim is renderLoading(), reading the DO records
+     above — this table is the OLDER manual Seedlings Collection sheet, kept
+     for whatever was keyed under it before the automatic one existed. Same
+     "stays out of the way when there is none" rule as Transplanting's. */
+  if (category === 'seedlings') {
+    const wrap = $('seedling-keyed-wrap');
+    if (wrap) wrap.classList.toggle('hidden', !list.length);
+    if (!list.length) { $('seedling-table').innerHTML = ''; return; }
+  }
 
   const tableId = category === 'transplanting' ? 'transpl-keyed-table' : cfg.table;
   const wName = id => (workers.find(w => w.id === id) || {}).full_name || '—';
@@ -2407,6 +2439,12 @@ const MAINT_TYPES = [
   { code:'loading_seedlings', label:'Loading Seedlings', unit:'Bag', jenis:null,
     mark:['loading seedling', 'pemunggahan', 'muat anak benih', 'memunggah anak benih'] }
 ];
+
+/* The one MAINT_TYPES job this module also gives its own tab — see
+   renderLoading() below. It is still read out of the SAME maintTotals()
+   pass as the other four; this is a second screen onto it, not a second
+   source for it. */
+function loadingJob() { return MAINT_TYPES.find(t => t.code === 'loading_seedlings'); }
 
 /* ── A Work Maintenance row on the Piece Rate screen, actually linked ──────
    mjmnpayroll_piece_rates (this screen) carries no field naming which of
@@ -3102,6 +3140,127 @@ function renderMaint() {
   $('maint-note').textContent = notes.join(' ');
 }
 
+/* ════════════ LOADING SEEDLINGS — its own screen on ONE of Work
+   Maintenance's five jobs ════════════
+
+   loading_seedlings has been priced inside maintTotals() since the DO
+   Signing flow was built — see MAINT_TYPES' own entry for it — and it has
+   always locked and calibrated together with the other four jobs under
+   the 'maint' sheet, because it IS one of the five. What it never had was
+   a screen of its own: the only place it showed was the fifth column of
+   the Work Maintenance table, which is not where the office went looking
+   for it — this tab used to be a different, older sheet (manual
+   Seedlings Collection entries, kept below now as "Keyed by hand") wearing
+   a confusingly similar name.
+
+   So this reads the exact same maintLiveView()/maintSnapshotFor() pipeline
+   renderMaint() does, filtered to loading_seedlings alone, and its nursery
+   picker is the SAME select as Work Maintenance's own — see
+   renderClaimPickers()/onMaintNurseryPicked() — because there is ONE
+   verify/lock scope for this sheet, not two: verifying Work Maintenance for
+   a nursery already closes Loading Seedlings for it, same as it closes the
+   other four. Editing a cell here edits the identical adjustment row
+   editing the Work Maintenance tab's own Loading Seedlings column would
+   (sheet:'maint', page:'maint'), so the two screens cannot disagree about
+   what a worker is being paid. */
+function renderLoadingGlance(view) {
+  const box = document.getElementById('loading-glance');
+  if (!box) return;
+  const t = loadingJob();
+  const capAll = view.capAll(t.code);
+  const rate = view.rateOf(t.code);
+  const wd = rate == null ? null
+    : Math.round(cap2(capAll) * Math.round(rate * 100000) / 1000) / 100;
+  box.innerHTML = `<div class="pt-card">
+      <div class="pt-label">${esc(t.label)}</div>
+      <div class="pt-val">${capFmt(capAll)}</div>
+      <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
+    </div>`;
+}
+
+function renderLoading() {
+  const primary = document.getElementById('loading-primary');
+  /* Fails open with everything else on this page — an unconfigured login
+     answers yes — but a login explicitly refused Work Maintenance must not
+     see its money again just because it reached a different tab. */
+  if (!may('maint')) { if (primary) primary.classList.add('hidden'); return; }
+  if (primary) primary.classList.remove('hidden');
+
+  const sel = $('maint-nursery');
+  if (!sel) return;
+  const n = sel.value;
+  const ym = monthValue();
+  const monthTxt = maintMonthLabel(ym);
+  const t = loadingJob();
+
+  const frozen = maintSnapshotFor(n, ym);
+  const view = frozen ? maintViewFromSnapshot(frozen) : maintLiveView(n, ym, monthTxt);
+  renderLoadingGlance(view);
+  const { wk, rateOf, capWorked, capOf, rmOf, capSum, rmSum, capAll } = view;
+
+  $('loading-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthLabelFull(ym)}`;
+  try { renderVerifyBar('maint', 'vb-loading'); } catch (_) {}
+
+  if (!wk.length) {
+    $('loading-table').innerHTML = `<tbody><tr><td class="empty">
+      No general worker for ${esc(NURSERY_FULL[n] || n)} on the Worker System register.
+      Add them under Worker System and they appear here too.
+    </td></tr></tbody>`;
+    $('loading-note').textContent = '';
+    return;
+  }
+
+  const head = `
+    <thead>
+      <tr>
+        <th rowspan="4" style="width:44px;">No.</th>
+        <th rowspan="4" class="l" style="width:220px;">Worker</th>
+        <th colspan="2">${esc(t.label)}</th>
+      </tr>
+      <tr><th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th></tr>
+      <tr>${workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code), { compact: true })}</tr>
+      <tr><th style="width:120px;">Capacity</th><th style="width:140px;">Total (RM)</th></tr>
+    </thead>`;
+
+  const body = wk.map((w, i) => `
+    <tr>
+      <td style="color:var(--text-faint);">${i + 1}</td>
+      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
+        calibrationLine(capCalibrationOf('maint', n, w, [t.code], (c) => capWorked(w, c)), 'cap')}${
+        calibrationLine(calibrationOf('maint', n, w, [t.code], (c) => rmOf(w, c)))}</td>
+      ${capCell('maint', 'maint', n, w, t.code, capWorked(w, t.code))}
+      ${(() => { const c = capOf(w, t.code);
+        return earnedCell('maint', 'maint', n, w, t.code, t.label, c ? rmOf(w, t.code) : 0); })()}
+    </tr>`).join('');
+
+  const foot = `
+    <tfoot><tr>
+      <td colspan="2">Grand Total</td>
+      <td>${capFmt(capSum(t.code))}</td>
+      <td>${money(rmSum(t.code))}</td>
+    </tr></tfoot>`;
+
+  $('loading-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+
+  /* A frozen (verified) claim stops reading Worker Record/DO records live —
+     same reasoning as renderMaint()'s own note. */
+  if (frozen) { $('loading-note').textContent = ''; return; }
+
+  const notes = [];
+  const why = maintWhyEmpty(t.code);
+  if (why) notes.push(why);
+  const d = (maint.why || {})[t.code] || {};
+  if (d.stray && d.stray.size) {
+    notes.push(`Credited for work but with no row here, so their share is not priced: `
+      + `${[...d.stray].join(', ')}. File them under this nursery in Worker System as a general worker.`);
+  }
+  if (rateOf(t.code) == null) {
+    notes.push(`No piece rate set for ${esc(t.label)} — set it under `
+      + 'Nursery Operation → Work Maintenance → Setting → Piece Rate.');
+  }
+  $('loading-note').textContent = notes.join(' ');
+}
+
 /* ════════════ WHEN A PAYROLL MONTH STOPS BEING EDITABLE ════════════
 
    Two ways, and they answer different questions.
@@ -3195,8 +3354,13 @@ function fmtStamp(t) {
 /* ── The strip above each sheet ──────────────────────────────────────────
    Drawn on every render, because the month picker and the nursery/section
    picker both change what it is answering about. */
-function renderVerifyBar(sheet) {
-  const el = $('vb-' + sheet);
+/* `targetId` lets a second screen of the same sheet carry its own copy of
+   the bar — Loading Seedlings' #vb-loading reads the 'maint' sheet (see
+   loadingJob()) into its own element rather than #vb-maint, which belongs
+   to the Work Maintenance tab. Every onclick inside still names the real
+   sheet, so pressing Verify from either copy does the one true thing. */
+function renderVerifyBar(sheet, targetId) {
+  const el = $(targetId || ('vb-' + sheet));
   if (!el) return;
   if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) { el.className = 'verify-bar'; el.innerHTML = ''; return; }
   const ym    = monthValue();
@@ -3909,6 +4073,79 @@ function _downloadMaintPDF() {
   y = pdfVerifiedNote(doc, y, 'maint', n, CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
   doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
+}
+
+/* Loading Seedlings' own claim form — one job, so a portrait page is
+   plenty, unlike the five-job landscape sheet above. It reads the SAME
+   view (live or a verified snapshot) and writes the SAME 'maint' sheet
+   into pdfVerifiedNote, because printing this is printing one column of
+   that sheet, not a different claim. */
+function downloadLoadingPDF() {
+  return pdfGuard('Loading Seedlings salary claim form', _downloadLoadingPDF);
+}
+function _downloadLoadingPDF() {
+  if (!mayDo('maint', 'export',
+      'You do not have permission to download the salary claim form.')) return;
+  const n = $('maint-nursery').value, month = monthValue(), monthTxt = maintMonthLabel(month);
+  const view = maintSnapshotFor(n, month)
+    ? maintViewFromSnapshot(maintSnapshotFor(n, month))
+    : maintLiveView(n, month, monthTxt);
+  const { wk, rateOf, capWorked, capOf, rmOf, payOf, capSum, rmSum } = view;
+  const t = loadingJob();
+  if (!wk.length) { alert('No worker on the Loading Seedlings list for this nursery.'); return; }
+
+  const doc = pdfDoc('portrait');
+  const PAGE_W = 210, PAGE_H = 297, MARGIN = 25;
+  const W_NO = 12, W_CAP = 40, W_TOT = 45;
+  const W_WORKER = PAGE_W - MARGIN * 2 - W_NO - W_CAP - W_TOT;
+  const COL = [W_NO, W_WORKER, W_CAP, W_TOT];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
+  const CONTENT_R = MARGIN + COL.reduce((s, w) => s + w, 0), CENTER_X = PAGE_W / 2;
+
+  const H1 = 7, H2 = 6, H3 = 6, HEAD_HT = H1 + H2 + H3;
+  const HF = [232, 236, 252], TF = [222, 228, 250];
+
+  const drawHead = () => {
+    let y = pdfTitle(doc, ['SALARY CLAIM FORM — LOADING SEEDLINGS', `${NURSERY_FULL[n] || n} (${n})`,
+                            `Month ${monthLabelFull(month)}`],
+                      { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
+    pdfCell(doc, X[0], y, COL[0], HEAD_HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
+    pdfCell(doc, X[1], y, COL[1], HEAD_HT, 'Worker', { bold: true, size: 8.5, fill: HF });
+    pdfCell(doc, X[2], y, COL[2] + COL[3], H1, t.label, { bold: true, size: 9, fill: HF });
+    pdfCell(doc, X[2], y + H1, COL[2] + COL[3], H2, maintRateTxt(t, rateOf(t.code)),
+            { size: 7, nowrap: true, fill: HF });
+    pdfCell(doc, X[2], y + H1 + H2, COL[2], H3, 'Capacity',  { bold: true, size: 7, nowrap: true, fill: HF });
+    pdfCell(doc, X[3], y + H1 + H2, COL[3], H3, 'Total (RM)', { bold: true, size: 7, nowrap: true, fill: HF });
+    return y + HEAD_HT;
+  };
+
+  let y = drawHead();
+  const calTxtOf = (w) => calibrationText(
+    capCalibrationOf('maint', n, w, [t.code], (c) => capWorked(w, c)),
+    calibrationOf('maint', n, w, [t.code], (c) => rmOf(w, c)));
+  const ROW_H = 9, ROW_H_CAL = 11;
+  const FOOT_H = ROW_H + 1;
+  const FOOT_RESERVE = FOOT_H + 6 + 12 + 3;
+  wk.forEach((w, i) => {
+    const rh = calTxtOf(w) ? ROW_H_CAL : ROW_H;
+    if (y + rh > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(); }
+    const z = i % 2 ? [250, 250, 253] : null;
+    pdfCell(doc, X[0], y, COL[0], rh, String(i + 1), { size: 8.5, nowrap: true, fill: z });
+    pdfWorkerCell(doc, X[1], y, COL[1], rh, w, calTxtOf(w), { size: 9, fill: z });
+    const cap = capOf(w, t.code);
+    pdfCell(doc, X[2], y, COL[2], rh, capFmt(cap), { size: 8.5, nowrap: true, fill: z });
+    pdfCell(doc, X[3], y, COL[3], rh, (cap || adjOf('maint', n, w, t.code))
+            ? money(payOf(w, t.code)) : '—', { size: 8, nowrap: true, fill: z });
+    y += rh;
+  });
+
+  pdfCell(doc, X[0], y, COL[0] + COL[1], FOOT_H, 'Grand Total', { bold: true, size: 9, fill: TF });
+  pdfCell(doc, X[2], y, COL[2], FOOT_H, capFmt(capSum(t.code)), { bold: true, size: 8.5, nowrap: true, fill: TF });
+  pdfCell(doc, X[3], y, COL[3], FOOT_H, money(rmSum(t.code)), { bold: true, size: 8.5, nowrap: true, fill: TF });
+  y += FOOT_H;
+  y = pdfVerifiedNote(doc, y, 'maint', n, CONTENT_R);
+  pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
+  doc.save(`Salary_Claim_Loading_Seedlings_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 
 /* The Transplanting claim, on paper.

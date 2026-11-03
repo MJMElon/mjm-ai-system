@@ -259,11 +259,47 @@
       </div>
     </div>
 
-    <!-- ── Seedlings Collection ── -->
+    <!-- ── Loading Seedlings — the SAME 'maint' sheet Work Maintenance
+         prices its own fifth column from (see MAINT_TYPES' loading_seedlings
+         entry and renderLoading() in npayroll_script.js), given its own
+         screen: the nursery circles (BNN/UNN1/UNN2 — the same #maint-nursery
+         select, see onMaintNurseryPicked), a claim-form download, and
+         capacity-adjustable cells, same template as Work Maintenance,
+         because it is the same sheet. ── -->
     <div id="sub-seedling" class="subpanel">
       <div class="bar">
         <div>
           <div class="bar-title">Loading Seedlings — Salary Claim</div>
+          <div class="bar-sub" id="loading-sub"></div>
+        </div>
+        <div class="bar-actions">
+          <div class="nsel" id="loading-nursery-pills"></div>
+          <button class="btn btn-icon-dl" onclick="downloadLoadingPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="verify-bar" id="vb-loading"></div>
+      <!-- Hidden rather than left to render for a login refused Work
+           Maintenance view — see the guard at the top of renderLoading(). -->
+      <div id="loading-primary">
+        <div id="loading-glance" class="pt-glance"></div>
+        <div class="card"><div class="tbl-wrap"><table id="loading-table"></table></div></div>
+        <p class="foot-note" id="loading-note"></p>
+      </div>
+
+      <!-- Keyed by hand: the older manual Seedlings Collection sheet, from
+           before loading_seedlings was priced automatically off the DO
+           Signing records above. The picker and Add Entry stay put so a
+           month with nothing yet keyed can still start one; only the table
+           below hides when there is nothing in it (renderEntries). -->
+      <div class="bar" style="margin-top:1.1rem;">
+        <div>
+          <div class="bar-title" style="font-size:.95rem;">Seedlings Collection (keyed by hand)</div>
           <div class="bar-sub" id="seedling-sub"></div>
         </div>
         <div class="bar-actions">
@@ -271,8 +307,10 @@
           <button class="btn btn-primary" data-add onclick="openEntry('seedlings')">+ Add Entry</button>
         </div>
       </div>
-            <div class="verify-bar" id="vb-seedling"></div>
-      <div class="card"><div class="tbl-wrap"><table id="seedling-table"></table></div></div>
+      <div class="verify-bar" id="vb-seedling"></div>
+      <div id="seedling-keyed-wrap" class="hidden">
+        <div class="card"><div class="tbl-wrap"><table id="seedling-table"></table></div></div>
+      </div>
     </div>
 
     <!-- ── Others ── -->
@@ -501,7 +539,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=75"></script>
+<script src="npayroll_script.js?v=76"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
