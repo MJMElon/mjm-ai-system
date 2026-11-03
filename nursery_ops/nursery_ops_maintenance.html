@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=111">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=112">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -383,6 +383,11 @@
         <div class="perf-toggle">
           <button type="button" id="perf-view-table" class="perf-btn active" onclick="switchPerfView('table')">Table view</button>
           <button type="button" id="perf-view-chart" class="perf-btn" onclick="switchPerfView('chart')">Chart view</button>
+          <!-- The printer prints the TABLE, through the same builder that
+               draws it — see printPerfTable(). -->
+          <button type="button" id="perf-print" class="perf-btn perf-print" onclick="printPerfTable()" title="Print the table" aria-label="Print the table">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
+          </button>
         </div>
 
         <div id="perf-table-wrap"></div>
@@ -937,7 +942,7 @@
      The payroll module has read this since it was written; this page
      showed the raw address on three Checked badges. -->
 <script src="../shared/shared_people.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=168"></script>
+<script src="plot_maintenance_script.js?v=169"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

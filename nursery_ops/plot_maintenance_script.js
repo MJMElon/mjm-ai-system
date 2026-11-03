@@ -9544,41 +9544,45 @@ let plotInst  = null;
 /* ════════════════════════════════════════════════════════════════════════
    MONTHLY PERFORMANCE — two selectable views, Table and Chart.
 
-   The TABLE is the office's own monthly summary sheet ("Summary of work
-   done ... (Scheduled Maintenance Programme)"), which they were building
-   by hand every month off the Monthly Records. A row per plot:
+   The TABLE answers the office's question in their own words: "Link the
+   data from work schedule and work record so that we can know B1 schedule
+   how many round and the how many the capacity verses the actual round
+   and capacity from work record. Come out with how many variance." So a
+   row per plot, and under each of the four jobs:
 
-   - FULL CAPACITY and ALIVE are the plot's linked quantities off the
-     batch ledger — the same two figures every record on this page links
-     to: Alive is what Manuring, P & D and Weeding count (2nd culling
-     off), Full is what Interrow counts (the ground between the rows does
-     not shrink when a polybag empties — the B5 rule in CLAUDE.md, and
-     their sheet says it in its own words: "Based on alive" / "Based on
-     full capacity").
-   - A ROUND is a month record that carries work of its own — a quantity
-     somebody keyed, a figure frozen by Checked, or the Checked tick
-     itself. A row the schedule generated and nobody filled is not a
-     round (their August sheet reads 0 rounds on a new transplant plot
-     whose schedule had one). The gaia flag is NOT the test: October has
-     539 records and not one gaia tick, so a gaia-gated table would read
-     as a month nobody worked.
-   - PROGRAM is the plot's base (Alive, or Full for interrow) times the
-     rounds done; the column their sheet heads "Plot Capacity x No.of
-     Rounds" is the SUM OF THE RECORDED FIGURES over those rounds — the
-     same recQty the Worker Record pays on (keyed, else frozen, else the
-     link) — and VARIANCE is recorded less program, red when it is not
-     nought, both signs, exactly as they print it.
-   - The header's "No. of Rounds : N" is the month's program for the job:
-     the most rows the schedule generated for any one plot.
-   - REMARKS is every distinct remark on the plot's month records.
+   - PROGRAM is the WORK SCHEDULE's: the rows autoSyncRecords generated
+     for this month carry the slot they came from (_src), so the rounds
+     the schedule planned for a plot are exactly its _src rows, and the
+     program quantity is the plot's capacity times those rounds.
+   - CAPACITY comes STRAIGHT OFF SETTINGS (capacityOf — the Plot Capacity
+     grid), the office's own figure, never the ledger: "Get the full
+     capacity amount from settings and no need alive quantity as you will
+     link the capacity directly." The Alive column went with that.
+   - ACTUAL is the WORK RECORD's: a round counts when the row carries
+     work of its own — a keyed quantity (nought included), a figure
+     frozen by Checked, or the Checked tick — and the actual quantity is
+     the sum of recQty over those rows, the same figure the Worker Record
+     pays (keyed, else frozen, else the link). A generated row nobody
+     filled is a program round and not an actual one. The gaia flag is
+     NOT the test: October holds 539 records and no gaia tick at all.
+   - VARIANCE is actual less program, red short and green over.
+   - REMARKS is the office's own box, saved per plot per month per
+     nursery in nops_maint_perf_remarks
+     (shared/RUN_ME_monthly_performance_remarks.sql) — they asked to
+     write their own, so the records' remarks stay on the records. Until
+     the SQL is run the boxes are read-only and the hint names the file;
+     a sheet that silently dropped what somebody typed would be worse
+     than one that refuses to take it.
 
    The CHART view is the panel this always was, untouched behind the
-   toggle. The choice is remembered per machine. */
+   toggle. The choice is remembered per machine, and the printer icon
+   prints the table through the same builder that draws it — one
+   builder, two outputs, so the paper cannot drift from the screen. */
 const PERF_JOBS = [
-  { type: 'manuring', head: 'Manuring',                note: 'Based on alive',         full: false },
-  { type: 'pd',       head: 'Pest & Disease Spraying', note: 'Based on alive',         full: false },
-  { type: 'weeding',  head: 'Weeding',                 note: 'Based on alive',         full: false },
-  { type: 'interrow', head: 'Interrow Spraying',       note: 'Based on full capacity', full: true  }
+  { type: 'manuring', head: 'Manuring' },
+  { type: 'pd',       head: 'Pest & Disease Spraying' },
+  { type: 'weeding',  head: 'Weeding' },
+  { type: 'interrow', head: 'Interrow Spraying' }
 ];
 let _perfView = 'table';
 try { const v = localStorage.getItem('mjm_maint_perfview'); if (v === 'chart' || v === 'table') _perfView = v; } catch (_) {}
@@ -9611,96 +9615,198 @@ function _perfRowDone(r) {
 const _perfEsc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-function renderPerfTable() {
-  const box = document.getElementById('perf-table-wrap');
-  if (!box) return;
+/* The office's own remarks, one per plot per month per nursery. Loaded
+   once per (nursery, month); a failed read is asked again on the next
+   draw, a MISSING TABLE is remembered and said, and a redraw never lands
+   while somebody is typing into one of the boxes. */
+const PERF_REMARKS_TABLE = 'nops_maint_perf_remarks';
+let _perfRemarks = {};        // `${n}||${m}` -> { plot: remark }
+let _perfRemarksState = {};   // key -> 'ok' | 'missing' | 'failed'
+let _perfRemarksAsked = {};
+let _perfRemarkTimers = {};
+
+function _loadPerfRemarks(n, m) {
+  const key = n + '||' + m;
+  if (_perfRemarksAsked[key] || !_supabase) return;
+  _perfRemarksAsked[key] = true;
+  _supabase.from(PERF_REMARKS_TABLE).select('plot, remark').eq('nursery', n).eq('month', m)
+    .then(({ data, error }) => {
+      if (error) {
+        const gone = /does not exist|could not find|schema cache/i.test(error.message || '');
+        _perfRemarksState[key] = gone ? 'missing' : 'failed';
+        if (!gone) _perfRemarksAsked[key] = false; // a flaky read is asked again, a missing table is not
+      } else {
+        _perfRemarksState[key] = 'ok';
+        const map = {};
+        (data || []).forEach(r => { if (r && r.plot) map[r.plot] = r.remark || ''; });
+        _perfRemarks[key] = map;
+      }
+      const active = document.activeElement;
+      if (active && active.classList && active.classList.contains('pf-remark-box')) return;
+      const chartView = document.getElementById('recview-chart');
+      if (chartView && chartView.classList.contains('active') && _perfView === 'table') renderPerfTable();
+    }, () => { _perfRemarksAsked[key] = false; });
+}
+
+function perfRemarkInput(el) {
   const n = getNursery(), m = getMonth();
-  const plots = NURSERY_PLOTS[n] || [];
-  /* The two capacity columns are the batch ledger's answer, so without it
-     there is no table to draw — say which of the two states this is
-     rather than showing noughts that read as an empty nursery. */
-  if (!PlotMovement.ready()) {
-    box.innerHTML = `<div class="perf-wait">${PlotMovement.error()
-      ? 'The batch ledger could not be reached, and the capacity columns are its answer — reload to try again.'
-      : 'Loading the batch ledger…'}</div>`;
-    return;
-  }
+  const plot = el.dataset.plot || '';
+  const key = n + '||' + m;
+  (_perfRemarks[key] = _perfRemarks[key] || {})[plot] = el.value;
+  const tKey = key + '||' + plot;
+  clearTimeout(_perfRemarkTimers[tKey]);
+  _perfRemarkTimers[tKey] = setTimeout(() => {
+    if (!_supabase || _perfRemarksState[key] === 'missing') return;
+    _supabase.from(PERF_REMARKS_TABLE)
+      .upsert({
+        nursery: n, month: m, plot, remark: el.value,
+        updated_at: new Date().toISOString(),
+        updated_by: ((typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || {}).email || ''
+      }, { onConflict: 'nursery,month,plot' })
+      .then(({ error }) => { if (error) console.warn('[maint] performance remark save failed:', error.message); });
+  }, 600);
+}
+window.perfRemarkInput = perfRemarkInput;
+
+/* The figures, worked out once — the screen and the printed sheet both
+   draw from this, so the paper cannot disagree with the page. */
+function _perfData() {
+  const n = getNursery(), m = getMonth();
   const monthRecs = records.filter(r => r && _recInMonth(r, m));
+  const key = n + '||' + m;
+  const remarks = _perfRemarks[key] || {};
   const monthFull = (() => {
     const v = monthLabelToInput(m);
     const d = v ? new Date(v + '-01T00:00:00') : null;
     return d && !isNaN(d) ? d.toLocaleString('en-MY', { month: 'long', year: 'numeric' }) : m;
   })();
-
-  const headRounds = {};
-  PERF_JOBS.forEach(j => {
-    const jenis = PAYROLL_TYPES[j.type].jenis;
-    let maxN = 0;
-    plots.forEach(p => {
-      const c = monthRecs.filter(r => r.plot === p && r.jenis === jenis).length;
-      if (c > maxN) maxN = c;
-    });
-    headRounds[j.type] = maxN;
-  });
-
-  let totFull = 0, totAlive = 0;
-  const tots = {};
-  PERF_JOBS.forEach(j => { tots[j.type] = { prog: 0, qty: 0 }; });
-
-  const bodyRows = plots.map(plot => {
-    const alive = (linkedPlotQty(plot, '', '', PlotMovement.qtyOpts({ jenis: PAYROLL_TYPES.manuring.jenis })) || {}).qty || 0;
-    const full  = (linkedPlotQty(plot, '', '', PlotMovement.qtyOpts({ jenis: PAYROLL_TYPES.interrow.jenis })) || {}).qty || 0;
-    totFull += full; totAlive += alive;
-    const remarks = [];
-    const cells = PERF_JOBS.map(j => {
+  const tots = { cap: 0 };
+  PERF_JOBS.forEach(j => { tots[j.type] = { progR: 0, progQ: 0, actR: 0, actQ: 0 }; });
+  const rows = [];
+  (NURSERY_PLOTS[n] || []).forEach(plot => {
+    const cap = capacityOf(n, plot) || 0;
+    const plotRecs = monthRecs.filter(r => r.plot === plot);
+    // A plot with no capacity, no schedule, no record and no remark is a
+    // row of noughts nobody asked about — the tidy the office asked for.
+    if (!cap && !plotRecs.length && !(remarks[plot] || '').trim()) return;
+    const jobs = PERF_JOBS.map(j => {
       const jenis = PAYROLL_TYPES[j.type].jenis;
-      const rows = monthRecs.filter(r => r.plot === plot && r.jenis === jenis);
-      rows.forEach(r => {
-        const txt = String(r.remark || '').trim();
-        if (txt && remarks.indexOf(txt) < 0) remarks.push(txt);
-      });
-      const done   = rows.filter(_perfRowDone);
-      const rounds = done.length;
-      const base   = j.full ? full : alive;
-      const prog   = base * rounds;
-      const qty    = done.reduce((s, r) => s + ((recQty(r) || {}).value || 0), 0);
-      const vari   = qty - prog;
-      tots[j.type].prog += prog;
-      tots[j.type].qty  += qty;
-      return `<td class="num">${numMY(prog)}</td><td class="num">${numMY(rounds)}</td>`
-           + `<td class="num pf-rec">${numMY(qty)}</td><td class="num${vari ? ' pf-var' : ''}">${numMY(vari)}</td>`;
-    }).join('');
-    return `<tr><td class="pf-plot">${_perfEsc(plot)}</td><td class="num">${numMY(full)}</td><td class="num">${numMY(alive)}</td>${cells}<td class="pf-remark">${_perfEsc(remarks.join(' ; '))}</td></tr>`;
-  }).join('');
+      const jr = plotRecs.filter(r => r.jenis === jenis);
+      const progR = jr.filter(r => r._src).length;      // the work schedule's rounds
+      const progQ = cap * progR;
+      const done  = jr.filter(_perfRowDone);            // the work record's rounds
+      const actR  = done.length;
+      const actQ  = done.reduce((s, r) => s + ((recQty(r) || {}).value || 0), 0);
+      const t = tots[j.type];
+      t.progR += progR; t.progQ += progQ; t.actR += actR; t.actQ += actQ;
+      return { progR, progQ, actR, actQ, vari: actQ - progQ };
+    });
+    tots.cap += cap;
+    rows.push({ plot, cap, jobs, remark: remarks[plot] || '' });
+  });
+  return { n, m, key, monthFull, rows, tots };
+}
 
-  const footCells = PERF_JOBS.map(j => {
-    const vari = tots[j.type].qty - tots[j.type].prog;
-    return `<td class="num">${numMY(tots[j.type].prog)}</td><td></td>`
-         + `<td class="num">${numMY(tots[j.type].qty)}</td><td class="num${vari ? ' pf-var' : ''}">${numMY(vari)}</td>`;
-  }).join('');
+const _perfVarCell = (v) =>
+  `<td class="num ${v < 0 ? 'pf-neg' : v > 0 ? 'pf-pos' : 'pf-zero'}">${numMY(v)}</td>`;
 
-  box.innerHTML = `
+function _perfHeadHtml(d) {
+  return `
     <div class="perf-head">
-      <div class="ph-1">Summary of work done in ${_perfEsc(NURSERY_LABELS[n] || n)} (Scheduled Maintenance Programme)</div>
-      <div class="ph-2">${_perfEsc(monthFull)}</div>
-    </div>
-    <div class="perf-scroll">
-      <table class="perf-table">
-        <thead>
-          <tr>
-            <th rowspan="3">Plot</th><th rowspan="3">Full<br>Capacity</th><th rowspan="3">Alive</th>
-            ${PERF_JOBS.map(j => `<th colspan="4">${j.head}<span class="pf-note">(Remarks: ${j.note})</span></th>`).join('')}
-            <th rowspan="3">Remarks</th>
-          </tr>
-          <tr>${PERF_JOBS.map(() => '<th>Program</th><th colspan="3">Verification</th>').join('')}</tr>
-          <tr>${PERF_JOBS.map(j => `<th class="pf-sub">No. of Rounds : ${numMY(headRounds[j.type])}</th>`
-            + '<th class="pf-sub">No. of Rounds</th><th class="pf-sub">Plot Capacity x No.of Rounds</th><th class="pf-sub">Variance</th>').join('')}</tr>
-        </thead>
-        <tbody>${bodyRows}</tbody>
-        <tfoot><tr><td class="pf-plot">Total</td><td class="num">${numMY(totFull)}</td><td class="num">${numMY(totAlive)}</td>${footCells}<td></td></tr></tfoot>
-      </table>
+      <div class="ph-1">Summary of Work Done — ${_perfEsc(NURSERY_LABELS[d.n] || d.n)}</div>
+      <div class="ph-2">Scheduled Maintenance Programme · ${_perfEsc(d.monthFull)}</div>
     </div>`;
 }
+
+function _perfTableHtml(d, forPrint) {
+  const remarksOk = _perfRemarksState[d.key] === 'ok';
+  const bodyRows = d.rows.map(r => {
+    const cells = r.jobs.map(j =>
+      `<td class="num">${numMY(j.progR)}</td><td class="num">${numMY(j.progQ)}</td>`
+      + `<td class="num">${numMY(j.actR)}</td><td class="num pf-act">${numMY(j.actQ)}</td>`
+      + _perfVarCell(j.vari)).join('');
+    const remark = forPrint
+      ? `<td class="pf-remark">${_perfEsc(r.remark)}</td>`
+      : `<td class="pf-remark"><textarea class="pf-remark-box" data-plot="${_perfEsc(r.plot)}" rows="1"
+           oninput="perfRemarkInput(this)" ${remarksOk ? '' : 'disabled'}
+           placeholder="${remarksOk ? 'Write a remark…' : ''}">${_perfEsc(r.remark)}</textarea></td>`;
+    return `<tr><td class="pf-plot">${_perfEsc(r.plot)}</td><td class="num">${numMY(r.cap)}</td>${cells}${remark}</tr>`;
+  }).join('');
+  const footCells = PERF_JOBS.map(j => {
+    const t = d.tots[j.type];
+    return `<td class="num">${numMY(t.progR)}</td><td class="num">${numMY(t.progQ)}</td>`
+      + `<td class="num">${numMY(t.actR)}</td><td class="num pf-act">${numMY(t.actQ)}</td>`
+      + _perfVarCell(t.actQ - t.progQ);
+  }).join('');
+  return `
+    <table class="perf-table">
+      <thead>
+        <tr>
+          <th rowspan="3" class="pf-left">Plot</th><th rowspan="3">Capacity</th>
+          ${PERF_JOBS.map(j => `<th colspan="5" class="pf-job">${j.head}</th>`).join('')}
+          <th rowspan="3" class="pf-left">Remarks</th>
+        </tr>
+        <tr>${PERF_JOBS.map(() =>
+          '<th colspan="2" class="pf-grp">Program · Work Schedule</th>'
+          + '<th colspan="2" class="pf-grp">Actual · Work Record</th>'
+          + '<th rowspan="2" class="pf-sub">Variance</th>').join('')}</tr>
+        <tr>${PERF_JOBS.map(() =>
+          '<th class="pf-sub">Rounds</th><th class="pf-sub">Qty</th><th class="pf-sub">Rounds</th><th class="pf-sub">Qty</th>').join('')}</tr>
+      </thead>
+      <tbody>${bodyRows || '<tr><td colspan="23" class="pf-empty">Nothing scheduled or recorded for this month</td></tr>'}</tbody>
+      <tfoot><tr><td class="pf-plot pf-left">Total</td><td class="num">${numMY(d.tots.cap)}</td>${footCells}<td></td></tr></tfoot>
+    </table>`;
+}
+
+function renderPerfTable() {
+  const box = document.getElementById('perf-table-wrap');
+  if (!box) return;
+  const d = _perfData();
+  _loadPerfRemarks(d.n, d.m);
+  const state = _perfRemarksState[d.key];
+  const hint = state === 'missing'
+    ? `<div class="perf-hint">Remarks are not saved yet — run shared/RUN_ME_monthly_performance_remarks.sql in the Supabase SQL Editor. Until then the boxes are read-only.</div>`
+    : state === 'failed'
+      ? `<div class="perf-hint">The saved remarks could not be read just now — what you type still saves, and they come back on the next load.</div>`
+      : '';
+  box.innerHTML = `${_perfHeadHtml(d)}${hint}<div class="perf-scroll">${_perfTableHtml(d, false)}</div>`;
+}
+
+/* The printer icon. Same data, same builder, a sheet of its own — the
+   iframe route the other prints here use, because a popup blocker eating
+   a print is a button that does nothing. Remarks print as text. */
+function printPerfTable() {
+  const d = _perfData();
+  const css = `
+    @page { size: A4 landscape; margin: 9mm; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #1a2e22; margin: 0; }
+    .perf-head .ph-1 { font-size: 14px; font-weight: 800; }
+    .perf-head .ph-2 { font-size: 12px; font-weight: 600; margin: 2px 0 8px; }
+    table.perf-table { border-collapse: collapse; width: 100%; font-size: 9px; }
+    .perf-table th, .perf-table td { border: 0.5pt solid #9aa89f; padding: 2.5px 4px; }
+    .perf-table thead th { background: #eef3ef; font-weight: 700; text-align: center; }
+    .perf-table td.num { text-align: right; white-space: nowrap; }
+    .perf-table td.pf-plot { font-weight: 800; text-align: center; }
+    .perf-table td.pf-neg { color: #b91c1c; font-weight: 700; }
+    .perf-table td.pf-pos { color: #0d7a47; font-weight: 700; }
+    .perf-table td.pf-zero { color: #8a978f; }
+    .perf-table tfoot td { font-weight: 800; background: #eef3ef; }
+    .perf-table td.pf-remark { min-width: 110px; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Monthly Performance — ${_perfEsc(d.n)} ${_perfEsc(d.monthFull)}</title>
+    <style>${css}</style></head><body>${_perfHeadHtml(d)}${_perfTableHtml(d, true)}</body></html>`;
+  const f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(f);
+  f.onload = () => {
+    try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.warn('[maint] print failed:', e); }
+    setTimeout(() => f.remove(), 60000);
+  };
+  f.srcdoc = html;
+}
+window.printPerfTable = printPerfTable;
 
 function renderCharts() {
   const chartN = getNursery();

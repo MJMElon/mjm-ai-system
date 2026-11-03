@@ -1754,33 +1754,53 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .cm-days:focus { outline:none; border-color:var(--green-mid); }
 
 /* ─── MONTHLY PERFORMANCE — the Table/Chart view switch and the table ───
-   The table is the office's own monthly summary sheet, reproduced: a row
-   per plot, Full Capacity and Alive, then the four jobs each carrying
-   Program and Verification (rounds, the recorded figure, the variance),
-   and the Remarks off the month's records. Their sheet tints the figure
-   columns and sets every variance that is not nought in red; both are
-   kept, because a sheet that reads like the one they make by hand is the
-   whole point of it. */
-.perf-toggle{display:flex;gap:8px;margin-bottom:14px;}
+   The table links the WORK SCHEDULE (Program: rounds planned, capacity ×
+   rounds) against the WORK RECORD (Actual: rounds done, the recorded
+   figures) with a Variance per job, the capacity straight off Settings,
+   and an editable Remarks box per plot. One clean house style whatever
+   the nursery — the office asked for tidy and standard, not a copy of
+   their spreadsheet. */
+.perf-toggle{display:flex;gap:8px;margin-bottom:14px;align-items:center;}
 .perf-btn{padding:8px 18px;font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.04em;
           color:var(--text-body);background:var(--bg-white);border:1.5px solid var(--border);
           border-radius:var(--r-sm);cursor:pointer;}
 .perf-btn.active{color:#fff;background:var(--green-mid);border-color:var(--green-mid);}
-.perf-wait{padding:30px 10px;font-size:13px;font-weight:700;color:var(--text-faint);text-align:center;}
+.perf-btn.perf-print{margin-left:auto;display:flex;align-items:center;gap:6px;padding:8px 12px;}
+.perf-btn.perf-print:hover{background:#eef7f1;}
+.perf-hint{margin:0 0 10px;padding:8px 12px;font-size:12px;font-weight:700;color:#92400e;
+           background:#fef3c7;border:1.5px solid #fcd34d;border-radius:var(--r-sm);}
 .perf-head{margin:2px 0 12px;}
-.perf-head .ph-1{font-size:14px;font-weight:900;color:var(--text-head);}
-.perf-head .ph-2{font-size:13px;font-weight:800;color:var(--text-body);margin-top:2px;}
+.perf-head .ph-1{font-size:15px;font-weight:900;color:var(--text-head);}
+.perf-head .ph-2{font-size:12px;font-weight:700;color:var(--text-faint);margin-top:2px;
+                 text-transform:uppercase;letter-spacing:.05em;}
 .perf-scroll{overflow-x:auto;background:var(--bg-white);border:1.5px solid var(--border);
              border-radius:var(--r-md);box-shadow:var(--shadow-sm);}
-table.perf-table{border-collapse:collapse;width:100%;min-width:1180px;font-size:12px;}
-.perf-table th,.perf-table td{border:1px solid #d8cdb8;padding:5px 7px;}
-.perf-table thead th{background:#fdf0e0;color:var(--text-head);font-weight:800;text-align:center;}
-.perf-table thead th.pf-note{font-weight:600;font-style:italic;font-size:10px;}
-.perf-table thead th .pf-note{display:block;font-weight:600;font-style:italic;font-size:10px;margin-top:2px;}
-.perf-table thead th.pf-sub{font-size:10.5px;}
+table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:12px;}
+.perf-table th,.perf-table td{border:1px solid var(--border);padding:5px 8px;}
+.perf-table thead th{background:#f0f6f1;color:var(--text-head);font-weight:800;text-align:center;
+                     font-size:11px;letter-spacing:.02em;}
+.perf-table thead th.pf-job{background:#e3efe6;text-transform:uppercase;letter-spacing:.05em;}
+.perf-table thead th.pf-grp{font-weight:700;font-size:10.5px;color:var(--text-body);}
+.perf-table thead th.pf-sub{font-weight:700;font-size:10px;color:var(--text-faint);
+                            text-transform:uppercase;letter-spacing:.04em;}
+/* A job group reads as a group: a heavier rule on its left edge. The
+   header lays the 5 job columns as Rounds/Qty/Rounds/Qty/Variance, so
+   the rule falls on every 5th figure column (Plot and Capacity first). */
+.perf-table td:nth-child(5n+3),.perf-table tbody td:nth-child(3),
+.perf-table thead th.pf-job{border-left:2px solid #b9c9bd;}
 .perf-table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
 .perf-table td.pf-plot{font-weight:900;color:var(--text-head);text-align:center;}
-.perf-table td.pf-rec{background:#fdf0e0;}
-.perf-table td.pf-var{color:#c0392b;font-weight:700;}
-.perf-table td.pf-remark{font-size:11px;min-width:170px;}
-.perf-table tfoot td{font-weight:900;color:var(--text-head);background:#f6f1e7;}
+.perf-table td.pf-act{font-weight:700;}
+.perf-table td.pf-neg{color:#b91c1c;font-weight:800;}
+.perf-table td.pf-pos{color:var(--green-text);font-weight:800;}
+.perf-table td.pf-zero{color:var(--text-faint);}
+.perf-table tbody tr:nth-child(even) td{background:#fafcfa;}
+.perf-table td.pf-empty{text-align:center;color:var(--text-faint);font-weight:700;padding:26px 10px;}
+.perf-table tfoot td{font-weight:900;color:var(--text-head);background:#f0f6f1;}
+.perf-table td.pf-remark{min-width:180px;padding:3px 4px;}
+.pf-remark-box{width:100%;min-height:30px;box-sizing:border-box;resize:vertical;border:1px solid transparent;
+               border-radius:6px;padding:5px 7px;font-family:inherit;font-size:12px;color:var(--text-body);
+               background:transparent;}
+.pf-remark-box:hover{border-color:var(--border);}
+.pf-remark-box:focus{outline:none;border-color:var(--green-mid);background:#fff;}
+.pf-remark-box:disabled{background:transparent;color:var(--text-faint);}
