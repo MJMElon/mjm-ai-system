@@ -858,7 +858,7 @@ function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
    Record's list/chart: the panel's own sub-tab bar, and the side bar's
    expandable entry. _syncSubNav (declared beside switchRecordView) is the
    one place that keeps the two in step, by the type key alone. */
-const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive', 'seed_planting', 'hyplug_soil'];
+const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive', 'seed_planting'];
 function switchPayrollView(type) {
   _payrollView = type;
   _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
@@ -2503,11 +2503,14 @@ const SP_NURSERY = 'PN';
    ke hyplug RM0.027 per biji"* -- filling the hyplug trays with soil, which
    happens BEFORE the seeds go in and is paid by the same unit, a biji.
 
-   THEY ARE TWO SHEETS AND NOT TWO SETS OF COLUMNS, which is what the office
-   chose when asked. The sheet already scrolls sideways at eight workers, so
-   a second group of eight would be sixteen columns nobody can read across;
-   and a switch at the top of one table hides whichever job you are not
-   looking at, which is no better than a second row in the side bar.
+   THEY ARE ONE SHEET, ONE JOB UNDER THE OTHER. They were two entries in
+   the side bar for a day and the office asked for them together -- *"不要分
+   开 放一起 分上下两部分就好 flow进去payroll system的时候也是一样"* -- which
+   is how the claim they flow into is laid out, so the screen and the paper
+   read the same way round.
+
+   The worker COLUMNS are asked of both jobs and shared, because stacked
+   sections whose columns do not line up are two tables sharing a scrollbar.
 
    WHAT THE TWO SHARE IS EVERYTHING EXCEPT THE FIGURES: the same batch rows
    off the ledger, the same month moves, and the SAME NAME LIST -- the crew
@@ -2520,20 +2523,18 @@ const SP_NURSERY = 'PN';
    full of: one reader, one writer, one trigger, one set of policies. The key
    is (batch_name, job).
 
-   `_spJob()` reads the sheet on screen. A row's figures are looked up by
-   `_spKey(batch, job)`, so the two sheets cannot see each other's. */
-const SP_VIEWS = { seed_planting: 'seed', hyplug_soil: 'hyplug' };
+   A row's figures are looked up by `_spKey(batch, job)`, so the two halves
+   cannot see each other's. THE VIEW KEY DID NOT MOVE: `seed_planting` is
+   what the side bar still addresses, so a link carrying it opens this. */
+const SP_VIEWS = { seed_planting: 'seed' };
+/* The JOB names, which are not the side bar's label: that one entry opens
+   a sheet carrying both, so it says so, while each band inside names the
+   one job it heads. */
 const SP_JOBS = [
-  { job: 'seed',   view: 'seed_planting', label: 'tab.seedPlanting' },
-  { job: 'hyplug', view: 'hyplug_soil',   label: 'tab.hyplugSoil' },
+  { job: 'seed',   label: 'pay.jobSeed' },
+  { job: 'hyplug', label: 'pay.jobHyplug' },
 ];
-function _spJob() { return SP_VIEWS[_payrollView] || 'seed'; }
 function _spKey(batch, job) { return String(batch) + '|' + (job || 'seed'); }
-/* The sheet's own name, so a heading, a hint and a PDF cannot disagree. */
-function _spJobLabel(job) {
-  const j = SP_JOBS.find(x => x.job === (job || 'seed'));
-  return t(j ? j.label : 'tab.seedPlanting');
-}
 
 /* THE JOB IS SENT ONLY BY A DATABASE THAT HAS THE COLUMN. Naming a column a
    table has not got is not an empty cell, it is the whole row refused -- so
@@ -2729,15 +2730,21 @@ function _spPrevMonth(m) {
 /* The month's names as keyed, then any name a row still carries a figure
    for that is no longer on the list -- that figure would otherwise leave
    the sheet with nothing saying so. */
-function spWorkerColumns(rows, saved, names, job) {
+/* ONE COLUMN SET FOR THE WHOLE SHEET, asked of BOTH jobs. The office wanted
+   the two stacked rather than split (*"不要分开 放一起 分上下两部分就好"*),
+   and stacked sections whose columns do not line up are two tables sharing
+   a scrollbar. The name list is shared anyway, so the only thing that could
+   differ is a name carrying figures while off the list, and that belongs in
+   both halves or neither. */
+function spWorkerColumns(rows, saved, names) {
   const wk = (names || []).slice();
   const extra = [];
-  rows.forEach(r => {
-    const s = saved[_spKey(r.key, job)];
+  rows.forEach(r => SP_JOBS.forEach(j => {
+    const s = saved[_spKey(r.key, j.job)];
     Object.keys((s && s.workers) || {}).forEach(w => {
       if (!wk.includes(w) && !extra.includes(w)) extra.push(w);
     });
-  });
+  }));
   return { wk: wk.concat(extra), extra };
 }
 
@@ -2751,9 +2758,8 @@ function renderSeedPlantingPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
   const m = getMonth();
-  const job = _spJob();
   const line = document.getElementById('payroll-form-line');
-  if (line) line.textContent = `${_spJobLabel(job)} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
+  if (line) line.textContent = `${t('tab.preNursery')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
   const off = document.getElementById('payroll-offreg');
   if (off) { off.style.display = 'none'; }
 
@@ -2762,13 +2768,12 @@ function renderSeedPlantingPayroll() {
   const hint = document.getElementById('payroll-hint');
   if (hint) {
     const noTable = !!(st && st.noTable);
-    /* The column is missing and this is the sheet that needs it: say so and
-       name the file, rather than letting figures be keyed into boxes whose
-       save the database will refuse. On the Seed Planting sheet it changes
-       nothing -- those rows save as they always have. */
-    const noJob = !!(st && !st.noTable && st.noJob && job !== 'seed');
-    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol')
-      : t(job === 'hyplug' ? 'pay.hyplugHint' : 'pay.spHint');
+    /* The job column is missing: the soil filling half cannot be stored, so
+       say so and name the file rather than letting figures be keyed into
+       boxes whose save the database will refuse. Seed Planting is
+       unaffected -- those rows save as they always have. */
+    const noJob = !!(st && !st.noTable && st.noJob);
+    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol') : t('pay.spHint');
     hint.classList.toggle('pay-hint-warn', noTable || noJob);
   }
   if (_spLoading[m] || !st) {
@@ -2779,65 +2784,77 @@ function renderSeedPlantingPayroll() {
   }
 
   const { rows, saved } = st;
-  /* A sheet whose figures cannot be stored takes no figures. */
-  const noTable = st.noTable || (st.noJob && job !== 'seed');
-  const { wk, extra } = spWorkerColumns(rows, saved, st.names, job);
+  const { wk, extra } = spWorkerColumns(rows, saved, st.names);
   _spDrawNames(m, st);
   const payTh = (txt, w) =>
     `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
   const span = 3 + wk.length + 2;
-  let h = `<thead>
-    <tr><th class="wk-th" colspan="${span}">${_spJobLabel(job)}</th></tr>
-    <tr>
-      ${payTh(t('pay.spPlantedDate'), 100)}
-      ${payTh(t('pay.batch'), 96)}
-      ${payTh(t('pay.qtyPlanted'), 100)}
-      ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
-      ${payTh(t('pay.spKeyed'), 120)}
-      ${payTh(t('pay.checked'), 132)}
-    </tr></thead><tbody>`;
-
-  const totals = {}; wk.forEach(w => totals[w] = 0);
-  let qtyTotal = 0;
-  if (!rows.length) {
-    h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.spNone', { m })}</td></tr>`;
-  } else {
-    rows.forEach((r, ri) => {
-      const s = saved[_spKey(r.key, job)];
-      const cells = (s && s.workers) || {};
-      const locked = !!(s && s.checked_at);
-      qtyTotal += r.qty;
-      const keyed = _spKeyed(s);
-      wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
-      const diff = keyed - r.qty;
-      const state = !keyed ? '<span style="color:var(--text-faint);">—</span>'
-        : diff === 0 ? `<span style="color:#15803d;font-weight:700;">✓ ${keyed.toLocaleString(USAGE_LOCALE)}</span>`
-        : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
-      h += `<tr>
-        <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
-        <td class="plot-td">${esc(r.batch)}</td>
-        <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
-        ${wk.map((w, wi) => {
-          const v = cells[w];
-          return `<td class="sp-cell"><input type="number" min="0" step="1" inputmode="numeric" class="sp-in"
-            id="sp-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${noTable || locked ? ' disabled' : ''}
-            onchange="setSeedPlantingQty(${ri}, ${wi}, this.value)" aria-label="${esc(w)}"></td>`;
-        }).join('')}
-        <td style="white-space:nowrap;">${state}</td>
-        <td style="white-space:nowrap;">${_spCheckCell(ri, s, keyed, noTable)}</td>
-      </tr>`;
-    });
-  }
-  const grand = wk.reduce((a, w) => a + totals[w], 0);
   const fig = v => v ? v.toLocaleString(USAGE_LOCALE) : '—';
-  h += `</tbody><tfoot>
-    <tr class="jumlah-tr">
-      <td class="th-left" colspan="2">${t('pay.totalCap')}</td>
-      <td>${fig(qtyTotal)}</td>
-      ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
-      <td>${fig(grand)}</td><td></td></tr>
-  </tfoot>`;
-  tbl.innerHTML = h;
+
+  /* ONE SHEET, THE TWO JOBS ONE UNDER THE OTHER. They were two sub-tabs for
+     a day and the office asked for them together -- *"不要分开 放一起 分上
+     下两部分就好"* -- which is also how the claim they flow into is laid
+     out, so the screen and the paper read the same way round. */
+  const section = (j) => {
+    /* The soil filling half cannot be stored without the column; the seed
+       half always can, because that is the row the table has always had. */
+    const shut = st.noTable || (st.noJob && j.job !== 'seed');
+    const totals = {}; wk.forEach(w => totals[w] = 0);
+    let qtyTotal = 0;
+    let body = '';
+    if (!rows.length) {
+      body = `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.spNone', { m })}</td></tr>`;
+    } else {
+      rows.forEach((r, ri) => {
+        const s = saved[_spKey(r.key, j.job)];
+        const cells = (s && s.workers) || {};
+        const locked = !!(s && s.checked_at);
+        qtyTotal += r.qty;
+        const keyed = _spKeyed(s);
+        wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
+        const diff = keyed - r.qty;
+        const state = !keyed ? '<span style="color:var(--text-faint);">—</span>'
+          : diff === 0 ? `<span style="color:#15803d;font-weight:700;">✓ ${keyed.toLocaleString(USAGE_LOCALE)}</span>`
+          : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
+        body += `<tr>
+          <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
+          <td class="plot-td">${esc(r.batch)}</td>
+          <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
+          ${wk.map((w, wi) => {
+            const v = cells[w];
+            return `<td class="sp-cell"><input type="number" min="0" step="1" inputmode="numeric" class="sp-in"
+              id="sp-${j.job}-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${shut || locked ? ' disabled' : ''}
+              onchange="setSeedPlantingQty('${j.job}', ${ri}, ${wi}, this.value)" aria-label="${esc(w)}"></td>`;
+          }).join('')}
+          <td style="white-space:nowrap;">${state}</td>
+          <td style="white-space:nowrap;">${_spCheckCell(j.job, ri, s, keyed, shut)}</td>
+        </tr>`;
+      });
+    }
+    const grand = wk.reduce((a, w) => a + totals[w], 0);
+    /* The band names the job and nothing else. Its own total sits under its
+       own rows: one figure under both would be two jobs added together, and
+       they are not the same thing even where the unit is. */
+    return `<tr class="sp-job-row"><td class="sp-job" colspan="${span}">${esc(t(j.label))}</td></tr>
+      <tr class="sp-head">
+        ${payTh(t('pay.spPlantedDate'), 100)}
+        ${payTh(t('pay.batch'), 96)}
+        ${payTh(t(j.job === 'hyplug' ? 'pay.qtyHoles' : 'pay.qtyPlanted'), 100)}
+        ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
+        ${payTh(t('pay.spKeyed'), 120)}
+        ${payTh(t('pay.checked'), 132)}
+      </tr>
+      ${body}
+      <tr class="sp-sub-row">
+        <td class="th-left" colspan="2">${esc(t(j.label))} — ${t('pay.totalCap')}</td>
+        <td>${fig(qtyTotal)}</td>
+        ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
+        <td>${fig(grand)}</td><td></td></tr>`;
+  };
+
+  tbl.innerHTML = `<thead>
+    <tr><th class="wk-th" colspan="${span}">${t('tab.preNursery')}</th></tr>
+  </thead><tbody>${SP_JOBS.map(section).join('')}</tbody>`;
 }
 
 /* CHECKED IS WHAT SENDS A ROW TO THE PAYROLL. The figures here are
@@ -2846,7 +2863,7 @@ function renderSeedPlantingPayroll() {
    A checked row is shut: its boxes are disabled, and the save refuses too,
    because a box drawn before the tick is still on the screen. Uncheck to
    correct it. */
-function _spCheckCell(ri, s, keyed, noTable) {
+function _spCheckCell(job, ri, s, keyed, noTable) {
   if (noTable) return '<span style="color:var(--text-faint);">—</span>';
   if (s && s.checked_at) {
     /* The NAME, not the stored email — this button has shown
@@ -2855,15 +2872,15 @@ function _spCheckCell(ri, s, keyed, noTable) {
        table that cannot be read hands the address back rather than
        leaving the button blank. */
     const when = _maintWhen(s.checked_at);
-    return `<button type="button" class="btn btn-sm sp-checked" onclick="toggleSeedPlantingCheck(${ri})"
+    return `<button type="button" class="btn btn-sm sp-checked" onclick="toggleSeedPlantingCheck('${job}', ${ri})"
       title="${esc(t('pay.spUncheckTip'))}">✓ ${esc(_maintWho(s.checked_by) || 'Checked')} · ${esc(when)}</button>`;
   }
   if (!keyed) return '<span style="color:var(--text-faint);">—</span>';
-  return `<button type="button" class="btn btn-sm btn-primary" onclick="toggleSeedPlantingCheck(${ri})">${esc(t('pay.spCheck'))}</button>`;
+  return `<button type="button" class="btn btn-sm btn-primary" onclick="toggleSeedPlantingCheck('${job}', ${ri})">${esc(t('pay.spCheck'))}</button>`;
 }
 
-async function toggleSeedPlantingCheck(ri) {
-  const m = getMonth(), st = _spCache[m], job = _spJob();
+async function toggleSeedPlantingCheck(job, ri) {
+  const m = getMonth(), st = _spCache[m];
   if (!st || st.noTable || (st.noJob && job !== 'seed') || !_supabase) return;
   const r = st.rows[ri];
   const s = r && st.saved[_spKey(r.key, job)];
@@ -3096,13 +3113,12 @@ function useLastMonthSeedPlantingNames() {
    once, written a moment later, and the sheet redrawn with the cursor put
    back where it went -- a redraw inside `change` would otherwise throw away
    the box the Tab key was moving to. */
-function setSeedPlantingQty(ri, wi, raw) {
+function setSeedPlantingQty(job, ri, wi, raw) {
   const m = getMonth();
   const st = _spCache[m];
-  const job = _spJob();
   if (!st || st.noTable || (st.noJob && job !== 'seed')) return;
   const r = st.rows[ri];
-  const { wk } = spWorkerColumns(st.rows, st.saved, st.names, job);
+  const { wk } = spWorkerColumns(st.rows, st.saved, st.names);
   const w = wk[wi];
   if (!r || !w) return;
   const k = _spKey(r.key, job);
@@ -3461,17 +3477,21 @@ function downloadPayrollPDF() {
     doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
-  /* Seed Planting: one row per tray per day off the batch report, and what
-     each Pre Nursery worker keyed against it -- the sheet on screen, on
-     paper. */
+  /* THE PRE NURSERY SHEET: the batch report's rows, and what each worker
+     keyed against each of the TWO jobs -- the sheet on screen, on paper,
+     one job under the other in the same order.
+
+     EACH JOB STARTS ITS OWN PAGE. On screen they are two bands a scroll
+     apart; on paper a job beginning halfway down a sheet, under the other
+     one's total row, is two tables somebody has to tell apart by reading.
+     The workers already split across pages when too many for a line, so
+     this is the rule that was there, asked once more. */
   function drawSeedPlantingSheet() {
     const st = _spCache[m];
     if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
-    const job = _spJob();
     const rows = st.rows, saved = st.saved;
-    const { wk: cols } = spWorkerColumns(rows, saved, st.names, job);
+    const { wk: cols } = spWorkerColumns(rows, saved, st.names);
     if (!cols.length) { alert(t('pay.spNoNames')); return; }
-    const label = _spJobLabel(job);
     const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
 
     const W_DATE = 24, W_BATCH = 24, W_QTY = 24, W_SUM = 26;
@@ -3480,65 +3500,74 @@ function downloadPayrollPDF() {
     const chunks = [];
     for (let i = 0; i < cols.length; i += per) chunks.push(cols.slice(i, i + per));
 
-    chunks.forEach((chunk, ci) => {
-      if (ci) doc.addPage();
-      const part = chunks.length > 1
-        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
-        : '';
-      let y = titleBlock(label, part);
-      const wkW = (CONTENT_W - FIX) / chunk.length;
-      const widths = [W_DATE, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
-      const xs = []; let x = MARGIN;
-      widths.forEach(w => { xs.push(x); x += w; });
-      const iSum = widths.length - 1;
-      const HEAD_H = headerHeightFor(chunk);
-      const drawHead = () => {
-        cell(xs[0], y, widths[0], HEAD_H, t('pay.spPlantedDate'), { bold: true, size: 7.5, fill: HEAD_FILL });
-        cell(xs[1], y, widths[1], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
-        cell(xs[2], y, widths[2], HEAD_H, t('pay.qtyPlanted'), { bold: true, size: 7.5, fill: HEAD_FILL });
-        chunk.forEach((w, i) => vHeaderCell(xs[3 + i], y, widths[3 + i], HEAD_H, w));
-        cell(xs[iSum], y, widths[iSum], HEAD_H, t('pay.spKeyed'), { bold: true, size: 7.5, fill: HEAD_FILL });
-        y += HEAD_H;
-      };
-      drawHead();
+    let started = false;
+    SP_JOBS.forEach((j) => {
+      const job = j.job, label = t(j.label);
+      chunks.forEach((chunk, ci) => {
+        if (started) doc.addPage();
+        started = true;
+        const part = chunks.length > 1
+          ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
+          : '';
+        let y = titleBlock(label, part);
+        const wkW = (CONTENT_W - FIX) / chunk.length;
+        const widths = [W_DATE, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
+        const xs = []; let x = MARGIN;
+        widths.forEach(w => { xs.push(x); x += w; });
+        const iSum = widths.length - 1;
+        const HEAD_H = headerHeightFor(chunk);
+        const drawHead = () => {
+          cell(xs[0], y, widths[0], HEAD_H, t('pay.spPlantedDate'), { bold: true, size: 7.5, fill: HEAD_FILL });
+          cell(xs[1], y, widths[1], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
+          cell(xs[2], y, widths[2], HEAD_H, t(job === 'hyplug' ? 'pay.qtyHoles' : 'pay.qtyPlanted'),
+               { bold: true, size: 7.5, fill: HEAD_FILL });
+          chunk.forEach((w, i) => vHeaderCell(xs[3 + i], y, widths[3 + i], HEAD_H, w));
+          cell(xs[iSum], y, widths[iSum], HEAD_H, t('pay.spKeyed'), { bold: true, size: 7.5, fill: HEAD_FILL });
+          y += HEAD_H;
+        };
+        drawHead();
 
-      const totals = {}; chunk.forEach(w => totals[w] = 0);
-      let qtyTotal = 0, keyedTotal = 0;
-      if (!rows.length) {
-        cell(MARGIN, y, CONTENT_W, 14, t('pay.spNone', { m }), { size: 9 });
-        y += 14;
-      } else {
-        const floor = PH - MARGIN - 20;
-        rows.forEach((r, ri) => {
-          if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
-          const sv = saved[_spKey(r.key, job)];
-          const cells = (sv && sv.workers) || {};
-          const keyed = _spKeyed(sv);
-          qtyTotal += r.qty; keyedTotal += keyed;
-          const z = ri % 2 ? ZEBRA : null;
-          cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
-          cell(xs[1], y, widths[1], ROW_H, r.batch, { size: 8.5, bold: true, nowrap: true, fill: z });
-          cell(xs[2], y, widths[2], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
-          chunk.forEach((w, i) => {
-            const v = Number(cells[w]) || 0;
-            totals[w] += v;
-            cell(xs[3 + i], y, widths[3 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
+        const totals = {}; chunk.forEach(w => totals[w] = 0);
+        let qtyTotal = 0, keyedTotal = 0;
+        if (!rows.length) {
+          cell(MARGIN, y, CONTENT_W, 14, t('pay.spNone', { m }), { size: 9 });
+          y += 14;
+        } else {
+          const floor = PH - MARGIN - 20;
+          rows.forEach((r, ri) => {
+            if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
+            const sv = saved[_spKey(r.key, job)];
+            const cells = (sv && sv.workers) || {};
+            const keyed = _spKeyed(sv);
+            qtyTotal += r.qty; keyedTotal += keyed;
+            const z = ri % 2 ? ZEBRA : null;
+            cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
+            cell(xs[1], y, widths[1], ROW_H, r.batch, { size: 8.5, bold: true, nowrap: true, fill: z });
+            cell(xs[2], y, widths[2], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
+            chunk.forEach((w, i) => {
+              const v = Number(cells[w]) || 0;
+              totals[w] += v;
+              cell(xs[3 + i], y, widths[3 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
+            });
+            cell(xs[iSum], y, widths[iSum], ROW_H, fig(keyed) || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
+            y += ROW_H;
           });
-          cell(xs[iSum], y, widths[iSum], ROW_H, fig(keyed) || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
-          y += ROW_H;
-        });
-      }
-      cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
-      cell(xs[2], y, widths[2], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
-      chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1, fig(totals[w]) || '—',
-           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
-      cell(xs[iSum], y, widths[iSum], ROW_H + 1, fig(keyedTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+        }
+        /* The total names its own job. Two total rows a page apart reading
+           the same word is how somebody writes the wrong one down. */
+        cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, label + ' — ' + t('pay.totalCap'),
+             { bold: true, size: 8, fill: TOTAL_FILL });
+        cell(xs[2], y, widths[2], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+        chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1, fig(totals[w]) || '—',
+             { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+        cell(xs[iSum], y, widths[iSum], ROW_H + 1, fig(keyedTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
 
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
-      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+        doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+      });
     });
-    doc.save(`Worker_Record_Seed_Planting_${m.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`Worker_Record_Pre_Nursery_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
   /* Column widths for one chunk of workers. The three fixed columns and the
@@ -4242,7 +4271,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -4251,10 +4280,11 @@ const I18N = {
     'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
     'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
-    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Seed Planting payroll, where it is priced.',
+    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Pre Nursery payroll, where it is priced. The sheet carries BOTH Pre Nursery jobs, one under the other: sowing the seed on top, and filling the hyplug trays with soil below it, each with its own figures and its own Check.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug cannot save yet: run shared/RUN_ME_hyplug_soil.sql in Supabase. The rows below are read from the batch report as normal, and Seed Planting is unaffected.',
-    'pay.hyplugHint':'Each row is a batch planted this month, with its total planted quantity from the batch report. Filling the hyplug trays with soil is paid by the same unit as sowing them \u2014 a biji \u2014 so key how many each worker filled. Check a batch to send it to the Pre Nursery payroll, where it is priced.',
+    'pay.qtyHoles':'Qty to fill',
+    'pay.jobSeed':'Seed Planting', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
     'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
     'pay.spPickWorker':'Pick a worker…', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
@@ -4438,7 +4468,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -4447,10 +4477,11 @@ const I18N = {
     'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
     'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
     'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
-    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Seed Planting, di mana ia diberi harga.',
+    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Pre Nursery, di mana ia diberi harga. Helaian ini membawa KEDUA-DUA kerja Pre Nursery, satu di bawah satu lagi: menanam benih di atas, mengisi tanah ke hyplug di bawahnya, masing-masing dengan angka dan Check sendiri.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug belum boleh disimpan: jalankan shared/RUN_ME_hyplug_soil.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa, dan Penanaman Benih tidak terjejas.',
-    'pay.hyplugHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari laporan batch. Mengisi tanah ke hyplug dibayar mengikut unit yang sama dengan menanam \u2014 sebiji \u2014 jadi isi berapa yang diisi oleh setiap seorang. Semak satu batch untuk menghantarnya ke gaji Pre Nursery, di mana ia diberi harga.',
+    'pay.qtyHoles':'Kuantiti diisi',
+    'pay.jobSeed':'Penanaman Benih', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
     'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
     'pay.spPickWorker':'Pilih pekerja…', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
