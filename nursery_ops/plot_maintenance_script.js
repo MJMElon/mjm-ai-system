@@ -1209,6 +1209,15 @@ async function loadDoRecordsForPayroll(n, m) {
   _doRecordsErr[key] = '';
   renderPayroll();
 
+  // Once per page: the Seedling Stock plot index the DO lines resolve
+  // through (see _doQtyForNursery). Soft — loadAll hands back what it
+  // could read, and with nothing at all the base index still covers every
+  // ordinary plot while NURSERY_PLOTS stays the fallback.
+  if (!_doPlotIndex) {
+    const extra = await MJMMaintPlots.loadAll(_supabase).then(r => r, () => ({}));
+    _doPlotIndex = MJMMaintPlots.index(extra);
+  }
+
   const { data, error } = await _supabase
     .from('shared_do_records')
     .select('id, do_number, al_number, delivery_date, total_qty, remark, status, plot_1, plot_2, plot_3, plot_4, plot_5, qty_1, qty_2, qty_3, qty_4, qty_5, worked_by_by_nursery, worked_by_locked_at, worked_by_locked_by')
@@ -1247,12 +1256,29 @@ function _doIsLoadingWork(d) {
 
 /* The qty a DO contributed to ONE nursery — a DO's five item rows can span
    more than one, same reasoning DoSigning.jsx's own nurseriesOfDO carries
-   (see Mobile repo). plot_N resolves to its nursery through NURSERY_PLOTS,
-   the same list the rest of this page already keys every plot off.
+   (see Mobile repo).
+
+   THE PLOT RESOLVES THROUGH SEEDLING STOCK, not through this page's own
+   schedule list. NURSERY_PLOTS is the schedule's rows — base plus custom
+   plus whatever earned a capacity — and a DO regularly collects off a
+   plot the schedule never drew: a "-R" transfer plot is made by a
+   3rd-culling transfer and joins no schedule until somebody keys a
+   capacity for it. Matched against NURSERY_PLOTS alone, those DO lines
+   read as no nursery's and the sheet ran short of the Nursery Report's
+   Sales Listing by exactly the -R collections (Oct 2026: 85 + 418 + 557
+   seedlings across the three nurseries). shared_plots is where the
+   office says whose plot it is — the same table the Sales Listing maps
+   its lines with and the same index the payroll claim already resolves
+   through (maintDoQtyForNursery in npayroll_script.js, via
+   MJMMaintPlots.loadAll) — so all three screens give one total. The
+   page's own list stays as the fallback for a plot Seedling Stock does
+   not know.
+
    A single-line DO whose per-line qty was never keyed reads the DO's own
    total instead — the same fallback the Sales Listing and the batch
    report's Sales figure use, so a DO keyed that way is the same loading
    work on every screen. */
+let _doPlotIndex = null; // plotKey -> nursery code, set by loadDoRecordsForPayroll
 function _doQtyForNursery(d, n) {
   const plots = new Set(NURSERY_PLOTS[n] || []);
   let filled = 0;
@@ -1260,7 +1286,9 @@ function _doQtyForNursery(d, n) {
   let qty = 0;
   for (let i = 1; i <= 5; i++) {
     const plot = d[`plot_${i}`];
-    if (!plot || !plots.has(plot)) continue;
+    if (!plot) continue;
+    const owner = _doPlotIndex ? MJMMaintPlots.nurseryOfPlot(plot, _doPlotIndex) : null;
+    if (owner ? owner !== n : !plots.has(plot)) continue;
     let q = Number(d[`qty_${i}`]) || 0;
     if (!q && filled === 1) q = Number(d.total_qty) || 0;
     qty += q;
