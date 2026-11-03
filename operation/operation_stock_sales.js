@@ -645,7 +645,7 @@
 
     async function loadMaturity() {
         try {
-            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes, seedsRes] = await Promise.all([
+            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes, seedsRes, rowVerRes, tabVerRes] = await Promise.all([
                 // 'Transplanted' only — Premium Care and D-Tone are holding
                 // trays, not plots (same distinction operation_batch_detail.html's
                 // own transplanted total and operation_reports.html's
@@ -677,8 +677,10 @@
                 // transplant row uses below. Without this, a plot the batch
                 // report already has at nought (fully culled, moved on, or
                 // sold) kept showing a stale positive balance here.
+                // remark rides along for the MONTH rows' gate below: the
+                // drone qty (MapQty:) the batch report keys into the row.
                 fetchAllRows(() => _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,quantity_change')
+                    .select('batch_name,plot_name,quantity_change,remark')
                     .eq('transaction_type', '3rd_Culling')
                     .order('id', { ascending: true })),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
@@ -703,7 +705,21 @@
                     .select('batch_name,breed_name')
                     .eq('transaction_type', 'Seeds_Received')
                     .order('id', { ascending: true }))
-                    .then(r => r, e => ({ data: [], error: e }))
+                    .then(r => r, e => ({ data: [], error: e })),
+                // The two sign-off reads, for the month rows' culled gate —
+                // the SAME two routes Life of Seedlings reads: a
+                // Row_Verification keyed `cull_3::<rowKey>` in plot_name, or
+                // one signature over the whole tab in
+                // operation_batch_verifications. Either failing must not
+                // take the table down — see the fail-open note at the gate.
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name')
+                    .eq('transaction_type', 'Row_Verification')
+                    .order('id', { ascending: true }))
+                    .then(r => r, e => ({ data: null, error: e })),
+                _supabase.from('operation_batch_verifications')
+                    .select('batch_name,stage')
+                    .then(r => r, e => ({ data: null, error: e }))
             ]);
 
             // Newest reception row wins — a batch is meant to have exactly
@@ -849,18 +865,66 @@
             });
 
             // The 3rd culling keyed on the batch report, matched per
-            // batch+plot — the office's rule over four messages: a culled
+            // batch+plot — the office's rule over five messages: a culled
             // plot reads 0 and Culled ("system auto detect and set"), a
             // "partially culled plot keep the reduced balance instead", the
             // match is "based on the plot and batch... If not, you have to
-            // keep the balance", and 0 appears only once the "batch report
-            // 3rd culling being keyed in" — never from a guess. So the
-            // culled qty DEDUCTS in buildRow like a DO does, and only a
-            // culling that covers the balance reads Culled. Stamped on the
-            // MONTH rows only: a Plot-R row nets its culling off through
-            // otherDeducted above and keeps its own arithmetic
-            // (fully-at-nought PR rows already fold into History).
-            matRows.forEach(g => { g.culledQty = culledByKey[g.key] || 0; });
+            // keep the balance", 0 appears only once the "batch report 3rd
+            // culling being keyed in", and — the gate — "Only got the drone
+            // qty in the report and the line being verify, my table only
+            // show culled with qty 0". So a 3rd_Culling line counts here
+            // only when BOTH hold:
+            //   - its remark carries the drone qty the report keys
+            //     (MapQty:), and
+            //   - the line is signed off — a Row_Verification under
+            //     `cull_3::<rowKey>` (rowKey starts with the plot; see
+            //     rowsAllSigned in operation_batch_detail.html and
+            //     _losVerKey in operation_reports.html, the two readers
+            //     this must agree with), or one signature over the whole
+            //     tab in operation_batch_verifications.
+            // A culling keyed and not yet gated through LEAVES THE BALANCE
+            // ALONE — zero never appears from a guess — and buildRow's
+            // hover names what it is waiting for (culledPending), because a
+            // balance that reads high with nothing saying why is the silent
+            // screen this codebase keeps paying for.
+            //
+            // FAIL OPEN, the Life of Seedlings way: if the Row_Verification
+            // read failed (data null, not merely empty), the verification
+            // half of the gate is waived rather than every culled plot
+            // springing back to a stale positive balance — a check that
+            // cannot run must not move the report. The MapQty half reads
+            // off the same cull3 rows the figures do, so it has no separate
+            // read to fail. Stamped on the MONTH rows only: a Plot-R row
+            // nets its culling off through otherDeducted above, ungated,
+            // its own long-standing arithmetic.
+            const verOK = !(rowVerRes && rowVerRes.error);
+            const cullRowSigned = new Set();
+            const cullTabSigned = new Set();
+            (rowVerRes?.data || []).forEach(v => {
+                const key = String(v.plot_name || '');
+                if (!key.startsWith('cull_3::')) return;
+                const rest = key.slice('cull_3::'.length);
+                const bar  = rest.indexOf('|');
+                const head = (bar < 0 ? rest : rest.slice(0, bar)).trim().toUpperCase();
+                if (head) cullRowSigned.add((v.batch_name || '') + '::' + head);
+            });
+            (tabVerRes?.data || []).forEach(v => {
+                if (v && v.stage === 'cull_3') cullTabSigned.add(v.batch_name || '');
+            });
+            const culledCountedByKey = {};
+            (cull3Res?.data || []).forEach(r => {
+                if (!/MapQty:\s*\d/i.test(r.remark || '')) return;
+                const batch = r.batch_name || '';
+                const plotU = String(r.plot_name || '').trim().toUpperCase();
+                const signed = cullTabSigned.has(batch) || cullRowSigned.has(batch + '::' + plotU);
+                if (verOK && !signed) return;
+                const k = batch + '||' + (r.plot_name || '');
+                culledCountedByKey[k] = (culledCountedByKey[k] || 0) + (r.quantity_change || 0);
+            });
+            matRows.forEach(g => {
+                g.culledQty     = culledCountedByKey[g.key] || 0;
+                g.culledPending = Math.max(0, (culledByKey[g.key] || 0) - g.culledQty);
+            });
 
             plotAllocations = {};
             (allocRes?.data || []).forEach(a => {
@@ -1230,11 +1294,16 @@
             const doTitle = otherDed > 0
                 ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
                 : '';
-            const balTitle = culled
-                ? ` title="3rd culling recorded on this plot (${culledQty.toLocaleString()} culled) — fully culled, balance reads 0"`
-                : culledQty > 0
-                    ? ` title="3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance"`
-                    : '';
+            // A culling keyed but not yet counted (no drone qty on the
+            // report row, or the line unsigned) must SAY so — the balance
+            // reads high and a figure that cannot explain itself is what
+            // sends the office looking for a fault that is not there.
+            const culledPending = isPR ? 0 : (r.culledPending || 0);
+            const balNotes = [];
+            if (culled) balNotes.push(`3rd culling recorded on this plot (${culledQty.toLocaleString()} culled) — fully culled, balance reads 0`);
+            else if (culledQty > 0) balNotes.push(`3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance`);
+            if (culledPending > 0 && !culled) balNotes.push(`A 3rd culling of ${culledPending.toLocaleString()} is keyed but NOT counted yet — it needs the drone qty on the batch report row and the line verified`);
+            const balTitle = balNotes.length ? ` title="${balNotes.join('. ')}"` : '';
 
             // Finished is a person's judgment that this plot's allocation is
             // done, even while a balance is still sitting on it — a manual
