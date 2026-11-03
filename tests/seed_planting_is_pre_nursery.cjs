@@ -177,9 +177,9 @@ const sheetOf = (page) => page.evaluate(() => {
     return [...sub.children].map(el => el.classList.contains('pn-subgroup')
       ? '#' + el.textContent.trim() : el.id.replace('pn-subtab-', ''));
   });
-  check('Worker Activity reads Main Nursery, its seven jobs, then Pre Nursery and Seed Planting', nav,
+  check('Worker Activity reads Main Nursery, its seven jobs, then Pre Nursery and its two', nav,
     ['#Main Nursery', 'pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive',
-     '#Pre Nursery', 'seed_planting']);
+     '#Pre Nursery', 'seed_planting', 'hyplug_soil']);
   check('Seed Planting is the button lit', await page.evaluate(() =>
     document.getElementById('pn-subtab-seed_planting').classList.contains('active')
     && !document.getElementById('pn-subtab-pd').classList.contains('active')), true);
@@ -213,9 +213,13 @@ const sheetOf = (page) => page.evaluate(() => {
   await page.fill('#sp-1-1', '100');
   await page.dispatchEvent('#sp-1-1', 'change');
   await page.waitForTimeout(900);
-  check('one upsert, keyed on the batch',
-    await page.evaluate(() => window.__WRITES.map(x => [x.row.batch_name, x.row.month, x.row.planted_date, x.row.qty_planted, x.row.workers, x.opt && x.opt.onConflict])),
-    [['279', 'Oct 2026', '2026-10-20', 800, { Siti: 500, 'Old Name': 200, Rina: 100 }, 'batch_name']]);
+  /* ONE UPSERT, KEYED ON THE BATCH AND THE JOB. The Pre Nursery has two
+     jobs now -- sowing the seed and filling the hyplug trays before it --
+     and the key moved with them, or the second job would write over the
+     first's figures on the same batch. */
+  check('one upsert, keyed on the batch AND the job',
+    await page.evaluate(() => window.__WRITES.map(x => [x.row.batch_name, x.row.job, x.row.month, x.row.planted_date, x.row.qty_planted, x.row.workers, x.opt && x.opt.onConflict])),
+    [['279', 'seed', 'Oct 2026', '2026-10-20', 800, { Siti: 500, 'Old Name': 200, Rina: 100 }, 'batch_name,job']]);
   check('…and the row redraws as adding up', await page.evaluate(() =>
     document.querySelector('#payroll-table tbody tr:nth-child(2) td:nth-last-child(2)').textContent.trim()), '✓ 800');
 

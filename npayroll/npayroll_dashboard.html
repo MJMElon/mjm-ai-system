@@ -45,7 +45,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=27">
+<link rel="stylesheet" href="npayroll_styles.css?v=28">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -149,10 +149,15 @@
          is a display name, not a rename of the thing itself. -->
     <nav class="subtabs">
       <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
-      <!-- Seed Planting is the Pre Nursery's own piece work. The figures are
-           keyed and CHECKED on Work Maintenance, Worker Activity, Seed
-           Planting; this prices the checked ones. -->
-      <button class="subtab"        data-sub="seedplant" onclick="switchSub('seedplant')">Seed Planting</button>
+      <!-- The Pre Nursery's own piece work, BOTH its jobs on one claim:
+           tanam biji benih, and mengisi tanah ke hyplug at its own rate. The
+           figures are keyed and CHECKED on Work Maintenance, Worker Activity,
+           under a sheet each; this prices the checked ones and totals them.
+           The office asked for one sheet of paper and one signature.
+           THE KEY DID NOT MOVE -- `seedplant` is what the verification, the
+           permission and the saved rows are filed under, so only the word
+           somebody reads changed. -->
+      <button class="subtab"        data-sub="seedplant" onclick="switchSub('seedplant')">Pre Nursery</button>
       <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
       <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
       <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
@@ -347,7 +352,7 @@
     <div id="sub-seedplant" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Seed Planting — Salary Claim</div>
+          <div class="bar-title">Pre Nursery — Salary Claim</div>
           <div class="bar-sub" id="seedplant-sub"></div>
         </div>
         <!-- ONE BUILDER, TWO BUTTONS — see _seedPlantingPDF. Print is what
@@ -538,6 +543,7 @@
             <option value="maintenance">Work Maintenance</option>
             <option value="other">Other</option>
             <option value="seed_planting">Seed Planting</option>
+            <option value="hyplug_soil">Mengisi Tanah ke Hyplug</option>
           </select></div>
         <div class="frow"><label>Status</label>
           <select id="rf-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
@@ -626,7 +632,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=96"></script>
+<script src="npayroll_script.js?v=98"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
