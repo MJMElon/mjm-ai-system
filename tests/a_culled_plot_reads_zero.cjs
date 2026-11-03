@@ -22,9 +22,11 @@
    cell's hover says what it is waiting for. Only when the counted culling
    (plus what sold) covers the balance does the row read 0 with the locked
    system-set CULLED pill — never a menu choice, never written back to
-   shared_plot_allocations, drops refused. A Plot-R row is untouched and
-   UNGATED — its culling nets off through otherDeducted, its own
-   long-standing arithmetic. The foot sums the SHOWN balances. And the
+   shared_plot_allocations, drops refused. A Plot-R row goes through the
+   SAME gate — the office later asked the same question of the transfer
+   tab ("Plot-R history data must be same with the normal tab"), so an
+   ungated P-R culling leaves ITS balance standing too, with the same
+   pending hover. The foot sums the SHOWN balances. And the
    gate FAILS OPEN the Life of Seedlings way: a Row_Verification read that
    errors waives the verification half rather than springing every culled
    plot back to a stale positive balance; the MapQty half has no separate
@@ -64,7 +66,9 @@ const server = http.createServer((req, res) => {
      253/U5 — 400 (360); culled 360 WITH MapQty, nobody signed
               -> NOT counted: 360, hover pending.
      250/B6-R — 800 in, 200 culled, no MapQty, no signature
-              -> Plot-R is UNGATED: still nets to 600, never Culled. */
+              -> Plot-R is GATED like the month rows: the 200 is NOT
+                 counted, the balance stands at 800 with the pending
+                 hover, never Culled. */
 const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
 (function(){
  window.__inserts=[];window.__writes=[];
@@ -247,16 +251,20 @@ async function openPage(browser, port, failRowVer) {
   check(foot.includes('2,810'), `the Plot Balance total is the column's own sum — 1,100 + 900 + 450 + 0 + 360 (foot: ${foot.join(' | ')})`);
   check(foot.includes('2,210'), 'and After Deduct Reserve totals 2,810 − 600 off the same shown figures');
 
-  // ── 8. Plot-R is UNGATED and never stamped ───────────────────────────────
+  // ── 8. Plot-R goes through the SAME gate as the month rows ───────────────
   const pr = await page.evaluate(`(async () => {
     const btn = [...document.querySelectorAll('.month-tab')].find(b => /plot-?r/i.test(b.textContent));
     if (!btn) return null;
     btn.click(); await new Promise(r => setTimeout(r, 50));
     const tr = ${rowOf('B6-R')}; if (!tr) return { noRow: true };
-    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[9].textContent.trim(), dropdown: !!tr.querySelector('.mat-status-wrap') };
+    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[9].textContent.trim(),
+             balTitle: tr.querySelectorAll('td')[9].getAttribute('title') || '',
+             dropdown: !!tr.querySelector('.mat-status-wrap') };
   })()`);
-  check(pr && !pr.noRow && pr.status !== 'culled' && pr.dropdown && pr.balance === '600',
-    `a Plot-R row still nets its culling with NO gate — 800 in less 200: 600, never Culled (got ${pr && pr.status} / "${pr && pr.balance}")`);
+  check(pr && !pr.noRow && pr.status !== 'culled' && pr.dropdown && pr.balance === '800',
+    `a Plot-R culling with no MapQty and no signature is NOT counted — 800 stands, never Culled (got ${pr && pr.status} / "${pr && pr.balance}")`);
+  check(pr && /keyed but NOT counted/i.test(pr.balTitle) && pr.balTitle.includes('200'),
+    `and its hover says the 200 is waiting for the gate (got "${pr && pr.balTitle}")`);
 
   // ── 9. Nothing is written back ───────────────────────────────────────────
   const writes = await page.evaluate(() => ({ inserts: window.__inserts.length, writes: window.__writes.length }));

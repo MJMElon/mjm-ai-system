@@ -1,27 +1,34 @@
 /* Plot-R: Qty Transferred (not Qty Transplanted), no 10%-culling estimate,
-   DO Deducted reads as Sold (the Movement report's own figure) while Plot
-   Balance still nets off what was culled or moved on separately, a plot
-   already at/under zero balance is History (collapsed, latest first), and
-   EVERY Cull3_Transfer destination is on this tab — the office: "If the
-   batch in the plot has transfer data, pls flow the data to my monthly
-   maturity allocation tab named plot-R". It used to be "-R"-named plots
-   only, which dropped a transfer landing on an ordinary plot off every
-   tab at once. (The one exception — a destination where the same batch
-   already has a month row — is held by
-   tests/a_transfer_reads_culled_and_flows_to_plot_r.cjs.)
+   DO Deducted reads as Sold, and the rows behave EXACTLY like a month
+   tab's — the office: "Check why Plot-R no data. Plot-R history data must
+   be same with the normal tab. If the batch report for that transfer data
+   has been keyed in the drone amount or being verified for the line in
+   the part of 3rd culling, the monthly maturity allocation line will
+   become Culled."
+
+   The tab used to split into a Live list and a collapsed History of rows
+   already at nought — and once every transfer plot's figures netted out
+   (which on the real ledger is all of them) it opened on "no data" with
+   everything hidden behind a toggle. Now every row shows inline: a plot
+   whose own 3rd culling is drone-keyed AND verified reads 0 with the
+   locked CULLED pill, a plot sold out reads SOLD OUT, a culling missing
+   the drone qty or the signature leaves the balance standing with the
+   hover saying what it waits for — the month tab's own gate, asked of
+   this tab too. And EVERY Cull3_Transfer destination is on it, "-R"-named
+   or not (the one exception — a destination where the same batch already
+   has a month row — is held by
+   tests/a_transfer_reads_culled_and_flows_to_plot_r.cjs).
 
    Fixture:
-     U12-R / batch 242 — Cull3_Transfer 300 + 200 (qty transferred 500),
-       a DO for 150 (sold), a 3rd_Culling of 50 (culled).
-       Balance = 500 - 150 - 50 = 300 → Live.
-     U13-R / batch 256 — Cull3_Transfer 100 on 10 Aug, a DO for the full 100.
-       Balance = 0 → History.
-     U14-R / batch 260 — Cull3_Transfer 80 on 20 Sep (LATER than U13-R), a
-       DO for the full 80. Balance = 0 → History, and dated after U13-R —
-       History must read U14-R above U13-R (latest first).
-     U20 (no "-R") / batch 270 — Cull3_Transfer 40 in from U19, no DO.
-       Balance = 40 → Live, exactly like a reserve plot: the name is not
-       the rule any more, the transfer is.
+     U12-R / 242 — 300+200 in (500), DO 150, culled 50 WITH MapQty and the
+       row signed → the gated 50 deducts: balance 300, still live.
+     U13-R / 256 — 100 in, DO 100 → 0, locked SOLD OUT, shown inline.
+     U14-R / 260 — 80 in, culled 80 WITH MapQty, whole tab signed → 0,
+       locked CULLED, shown inline.
+     U21-R / 258 — 60 in, culled 60 with NO MapQty → not counted: balance
+       60, hover says what the 60 waits for.
+     U20 (no "-R") / 270 — 40 in from U19, nothing out → 40, live: the
+       transfer is the rule, not the name.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/maturity_plotr_tab.cjs
    with `python3 -m http.server 8777` serving the repository root.        */
@@ -34,26 +41,36 @@ function check(name, got, want) {
   else { fail++; console.log('  FAIL ' + name + '\n         got  ' + JSON.stringify(got) + '\n         want ' + JSON.stringify(want)); }
 }
 function checkTrue(name, got) { check(name, !!got, true); }
+function checkFalse(name, got) { check(name, !!got, false); }
 
 const CULL3_TRANSFER_ROWS = [
   { batch_name: '242', plot_name: 'U12-R', breed_name: 'DxP', quantity_change: 300, transaction_date: '2026-09-01', created_at: '2026-09-01T02:00:00Z', remark: 'From: [U12|B/F] To: [U12-R]' },
   { batch_name: '242', plot_name: 'U12-R', breed_name: 'DxP', quantity_change: 200, transaction_date: '2026-09-02', created_at: '2026-09-02T02:00:00Z', remark: 'From: [U12|B/F] To: [U12-R]' },
   { batch_name: '256', plot_name: 'U13-R', breed_name: 'DxP', quantity_change: 100, transaction_date: '2026-08-10', created_at: '2026-08-10T02:00:00Z', remark: 'From: [U13|B/F] To: [U13-R]' },
   { batch_name: '260', plot_name: 'U14-R', breed_name: 'DxP', quantity_change: 80,  transaction_date: '2026-09-20', created_at: '2026-09-20T02:00:00Z', remark: 'From: [U14|B/F] To: [U14-R]' },
+  { batch_name: '258', plot_name: 'U21-R', breed_name: 'DxP', quantity_change: 60,  transaction_date: '2026-09-18', created_at: '2026-09-18T02:00:00Z', remark: 'From: [U21|B/F] To: [U21-R]' },
   { batch_name: '270', plot_name: 'U20',   breed_name: 'DxP', quantity_change: 40,  transaction_date: '2026-09-15', created_at: '2026-09-15T02:00:00Z', remark: 'From: [U19|B/F] To: [U20]' },
 ];
 const CULL3_ROWS = [
-  { batch_name: '242', plot_name: 'U12-R', quantity_change: 50 },
+  { batch_name: '242', plot_name: 'U12-R', quantity_change: 50, remark: 'P-R Culling. MapQty: 50 CullDate:2026-09-25' },
+  { batch_name: '260', plot_name: 'U14-R', quantity_change: 80, remark: 'P-R Culling. MapQty: 80 CullDate:2026-09-26' },
+  { batch_name: '258', plot_name: 'U21-R', quantity_change: 60, remark: 'P-R Culling. CullDate:2026-09-27' },
+];
+const ROW_VER_ROWS = [
+  { batch_name: '242', plot_name: 'cull_3::U12-R|reserve', quantity_change: 0, remark: 'Row verified' },
+];
+const TAB_VER_ROWS = [
+  { batch_name: '260', stage: 'cull_3' },
 ];
 const DO_ROWS = [
   { do_number: 'DO-1', total_qty: 150, status: 'Delivered', remark: '', plot_1: 'U12-R', qty_1: 150, batch_1: '242' },
   { do_number: 'DO-2', total_qty: 100, status: 'Delivered', remark: '', plot_1: 'U13-R', qty_1: 100, batch_1: '256' },
-  { do_number: 'DO-3', total_qty: 80,  status: 'Delivered', remark: '', plot_1: 'U14-R', qty_1: 80,  batch_1: '260' },
 ];
 const PLOTS = [
   { plot_name: 'U12-R', nursery_name: 'UNN 1' },
   { plot_name: 'U13-R', nursery_name: 'UNN 1' },
   { plot_name: 'U14-R', nursery_name: 'UNN 1' },
+  { plot_name: 'U21-R', nursery_name: 'UNN 1' },
   { plot_name: 'U20',   nursery_name: 'UNN 2' },
 ];
 
@@ -62,16 +79,18 @@ const PLOTS = [
   const page = await browser.newPage({ viewport: { width: 1700, height: 1100 } });
   page.on('pageerror', e => console.log('  [page error] ' + e.message));
 
-  await page.addInitScript(({ cull3Transfer, cull3, doRows, plots }) => {
+  await page.addInitScript(({ cull3Transfer, cull3, rowVer, tabVer, doRows, plots }) => {
     function makeQuery(table) {
       const st = { filters: {}, type: null };
       const rows = () => {
         if (table === 'shared_inventory_logs') {
           if (st.filters.transaction_type === 'Cull3_Transfer') return cull3Transfer;
           if (st.filters.transaction_type === '3rd_Culling') return cull3;
+          if (st.filters.transaction_type === 'Row_Verification') return rowVer;
           if (st.filters.transaction_type === 'Transplanted') return [];
           return [];
         }
+        if (table === 'operation_batch_verifications') return tabVer;
         if (table === 'shared_plots') return plots;
         if (table === 'shared_plot_allocations') return [];
         if (table === 'shared_do_records') return doRows;
@@ -100,7 +119,7 @@ const PLOTS = [
       channel: () => ({ on() { return this; }, subscribe() { return this; } }),
       removeChannel: () => {}
     }) };
-  }, { cull3Transfer: CULL3_TRANSFER_ROWS, cull3: CULL3_ROWS, doRows: DO_ROWS, plots: PLOTS });
+  }, { cull3Transfer: CULL3_TRANSFER_ROWS, cull3: CULL3_ROWS, rowVer: ROW_VER_ROWS, tabVer: TAB_VER_ROWS, doRows: DO_ROWS, plots: PLOTS });
 
   await page.route('**/shared_access.js', r => r.fulfill({
     status: 200, contentType: 'application/javascript',
@@ -119,8 +138,10 @@ const PLOTS = [
   await page.route('**://*.supabase.co/**',     r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
 
   await page.goto('http://localhost:8777/operation/operation_stock_sales.html', { waitUntil: 'load' });
-  await page.waitForFunction(() => typeof window.toggleMatHistory === 'function', { timeout: 15000 });
-  await page.waitForTimeout(500);
+  // Waited on a function every page version has (the old boot waited on
+  // toggleMatHistory, which the History split took with it when it went).
+  await page.waitForFunction(() => typeof window.toggleMatStatusMenu === 'function', { timeout: 15000 });
+  await page.waitForTimeout(600);
 
   console.log('\nOn a normal month tab, nothing changes');
   checkTrue('Qty Transplanted header shows (not yet on Plot-R)',
@@ -136,53 +157,66 @@ const PLOTS = [
   checkTrue('After 10% Culling column is hidden',
     !(await page.locator('.col-afterc').first().isVisible()));
 
-  const bodyText = await page.locator('#maturity-rows').innerText();
+  console.log('\nEvery transfer plot is a visible row — no collapsed History, no "no data"');
+  const plotsShown = await page.locator('#maturity-rows tr[data-batch-key]').evaluateAll(
+    rows => rows.filter(r => r.offsetParent !== null).map(r => r.getAttribute('data-plot-name')).sort());
+  check('all five rows are on screen at once', plotsShown, ['U12-R', 'U13-R', 'U14-R', 'U20', 'U21-R']);
+  check('no History toggle anywhere — the rows read like a month tab',
+    await page.locator('.mat-history-toggle, .mat-history-row').count(), 0);
 
-  console.log('\nU12-R (still has balance) is in the Live section');
-  checkTrue('U12-R row is visible without expanding anything', bodyText.includes('U12-R'));
+  console.log('\nU12-R — a GATED culling deducts and the rest stays live');
   const liveRow = page.locator('tr[data-plot-name="U12-R"]');
   check('Qty Transferred (col-prod num, 1st) reads 500 (300+200)',
     (await liveRow.locator('td.col-prod.num').first().innerText()).trim(), '500');
-  check('DO Deducted reads 150 — Sold only, not +50 culled',
+  check('DO Deducted reads 150 — Sold only',
     (await liveRow.locator('td.col-plot.num').first().innerText()).trim(), '150');
-  check('Plot Balance reads 300 — 500 minus sold 150 minus culled 50',
+  check('Plot Balance reads 300 — 500 minus sold 150 minus the gated 50 culled',
     (await liveRow.locator('td.col-plot.num.font-black').first().innerText()).trim(), '300');
-  checkTrue('DO Deducted cell explains the culled/moved-out split on hover',
-    /Sold 150.*Culled\/moved out 50/.test(await liveRow.locator('td.col-plot.num').first().getAttribute('title') || ''));
+  checkTrue('its status dropdown is still live (not locked)',
+    await liveRow.locator('.mat-status-wrap').count() > 0);
+  checkTrue('the balance hover says the 50 came off',
+    /3rd culling of 50/.test(await liveRow.locator('td.col-plot.num.font-black').first().getAttribute('title') || ''));
 
-  console.log('\nU13-R (fully sold, balance 0) is in History, collapsed');
-  checkTrue('U13-R is not visible before expanding', !bodyText.includes('U13-R'));
-  checkTrue('a History toggle row is shown', await page.locator('.mat-history-toggle').count());
-  const historyRowsBefore = await page.locator('.mat-history-row.mat-history-open').count();
-  check('history rows start collapsed', historyRowsBefore, 0);
+  console.log('\nU14-R — drone qty keyed AND the tab signed: the line becomes CULLED');
+  const culledRow = page.locator('tr[data-plot-name="U14-R"]');
+  check('data-mat-status is culled', await culledRow.getAttribute('data-mat-status'), 'culled');
+  check('Plot Balance reads 0', (await culledRow.locator('td.col-plot.num.font-black').first().innerText()).trim(), '0');
+  checkFalse('and the pill is locked — no dropdown', await culledRow.locator('.mat-status-wrap').count() > 0);
+  checkTrue('the hover says fully culled',
+    /fully culled/.test(await culledRow.locator('td.col-plot.num.font-black').first().getAttribute('title') || ''));
 
-  await page.click('.mat-history-toggle');
-  await page.waitForTimeout(200);
-  const afterExpand = await page.locator('#maturity-rows').innerText();
-  checkTrue('U13-R appears once History is expanded', afterExpand.includes('U13-R'));
-  checkTrue('U14-R appears too (also fully sold)', afterExpand.includes('U14-R'));
-  const historyRow = page.locator('tr[data-plot-name="U13-R"]');
-  check('U13-R Plot Balance reads 0', (await historyRow.locator('td.col-plot.num.font-black').first().innerText()).trim(), '0');
+  console.log('\nU21-R — a culling with NO drone qty moves nothing, and says why');
+  const pendRow = page.locator('tr[data-plot-name="U21-R"]');
+  check('its balance still reads 60', (await pendRow.locator('td.col-plot.num.font-black').first().innerText()).trim(), '60');
+  checkTrue('status is not culled', (await pendRow.getAttribute('data-mat-status')) !== 'culled');
+  checkTrue('the hover names what the 60 is waiting for',
+    /keyed but NOT counted/.test(await pendRow.locator('td.col-plot.num.font-black').first().getAttribute('title') || ''));
 
-  console.log('\nHistory reads latest first');
-  const historyPlotOrder = await page.locator('.mat-history-row').evaluateAll(
-    rows => rows.map(r => r.getAttribute('data-plot-name'))
-  );
-  check('U14-R (20 Sep) comes before U13-R (10 Aug)', historyPlotOrder, ['U14-R', 'U13-R']);
+  console.log('\nU13-R — fully sold reads SOLD OUT inline, not hidden');
+  const soldRow = page.locator('tr[data-plot-name="U13-R"]');
+  check('data-mat-status is sold_out', await soldRow.getAttribute('data-mat-status'), 'sold_out');
+  check('Plot Balance reads 0', (await soldRow.locator('td.col-plot.num.font-black').first().innerText()).trim(), '0');
+  checkFalse('locked — no dropdown', await soldRow.locator('.mat-status-wrap').count() > 0);
 
-  console.log('\nU20 — a Cull3_Transfer onto an ORDINARY plot — flows to this tab too');
-  checkTrue('U20 is in the Live rows: the transfer is the rule, not the "-R" name', afterExpand.includes('U20'));
+  console.log('\nU20 — a Cull3_Transfer onto an ORDINARY plot flows to this tab too');
   const u20Row = page.locator('tr[data-plot-name="U20"]');
   check('its Qty Transferred reads 40', (await u20Row.locator('td.col-prod.num').first().innerText()).trim(), '40');
   check('and Plot Balance is Transfer data − DO Deducted: 40 − 0',
     (await u20Row.locator('td.col-plot.num.font-black').first().innerText()).trim(), '40');
 
-  await page.click('.mat-history-toggle');
-  await page.waitForTimeout(200);
-  check('collapses again on a second click', await page.locator('.mat-history-row.mat-history-open').count(), 0);
+  console.log('\nThe foot sums every shown row, like a month tab');
+  const foot = await page.locator('#maturity-foot td').allInnerTexts();
+  checkTrue('Qty Transferred totals 780 (500+100+80+60+40)', foot.some(t => t.trim() === '780'));
+  checkTrue('Plot Balance totals 400 (300+0+0+60+40)', foot.some(t => t.trim() === '400'));
+
+  console.log('\nThe four menu choices read Pending / Open / Leftover / Closed');
+  const menuText = await liveRow.locator('.mat-status-menu').innerText();
+  checkTrue('Pending is offered (stored no_status)', /Pending/.test(menuText));
+  checkTrue('Leftover is offered (stored sisa)', /Leftover/.test(menuText));
+  checkTrue('Closed is offered (stored finished)', /Closed/.test(menuText));
+  checkFalse('the old words No Status / Sisa / Finished are gone', /No Status|Sisa|Finished/.test(menuText));
 
   console.log(`\n${pass} passed, ${fail} failed`);
-  await page.screenshot({ path: '/tmp/claude-0/-home-user/b45e245b-bb91-52f3-b756-1ec7cbcd3ede/scratchpad/maturity_plotr_test.png', fullPage: true });
   await browser.close();
   process.exit(fail ? 1 : 0);
 })();
