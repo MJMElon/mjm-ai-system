@@ -6019,58 +6019,104 @@ Three things in it:
 the sheet, the Check, the dropdowns, the PDF and the no-table state;
 `tests/seed_planting_is_paid_when_checked.cjs` holds the payroll tab.
 
-### The Pre Nursery has TWO jobs, and the office chose where each half goes
+### The Pre Nursery has TWO jobs, and they are ONE sheet divided top and bottom
 
 It had one, tanam biji benih, and the office added a second: *"这个工作是
 tanam biji benih 现在我要加多一个工作是Mengisi tanah ke hyplug RM0.027 per
 biji"* — filling the hyplug trays with soil, which happens BEFORE the seeds
 go in and is paid by the same unit, a biji.
 
-**Both halves were ASKED rather than guessed**, because the office has
-reversed a layout in this module twice (*"算了做回之前的"*), and rebuilding a
-screen costs more than one question:
+**WHERE THE SECOND JOB GOES WAS ASKED, ANSWERED ONE WAY, AND REVERSED** —
+the third layout in this module the office has turned round (*"算了做回之前
+的"* was the last), which is the argument for asking rather than the argument
+against. It was built as its OWN SHEET beside Seed Planting under Pre
+Nursery, on the reasoning that their screenshot already scrolls sideways at
+eight workers so a second group of eight would be sixteen columns nobody
+reads across. The office looked at the two side bar entries and said it in
+one line: *"不要分开 放一起 分上下两部分就好 flow进去payroll system的时候也
+是一样 分上下就好 不要分开"*.
 
-- **Work Maintenance: its own SHEET**, beside Seed Planting under Pre
-  Nursery. Their screenshot already scrolls sideways at eight workers, so a
-  second group of eight would be sixteen columns nobody reads across, and a
-  switch at the top of one table hides whichever job you are not looking at.
+**They are right, and the reason the sideways argument failed is that it was
+about the wrong axis.** Two jobs side by side would be sixteen columns; two
+jobs ONE UNDER THE OTHER are the same eight columns twice, which costs
+height — and a sheet already scrolls down. What the switch bought was never
+room, it was a second place to be, and the two jobs are keyed in one sitting
+by one person off one tray of batches.
+
+So, on BOTH screens:
+
+- **Work Maintenance: ONE sub-tab under Pre Nursery**, labelled *Seed
+  Planting & Hyplug*, drawing one table whose tbody carries a band per job —
+  `.sp-job-row` naming the job, `.sp-head` its own quantity heading, the
+  rows, then `.sp-sub-row` with that job's own total.
 - **Nursery Payroll: ONE claim**, both jobs on one sheet of paper under one
-  signature, each at its own rate with a grand total under them.
+  signature, each at its own rate with a grand total under them. That half
+  was already this shape and did not move.
 
-**WHAT THE TWO SHEETS SHARE IS EVERYTHING EXCEPT THE FIGURES**: the same
+**THE KEY DID NOT MOVE.** `seed_planting` is still what the view is
+addressed by (`SP_VIEWS`), so a link or a bookmark carrying it opens the
+sheet; only the label changed. Same rule as System Setting, for the same
+reason — a label that takes its key with it reads every tick the office ever
+set as unset. `hyplug_soil` was a view of its own for a day and is now in
+`PAYROLL_VIEW_KEYS` nowhere.
+
+**WHAT THE TWO SECTIONS SHARE IS EVERYTHING EXCEPT THE FIGURES**: the same
 batch rows off the ledger, the same month moves, and the SAME NAME LIST —
 the crew that fills the trays is the crew that sows them, and a second list
 would be the same names keyed twice and drifting apart. What differs is the
 figures, the Check and the rate.
 
+**SO THE COLUMNS HAVE TO LINE UP, and that is what stacking actually costs.**
+`spWorkerColumns` is asked about BOTH jobs rather than the one being drawn,
+so a name keyed against the soil filling and not the sowing still has a
+column in both bands. Without it the lower section would be one column
+narrower than the upper and the two would read as two tables sharing a
+scrollbar, which is the thing the office asked to be rid of.
+
+**EACH TOTAL NAMES ITS JOB.** Two `Total (Capacity)` rows of the same weight,
+one above the other, is how somebody signs for the wrong one — the rule the
+nursery payroll's own two figures already follow. The PDF goes further and
+starts each job on its OWN PAGE: a band mid-sheet is a heading somebody reads
+past, where a page turn is not.
+
+**`SP_JOBS` is the list and `_spJob()` is gone.** There is no job on screen
+to read any more — the renderer walks the two and every handler takes the job
+as its first argument (`setSeedPlantingQty(job, ri, wi, v)`,
+`toggleSeedPlantingCheck(job, ri)`), so a cell cannot be keyed against
+whichever band happened to be open.
+
 **THE JOB IS A COLUMN, NOT A SECOND TABLE.** A table of the same shape
 beside the first is two readers, two writers, two triggers and two sets of
 policies — the thinner-copy fault this file is full of. So the key moved
-from `(batch_name)` to `(batch_name, job)`, and `_spJob()` on Work
-Maintenance reads the sheet on screen while `_spKey(batch, job)` is how a
-row's figures are looked up. Keyed on the batch alone the second job would
-write over the first's figures and a crew would be paid for the wrong work.
+from `(batch_name)` to `(batch_name, job)`, and `_spKey(batch, job)` is how
+a row's figures are looked up on either screen. Keyed on the batch alone the
+second job would write over the first's figures and a crew would be paid for
+the wrong work. **That half was decided before the stacking and survived it
+untouched**, which is the whole value of it: the layout turned round and not
+one stored row or one write moved.
 
 Six things in it, and four are rules this file already has:
 
 - **`job` IS SENT ONLY BY CODE THAT KNOWS ABOUT IT.** Naming a column a
   table has not got is not an empty cell, it is the whole row refused —
   so `_spRow` / `_spConflict` omit it on a database still waiting on the
-  SQL, Seed Planting writes exactly the row it always wrote, and the Hyplug
-  sheet is the one that says to run the file. Same rule, same reason, as
-  the not-done flag on the FC Portal's transplanting record.
+  SQL, the Seed Planting band writes exactly the row it always wrote, and
+  the Hyplug band below it is the one that says to run the file — shut, with
+  the sentence on it, while the band above goes on taking figures. Same
+  rule, same reason, as the not-done flag on the FC Portal's transplanting
+  record.
 - **A READ CANNOT FIND OUT WHETHER THE COLUMN IS THERE.** `select('*')` is
   perfectly happy on a table without it, so the page asks for `job` BY NAME
-  once per month read. Without that probe the Hyplug sheet would take
-  figures all morning and store none of them, which is the one shape this
-  must not have.
+  once per month read. Without that probe the Hyplug band would take figures
+  all morning and store none of them, which is the one shape this must not
+  have.
 - **A record written before the column reads as `seed`**, which is what it
   is — that was the only job there was. `pnJobOf` is the one place that
   says so, or a month of old records lands on neither half of the claim.
 - **Removing a name asks BOTH jobs.** The list is shared, so a name with no
   sowing against it and a morning of filling would otherwise come off from
-  the Seed Planting sheet and its figures reappear on the other one as a
-  column nobody can place.
+  the upper band and its figures reappear in the lower one as a column
+  nobody can place.
 - **`preNurseryClaim` CALLS `seedPlantingClaim` once per job** rather than
   summing the records itself. Two jobs priced by two walks of the same rows
   is two chances to divide a batch differently. One piece of arithmetic;
@@ -6079,8 +6125,9 @@ Six things in it, and four are rules this file already has:
 - **A job with nothing keyed is not drawn; a job entirely HELD is.** An
   empty table under a heading is a section somebody reads past, and a claim
   short of work reads exactly like a quiet month. The held note names the
-  JOB as well as the batch, because the two are checked on two different
-  sheets and "go and tick it" is no use without saying which one.
+  JOB as well as the batch, because the two are Checked in two different
+  bands of the sheet and "go and tick it" is no use without saying which
+  one.
 
 **The claim tab is called Pre Nursery now, and THE KEY DID NOT MOVE.**
 `seedplant` is what the verification, the permission and every saved row are
@@ -6159,5 +6206,12 @@ Postgres against the state production is actually in: the previous file run
 first, a month of real records keyed, then this one, three times over.
 
 `tests/the_pre_nursery_pays_two_jobs.cjs` drives the shipped claim
-arithmetic and both real pages; **39 of its 48 checks fail on the previous
-code**.
+arithmetic and both real pages, and `tests/seed_planting_is_pre_nursery.cjs`
+drives the stacked sheet itself: **14 of the first one's 48 checks and 17 of
+the second's 44 fail on the code before the stacking.** Both had to learn
+the same thing to say that: a page drawing ONE section is read as
+`sections[1]` undefined and `#sp-hyplug-1-1` missing, so every reader and
+every interaction is guarded and the failure arrives as a NAMED check.
+**A test that dies on the previous code proves nothing about it** — the
+harness stops at the first throw and the twelve checks underneath are never
+asked.

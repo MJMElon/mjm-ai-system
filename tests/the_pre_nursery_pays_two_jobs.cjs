@@ -180,13 +180,17 @@ const RECS = [
     payHtml:   fs.readFileSync(path.join(ROOT, 'npayroll/npayroll_dashboard.html'), 'utf8'),
     payJs:     fs.readFileSync(path.join(ROOT, 'npayroll/npayroll_script.js'), 'utf8'),
     css:       fs.readFileSync(path.join(ROOT, 'npayroll/npayroll_styles.css'), 'utf8'),
+    maintCss:  fs.readFileSync(path.join(ROOT, 'nursery_ops/plot_maintenance_styles.css'), 'utf8'),
     sql:       fs.existsSync(path.join(ROOT, 'shared/RUN_ME_hyplug_soil.sql'))
                  ? fs.readFileSync(path.join(ROOT, 'shared/RUN_ME_hyplug_soil.sql'), 'utf8') : '',
   };
-  check('the Pre Nursery has a second sheet in the side bar',
-    /pn-subtab-hyplug_soil/.test(SRC.maintHtml), true);
-  check('…and the view is one Worker Activity knows about',
-    /'cull_incentive', 'seed_planting', 'hyplug_soil'/.test(SRC.maintJs), true);
+  /* ONE ENTRY, BOTH JOBS. They were two in the side bar for a day and the
+     office asked for them together -- *"不要分开 放一起 分上下两部分就好"*. */
+  check('the Pre Nursery has ONE entry, not one per job',
+    [/pn-subtab-seed_planting/.test(SRC.maintHtml), /pn-subtab-hyplug_soil/.test(SRC.maintHtml)],
+    [true, false]);
+  check('…and the view key did not move, so a link carrying it still opens this',
+    /switchPayrollView\('seed_planting'\)/.test(SRC.maintHtml), true);
   check('…and the figures are keyed by (batch, job), never by the batch alone',
     [/function _spKey\(batch, job\)/.test(SRC.maintJs),
      /'batch_name,job'/.test(SRC.maintJs)], [true, true]);
@@ -213,70 +217,77 @@ const RECS = [
 
   /* The section head cannot be a <thead> -- there are two of them -- so it
      needs its own rule, or a head reads as an ordinary body row. */
-  check('the job band and its head are styled',
+  check('the job band and its head are styled on BOTH screens',
     [/tbody tr\.pn-job-row td\.pn-job/.test(SRC.css),
-     /tbody tr\.pn-head th/.test(SRC.css),
-     /tbody tr\.pn-sub-row td/.test(SRC.css)], [true, true, true]);
+     /tr\.sp-job-row td\.sp-job/.test(SRC.maintCss),
+     /tr\.sp-head th/.test(SRC.maintCss)], [true, true, true]);
 
   check('the SQL is handed over, and it moves the key',
     [SRC.sql.length > 0, /ADD COLUMN IF NOT EXISTS job TEXT NOT NULL DEFAULT 'seed'/.test(SRC.sql),
      /PRIMARY KEY \(batch_name, job\)/.test(SRC.sql),
      /0\.027/.test(SRC.sql)], [true, true, true, true]);
 
-  console.log('\n3. The two sheets, driven');
+  console.log('\n3. One sheet, the two jobs one under the other');
 
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const { page, errs } = await bootMaint(browser);
 
+  /* The band and the head are rows in the tbody, there being two of each,
+     so the reader splits on the band rather than counting children. */
   const sheet = () => page.evaluate(() => {
     const tbl = document.getElementById('payroll-table');
-    if (!tbl) return { title: '', band: '', head: [], body: [], hint: '' };
-    return {
+    const cells = (tr) => [...tr.children].map(td => {
+      const i = td.querySelector('input'); return i ? (i.value || '_') : td.textContent.trim().replace(/\s+/g, ' '); });
+    const secs = [];
+    let cur = null;
+    [...tbl.querySelectorAll('tbody tr')].forEach(tr => {
+      if (tr.classList.contains('sp-job-row')) { cur = { band: tr.textContent.trim(), head: [], body: [], foot: [] }; secs.push(cur); return; }
+      if (!cur) return;
+      if (tr.classList.contains('sp-head')) { cur.head = [...tr.children].map(th => th.textContent.trim()); return; }
+      if (tr.classList.contains('sp-sub-row')) { cur.foot = cells(tr); return; }
+      cur.body.push(cells(tr));
+    });
+    return { secs,
       title: (document.getElementById('payroll-form-line') || {}).textContent || '',
-      band: (tbl.querySelector('thead .wk-th') || {}).textContent || '',
-      head: [...tbl.querySelectorAll('thead tr:nth-child(2) th')].map(th => th.textContent.trim()),
-      body: [...tbl.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(td => {
-        const i = td.querySelector('input'); return i ? (i.value || '_') : td.textContent.trim().replace(/\s+/g, ' ');
-      })),
-      hint: (document.getElementById('payroll-hint') || {}).textContent || '',
-    };
+      top: (tbl.querySelector('thead .wk-th') || {}).textContent || '',
+      hint: (document.getElementById('payroll-hint') || {}).textContent || '' };
   });
-  /* A VIEW THE PAGE DOES NOT KNOW ABOUT MUST FAIL AS A NAMED CHECK and not
-     take the run down: on the previous code `hyplug_soil` reaches
-     payrollRowsFor, which indexes PAYROLL_TYPES and throws, and a harness
-     that dies there reports nothing about the twenty checks after it. */
-  const go = async (v) => {
-    try { await page.evaluate((x) => switchPayrollView(x), v); }
-    catch (e) { errs.length = 0; }
-    await page.waitForTimeout(250);
-  };
 
-  await go('seed_planting');
-  let s = await sheet();
-  check('Seed Planting opens on its own name', [/Seed Planting/.test(s.band), /Hyplug/.test(s.band)], [true, false]);
-  check('…and its figures are the ones keyed against it', s.body.map(r => [r[1], r[3]]),
-    [['277', '2000'], ['278', '_']]);
-
-  await go('hyplug_soil');
-  s = await sheet();
-  check('Mengisi Tanah ke Hyplug is a sheet of its OWN name', /Mengisi Tanah ke Hyplug/.test(s.band), true);
-  check('…over the SAME batch rows off the same ledger', s.body.map(r => r[1]), ['277', '278']);
+  let s3 = await sheet();
+  check('ONE sheet, headed Pre Nursery', [/Pre Nursery/.test(s3.top), /Pre Nursery/.test(s3.title)], [true, true]);
+  check('…with TWO sections, each naming its own job',
+    s3.secs.map(x => x.band), ['Seed Planting', 'Mengisi Tanah ke Hyplug']);
+  check('…over the SAME batch rows off the same ledger',
+    s3.secs.map(x => x.body.map(r => r[1])), [['277', '278'], ['277', '278']]);
   /* THE WHOLE POINT: one batch, two jobs, two sets of figures that cannot
      see each other. Keyed on the batch alone the second would overwrite the
      first and a crew would be paid for the wrong work. */
-  check('…and its OWN figures, not the other sheet’s', s.body.map(r => [r[1], r[3]]),
-    [['277', '900'], ['278', '_']]);
-  check('…and the same shared name list, so a name is keyed once',
-    s.head.slice(3, 5), ['Siti', 'Ani']);
-  check('…and its hint says what the job is paid by', /a biji/.test(s.hint), true);
+  check('…and each half carries its OWN figures, not the other half’s',
+    s3.secs.map(x => x.body.map(r => [r[1], r[3]])),
+    [[['277', '2000'], ['278', '_']], [['277', '900'], ['278', '_']]]);
+  /* Stacked sections whose columns do not line up are two tables sharing a
+     scrollbar, which is what the office asked to be rid of. */
+  /* A page with no sections at all -- which is what the previous one draws,
+     having two sheets rather than one -- must FAIL these by name and not
+     take the harness down on `secs[0]` being undefined. */
+  const sec = (i) => s3.secs[i] || { band: '', head: [], body: [], foot: [] };
+  check('…and the COLUMNS line up, off the one shared name list',
+    [sec(0).head.slice(3, 5), sec(1).head.slice(3, 5),
+     sec(0).head.length === sec(1).head.length && sec(0).head.length > 0],
+    [['Siti', 'Ani'], ['Siti', 'Ani'], true]);
+  check('…while the quantity heading says what each job is counting',
+    [sec(0).head[2], sec(1).head[2]], ['Qty planted', 'Qty to fill']);
+  check('…and each closes with its OWN total, naming the job',
+    s3.secs.map(x => x.foot[0]),
+    ['Seed Planting — Total (Capacity)', 'Mengisi Tanah ke Hyplug — Total (Capacity)']);
 
-  // Keying on the Hyplug sheet writes the job on the row.
+  // Keying in the lower half writes the job on the row.
   try {
-    await page.fill('#sp-1-1', '750', { timeout: 4000 });
-    await page.dispatchEvent('#sp-1-1', 'change');
-  } catch (e) { /* no such box: the checks below say so by name */ }
+    await page.fill('#sp-hyplug-1-1', '750', { timeout: 4000 });
+    await page.dispatchEvent('#sp-hyplug-1-1', 'change');
+  } catch (e) { /* no such box: the check below says so by name */ }
   await page.waitForTimeout(900);
-  check('a figure keyed here is saved AS HYPLUG, keyed on the batch and the job',
+  check('a figure keyed in the lower half is saved AS HYPLUG, on (batch, job)',
     await page.evaluate(() => (window.__WRITES || []).map(w =>
       [w.row.batch_name, w.row.job, w.row.workers, w.opt && w.opt.onConflict])),
     [['278', 'hyplug', { Ani: 750 }, 'batch_name,job']]);
@@ -284,59 +295,57 @@ const RECS = [
   /* THE TWO CHECKS ARE INDEPENDENT. They are different work, agreed by
      different people on different days, and the claim prices them apart. */
   await page.evaluate(() => { window.__WRITES.length = 0; });
-  try { await page.evaluate(() => toggleSeedPlantingCheck(0)); } catch (e) {}
+  try { await page.evaluate(() => toggleSeedPlantingCheck('hyplug', 0)); } catch (e) {}
   await page.waitForTimeout(500);
-  check('Checking a batch here ticks the HYPLUG record and not the seed one',
+  check('Checking in the lower half ticks the HYPLUG record and not the seed one',
     await page.evaluate(() => (window.__WRITES || []).map(w =>
       [w.row.batch_name, w.row.job, !!w.row.checked_at])),
     [['277', 'hyplug', true]]);
 
-  /* A NAME WITH FIGURES ON EITHER SHEET STAYS ON THE SHARED LIST. Taken off
-     from the sheet that has none, its figures would come back on the other
+  /* A NAME WITH FIGURES IN EITHER HALF STAYS ON THE SHARED LIST. Taken off
+     from the half that has none, its figures would come back in the other
      one as a column nobody can place. */
-  await go('seed_planting');
   const said = await page.evaluate(() => {
     const st = _spCache[getMonth()];
     if (!st || !st.names) return ['no sheet', false];
     const was = window.alert; let msg = '';
     window.alert = (m) => { msg = String(m); };
-    // "Ani" has no seed figures at all, and a morning of hyplug filling.
-    const i = _spCache[getMonth()].names.indexOf('Ani');
+    // "Ani" has no sowing against her at all, and a morning of filling.
+    const i = st.names.indexOf('Ani');
     removeSeedPlantingWorker(i);
     window.alert = was;
-    return [msg, _spCache[getMonth()].names.includes('Ani')];
+    return [msg, st.names.includes('Ani')];
   });
-  check('a name used on the OTHER sheet cannot be taken off the shared list',
+  check('a name used in the OTHER half cannot be taken off the shared list',
     [/Ani/.test(said[0]), said[1]], [true, true]);
 
-  check('no page errors on either sheet', errs, []);
+  check('no page errors', errs, []);
   await page.close();
 
   /* ── A DATABASE STILL WAITING ON THE SQL ────────────────────────────────
      Naming a column the table has not got is not an empty cell, it is the
-     whole row refused. So Seed Planting goes on saving exactly as it did,
-     and the Hyplug sheet is the one that says to run the file rather than
+     whole row refused. So the seed half goes on saving exactly as it did,
+     and the lower half is the one that says to run the file rather than
      taking figures all morning and storing none of them. */
   const old = await bootMaint(browser, { noJob: true });
-  await old.page.evaluate(() => switchPayrollView('seed_planting'));
-  await old.page.waitForTimeout(250);
   try {
-    await old.page.fill('#sp-1-1', '123', { timeout: 4000 });
-    await old.page.dispatchEvent('#sp-1-1', 'change');
+    await old.page.fill('#sp-seed-1-1', '123', { timeout: 4000 });
+    await old.page.dispatchEvent('#sp-seed-1-1', 'change');
   } catch (e) {}
   await old.page.waitForTimeout(900);
-  check('without the column, Seed Planting writes the row it always wrote',
+  check('without the column, the seed half writes the row it always wrote',
     await old.page.evaluate(() => (window.__WRITES || []).map(w =>
       [w.row.batch_name, 'job' in w.row, w.opt && w.opt.onConflict])),
     [['278', false, 'batch_name']]);
-  try { await old.page.evaluate(() => switchPayrollView('hyplug_soil')); } catch (e) {}
-  await old.page.waitForTimeout(250);
   const shut = await old.page.evaluate(() => ({
     hint: (document.getElementById('payroll-hint') || {}).textContent || '',
-    boxes: [...document.querySelectorAll('#payroll-table .sp-in')].every(i => i.disabled),
+    shutLower: [...document.querySelectorAll('#payroll-table .sp-in')]
+                 .filter(i => /^sp-hyplug-/.test(i.id)).every(i => i.disabled),
+    openUpper: [...document.querySelectorAll('#payroll-table .sp-in')]
+                 .filter(i => /^sp-seed-/.test(i.id)).some(i => !i.disabled),
   }));
-  check('…and the Hyplug sheet refuses, naming the file to run',
-    [/RUN_ME_hyplug_soil\.sql/.test(shut.hint), shut.boxes], [true, true]);
+  check('…the lower half refuses and names the file, while the upper one keys on',
+    [/RUN_ME_hyplug_soil\.sql/.test(shut.hint), shut.shutLower, shut.openUpper], [true, true, true]);
   await old.page.close();
 
   console.log('\n4. One claim, both jobs, on the paper');
@@ -500,7 +509,7 @@ async function bootMaint(browser, opts) {
     btn.click();
     switchPayrollView('seed_planting');
   });
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(700);
   return { page, errs };
 }
 

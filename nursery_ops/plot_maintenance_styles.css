@@ -195,6 +195,26 @@ td.check-td.ticked::after{content:"";position:absolute;left:50%;top:50%;width:6p
 td.check-td.modified::before{border-color:#f0b429;background:#fef3c7;}
 td.check-td.modified.ticked::before{border-color:#d97706;background:#d97706;}
 tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background:var(--green-light) !important;color:var(--green-text) !important;border-top:2px solid var(--green-mid);text-transform:uppercase;vertical-align:middle;white-space:normal;line-height:1.3;}
+
+/* ── THE PRE NURSERY SHEET IS TWO JOBS, ONE UNDER THE OTHER ──────────────
+   Sowing the seed and filling the hyplug trays before it. The office asked
+   for them together rather than as two entries in the side bar -- "不要分开
+   放一起 分上下两部分就好" -- so the head belongs to the SECTION and cannot
+   be a <thead>, there being two of them. These carry the look `thead th`
+   gives the rest of the table, or a head reads as an ordinary row. */
+tr.sp-job-row td.sp-job{background:var(--green-mid);color:var(--green-text);font-size:12px;font-weight:800;
+  letter-spacing:0.6px;text-transform:uppercase;text-align:left;padding:11px 14px 7px;border-bottom:none;}
+tr.sp-head th{background:var(--green-light);color:var(--green-text);font-size:11px;font-weight:800;
+  letter-spacing:0.4px;padding:8px 10px 10px;text-align:center;vertical-align:middle;
+  border-bottom:2px solid var(--green-mid);}
+/* A JOB TOTAL IS NOT THE SHEET'S TOTAL. There are two of them a scroll
+   apart, so each names its own job -- two rows reading the same word is how
+   somebody writes the wrong figure down -- and the row closes its section
+   rather than wearing the foot's full weight. */
+tr.sp-sub-row td{font-weight:700;font-size:12px;letter-spacing:0.3px;background:var(--green-light) !important;
+  color:var(--green-text) !important;border-top:2px solid var(--green-mid);
+  border-bottom:3px solid var(--green-mid);vertical-align:middle;white-space:normal;line-height:1.3;}
+tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
 /* Fixed layout, so the colgroup in the HTML decides the columns and the
    content never does. Auto layout gave every nursery a different table —
    UNN 2's longer chemical names squeezed the date column until the year
