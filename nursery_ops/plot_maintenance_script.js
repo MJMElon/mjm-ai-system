@@ -1227,16 +1227,43 @@ async function loadDoRecordsForPayroll(n, m) {
   renderPayroll();
 }
 
+/* A DO counts as loading work only when it is a real customer collection.
+   A CAL- DO is a stock correction — no lorry was loaded — and a DO
+   cancelled through its remark ([CANCELLED]) is as cancelled as one whose
+   status says so. August 2026 carried 110 CAL- lines (125,110 seedlings)
+   that this sheet counted and the Nursery Report's Sales Listing rightly
+   did not, so the two totals could never tally.
+
+   SHARED RULE — the Sales Listing (runSalesListing in
+   operation/operation_reports.html) and the payroll claim's own copy
+   (_doIsLoadingWork in npayroll/npayroll_script.js) apply the same line
+   rule. Change one, change the others. */
+function _doIsLoadingWork(d) {
+  if (!d) return false;
+  if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return false;
+  if (/^CAL-/i.test(d.do_number || '')) return false;
+  return true;
+}
+
 /* The qty a DO contributed to ONE nursery — a DO's five item rows can span
    more than one, same reasoning DoSigning.jsx's own nurseriesOfDO carries
    (see Mobile repo). plot_N resolves to its nursery through NURSERY_PLOTS,
-   the same list the rest of this page already keys every plot off. */
+   the same list the rest of this page already keys every plot off.
+   A single-line DO whose per-line qty was never keyed reads the DO's own
+   total instead — the same fallback the Sales Listing and the batch
+   report's Sales figure use, so a DO keyed that way is the same loading
+   work on every screen. */
 function _doQtyForNursery(d, n) {
   const plots = new Set(NURSERY_PLOTS[n] || []);
+  let filled = 0;
+  for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
   let qty = 0;
   for (let i = 1; i <= 5; i++) {
     const plot = d[`plot_${i}`];
-    if (plot && plots.has(plot)) qty += Number(d[`qty_${i}`]) || 0;
+    if (!plot || !plots.has(plot)) continue;
+    let q = Number(d[`qty_${i}`]) || 0;
+    if (!q && filled === 1) q = Number(d.total_qty) || 0;
+    qty += q;
   }
   return qty;
 }
@@ -1244,6 +1271,7 @@ function _doQtyForNursery(d, n) {
 function loadingSeedlingsRows(n, m) {
   const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
   return rows
+    .filter(_doIsLoadingWork)
     .map(d => ({ d, qty: _doQtyForNursery(d, n) }))
     .filter(x => x.qty > 0)
     .sort((a, b) => String(a.d.delivery_date || '').localeCompare(String(b.d.delivery_date || '')));

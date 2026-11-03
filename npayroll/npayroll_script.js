@@ -3388,6 +3388,7 @@ function maintTotals(nursery, month, ym) {
     };
     const wantYm = ym || monthValue();
     (maint.doRecords || []).forEach(do_ => {
+      if (!_doIsLoadingWork(do_)) return; // a CAL- correction or a cancelled DO loaded no lorry
       if (String(do_.delivery_date || '').slice(0, 7) !== wantYm) {
         if (!do_.delivery_date) d.noMonth++; else d.otherMonth++;
         return;
@@ -3411,17 +3412,41 @@ function maintTotals(nursery, month, ym) {
   return per;
 }
 
+/* A DO counts as loading work only when it is a real customer collection.
+   A CAL- DO is a stock correction — no lorry was loaded — and a DO
+   cancelled through its remark ([CANCELLED]) is as cancelled as one whose
+   status says so. Without this, August 2026's 125,110 CAL- seedlings sat
+   on this claim as loadable capacity while the Sales Listing read none.
+
+   SHARED RULE — the Sales Listing (runSalesListing in
+   operation/operation_reports.html) and the Worker Activity sheet's own
+   copy (_doIsLoadingWork in nursery_ops/plot_maintenance_script.js) apply
+   the same line rule. Change one, change the others. */
+function _doIsLoadingWork(d) {
+  if (!d) return false;
+  if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return false;
+  if (/^CAL-/i.test(d.do_number || '')) return false;
+  return true;
+}
+
 /* The qty one DO contributed to ONE nursery — a DO's five item rows can
    span more than one (see DoSigning.jsx's own nurseriesOfDO in the Mobile
    repo, same reasoning). Resolved through MJMMaintPlots the same way every
-   other plot on this claim already is, rather than a second plot list. */
+   other plot on this claim already is, rather than a second plot list.
+   A single-line DO whose per-line qty was never keyed reads the DO's own
+   total instead — the Sales Listing's fallback, so the same DO is the same
+   quantity on both screens. */
 function maintDoQtyForNursery(do_, nursery) {
+  let filled = 0;
+  for (let i = 1; i <= 5; i++) if (String(do_[`plot_${i}`] || '').trim()) filled++;
   let qty = 0;
   for (let i = 1; i <= 5; i++) {
     const plot = do_[`plot_${i}`];
     if (!plot) continue;
     if (MJMMaintPlots.nurseryOfPlot(plot, maint.plotIndex) === nursery) {
-      qty += Number(do_[`qty_${i}`]) || 0;
+      let q = Number(do_[`qty_${i}`]) || 0;
+      if (!q && filled === 1) q = Number(do_.total_qty) || 0;
+      qty += q;
     }
   }
   return qty;
@@ -5757,11 +5782,14 @@ async function loadMaint() {
     _supabase.from('nops_maint_workers').select('nursery, name').then(r => r, () => ({ data: [] })),
     /* Loading Seedlings' own source — see MAINT_TYPES' loading_seedlings
        entry and maintTotals below. Cancelled DOs never counted as a
-       delivery anywhere else in the system and do not start here. */
-    _supabase.from('shared_do_records')
-      .select('id, do_number, delivery_date, remark, status, plot_1, plot_2, plot_3, plot_4, plot_5, qty_1, qty_2, qty_3, qty_4, qty_5, worked_by_by_nursery')
+       delivery anywhere else in the system and do not start here. Paged
+       through fetchAll: Supabase caps one request at 1000 rows and the DO
+       table has grown past half of that — an unpaged read would one day
+       quietly drop whole months off this claim. */
+    PlotMovement.fetchAll(() => _supabase.from('shared_do_records')
+      .select('id, do_number, delivery_date, total_qty, remark, status, plot_1, plot_2, plot_3, plot_4, plot_5, qty_1, qty_2, qty_3, qty_4, qty_5, worked_by_by_nursery')
       .not('status', 'in', '("Cancelled")')
-      .then(r => r, () => ({ data: [] })),
+      .order('id', { ascending: true })).then(r => r, () => ({ data: [] })),
     /* What the field actually recorded. Verified only — a record nobody has
        checked is not payable — and read here so the claim can pair the work
        to a schedule row ITSELF. It used to price only the ticks the Work
