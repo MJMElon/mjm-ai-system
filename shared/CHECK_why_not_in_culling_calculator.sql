@@ -85,7 +85,7 @@ SELECT p.plot,
          WHEN pp.live_batches IS NOT NULL
            THEN 'NO -- PALMS does not have it at Pengambilan or Saringan Anak Bibit'
          WHEN pp.finished_batches IS NOT NULL
-           THEN 'NO -- at a collecting stage but every batch has a MapQty on its 3rd Culling'
+           THEN 'NO -- every batch has a MapQty on its 3rd Culling, so it is finished'
          ELSE 'NO -- at a collecting stage but no batch 224 or later was transplanted into it'
        END AS on_calculator
   FROM plots p
