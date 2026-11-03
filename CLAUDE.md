@@ -6018,3 +6018,126 @@ Three things in it:
 `tests/seed_planting_is_pre_nursery.cjs` holds the sidebar, the date rule,
 the sheet, the Check, the dropdowns, the PDF and the no-table state;
 `tests/seed_planting_is_paid_when_checked.cjs` holds the payroll tab.
+
+### The Pre Nursery has TWO jobs, and the office chose where each half goes
+
+It had one, tanam biji benih, and the office added a second: *"这个工作是
+tanam biji benih 现在我要加多一个工作是Mengisi tanah ke hyplug RM0.027 per
+biji"* — filling the hyplug trays with soil, which happens BEFORE the seeds
+go in and is paid by the same unit, a biji.
+
+**Both halves were ASKED rather than guessed**, because the office has
+reversed a layout in this module twice (*"算了做回之前的"*), and rebuilding a
+screen costs more than one question:
+
+- **Work Maintenance: its own SHEET**, beside Seed Planting under Pre
+  Nursery. Their screenshot already scrolls sideways at eight workers, so a
+  second group of eight would be sixteen columns nobody reads across, and a
+  switch at the top of one table hides whichever job you are not looking at.
+- **Nursery Payroll: ONE claim**, both jobs on one sheet of paper under one
+  signature, each at its own rate with a grand total under them.
+
+**WHAT THE TWO SHEETS SHARE IS EVERYTHING EXCEPT THE FIGURES**: the same
+batch rows off the ledger, the same month moves, and the SAME NAME LIST —
+the crew that fills the trays is the crew that sows them, and a second list
+would be the same names keyed twice and drifting apart. What differs is the
+figures, the Check and the rate.
+
+**THE JOB IS A COLUMN, NOT A SECOND TABLE.** A table of the same shape
+beside the first is two readers, two writers, two triggers and two sets of
+policies — the thinner-copy fault this file is full of. So the key moved
+from `(batch_name)` to `(batch_name, job)`, and `_spJob()` on Work
+Maintenance reads the sheet on screen while `_spKey(batch, job)` is how a
+row's figures are looked up. Keyed on the batch alone the second job would
+write over the first's figures and a crew would be paid for the wrong work.
+
+Six things in it, and four are rules this file already has:
+
+- **`job` IS SENT ONLY BY CODE THAT KNOWS ABOUT IT.** Naming a column a
+  table has not got is not an empty cell, it is the whole row refused —
+  so `_spRow` / `_spConflict` omit it on a database still waiting on the
+  SQL, Seed Planting writes exactly the row it always wrote, and the Hyplug
+  sheet is the one that says to run the file. Same rule, same reason, as
+  the not-done flag on the FC Portal's transplanting record.
+- **A READ CANNOT FIND OUT WHETHER THE COLUMN IS THERE.** `select('*')` is
+  perfectly happy on a table without it, so the page asks for `job` BY NAME
+  once per month read. Without that probe the Hyplug sheet would take
+  figures all morning and store none of them, which is the one shape this
+  must not have.
+- **A record written before the column reads as `seed`**, which is what it
+  is — that was the only job there was. `pnJobOf` is the one place that
+  says so, or a month of old records lands on neither half of the claim.
+- **Removing a name asks BOTH jobs.** The list is shared, so a name with no
+  sowing against it and a morning of filling would otherwise come off from
+  the Seed Planting sheet and its figures reappear on the other one as a
+  column nobody can place.
+- **`preNurseryClaim` CALLS `seedPlantingClaim` once per job** rather than
+  summing the records itself. Two jobs priced by two walks of the same rows
+  is two chances to divide a batch differently. One piece of arithmetic;
+  this only collects what it answered, and adds a per-person total ACROSS
+  both jobs, which is what somebody signing a claim adds up.
+- **A job with nothing keyed is not drawn; a job entirely HELD is.** An
+  empty table under a heading is a section somebody reads past, and a claim
+  short of work reads exactly like a quiet month. The held note names the
+  JOB as well as the batch, because the two are checked on two different
+  sheets and "go and tick it" is no use without saying which one.
+
+**The claim tab is called Pre Nursery now, and THE KEY DID NOT MOVE.**
+`seedplant` is what the verification, the permission and every saved row are
+filed under; only the word somebody reads changed. Same rule as System
+Setting, and the reason is the same: a label that takes its key with it
+reads every tick the office ever set as unset.
+
+**And `seed_planting` was on no `CAT_LABEL`**, so that Piece Rate row has
+been printing its raw key since `RUN_ME_seed_planting_workers.sql` wrote it.
+Named now, with its neighbour. The Used For dropdown offers `hyplug_soil`,
+or the RM 0.027 could not be set anywhere and the claim would be stuck on
+the figure in the code.
+
+#### THE RATE THE OFFICE ALREADY KEYED IS RE-FILED, NEVER DUPLICATED
+
+The first version of the SQL inserted its own rate row, and the office sent
+a screenshot of their Piece Rate list that stopped it: **Hy Plug Soil
+Filling, RM 0.027 a Hole, already there** and filed under Other — along with
+TWO rows reading Seed Planting, which is what they were asking about:
+*"为什么有两个 seed planting 我要remove哪一个"*.
+
+Inserting a second Hy Plug row would have been that same question again, a
+week later, caused by the file meant to help. **So the row the office keyed
+is MOVED onto the new Used For** — their wording, their unit, their figure —
+and a new one is made only where there is none at all. Matched on the job
+description with the spaces out and the case dropped, so *Hy Plug Soil
+Filling* and *Mengisi Tanah ke Hyplug* both answer, and with no regular
+expression because the SQL Editor has choked on one.
+
+**The claim prints the office's UNIT, not a word of its own.** They filed
+the job as RM 0.027 a **Hole**; a form that said *biji* would be the paper
+disagreeing with the setting it was priced from. `pnJobRate` hands the unit
+back off the rate row and the figure in the code is only the fallback.
+
+**And the check LISTS every Pre Nursery rate**, marking the one each claim
+actually prices off. That is what answers the office's question rather than
+a sentence from here: the row marked *PRICES THIS JOB* is the one to keep,
+and a job showing twice is one somebody keyed before its Used For existed.
+**Nothing removes it** — a rate filed under Other is a job option on the
+Other sheet, so taking it off is the office's decision and not a repair.
+
+Tested against their own four rows, and against a database with none: the
+list came back four rows long both times, and running it three more times
+added nothing.
+
+**The section head cannot be a `<thead>`** — there are two of them — so
+`.pn-job-row`, `.pn-head` and `.pn-sub-row` carry the look `thead th` gives
+every other table, and the job total deliberately does NOT wear the foot's
+weight: two figures of the same colour one above the other is how somebody
+signs for the wrong one.
+
+`shared/RUN_ME_hyplug_soil.sql` is the column, the key and the rate, and its
+proof writes BOTH jobs against one batch — which is exactly what the old key
+refused, so that row is what says the change took. Tested on the scratch
+Postgres against the state production is actually in: the previous file run
+first, a month of real records keyed, then this one, three times over.
+
+`tests/the_pre_nursery_pays_two_jobs.cjs` drives the shipped claim
+arithmetic and both real pages; **39 of its 48 checks fail on the previous
+code**.

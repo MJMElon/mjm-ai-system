@@ -595,11 +595,50 @@ function refreshPayrollTab() {
 const SEED_PLANTING_DEFAULT_RATE = 0.02;
 const _seedPlant = { month: null, rows: null, err: '', at: 0, loading: false };
 
-function seedPlantingRate() {
-  const set = (rates || []).filter(r => r.active !== false && r.category === 'seed_planting');
-  if (set.length) return { rate: Number(set[0].rate) || 0, from: set[0].job_desc || 'Piece Rate', many: set.length > 1 };
-  return { rate: SEED_PLANTING_DEFAULT_RATE, from: null, many: false };
+/* ── THE PRE NURSERY HAS TWO JOBS, AND ONE CLAIM ──────────────────────────
+   Sowing the seed (tanam biji benih) and filling the hyplug trays with soil
+   before it (mengisi tanah ke hyplug), which the office added at RM 0.027 a
+   biji. They are two SHEETS on Work Maintenance -- see the note there -- and
+   ONE claim here, which is what the office chose when asked: one sheet of
+   paper, one signature, the two jobs one under the other and a grand total
+   at the foot.
+
+   Each job keeps its OWN RATE and its own Check, so the two figures can
+   never be priced off one another. `job` on the record is what tells them
+   apart, and a record written before that column existed has none and reads
+   as `seed` -- which is what it is, that being the only job there was.
+
+   PN_JOBS is the list, and everything on this tab and on the printed form
+   walks it rather than naming either job. A third Pre Nursery job is a row
+   here and nothing else. */
+const HYPLUG_SOIL_DEFAULT_RATE = 0.027;
+const PN_JOBS = [
+  { job: 'seed',   label: 'Seed Planting',            unit: 'seed',
+    category: 'seed_planting', fallback: SEED_PLANTING_DEFAULT_RATE, usedFor: 'Seed Planting' },
+  { job: 'hyplug', label: 'Mengisi Tanah ke Hyplug',  unit: 'biji',
+    category: 'hyplug_soil',   fallback: HYPLUG_SOIL_DEFAULT_RATE,   usedFor: 'Mengisi Tanah ke Hyplug' },
+];
+
+/* The Piece Rate row filed under a job's category. With none set it is the
+   figure the office gave, and the note says it is the default rather than a
+   setting somebody chose. */
+function pnJobRate(job) {
+  const j = PN_JOBS.find(x => x.job === job) || PN_JOBS[0];
+  const set = (rates || []).filter(r => r.active !== false && r.category === j.category);
+  /* THE UNIT IS THE OFFICE'S OWN WORD, off the rate row they keyed. They
+     filed this job as RM 0.027 a *Hole*, not a biji, and a claim that
+     printed a unit of its own would be the screen disagreeing with the
+     setting it was priced from. The figure in the code is the fallback for
+     both, so a job nobody has filed still reads sensibly. */
+  if (set.length) return { rate: Number(set[0].rate) || 0, from: set[0].job_desc || 'Piece Rate',
+                           unit: String(set[0].unit || '').trim() || j.unit, many: set.length > 1 };
+  return { rate: j.fallback, from: null, unit: j.unit, many: false };
 }
+function seedPlantingRate() { return pnJobRate('seed'); }
+
+/* A record's job. One place, because `job` being absent has to mean `seed`
+   everywhere or a month of old records lands on neither half of the claim. */
+function pnJobOf(r) { return String((r && r.job) || 'seed'); }
 
 /* Pure: the month's records in, the claim out. Exposed for the test. */
 function seedPlantingClaim(recs, rate) {
@@ -649,6 +688,46 @@ function seedPlantingClaim(recs, rate) {
            amount: list.reduce((a, p) => a + p.amount, 0) };
 }
 
+/* THE WHOLE PRE NURSERY CLAIM: every job's own claim, and the one figure
+   underneath that is what the month pays.
+
+   It CALLS seedPlantingClaim once per job rather than summing the records
+   itself. Two jobs priced by two walks of the same rows is two chances to
+   divide a batch differently, which is the fault this codebase has a
+   heading about -- so there is one piece of arithmetic and this only
+   collects what it answered.
+
+   `people` is the per-person total ACROSS both jobs, which is what somebody
+   signing a claim adds up, and each person carries `byJob` so the paper can
+   show where their money came from. */
+function preNurseryClaim(recs, rateOf) {
+  const rate = rateOf || (j => pnJobRate(j).rate);
+  const jobs = PN_JOBS.map(j => {
+    const set = pnJobRate(j.job);
+    const r = Number(rate(j.job)) || 0;
+    return Object.assign({}, j, { rate: r, unit: set.unit || j.unit,
+      claim: seedPlantingClaim((recs || []).filter(x => pnJobOf(x) === j.job), r) });
+  });
+  const people = {};
+  jobs.forEach(j => j.claim.people.forEach(p => {
+    const who = people[p.name] || (people[p.name] = { name: p.name, byJob: {}, qty: 0, amount: 0 });
+    who.byJob[j.job] = { qty: p.qty, amount: p.amount };
+    who.qty += p.qty;
+    who.amount = Math.round((who.amount + p.amount) * 100) / 100;
+  }));
+  const list = Object.values(people).sort((a, b) => a.name.localeCompare(b.name));
+  /* A job with nothing keyed AND nothing held is not drawn at all -- an
+     empty table under a heading is a section somebody has to read past. One
+     that is entirely HELD still is, because a claim short of work reads
+     exactly like a quiet month. */
+  const shown = jobs.filter(j => j.claim.people.length || j.claim.held.length);
+  return { jobs, shown, people: list,
+           held: jobs.reduce((a, j) => a.concat(j.claim.held.map(h =>
+             Object.assign({ _job: j.job, _label: j.label }, h))), []),
+           qty: jobs.reduce((a, j) => a + j.claim.qty, 0),
+           amount: Math.round(jobs.reduce((a, j) => a + j.claim.amount, 0) * 100) / 100 };
+}
+
 async function loadSeedPlanting(month) {
   _seedPlant.loading = true; _seedPlant.month = month; _seedPlant.err = '';
   const { data, error } = await _supabase.from('nops_seed_planting_batch_workers')
@@ -679,10 +758,9 @@ function renderSeedPlanting(fromLoad) {
     if (note) note.textContent = 'If this says the table does not exist, run shared/RUN_ME_seed_planting_workers.sql in Supabase.';
     return;
   }
-  const r = seedPlantingRate();
-  const c = seedPlantingClaim(_seedPlant.rows, r.rate);
-  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
-  /* A WORKER A ROW, A BATCH A COLUMN — the office asked for it back.
+  const c = preNurseryClaim(_seedPlant.rows);
+  const fig = v => v ? Number(v).toLocaleString('en-MY') : '\u2014';
+  /* A WORKER A ROW, A BATCH A COLUMN \u2014 the office asked for it back.
      The planted day rides UNDER the batch in its own HEADING, which is the
      one thing the turn is worth keeping: the columns are in date order, so a
      reader needs the day to see why they are in that order, and a heading is
@@ -692,39 +770,77 @@ function renderSeedPlanting(fromLoad) {
     const t = new Date(d);
     return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
   };
-  let h = `<thead><tr>
-      <th style="text-align:left;">Worker</th>
-      ${c.rows.map(b => {
-        const d = dayTxt(b.date);
-        return `<th>Batch ${esc(b.batch)}${d ? `<div class="sp-day" style="font-size:10px;font-weight:600;opacity:.75;">${esc(d)}</div>` : ''}</th>`;
-      }).join('')}
-      <th>Seeds planted</th><th>Rate</th><th>Amount</th>
-    </tr></thead><tbody>`;
-  if (!c.people.length) {
-    h += `<tr><td colspan="${4 + c.rows.length}" style="padding:1.6rem;text-align:center;color:var(--text-light);">${
-      c.held.length ? 'Nothing is Checked yet for ' + esc(monthLabelFull(monthValue())) + '.'
-                    : 'No seed planting was keyed for ' + esc(monthLabelFull(monthValue())) + '.'}</td></tr>`;
+
+  /* ONE TABLE PER JOB, drawn by the one function, so the two halves of the
+     claim cannot come to be laid out differently. */
+  const jobTable = (j) => {
+    const cj = j.claim;
+    let x = `<tr class="pn-job-row"><td class="pn-job" colspan="${4 + cj.rows.length}">${esc(j.label)}
+        <span style="font-weight:600;opacity:.7;">\u00b7 ${rateTxt(j.rate)} a ${esc(j.unit)}</span></td></tr>
+      <tr class="pn-head">
+        <th style="text-align:left;">Worker</th>
+        ${cj.rows.map(b => {
+          const d = dayTxt(b.date);
+          return `<th>Batch ${esc(b.batch)}${d ? `<div class="sp-day" style="font-size:10px;font-weight:600;opacity:.75;">${esc(d)}</div>` : ''}</th>`;
+        }).join('')}
+        <th>${esc(j.job === 'hyplug' ? 'Biji filled' : 'Seeds planted')}</th><th>Rate</th><th>Amount</th>
+      </tr>`;
+    if (!cj.people.length) {
+      x += `<tr><td colspan="${4 + cj.rows.length}" style="padding:1.2rem;text-align:center;color:var(--text-light);">${
+        cj.held.length ? 'Nothing is Checked yet for ' + esc(monthLabelFull(monthValue())) + '.'
+                       : 'Nothing was keyed for ' + esc(monthLabelFull(monthValue())) + '.'}</td></tr>`;
+    } else {
+      cj.people.forEach(p => {
+        x += `<tr><td style="text-align:left;font-weight:700;">${esc(p.name)}</td>
+          ${cj.rows.map(b => `<td>${fig(p.byBatch[b.batch])}</td>`).join('')}
+          <td style="font-weight:700;">${fig(p.qty)}</td>
+          <td>${rateTxt(j.rate)}</td>
+          <td style="font-weight:700;">${money(p.amount)}</td></tr>`;
+      });
+      x += `<tr class="pn-sub-row">
+        <td style="text-align:left;">${esc(j.label)} total</td>
+        ${cj.rows.map(b => `<td>${fig(b.qty)}</td>`).join('')}
+        <td>${fig(cj.qty)}</td><td></td><td>${money(cj.amount)}</td></tr>`;
+    }
+    return x;
+  };
+
+  /* The widest job decides the table, so the two sit under one grid. */
+  const widest = c.shown.reduce((a, j) => Math.max(a, j.claim.rows.length), 0);
+  let h = '<tbody>';
+  if (!c.shown.length) {
+    h += `<tr><td style="padding:1.6rem;text-align:center;color:var(--text-light);">No Pre Nursery work was keyed for ${esc(monthLabelFull(monthValue()))}.</td></tr>`;
   } else {
-    c.people.forEach(p => {
-      h += `<tr><td style="text-align:left;font-weight:700;">${esc(p.name)}</td>
-        ${c.rows.map(b => `<td>${fig(p.byBatch[b.batch])}</td>`).join('')}
-        <td style="font-weight:700;">${fig(p.qty)}</td>
-        <td>${rateTxt(r.rate)}</td>
-        <td style="font-weight:700;">${money(p.amount)}</td></tr>`;
-    });
+    h += c.shown.map(jobTable).join('');
   }
-  h += `</tbody><tfoot><tr class="total-row">
-      <td style="text-align:left;">Total</td>
-      ${c.rows.map(b => `<td>${fig(b.qty)}</td>`).join('')}
-      <td>${fig(c.qty)}</td><td></td><td>${money(c.amount)}</td>
-    </tr></tfoot>`;
+  h += '</tbody>';
+  /* THE GRAND TOTAL IS THE ONE FIGURE THE MONTH PAYS, so it is drawn even
+     where only one job has anything on it \u2014 a claim whose foot is the
+     same number as the section above it still has to say that is the whole
+     of it. */
+  if (c.shown.length) {
+    h += `<tfoot><tr class="total-row">
+        <td style="text-align:left;">PRE NURSERY TOTAL</td>
+        <td colspan="${Math.max(1, widest)}"></td>
+        <td>${fig(c.qty)}</td><td></td><td>${money(c.amount)}</td>
+      </tr></tfoot>`;
+  }
   tbl.innerHTML = h;
   if (note) {
     const bits = [];
-    bits.push(r.from
-      ? `Rate: ${rateTxt(r.rate)} a seed, from Piece Rate (${esc(r.from)})${r.many ? ' — more than one Seed Planting rate is active, the first is used' : ''}.`
-      : `Rate: ${rateTxt(r.rate)} a seed, the default. Set it on Settings → Piece Rate with Used For "Seed Planting".`);
-    if (c.held.length) bits.push(`<b style="color:#b45309;">Not on this claim:</b> batch ${c.held.map(x => esc(x.batch_name)).join(', ')} ${c.held.length === 1 ? 'is' : 'are'} keyed and not yet Checked on Work Maintenance.`);
+    /* A LINE PER JOB, because each carries its own rate and its own held
+       work, and one sentence covering both would have to name a rate that
+       is only half true. */
+    c.jobs.forEach(j => {
+      const set = pnJobRate(j.job);
+      bits.push(set.from
+        ? `${esc(j.label)}: ${rateTxt(j.rate)} a ${esc(j.unit)}, from Piece Rate (${esc(set.from)})${set.many ? ' — more than one rate is active for it, the first is used' : ''}.`
+        : `${esc(j.label)}: ${rateTxt(j.rate)} a ${esc(j.unit)}, the default. Set it on Settings → Piece Rate with Used For "${esc(j.usedFor)}".`);
+    });
+    c.jobs.forEach(j => {
+      if (!j.claim.held.length) return;
+      bits.push(`<b style="color:#b45309;">Not on this claim:</b> ${esc(j.label)} batch ${j.claim.held.map(x => esc(x.batch_name)).join(', ')} ${j.claim.held.length === 1 ? 'is' : 'are'} keyed and not yet Checked on Work Maintenance.`);
+    });
     note.innerHTML = bits.join('<br>');
   }
 }
@@ -760,8 +876,12 @@ function fillSectionSelect(el, includeAll, selected) {
    editing screen, not the register. */
 
 /* ════════════ PIECE RATE ════════════ */
+/* Used For, as the Piece Rate list prints it. `seed_planting` was keyed by
+   RUN_ME_seed_planting_workers.sql and never named here, so that row read as
+   the raw key; it is named now, and the Pre Nursery's second job beside it. */
 const CAT_LABEL = { transplanting:'Transplanting', seedlings:'Seedlings Collection',
-                    maintenance:'Work Maintenance', other:'Other', '':'Any sheet' };
+                    maintenance:'Work Maintenance', other:'Other', '':'Any sheet',
+                    seed_planting:'Seed Planting', hyplug_soil:'Mengisi Tanah ke Hyplug' };
 
 /* The three groups a job is filed under. A separate question from `category`
    above, which says which sheet offers the job — a Main Nursery job can be a
@@ -3895,7 +4015,7 @@ const LOCK_SHEETS = {
      to have moved is the day to do it. `shared/CHECK_...` is not owed
      either — `mjmnpayroll_verifications.sheet` is plain TEXT with no CHECK
      constraint on it, so a new sheet name needs nothing run. */
-  seedplant: { label: 'Seed Planting',       scope: () => '' },
+  seedplant: { label: 'Pre Nursery',         scope: () => '' },
   transpl:  { label: 'Transplanting',        scope: () => $('transpl-section').value || '' },
   seedling: { label: 'Seedlings Collection', scope: () => $('seedling-section').value || '' },
   other:    { label: 'Others',               scope: () => $('other-section').value || '' },
@@ -4612,46 +4732,50 @@ function pdfFooterNote(doc, y, centerX, rightX, gap) {
    FLOOR and the paper widens to meet it, which a printer scales down once
    instead of the form being illegible by construction. */
 function downloadSeedPlantingPDF() {
-  return pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF('save'));
+  return pdfGuard('Pre Nursery salary claim form', () => _seedPlantingPDF('save'));
 }
 function printSeedPlantingPDF() {
-  return pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF('print'));
+  return pdfGuard('Pre Nursery salary claim form', () => _seedPlantingPDF('print'));
 }
 function _seedPlantingPDF(how) {
   if (!mayDo('seedplant', 'export',
       'You do not have permission to download the salary claim form.')) return;
-  if (_seedPlant.rows === null) { alert('The Seed Planting records are still loading.'); return; }
-  if (_seedPlant.err) { alert('The Seed Planting records could not be read:\n\n' + _seedPlant.err); return; }
-  const r = seedPlantingRate();
-  const c = seedPlantingClaim(_seedPlant.rows, r.rate);
-  if (!c.people.length) {
+  if (_seedPlant.rows === null) { alert('The Pre Nursery records are still loading.'); return; }
+  if (_seedPlant.err) { alert('The Pre Nursery records could not be read:\n\n' + _seedPlant.err); return; }
+  const c = preNurseryClaim(_seedPlant.rows);
+  const paid = c.jobs.filter(j => j.claim.people.length);
+  if (!paid.length) {
     alert(c.held.length
-      ? 'No batch has been Checked on Work Maintenance for this month, so there is nothing to claim yet.'
-      : 'No seed planting was keyed for this month.');
+      ? 'Nothing has been Checked on Work Maintenance for this month, so there is nothing to claim yet.'
+      : 'No Pre Nursery work was keyed for this month.');
     return;
   }
-  const cols = c.rows;                                  // one per batch, in date order
 
   /* The fixed columns first, then what is left divided between the
      batches — the same "count the columns off the list, never type them
      out" rule the other two claim forms follow, for the reason this file
-     has a heading about. */
+     has a heading about.
+
+     THE FIXED COLUMNS ARE THE SAME FOR BOTH JOBS, so Worker, Qty, Rate and
+     Amount line up straight down the page however many batches each job
+     has. Somebody adding up the Amount column reads ONE column, which is
+     the whole reason the office asked for one claim rather than two. */
   const MARGIN = 20, W_NAME = 46, W_SEEDS = 26, W_RATE = 18, W_AMT = 26;
   const FIXED = W_NAME + W_SEEDS + W_RATE + W_AMT;
   const MIN_W = 20;                       // a batch column narrower than this cannot hold its heading
   const A4P_W = 210;
-  const needed = MARGIN * 2 + FIXED + cols.length * MIN_W;
+  /* The WIDEST job decides the paper. Sized off one of them, the other
+     would be squeezed under the floor its own columns need. */
+  const widest = paid.reduce((a, j) => Math.max(a, j.claim.rows.length), 1);
+  const needed = MARGIN * 2 + FIXED + widest * MIN_W;
   const PAGE_W = Math.max(A4P_W, Math.ceil(needed));
   const PAGE_H = 297;
   const doc = pdfDoc('portrait', PAGE_W === A4P_W ? 'a4' : [PAGE_W, PAGE_H]);
-  const W_B = (PAGE_W - MARGIN * 2 - FIXED) / cols.length;
-  const COL = [W_NAME].concat(cols.map(() => W_B)).concat([W_SEEDS, W_RATE, W_AMT]);
-  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
-  const I_SEEDS = 1 + cols.length, I_RATE = I_SEEDS + 1, I_AMT = I_SEEDS + 2;
-  const CONTENT_R = MARGIN + COL.reduce((s, w) => s + w, 0), CENTER_X = PAGE_W / 2;
-  const HF = [232, 236, 252], TF = [222, 228, 250];
+  const INNER = PAGE_W - MARGIN * 2;               // everything between the margins
+  const CONTENT_R = MARGIN + INNER, CENTER_X = PAGE_W / 2;
+  const HF = [232, 236, 252], TF = [222, 228, 250], JF = [240, 243, 254];
 
-  const HEAD_H = 16, ROW_H = 9, FOOT_H = 10;
+  const HEAD_H = 16, ROW_H = 9, FOOT_H = 10, BAND_H = 9;
   /* The floor every page stops at, so no row is drawn under the signature
      and the footer note — the rule the Seed Audit sheet had to learn when
      the office found a row eaten off the foot of page one. */
@@ -4662,62 +4786,103 @@ function _seedPlantingPDF(how) {
     const t = new Date(d);
     return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
   };
+  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
 
-  let y = pdfTitle(doc, ['SALARY CLAIM FORM — SEED PLANTING', 'Pre Nursery',
+  let y = pdfTitle(doc, ['SALARY CLAIM FORM — PRE NURSERY', 'Pre Nursery',
                          `Month ${monthTxt}`],
                    { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
-  const drawHead = (top) => {
-    pdfCell(doc, X[0], top, COL[0], HEAD_H, 'Worker', { bold: true, size: 8.5, fill: HF });
-    cols.forEach((b, i) => {
-      const d = dayTxt(b.date);
-      pdfCell(doc, X[1 + i], top, COL[1 + i], HEAD_H,
-              'Batch ' + b.batch + (d ? '\n' + d : ''), { bold: true, size: 8, fill: HF });
+
+  /* ONE JOB, DRAWN. Its own batch columns inside the shared width, its own
+     rate, its own subtotal. Walked rather than written out twice, so a third
+     Pre Nursery job is a row in PN_JOBS and nothing here. */
+  function drawJob(j) {
+    const cols = j.claim.rows;                        // one per batch, in date order
+    const W_B = cols.length ? (INNER - FIXED) / cols.length : 0;
+    const COL = [W_NAME].concat(cols.map(() => W_B)).concat([W_SEEDS, W_RATE, W_AMT]);
+    const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
+    const I_Q = 1 + cols.length, I_R = I_Q + 1, I_A = I_Q + 2;
+    const qtyHead = j.job === 'hyplug' ? 'Biji filled' : 'Seeds planted';
+
+    const band = (top) => {
+      pdfCell(doc, MARGIN, top, INNER, BAND_H,
+              j.label + '  ·  ' + rateTxt(j.rate) + ' a ' + j.unit,
+              { bold: true, size: 9, fill: JF, align: 'left' });
+      return top + BAND_H;
+    };
+    const head = (top) => {
+      pdfCell(doc, X[0], top, COL[0], HEAD_H, 'Worker', { bold: true, size: 8.5, fill: HF });
+      cols.forEach((b, i) => {
+        const d = dayTxt(b.date);
+        pdfCell(doc, X[1 + i], top, COL[1 + i], HEAD_H,
+                'Batch ' + b.batch + (d ? '\n' + d : ''), { bold: true, size: 8, fill: HF });
+      });
+      pdfCell(doc, X[I_Q], top, COL[I_Q], HEAD_H, qtyHead, { bold: true, size: 8, fill: HF });
+      pdfCell(doc, X[I_R], top, COL[I_R], HEAD_H, 'Rate', { bold: true, size: 8, fill: HF });
+      pdfCell(doc, X[I_A], top, COL[I_A], HEAD_H, 'Amount (RM)', { bold: true, size: 8, fill: HF });
+      return top + HEAD_H;
+    };
+
+    /* THE BAND GOES WITH ITS HEAD AND ITS FIRST ROW, never alone at the
+       foot of a page — a job name with nothing under it reads as a section
+       somebody forgot to fill in. Same rule as the Seed Audit sheet's
+       damage heading and the Worker Record's plot. */
+    if (y + BAND_H + HEAD_H + ROW_H > FLOOR) { doc.addPage(); y = 25; }
+    y = band(y);
+    y = head(y);
+    j.claim.people.forEach(p => {
+      if (y + ROW_H > FLOOR) { doc.addPage(); y = head(band(25)); }
+      pdfCell(doc, X[0], y, COL[0], ROW_H, p.name, { bold: true, size: 8 });
+      cols.forEach((b, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], ROW_H,
+                                     fig(p.byBatch[b.batch]), { size: 8, nowrap: true }));
+      pdfCell(doc, X[I_Q], y, COL[I_Q], ROW_H, fig(p.qty), { bold: true, size: 8, nowrap: true });
+      pdfCell(doc, X[I_R], y, COL[I_R], ROW_H, rateTxt(j.rate), { size: 8, nowrap: true });
+      pdfCell(doc, X[I_A], y, COL[I_A], ROW_H, money(p.amount), { bold: true, size: 8, nowrap: true });
+      y += ROW_H;
     });
-    pdfCell(doc, X[I_SEEDS], top, COL[I_SEEDS], HEAD_H, 'Seeds planted', { bold: true, size: 8, fill: HF });
-    pdfCell(doc, X[I_RATE],  top, COL[I_RATE],  HEAD_H, 'Rate', { bold: true, size: 8, fill: HF });
-    pdfCell(doc, X[I_AMT],   top, COL[I_AMT],   HEAD_H, 'Amount (RM)', { bold: true, size: 8, fill: HF });
-    return top + HEAD_H;
-  };
-  y = drawHead(y);
+    if (y + FOOT_H > FLOOR) { doc.addPage(); y = head(band(25)); }
+    pdfCell(doc, X[0], y, COL[0], FOOT_H, j.label + ' total', { bold: true, size: 8.5, fill: TF });
+    cols.forEach((b, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], FOOT_H, fig(b.qty),
+                                   { bold: true, size: 8, nowrap: true, fill: TF }));
+    pdfCell(doc, X[I_Q], y, COL[I_Q], FOOT_H, fig(j.claim.qty), { bold: true, size: 8.5, nowrap: true, fill: TF });
+    pdfCell(doc, X[I_R], y, COL[I_R], FOOT_H, '', { fill: TF });
+    pdfCell(doc, X[I_A], y, COL[I_A], FOOT_H, money(j.claim.amount), { bold: true, size: 8.5, nowrap: true, fill: TF });
+    y += FOOT_H + 3;
+  }
 
-  const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
-  c.people.forEach(p => {
-    /* The foot row has to fit under the last body row, or the totals open a
-       page of their own under no heading at all. */
-    if (y + ROW_H > FLOOR) { doc.addPage(); y = drawHead(25); }
-    pdfCell(doc, X[0], y, COL[0], ROW_H, p.name, { bold: true, size: 8 });
-    cols.forEach((b, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], ROW_H,
-                                   fig(p.byBatch[b.batch]), { size: 8, nowrap: true }));
-    pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], ROW_H, fig(p.qty), { bold: true, size: 8, nowrap: true });
-    pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  ROW_H, rateTxt(r.rate), { size: 8, nowrap: true });
-    pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   ROW_H, money(p.amount), { bold: true, size: 8, nowrap: true });
-    y += ROW_H;
-  });
+  paid.forEach(drawJob);
 
-  if (y + FOOT_H > FLOOR) { doc.addPage(); y = drawHead(25); }
-  pdfCell(doc, X[0], y, COL[0], FOOT_H, 'Total', { bold: true, size: 8.5, fill: TF });
-  cols.forEach((b, i) => pdfCell(doc, X[1 + i], y, COL[1 + i], FOOT_H, fig(b.qty),
-                                 { bold: true, size: 8, nowrap: true, fill: TF }));
-  pdfCell(doc, X[I_SEEDS], y, COL[I_SEEDS], FOOT_H, fig(c.qty), { bold: true, size: 8.5, nowrap: true, fill: TF });
-  pdfCell(doc, X[I_RATE],  y, COL[I_RATE],  FOOT_H, '', { fill: TF });
-  pdfCell(doc, X[I_AMT],   y, COL[I_AMT],   FOOT_H, money(c.amount), { bold: true, size: 8.5, nowrap: true, fill: TF });
+  /* THE GRAND TOTAL IS WHAT THE MONTH PAYS, and it is the figure the person
+     signing is agreeing to. Drawn even where one job carried the lot, since
+     a claim whose foot repeats the section above it still has to say that
+     is the whole of it. */
+  const X_Q = MARGIN + W_NAME, X_R = X_Q + W_SEEDS, X_A = X_R + W_RATE;
+  const W_LEAD = INNER - FIXED + W_NAME;
+  if (y + FOOT_H > FLOOR) { doc.addPage(); y = 25; }
+  pdfCell(doc, MARGIN, y, W_LEAD, FOOT_H, 'PRE NURSERY TOTAL', { bold: true, size: 9, fill: TF, align: 'left' });
+  pdfCell(doc, X_Q + (INNER - FIXED), y, W_SEEDS, FOOT_H, fig(c.qty), { bold: true, size: 9, nowrap: true, fill: TF });
+  pdfCell(doc, X_R + (INNER - FIXED), y, W_RATE, FOOT_H, '', { fill: TF });
+  pdfCell(doc, X_A + (INNER - FIXED), y, W_AMT, FOOT_H, money(c.amount), { bold: true, size: 9, nowrap: true, fill: TF });
   y += FOOT_H;
 
   /* A batch keyed and NOT Checked is named on the paper as well as on the
      screen. A claim short of work reads exactly like a quiet month, and the
-     sheet that gets filed is the one somebody reads months later. */
-  if (c.held.length) {
+     sheet that gets filed is the one somebody reads months later. NAMED BY
+     JOB, because the two are checked on two different sheets and "go and
+     tick it" is no use without saying which one. */
+  c.jobs.forEach(j => {
+    if (!j.claim.held.length) return;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(180, 83, 9);
-    doc.text('Not on this claim: batch ' + c.held.map(x => x.batch_name).join(', ')
-           + (c.held.length === 1 ? ' is' : ' are') + ' keyed and not yet Checked on Work Maintenance.',
+    doc.text('Not on this claim: ' + j.label + ' batch ' + j.claim.held.map(x => x.batch_name).join(', ')
+           + (j.claim.held.length === 1 ? ' is' : ' are') + ' keyed and not yet Checked on Work Maintenance.',
              MARGIN, y + 6);
     y += 6;
-  }
-  y = pdfCheckedNote(doc, y, c.rows, CONTENT_R);
+  });
+  /* Both jobs' rows, so a checker who agreed one of them is named. */
+  y = pdfCheckedNote(doc, y, paid.reduce((a, j) => a.concat(j.claim.rows), []), CONTENT_R);
   y = pdfVerifiedNote(doc, y, 'seedplant', '', CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
 
-  const file = `Salary_Claim_Seed_Planting_${monthTxt.replace(/\s+/g, '_')}.pdf`;
+  const file = `Salary_Claim_Pre_Nursery_${monthTxt.replace(/\s+/g, '_')}.pdf`;
   if (how !== 'print') { doc.save(file); return; }
   /* Print, the Seed Audit sheet's way: autoPrint, then the blob into a
      hidden iframe. A new tab is what a popup blocker eats. */

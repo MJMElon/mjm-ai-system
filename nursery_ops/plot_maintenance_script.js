@@ -858,7 +858,7 @@ function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
    Record's list/chart: the panel's own sub-tab bar, and the side bar's
    expandable entry. _syncSubNav (declared beside switchRecordView) is the
    one place that keeps the two in step, by the type key alone. */
-const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive', 'seed_planting'];
+const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive', 'seed_planting', 'hyplug_soil'];
 function switchPayrollView(type) {
   _payrollView = type;
   _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
@@ -987,7 +987,7 @@ function renderPayroll() {
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
-  if (_payrollView === 'seed_planting')     { renderSeedPlantingPayroll(); return; }
+  if (SP_VIEWS[_payrollView])               { renderSeedPlantingPayroll(); return; }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -2496,6 +2496,56 @@ function renderLoadingSeedlingsPayroll() {
    NOT ON ANY CLAIM YET. The office asked for the record first -- nothing in
    npayroll reads this table. */
 const SP_NURSERY = 'PN';
+
+/* ── TWO JOBS, ONE SHEET EACH ─────────────────────────────────────────────
+   The Pre Nursery had one job on it, tanam biji benih, and the office added
+   a second: *"这个工作是tanam biji benih 现在我要加多一个工作是Mengisi tanah
+   ke hyplug RM0.027 per biji"* -- filling the hyplug trays with soil, which
+   happens BEFORE the seeds go in and is paid by the same unit, a biji.
+
+   THEY ARE TWO SHEETS AND NOT TWO SETS OF COLUMNS, which is what the office
+   chose when asked. The sheet already scrolls sideways at eight workers, so
+   a second group of eight would be sixteen columns nobody can read across;
+   and a switch at the top of one table hides whichever job you are not
+   looking at, which is no better than a second row in the side bar.
+
+   WHAT THE TWO SHARE IS EVERYTHING EXCEPT THE FIGURES: the same batch rows
+   off the ledger, the same month moves, and the SAME NAME LIST -- the crew
+   that fills the trays is the crew that sows them, and a second list would
+   be the same names keyed twice and drifting. What differs is the figures,
+   the Check and the rate.
+
+   THE JOB IS A COLUMN ON THE RECORD (`job`), not a table of its own. A
+   second table of the same shape is the thinner-copy fault this codebase is
+   full of: one reader, one writer, one trigger, one set of policies. The key
+   is (batch_name, job).
+
+   `_spJob()` reads the sheet on screen. A row's figures are looked up by
+   `_spKey(batch, job)`, so the two sheets cannot see each other's. */
+const SP_VIEWS = { seed_planting: 'seed', hyplug_soil: 'hyplug' };
+const SP_JOBS = [
+  { job: 'seed',   view: 'seed_planting', label: 'tab.seedPlanting' },
+  { job: 'hyplug', view: 'hyplug_soil',   label: 'tab.hyplugSoil' },
+];
+function _spJob() { return SP_VIEWS[_payrollView] || 'seed'; }
+function _spKey(batch, job) { return String(batch) + '|' + (job || 'seed'); }
+/* The sheet's own name, so a heading, a hint and a PDF cannot disagree. */
+function _spJobLabel(job) {
+  const j = SP_JOBS.find(x => x.job === (job || 'seed'));
+  return t(j ? j.label : 'tab.seedPlanting');
+}
+
+/* THE JOB IS SENT ONLY BY A DATABASE THAT HAS THE COLUMN. Naming a column a
+   table has not got is not an empty cell, it is the whole row refused -- so
+   a database still waiting on the SQL writes exactly the row it always
+   wrote, on the one job it has ever had, and the Hyplug sheet is the one
+   that says to run the file. Same rule, and the same reason, as the
+   not-done flag on the FC Portal's transplanting record. */
+function _spRow(row, job, st) {
+  if (st && st.noJob) return row;
+  return Object.assign({}, row, { job: job || 'seed' });
+}
+function _spConflict(st) { return (st && st.noJob) ? 'batch_name' : 'batch_name,job'; }
 const _spCache = {};      // month -> { rows, saved, names, prevNames, noTable }
 const _spLoading = {};
 const _spErr = {};
@@ -2609,10 +2659,29 @@ async function loadSeedPlantingForPayroll(m) {
       console.warn('[maint] seed planting read:', se.message);
     } else {
       const want = new Set(bs);
+      /* ONE READ SERVES BOTH SHEETS. The rows come back for every job and
+         are filed under (batch, job), so switching between Seed Planting
+         and Mengisi Tanah ke Hyplug asks the database nothing.
+
+         A row written before the `job` column existed has none, and reads
+         as `seed` -- which is what it is, since that was the only job there
+         was. That is why a database still without the column goes on
+         showing the Seed Planting sheet exactly as it did. */
       (sv || []).forEach(r => {
         const k = String(r.batch_name || '').trim();
-        if (want.has(k)) saved[k] = r;
+        if (want.has(k)) saved[_spKey(k, String(r.job || 'seed'))] = r;
       });
+    }
+    /* AND WHETHER THE COLUMN IS THERE AT ALL, asked on its own. A read
+       cannot find out -- `select('*')` is happy on a table without it --
+       but a SAVE carrying `job` is refused by the whole row. So the Hyplug
+       sheet would take figures all morning and store none of them, which is
+       the one shape this must not have. Asked once per month read. */
+    let noJob = false;
+    if (!noTable) {
+      const { error: je } = await _supabase.from('nops_seed_planting_batch_workers')
+        .select('batch_name, job').limit(1);
+      if (je) { noJob = true; console.warn('[maint] seed planting job column:', je.message); }
     }
     /* The month's names, and last month's to offer when this one has none. */
     let names = [], prevNames = [];
@@ -2639,7 +2708,7 @@ async function loadSeedPlantingForPayroll(m) {
       if (b && d && (!home[b] || d < home[b])) home[b] = d;
       if (b && d) homeQty[b] = (homeQty[b] || 0) + (Number(l.quantity_change) || 0);
     });
-    _spCache[m] = { rows, saved, names, prevNames, noTable, moved, noMoveTable, home, homeQty };
+    _spCache[m] = { rows, saved, names, prevNames, noTable, noJob, moved, noMoveTable, home, homeQty };
   } catch (e) {
     _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
   } finally {
@@ -2660,11 +2729,11 @@ function _spPrevMonth(m) {
 /* The month's names as keyed, then any name a row still carries a figure
    for that is no longer on the list -- that figure would otherwise leave
    the sheet with nothing saying so. */
-function spWorkerColumns(rows, saved, names) {
+function spWorkerColumns(rows, saved, names, job) {
   const wk = (names || []).slice();
   const extra = [];
   rows.forEach(r => {
-    const s = saved[r.key];
+    const s = saved[_spKey(r.key, job)];
     Object.keys((s && s.workers) || {}).forEach(w => {
       if (!wk.includes(w) && !extra.includes(w)) extra.push(w);
     });
@@ -2682,8 +2751,9 @@ function renderSeedPlantingPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
   const m = getMonth();
+  const job = _spJob();
   const line = document.getElementById('payroll-form-line');
-  if (line) line.textContent = `${t('tab.seedPlanting')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
+  if (line) line.textContent = `${_spJobLabel(job)} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
   const off = document.getElementById('payroll-offreg');
   if (off) { off.style.display = 'none'; }
 
@@ -2692,8 +2762,14 @@ function renderSeedPlantingPayroll() {
   const hint = document.getElementById('payroll-hint');
   if (hint) {
     const noTable = !!(st && st.noTable);
-    hint.textContent = noTable ? t('pay.spNoTable') : t('pay.spHint');
-    hint.classList.toggle('pay-hint-warn', noTable);
+    /* The column is missing and this is the sheet that needs it: say so and
+       name the file, rather than letting figures be keyed into boxes whose
+       save the database will refuse. On the Seed Planting sheet it changes
+       nothing -- those rows save as they always have. */
+    const noJob = !!(st && !st.noTable && st.noJob && job !== 'seed');
+    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol')
+      : t(job === 'hyplug' ? 'pay.hyplugHint' : 'pay.spHint');
+    hint.classList.toggle('pay-hint-warn', noTable || noJob);
   }
   if (_spLoading[m] || !st) {
     tbl.innerHTML = _spErr[m]
@@ -2702,14 +2778,16 @@ function renderSeedPlantingPayroll() {
     return;
   }
 
-  const { rows, saved, noTable } = st;
-  const { wk, extra } = spWorkerColumns(rows, saved, st.names);
+  const { rows, saved } = st;
+  /* A sheet whose figures cannot be stored takes no figures. */
+  const noTable = st.noTable || (st.noJob && job !== 'seed');
+  const { wk, extra } = spWorkerColumns(rows, saved, st.names, job);
   _spDrawNames(m, st);
   const payTh = (txt, w) =>
     `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
   const span = 3 + wk.length + 2;
   let h = `<thead>
-    <tr><th class="wk-th" colspan="${span}">${t('tab.seedPlanting')}</th></tr>
+    <tr><th class="wk-th" colspan="${span}">${_spJobLabel(job)}</th></tr>
     <tr>
       ${payTh(t('pay.spPlantedDate'), 100)}
       ${payTh(t('pay.batch'), 96)}
@@ -2725,7 +2803,7 @@ function renderSeedPlantingPayroll() {
     h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.spNone', { m })}</td></tr>`;
   } else {
     rows.forEach((r, ri) => {
-      const s = saved[r.key];
+      const s = saved[_spKey(r.key, job)];
       const cells = (s && s.workers) || {};
       const locked = !!(s && s.checked_at);
       qtyTotal += r.qty;
@@ -2785,10 +2863,10 @@ function _spCheckCell(ri, s, keyed, noTable) {
 }
 
 async function toggleSeedPlantingCheck(ri) {
-  const m = getMonth(), st = _spCache[m];
-  if (!st || st.noTable || !_supabase) return;
+  const m = getMonth(), st = _spCache[m], job = _spJob();
+  if (!st || st.noTable || (st.noJob && job !== 'seed') || !_supabase) return;
   const r = st.rows[ri];
-  const s = r && st.saved[r.key];
+  const s = r && st.saved[_spKey(r.key, job)];
   if (!r || !s) return;
   const keyed = _spKeyed(s);
   if (!s.checked_at) {
@@ -2797,7 +2875,7 @@ async function toggleSeedPlantingCheck(ri) {
   } else if (!confirm(t('pay.spUncheckQ', { b: r.batch }))) return;
   /* Any figure still waiting in the debounce goes with the tick, so the
      record that is agreed is the one on the screen. */
-  const tk = m + '|' + r.key;
+  const tk = m + '|' + _spKey(r.key, job);
   if (_spSaveTimers[tk]) { clearTimeout(_spSaveTimers[tk]); delete _spSaveTimers[tk]; }
   const was = { at: s.checked_at || null, by: s.checked_by || null };
   const at = s.checked_at ? null : new Date().toISOString();
@@ -2805,10 +2883,11 @@ async function toggleSeedPlantingCheck(ri) {
   s.checked_at = at; s.checked_by = by;
   renderPayroll();
   const { error } = await _supabase.from('nops_seed_planting_batch_workers')
-    .upsert({ batch_name: r.batch, month: m, planted_date: r.date, qty_planted: r.qty,
+    .upsert(_spRow({ batch_name: r.batch, month: m, planted_date: r.date, qty_planted: r.qty,
               workers: s.workers || {}, checked_at: at, checked_by: by,
               updated_by: window.currentUserEmail || _signingAs() || 'office',
-              updated_at: new Date().toISOString() }, { onConflict: 'batch_name' });
+              updated_at: new Date().toISOString() }, job, st),
+            { onConflict: _spConflict(st) });
   if (error) {
     s.checked_at = was.at; s.checked_by = was.by;
     renderPayroll();
@@ -2983,16 +3062,21 @@ function addSeedPlantingWorker() {
 
 /* A name with figures against it is not taken off: its column would only
    come back as a name off the list, and the figures with it. Clearing the
-   figures first is the decision, made where it can be seen. */
+   figures first is the decision, made where it can be seen.
+
+   ASKED OF BOTH JOBS, because the list is shared. A name with no seed
+   planting against it and a morning of hyplug filling would otherwise come
+   off this list from the Seed Planting sheet, and its figures would reappear
+   on the other one as a column marked unknown. */
 function removeSeedPlantingWorker(i) {
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noTable) return;
   const w = st.names[i];
   if (w == null) return;
-  const used = st.rows.filter(r => {
-    const s = st.saved[r.key];
+  const used = st.rows.filter(r => SP_JOBS.some(j => {
+    const s = st.saved[_spKey(r.key, j.job)];
     return s && s.workers && Number(s.workers[w]) > 0;
-  }).length;
+  })).length;
   if (used) { alert(t('pay.spInUse', { w, n: used })); return; }
   if (!confirm(t('pay.spRemoveQ', { w, m }))) return;
   st.names.splice(i, 1);
@@ -3015,23 +3099,25 @@ function useLastMonthSeedPlantingNames() {
 function setSeedPlantingQty(ri, wi, raw) {
   const m = getMonth();
   const st = _spCache[m];
-  if (!st || st.noTable) return;
+  const job = _spJob();
+  if (!st || st.noTable || (st.noJob && job !== 'seed')) return;
   const r = st.rows[ri];
-  const { wk } = spWorkerColumns(st.rows, st.saved, st.names);
+  const { wk } = spWorkerColumns(st.rows, st.saved, st.names, job);
   const w = wk[wi];
   if (!r || !w) return;
-  if (st.saved[r.key] && st.saved[r.key].checked_at) {
+  const k = _spKey(r.key, job);
+  if (st.saved[k] && st.saved[k].checked_at) {
     alert(t('pay.spLocked', { b: r.batch }));
     renderPayroll();
     return;
   }
-  const s = st.saved[r.key] || (st.saved[r.key] = { batch_name: r.batch, month: m, workers: {} });
+  const s = st.saved[k] || (st.saved[k] = { batch_name: r.batch, month: m, job, workers: {} });
   s.planted_date = r.date;
   const n = String(raw).trim() === '' ? null : Math.max(0, Math.round(Number(raw)));
   s.workers = Object.assign({}, s.workers || {});
   if (n == null || !isFinite(n) || n === 0) delete s.workers[w]; else s.workers[w] = n;
   s.qty_planted = r.qty;
-  persistSeedPlanting(m, r.key);
+  persistSeedPlanting(m, k, job);
   setTimeout(() => {
     const focusId = document.activeElement && document.activeElement.id;
     renderPayroll();
@@ -3040,20 +3126,21 @@ function setSeedPlantingQty(ri, wi, raw) {
   }, 0);
 }
 
-function persistSeedPlanting(m, key) {
+function persistSeedPlanting(m, key, job) {
   if (!_supabase) return;
   const tk = m + '|' + key;
   clearTimeout(_spSaveTimers[tk]);
   _spSaveTimers[tk] = setTimeout(() => {
     delete _spSaveTimers[tk];
-    const s = (_spCache[m] && _spCache[m].saved[key]) || null;
+    const st = _spCache[m];
+    const s = (st && st.saved[key]) || null;
     if (!s) return;
     _supabase.from('nops_seed_planting_batch_workers')
-      .upsert({ batch_name: s.batch_name, month: m, planted_date: s.planted_date,
+      .upsert(_spRow({ batch_name: s.batch_name, month: m, planted_date: s.planted_date,
                 qty_planted: s.qty_planted, workers: s.workers || {},
                 updated_by: window.currentUserEmail || _signingAs() || 'office',
-                updated_at: new Date().toISOString() },
-              { onConflict: 'batch_name' })
+                updated_at: new Date().toISOString() }, job || s.job, st),
+              { onConflict: _spConflict(st) })
       .then(({ error }) => {
         if (!error) { delete _spSaveErr[tk]; return; }
         _spSaveErr[tk] = error.message;
@@ -3101,7 +3188,9 @@ function downloadPayrollPDF() {
   const tpView = _payrollView === 'transplanting';
   /* Seed Planting is the Pre Nursery's own sheet, a figure in every worker
      cell like Transplanting, so it takes the wide page too. */
-  const spView = _payrollView === 'seed_planting';
+  /* Both Pre Nursery sheets take the wide page: they are the same table
+     with the same worker columns, and only the job differs. */
+  const spView = !!SP_VIEWS[_payrollView];
   const wide = tpView || spView;
   const doc = new jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
   const PW = wide ? 297 : 210, PH = wide ? 210 : 297, MARGIN = 25;
@@ -3378,10 +3467,11 @@ function downloadPayrollPDF() {
   function drawSeedPlantingSheet() {
     const st = _spCache[m];
     if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
+    const job = _spJob();
     const rows = st.rows, saved = st.saved;
-    const { wk: cols } = spWorkerColumns(rows, saved, st.names);
+    const { wk: cols } = spWorkerColumns(rows, saved, st.names, job);
     if (!cols.length) { alert(t('pay.spNoNames')); return; }
-    const label = t('tab.seedPlanting');
+    const label = _spJobLabel(job);
     const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
 
     const W_DATE = 24, W_BATCH = 24, W_QTY = 24, W_SUM = 26;
@@ -3421,8 +3511,9 @@ function downloadPayrollPDF() {
         const floor = PH - MARGIN - 20;
         rows.forEach((r, ri) => {
           if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
-          const cells = (saved[r.key] && saved[r.key].workers) || {};
-          const keyed = _spKeyed(saved[r.key]);
+          const sv = saved[_spKey(r.key, job)];
+          const cells = (sv && sv.workers) || {};
+          const keyed = _spKeyed(sv);
           qtyTotal += r.qty; keyedTotal += keyed;
           const z = ri % 2 ? ZEBRA : null;
           cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
@@ -4151,7 +4242,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -4162,6 +4253,8 @@ const I18N = {
     'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
     'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Seed Planting payroll, where it is priced.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
+    'pay.spNoJobCol':'Mengisi Tanah ke Hyplug cannot save yet: run shared/RUN_ME_hyplug_soil.sql in Supabase. The rows below are read from the batch report as normal, and Seed Planting is unaffected.',
+    'pay.hyplugHint':'Each row is a batch planted this month, with its total planted quantity from the batch report. Filling the hyplug trays with soil is paid by the same unit as sowing them \u2014 a biji \u2014 so key how many each worker filled. Check a batch to send it to the Pre Nursery payroll, where it is priced.',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
     'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
     'pay.spPickWorker':'Pick a worker…', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
@@ -4345,7 +4438,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -4356,6 +4449,8 @@ const I18N = {
     'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
     'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Seed Planting, di mana ia diberi harga.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
+    'pay.spNoJobCol':'Mengisi Tanah ke Hyplug belum boleh disimpan: jalankan shared/RUN_ME_hyplug_soil.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa, dan Penanaman Benih tidak terjejas.',
+    'pay.hyplugHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari laporan batch. Mengisi tanah ke hyplug dibayar mengikut unit yang sama dengan menanam \u2014 sebiji \u2014 jadi isi berapa yang diisi oleh setiap seorang. Semak satu batch untuk menghantarnya ke gaji Pre Nursery, di mana ia diberi harga.',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
     'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
     'pay.spPickWorker':'Pilih pekerja…', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',

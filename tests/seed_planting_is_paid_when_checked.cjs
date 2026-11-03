@@ -144,17 +144,43 @@ async function boot(browser, db) {
    day is read on its own rather than tidied out of the way: it is the fact
    the COLUMNS are ordered by, and a check that threw it away would pass over
    a sheet that had stopped showing it. */
+/* THE CLAIM IS SECTIONS NOW, one per Pre Nursery job, because the office
+   asked for both on one sheet of paper under one signature. So the head
+   belongs to the SECTION and cannot be a <thead> -- there are two of them --
+   and this reader walks the tbody splitting on the job band.
+
+   `sect(0)` is whatever job is drawn first, which keeps every check below
+   saying exactly what it said when there was only one. */
 const read = (page) => page.evaluate(() => {
   const t = document.getElementById('seedplant-table');
   const cells = (tr) => [...tr.children].map(td => td.textContent.trim());
-  const heads = [...t.querySelectorAll('thead th')].map(th => {
+  const headText = (th) => {
     const day = th.querySelector('.sp-day');
     return (day ? th.textContent.replace(day.textContent, '') : th.textContent).trim();
+  };
+  const sections = [];
+  let cur = null;
+  [...t.querySelectorAll('tbody tr')].forEach(tr => {
+    if (tr.classList.contains('pn-job-row')) {
+      cur = { band: tr.textContent.replace(/\s+/g, ' ').trim(), head: [], days: [], body: [], sub: null };
+      sections.push(cur);
+      return;
+    }
+    if (!cur) { cur = { band: '', head: [], days: [], body: [], sub: null }; sections.push(cur); }
+    if (tr.classList.contains('pn-head')) {
+      cur.head = [...tr.children].map(headText);
+      cur.days = [...tr.querySelectorAll('.sp-day')].map(d => d.textContent.trim());
+      return;
+    }
+    if (tr.classList.contains('pn-sub-row')) { cur.sub = cells(tr); return; }
+    cur.body.push(cells(tr));
   });
   return {
-    head: heads,
-    body: [...t.querySelectorAll('tbody tr')].map(cells),
-    days: [...t.querySelectorAll('thead .sp-day')].map(d => d.textContent.trim()),
+    sections,
+    head: (sections[0] || {}).head || [],
+    body: (sections[0] || {}).body || [],
+    days: (sections[0] || {}).days || [],
+    sub:  (sections[0] || {}).sub  || null,
     foot: [...t.querySelectorAll('tfoot tr')].map(cells),
     note: document.getElementById('seedplant-note').textContent.replace(/\s+/g, ' ').trim()
   };
@@ -185,12 +211,22 @@ const read = (page) => page.evaluate(() => {
     ['Siti', '2,000', '1,000', '3,000', 'RM 0.02', 'RM 60.00']]);
   check('…and the planted day rides in the batch HEADING, which is what the columns order on',
     v.days, ['28 Sep', '05 Oct']);
-  check('one foot row: each batch’s total, the grand total and the money', v.foot, [
-    ['Total', '3,760', '3,000', '6,760', '', 'RM 135.20']]);
+  check('a job total under the section: each batch’s, the job’s and its money', v.sub,
+    ['Seed Planting total', '3,760', '3,000', '6,760', '', 'RM 135.20']);
+  /* AND THE CLAIM'S OWN TOTAL UNDER BOTH JOBS, which is the figure somebody
+     is signing for. Drawn even where one job carried the lot: a foot that
+     repeats the section above it still has to say that is the whole of it. */
+  check('one foot row: the PRE NURSERY total and the money', v.foot, [
+    ['PRE NURSERY TOTAL', '', '6,760', '', 'RM 135.20']]);
   check('…and the Amount column adds up to the total in the foot',
     await a.page.evaluate(() => {
       const rm = s => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
-      const rows = [...document.querySelectorAll('#seedplant-table tbody tr')];
+      /* THE PEOPLE ROWS ONLY. The job total is in the tbody too now, and a
+         sum that swallowed it would read as double and pass over nothing. */
+      const rows = [...document.querySelectorAll('#seedplant-table tbody tr')]
+        .filter(tr => !tr.classList.contains('pn-job-row')
+                   && !tr.classList.contains('pn-head')
+                   && !tr.classList.contains('pn-sub-row'));
       const paid = rows.reduce((s, tr) => s + rm(tr.children[tr.children.length - 1].textContent), 0);
       const f = document.querySelector('#seedplant-table tfoot tr');
       /* Answers rather than throwing: a sheet with no foot has to FAIL this
@@ -199,7 +235,8 @@ const read = (page) => page.evaluate(() => {
       return [Math.round(paid * 100) / 100, rm(f.children[f.children.length - 1].textContent)];
     }),
     [135.2, 135.2]);
-  check('the unchecked batch is named, not paid', /Not on this claim: batch 279 is keyed and not yet Checked/.test(v.note), true);
+  check('the unchecked batch is named, not paid, AND the job it is waiting on',
+    /Not on this claim: Seed Planting batch 279 is keyed and not yet Checked/.test(v.note), true);
   check('with no rate set the default is said to be the default', /RM 0.02 a seed, the default/.test(v.note), true);
   check('this page writes nothing', await a.page.evaluate(() => (window.__WRITES || []).filter(w => w.startsWith('nops_seed'))), []);
 
@@ -215,7 +252,7 @@ const read = (page) => page.evaluate(() => {
          no strip at all has to FAIL this check, not kill the run. */
       return [!!el, el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : 'no strip'];
     }),
-    [true, 'Open — Seed Planting · the Pre Nursery · ' +
+    [true, 'Open — Pre Nursery · the Pre Nursery · ' +
       (() => { const d = new Date(); const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                return `${M[d.getMonth()]} ${d.getFullYear()}`; })() +
       '\u2714 Verify & lock']);
@@ -242,14 +279,21 @@ const read = (page) => page.evaluate(() => {
   }, fn);
   const dl = await pdfOf(a.page, 'downloadSeedPlantingPDF');
   check('Download draws the form and names the file',
-    [!!dl, dl && /^Salary_Claim_Seed_Planting_/.test(dl.saved || ''), dl && dl.printed],
+    [!!dl, dl && /^Salary_Claim_Pre_Nursery_/.test(dl.saved || ''), dl && dl.printed],
     [true, true, false]);
   check('…and the paper is the screen’s table: a planter a row, a batch a column',
     dl && [dl.lines.includes('Worker'), dl.lines.includes('Siti'),
            dl.lines.includes('Batch 277\n28 Sep'),
-           dl.lines.includes('Total'), dl.lines.includes('Amount (RM)'),
+           dl.lines.includes('Seed Planting total'), dl.lines.includes('Amount (RM)'),
            dl.lines.includes('RM 135.20')],
     [true, true, true, true, true, true]);
+  /* THE JOB IS NAMED ON THE PAPER, with its rate beside it. One sheet
+     carrying two rates has to say which figure each half was priced at, or
+     somebody adding it up has no way to check the arithmetic. */
+  check('…and the job band names the job and the rate it was paid at',
+    dl && dl.lines.some(t => /^Seed Planting {2}·  RM 0\.02 a seed$/.test(t)), true);
+  check('…and the PRE NURSERY total is the figure being signed for',
+    dl && dl.lines.includes('PRE NURSERY TOTAL'), true);
   /* WHO CHECKED IT, beside who verified it — *"所以每次print出来 就可以显示
      check by谁 verify by 谁"*. They are two different signatures and the form
      carried only the second. A line, never a column: the office already took
@@ -259,7 +303,7 @@ const read = (page) => page.evaluate(() => {
            dl.lines.some(t => /^(Verified by |Not yet verified)/.test(t))],
     [true, true]);
   check('…the unchecked batch is named on the paper too',
-    dl && dl.lines.some(t => /Not on this claim: batch 279/.test(t)), true);
+    dl && dl.lines.some(t => /Not on this claim: Seed Planting batch 279/.test(t)), true);
   const pr = await pdfOf(a.page, 'printSeedPlantingPDF');
   check('Print draws the SAME document and saves nothing',
     [pr && pr.printed, pr && pr.saved, JSON.stringify(pr && pr.lines) === JSON.stringify(dl && dl.lines)],
@@ -317,9 +361,9 @@ const read = (page) => page.evaluate(() => {
      to fail this as a named check and not take the run down with it. */
   const at = (grid, i, j) => ((grid || [])[i] || [])[j];
   check('the Piece Rate row prices it',
-    [at(v.body, 0, 4), at(v.body, 0, 5), at(v.foot, 0, 5), at(v.foot, 0, 3)],
+    [at(v.body, 0, 4), at(v.body, 0, 5), at([v.sub], 0, 5), at([v.sub], 0, 3)],
     ['RM 0.025', 'RM 50.00', 'RM 169.00', '6,760']);
-  check('…and the note names where the rate came from', /from Piece Rate \(Seed Planting\)/.test(v.note), true);
+  check('…and the note names where the rate came from', /Seed Planting: RM 0.025 a seed, from Piece Rate \(Seed Planting\)/.test(v.note), true);
   await b.page.close();
 
   // ── 4. Nothing checked yet is not "nothing keyed" ──
