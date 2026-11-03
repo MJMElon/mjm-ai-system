@@ -848,6 +848,18 @@
                 g.otherDeducted = (culledByKey[g.key] || 0) + (movedOutByKey[g.key] || 0);
             });
 
+            // A main plot with a 3rd_Culling record against it has had its
+            // final culling — the office's rule, in their own words: "If the
+            // plot has been culled, just make the plot balance become 0, and
+            // the status become culled (this is system auto detect and
+            // set)." Stamped on the MONTH rows only: a Plot-R row nets its
+            // culling off through otherDeducted above and keeps its own
+            // arithmetic (fully-at-nought PR rows already fold into
+            // History). Any culling counts, partial included — the 3rd
+            // culling is the plot's final stage, so once one is recorded the
+            // remainder has moved on (Plot-R, or sold) and the row is done.
+            matRows.forEach(g => { g.culledQty = culledByKey[g.key] || 0; });
+
             plotAllocations = {};
             (allocRes?.data || []).forEach(a => {
                 const k = (a.batch_name||'') + '||' + (a.plot_name||'');
@@ -1054,7 +1066,11 @@
         // balance reads Sold Out no matter what was picked before, and the
         // control locks: there's nothing left to allocate, so there's
         // nothing left to decide.
-        sold_out:  { label: 'Sold Out',  dot: 'bg-white' }
+        sold_out:  { label: 'Sold Out',  dot: 'bg-white' },
+        // Automatic too, and it wins over Sold Out: a plot with a
+        // 3rd_Culling record against it is done — the balance is forced to
+        // 0 and the status is system-set (see buildRow). Never in the menu.
+        culled:    { label: 'Culled',    dot: 'bg-white' }
     };
 
     // One dropdown in place of the status pill + native <select> combo —
@@ -1063,13 +1079,16 @@
     function matStatusControl(key, status, locked) {
         const m = MAT_STATUS_MAP[status] || MAT_STATUS_MAP.no_status;
         if (locked) {
+            const title = status === 'culled'
+                ? 'A 3rd culling is recorded on this plot — balance reads 0 and the status is set by the system'
+                : 'Balance is sold out — status is automatic, not editable';
             return `
-                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white bg-red-600 border border-red-600 rounded-lg px-2 py-1 uppercase tracking-widest" title="Balance is sold out — status is automatic, not editable">
+                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white bg-red-600 border border-red-600 rounded-lg px-2 py-1 uppercase tracking-widest" title="${title}">
                     <span class="w-2 h-2 rounded-full ${m.dot} shrink-0"></span>
                     <span>${m.label}</span>
                 </span>`;
         }
-        const opts = Object.entries(MAT_STATUS_MAP).filter(([value]) => value !== 'sold_out').map(([value, o]) => `
+        const opts = Object.entries(MAT_STATUS_MAP).filter(([value]) => value !== 'sold_out' && value !== 'culled').map(([value, o]) => `
             <button type="button" onclick="selectMatStatus(this,'${value}')" class="w-full text-left text-[11px] font-bold text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-2 ${value === status ? 'bg-amber-50 text-amber-800' : ''}">
                 <span class="w-2 h-2 rounded-full ${o.dot} shrink-0"></span><span>${o.label}</span>
             </button>`).join('');
@@ -1156,7 +1175,7 @@
             return;
         }
 
-        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0, totOther = 0, totRowCount = 0;
+        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0, totOther = 0, totBalance = 0, totRowCount = 0;
 
         // One row's <tr>, shared by the live list and the history list below
         // — history=true only changes a CSS class, the figures and the
@@ -1174,17 +1193,30 @@
             // while Plot Balance still nets this off too, same total
             // deduction as before the split.
             const otherDed = isPR ? (r.otherDeducted || 0) : 0;
-            const plotBalance        = r.afterCulling - collected - otherDed;
+            // A 3rd culling on a main plot ends the row: the balance is
+            // FORCED to 0 and the status reads Culled, system-set — the
+            // office's own rule ("this is system auto detect and set").
+            // Shown, never written back to plotAllocations, same as Sold
+            // Out below — the person's last pick survives if the culling
+            // rows are ever corrected. Any chips still on the row stay
+            // visible (customers the office has to move), so After Deduct
+            // Reserve can read negative here, which is the thing to see.
+            const culled = !isPR && (r.culledQty || 0) > 0;
+            const plotBalance        = culled ? 0 : (r.afterCulling - collected - otherDed);
             const afterDeductReserve = plotBalance - allocSum;
 
             // Sold Out overrides whatever was picked — it's never written
             // back to plotAllocations (that stays the person's last real
             // choice, in case the plot's balance later recovers), only
-            // shown while plotBalance stays at/under zero.
-            const soldOut = plotBalance <= 0;
-            const status  = soldOut ? 'sold_out' : (alloc.plot_status || 'no_status');
+            // shown while plotBalance stays at/under zero. Culled wins over
+            // it: both are automatic, and the culling is the reason.
+            const soldOut = !culled && plotBalance <= 0;
+            const status  = culled ? 'culled' : (soldOut ? 'sold_out' : (alloc.plot_status || 'no_status'));
             const doTitle = otherDed > 0
                 ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
+                : '';
+            const balTitle = culled
+                ? ` title="3rd culling recorded on this plot (${(r.culledQty || 0).toLocaleString()} culled) — balance set to 0 by the system"`
                 : '';
 
             // Finished is a person's judgment that this plot's allocation is
@@ -1222,16 +1254,16 @@
                     <td class="col-prod num">${r.qty.toLocaleString()}</td>
                     <td class="col-prod num text-emerald-700 mat-sep-r col-afterc">${r.afterCulling.toLocaleString()}</td>
                     <td class="col-plot">
-                        ${matStatusControl(r.key, status, soldOut)}
+                        ${matStatusControl(r.key, status, soldOut || culled)}
                     </td>
                     <td class="col-plot num text-blue-700"${doTitle}>${collected.toLocaleString()}</td>
-                    <td class="col-plot num font-black mat-sep-r ${soldOut ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}</td>
+                    <td class="col-plot num font-black mat-sep-r ${(soldOut || culled) ? 'text-red-600' : 'text-slate-800'}"${balTitle}>${plotBalance.toLocaleString()}</td>
                     <td class="col-alloc">${reservHtml}</td>
                     <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
                     <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
                 </tr>
             `;
-            return { html, allocSum, collected, otherDed };
+            return { html, allocSum, collected, otherDed, plotBalance };
         }
 
         let bodyHtml = '';
@@ -1255,7 +1287,7 @@
                     const b = buildRow(r, false);
                     bodyHtml += b.html;
                     totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
-                    totCollected += b.collected; totOther += b.otherDed; totRowCount++;
+                    totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totRowCount++;
                 });
             }
             if (historyRows.length) {
@@ -1270,7 +1302,7 @@
                 const b = buildRow(r, false);
                 bodyHtml += b.html;
                 totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
-                totCollected += b.collected; totOther += b.otherDed; totRowCount++;
+                totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totRowCount++;
             });
         }
 
@@ -1288,7 +1320,11 @@
 
         // Totals are the Live rows only on Plot-R (History is reference, not
         // stock still to place) and every row on a month tab, same as before.
-        const totAfterDeduct = totCull - totCollected - totOther - totReserved;
+        // Plot Balance totals the SHOWN per-row figures, never a re-derive
+        // from the other columns — a Culled row's balance is forced to 0,
+        // and a foot that disagreed with the column above it would be the
+        // one shape of wrong nobody can spot.
+        const totAfterDeduct = totBalance - totReserved;
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
                 <td colspan="5" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${totRowCount} rows)</td>
@@ -1296,7 +1332,7 @@
                 <td class="num text-emerald-700 mat-sep-r col-afterc">${totCull.toLocaleString()}</td>
                 <td></td>
                 <td class="num text-blue-700">${totCollected.toLocaleString()}</td>
-                <td class="num text-slate-800 mat-sep-r">${(totCull - totCollected - totOther).toLocaleString()}</td>
+                <td class="num text-slate-800 mat-sep-r">${totBalance.toLocaleString()}</td>
                 <td></td>
                 <td class="num text-slate-900">${totReserved.toLocaleString()}</td>
                 <td class="num ${totAfterDeduct < 0 ? 'text-red-600' : 'text-emerald-700'}">${totAfterDeduct.toLocaleString()}</td>
