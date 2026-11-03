@@ -848,16 +848,18 @@
                 g.otherDeducted = (culledByKey[g.key] || 0) + (movedOutByKey[g.key] || 0);
             });
 
-            // A main plot with a 3rd_Culling record against it has had its
-            // final culling — the office's rule, in their own words: "If the
-            // plot has been culled, just make the plot balance become 0, and
-            // the status become culled (this is system auto detect and
-            // set)." Stamped on the MONTH rows only: a Plot-R row nets its
-            // culling off through otherDeducted above and keeps its own
-            // arithmetic (fully-at-nought PR rows already fold into
-            // History). Any culling counts, partial included — the 3rd
-            // culling is the plot's final stage, so once one is recorded the
-            // remainder has moved on (Plot-R, or sold) and the row is done.
+            // The 3rd culling keyed on the batch report, matched per
+            // batch+plot — the office's rule over four messages: a culled
+            // plot reads 0 and Culled ("system auto detect and set"), a
+            // "partially culled plot keep the reduced balance instead", the
+            // match is "based on the plot and batch... If not, you have to
+            // keep the balance", and 0 appears only once the "batch report
+            // 3rd culling being keyed in" — never from a guess. So the
+            // culled qty DEDUCTS in buildRow like a DO does, and only a
+            // culling that covers the balance reads Culled. Stamped on the
+            // MONTH rows only: a Plot-R row nets its culling off through
+            // otherDeducted above and keeps its own arithmetic
+            // (fully-at-nought PR rows already fold into History).
             matRows.forEach(g => { g.culledQty = culledByKey[g.key] || 0; });
 
             plotAllocations = {};
@@ -1067,8 +1069,8 @@
         // control locks: there's nothing left to allocate, so there's
         // nothing left to decide.
         sold_out:  { label: 'Sold Out',  dot: 'bg-white' },
-        // Automatic too, and it wins over Sold Out: a plot with a
-        // 3rd_Culling record against it is done — the balance is forced to
+        // Automatic too, and it wins over Sold Out: a plot whose keyed 3rd
+        // culling covers what was left standing is done — the balance reads
         // 0 and the status is system-set (see buildRow). Never in the menu.
         culled:    { label: 'Culled',    dot: 'bg-white' }
     };
@@ -1192,17 +1194,30 @@
             // DO Deducted reads as Sold (the Movement report's own figure),
             // while Plot Balance still nets this off too, same total
             // deduction as before the split.
-            const otherDed = isPR ? (r.otherDeducted || 0) : 0;
-            // A 3rd culling on a main plot ends the row: the balance is
-            // FORCED to 0 and the status reads Culled, system-set — the
-            // office's own rule ("this is system auto detect and set").
-            // Shown, never written back to plotAllocations, same as Sold
-            // Out below — the person's last pick survives if the culling
-            // rows are ever corrected. Any chips still on the row stay
-            // visible (customers the office has to move), so After Deduct
-            // Reserve can read negative here, which is the thing to see.
-            const culled = !isPR && (r.culledQty || 0) > 0;
-            const plotBalance        = culled ? 0 : (r.afterCulling - collected - otherDed);
+            // What left the plot WITHOUT a DO. On Plot-R that is its own
+            // culling + onward moves (loadMaturity); on a month row it is
+            // the 3rd culling recorded against this exact batch+plot — the
+            // office's rule, refined over two messages: a culled plot reads
+            // 0 and Culled, but "partially culled plot keep the reduced
+            // balance instead", and the match is "based on the plot and
+            // batch" — a batch culled on one plot leaves the same batch's
+            // other plots alone (culledByKey is keyed batch||plot). So the
+            // culled qty DEDUCTS like a DO does, and only a culling that
+            // takes the balance to nought reads Culled.
+            const culledQty = isPR ? 0 : (r.culledQty || 0);
+            const otherDed  = isPR ? (r.otherDeducted || 0) : culledQty;
+            const rawBalance = r.afterCulling - collected - otherDed;
+            // Fully culled: the culling (with whatever sold) took the row to
+            // or past nought. Clamped at 0 — the estimate is 90% and a full
+            // culling counts the real 100%, so the raw figure can go a few
+            // seedlings negative, and a culled plot reading −244 reads as a
+            // fault. Status is system-set, shown, and never written back to
+            // plotAllocations (same as Sold Out below) — the person's last
+            // pick survives if the culling rows are ever corrected. Chips
+            // still on the row stay visible (customers the office has to
+            // move), so After Deduct Reserve can read red negative here.
+            const culled = culledQty > 0 && rawBalance <= 0;
+            const plotBalance        = culled ? 0 : rawBalance;
             const afterDeductReserve = plotBalance - allocSum;
 
             // Sold Out overrides whatever was picked — it's never written
@@ -1216,8 +1231,10 @@
                 ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
                 : '';
             const balTitle = culled
-                ? ` title="3rd culling recorded on this plot (${(r.culledQty || 0).toLocaleString()} culled) — balance set to 0 by the system"`
-                : '';
+                ? ` title="3rd culling recorded on this plot (${culledQty.toLocaleString()} culled) — fully culled, balance reads 0"`
+                : culledQty > 0
+                    ? ` title="3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance"`
+                    : '';
 
             // Finished is a person's judgment that this plot's allocation is
             // done, even while a balance is still sitting on it — a manual
