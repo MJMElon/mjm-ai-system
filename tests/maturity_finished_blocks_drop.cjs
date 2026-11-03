@@ -115,7 +115,11 @@ const BATCH_ALLOCATIONS = [
   await finRow.waitFor();
   check('data-mat-status is "finished"', await finRow.getAttribute('data-mat-status'), 'finished');
   checkTrue('balance is still positive (not Sold Out)', (parseInt(await finRow.getAttribute('data-batch-balance'), 10)) > 0);
-  checkTrue('placeholder reads the locked message', (await finRow.textContent()).includes('Finished — no new allocations'));
+  // The placeholder went from a worded message to a plain grey block
+  // (reserv-empty-finished with nothing in it) in a later commit the same
+  // day — see operation_stock_sales.js. The lock itself is unchanged.
+  checkTrue('placeholder is the locked (finished) block, not the Drop card here one',
+    await finRow.locator('.reserv-empty-finished').count() > 0);
 
   console.log('\nDragging the existing chip off U_SRC');
   const chip = page.locator('.reserv-chip[data-alloc-id="a1"]');
@@ -152,7 +156,8 @@ const BATCH_ALLOCATIONS = [
   await page.waitForTimeout(150);
   checkTrue('the chip is still on U_SRC — the drop onto Finished did nothing',
     await page.locator('tr[data-batch-key="703||U_SRC"] .reserv-chip[data-alloc-id="a1"]').count() > 0);
-  check('U_FIN still shows the locked placeholder, not the chip', await finRow.textContent().then(t => t.includes('Finished — no new allocations')), true);
+  checkTrue('U_FIN still shows the locked placeholder, not the chip',
+    await finRow.locator('.reserv-empty-finished').count() > 0);
 
   console.log('\nDragging the same chip onto the OPEN row still works (no regression)');
   await page.evaluate(() => {
