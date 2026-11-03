@@ -122,6 +122,14 @@ button.top-sel:focus{outline:none;border-color:var(--border-focus);box-shadow:0 
 .btn:disabled:hover{border-color:var(--border);color:var(--text-muted);background:var(--bg-white);}
 .btn-primary:disabled:hover{background:var(--green);border-color:var(--green);color:#fff;}
 .btn-sm{padding:4px 10px;font-size:11px;}
+/* "Use the linked amount", in the linked-quantity hint under the box. It sits
+   INLINE at the end of the sentence it undoes, so it reads as part of that
+   sentence rather than as an action on the form — the form's own buttons are
+   Cancel and Save Record, and a third one down there would read as a third
+   way out. Small, quiet, and never wrapping away from the figure it refers
+   to. */
+.lnk-use{padding:2px 8px;font-size:10.5px;font-weight:700;vertical-align:1px;
+  white-space:nowrap;margin-left:2px;}
 .btn-danger{color:var(--red);border-color:var(--red-border);}
 .btn-danger:hover{background:var(--red-bg);border-color:var(--red);color:var(--red);}
 select.filter-sel{height:36px;padding:0 30px 0 11px;appearance:none;
@@ -615,7 +623,12 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 /* ─── CHECKED (verified) ROWS ─── */
 .btn-check{color:#065f46 !important;border-color:#a7f3d0 !important;background:#ecfdf5 !important;}
 .btn-check:hover{background:var(--green) !important;color:#fff !important;border-color:var(--green) !important;}
+/* IT CARRIES A NAME NOW, not the word CHECKED, so it must not wrap: a pill
+   broken over two lines round "Esther Wong Sze Qi" reads as a fault rather
+   than as a signature. The cell widens instead, which the table can afford —
+   the column is a min-width and nothing is pinned to its right. */
 .rec-checked-badge{display:inline-block;font-size:13px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;
+  white-space:nowrap;
   color:#065f46;background:#ecfdf5;border:1.5px solid #a7f3d0;border-radius:999px;padding:6px 14px;margin-right:6px;vertical-align:middle;}
 .chk-btn.chk-locked{cursor:not-allowed;opacity:.55;}
 
@@ -1338,7 +1351,19 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
     line-height:1.3;transition:background .15s,color .15s;}
   #sm-nav .pn-subtab:hover{background:rgba(255,255,255,.1);color:#fff;}
   #sm-nav .pn-subtab.active{background:rgba(255,255,255,.18);color:#fff;}
+  /* Worker Activity is two halves: the Main Nursery jobs and the Pre
+     Nursery's Seed Planting. A heading, not a button. */
+  #sm-nav .pn-subgroup{padding:8px 10px 2px;font-family:var(--font);
+    font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:rgba(255,255,255,.45);}
+  #sm-nav .pn-subgroup:first-child{padding-top:2px;}
 }
+/* Seed Planting: one number box per worker. */
+#payroll-table td.sp-cell{padding:3px 4px;}
+#payroll-table input.sp-in{width:100%;min-width:64px;box-sizing:border-box;
+  padding:5px 6px;border:1px solid var(--border,#d6dfd9);border-radius:7px;
+  font:inherit;font-size:12.5px;text-align:right;background:#fff;}
+#payroll-table input.sp-in:disabled{background:#f3f4f6;color:#9ca3af;}
 /* Icon-collapsed rail: no room for a label, let alone a sub-list under one. */
 .sm-frame.nav-hid #sm-nav .pn-sub{display:none !important;}
 /* Phone: the in-panel subtabs-bar is the only way to switch this, same as
@@ -1590,3 +1615,120 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    nothing to do on it, which is the opposite of what this one wants. */
 #payroll-table tbody tr.tp-row-held > td{background:#fffbeb;}
 #payroll-table tbody tr.tp-row-held:hover > td{background:#fef3c7;}
+
+/* Seed Planting: the month's names, keyed by hand. */
+.sp-names{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px;
+  padding:10px 12px;background:#fff;border:1px solid var(--border,#d6dfd9);border-radius:var(--r-sm,10px);}
+.sp-names-lbl{font-size:12px;font-weight:800;color:var(--text,#1f2d27);margin-right:4px;}
+.sp-names-none{font-size:12px;color:var(--text-faint,#8a968f);}
+.sp-chip{display:inline-flex;align-items:center;gap:2px;padding:3px 4px 3px 10px;border-radius:999px;
+  background:#e8f0eb;color:#0d5c33;font-size:12px;font-weight:700;}
+.sp-chip-x{border:0;background:transparent;color:#0d5c33;cursor:pointer;font-size:15px;line-height:1;
+  padding:0 6px;border-radius:999px;}
+.sp-chip-x:hover{background:rgba(13,92,51,.12);}
+.sp-names-add{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-left:auto;}
+.sp-names-add input{padding:6px 9px;border:1px solid var(--border,#d6dfd9);border-radius:8px;font:inherit;font-size:12.5px;min-width:160px;}
+.sp-chip-sub{font-weight:600;font-size:10.5px;opacity:.7;margin-left:6px;}
+.sp-names-warn{color:#92400e;background:var(--gold-bg,#fffbeb);border-color:var(--gold-border,#fcd34d);font-size:12px;font-weight:700;}
+.sp-pick{padding:6px 9px;border:1px solid var(--border,#d6dfd9);border-radius:8px;font:inherit;font-size:12.5px;min-width:200px;background:#fff;}
+#payroll-table .sp-checked{background:#ecfdf5;color:#15803d;border-color:#a7f3d0;font-weight:700;}
+/* ── CULLING MONITORING: THE RULE, KEYED ────────────────────────────────
+   The office asked for the things that can affect it on Settings, and the
+   reason is that not one of them was on a screen: the 15-day target, the
+   two names paid on every nursery, and the three Field Conductors paid on
+   their own. All three are keyed here.
+
+   It carried a six-row reference table underneath as well — the ledger,
+   Seedling Stock, PALMS, a -R plot, by hand, Checked — and the office took
+   it off in one line (这里不用show). None of the six is a lever anybody
+   keys, so they were six rows to read past above the two that are. */
+/* The corner control sits where every other card's does. `.lst-top` is
+   position:relative and the heading inside it is centred, so a control
+   that does not take itself out of the flow drops onto a second line under
+   the title -- which is what this one did first. `.sched-dl` is the same
+   pattern; `.lst-edit` is left meaning the Edit button.
+
+   IT WAS THE "Open Culling Monitoring" LINK and it is EDIT now, which the
+   office asked for off the foot (edit 移动到右上角). The class outlived the
+   link because it is the PATTERN and not that one door -- and on a phone
+   it goes back into the flow, where a button pinned to a corner narrower
+   than the heading lands on top of the words. */
+.lst-top .cm-set-open { position:absolute; right:0; top:-4px; font-size:13px; }
+@media (max-width:560px) { .lst-top .cm-set-open { position:static; } }
+/* The slot the renderer fills. It is EMPTY in two of the three states, and
+   an empty div in a grid cell is still a cell -- zero height keeps it from
+   moving the heading off the line it shares. */
+#cm-set-corner:empty { display:none; }
+/* `.cm-set-lead` was the sentence the target was keyed inside -- "A plot
+   that went from Saringan Anak Bibit to the end of Transplanting in [15]
+   days or fewer earns this." The office asked it off (删掉) and the figure
+   moved into a bar of its own, so the class went with the prose. */
+.cm-set-warn { font-size:12.5px; line-height:1.7; color:#c0392b; font-weight:600;
+               background:#fef2f2; border:1.5px solid #fecaca; border-radius:var(--r-sm);
+               padding:10px 12px; margin-bottom:14px; }
+.cm-set-k { font-size:13px; font-weight:800; color:var(--text-head); }
+.cm-set-w { font-size:11.5px; font-weight:700; color:var(--text-faint); }
+/* The dated line, which is drawn only while the card is being EDITED. */
+.cm-set-note { font-size:12px; line-height:1.7; color:var(--text-faint); margin:2px 0 10px; }
+.cm-set-note code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:11.5px; }
+/* `.cm-set-grid` / `-head` / `-row` / `-v` were the six-row reference table
+   the office took off this card (这里不用show). Deleted rather than left:
+   a style nothing wears is a style the next person spends five minutes
+   looking for a use of, the rule the audit back-office move already made. */
+
+/* ── THE THREE BLOCKS THE RULE IS KEYED IN ──────────────────────────────
+   The office drew the two price ones: a block per kind, the PRICE on the
+   block and not on the person, a list of names under it with a remove on
+   each, and an Add. The price sits in the block head for that reason --
+   two people on one block cannot drift onto two different rates if there
+   is only one box.
+
+   THE TARGET IS THE THIRD and wears the same bar with no rows under it
+   (`.cm-pay-solo`). It was keyed inside a sentence of prose until the
+   office asked the prose off; the figure had to keep a home, and the
+   home the card already had is this one. */
+.cm-pay { border:1.5px solid var(--border); border-radius:var(--r-sm); overflow:hidden;
+          margin-bottom:12px; }
+.cm-pay-top { display:flex; align-items:center; justify-content:space-between; gap:10px;
+              padding:9px 12px; background:var(--green-pale,#f0f7f2); }
+.cm-pay-t { font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase;
+            color:var(--green-text); }
+.cm-pay-rate { font-size:12.5px; font-weight:700; color:var(--text); display:flex;
+               align-items:center; gap:6px; }
+.cm-pay-rate b { color:var(--green-text); font-weight:800; }
+.cm-pay-rate input { width:84px; height:32px; padding:0 8px; font-family:inherit; font-size:13px;
+                     font-weight:800; color:var(--text-head); background:#fff;
+                     border:1.5px solid var(--border); border-radius:var(--r-sm); }
+.cm-pay-rate input:focus { outline:none; border-color:var(--green-mid); }
+.cm-pay-row { display:grid; grid-template-columns:1fr 190px 34px; gap:10px; align-items:center;
+              padding:8px 12px; border-top:1px solid var(--border); }
+.cm-pay-none span { font-size:12.5px; color:#c0392b; font-weight:600; }
+/* A note INSIDE a block, which `.cm-pay-none` is not: that one is red,
+   because a block paying nobody is a fault, and a line explaining the
+   target is not. */
+.cm-pay-note span { font-size:12px; color:var(--text-faint); font-weight:600; }
+.cm-pay-note b { color:var(--green-text); font-weight:800; }
+/* The target bar has no rows, so nothing under it needs a top border. */
+.cm-pay-solo { margin-bottom:12px; }
+.cm-pay .row-add { margin:8px 12px 10px; }
+.cm-pick { height:34px; padding:0 8px; font-family:inherit; font-size:13px; font-weight:700;
+           color:var(--text-head); background:#fff; border:1.5px solid var(--border);
+           border-radius:var(--r-sm); min-width:0; width:100%; }
+.cm-pick:focus { outline:none; border-color:var(--green-mid); }
+.cm-pick-n { font-weight:800; }
+.cm-x { width:30px; height:30px; border:1.5px solid var(--border); border-radius:var(--r-sm);
+        background:#fff; color:var(--text-faint); font-size:17px; line-height:1; cursor:pointer;
+        justify-self:end; }
+.cm-x:hover { border-color:#fca5a5; color:#c0392b; background:#fef2f2; }
+/* On a phone the nursery picker drops under the name rather than squeezing
+   both into half a row each. */
+@media (max-width:640px) {
+  .cm-pay-row { grid-template-columns:1fr 34px; }
+  .cm-pay-row > :nth-child(2) { grid-column:1 / 2; }
+}
+/* The target sits in the sentence it belongs to rather than in a block of
+   its own: it is not a price, it is the condition the prices are paid on. */
+.cm-days { width:62px; height:30px; padding:0 8px; font-family:inherit; font-size:13px;
+           font-weight:800; color:var(--text-head); background:#fff;
+           border:1.5px solid var(--border); border-radius:var(--r-sm); }
+.cm-days:focus { outline:none; border-color:var(--green-mid); }

@@ -345,6 +345,43 @@ async function pick(page, label) {
     await page.close();
   }
 
+  console.log('\nEvery job answered "nobody did it"');
+  {
+    /* THE SEVENTH KIND OF EMPTY, and it is an answer rather than a fault. A
+       blanket spray is not always needed, so the conductor can record a job
+       as not done -- shared/RUN_ME_transplant_not_done.sql. The plot then
+       stops asking for it on Pending Verification, and nothing is claimed.
+       "Nothing was recorded" over a conductor who answered every question
+       put to him is the same wrong sentence as telling him his work never
+       arrived, which is what this whole file is about. */
+    const page = await boot(browser, {
+      mjmnpayroll_workers: REGISTER,
+      nops_transplant_field_records: [
+        rec({ plot_name: 'N4', work_type: 'blanket_spray', workers: [],
+              not_done: true, checked_at: null, checked_by: null })
+      ]
+    });
+    await pick(page, 'UNN2');
+    const txt = await cell(page);
+    checkFalse('it does NOT say nothing was recorded', /No transplanting was recorded/i.test(txt));
+    checkFalse('and it is NOT reported as work waiting to be Checked',
+               /not been Checked/i.test(txt));
+    checkTrue('it says the job reached the office', /reached the office/i.test(txt));
+    checkTrue('…and that it is recorded as NOT DONE', /NOT DONE/.test(txt));
+    checkTrue('…and that there is therefore nothing to claim',
+              /nothing to claim/i.test(txt));
+    checkTrue('…and that this is the conductor’s answer, not a missing crew',
+              /not a missing crew/i.test(txt));
+    const plots = await page.evaluate(() =>
+      (document.getElementById('transpl-plots-table').textContent || '')
+        .replace(/\s+/g, ' ').trim());
+    checkTrue('the by-plot table says the same of the plot', /N4/.test(plots)
+              && /NOT DONE/.test(plots));
+    checkFalse('and does not claim nothing was recorded there either',
+               /has been recorded/i.test(plots));
+    await page.close();
+  }
+
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

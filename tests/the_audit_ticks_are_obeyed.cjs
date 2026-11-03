@@ -280,7 +280,11 @@ console.log('\n── 7. The mirror follows, so the versions had to move ──'
       while ((m = re.exec(html))) vers.add(name + '@' + m[1]);
     }
   }
-  const stale = [...vers].filter((v) => !v.endsWith('@20261022e'));
+  /* At or above the version these changes went out under. A later change
+     to one of these files moves its number on (audit_supabase.js went to
+     20261027a for the customer refusal), and that is not staleness. Same
+     length, so the strings compare in order. */
+  const stale = [...vers].filter((v) => v.split('@')[1] < '20261022e');
   check('every page asks for the version these changes went out under', stale, []);
 }
 

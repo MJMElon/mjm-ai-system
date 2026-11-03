@@ -45,7 +45,43 @@
 
   let FIRST_ACT = 1;    // Saringan Anak Bibit
   let LAST_ACT = 11;    // Pengambilan
-  const TARGET_DAYS = 15; // the speed incentive: Saringan → Transplanting
+  /* THE TARGET IS THE OFFICE'S, AND IT IS ONE NUMBER. The run it measures
+     — Saringan Anak Bibit to the end of Transplanting — is the same run the
+     Motion Study times and the same run Culling Monitoring pays for, and
+     this comment has said so since it was written. So it is kept HERE, in
+     the module that owns the timing, and everything reads it live rather
+     than taking a copy at load: a page that captured it would go on
+     drawing 15 beside a figure worked out against 12.
+
+     It is DATED in the table like the prices beside it, because a target
+     changed in October must not move what September came to. `loadTarget`
+     picks the one in force for a month; with no month it is today, which
+     is what "now" means on the Motion Study. */
+  let TARGET_DAYS = 15;
+  function setTargetDays(n) {
+    const v = Number(n);
+    if (Number.isFinite(v) && v > 0) TARGET_DAYS = v;
+    return TARGET_DAYS;
+  }
+  /* FAILS OPEN. No table, an RLS refusal, no signal — the target stays at
+     whatever it already was, and every plot is timed exactly as it was
+     timed before. A target that fell to nought because a read failed would
+     take every plot off the incentive at once. */
+  async function loadTarget(supa, ym) {
+    if (!supa) return TARGET_DAYS;
+    const month = ym || (() => { const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); })();
+    const res = await supa.from('nops_cull_monitoring_rate').select('kind, from_month, rm')
+      .then(r => r, e => ({ error: e }));
+    if (!res || res.error || !res.data) return TARGET_DAYS;
+    let best = null;
+    res.data.forEach(r => {
+      if (r.kind !== 'target' || String(r.from_month || '') > month) return;
+      if (!best || String(r.from_month || '') > String(best.from_month || '')) best = r;
+    });
+    if (best) setTargetDays(best.rm);
+    return TARGET_DAYS;
+  }
 
   const actByN = (n) => ACTIVITIES.find((a) => a.n === n) || null;
 
@@ -155,6 +191,29 @@
   const keyLabel = (k) => (String(k).indexOf('#') !== -1 ? String(k).replace('#', ' · ') : String(k));
   const plotOf = (k) => String(k).split('#')[0];
 
+  /* A -R plot is a REPLANT plot — ground a 3rd-culling transfer moved
+     seedlings onto. PALMS has nothing to say about one: the office said it
+     in as many words, "plot-R 不需要出现在palms 完全不需要" -- and then, when
+     the first version dropped it here, in the log every reader shares, that
+     it was ONLY the PALMS screens: "不要乱改 只有关系到palms而已的不用显示".
+     Life of Plot and the payroll culling incentive read this same log and
+     keep their -R plots. So the log is left whole and each PALMS page asks
+     for withoutReplant(logs) itself.
+
+     SHARED RULE — isReplantPlot in the FC Portal,
+     src/modules/palms/cullingSource.js. Change one, change the other. A
+     trailing number is allowed for, so B4-R and B4-R2 both go. A split area
+     ("B4-R#A") is judged by its plot. */
+  const isReplantPlot = (p) => /-R\d*$/i.test(String(p == null ? '' : p).split('#')[0].trim());
+
+  /* The log with every -R unit left out -- for the PALMS pages only. A copy,
+     so the log a caller already holds is not changed under it. */
+  const withoutReplant = (logs) => {
+    const out = {};
+    Object.keys(logs || {}).forEach((k) => { if (!isReplantPlot(k)) out[k] = logs[k]; });
+    return out;
+  };
+
   const NURSERY_PREFIX = { B: 'BNN', U: 'UNN1', N: 'UNN2' };
   const nurseryOfPlot = (p) => NURSERY_PREFIX[String(p).charAt(0).toUpperCase()] || null;
 
@@ -205,12 +264,74 @@
      plotHistory. History should not change its verdict because the target
      moved afterwards. The stored value is the fallback here too, for a stage
      that has since been deleted from the office list. */
-  function statusOfEntry(key, e) {
+  /* ---------- one stage logged in two parts is ONE spell ----------
+     A Field Conductor closes Membesar on 16 Oct and opens Membesar again on
+     16 Oct — a phone re-keying the stage, or the day saved twice. That is one
+     stretch of work on the ground, and the office asked for it read as one:
+     "这种情况请combine". Shown as two it was worse than untidy: the open half
+     was timed from 16 Oct, so a plot 57 days into a 270-day stage read
+     "12d so far · 258d left", 45 days more generous than the truth.
+
+     Two entries of the SAME stage are one spell when the later starts while
+     the earlier is still open, or no more than a day after it ended. A real
+     gap between them is two spells and is left as two. Where either part is
+     still open the spell is running. The log itself is untouched — this is how it
+     is READ. */
+  const SPELL_GAP_DAYS = 1;
+
+  /* The first day of the spell an entry belongs to: walk back through closed
+     entries of the same stage that end within a day of where this one starts. */
+  function spellStart(log, e) {
+    let start = e.start;
+    const same = (log || []).filter((x) => x !== e && x.actN === e.actN && x.end && x.start);
+    for (let guard = 0; guard < 50; guard++) {
+      const prev = same.find((x) => x.start < start && diffDays(x.end, start) <= SPELL_GAP_DAYS
+                                   && diffDays(x.end, start) >= 0);
+      if (!prev) break;
+      start = prev.start;
+    }
+    return start;
+  }
+
+  /* A list of entries with each spell folded into one row: the first start,
+     the last end (or open while any part is), the name of whoever keyed it
+     first, and how many parts it was. Oldest first, as given. */
+  function mergeSpells(entries) {
+    const out = [];
+    (entries || []).slice().sort((a, b) => String(a.start).localeCompare(String(b.start)) || (a.no - b.no))
+      .forEach((e) => {
+        let prev = null;
+        for (let i = out.length - 1; i >= 0; i--) if (out[i].actN === e.actN) { prev = out[i]; break; }
+        /* A part still OPEN when the next one starts is the same spell too —
+           the "×2 open" case: Pengambilan opened on 7 Oct and opened AGAIN on
+           20 Oct with nothing closed, which read as two Pengambilan running
+           side by side. A part that ended before the next began joins only
+           across a gap of a day at most. */
+        if (prev && e.start) {
+          const gap = prev.end ? diffDays(prev.end, e.start) : -1;
+          if (gap <= SPELL_GAP_DAYS) {
+            prev.end = (e.end && prev.end) ? (String(e.end) > String(prev.end) ? e.end : prev.end) : null;
+            if (prev.ideal == null) prev.ideal = e.ideal;
+            /* The name is whoever keyed it FIRST — the office: "如果都一样 就
+               显示第一个key的人的名字". The later parts are the same stage
+               keyed again, not a second person doing the job. */
+            if (!prev.by && e.by) prev.by = e.by;
+            prev.parts += 1;
+            return;
+          }
+        }
+        out.push(Object.assign({}, e, { parts: 1 }));
+      });
+    return out;
+  }
+
+  function statusOfEntry(key, e, log) {
     const act = actByN(e.actN);
     const ideal = act && act.days != null ? act.days : e.ideal;
-    const due = addDays(e.start, ideal == null ? 0 : ideal);
+    const start = log ? spellStart(log, e) : e.start;
+    const due = addDays(start, ideal == null ? 0 : ideal);
     const left = diffDays(todayStr(), due);
-    return { state: left < 0 ? 'overdue' : 'ontrack', act, due, left, start: e.start, key };
+    return { state: left < 0 ? 'overdue' : 'ontrack', act, due, left, start: start, key };
   }
 
   const STATE_RANK = { overdue: 0, ontrack: 1, none: 2 };
@@ -220,7 +341,7 @@
   function computeStatus(logs, key) {
     const open = currentEntries(logs, key);
     if (!open.length) return { state: 'none' };
-    return open.map((e) => statusOfEntry(key, e)).sort((a, b) => {
+    return open.map((e) => statusOfEntry(key, e, logs[key])).sort((a, b) => {
       const r = STATE_RANK[a.state] - STATE_RANK[b.state];
       return r !== 0 ? r : (a.left == null ? Infinity : a.left) - (b.left == null ? Infinity : b.left);
     })[0];
@@ -655,7 +776,11 @@
     ACTIVITIES: ACTIVITIES,
     FIRST_ACT: FIRST_ACT,
     LAST_ACT: LAST_ACT,
-    TARGET_DAYS: TARGET_DAYS,
+    /* A GETTER, not a value: the office can change it, and a caller that
+       took a copy at load would go on drawing the old number. */
+    get TARGET_DAYS() { return TARGET_DAYS; },
+    setTargetDays: setTargetDays,
+    loadTarget: loadTarget,
     actByN: actByN,
     addDays: addDays,
     diffDays: diffDays,
@@ -663,6 +788,8 @@
     prettyD: prettyD,
     keyLabel: keyLabel,
     plotOf: plotOf,
+    isReplantPlot: isReplantPlot,
+    withoutReplant: withoutReplant,
     nurseryOfPlot: nurseryOfPlot,
     loadLogs: loadLogs,
     loadStages: loadStages,
@@ -683,6 +810,8 @@
     plotHistory: plotHistory,
     openActivities: openActivities,
     cyclesOf: cyclesOf,
+    mergeSpells: mergeSpells,
+    spellStart: spellStart,
     lastRound: lastRound,
     roundResults: roundResults,
     activityStats: activityStats,

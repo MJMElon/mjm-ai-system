@@ -16,6 +16,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_module_access.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -65,6 +66,12 @@ MJMModuleAccess.init({
         { key:'manage', label:'Add, edit & delete entries', desc:'Key in other piece work against a worker' },
         { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away', highlight:true, chip:'Verify' },
         { key:'unverify', label:'Unlock a verified sheet', desc:'Take one sheet\u2019s verification back so it can be corrected and signed again. It does NOT re-open the month \u2014 that is Lock Controls', highlight:true, chip:'Unlock' }
+      ]},
+    { key:'seedplant', label:'Payroll · Seed Planting', desc:'The Pre Nursery seed planting, priced from the batches Checked on Work Maintenance',
+      actions:[
+        { key:'export', label:'Download & print the claim form', desc:'Produce the Seed Planting salary claim form' },
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away', highlight:true, chip:'Verify' },
+        { key:'unverify', label:'Unlock a verified sheet', desc:'Take one sheet’s verification back so it can be corrected and signed again. It does NOT re-open the month — that is Lock Controls', highlight:true, chip:'Unlock' }
       ]},
     { key:'monthly', label:'Payroll · Monthly Payroll', desc:'Everything a worker earned this month, from all sheets',
       actions:[

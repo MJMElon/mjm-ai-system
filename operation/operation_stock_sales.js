@@ -848,6 +848,18 @@
                 g.otherDeducted = (culledByKey[g.key] || 0) + (movedOutByKey[g.key] || 0);
             });
 
+            // A main plot with a 3rd_Culling record against it has had its
+            // final culling — the office's rule, in their own words: "If the
+            // plot has been culled, just make the plot balance become 0, and
+            // the status become culled (this is system auto detect and
+            // set)." Stamped on the MONTH rows only: a Plot-R row nets its
+            // culling off through otherDeducted above and keeps its own
+            // arithmetic (fully-at-nought PR rows already fold into
+            // History). Any culling counts, partial included — the 3rd
+            // culling is the plot's final stage, so once one is recorded the
+            // remainder has moved on (Plot-R, or sold) and the row is done.
+            matRows.forEach(g => { g.culledQty = culledByKey[g.key] || 0; });
+
             plotAllocations = {};
             (allocRes?.data || []).forEach(a => {
                 const k = (a.batch_name||'') + '||' + (a.plot_name||'');
@@ -1054,7 +1066,11 @@
         // balance reads Sold Out no matter what was picked before, and the
         // control locks: there's nothing left to allocate, so there's
         // nothing left to decide.
-        sold_out:  { label: 'Sold Out',  dot: 'bg-white' }
+        sold_out:  { label: 'Sold Out',  dot: 'bg-white' },
+        // Automatic too, and it wins over Sold Out: a plot with a
+        // 3rd_Culling record against it is done — the balance is forced to
+        // 0 and the status is system-set (see buildRow). Never in the menu.
+        culled:    { label: 'Culled',    dot: 'bg-white' }
     };
 
     // One dropdown in place of the status pill + native <select> combo —
@@ -1063,13 +1079,16 @@
     function matStatusControl(key, status, locked) {
         const m = MAT_STATUS_MAP[status] || MAT_STATUS_MAP.no_status;
         if (locked) {
+            const title = status === 'culled'
+                ? 'A 3rd culling is recorded on this plot — balance reads 0 and the status is set by the system'
+                : 'Balance is sold out — status is automatic, not editable';
             return `
-                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white bg-red-600 border border-red-600 rounded-lg px-2 py-1 uppercase tracking-widest" title="Balance is sold out — status is automatic, not editable">
+                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white bg-red-600 border border-red-600 rounded-lg px-2 py-1 uppercase tracking-widest" title="${title}">
                     <span class="w-2 h-2 rounded-full ${m.dot} shrink-0"></span>
                     <span>${m.label}</span>
                 </span>`;
         }
-        const opts = Object.entries(MAT_STATUS_MAP).filter(([value]) => value !== 'sold_out').map(([value, o]) => `
+        const opts = Object.entries(MAT_STATUS_MAP).filter(([value]) => value !== 'sold_out' && value !== 'culled').map(([value, o]) => `
             <button type="button" onclick="selectMatStatus(this,'${value}')" class="w-full text-left text-[11px] font-bold text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-2 ${value === status ? 'bg-amber-50 text-amber-800' : ''}">
                 <span class="w-2 h-2 rounded-full ${o.dot} shrink-0"></span><span>${o.label}</span>
             </button>`).join('');
@@ -1156,7 +1175,7 @@
             return;
         }
 
-        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0, totOther = 0, totRowCount = 0;
+        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0, totOther = 0, totBalance = 0, totRowCount = 0;
 
         // One row's <tr>, shared by the live list and the history list below
         // — history=true only changes a CSS class, the figures and the
@@ -1164,7 +1183,9 @@
         function buildRow(r, history) {
             const alloc = plotAllocations[r.key] || { plot_status: 'no_status', reserved_for: '', reserved_qty: 0, premium: false };
             const rowAllocs = allocsForBatch(r.key);
-            const allocSum  = rowAllocs.reduce((s, a) => s + (a.allocated_qty || 0), 0);
+            // Reserved Qty counts what is still OWED, not what was dragged —
+            // the collected part of an order already sits in DO Deducted.
+            const allocSum  = rowAllocs.reduce((s, a) => s + allocLiveQty(a), 0);
             const collected = r.doDeducted || 0;
             // Plot-R only — what left the plot WITHOUT a DO (culled, or
             // moved on to another plot). Kept separate from `collected` so
@@ -1172,17 +1193,30 @@
             // while Plot Balance still nets this off too, same total
             // deduction as before the split.
             const otherDed = isPR ? (r.otherDeducted || 0) : 0;
-            const plotBalance        = r.afterCulling - collected - otherDed;
+            // A 3rd culling on a main plot ends the row: the balance is
+            // FORCED to 0 and the status reads Culled, system-set — the
+            // office's own rule ("this is system auto detect and set").
+            // Shown, never written back to plotAllocations, same as Sold
+            // Out below — the person's last pick survives if the culling
+            // rows are ever corrected. Any chips still on the row stay
+            // visible (customers the office has to move), so After Deduct
+            // Reserve can read negative here, which is the thing to see.
+            const culled = !isPR && (r.culledQty || 0) > 0;
+            const plotBalance        = culled ? 0 : (r.afterCulling - collected - otherDed);
             const afterDeductReserve = plotBalance - allocSum;
 
             // Sold Out overrides whatever was picked — it's never written
             // back to plotAllocations (that stays the person's last real
             // choice, in case the plot's balance later recovers), only
-            // shown while plotBalance stays at/under zero.
-            const soldOut = plotBalance <= 0;
-            const status  = soldOut ? 'sold_out' : (alloc.plot_status || 'no_status');
+            // shown while plotBalance stays at/under zero. Culled wins over
+            // it: both are automatic, and the culling is the reason.
+            const soldOut = !culled && plotBalance <= 0;
+            const status  = culled ? 'culled' : (soldOut ? 'sold_out' : (alloc.plot_status || 'no_status'));
             const doTitle = otherDed > 0
                 ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
+                : '';
+            const balTitle = culled
+                ? ` title="3rd culling recorded on this plot (${(r.culledQty || 0).toLocaleString()} culled) — balance set to 0 by the system"`
                 : '';
 
             // Finished is a person's judgment that this plot's allocation is
@@ -1192,15 +1226,22 @@
             const matFinished = status === 'finished';
 
             const reservHtml = rowAllocs.length
-                ? `<div class="reserv-stack">${rowAllocs.map(a => `
-                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(a.order_number || '')} — drag chip to move to another row">
+                ? `<div class="reserv-stack">${rowAllocs.map(a => {
+                    const live = allocLiveQty(a);
+                    const collected = (Number(a.allocated_qty) || 0) - live;
+                    const tip = (a.order_number || '') +
+                        (collected > 0 ? ` — ${collected.toLocaleString('en-MY')} collected, already in DO Deducted` : '') +
+                        ' — drag chip to move to another row';
+                    return `
+                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(tip)}">
                         <span class="reserv-chip-grip">⋮⋮</span>
                         <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
-                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
+                        <span class="reserv-chip-qty">${live.toLocaleString('en-MY')}</span>
                         <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
-                    </div>`).join('')}</div>`
+                    </div>`;
+                }).join('')}</div>`
                 : matFinished
-                    ? `<div class="reserv-empty reserv-empty-finished"><span class="reserv-empty-emoji">🔒</span><span>Finished — no new allocations</span></div>`
+                    ? `<div class="reserv-empty reserv-empty-finished"></div>`
                     : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
 
             const html = `
@@ -1213,16 +1254,16 @@
                     <td class="col-prod num">${r.qty.toLocaleString()}</td>
                     <td class="col-prod num text-emerald-700 mat-sep-r col-afterc">${r.afterCulling.toLocaleString()}</td>
                     <td class="col-plot">
-                        ${matStatusControl(r.key, status, soldOut)}
+                        ${matStatusControl(r.key, status, soldOut || culled)}
                     </td>
                     <td class="col-plot num text-blue-700"${doTitle}>${collected.toLocaleString()}</td>
-                    <td class="col-plot num font-black mat-sep-r ${soldOut ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}</td>
+                    <td class="col-plot num font-black mat-sep-r ${(soldOut || culled) ? 'text-red-600' : 'text-slate-800'}"${balTitle}>${plotBalance.toLocaleString()}</td>
                     <td class="col-alloc">${reservHtml}</td>
                     <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
                     <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
                 </tr>
             `;
-            return { html, allocSum, collected, otherDed };
+            return { html, allocSum, collected, otherDed, plotBalance };
         }
 
         let bodyHtml = '';
@@ -1246,7 +1287,7 @@
                     const b = buildRow(r, false);
                     bodyHtml += b.html;
                     totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
-                    totCollected += b.collected; totOther += b.otherDed; totRowCount++;
+                    totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totRowCount++;
                 });
             }
             if (historyRows.length) {
@@ -1261,7 +1302,7 @@
                 const b = buildRow(r, false);
                 bodyHtml += b.html;
                 totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
-                totCollected += b.collected; totOther += b.otherDed; totRowCount++;
+                totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totRowCount++;
             });
         }
 
@@ -1279,7 +1320,11 @@
 
         // Totals are the Live rows only on Plot-R (History is reference, not
         // stock still to place) and every row on a month tab, same as before.
-        const totAfterDeduct = totCull - totCollected - totOther - totReserved;
+        // Plot Balance totals the SHOWN per-row figures, never a re-derive
+        // from the other columns — a Culled row's balance is forced to 0,
+        // and a foot that disagreed with the column above it would be the
+        // one shape of wrong nobody can spot.
+        const totAfterDeduct = totBalance - totReserved;
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
                 <td colspan="5" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${totRowCount} rows)</td>
@@ -1287,7 +1332,7 @@
                 <td class="num text-emerald-700 mat-sep-r col-afterc">${totCull.toLocaleString()}</td>
                 <td></td>
                 <td class="num text-blue-700">${totCollected.toLocaleString()}</td>
-                <td class="num text-slate-800 mat-sep-r">${(totCull - totCollected - totOther).toLocaleString()}</td>
+                <td class="num text-slate-800 mat-sep-r">${totBalance.toLocaleString()}</td>
                 <td></td>
                 <td class="num text-slate-900">${totReserved.toLocaleString()}</td>
                 <td class="num ${totAfterDeduct < 0 ? 'text-red-600' : 'text-emerald-700'}">${totAfterDeduct.toLocaleString()}</td>
@@ -1342,6 +1387,12 @@
     function escapeHtml(s) {
         return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+
+    // ONE normaliser for a human-keyed order reference — AL rows and one of
+    // the duplicate salesweb keyings carry a leading "#" that is formatting,
+    // not identity. Shared by the AL join, the order dedupe and the
+    // spent-allocation test, so the three cannot drift.
+    const _normOrderKey = v => String(v || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
 
     let allCustomerOrders = [];
     // All ALs from shared_al_orders. Held at module scope so the Allocate FAB
@@ -1447,7 +1498,7 @@
             // If a single order_number happens to map to multiple ALs (e.g.
             // partial replacements), prefer the row with the highest
             // balance_quantity so the totals stay consistent for the user.
-            const normOrderKey = v => String(v || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+            const normOrderKey = _normOrderKey;
             const alByOrderNumber = {};
             alRows.forEach(a => {
                 if (!a.order_number) return;
@@ -1590,11 +1641,43 @@
                 };
             });
 
+            // ── One real order, one row ──────────────────────────────────
+            // Six orders sit in salesweb_customer_orders TWICE — once keyed
+            // with a leading "#" and once without — and every reader then
+            // counted the order twice: the Customer Orders drawer showed two
+            // identical draggable 6DS520 cards of 2,580 pcs each, and the
+            // Collection tab's Balance total carried 5,160 for one 2,580
+            // order. Same rule as the batch list and the Seeds In form: one
+            // order per normalised number, the NEWEST row wins, and the
+            // survivor says so on its card (dupRows) rather than hiding it.
+            // allIds keeps every duplicate's row id so an allocation written
+            // against EITHER row still counts against the one order —
+            // allocsForOrder reads it.
+            {
+                const byNorm = {};
+                allCustomerOrders.forEach(o => {
+                    const k = normOrderKey(o.orderNumber) || ('id:' + o.id);
+                    (byNorm[k] = byNorm[k] || []).push(o);
+                });
+                allCustomerOrders = Object.values(byNorm).map(group => {
+                    group.sort((a, b) =>
+                        ((b.orderDate instanceof Date ? b.orderDate.getTime() : 0) -
+                         (a.orderDate instanceof Date ? a.orderDate.getTime() : 0)));
+                    const keep = group[0];
+                    keep.dupRows = group.length;
+                    keep.allIds  = group.map(g => g.id);
+                    return keep;
+                });
+            }
+
             // Weekly Collection — only a booking belonging to an
             // order that still has balance left to collect counts, same
             // rule the Booking tab and the month "pending pickup" card
             // below apply. Built after allCustomerOrders so each day's
             // booked qty can be checked against its order's balance.
+            // (And after the dedupe above, or a duplicated order's booked
+            // qty would be summed twice — bookByOrderNumberByDay is keyed
+            // on the order number both rows share.)
             allBookingsByDate = {};
             allCustomerOrders.forEach(o => {
                 if ((Number(o.balance) || 0) <= 0) return;
@@ -3069,18 +3152,71 @@
         }
     }
 
-    function allocsForBatch(batchKey) {
-        const [b, p] = batchKey.split('||');
-        return batchAllocations.filter(a => a.batch_name === b && a.plot_name === p);
+    // Which customer order an allocation belongs to. Matched on order_id
+    // first — through allIds, so a row written against EITHER keying of a
+    // duplicated order still finds it — then on the normalised order
+    // number, for a row with no id on it.
+    function orderForAlloc(a) {
+        if (!a) return null;
+        if (a.order_id) {
+            const hit = allCustomerOrders.find(o => (o.allIds || [o.id]).includes(a.order_id));
+            if (hit) return hit;
+        }
+        const k = _normOrderKey(a.order_number);
+        if (!k) return null;
+        return allCustomerOrders.find(o => _normOrderKey(o.orderNumber) === k) || null;
     }
 
-    function allocsForOrder(orderId) {
-        if (!orderId) return [];
-        return batchAllocations.filter(a => a.order_id === orderId);
+    // An allocation is SPENT once its order has nothing left to collect —
+    // balance at nought, whether collected, cancelled or closed (the last
+    // two are zeroed at load). The office's rule in their own words: "my
+    // order balance has become 0, it disappear both from this list or
+    // Monthly Maturity Allocation table." It is HIDDEN, never deleted:
+    // cancel the DO and the balance comes back, and the reservation stands
+    // again by itself. An allocation no order can explain is NOT spent —
+    // a reservation nothing explains is the thing somebody has to see,
+    // with its × beside it.
+    function allocIsSpent(a) {
+        const o = orderForAlloc(a);
+        return !!o && (Number(o.balance) || 0) <= 0;
+    }
+
+    // What a chip still RESERVES: the stored quantity, capped at what the
+    // customer is still owed. "Remove the customer from the card column
+    // as they will flow to DO deducted column" — a collection lands in DO
+    // Deducted, so the part collected must leave the reservation or the
+    // same seedlings are taken off the row twice. A partial collection
+    // shrinks the chip to the remainder; a full one takes the card off
+    // entirely (allocIsSpent). Nothing is written: cancel the DO and the
+    // balance comes back, and the chip grows back to its stored figure by
+    // itself. An allocation no order can explain keeps its stored
+    // quantity — nothing can judge it, and it has its × beside it.
+    function allocLiveQty(a) {
+        const stored = Number(a && a.allocated_qty) || 0;
+        const o = orderForAlloc(a);
+        if (!o) return stored;
+        return Math.min(stored, Math.max(0, Number(o.balance) || 0));
+    }
+
+    function allocsForBatch(batchKey) {
+        const [b, p] = batchKey.split('||');
+        return batchAllocations.filter(a =>
+            a.batch_name === b && a.plot_name === p && !allocIsSpent(a));
+    }
+
+    // Takes the order OBJECT where the caller has one — a deduplicated
+    // order carries allIds (every salesweb row id the one real order was
+    // keyed under), and an allocation dropped against EITHER row id has to
+    // count against it. A bare id still works for a caller with nothing
+    // else in hand.
+    function allocsForOrder(order) {
+        if (!order) return [];
+        const ids = (typeof order === 'object') ? (order.allIds || [order.id]) : [order];
+        return batchAllocations.filter(a => ids.includes(a.order_id));
     }
 
     function orderUnallocatedQty(o) {
-        const allocated = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        const allocated = allocsForOrder(o).reduce((s, a) => s + (a.allocated_qty || 0), 0);
         return Math.max(0, (o.totalQty || 0) - (o.totalCollected || 0) - allocated);
     }
 
@@ -3092,7 +3228,20 @@
     }
 
     function isAllocatableStatus(o) {
-        return o.rawStatus !== 'Cancelled' && o.rawStatus !== 'Pending Payment';
+        // MIRRORS THE COLLECTION TAB'S OWN ROW FILTER, because the office
+        // reconciles the drawer against that list: any order it shows with
+        // a balance has to be on one of the drawer's tabs. The old rule
+        // excluded every 'Pending Payment' row, which silently kept two
+        // CREDIT-terms orders — 66,589 pcs between them — off the drawer
+        // while the Collection tab showed them with their balances. Credit
+        // is the invoice flow: the order is real and allocatable before
+        // the payment lands. Cash + unpaid stays hidden, same as there.
+        const isCash   = (o.paymentMethod || 'cash') === 'cash';
+        const isUnpaid = o.rawStatus === 'Pending Payment' || o.derivedStatus === 'Pending Payment';
+        if (isCash && isUnpaid) return false;
+        if (o.rawStatus === 'Cancelled' || o.alCancelled) return false;
+        if (o.rawStatus === 'Closed'    || o.alClosed)    return false;
+        return true;
     }
 
     let _allocSearch = '';
@@ -3138,11 +3287,25 @@
             return;
         }
 
+        // THE DRAWER IS A TO-DO LIST: a card is on it only while something
+        // is still UNALLOCATED. The office asked in as many words — "It
+        // should be disappear when I allocated" — so a fully allocated
+        // order leaves the list the moment the drop lands (the ✓ card of
+        // an earlier version is gone), and comes back by itself if its
+        // allocation is removed. An order whose BALANCE reaches nought
+        // (collected, cancelled, closed) is out the same way, because
+        // remaining can never exceed the balance.
         const eligible = allCustomerOrders.filter(isAllocatableStatus);
         const active = eligible.filter(o => !isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
-        const past   = eligible.filter(o =>  isPastMonthOrder(o) && o.balance > 0);
+        const past   = eligible.filter(o =>  isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
 
-        updateAllocCounts(active.length, past.length);
+        // Each tab totals the figure its own cards show: Active cards show
+        // what is still to allocate, Past Due cards show what is
+        // uncollected — different questions, and each tab's total has to
+        // agree with the cards under it.
+        const activeQty = active.reduce((s, o) => s + orderUnallocatedQty(o), 0);
+        const pastQty   = past.reduce((s, o) => s + (o.balance || 0), 0);
+        updateAllocCounts(active.length, past.length, activeQty, pastQty);
 
         const baseList = _allocTab === 'active' ? active : past;
         const showList = baseList.filter(matchesAllocSearch);
@@ -3154,7 +3317,7 @@
             } else {
                 msg = _allocTab === 'active'
                     ? '✅ All current orders are fully allocated'
-                    : '✅ No past-month uncollected orders';
+                    : '✅ Every past-month order is allocated or collected';
             }
             body.innerHTML = `<div class="alloc-drawer-empty">${msg}</div>`;
             return;
@@ -3162,12 +3325,13 @@
 
         body.innerHTML = showList.map(o => orderCardHtml(o, _allocTab)).join('');
 
-        if (_allocTab === 'active') {
-            body.querySelectorAll('.order-card[draggable="true"]').forEach(el => {
-                el.addEventListener('dragstart', onCardDragStart);
-                el.addEventListener('dragend',   onCardDragEnd);
-            });
-        }
+        // Both tabs: a past-due order still waiting to be allocated drags
+        // onto a matured-stock row exactly like a current one. The selector
+        // already scopes this to the cards orderCardHtml marked draggable.
+        body.querySelectorAll('.order-card[draggable="true"]').forEach(el => {
+            el.addEventListener('dragstart', onCardDragStart);
+            el.addEventListener('dragend',   onCardDragEnd);
+        });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -3287,9 +3451,13 @@
         });
     }
 
-    function updateAllocCounts(active, past) {
+    function updateAllocCounts(active, past, activeQty, pastQty) {
         document.getElementById('alloc-count-active').textContent = active;
         document.getElementById('alloc-count-past').textContent   = past;
+        const qa = document.getElementById('alloc-qty-active');
+        const qp = document.getElementById('alloc-qty-past');
+        if (qa) qa.textContent = (activeQty || 0).toLocaleString('en-MY') + ' pcs';
+        if (qp) qp.textContent = (pastQty   || 0).toLocaleString('en-MY') + ' pcs';
         const fab   = document.getElementById('alloc-fab');
         const badge = document.getElementById('alloc-fab-badge');
 
@@ -3322,32 +3490,51 @@
 
     function orderCardHtml(o, tab) {
         const remaining   = orderUnallocatedQty(o);
-        const allocated   = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        const allocated   = allocsForOrder(o).reduce((s, a) => s + (a.allocated_qty || 0), 0);
         const total       = o.totalQty || 0;
         const collected   = o.totalCollected || 0;
         const pctAlloc    = total ? Math.min(100, ((allocated + collected) / total) * 100) : 0;
-        const fullyAlloc  = remaining === 0 && tab === 'active';
         const dateLabel   = o.orderDate ? o.orderDate.toLocaleDateString('en-MY', { day:'2-digit', month:'short' }) : '—';
-        const dragAttrs   = (tab === 'active' && remaining > 0)
+        // A past-due order drags for allocation exactly like a current one —
+        // the office asked for that in as many words. Every card the drawer
+        // draws has something unallocated (renderAllocDrawer filters the
+        // rest off: "It should be disappear when I allocated"), so every
+        // card drags; the remaining > 0 guard stays as the seatbelt.
+        const dragAttrs   = (remaining > 0)
             ? `draggable="true" data-order-id="${escapeHtml(o.id || '')}"`
             : '';
-        const cls = (tab === 'past') ? 'order-card past-due' : (fullyAlloc ? 'order-card fully-allocated' : 'order-card');
-        const grip = (tab === 'active' && remaining > 0) ? '<span class="order-card-grip">⋮⋮</span>' : '';
+        const cls  = (tab === 'past') ? 'order-card past-due' : 'order-card';
+        const grip = (remaining > 0) ? '<span class="order-card-grip">⋮⋮</span>' : '';
 
         let qtyDisplay, qtySubLabel;
         if (tab === 'past') {
             qtyDisplay = (o.balance || 0).toLocaleString();
             qtySubLabel = 'pcs uncollected · ordered ' + dateLabel;
-        } else if (fullyAlloc) {
-            qtyDisplay = '✓';
-            qtySubLabel = 'fully allocated · ' + total.toLocaleString() + ' pcs';
         } else {
             qtyDisplay = remaining.toLocaleString();
             qtySubLabel = 'pcs to allocate · of ' + total.toLocaleString();
         }
 
+        // The big figure on a past card is what is UNCOLLECTED (o.balance);
+        // a drop allocates what is UNALLOCATED (remaining), which is smaller
+        // once some of it already sits on a batch — so the remark names the
+        // figure the drag will actually move.
         const remarkHtml = (tab === 'past')
-            ? `<div class="order-card-remark">⏳ Customer not yet collected — follow up reminder only</div>`
+            ? `<div class="order-card-remark">⏳ Not yet collected — drag onto a matured-stock row to allocate ${remaining.toLocaleString('en-MY')} pcs</div>`
+            : '';
+
+        // A duplicated keying is counted ONCE and said, never hidden —
+        // the same rule as the Seed Received cell's "⚠ 2 reception rows":
+        // a figure that silently drops a row is how the row stays there
+        // for ever. 6DS520 is the live case, keyed once as #6DS520 too.
+        const dupNote = (o.dupRows || 1) > 1
+            ? `<div class="order-card-dup">⚠ Keyed ${o.dupRows} times in Customer Orders — counted once</div>`
+            : '';
+        // Cash + unpaid never reaches the drawer, so a Pending Payment
+        // card here is the credit (invoice) flow — worth saying, because
+        // the office is allocating stock ahead of the payment landing.
+        const payNote = (o.rawStatus === 'Pending Payment' || o.derivedStatus === 'Pending Payment')
+            ? `<div class="order-card-dup">💳 Payment pending — credit terms</div>`
             : '';
 
         return `
@@ -3361,6 +3548,8 @@
                 </div>
                 <div class="order-card-progress"><div class="order-card-progress-bar${pctAlloc >= 100 ? ' full' : ''}" style="width:${pctAlloc}%;"></div></div>
                 ${remarkHtml}
+                ${dupNote}
+                ${payNote}
             </div>`;
     }
 
@@ -3405,7 +3594,9 @@
         if (!alloc) return;
         _draggingAlloc = {
             id: allocId,
-            qty: alloc.allocated_qty || 0,
+            // The LIVE quantity, not the stored one — moving a chip moves
+            // what is still owed, and the write lands at that figure.
+            qty: allocLiveQty(alloc),
             sourceBatch: alloc.batch_name || '',
             sourcePlot:  alloc.plot_name  || '',
             customer:    alloc.customer_name || '',
@@ -4382,7 +4573,11 @@
         loadNsd();
         loadTodoList();
         loadMaturity();
-        loadCustomerOrders().then(() => renderAllocDrawer());
+        // The maturity table hides SPENT allocations (allocIsSpent reads the
+        // order balances), and the three loads race — redraw it once the
+        // orders are in, or a spent chip drawn by the earlier render stands
+        // until something else touches the table.
+        loadCustomerOrders().then(() => { renderMaturityTable(); renderAllocDrawer(); });
         loadScheduledCollection();
         // loadAgingReport removed — Aging Report block deleted from UI.
         loadBatchAllocations().then(() => { renderMaturityTable(); renderAllocDrawer(); });

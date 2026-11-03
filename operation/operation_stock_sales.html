@@ -94,6 +94,10 @@
         /* Maturity table */
         .mat-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
         .mat-table thead th{background:#f1f5f9;color:#334155;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:11px 10px;text-align:left;border-bottom:2px solid #cbd5e1;position:sticky;top:0;z-index:1;}
+        /* The numeric headings carry .text-right in the markup, but the rule
+           above is more specific than the Tailwind class, so they sat LEFT
+           over right-aligned figures. Same fix .ph-table already carries. */
+        .mat-table thead th.text-right{text-align:right;}
         .mat-table tbody td{padding:11px 10px;border-bottom:1px solid #eef2f6;color:#1e293b;font-weight:600;vertical-align:middle;}
         .mat-table tbody tr{transition:background .12s;}
         .mat-table tbody tr:nth-child(even){background:#fbfcfe;}
@@ -293,6 +297,9 @@
         .alloc-drawer-tab.active{background:white;color:#1d4ed8;box-shadow:0 2px 8px rgba(0,0,0,.06);}
         .alloc-drawer-tab .alloc-tab-count{display:inline-block;margin-left:4px;background:#e2e8f0;color:#475569;border-radius:999px;padding:1px 7px;font-size:9px;}
         .alloc-drawer-tab.active .alloc-tab-count{background:#dbeafe;color:#1d4ed8;}
+        /* Total seedlings on each tab — the sum of the figure its own cards show */
+        .alloc-tab-qty{display:block;margin-top:2px;font-size:9px;font-weight:800;color:#94a3b8;letter-spacing:.04em;font-variant-numeric:tabular-nums;}
+        .alloc-drawer-tab.active .alloc-tab-qty{color:#1d4ed8;}
         .alloc-drawer-body{flex:1;overflow-y:auto;padding:12px;background:#f8fafc;}
         .alloc-drawer-empty{text-align:center;padding:32px 12px;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
 
@@ -300,8 +307,6 @@
         .order-card:hover{border-color:#3b82f6;box-shadow:0 6px 16px rgba(59,130,246,.18);transform:translateY(-1px);}
         .order-card:active{cursor:grabbing;}
         .order-card.dragging{opacity:.5;cursor:grabbing;}
-        .order-card.fully-allocated{opacity:.6;border-color:#10b981;background:#f0fdf4;cursor:default;}
-        .order-card.fully-allocated:hover{transform:none;}
         .order-card-name{font-size:12px;font-weight:900;color:#0f172a;line-height:1.2;}
         .order-card-meta{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-family:'Outfit',sans-serif;}
         .order-card-qty-row{display:flex;align-items:baseline;gap:6px;margin-top:8px;}
@@ -312,8 +317,12 @@
         .order-card-progress-bar.full{background:linear-gradient(90deg,#10b981,#059669);}
         .order-card-remark{margin-top:6px;font-size:10px;color:#475569;line-height:1.35;background:#f8fafc;border:1px dashed #e2e8f0;border-radius:6px;padding:5px 7px;}
         .order-card-grip{position:absolute;top:10px;right:10px;color:#cbd5e1;font-size:14px;line-height:1;}
+        .order-card-dup{margin-top:4px;font-size:9px;font-weight:800;color:#b45309;letter-spacing:.02em;}
 
         .order-card.past-due{cursor:default;border-left:3px solid #f59e0b;}
+        /* A past-due card still owed allocation drags like an Active one */
+        .order-card.past-due[draggable="true"]{cursor:grab;}
+        .order-card.past-due[draggable="true"]:active{cursor:grabbing;}
         .order-card.past-due:hover{border-color:#fbbf24;transform:none;box-shadow:0 4px 10px rgba(245,158,11,.15);}
         .order-card.past-due .order-card-qty-big{color:#b45309;}
 
@@ -336,7 +345,12 @@
         .reserv-chip-x:hover{background:#fca5a5;color:white;}
         .reserv-empty{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1.5px dashed #cbd5e1;border-radius:9px;background:#fafbfc;font-size:9px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}
         .reserv-empty-emoji{font-size:11px;line-height:1;}
-        .reserv-empty-finished{border-style:solid;background:#f1f5f9;color:#64748b;}
+        /* A Finished row's empty allocation cell is a plain grey block — the
+           office asked for the lock icon and its sentence to go. min-height
+           keeps it the size of the Drop card here cell beside it, since it
+           no longer has text to hold it open. The status pill one column
+           over is what says why it is closed. */
+        .reserv-empty-finished{border-style:solid;border-color:#e2e8f0;background:#e9edf2;min-height:31px;cursor:default;}
 
         /* Inventory map plot labels */
         .invmap-plot-shape{transition:all .2s ease-in-out;cursor:pointer;}
@@ -887,9 +901,11 @@
     <div class="alloc-drawer-tabs">
         <button class="alloc-drawer-tab active" id="alloc-tab-active" onclick="switchAllocTab('active')">
             Active <span class="alloc-tab-count" id="alloc-count-active">0</span>
+            <span class="alloc-tab-qty" id="alloc-qty-active">0 pcs</span>
         </button>
         <button class="alloc-drawer-tab" id="alloc-tab-past" onclick="switchAllocTab('past')">
             Past Due <span class="alloc-tab-count" id="alloc-count-past">0</span>
+            <span class="alloc-tab-qty" id="alloc-qty-past">0 pcs</span>
         </button>
     </div>
     <div class="px-3 pt-3 pb-2 border-b border-slate-200 bg-white">
@@ -960,7 +976,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=7"></script>
+<script src="operation_stock_sales.js?v=13"></script>
 <!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
 <div class="ci-modal" id="ci-upload-modal">
     <div class="ci-modal-card">
@@ -1024,6 +1040,7 @@
 <!-- Page-access guard: this page can be locked per user in the module's
      User Access (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script>
 (async () => {

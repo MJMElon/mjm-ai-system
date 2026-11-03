@@ -270,6 +270,7 @@ async function openPage(browser, auditRows) {
       wentStraightToCamera: opened,
       same: el ? (el.querySelector('#recount-same').textContent || '').trim() : '',
       fresh: el ? (el.querySelector('#recount-new').textContent || '').trim() : '',
+      upload: el ? (el.querySelector('#recount-upload').textContent || '').trim() : '',
       sub: el ? (el.querySelector('#recount-sub').textContent || '').trim() : ''
     };
   });
@@ -277,6 +278,7 @@ async function openPage(browser, auditRows) {
   check('…instead of opening the camera on its own', chooser.wentStraightToCamera, false);
   checkTrue('…offering the same photo again', /count this photo again/i.test(chooser.same));
   checkTrue('…and a new one', /take a new photo/i.test(chooser.fresh));
+  checkTrue('…or one to upload', /upload photo/i.test(chooser.upload));
   checkTrue('…and it says what the AI made of it last time', /250/.test(chooser.sub));
 
   const cancelled = await back.evaluate(() => {
@@ -292,6 +294,8 @@ async function openPage(browser, auditRows) {
   const picked = await back.evaluate(() => {
     const r = document.querySelector('.t8-bag-row');
     let opened = false;
+    /* A phone: its own camera, through the capture box. */
+    window._bagUseLiveCamera = () => false;
     document.getElementById(r.id + '-photo').click = () => { opened = true; };
     window.onBagCountBtn(r.id);
     document.getElementById('recount-chooser').querySelector('#recount-new').click();
@@ -300,7 +304,21 @@ async function openPage(browser, auditRows) {
   checkTrue('Take a new photo opens the camera', picked.opened);
   check('…and closes the dialog', picked.shut, 'none');
 
-  console.log('\nA row with no photo at all still just opens the camera');
+  const uploaded = await back.evaluate(() => {
+    const r = document.querySelector('.t8-bag-row');
+    let cam = false, up = false;
+    document.getElementById(r.id + '-photo').click = () => { cam = true; };
+    const box = document.getElementById(r.id + '-upload');
+    box.click = () => { up = true; };
+    window.onBagCountBtn(r.id);
+    document.getElementById('recount-chooser').querySelector('#recount-upload').click();
+    return { cam, up, capture: box.hasAttribute('capture') };
+  });
+  checkTrue('Upload photo opens the file box', uploaded.up);
+  check('…not the camera', uploaded.cam, false);
+  check('…and that box carries no capture, so the gallery is offered', uploaded.capture, false);
+
+  console.log('\nA row with no photo is asked too: take one, or upload one');
   const plain = await back.evaluate(() => {
     window.addSeedAuditRow();
     const rows = document.querySelectorAll('.t8-bag-row');
@@ -308,11 +326,57 @@ async function openPage(browser, auditRows) {
     let opened = false;
     document.getElementById(r.id + '-photo').click = () => { opened = true; };
     window.onBagCountBtn(r.id);
-    return { opened, dialog: (document.getElementById('recount-chooser') || {}).style?.display };
+    const el = document.getElementById('recount-chooser');
+    const out = {
+      opened, dialog: el.style.display,
+      title: el.querySelector('#recount-title').textContent,
+      same: el.querySelector('#recount-same-wrap').style.display,
+      fresh: el.querySelector('#recount-new').textContent.trim()
+    };
+    el.querySelector('#recount-cancel').click();
+    return out;
   });
-  checkTrue('straight to the camera', plain.opened);
-  check('…with nothing to choose between', plain.dialog, 'none');
+  check('nothing opened before a choice', plain.opened, false);
+  check('…the choice is shown', plain.dialog, 'flex');
+  check('…headed Count seeds', plain.title, 'Count seeds');
+  check('…with no photo to count again', plain.same, 'none');
+  check('…offering to take one', plain.fresh, '📷 Take photo');
   await back.close();
+
+  console.log('\nOn a laptop, Take photo opens the webcam and counts what it sees');
+  const camBrowser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium',
+    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+  const cam = await openPage(camBrowser, []);
+  const camRow = await cam.evaluate(() => {
+    const r = document.querySelector('.t8-bag-row');
+    const sup = r.querySelector('.t8-supplier-qty'), rec = r.querySelector('.t8-received-qty');
+    sup.value = '250'; sup.dispatchEvent(new Event('input', { bubbles: true }));
+    rec.value = '250'; rec.dispatchEvent(new Event('input', { bubbles: true }));
+    window.__CAM_FILE = false;
+    document.getElementById(r.id + '-photo').click = () => { window.__CAM_FILE = true; };
+    document.getElementById(r.id + '-upload').click = () => { window.__CAM_FILE = true; };
+    window.onBagCountBtn(r.id);
+    document.getElementById('recount-chooser').querySelector('#recount-new').click();
+    return r.id;
+  });
+  await cam.waitForFunction(() => {
+    const b = document.getElementById('bag-cam-snap');
+    return b && !b.disabled;
+  }, null, { timeout: 10000 });
+  check('the live camera is open, not a file box', await cam.evaluate(() =>
+    [document.getElementById('bag-camera').style.display, window.__CAM_FILE]), ['flex', false]);
+  await cam.click('#bag-cam-snap');
+  await cam.waitForFunction(id => /counted/i.test(document.getElementById(id).querySelector('.t8-verify-result').textContent),
+    camRow, { timeout: 10000 });
+  const camAfter = await cam.evaluate(id => ({
+    said: document.getElementById(id).querySelector('.t8-verify-result').textContent.trim(),
+    shut: document.getElementById('bag-camera').style.display,
+    live: !!document.getElementById('bag-cam-video').srcObject
+  }), camRow);
+  checkTrue('the captured frame is counted', /Checked/i.test(camAfter.said) && /250/.test(camAfter.said));
+  check('…the camera dialog closes', camAfter.shut, 'none');
+  check('…and the webcam is let go', camAfter.live, false);
+  await camBrowser.close();
 
   console.log('\nTHE CLEAN FRAME IS WHAT GETS COUNTED');
   /* What is on screen and what is stored as PhotoUrl carry a red dot on

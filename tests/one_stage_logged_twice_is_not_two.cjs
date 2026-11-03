@@ -111,18 +111,9 @@ console.log('\nBoth pages ask openActivities, and neither counts rows for displa
         /actByN\(e\.actN\); return a \? a\.name : '\?'/.test(src), false);
 });
 
-console.log('\nThe duplicate is out of the count, not out of sight');
+console.log('\nNo mark for a stage open twice -- the office: "2 open 我也不要看到"');
 [['the board', BOARD], ['plot life', LIFE]].forEach(([who, src]) => {
-  checkTrue(who + ' works out how many rows are extra',
-            /const dupes = (cur|open)\.length - openActs\.length;/.test(src));
-  checkTrue(who + ' marks the row when there are', /class="st-dup"/.test(src));
-  checkTrue(who + ' styles that mark', /\.st-dup \{/.test(src));
-  /* The words matter more than the mark: "2 running" was read as two jobs,
-     so what replaces it has to say it is one stage logged twice. */
-  checkTrue(who + ' says what it means',
-            /one stage logged ' \+ (cur|open)\.length \+ ' times/.test(src));
-  checkTrue(who + ' and that picking a stage clears it',
-            /Picking a stage closes every one of them/.test(src));
+  check(who + ' draws no "open" mark', /class="st-dup"|\.st-dup \{|dupTag/.test(src), false);
 });
 
 console.log('\nThe confirm panel promises what the save does');

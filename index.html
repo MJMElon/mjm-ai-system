@@ -11,6 +11,8 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Customers cannot enter the staff system: shared/shared_staff_gate.js -->
+<script src="shared/shared_staff_gate.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Outfit', system-ui, sans-serif; }
@@ -509,33 +511,16 @@
     } catch (e) { return null; }
   }
 
-  function _keepProfile(uid, data) {
-    try {
-      if (data) localStorage.setItem(_LAST_PROFILE(uid),
-        JSON.stringify({ ts: Date.now(), data }));
-    } catch (e) { /* private mode / quota — silent */ }
-  }
+  /* Written by MJMStaffGate.check() on every good read, merged into what
+     is there; never for a customer. */
 
-  const _STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
-  function hasOpsAccess(profile) {
-    // No row came back at all. That is not "this person has no access" — it
-    // means the read was filtered by RLS, or their profile is keyed to a
-    // different id than the one they signed in with. Locking out on it left a
-    // full admin (manage_users: true) stranded on the Pending screen. The
-    // catch below already lets a FAILED read through; a read that simply
-    // returns nothing is the same situation, so treat it the same.
-    // A genuine new signup still gets a row (created by the signup trigger)
-    // with no permissions on it, and still lands on Pending as it should.
-    if (!profile) return true;
-    const p = profile.permissions || {};
-    if (p.manage_users || p.can_verify_operation) return true;
-    if (p.modules && typeof p.modules === 'object') {
-      for (const k in p.modules) {
-        if (_STAFF_MODULE_VALUES.indexOf(String(p.modules[k]).toLowerCase()) !== -1) return true;
-      }
-    }
-    return false;
-  }
+  /* Who is staff is MJMStaffGate.hasStaffAccess (shared/shared_staff_gate.js)
+     — one definition for the hub and every module page. It no longer lets a
+     MISSING profile through: that shortcut was written so an RLS-filtered
+     read could not strand an admin on Pending, and it is also what let any
+     login with no row, or a read that failed, see every tile. A login with
+     no row is Pending now, as a new signup always was. */
+  function hasOpsAccess(profile) { return MJMStaffGate.hasStaffAccess(profile); }
 
   function applyModuleVisibility(profile) {
     const perms = profile && profile.permissions;
@@ -552,7 +537,9 @@
          Only for cards that open nothing privileged. Anything that does
          must stay hidden-by-default, where an unset answer costs nothing. */
       const unaskedIsOpen = card.hasAttribute('data-module-open');
-      const visible = !perms ? true
+      /* No permissions is no tiles. It used to be every tile, and a profile
+         the page failed to read came out as the whole building. */
+      const visible = !perms ? false
         : (lvl === undefined || lvl === null) ? unaskedIsOpen
         : lvl !== 'none';
       card.style.display = visible ? '' : 'none';
@@ -578,7 +565,7 @@
     const scanCard = document.querySelector('.module-card[data-module="scan"]');
     if (scanCard) {
       const scanLvl = mods ? String(mods.scan || '').toLowerCase() : null;
-      const admin = scanLvl === 'admin' || !perms;
+      const admin = scanLvl === 'admin';
       scanCard.setAttribute('href', admin ? 'scan/scan_admin.html' : 'https://scan.mjmnursery.com');
       // The phone app is a PWA on another domain: a cached shell naming chunks
       // that no longer exist is how it comes up broken after a deploy.
@@ -640,7 +627,7 @@
     const _s = _cachedSession();
     if (_s) {
       const _last = _lastKnownProfile(_s.user.id);
-      if (_last && hasOpsAccess(_last)) {
+      if (_last && !MJMStaffGate.isCustomer(_last) && hasOpsAccess(_last)) {
         try { applyModuleVisibility(_last); } catch (e) { /* the handler draws it again */ }
         welcomeText.innerText = (_s.user.user_metadata && _s.user.user_metadata.full_name) || _s.user.email || '';
         showHub();
@@ -799,33 +786,22 @@
     const sess = session || _cachedSession();
     if (!sess) { showAuth(); return; }
     if (sess) {
-      let canEnter = true;
-      let profile  = null;
-      try {
-        const resp = await _supabase
-          .from('shared_profiles')
-          .select('*')
-          .eq('id', sess.user.id)
-          .maybeSingle();
-        profile = resp && resp.data;
-        if (profile) _keepProfile(sess.user.id, profile);
-        canEnter = hasOpsAccess(profile);
-        console.log('[ops-gate]', { email: sess.user.email, canEnter, profile, error: resp && resp.error });
-      } catch (e) {
-        console.warn('[ops-gate] profile read threw (failing open):', e);
+      /* THE ONE RULE (shared/shared_staff_gate.js). A customer is signed
+         out and shown only the refusal. A read that FAILED — a returned
+         {error} as much as a throw — stands on the last profile this device
+         was given for this same account, and with none the hub is not drawn
+         at all: "could not check, retry", session kept. It used to fail
+         open here, and a null profile drew every tile. */
+      const gate = await MJMStaffGate.enforce(_supabase, sess, { columns: '*' });
+      console.log('[ops-gate]', { email: sess.user.email, status: gate.status, fromCache: gate.fromCache, error: gate.error });
+      if (gate.status === 'customer' || gate.status === 'unknown') {
+        hubScreen.style.display = 'none';
+        authScreen.style.display = 'none';
+        document.getElementById('pending-screen').style.display = 'none';
+        return;
       }
-      /* Could not be read — no signal, almost always. Fall back to the last
-         answer this device was given rather than to nothing: a null profile
-         draws a hub with only the always-open tiles on it, which is not what
-         this person has, it is what this page failed to find out. */
-      if (!profile) {
-        const last = _lastKnownProfile(sess.user.id);
-        if (last) {
-          profile = last;
-          canEnter = hasOpsAccess(last);
-          console.info('[ops-gate] using the last known profile for this account');
-        }
-      }
+      const profile  = gate.profile;
+      const canEnter = gate.status === 'staff';
       if (!canEnter) {
         document.getElementById('pending-email').textContent = sess.user.email || '—';
         authScreen.style.display = 'none';
