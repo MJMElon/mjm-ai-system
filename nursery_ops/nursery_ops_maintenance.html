@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=110">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=111">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -84,7 +84,7 @@
               <span data-i18n="tab.maintList">Monthly Records</span>
             </button>
             <button type="button" class="pn-subtab" id="pn-subtab-chart" onclick="switchRecordView('chart')">
-              <span data-i18n="tab.chart">Performance</span>
+              <span data-i18n="tab.chart">Monthly Performance</span>
             </button>
           </div>
           <button type="button" class="pn-tab" onclick="switchTab('schedule',this)">
@@ -373,7 +373,22 @@
         </div><!-- /recsec-rejected -->
       </div>
       <div id="recview-chart" class="recview">
-      <!-- ANALYTICS -->
+      <!-- MONTHLY PERFORMANCE — two selectable views. The TABLE is the
+           office's own monthly summary sheet, which they were building by
+           hand off the Monthly Records ("Summary of work done ...
+           (Scheduled Maintenance Programme)"); the charts are the view
+           this panel always had. renderPerformance() in
+           plot_maintenance_script.js decides which of the two is shown
+           and remembers the choice per machine. -->
+        <div class="perf-toggle">
+          <button type="button" id="perf-view-table" class="perf-btn active" onclick="switchPerfView('table')">Table view</button>
+          <button type="button" id="perf-view-chart" class="perf-btn" onclick="switchPerfView('chart')">Chart view</button>
+        </div>
+
+        <div id="perf-table-wrap"></div>
+
+        <div id="perf-charts" style="display:none;">
+        <!-- ANALYTICS -->
 
         <div style="margin-bottom:18px;">
         </div>
@@ -414,6 +429,8 @@
           </div>
           <div style="height:340px;"><canvas id="plotChart"></canvas></div>
         </div>
+
+        </div><!-- /perf-charts -->
 
       </div>
     </div>
@@ -920,7 +937,7 @@
      The payroll module has read this since it was written; this page
      showed the raw address on three Checked badges. -->
 <script src="../shared/shared_people.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=167"></script>
+<script src="plot_maintenance_script.js?v=168"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

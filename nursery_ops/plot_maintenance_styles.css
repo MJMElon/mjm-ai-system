@@ -1752,3 +1752,35 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
            font-weight:800; color:var(--text-head); background:#fff;
            border:1.5px solid var(--border); border-radius:var(--r-sm); }
 .cm-days:focus { outline:none; border-color:var(--green-mid); }
+
+/* ─── MONTHLY PERFORMANCE — the Table/Chart view switch and the table ───
+   The table is the office's own monthly summary sheet, reproduced: a row
+   per plot, Full Capacity and Alive, then the four jobs each carrying
+   Program and Verification (rounds, the recorded figure, the variance),
+   and the Remarks off the month's records. Their sheet tints the figure
+   columns and sets every variance that is not nought in red; both are
+   kept, because a sheet that reads like the one they make by hand is the
+   whole point of it. */
+.perf-toggle{display:flex;gap:8px;margin-bottom:14px;}
+.perf-btn{padding:8px 18px;font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.04em;
+          color:var(--text-body);background:var(--bg-white);border:1.5px solid var(--border);
+          border-radius:var(--r-sm);cursor:pointer;}
+.perf-btn.active{color:#fff;background:var(--green-mid);border-color:var(--green-mid);}
+.perf-wait{padding:30px 10px;font-size:13px;font-weight:700;color:var(--text-faint);text-align:center;}
+.perf-head{margin:2px 0 12px;}
+.perf-head .ph-1{font-size:14px;font-weight:900;color:var(--text-head);}
+.perf-head .ph-2{font-size:13px;font-weight:800;color:var(--text-body);margin-top:2px;}
+.perf-scroll{overflow-x:auto;background:var(--bg-white);border:1.5px solid var(--border);
+             border-radius:var(--r-md);box-shadow:var(--shadow-sm);}
+table.perf-table{border-collapse:collapse;width:100%;min-width:1180px;font-size:12px;}
+.perf-table th,.perf-table td{border:1px solid #d8cdb8;padding:5px 7px;}
+.perf-table thead th{background:#fdf0e0;color:var(--text-head);font-weight:800;text-align:center;}
+.perf-table thead th.pf-note{font-weight:600;font-style:italic;font-size:10px;}
+.perf-table thead th .pf-note{display:block;font-weight:600;font-style:italic;font-size:10px;margin-top:2px;}
+.perf-table thead th.pf-sub{font-size:10.5px;}
+.perf-table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.perf-table td.pf-plot{font-weight:900;color:var(--text-head);text-align:center;}
+.perf-table td.pf-rec{background:#fdf0e0;}
+.perf-table td.pf-var{color:#c0392b;font-weight:700;}
+.perf-table td.pf-remark{font-size:11px;min-width:170px;}
+.perf-table tfoot td{font-weight:900;color:var(--text-head);background:#f6f1e7;}

@@ -4327,7 +4327,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Monthly Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -4524,7 +4524,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi Bulanan', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -5320,7 +5320,7 @@ function renderAll() {
   updateCarryNotice();
   // Re-render analytics when its sub-view inside Work Record is showing
   const chartView = document.getElementById('recview-chart');
-  if (chartView && chartView.classList.contains('active')) renderCharts();
+  if (chartView && chartView.classList.contains('active')) renderPerformance();
   const payTab = document.getElementById('tab-payroll');
   if (payTab && payTab.classList.contains('active')) renderPayroll();
 }
@@ -6600,7 +6600,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   const panel = document.getElementById('tab-'+name);
   if (panel) panel.classList.add('active');
-  if (name==='record') { renderRecords(); if (_recordView==='chart') renderCharts(); }
+  if (name==='record') { renderRecords(); if (_recordView==='chart') renderPerformance(); }
   // Re-read the register on the way in, so an amendment made in the payroll
   // module a moment ago is already reflected without reloading the page.
   /* Setting has its own nursery tabs and no month, so the two pickers in the
@@ -6678,7 +6678,7 @@ function switchRecordView(view) {
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
-  if (view === 'chart') renderCharts(); else renderRecords();
+  if (view === 'chart') renderPerformance(); else renderRecords();
 }
 
 /* Inside the maintenance list: approved work, or what was sent back.
@@ -9540,6 +9540,167 @@ function downloadPDF() {
 ════════════════════════════ */
 let staffInst = null;
 let plotInst  = null;
+
+/* ════════════════════════════════════════════════════════════════════════
+   MONTHLY PERFORMANCE — two selectable views, Table and Chart.
+
+   The TABLE is the office's own monthly summary sheet ("Summary of work
+   done ... (Scheduled Maintenance Programme)"), which they were building
+   by hand every month off the Monthly Records. A row per plot:
+
+   - FULL CAPACITY and ALIVE are the plot's linked quantities off the
+     batch ledger — the same two figures every record on this page links
+     to: Alive is what Manuring, P & D and Weeding count (2nd culling
+     off), Full is what Interrow counts (the ground between the rows does
+     not shrink when a polybag empties — the B5 rule in CLAUDE.md, and
+     their sheet says it in its own words: "Based on alive" / "Based on
+     full capacity").
+   - A ROUND is a month record that carries work of its own — a quantity
+     somebody keyed, a figure frozen by Checked, or the Checked tick
+     itself. A row the schedule generated and nobody filled is not a
+     round (their August sheet reads 0 rounds on a new transplant plot
+     whose schedule had one). The gaia flag is NOT the test: October has
+     539 records and not one gaia tick, so a gaia-gated table would read
+     as a month nobody worked.
+   - PROGRAM is the plot's base (Alive, or Full for interrow) times the
+     rounds done; the column their sheet heads "Plot Capacity x No.of
+     Rounds" is the SUM OF THE RECORDED FIGURES over those rounds — the
+     same recQty the Worker Record pays on (keyed, else frozen, else the
+     link) — and VARIANCE is recorded less program, red when it is not
+     nought, both signs, exactly as they print it.
+   - The header's "No. of Rounds : N" is the month's program for the job:
+     the most rows the schedule generated for any one plot.
+   - REMARKS is every distinct remark on the plot's month records.
+
+   The CHART view is the panel this always was, untouched behind the
+   toggle. The choice is remembered per machine. */
+const PERF_JOBS = [
+  { type: 'manuring', head: 'Manuring',                note: 'Based on alive',         full: false },
+  { type: 'pd',       head: 'Pest & Disease Spraying', note: 'Based on alive',         full: false },
+  { type: 'weeding',  head: 'Weeding',                 note: 'Based on alive',         full: false },
+  { type: 'interrow', head: 'Interrow Spraying',       note: 'Based on full capacity', full: true  }
+];
+let _perfView = 'table';
+try { const v = localStorage.getItem('mjm_maint_perfview'); if (v === 'chart' || v === 'table') _perfView = v; } catch (_) {}
+
+function switchPerfView(view) {
+  _perfView = view === 'chart' ? 'chart' : 'table';
+  try { localStorage.setItem('mjm_maint_perfview', _perfView); } catch (_) {}
+  renderPerformance();
+}
+window.switchPerfView = switchPerfView;
+
+function renderPerformance() {
+  const tBtn = document.getElementById('perf-view-table');
+  const cBtn = document.getElementById('perf-view-chart');
+  if (tBtn) tBtn.classList.toggle('active', _perfView === 'table');
+  if (cBtn) cBtn.classList.toggle('active', _perfView === 'chart');
+  const tw = document.getElementById('perf-table-wrap');
+  const cw = document.getElementById('perf-charts');
+  if (tw) tw.style.display = _perfView === 'table' ? '' : 'none';
+  if (cw) cw.style.display = _perfView === 'chart' ? '' : 'none';
+  if (_perfView === 'chart') renderCharts(); else renderPerfTable();
+}
+
+function _perfRowDone(r) {
+  if (!r) return false;
+  if (r.qty === 0 || (r.qty != null && r.qty !== '')) return true;
+  if (r.qtyFrozen != null) return true;
+  return !!r.checked;
+}
+const _perfEsc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function renderPerfTable() {
+  const box = document.getElementById('perf-table-wrap');
+  if (!box) return;
+  const n = getNursery(), m = getMonth();
+  const plots = NURSERY_PLOTS[n] || [];
+  /* The two capacity columns are the batch ledger's answer, so without it
+     there is no table to draw — say which of the two states this is
+     rather than showing noughts that read as an empty nursery. */
+  if (!PlotMovement.ready()) {
+    box.innerHTML = `<div class="perf-wait">${PlotMovement.error()
+      ? 'The batch ledger could not be reached, and the capacity columns are its answer — reload to try again.'
+      : 'Loading the batch ledger…'}</div>`;
+    return;
+  }
+  const monthRecs = records.filter(r => r && _recInMonth(r, m));
+  const monthFull = (() => {
+    const v = monthLabelToInput(m);
+    const d = v ? new Date(v + '-01T00:00:00') : null;
+    return d && !isNaN(d) ? d.toLocaleString('en-MY', { month: 'long', year: 'numeric' }) : m;
+  })();
+
+  const headRounds = {};
+  PERF_JOBS.forEach(j => {
+    const jenis = PAYROLL_TYPES[j.type].jenis;
+    let maxN = 0;
+    plots.forEach(p => {
+      const c = monthRecs.filter(r => r.plot === p && r.jenis === jenis).length;
+      if (c > maxN) maxN = c;
+    });
+    headRounds[j.type] = maxN;
+  });
+
+  let totFull = 0, totAlive = 0;
+  const tots = {};
+  PERF_JOBS.forEach(j => { tots[j.type] = { prog: 0, qty: 0 }; });
+
+  const bodyRows = plots.map(plot => {
+    const alive = (linkedPlotQty(plot, '', '', PlotMovement.qtyOpts({ jenis: PAYROLL_TYPES.manuring.jenis })) || {}).qty || 0;
+    const full  = (linkedPlotQty(plot, '', '', PlotMovement.qtyOpts({ jenis: PAYROLL_TYPES.interrow.jenis })) || {}).qty || 0;
+    totFull += full; totAlive += alive;
+    const remarks = [];
+    const cells = PERF_JOBS.map(j => {
+      const jenis = PAYROLL_TYPES[j.type].jenis;
+      const rows = monthRecs.filter(r => r.plot === plot && r.jenis === jenis);
+      rows.forEach(r => {
+        const txt = String(r.remark || '').trim();
+        if (txt && remarks.indexOf(txt) < 0) remarks.push(txt);
+      });
+      const done   = rows.filter(_perfRowDone);
+      const rounds = done.length;
+      const base   = j.full ? full : alive;
+      const prog   = base * rounds;
+      const qty    = done.reduce((s, r) => s + ((recQty(r) || {}).value || 0), 0);
+      const vari   = qty - prog;
+      tots[j.type].prog += prog;
+      tots[j.type].qty  += qty;
+      return `<td class="num">${numMY(prog)}</td><td class="num">${numMY(rounds)}</td>`
+           + `<td class="num pf-rec">${numMY(qty)}</td><td class="num${vari ? ' pf-var' : ''}">${numMY(vari)}</td>`;
+    }).join('');
+    return `<tr><td class="pf-plot">${_perfEsc(plot)}</td><td class="num">${numMY(full)}</td><td class="num">${numMY(alive)}</td>${cells}<td class="pf-remark">${_perfEsc(remarks.join(' ; '))}</td></tr>`;
+  }).join('');
+
+  const footCells = PERF_JOBS.map(j => {
+    const vari = tots[j.type].qty - tots[j.type].prog;
+    return `<td class="num">${numMY(tots[j.type].prog)}</td><td></td>`
+         + `<td class="num">${numMY(tots[j.type].qty)}</td><td class="num${vari ? ' pf-var' : ''}">${numMY(vari)}</td>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div class="perf-head">
+      <div class="ph-1">Summary of work done in ${_perfEsc(NURSERY_LABELS[n] || n)} (Scheduled Maintenance Programme)</div>
+      <div class="ph-2">${_perfEsc(monthFull)}</div>
+    </div>
+    <div class="perf-scroll">
+      <table class="perf-table">
+        <thead>
+          <tr>
+            <th rowspan="3">Plot</th><th rowspan="3">Full<br>Capacity</th><th rowspan="3">Alive</th>
+            ${PERF_JOBS.map(j => `<th colspan="4">${j.head}<span class="pf-note">(Remarks: ${j.note})</span></th>`).join('')}
+            <th rowspan="3">Remarks</th>
+          </tr>
+          <tr>${PERF_JOBS.map(() => '<th>Program</th><th colspan="3">Verification</th>').join('')}</tr>
+          <tr>${PERF_JOBS.map(j => `<th class="pf-sub">No. of Rounds : ${numMY(headRounds[j.type])}</th>`
+            + '<th class="pf-sub">No. of Rounds</th><th class="pf-sub">Plot Capacity x No.of Rounds</th><th class="pf-sub">Variance</th>').join('')}</tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+        <tfoot><tr><td class="pf-plot">Total</td><td class="num">${numMY(totFull)}</td><td class="num">${numMY(totAlive)}</td>${footCells}<td></td></tr></tfoot>
+      </table>
+    </div>`;
+}
 
 function renderCharts() {
   const chartN = getNursery();
