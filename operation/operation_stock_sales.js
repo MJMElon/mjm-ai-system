@@ -732,18 +732,22 @@
 
             const trans = transRes.data || [];
             const plots = plotsRes.data || [];
-            // The Plot-R tab is specifically the "-R" reserve plots the
-            // office names by that suffix (U12-R, B6-R, NP-R...) — a
-            // Cull3_Transfer's destination is not always one of those (a
-            // transfer can land back on an ordinary production plot), and
-            // without this filter those showed up on this tab too, under
-            // Plot column values with no "-R" at all. Matched case-
-            // insensitively, trimmed, same leniency every other plot
-            // comparison in this system gets.
-            const isReservePlot = p => /-R$/i.test(String(p || '').trim());
-            const prTrans = (prRes.data || []).filter(l => isReservePlot(l.plot_name));
+            // EVERY Cull3_Transfer flows to the Plot-R tab — the office's
+            // rule: "If the batch in the plot has transfer data, pls flow
+            // the data to my monthly maturity allocation tab named
+            // plot-R". It used to be filtered to "-R"-suffixed names only,
+            // which dropped the rare transfer that lands back on an
+            // ordinary production plot (233's B9 → B4, 230's N2 → N1) off
+            // every tab at once. The one case a destination CANNOT be a
+            // row of its own is a plot where the SAME batch already has a
+            // month row (230's N2 → N1, with 230 standing in N1 already) —
+            // two rows on one batch+plot key would share one
+            // shared_plot_allocations record and split the DO deductions
+            // arbitrarily, so that transfer credits the month row instead
+            // (transferredInByKey, read in buildRow).
+            const allXfer = prRes.data || [];
 
-            // Culled qty per reserve plot, straight off Batch Detail's own
+            // Culled qty per plot, straight off Batch Detail's own
             // 3rd_Culling records — same batch+plot key as everything else
             // here (see groupRows below).
             const culledByKey = {};
@@ -751,13 +755,18 @@
                 const k = (r.batch_name||'') + '||' + (r.plot_name||'');
                 culledByKey[k] = (culledByKey[k] || 0) + (r.quantity_change || 0);
             });
-            // Qty a reserve plot sent on to yet another plot — the reverse
-            // of "Transferred". Batch Detail's Cull3_Transfer remark names
+            // Qty a plot sent on to another plot — the reverse of
+            // "Transferred". Batch Detail's Cull3_Transfer remark names
             // the source plot it left: "...From: [<plot>|<destType>] To:...".
-            // A plot's OWN inbound rows (prTrans, grouped below) don't carry
-            // this; only an outbound move naming it as the source does.
+            // A plot's OWN inbound rows (grouped below) don't carry this;
+            // only an outbound move naming it as the source does. Built
+            // over EVERY transfer: a month row's plot is a source too, and
+            // what it sent to Plot-R comes off its balance exactly like a
+            // sale does — the seedlings are standing on the Plot-R tab
+            // now, and counting them in both places sold the same
+            // seedlings twice.
             const movedOutByKey = {};
-            (prTrans || []).forEach(r => {
+            allXfer.forEach(r => {
                 const m = r.remark ? r.remark.match(/From:\s*\[([^|\]]+)\|/) : null;
                 if (!m) return;
                 const sourcePlot = m[1].trim();
@@ -847,7 +856,30 @@
             // remark), with created_at only the fallback for rows saved
             // without any date at all.
             const matRows = groupRows(trans, 'main');
+            // The transfers split two ways on the month rows' own keys —
+            // see the note at allXfer above.
+            const matKeys = new Set(matRows.map(g => g.key));
+            const transferredInByKey = {};
+            const prTrans = [];
+            allXfer.forEach(l => {
+                const k = (l.batch_name||'') + '||' + (l.plot_name||'');
+                if (matKeys.has(k)) transferredInByKey[k] = (transferredInByKey[k] || 0) + (l.quantity_change || 0);
+                else prTrans.push(l);
+            });
             const prRows  = groupRows(prTrans, 'pr');
+            // A Plot-R row's Maturity Date is the BATCH's — the office's
+            // rule: "show the maturity date (based on what batch)". The
+            // batch's earliest month-row maturity stands for it (one batch
+            // can mature across months; the earliest is when its stock
+            // starts being sellable, which is the question this column
+            // answers). A batch with no month row at all keeps the
+            // transfer-arrival date groupRows gave it — better a real date
+            // than a blank.
+            const batchMature = {};
+            matRows.forEach(g => {
+                if (!batchMature[g.batch] || g.matureDate < batchMature[g.batch]) batchMature[g.batch] = g.matureDate;
+            });
+            prRows.forEach(g => { if (batchMature[g.batch]) g.matureDate = batchMature[g.batch]; });
             allMatGroups  = matRows.concat(prRows);
 
             applyDoDeductions(allMatGroups, doRes?.data || []);
@@ -924,6 +956,17 @@
             matRows.forEach(g => {
                 g.culledQty     = culledCountedByKey[g.key] || 0;
                 g.culledPending = Math.max(0, (culledByKey[g.key] || 0) - g.culledQty);
+                // What a 3rd-culling transfer moved OFF this plot (it is
+                // standing on the Plot-R tab now) and, rarely, INTO it.
+                // Ungated, like a DO: a Cull3_Transfer is Tab 6's own
+                // deliberate record of seedlings moving, not a count
+                // waiting on a drone — the gate above is about the culled
+                // figure alone. This is what lets a plot whose 3rd culling
+                // IS gated through read Culled even though it also has
+                // transfer data: the transferred remainder used to sit on
+                // the balance for ever and hold the row above nought.
+                g.transferredOut = movedOutByKey[g.key] || 0;
+                g.transferredIn  = transferredInByKey[g.key] || 0;
             });
 
             plotAllocations = {};
@@ -970,7 +1013,7 @@
         prBtn.type = 'button';
         prBtn.className = 'month-tab' + (activeMonthKey === PR_TAB_KEY ? ' active' : '');
         prBtn.innerText = 'Plot-R';
-        prBtn.title = 'Reserve ("-R") plots from Batch Detail’s P-R Culling, with balance still to allocate';
+        prBtn.title = 'Plots a 3rd-culling transfer moved stock into (Batch Detail’s P-R Culling), with balance still to allocate';
         prBtn.onclick = () => { activeMonthKey = PR_TAB_KEY; closeHistoryMenu(); renderMonthTabs(); renderMaturityTable(); renderActiveBanner(); };
         tabsEl.appendChild(prBtn);
 
@@ -1003,7 +1046,7 @@
         const banner = document.getElementById('active-month-banner');
         if (activeMonthKey === PR_TAB_KEY) {
             banner.classList.remove('hidden');
-            banner.innerHTML = `🪴 Viewing <span class="font-black uppercase tracking-widest">Plot-R</span> — reserve plots from Batch Detail's P-R Culling with balance still to allocate, not bucketed by month`;
+            banner.innerHTML = `🪴 Viewing <span class="font-black uppercase tracking-widest">Plot-R</span> — every plot a 3rd-culling transfer moved stock into, balance = qty transferred − DO deducted (less its own culls and onward moves), not bucketed by month`;
         } else if (historyMonthKeys.includes(activeMonthKey)) {
             banner.classList.remove('hidden');
             banner.innerHTML = `🕘 Viewing <span class="font-black uppercase tracking-widest">history</span> — ${monthLabel(activeMonthKey)} (already matured & past)`;
@@ -1234,7 +1277,7 @@
             });
 
         if (!rows.length) {
-            const emptyMsg = isPR ? 'No reserve (Plot-R) plots' : 'No maturity allocations for this month';
+            const emptyMsg = isPR ? 'No transfer (Plot-R) plots' : 'No maturity allocations for this month';
             tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
             tfoot.innerHTML = '';
             renderDoUnmatched();
@@ -1269,8 +1312,15 @@
             // culled qty DEDUCTS like a DO does, and only a culling that
             // takes the balance to nought reads Culled.
             const culledQty = isPR ? 0 : (r.culledQty || 0);
-            const otherDed  = isPR ? (r.otherDeducted || 0) : culledQty;
-            const rawBalance = r.afterCulling - collected - otherDed;
+            // A month plot's 3rd-culling transfer deducts beside the
+            // culling: those seedlings are standing on the Plot-R tab now,
+            // and a balance still carrying them counts the same stock
+            // twice. transferredIn is the rare reverse (a transfer landing
+            // on a plot the same batch already stands in) and adds.
+            const xferOut   = isPR ? 0 : (r.transferredOut || 0);
+            const xferIn    = isPR ? 0 : (r.transferredIn  || 0);
+            const otherDed  = isPR ? (r.otherDeducted || 0) : (culledQty + xferOut);
+            const rawBalance = r.afterCulling + xferIn - collected - otherDed;
             // Fully culled: the culling (with whatever sold) took the row to
             // or past nought. Clamped at 0 — the estimate is 90% and a full
             // culling counts the real 100%, so the raw figure can go a few
@@ -1292,7 +1342,9 @@
             const soldOut = !culled && plotBalance <= 0;
             const status  = culled ? 'culled' : (soldOut ? 'sold_out' : (alloc.plot_status || 'no_status'));
             const doTitle = otherDed > 0
-                ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
+                ? (isPR
+                    ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
+                    : ` title="Sold ${collected.toLocaleString()} · Culled ${culledQty.toLocaleString()}${xferOut > 0 ? ` · Transferred out ${xferOut.toLocaleString()}` : ''}"`)
                 : '';
             // A culling keyed but not yet counted (no drone qty on the
             // report row, or the line unsigned) must SAY so — the balance
@@ -1300,8 +1352,10 @@
             // sends the office looking for a fault that is not there.
             const culledPending = isPR ? 0 : (r.culledPending || 0);
             const balNotes = [];
-            if (culled) balNotes.push(`3rd culling recorded on this plot (${culledQty.toLocaleString()} culled) — fully culled, balance reads 0`);
+            if (culled) balNotes.push(`3rd culling recorded on this plot (${culledQty.toLocaleString()} culled${xferOut > 0 ? `, ${xferOut.toLocaleString()} transferred to Plot-R` : ''}) — fully culled, balance reads 0`);
             else if (culledQty > 0) balNotes.push(`3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance`);
+            if (!culled && xferOut > 0) balNotes.push(`${xferOut.toLocaleString()} transferred off this plot by a 3rd-culling transfer — deducted here, standing on the Plot-R tab`);
+            if (xferIn > 0) balNotes.push(`${xferIn.toLocaleString()} transferred ONTO this plot by a 3rd-culling transfer — added to the balance`);
             if (culledPending > 0 && !culled) balNotes.push(`A 3rd culling of ${culledPending.toLocaleString()} is keyed but NOT counted yet — it needs the drone qty on the batch report row and the line verified`);
             const balTitle = balNotes.length ? ` title="${balNotes.join('. ')}"` : '';
 
@@ -1361,13 +1415,13 @@
             const liveRows    = rows.filter(r => (r.afterCulling - (r.doDeducted||0) - (r.otherDeducted||0)) > 0);
             // Latest first — History is a record of what already happened,
             // read like a log, not like the Live list above it (which sorts
-            // oldest-transferred-first, a picking order).
+            // earliest-maturing-batch-first, a picking order).
             const historyRows = rows
                 .filter(r => (r.afterCulling - (r.doDeducted||0) - (r.otherDeducted||0)) <= 0)
                 .sort((a, b) => b.matureDate - a.matureDate);
 
             if (!liveRows.length) {
-                bodyHtml += `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No reserve (Plot-R) plots with balance</div></td></tr>`;
+                bodyHtml += `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No transfer (Plot-R) plots with balance</div></td></tr>`;
             } else {
                 liveRows.forEach(r => {
                     const b = buildRow(r, false);
@@ -1379,7 +1433,7 @@
             if (historyRows.length) {
                 bodyHtml += `
                     <tr class="mat-history-toggle" onclick="toggleMatHistory()">
-                        <td colspan="13">🕘 History — ${historyRows.length} reserve plot${historyRows.length === 1 ? '' : 's'} already sold, culled or moved on <span id="mat-history-caret">▸ show</span></td>
+                        <td colspan="13">🕘 History — ${historyRows.length} transfer plot${historyRows.length === 1 ? '' : 's'} already sold, culled or moved on <span id="mat-history-caret">▸ show</span></td>
                     </tr>`;
                 bodyHtml += historyRows.map(r => buildRow(r, true).html).join('');
             }

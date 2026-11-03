@@ -2,8 +2,13 @@
    DO Deducted reads as Sold (the Movement report's own figure) while Plot
    Balance still nets off what was culled or moved on separately, a plot
    already at/under zero balance is History (collapsed, latest first), and
-   a transfer that did NOT land on a "-R"-named plot is not on this tab at
-   all.
+   EVERY Cull3_Transfer destination is on this tab — the office: "If the
+   batch in the plot has transfer data, pls flow the data to my monthly
+   maturity allocation tab named plot-R". It used to be "-R"-named plots
+   only, which dropped a transfer landing on an ordinary plot off every
+   tab at once. (The one exception — a destination where the same batch
+   already has a month row — is held by
+   tests/a_transfer_reads_culled_and_flows_to_plot_r.cjs.)
 
    Fixture:
      U12-R / batch 242 — Cull3_Transfer 300 + 200 (qty transferred 500),
@@ -14,9 +19,9 @@
      U14-R / batch 260 — Cull3_Transfer 80 on 20 Sep (LATER than U13-R), a
        DO for the full 80. Balance = 0 → History, and dated after U13-R —
        History must read U14-R above U13-R (latest first).
-     U20 (no "-R") / batch 270 — Cull3_Transfer 40, no DO. Balance = 40,
-       would be Live by the numbers alone, but it is not a reserve plot by
-       name and must not appear on this tab anywhere.
+     U20 (no "-R") / batch 270 — Cull3_Transfer 40 in from U19, no DO.
+       Balance = 40 → Live, exactly like a reserve plot: the name is not
+       the rule any more, the transfer is.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/maturity_plotr_tab.cjs
    with `python3 -m http.server 8777` serving the repository root.        */
@@ -35,7 +40,7 @@ const CULL3_TRANSFER_ROWS = [
   { batch_name: '242', plot_name: 'U12-R', breed_name: 'DxP', quantity_change: 200, transaction_date: '2026-09-02', created_at: '2026-09-02T02:00:00Z', remark: 'From: [U12|B/F] To: [U12-R]' },
   { batch_name: '256', plot_name: 'U13-R', breed_name: 'DxP', quantity_change: 100, transaction_date: '2026-08-10', created_at: '2026-08-10T02:00:00Z', remark: 'From: [U13|B/F] To: [U13-R]' },
   { batch_name: '260', plot_name: 'U14-R', breed_name: 'DxP', quantity_change: 80,  transaction_date: '2026-09-20', created_at: '2026-09-20T02:00:00Z', remark: 'From: [U14|B/F] To: [U14-R]' },
-  { batch_name: '270', plot_name: 'U20',   breed_name: 'DxP', quantity_change: 40,  transaction_date: '2026-09-15', created_at: '2026-09-15T02:00:00Z', remark: 'From: [U20|B/F] To: [U20]' },
+  { batch_name: '270', plot_name: 'U20',   breed_name: 'DxP', quantity_change: 40,  transaction_date: '2026-09-15', created_at: '2026-09-15T02:00:00Z', remark: 'From: [U19|B/F] To: [U20]' },
 ];
 const CULL3_ROWS = [
   { batch_name: '242', plot_name: 'U12-R', quantity_change: 50 },
@@ -165,9 +170,12 @@ const PLOTS = [
   );
   check('U14-R (20 Sep) comes before U13-R (10 Aug)', historyPlotOrder, ['U14-R', 'U13-R']);
 
-  console.log('\nU20 — a Cull3_Transfer that did not land on a "-R" plot — is not on this tab at all');
-  checkTrue('not in the visible (Live) rows', !afterExpand.includes('U20'));
-  check('no row for it anywhere, Live or History', await page.locator('#maturity-rows tr[data-plot-name="U20"]').count(), 0);
+  console.log('\nU20 — a Cull3_Transfer onto an ORDINARY plot — flows to this tab too');
+  checkTrue('U20 is in the Live rows: the transfer is the rule, not the "-R" name', afterExpand.includes('U20'));
+  const u20Row = page.locator('tr[data-plot-name="U20"]');
+  check('its Qty Transferred reads 40', (await u20Row.locator('td.col-prod.num').first().innerText()).trim(), '40');
+  check('and Plot Balance is Transfer data − DO Deducted: 40 − 0',
+    (await u20Row.locator('td.col-plot.num.font-black').first().innerText()).trim(), '40');
 
   await page.click('.mat-history-toggle');
   await page.waitForTimeout(200);
