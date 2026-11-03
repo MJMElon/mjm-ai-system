@@ -3747,6 +3747,85 @@ lifts the real `routeFor` out of the shipped dock and holds both files to it.
 `shared_cf_select.js` has: a browser holding yesterday's copy keeps it until
 one hard reload.
 
+### An ANSWER left standing where a QUESTION goes reads as a second question
+
+The rule was right and the form said it in the wrong order. The office
+opened Add New Case on the FC Portal and described the screen: an **Assign
+to** box standing open, already reading *FC*, above a Work list full of
+jobs the FC Portal does not solve. *"it seems like confusing, cuz there is
+'assigned to' when we open case."*
+
+Both halves of what they were looking at are correct — the Work list is the
+RAISING system's titles and the destination is the RULE's answer — and
+putting the answer on screen **before the question it follows from** turns
+one question into two, with the top one contradicting the list underneath
+it. Nothing was broken; nothing on the screen said which box was waiting
+for them.
+
+So **the destination row is not drawn until it has an answer**, and
+`showDest()` is the one test. Three things count as an answer, and the
+third is the one that is easy to drop:
+
+- a **WORK** has been chosen, so the rule has had its say. Both selects
+  stay editable, because overriding the rule for one case is the whole
+  reason they are not a line of text;
+- an existing case is being **EDITED**, where the destination is a fact
+  about that case rather than a question;
+- there is **no work list to derive from** — a system with no case titles
+  falls back to a typed line, nothing derives a destination from a sentence
+  somebody typed, and the person has to say where it goes. Hidden there the
+  form could not be filled in at all.
+
+Three things fall out, and each is a way the hiding alone would have been
+worse than the standing box:
+
+- **A WORK WITH NO RULE FALLS BACK TO THE SYSTEM THAT RAISED IT** — what
+  Case Routing promises at the foot of every block in those words, and what
+  `nelos_route_case()` does with a case naming no queue. `onWork` used to
+  return early and leave both alone, which was invisible while the row was
+  always on screen and is not now: the row would come back carrying
+  whatever the LAST work put there, which is nobody's answer reading as if
+  it were one. **Nelos itself is the exception**, exactly as in the
+  dashboard's `routedTo()` — the case log is not a queue anybody works, so
+  there is nothing to fall back to and the row asks. **An unreadable
+  `nelos_routes` still leaves both alone**, the fail-open every other gate
+  here follows.
+- **THE REFUSAL HAS TO NAME SOMETHING ON SCREEN.** `submitCase` asked
+  `assignTo` first, so pressing Create on a blank form answered *"Choose
+  who this is for"* over a box that is not on the page. The work is asked
+  first now, which is also the order the form asks them in.
+- **The phone copy had never been put in step on the ORDER.** The list
+  source and the rule were fixed in both; `NelosNewCase.jsx` kept **Assign
+  to → Work → PIC**, which is the layout the fix was about. It is Work
+  first, with the pair behind one `showDest`, in both.
+
+**The NELOS dashboard's own drawer is deliberately NOT in this**, and the
+reason is in its `routedTo()`: a case raised there has Nelos as its source,
+and Nelos has no queue to fall back to, so the destination is a real
+question on that screen. Three raise forms, and only the two raising from a
+real module can answer it for the person.
+
+`tests/the_destination_follows_the_work.cjs` drives the REAL dock in a real
+browser — it serves the repository itself, so nothing has to be started
+first — and 11 of its 25 checks fail on the previous code. Two things it
+had to learn, both of which make a browser test wait for nothing:
+
+- **`window.NelosDock` exists before the dock does.** The handle is
+  assigned as the file evaluates; `dock` is built at the end of `boot()`,
+  after four awaited reads, and `newCase()` answers **false** until then
+  and draws nothing. Waiting on the handle is waiting for nothing, and what
+  fails afterwards is whatever check comes next.
+- **The typed Work line ships with no `hidden` attribute**, so "the typed
+  line is showing" is true of the blank markup. That condition passed over
+  the four sections where the dropdown comes up anyway and timed out on the
+  one case it was written for. `#nd-f-to` having its options is the signal,
+  because `populateForm` is the only thing that fills it.
+
+And one about asserting absence: `!!row && !row.hidden` read a **missing**
+element as "not shown", so the first section passed over the very page it
+was written about — the previous markup had no id on that row at all. It
+answers `'no such row'` now, which is a different thing from `false`.
+
 ## A case category is retired, never deleted — and adding it back revives it
 
 The office asked for a cross on each row of Case Routing: *"i want to delete
