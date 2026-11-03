@@ -6122,9 +6122,29 @@ and a job showing twice is one somebody keyed before its Used For existed.
 **Nothing removes it** — a rate filed under Other is a job option on the
 Other sheet, so taking it off is the office's decision and not a repair.
 
-Tested against their own four rows, and against a database with none: the
-list came back four rows long both times, and running it three more times
-added nothing.
+**AND "MENTIONS HYPLUG" WAS TOO LOOSE A RULE, which their own list proved.**
+It also carries *Transplanting (from Hy Plug to polybag 15" x 18")* at
+RM 0.25 — the tray named, and the OPPOSITE job: seedlings coming out of it.
+The first matcher picked that row up and would have priced the soil filling
+at **RM 0.25 a Bag**. Their run was never at risk, because that row is filed
+under `transplanting` and the move only ever considers Other — but that is
+luck and not a rule, so a candidate now has to name the tray AND the
+filling, and must not be a transplanting job.
+
+**TWO CANDIDATES MOVE NEITHER.** Picking one of them would file somebody
+else's job under this rate, so both are named and the choice is left where
+it belongs — the same answer the worker register gives a tick name claimed
+by two rows.
+
+**No TEMP table**, because the SQL Editor warns that one is made without row
+level security and a warning somebody has to click past is a bad thing to
+hand over. One query answers how many could be it, which one, and what they
+are called.
+
+Tested on the scratch Postgres against their own five rows, against the same
+list with the transplanting row moved to Other, against a database with
+none, and against two genuine candidates. The list came back the length it
+started both times it should have, and running it again changes nothing.
 
 **The section head cannot be a `<thead>`** — there are two of them — so
 `.pn-job-row`, `.pn-head` and `.pn-sub-row` carry the look `thead th` gives

@@ -98,36 +98,63 @@ CREATE INDEX IF NOT EXISTS nops_seed_planting_batch_workers_job
 -- wording, their own unit and their own figure. Only where there is no
 -- such row at all is one made.
 --
--- Matched on the job description with the spaces taken out and the case
--- dropped, so Hy Plug Soil Filling and Mengisi Tanah ke Hyplug both answer.
--- No regular expression: the SQL Editor has choked on one before.
-SELECT set_config('mjm.hy_rate', '', false);
-
+-- MATCHING IS NOT "MENTIONS HYPLUG", and the office list is why. It also
+-- carries *Transplanting (from Hy Plug to polybag 15 x 18)* at RM 0.25,
+-- which mentions the tray and is the opposite job -- seedlings coming OUT
+-- of it. A looser rule picked that row up and would have priced the soil
+-- filling at RM 0.25 a Bag. It was filed under transplanting rather than
+-- Other, so their own run was never at risk, but that is luck and not a
+-- rule.
+--
+-- So a candidate has to name the tray AND the filling, and must not be a
+-- transplanting job. No regular expression: the SQL Editor has choked on
+-- one. The spaces come out and the case drops, so Hy Plug Soil Filling and
+-- Mengisi Tanah ke Hyplug both answer.
+--
+-- AND TWO CANDIDATES MOVE NEITHER. Picking one of them would file somebody
+-- elsewhere job under this rate, so the file names them both and leaves the
+-- choice where it belongs. Same rule as a tick name claimed by two rows of
+-- the worker register.
+-- ONE QUERY ANSWERS ALL THREE -- how many could be it, which one, and what
+-- they are called. No TEMP table: the SQL Editor warns that one is made
+-- without row level security, and a warning somebody has to click past is a
+-- bad thing to hand over.
 DO $$
 DECLARE
-  hit record;
+  many    int;
+  pick_id bigint;
+  names   text;
 BEGIN
   IF to_regclass('public.mjmnpayroll_piece_rates') IS NULL THEN
     RETURN;
   END IF;
 
   IF EXISTS (SELECT 1 FROM public.mjmnpayroll_piece_rates WHERE category = 'hyplug_soil') THEN
-    RETURN;                                   -- already filed: nothing to do
+    PERFORM set_config('mjm.hy_rate', 'already filed, left alone', false);
+    RETURN;
   END IF;
 
-  SELECT id, job_desc INTO hit
+  SELECT count(*), min(id), string_agg(job_desc, ', ' ORDER BY job_desc)
+    INTO many, pick_id, names
     FROM public.mjmnpayroll_piece_rates
-   WHERE position('hyplug' in replace(lower(COALESCE(job_desc, '')), ' ', '')) > 0
-     AND COALESCE(category, '') IN ('', 'other')
-   ORDER BY active DESC, id
-   LIMIT 1;
+   WHERE COALESCE(category, '') IN ('', 'other')
+     AND position('hyplug' in replace(lower(COALESCE(job_desc, '')), ' ', '')) > 0
+     AND (position('soil'  in replace(lower(COALESCE(job_desc, '')), ' ', '')) > 0
+       OR position('tanah' in replace(lower(COALESCE(job_desc, '')), ' ', '')) > 0
+       OR position('fill'  in replace(lower(COALESCE(job_desc, '')), ' ', '')) > 0
+       OR position('isi'   in replace(lower(COALESCE(job_desc, '')), ' ', '')) > 0)
+     AND position('transplant' in replace(lower(COALESCE(job_desc, '')), ' ', '')) = 0
+     AND position('pindah'     in replace(lower(COALESCE(job_desc, '')), ' ', '')) = 0;
 
-  IF hit.id IS NOT NULL THEN
+  IF many > 1 THEN
+    PERFORM set_config('mjm.hy_rate',
+      'MOVED NOTHING -- more than one row could be it, so the office decides: ' || names, false);
+  ELSIF many = 1 THEN
     UPDATE public.mjmnpayroll_piece_rates
        SET category = 'hyplug_soil',
            updated_by = 'RUN_ME_hyplug_soil'
-     WHERE id = hit.id;
-    PERFORM set_config('mjm.hy_rate', 'moved the row the office keyed: ' || hit.job_desc, false);
+     WHERE id = pick_id;
+    PERFORM set_config('mjm.hy_rate', 'moved the row the office keyed: ' || names, false);
   ELSIF EXISTS (SELECT 1 FROM information_schema.columns
                  WHERE table_schema = 'public' AND table_name = 'mjmnpayroll_piece_rates'
                    AND column_name = 'group_code') THEN
