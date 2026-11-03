@@ -1285,8 +1285,9 @@
 
         // One row's <tr> — identical machinery on every tab, Plot-R
         // included (the office: "Plot-R history data must be same with the
-        // normal tab").
-        function buildRow(r) {
+        // normal tab"). history=true only adds a CSS class; the figures,
+        // the statuses and the controls are the same either way.
+        function buildRow(r, history) {
             const alloc = plotAllocations[r.key] || { plot_status: 'no_status', reserved_for: '', reserved_qty: 0, premium: false };
             const rowAllocs = allocsForBatch(r.key);
             // Reserved Qty counts what is still OWED, not what was dragged —
@@ -1378,7 +1379,7 @@
                     : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
 
             const html = `
-                <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}">
+                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}">
                     <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
                     <td class="col-prod">${escapeHtml(r.location)}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
@@ -1396,25 +1397,55 @@
                     <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
                 </tr>
             `;
-            return { html, allocSum, collected, otherDed, plotBalance };
+            return { html, allocSum, collected, otherDed, plotBalance, status };
         }
 
-        // ONE loop for every tab, Plot-R included. The Plot-R tab used to
-        // split itself into a Live list and a collapsed History of rows
-        // already at nought — and once every transfer plot's figures netted
-        // out (which on this ledger is all of them) the tab opened on "no
-        // data" with everything hidden behind a toggle. The office: "Check
-        // why Plot-R no data. Plot-R history data must be same with the
-        // normal tab." So a fully-accounted transfer plot shows inline the
-        // way a month row does — 0 with its locked CULLED or SOLD OUT pill
-        // saying why — instead of vanishing.
+        // Every row goes through the ONE buildRow — same gate, same
+        // statuses, same figures on every tab. What differs on Plot-R is
+        // only WHERE a finished row sits: the office asked for the done
+        // ones tucked away again, keyed on the STATUS this time — "Make a
+        // line for History data. All sold out or culled status will be
+        // flow to the history part. The history part make it expandable
+        // and collapse, data from the latest to oldest." So a Plot-R row
+        // whose status is the locked CULLED or SOLD OUT goes under a
+        // History toggle (collapsed, newest maturity first), and a row
+        // still waiting on its gate — a culling with no drone qty or no
+        // signature — stays in the live list with its balance standing,
+        // exactly like a month row. The earlier shape (split on the raw
+        // balance) hid THOSE too, which is what read as "no data".
         let bodyHtml = '';
-        rows.forEach(r => {
-            const b = buildRow(r);
-            bodyHtml += b.html;
-            totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
-            totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totRowCount++;
-        });
+        if (isPR) {
+            const built = rows.map(r => ({ r, b: buildRow(r, false) }));
+            const liveRows    = built.filter(x => x.b.status !== 'culled' && x.b.status !== 'sold_out');
+            const historyRows = built.filter(x => x.b.status === 'culled' || x.b.status === 'sold_out')
+                .sort((a, b) => b.r.matureDate - a.r.matureDate);
+
+            if (!liveRows.length) {
+                bodyHtml += `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No transfer (Plot-R) plots with balance — everything is in History below</div></td></tr>`;
+            } else {
+                liveRows.forEach(x => {
+                    bodyHtml += x.b.html;
+                    totQty += x.r.qty; totCull += x.r.afterCulling; totReserved += x.b.allocSum;
+                    totCollected += x.b.collected; totOther += x.b.otherDed; totBalance += x.b.plotBalance; totRowCount++;
+                });
+            }
+            if (historyRows.length) {
+                bodyHtml += `
+                    <tr class="mat-history-toggle" onclick="toggleMatHistory()">
+                        <td colspan="13">🕘 History — ${historyRows.length} transfer plot${historyRows.length === 1 ? '' : 's'} already Sold Out or Culled <span id="mat-history-caret">▸ show</span></td>
+                    </tr>`;
+                // Rebuilt WITH the history class — the figures and statuses
+                // are identical, only the row hides until the toggle opens.
+                bodyHtml += historyRows.map(x => buildRow(x.r, true).html).join('');
+            }
+        } else {
+            rows.forEach(r => {
+                const b = buildRow(r, false);
+                bodyHtml += b.html;
+                totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
+                totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totRowCount++;
+            });
+        }
 
         tbody.innerHTML = bodyHtml;
 
@@ -1428,7 +1459,9 @@
             el.addEventListener('dragend',   onChipDragEnd);
         });
 
-        // Totals are every shown row, on Plot-R exactly as on a month tab.
+        // Totals are the LIVE rows on Plot-R (History is Sold Out and
+        // Culled — reference, not stock still to place) and every row on a
+        // month tab.
         // Plot Balance totals the SHOWN per-row figures, never a re-derive
         // from the other columns — a Culled row's balance is forced to 0,
         // and a foot that disagreed with the column above it would be the
@@ -1449,6 +1482,19 @@
 
         renderDoUnmatched();
     }
+
+    // Expand/collapse Plot-R's History section. Toggles the rows directly
+    // (no re-render) so drag state and open status menus on the live rows
+    // above are undisturbed.
+    function toggleMatHistory() {
+        const rows = document.querySelectorAll('#maturity-rows .mat-history-row');
+        if (!rows.length) return;
+        const opening = !rows[0].classList.contains('mat-history-open');
+        rows.forEach(tr => tr.classList.toggle('mat-history-open', opening));
+        const caret = document.getElementById('mat-history-caret');
+        if (caret) caret.textContent = opening ? '▾ hide' : '▸ show';
+    }
+    window.toggleMatHistory = toggleMatHistory;
 
     async function updateAllocation(el) {
         if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
