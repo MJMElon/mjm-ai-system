@@ -3637,6 +3637,42 @@ Three things in it:
   prints *relation already exists, skipping*, which is one more line
   somebody has to read past, so the guard is `to_regclass` instead.
 
+#### WHAT IT ACTUALLY MOVED, which is the figure that settles it
+
+Run on 4 Nov 2026. **472 rows deleted, and the table went from 2,037 rows
+over 1,565 tasks to 1,565 over 1,565** -- one audit per task exactly, with
+the index INSTALLED and nought duplicates left. The 472 split:
+
+| | |
+|---|---|
+| 188 | a second audit SAYING THE SAME THING -- nothing was ever in doubt |
+| 187 | a CLOSURE that gave way to a real audit |
+| 95 | a second closure on one task |
+| 2 | two real audits that DISAGREED |
+
+**So the bulk of Ruth Wong 12 Oct closure is undone**, and that is correct
+rather than a casualty: those plots were walked. The register
+(`CHECK_audits_closed_by_admin.sql`) therefore reads far shorter for
+October than it did, and the Monthly Audit Report loses its 12 Oct closure
+rows while keeping the 18 to 23 Oct audits that replaced them. Three tasks
+whose only surviving row is dated 4 Nov leave October altogether.
+
+**The two genuine disagreements both now read Unsatisfactory** -- U11
+Manuring (task 1443) and U16 Manuring (task 1791441167950), each
+Satisfactory on the first walk and Unsatisfactory on the second. Those are
+the two plots to go and look at.
+
+**ONE THING THE INDEX CHANGED THAT NOBODY ASKED FOR, and it is worth
+knowing before somebody reports it as a fault.** The section × on the audit
+board writes its closures as ONE insert, deliberately, so a section is
+never half closed. PostgREST rejects the WHOLE insert on a single
+constraint violation, so a section where one plot already carries an audit
+now closes NONE of them and alerts with the constraint name. It should not
+arise -- the paged board no longer offers an audited task -- and it is loud
+rather than silent when it does. The fix, the day somebody meets it, is to
+send that insert as an upsert that ignores duplicates, so the section
+closes what needs closing and skips what is already audited.
+
 **AND TWO DIFFERENT THINGS NOW COME BACK 23505.** The outbox has always
 retired a duplicate key quietly, on the correct reasoning that the row
 reached the table and only the acknowledgement was lost. The index makes a
