@@ -6907,3 +6907,68 @@ every interaction is guarded and the failure arrives as a NAMED check.
 **A test that dies on the previous code proves nothing about it** — the
 harness stops at the first throw and the twelve checks underneath are never
 asked.
+
+#### The summary at the top is a card per BATCH, because the columns are batches
+
+*"Payroll那里的seed planting我要像transplanting那样，上边有summary 有batch，
+amount， total workdone"*. **The words name the slots of a card this system
+already draws**: `.pt-card` is a label, a figure and `Total Workdone (RM) :`,
+which is batch, amount and total workdone exactly. So the ribbon is the
+Transplanting sheet's own `.pt-glance`, reused rather than copied — one
+office reads both claims, and a summary answering the same question in a
+different shape is a shape somebody has to learn twice.
+
+**WHAT DIFFERS IS THE UNIT, and it follows from the sheet.** Transplanting's
+four cards are its four JOBS, which are its columns. This sheet's columns
+are the BATCHES, so these are batches — which is also the unit the office
+named. A card per job here would have been two cards saying what the two
+band totals already say.
+
+Four things in it:
+
+- **IT IS COLLECTED, NEVER RECOMPUTED.** `preNurseryClaim` builds `byBatch`
+  off `j.claim.rows` — the very figures `seedPlantingClaim` already worked
+  out for the column feet. A card that disagreed with the column under it
+  would be the worse of the two faults, because the card is what somebody
+  reads first, and two walks of the same records is the fault this file has
+  a heading about. The test asserts the cards add up to exactly `c.qty` and
+  `c.amount`.
+- **A BATCH ON BOTH JOBS CARRIES THE SPLIT**, in `.pt-sub`, muted and small.
+  The two jobs are priced at different rates, so **7,760 biji and RM 183.20
+  cannot be checked against each other** by anybody who does not know how
+  the 7,760 divides. It is drawn ONLY where both jobs have something —
+  otherwise it would read "all of it" and "none of it", two lines of type
+  for no information, which is the rule the Life of Seedlings split already
+  follows.
+- **A HELD BATCH IS ON NO CARD.** 279 is keyed and not Checked, so it pays
+  nothing; a summary that counted it would be the one figure on the page
+  claiming money the claim underneath does not pay. The note still names it.
+- **The ribbon is CLEARED on both early returns.** Left standing over
+  *Loading…* it is last month's figures on this month, which is the one kind
+  of wrong a summary must not be.
+
+**AND IT IS ON THE PAPER**, because a figure on the screen belongs on the
+paper — the rule this module learned when Transplanting's own four cards
+were nowhere on its form. Same drawing, same figures, same rounding, and
+**said ONCE on page one**, exactly as Transplanting says it: these are the
+month's totals and not this page of them, so a second copy overleaf invites
+somebody to add the two pages together. **It WRAPS, which Transplanting's
+does not have to** — that sheet has exactly four cards and this one has a
+card per batch, so `CARD_MIN` decides how many fit a row and the row count
+follows the paper rather than a number typed here. A dozen batches at four
+to a row is three rows rather than twelve slivers with their money cut off.
+
+Section 5 of `tests/the_pre_nursery_pays_two_jobs.cjs` holds it — the
+arithmetic off the lifted `preNurseryClaim`, the cards off the REAL page,
+and the band off the real claim form. **10 of its 61 checks fail on the
+previous code**, each by NAME: `byBatch` is guarded with `|| []` and the
+screen read answers `'no #seedplant-glance on the page'` rather than
+throwing. `SHOT=/path.png` draws the tab as the office sees it, which is how
+the ribbon was judged — a check cannot read a layout.
+
+**One thing seen while doing it and NOT changed**: a job band with fewer
+batches than the widest ends short of the table's right edge, because
+`jobTable` draws that job's own columns and only the grand total spans the
+widest. It is how the stacked sheet has always drawn and the office has not
+mentioned it; padding each band to the widest would move the upper table's
+column widths as well, which is a change nobody asked for.

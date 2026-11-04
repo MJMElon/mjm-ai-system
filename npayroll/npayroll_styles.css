@@ -546,3 +546,11 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
   font-variant-numeric:tabular-nums;}
 .pt-wd{font-size:11px;font-weight:700;color:var(--ink-deep);margin-top:5px;
   font-variant-numeric:tabular-nums;}
+/* The job split inside a Pre Nursery card. The two jobs are priced at
+   different rates, so a card reading 5,000 biji and RM 117.08 cannot be
+   checked against itself without saying how the 5,000 divides — and it is
+   MUTED and SMALL because the composition is for the reader who stops,
+   where the total is for the one going across. Drawn only where both jobs
+   have something on that batch; see renderPreNurseryGlance(). */
+.pt-sub{font-size:10px;font-weight:600;color:var(--text-muted);margin-top:4px;
+  line-height:1.45;font-variant-numeric:tabular-nums;}
