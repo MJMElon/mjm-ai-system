@@ -6724,11 +6724,111 @@ B4-R2 both go; a split area is judged by its plot.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
 
-## Worker Activity is two parts, and Seed Planting is the Pre Nursery one
+## Where each job is done is KEYED, and the circles are what say it
+
+The office asked for a Setting splitting the jobs between the **Pre Nursery**
+and the **Main Nursery (BNN, UNN1, UNN2)** as rows, dragged between them the
+way the Team Board moves a worker, with the side bar following it — and then
+narrowed it twice, and the narrowing is the whole shape of what was built:
+
+> *"main page 不会跟着pre 和 main 分了 所以如果两边都有 当我按那个工作的时候
+> 上面的圈圈就会show PN BNN UNN1 UNN2"*
+
+> *"上面nursery的圈圈就会跟着side tab show，例如我按pnd，而后面的setting pnd
+> 是drag去main nursery，上面的圈圈只会show BNN UNN1 UNN2"*
+
+**SO THE SIDE BAR STOPPED BEING THE THING THAT SAYS IT.** It was two groups
+under a Main Nursery and a Pre Nursery heading (the section below this one is
+how that came to be) and both headings are gone: it is ONE list of eight jobs,
+alphabetical, with every job in it whatever row it sits in. What says where a
+job is done is the **nursery circles**, which can say it about the job
+somebody actually has open — and a heading saying it again over a list is the
+same answer twice, in the place with the least room for it.
+
+**TWO ROWS WERE ASKED FOR AND THERE ARE THREE**, and the office's own next
+sentence is why: *如果两边都有*. A chip that lives in exactly one cell is
+right for a WORKER — a person works at one nursery — and wrong for a JOB,
+since one job really is done in both places; two rows could not hold a state
+the office had already described. So **Both** is a row of its own, which keeps
+the gesture to the one thing they asked for (a drag, nothing else) and makes
+every state reachable. It stands empty rather than hiding, for the same reason
+the Team Board keeps a company section's column standing empty: it is where
+something IS dragged.
+
+**THE SCOPE IS STORED, NEVER THE NURSERY LIST.** `main` means whatever the
+main nursery is, so a fifth nursery added next year is picked up by every job
+scoped to it without anybody re-keying eight rows. `scopeNurseries` derives
+the four from `MAINT_NURSERIES`, so there is no second copy of which of them
+is the pre nursery, and `MAINT_NURSERIES` is also what fixes the ORDER the
+circles are drawn in.
+
+**NOTHING TO RUN IN THE DATABASE.** It is one `nops_maint_config` row per job,
+`job_scope:<job>` in `key` and `pre` / `main` / `both` in `txt_value` — the
+table that was made, in its own file's words, *"in a shape that will hold the
+next such setting without another migration"*, and this is that setting. A
+database old enough to lack `txt_value` refuses the whole select, which the
+fallback turns into no rows, so every job reads its default; and the SAVE
+**refuses** rather than dropping the column and writing eight rows that say
+nothing, naming `shared/RUN_ME_nops_maint_config.sql`.
+
+Six things in it, four of which are rules this file already has:
+
+- **AN ABSENT ANSWER IS NOBODY HAVING BEEN ASKED.** `JOB_SCOPE_WAS` is
+  exactly where each job has always been — Seed Planting & Hyplug in the Pre
+  Nursery, the other seven in the Main Nursery — so an unkeyed database, an
+  unreadable one and one with no `txt_value` all behave identically to the
+  page before this existed. Section 1 and section 6 of the test are that.
+- **SAVE WRITES ALL EIGHT, defaults included**, which is not seeding a
+  default into an unasked row: pressing Save IS being asked. A board half
+  keyed and half falling through to the code is two rules for one screen.
+- **A DRAFT WRITES NOTHING.** Eight round trips, one per chip somebody tried,
+  is a board that fights back — and a move stored before Save cannot be
+  cancelled. Same Edit / Cancel / Save shape as the three blocks above it.
+- **A NURSERY SOMEBODY CHOSE IS NOT WALKED AWAY FROM THEM.** The scope moves
+  the picked nursery when the job open does not have it, so without
+  `_nurseryChosen` opening Seed Planting from UNN 1 and going back to P & D
+  would land on BNN. A nursery the scope FORCED is deliberately not recorded
+  as a choice.
+- **THE SIDE BAR IS ORDERED AT RUN TIME**, by `orderJobSubnav()`, because the
+  labels are translated: P & D sorts before Transplanting in English and
+  Pemindahan before Racun in Malay, so `applyLang` re-orders it. The order in
+  the markup is only what shows before the script runs.
+- **THE BOX IS FOUND THROUGH A JOB BUTTON, never by `.pn-sub`.** There are
+  TWO of those bars — Work Record's list/chart is the other — so
+  `querySelector('.pn-sub')` answers with the one that is not this, the
+  reorder finds none of its own buttons in it, and the side bar silently goes
+  on in the order it was written. That is exactly what the first version did,
+  and the test caught it. `_syncSubNav` names the same trap in its own
+  comment, which is why it takes the exact set of ids it owns.
+
+**WHAT IT COSTS, and it is the one honest gap: the Seed Planting sheet does
+not read the nursery at all.** Its rows are keyed on the batch and the job and
+on nothing else, so it reads the same whichever circle is on — which is true
+while the Pre Nursery is its only circle, and a lie the moment somebody drags
+it onto a row offering three more. The line over the sheet therefore names the
+nursery that is PICKED once the scope is wider than the pre nursery, rather
+than going on saying Pre Nursery over BNN circles. **What the nursery will
+then DECIDE is the name list**, which is the half the office asked for next:
+*"seed planting那边就会show workers (show by nursery first)"*.
+
+`shared/CHECK_which_nurseries_each_job_is_on.sql` prints every job, what is
+keyed against it, which circles that draws, and whether anything is stored
+under a job or a value the page does not read.
+`tests/where_each_job_is_done.cjs` drives the real page and the REAL drag —
+a `DragEvent` dispatched at the chip and the row, which fires the inline
+handlers exactly as a mouse does, because a drag simulated by setting the
+draft would prove nothing about the board. **22 of its 40 checks fail on the
+previous code**, each by name: every reader is guarded, since a test that dies
+on the previous code proves nothing about it.
+
+### Worker Activity was two parts, and Seed Planting is the Pre Nursery one
+
+**The two headings this section is about are GONE** — see above. Everything
+else in it stands, and it is why the Pre Nursery sheet is one entry.
 
 The office asked for Worker Activity to read as two parts: **Main Nursery**
 (the seven sheets that were there) and **Pre Nursery**, which has one,
-**Seed Planting**. The two headings are `.pn-subgroup` lines inside the
+**Seed Planting**. The two headings were `.pn-subgroup` lines inside the
 existing `.pn-sub` list, and they are headings, not buttons.
 
 **The rows are the batch report's, ONE PER BATCH.** Seed Planting on the

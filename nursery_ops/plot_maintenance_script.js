@@ -866,7 +866,128 @@ function switchPayrollView(type) {
   _payrollView = type;
   _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
   _syncSubNav('pn-subtab-', PAYROLL_VIEW_KEYS, type);
+  /* The circles follow the side tab — 上面nursery的圈圈就会跟着side tab
+     show. Before the render, or the sheet draws against a nursery that is
+     about to be taken off the row above it. */
+  syncJobNurseries();
   renderPayroll();
+}
+
+/* ══ WHERE EACH JOB IS DONE ═══════════════════════════════════════════════
+   The office asked for a setting splitting the jobs between the PRE NURSERY
+   and the MAIN NURSERY, dragged between rows the way the Team Board moves a
+   worker, with the side bar and the nursery circles following it:
+
+     "P&D drag to main nursery only, so when click P&D, will only show BNN,
+      UNN1, UNN2, 不会有PN"
+
+   TWO ROWS WERE ASKED FOR AND THERE ARE THREE, because the office's own
+   next sentence describes a state two rows cannot hold: 如果两边都有 ——
+   if both sides have it, the circles show all four. A chip that lives in
+   exactly one cell is right for a WORKER (a person works at one nursery)
+   and wrong for a JOB, since one job really is done in both places. So
+   BOTH is a row of its own, which keeps the gesture the office named — one
+   drag, nothing else — and makes every state reachable. The row stands
+   empty rather than hiding, for the same reason the Team Board keeps a
+   company section's column standing empty: it is where something IS
+   dragged.
+
+   THE SCOPE IS STORED, NEVER THE NURSERY LIST. `main` means whatever the
+   main nursery is, so a fifth nursery added next year is picked up by every
+   job scoped to it without anybody re-keying eight rows.
+
+   AN ABSENT ANSWER IS NOBODY HAVING BEEN ASKED, so the default is exactly
+   what the page did before this existed: Seed Planting & Hyplug in the Pre
+   Nursery, the other seven in the Main Nursery. A database that cannot be
+   read, or one nobody has keyed, behaves identically. */
+const JOB_SCOPE_ROWS = ['pre', 'main', 'both'];
+/* Seed Planting is the only Pre Nursery job there has ever been; everything
+   else falls through to the main nursery, which is where it was. */
+const JOB_SCOPE_WAS = { seed_planting: 'pre' };
+let jobScopes = {};          // job key → 'pre' | 'main' | 'both', only what is KEYED
+const JOB_SCOPE_PREFIX = 'job_scope:';
+
+function jobScopeOf(key) {
+  const keyed = jobScopes[key];
+  return JOB_SCOPE_ROWS.includes(keyed) ? keyed : (JOB_SCOPE_WAS[key] || 'main');
+}
+/* ONE list of nurseries, derived, so there is no second copy of which of
+   them is the pre nursery. MAINT_NURSERIES decides the ORDER, which is the
+   order the circles are drawn in. */
+function scopeNurseries(scope) {
+  if (scope === 'both') return MAINT_NURSERIES.slice();
+  if (scope === 'pre')  return MAINT_NURSERIES.filter(n => n === 'PN');
+  return MAINT_NURSERIES.filter(n => n !== 'PN');
+}
+function jobNurseries(key) { return scopeNurseries(jobScopeOf(key)); }
+
+/* A JOB'S NAME COMES OFF THE SIDE BAR'S OWN BUTTON, never a second list
+   here — the same rule the section head follows, so one wording and one
+   language toggle. */
+function jobLabel(key) {
+  const btn = document.getElementById('pn-subtab-' + key);
+  const span = btn && btn.querySelector('[data-i18n]');
+  if (span) return t(span.getAttribute('data-i18n'));
+  return btn ? btn.textContent.trim() : key;
+}
+
+/* ── THE SIDE BAR IS ONE ALPHABETICAL LIST ────────────────────────────────
+   It was two groups under a Main Nursery and a Pre Nursery heading. The
+   office took both headings off in one line — main page 不会跟着pre 和 main
+   分了 — because the split is now said by the CIRCLES, which is the place
+   it can be said about the job somebody actually has open, and a heading
+   saying it again above a list is the same answer twice.
+
+   ORDERED AT RUN TIME AND NOT IN THE MARKUP, because the labels are
+   translated: P & D sorts before Transplanting in English and Pemindahan
+   before Racun in Malay. So applyLang re-orders it. */
+function orderJobSubnav() {
+  /* THE BOX IS FOUND THROUGH A JOB BUTTON, never by `.pn-sub`. There are
+     TWO of those bars — Work Record's list/chart is the other — and
+     `querySelector` answers with the first, which is not this one: the
+     reorder then found none of its own buttons in it and silently did
+     nothing. Same trap `_syncSubNav` names in its own comment, which is
+     why it takes the exact set of ids it owns. */
+  const first = document.getElementById('pn-subtab-' + PAYROLL_VIEW_KEYS[0]);
+  const box = first && first.parentNode;
+  if (!box) return;
+  const btns = PAYROLL_VIEW_KEYS
+    .map(k => document.getElementById('pn-subtab-' + k))
+    .filter(el => el && el.parentNode === box);
+  if (btns.length < 2) return;
+  btns
+    .slice()
+    .sort((a, b) => a.textContent.trim()
+      .localeCompare(b.textContent.trim(), currentLang === 'bm' ? 'ms' : 'en'))
+    .forEach(el => box.appendChild(el));
+}
+
+/* ── THE CIRCLES FOLLOW THE SIDE TAB ──────────────────────────────────────
+   "例如我按pnd，而后面的setting pnd是drag去main nursery，上面的圈圈只会show
+   BNN UNN1 UNN2".
+
+   A NURSERY SOMEBODY CHOSE IS NOT FORGOTTEN by a job that does not have it.
+   Without that, opening Seed Planting from UNN 1 forces PN, and going back
+   to P & D would land on BNN rather than the UNN 1 they were working in —
+   so the two jobs would walk the picked nursery away from them.
+
+   It sets the hidden select rather than calling pickNursery, because that
+   one re-renders and this is called from the renderers' own callers. */
+let _nurseryChosen = '';
+function syncJobNurseries() {
+  const box = document.getElementById('nursery-circles');
+  if (!box) return;
+  const onPayroll = !!document.querySelector('#tab-payroll.tab-panel.active');
+  const allowed = onPayroll ? jobNurseries(_payrollView) : MAINT_NURSERIES.slice();
+  box.querySelectorAll('.nursery-circle').forEach(b => {
+    b.style.display = allowed.includes(b.dataset.n) ? '' : 'none';
+  });
+  if (allowed.length && !allowed.includes(getNursery())) {
+    const want = allowed.includes(_nurseryChosen) ? _nurseryChosen : allowed[0];
+    const sel = document.getElementById('global-nursery');
+    if (sel) sel.value = want;
+  }
+  syncNurseryCircles();
 }
 
 function payrollRowsFor(type) {
@@ -2817,7 +2938,17 @@ function renderSeedPlantingPayroll() {
   if (!tbl) return;
   const m = getMonth();
   const line = document.getElementById('payroll-form-line');
-  if (line) line.textContent = `${t('tab.preNursery')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
+  /* THE LINE NAMES WHAT THE CIRCLES NAME. The sheet's rows are keyed on
+     the batch and the job and on no nursery at all, so it reads the same
+     whichever circle is on — which is honest while the Pre Nursery is the
+     only circle, and a lie the moment somebody drags this job onto a row
+     that offers three more. So where the scope is wider than the pre
+     nursery the line names the nursery that is actually picked. What the
+     nursery will then DECIDE is the name list, which is PART 2. */
+  const spN = getNursery();
+  if (line) line.textContent = (spN === SP_NURSERY
+    ? `${t('tab.preNursery')} (${NURSERY_NAMES[SP_NURSERY]})`
+    : (NURSERY_NAMES[spN] || spN)) + ` — ${t('pay.month')} ${m}`;
   const off = document.getElementById('payroll-offreg');
   if (off) { off.style.display = 'none'; }
 
@@ -4744,6 +4875,10 @@ function applyLang(){
   // the language changes while it is open.
   const recTitle = document.getElementById('rec-modal-title');
   if (recTitle) recTitle.textContent = t(editRecId ? 'mod.editRec' : 'mod.addRec');
+  /* The side bar's job list is alphabetical by LABEL, so the language
+     toggle changes the order: P & D sorts before Transplanting in English
+     and Pemindahan before Racun in Malay. */
+  try { orderJobSubnav(); } catch (_) {}
   // Dynamic tables/records carry their own strings through t()
   if (typeof renderAll === 'function') renderAll();
 }
@@ -6809,6 +6944,9 @@ function switchTab(name, btn) {
   const topCtrl = document.getElementById('top-nursery-ctrl');
   const noNursery = (name === 'setting' || name === 'schedule');
   if (topCtrl) topCtrl.style.display = noNursery ? 'none' : '';
+  /* Asked on the way OUT as well as in: the scope hides circles on Worker
+     Activity, and a panel that shows every nursery has to get them back. */
+  try { syncJobNurseries(); } catch (_) {}
   // Setting is the one panel that is not about a month.
   const monthCtrl = document.getElementById('sm-month-ctrl');
   if (monthCtrl) monthCtrl.style.display = name === 'setting' ? 'none' : '';
@@ -7012,6 +7150,10 @@ function switchSchedView(name) { jumpToSched(name); }
 function pickNursery(n) {
   const sel = document.getElementById('global-nursery');
   if (sel) sel.value = n;
+  /* A press is a CHOICE, which is what syncJobNurseries goes back to when a
+     job that does not have it has moved the nursery on in between. A nursery
+     the scope forced is not a choice and is deliberately not recorded. */
+  _nurseryChosen = n;
   syncNurseryCircles();
   onNurseryChange();
 }
@@ -10599,6 +10741,10 @@ async function initDb() {
     _mergeCapacityPlots();
   } catch (e) { console.warn('[maint] initial DB load failed:', e); }
   _dbReady = true;
+  /* The side bar's order and the circles both follow the keyed scopes,
+     which only exist once loadSettingLists has answered. Before switchTab,
+     so the landing panel already shows the right circles. */
+  try { orderJobSubnav(); } catch (e) { console.warn('[maint] job order:', e); }
   /* Land on the tab the markup marks active, through switchTab, so the side
      effects of being on it happen — Schedule hides the top bar's nursery
      picker, which it shows every nursery of. */
@@ -10735,11 +10881,27 @@ async function loadSettingLists() {
       .then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_fertilisers').select('*').order('sort_order').order('name')
       .then(r => r, () => ({ data: [] })),
-    _supabase.from('nops_maint_config').select('key, num_value').then(r => r, () => ({ data: [] }))
+    /* txt_value carries the job scopes, in the table that was made "in a
+       shape that will hold the next such setting without another
+       migration" — which this is, so there is nothing to run. A database
+       old enough to lack the column refuses the whole select, which the
+       fallback turns into no rows: every job then reads its default, which
+       is exactly what the page did before. */
+    _supabase.from('nops_maint_config').select('key, num_value, txt_value')
+      .then(r => r.error
+        ? _supabase.from('nops_maint_config').select('key, num_value')
+        : r, () => ({ data: [] }))
   ]);
   ((tsRes && tsRes.data) || []).forEach(r => { traySize[r.nursery] = +r.per_tray || 0; });
   const cfg = ((cfgRes && cfgRes.data) || []).find(r => r.key === 'pump_coverage');
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
+  jobScopes = {};
+  ((cfgRes && cfgRes.data) || []).forEach(r => {
+    if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
+    const key = String(r.key).slice(JOB_SCOPE_PREFIX.length);
+    const v = String(r.txt_value || '').trim().toLowerCase();
+    if (PAYROLL_VIEW_KEYS.includes(key) && JOB_SCOPE_ROWS.includes(v)) jobScopes[key] = v;
+  });
   chemicals   = (chRes && chRes.data) || [];
   fertilisers = (feRes && feRes.data) || [];
 }
@@ -10860,6 +11022,170 @@ function renderSetting() {
      bootstrap follows for its trailing steps. */
   try { renderCullMonitoringSetting(); }
   catch (e) { console.warn('[maint] Culling Monitoring settings card:', e); }
+  /* Its own try for the same reason, and it matters more here: this card
+     decides what the side bar shows, so a throw in it must not take the
+     capacities down with it. */
+  try { renderJobScopeSetting(); }
+  catch (e) { console.warn('[maint] job scope settings card:', e); }
+}
+
+/* ══ THE CARD THE SCOPES ARE KEYED ON ════════════════════════════════════
+   Three rows, a chip per job, dragged between them — "这些工作可以drag来
+   drag去，像worker namelist 一样". The gesture is the Team Board's, copied
+   rather than invented: `_jsDrag` is its `_dragId`, and the row wears
+   `.jb-cell-over` while something is held over it.
+
+   A DROP MOVES, which is what a board of rows means and what the office
+   described ("drag to main nursery only"). Every state is reachable because
+   BOTH is a row — see the note above `JOB_SCOPE_ROWS` for why two rows
+   could not hold what the office asked for.
+
+   IT IS A DRAFT AND ONE SAVE, the same shape as the three blocks above it:
+   the eight jobs are one decision about what the side bar is, and saving
+   half of it is not a thing anybody means to do. The draft is also what
+   makes the drag free — eight round trips, one per chip somebody tried,
+   is a board that fights back.
+
+   SAVE WRITES ALL EIGHT, defaults included. That is not seeding a default
+   into an unasked row: pressing Save IS being asked, and a board half
+   keyed and half falling through to the code is two rules for one screen. */
+let jobScopeDraft = null;        // null = not editing
+let _jsDrag = null;              // the job key being dragged
+let _jsSaving = false;
+
+const JOB_ROW_NAME = { pre: 'Pre Nursery', main: 'Main Nursery', both: 'Both' };
+
+function _jsScopes() {
+  const out = {};
+  PAYROLL_VIEW_KEYS.forEach(k => { out[k] = jobScopeOf(k); });
+  return out;
+}
+
+function _jsRowHtml(scope, scopes, editing) {
+  const jobs = PAYROLL_VIEW_KEYS.filter(k => scopes[k] === scope);
+  const circles = scopeNurseries(scope).map(nurseryShort).join(' · ');
+  const chips = jobs.length
+    ? jobs.map(k => `<span class="jb-chip"${editing ? ' draggable="true"' : ''}
+          ondragstart="jsDragStart(event,'${esc(k)}')" ondragend="jsDragEnd(event)"
+        >${esc(jobLabel(k))}</span>`).join('')
+    /* An empty row STANDS, because it is where a job is dragged. The Team
+       Board keeps a company section's column up for the same reason. */
+    : `<span class="jb-none">${editing ? 'Drag a job here' : 'No job'}</span>`;
+  return `<div class="jb-row">
+      <div class="jb-lab"><b>${esc(JOB_ROW_NAME[scope])}</b><span>${esc(circles)}</span></div>
+      <div class="jb-cell" ondragover="jsDragOver(event)" ondragleave="jsDragLeave(event)"
+           ondrop="jsDrop(event,'${esc(scope)}')">${chips}</div>
+    </div>`;
+}
+
+function renderJobScopeSetting() {
+  const box = document.getElementById('js-set-body');
+  if (!box) return;
+  const corner = document.getElementById('js-set-corner');
+  const editing = !!jobScopeDraft;
+  const scopes = editing ? jobScopeDraft : _jsScopes();
+  box.innerHTML = JOB_SCOPE_ROWS.map(s => _jsRowHtml(s, scopes, editing)).join('')
+    + (editing
+      ? `<div class="jb-note">The side bar lists every job whatever row it is
+           in; it is the nursery circles above a sheet that follow this. Saving
+           writes all three rows.</div>
+         <div class="lst-foot">
+           <button class="btn" onclick="jsCancel()">Cancel</button>
+           <button class="btn btn-primary" id="js-save-btn" onclick="jsSave()">Save</button>
+         </div>`
+      : '');
+  if (corner) {
+    corner.innerHTML = editing || !maySetting() ? ''
+      : `<button class="btn btn-sm cm-set-open" onclick="jsEdit()">&#9998; Edit</button>`;
+  }
+}
+
+function jsEdit() {
+  if (!maySetting()) return;
+  jobScopeDraft = _jsScopes();
+  renderJobScopeSetting();
+}
+function jsCancel() { jobScopeDraft = null; renderJobScopeSetting(); }
+
+function jsDragStart(ev, key) {
+  if (!jobScopeDraft) { ev.preventDefault(); return; }
+  _jsDrag = key;
+  ev.dataTransfer.effectAllowed = 'move';
+  // Firefox will not start a drag at all unless something is carried.
+  try { ev.dataTransfer.setData('text/plain', key); } catch (_) {}
+  ev.currentTarget.classList.add('jb-chip-drag');
+}
+function jsDragEnd(ev) {
+  if (ev && ev.currentTarget) ev.currentTarget.classList.remove('jb-chip-drag');
+  _jsDrag = null;
+  document.querySelectorAll('.jb-cell-over').forEach(el => el.classList.remove('jb-cell-over'));
+}
+function jsDragOver(ev) {
+  if (!_jsDrag) return;                     // something dragged in from outside
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('jb-cell-over');
+}
+function jsDragLeave(ev) { ev.currentTarget.classList.remove('jb-cell-over'); }
+function jsDrop(ev, scope) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('jb-cell-over');
+  const key = _jsDrag;
+  _jsDrag = null;
+  if (!key || !jobScopeDraft) return;
+  if (!JOB_SCOPE_ROWS.includes(scope)) return;
+  if (jobScopeDraft[key] === scope) return;        // nothing moved
+  jobScopeDraft[key] = scope;
+  renderJobScopeSetting();
+}
+
+/* ONE ROW PER JOB in nops_maint_config, which is the table that was made
+   "in a shape that will hold the next such setting without another
+   migration". So there is nothing to run in the database for this.
+
+   The permission is asked AGAIN here: a button drawn before somebody's
+   access changed is still sitting on the screen. */
+async function jsSave() {
+  if (!jobScopeDraft || _jsSaving) return;
+  if (!maySetting()) { alert('Setting is not open to you.'); return; }
+  if (!_supabase) { alert('Not signed in — nothing was saved.'); return; }
+  const draft = jobScopeDraft;
+  const btn = document.getElementById('js-save-btn');
+  _jsSaving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const now = new Date().toISOString();
+    const { error } = await _supabase.from('nops_maint_config').upsert(
+      PAYROLL_VIEW_KEYS.map(k => ({
+        key: JOB_SCOPE_PREFIX + k,
+        txt_value: draft[k],
+        note: 'Which nurseries this job is done in: pre, main or both. Keyed on '
+            + 'Work Maintenance, Settings, Where Each Job Is Done.',
+        updated_by: (typeof userEmail !== 'undefined' && userEmail) || null,
+        updated_at: now,
+      })), { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+    if (error) {
+      /* A database old enough to have no txt_value refuses the whole write.
+         Dropping the column and writing anyway would store eight rows
+         saying nothing, so it REFUSES and names the file. */
+      alert('Could not save — ' + (error.message || 'try again')
+        + (/txt_value/i.test(error.message || '')
+          ? '\n\nThis database has no txt_value on nops_maint_config yet. '
+            + 'Run shared/RUN_ME_nops_maint_config.sql in the Supabase SQL '
+            + 'Editor once, then save again.' : ''));
+      return;
+    }
+    jobScopes = Object.assign({}, draft);
+    jobScopeDraft = null;
+    renderJobScopeSetting();
+    /* The side bar does not re-order — every job is in it whatever row it
+       is in — but the circles over Worker Activity do move, so a sheet
+       left open behind this card is put right before anybody goes back. */
+    syncJobNurseries();
+  } finally {
+    _jsSaving = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
 }
 
 /* ══ WHAT MOVES CULLING MONITORING ══════════════════════════════════════

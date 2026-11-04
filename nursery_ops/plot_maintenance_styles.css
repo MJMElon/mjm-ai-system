@@ -1824,3 +1824,35 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .pf-remark-box:hover{border-color:var(--border);}
 .pf-remark-box:focus{outline:none;border-color:var(--green-mid);background:#fff;}
 .pf-remark-box:disabled{background:transparent;color:var(--text-faint);}
+
+/* ── WHERE EACH JOB IS DONE ───────────────────────────────────────────────
+   Three rows, a label on the left and a cell of job chips on the right —
+   the Team Board's shape, which is what the office compared it to. The
+   label carries the nurseries that row MEANS (PN, or BNN · UNN 1 · UNN 2),
+   because "Main Nursery" does not say which three and the circles the
+   setting drives do.
+
+   The cell keeps its height with nothing in it (`min-height`), or an empty
+   row collapses to a line of type and stops looking like somewhere a chip
+   can be dropped — which is the one thing it has to look like. */
+.jb-row{display:grid;grid-template-columns:200px 1fr;gap:12px;align-items:stretch;
+        border:1.5px solid var(--border);border-radius:var(--r-sm);margin-bottom:10px;
+        overflow:hidden;}
+.jb-lab{display:flex;flex-direction:column;justify-content:center;gap:3px;
+        padding:10px 12px;background:var(--green-pale,#f0f7f2);}
+.jb-lab b{font-size:13px;font-weight:900;color:var(--green-text);}
+.jb-lab span{font-size:11px;font-weight:700;color:var(--text-faint);
+             font-variant-numeric:tabular-nums;}
+.jb-cell{display:flex;flex-wrap:wrap;gap:6px;align-items:center;align-content:center;
+         padding:10px 12px;min-height:52px;background:#fff;}
+.jb-cell-over{background:#eef7f1;box-shadow:inset 0 0 0 2px var(--green-mid);}
+.jb-chip{display:inline-block;padding:5px 10px;border:1.5px solid var(--border);
+         border-radius:999px;background:#fff;font-size:12.5px;font-weight:800;
+         color:var(--text-head);white-space:nowrap;}
+.jb-chip[draggable="true"]{cursor:grab;}
+.jb-chip-drag{opacity:.45;}
+.jb-none{font-size:12px;font-weight:700;color:var(--text-faint);}
+.jb-note{font-size:12px;line-height:1.7;color:var(--text-faint);margin:2px 0 10px;}
+#js-set-corner:empty{display:none;}
+/* The label column is wider than half a phone, so the row stacks there. */
+@media (max-width:560px){.jb-row{grid-template-columns:1fr;}}
