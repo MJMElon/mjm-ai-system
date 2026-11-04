@@ -322,12 +322,16 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
       nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B3', qty: 4755 }],
       shared_inventory_logs: [
         { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
-          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 3100 }
+          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 3100 },
+        /* The Movement Report balance does not take the 2nd culling off, so
+           neither does the capacity. */
+        { transaction_type: '2nd_Culling', transaction_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 200 }
       ]
     });
     await page.waitForFunction(() => PlotMovement.ready(), { timeout: 15000 });
 
-    check('B3 reads what is standing in it, not what was keyed',
+    check('B3 reads the Movement Report balance, 2nd culling left standing, not what was keyed',
           await page.evaluate(() => capacityOf('BNN', 'B3')), 3100);
     check('a plot with nothing standing reads nought',
           await page.evaluate(() => capacityOf('BNN', 'B1')), 0);
