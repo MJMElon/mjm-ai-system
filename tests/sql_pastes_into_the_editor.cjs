@@ -53,6 +53,7 @@ const SWEPT = [
   'CHECK_which_batch_still_owes_the_round.sql',
   'CHECK_has_a_plot_ever_read_anything_but_clean.sql',
   'CHECK_the_alert_board_every_month.sql',
+  'CHECK_the_report_reads_the_auditors_records.sql',
   'CHECK_why_no_plot_condition_alert.sql',
 ];
 

@@ -3392,6 +3392,82 @@ a fetch the WORKER makes: once it activates it answers its own synthetic
 job correctly against a network that is not there. An hour went into
 that before it was the obvious thing.
 
+### And then the Monthly Audit Report could not tell the two apart
+
+A closure is an ordinary row of `audit_maintenance_audits`, which is the
+whole point of it — it goes through the one door everything goes through
+and lands in the report like any other record. What the report had no way
+to say is that a maintenance table holds **two different acts**: an
+auditor who walked the plot and answered Satisfied or Unsatisfied, and an
+admin who closed a cold task without one. The office asked for the
+difference — *"help to add a filter for maintenance cases, case done by
+who. Cuz we want to filter to see the cases closed by auditor, now it can
+view the cases closed by admin also."*
+
+**Maintenance — Done By** is two ticks on the filter panel, and
+`MOD_COLS.maint` grew the column that answers the same question on the
+row. Five things in it:
+
+- **BOTH START TICKED.** That is exactly what the report has always
+  drawn, so nothing moves for anybody until somebody unticks one. It is
+  the opposite of the Nursery and Module rows, which start empty because
+  an empty tick there is *forgot to pick*; this one narrows a report
+  already asked for. Neither ticked hides every maintenance row rather
+  than showing every one — somebody did that on purpose.
+- **THE RESULT DECIDES, NEVER `auditor_name`.** Both kinds carry a name
+  and a closure carries the ADMIN who pressed the button, so a name test
+  answers backwards on every closure — and backwards both ways for an
+  auditor who is also an admin. `maintDoneBy()` asks the saved `result`
+  against `MAINT_CLOSED_RESULT`, EXACTLY: a `LIKE`, an `indexOf` or a
+  lower-cased compare would start catching wording nobody wrote.
+- **`MAINT_CLOSED_RESULT` is in THREE files now** — `audit_home.html`
+  writes it, `audit_maintenance_script.js` colours it, `audit_report.html`
+  filters on it. Change one, change all three, and never the string
+  itself: a row written before keeps the old wording and falls on the
+  wrong side of the filter for ever. Section 0 of the test reads all
+  three out of the source and compares.
+- **It is applied in the ONE place the Plot search is applied**, before
+  anything downstream sees the rows — the summary card, the section
+  total, the records badge and the table are all counted off `data.maint`,
+  so a filter applied anywhere else leaves one of them disagreeing with
+  the rest.
+- **A NARROWED TABLE SAYS SO.** This sheet prints, and a maintenance
+  table cut to one kind reads exactly like a month that only had that
+  kind in it. The note sits on the block head and names how many rows are
+  hidden; it is drawn only where something WAS taken out, because a note
+  on a report nothing was removed from is a note nobody reads.
+
+**And `auditor_name` had been in the select since the table was written
+and in none of its columns**, so the one question the office actually asks
+of a maintenance record — who did this — could only be answered out of the
+database. It is the `Done By` column now, with a small grey **admin** tag
+on a closure.
+
+The head is `space-between`, so a name, a badge and a note would stand the
+badge in the MIDDLE of the row. `.mod-block-name` takes `margin-right:auto`
+instead — the auto margin eats the free space, the name stays left and the
+badge keeps its note beside it, and with two children it changes nothing.
+
+`shared/CHECK_the_report_reads_the_auditors_records.sql` is the other half
+of what the office asked, and it is the one that answers *"is the report
+data linked with the case audited by auditor?"* — **yes, and here is the
+proof**: the report reads the auditor tables themselves, with no second
+copy and no sync, so a record is on it as soon as it reaches the database.
+What it then does is CUT, twice and silently: the **date** must be inside
+the month, and the **nursery** must be exactly `PN`, `BNN`, `UNN1` or
+`UNN2`, letter for letter (`filterByNursery` uses `includes`, not
+`nurseryKey`). The check counts the rows each module saved against the rows
+the report draws, names every one it leaves out and why, and splits the
+maintenance records by who did them. The four modules all normalise the
+nursery before saving — the maintenance one through `_nurseryOfPlot`,
+which already matches on letters and digits — so the gap should read
+NOUGHT on every line; a row that reads `UNN 1` is the shape to look for.
+
+`tests/the_report_says_who_did_the_maintenance.cjs` drives the real page
+in a real browser, and asks for the filter as a CHECK rather than waiting
+on it: waited on, a page without it fails with a timeout, which says
+nothing about what is wrong.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated
