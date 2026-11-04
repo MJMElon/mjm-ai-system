@@ -38,16 +38,24 @@ const checkTrue = (n, g) => check(n, !!g, true);
 const checkFalse = (n, g) => check(n, !!g, false);
 
 const DB = {
-  /* Capacity comes from SETTINGS — the ledger is deliberately EMPTY, so a
-     figure in the Capacity column can only have come from here. */
+  /* Capacity is the CURRENT figure off the batch ledger now (currentCapacity
+     in the page): the office asked for Setting to link it. So the two plots
+     are given their seedlings as Transplanted rows, and the keyed figures
+     below are set to something else on purpose -- a column reading them
+     would be reading the old rule. */
   nops_maint_plot_qty: [
-    { nursery: 'BNN', plot: 'B1', qty: 2300 },
-    { nursery: 'BNN', plot: 'B2', qty: 500 }
+    { nursery: 'BNN', plot: 'B1', qty: 9999 },
+    { nursery: 'BNN', plot: 'B2', qty: 9999 }
   ],
   nops_maint_perf_remarks: [
     { id: 1, nursery: 'BNN', month: 'Aug 2026', plot: 'B1', remark: 'Collecting plot' }
   ],
-  shared_inventory_logs: [],
+  shared_inventory_logs: [
+    { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
+      remark: '', plot_name: 'B1', batch_name: '260', quantity_change: 2300 },
+    { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
+      remark: '', plot_name: 'B2', batch_name: '260', quantity_change: 500 }
+  ],
   shared_do_records: [],
   nops_maint_records: [{ id: 1, records: [] }]
 };

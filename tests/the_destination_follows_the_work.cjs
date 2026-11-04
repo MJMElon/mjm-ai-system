@@ -55,28 +55,39 @@ function check(name, got, want) {
                              '\n         want ' + JSON.stringify(want)); }
 }
 
-/* ── The office's own six titles, and the rules off their screenshot ──
+/* ── The office's own titles, as Case Routing now holds them ──
+   THE TITLE NAMES THE SYSTEM THAT SOLVES IT (module_key) and the systems
+   that may raise it (raise_modules) — RUN_ME_nelos_routing_is_the_category
+   .sql turned that column over, and the whole point of it is that the PAGE
+   somebody is standing on no longer decides anything.
+
    "Repair Maintenance Work" is the one the FC Portal both raises AND
    solves; the three culling ones go out to Audit and HQ. "Nobody Set A
-   Rule For This" is this test's own, because the no-rule fallback cannot
-   be driven on a system whose every title carries one. */
+   Rule For This" carries NO solver, which is the only remaining way to
+   have no answer, and it is this test's own — the fallback cannot be
+   driven on a system whose every title is set up.
+
+   Every one of them is raisable from the FC PORTAL AND NOWHERE ELSE, which
+   is what keeps section 5 honest: Seedling Stock has to have no titles at
+   all for the typed line to be reached. The three states of raise_modules
+   are driven as a unit in section 7 instead, because a title open to any
+   system would be in Seedling Stock's list too. */
 const CATEGORIES = [
-  { name: 'From Culling Calculator - Request Drone Flight',          module_key: 'scan' },
-  { name: 'From Culling Calculator - Request HQ Verification',       module_key: 'scan' },
-  { name: 'Request Transplanting Signboard',                         module_key: 'scan' },
-  { name: 'Repair Maintenance Work',                                 module_key: 'scan' },
-  { name: 'Nobody Set A Rule For This',                              module_key: 'scan' },
+  { name: 'From Culling Calculator - Request Drone Flight',    module_key: 'audit',
+    raise_modules: ['scan'], pic_seat_no: 2,    pic_user_id: null },
+  { name: 'From Culling Calculator - Request HQ Verification', module_key: 'nursery_ops',
+    raise_modules: ['scan'], pic_seat_no: null, pic_user_id: null },
+  { name: 'Request Transplanting Signboard',                   module_key: 'mobile',
+    raise_modules: ['scan'], pic_seat_no: 2,    pic_user_id: 'u-admin2' },
+  { name: 'Repair Maintenance Work',                           module_key: 'scan',
+    raise_modules: ['scan'], pic_seat_no: null, pic_user_id: null },
+  { name: 'Nobody Set A Rule For This',                        module_key: null,
+    raise_modules: ['scan'], pic_seat_no: null, pic_user_id: null },
 ];
-const ROUTES = [
-  { source_module: 'scan', category: 'From Culling Calculator - Request Drone Flight',
-    to_module: 'audit', to_seat_no: 2, to_user_id: 'u-auditor' },
-  { source_module: 'scan', category: 'From Culling Calculator - Request HQ Verification',
-    to_module: 'nursery_ops', to_seat_no: null, to_user_id: null },
-  { source_module: 'scan', category: 'Request Transplanting Signboard',
-    to_module: 'mobile', to_seat_no: 2, to_user_id: 'u-admin2' },
-  { source_module: 'scan', category: 'Repair Maintenance Work',
-    to_module: 'scan', to_seat_no: null, to_user_id: null },
-];
+/* Only a SECTION DEFAULT is still live in nelos_routes, and the FC Portal
+   has none — so "Nobody Set A Rule For This" has to fall all the way back
+   to the system it was raised in, which is what section 3 asks. */
+const ROUTES = [];
 const MODULES = [
   { key: 'operation',   label: 'Seedling Stock', handler_label: 'Seedling Stock', active: true },
   { key: 'nursery_ops', label: 'HQ Operation',   handler_label: 'HQ Operation',   active: true },
@@ -84,9 +95,14 @@ const MODULES = [
   { key: 'mobile',      label: 'Admin Portal',   handler_label: 'Admin',          active: true },
   { key: 'audit',       label: 'Audit Portal',   handler_label: 'Auditor',        active: true },
 ];
+/* seat_no as well as the pin, because the PIC the office sets is a SEAT
+   and the box on the form is a PERSON — the dock resolves one to the
+   other, so a handler with no number could never be pre-selected. */
 const HANDLERS = [
-  { user_id: 'u-admin2',  full_name: 'Florence Indun', email: 'f@x.com', primary_module: 'mobile' },
-  { user_id: 'u-auditor', full_name: 'Rousell Wayne',  email: 'r@x.com', primary_module: 'audit' },
+  { user_id: 'u-admin2',  full_name: 'Florence Indun', email: 'f@x.com',
+    primary_module: 'mobile', seat_no: 2 },
+  { user_id: 'u-auditor', full_name: 'Rousell Wayne',  email: 'r@x.com',
+    primary_module: 'audit',  seat_no: 2 },
 ];
 
 const FIXTURE = (source) => `<!doctype html>
@@ -195,8 +211,21 @@ const state = (page) => page.evaluate(() => {
   };
 });
 
+/* A TEST THAT DIES ON THE PREVIOUS CODE PROVES NOTHING ABOUT IT: the harness
+   stops at the first throw and every check underneath is never asked, which
+   this codebase has a heading about. The previous dock read module_key as
+   the system that RAISES a title, so against this fixture the FC Portal has
+   no titles at all, the Work dropdown is hidden and selectOption simply
+   times out. Caught, that is ONE NAMED failure and the five sections below
+   still report what they found. */
 const pickWork = async (page, name) => {
-  await page.selectOption('#nd-f-work', name);
+  try {
+    await page.selectOption('#nd-f-work', name, { timeout: 4000 });
+  } catch (e) {
+    check('the Work list offers “' + name + '”',
+          'the dropdown would not take it', 'chosen');
+    return;
+  }
   await page.waitForTimeout(150);
 };
 
@@ -316,6 +345,67 @@ console.log('\n── 6. Two copies, one decision ──');
           m.indexOf('htmlFor="nnc-work"') < m.indexOf('htmlFor="nnc-to"'), true);
     check('with the pair behind one condition',
           /\{showDest && \(/.test(m), true);
+  }
+}
+
+console.log('\n── 7. Which systems may raise a title — all THREE states ──');
+{
+  /* THE REAL FUNCTIONS, lifted out of the two shipped files and driven over
+     the same rows. Two copies of one decision is this codebase's commonest
+     fault, and the only way to say they agree is to run both.
+
+     The middle state is the one that is easy to lose: an EMPTY array is a
+     deliberate nobody-by-hand, which is what an automatic title wants,
+     while an ABSENT column is nobody having been asked — every title on a
+     database that has not run the SQL. Folded together, either every
+     automatic title appears in every Work list or every Work list empties
+     itself over a column. */
+  const vm = require('vm');
+  const dock = fs.readFileSync(path.join(ROOT, 'shared', 'shared_nelos_dock.js'), 'utf8');
+  const MOBILE = path.join(ROOT, '..', 'Mobile', 'src', 'components', 'NelosNewCase.jsx');
+
+  const lift = (src, from, to, call) => {
+    const at = src.indexOf(from);
+    if (at < 0) return null;
+    const end = src.indexOf(to, at);
+    if (end < 0) return null;
+    /* The sentinel is declared beside each copy of the function rather than
+       inside it, so it has to be handed in — and it is handed in as the
+       literal both files declare, so a file that changed the spelling fails
+       here rather than quietly reading undefined. */
+    const ctx = { ANY_SYSTEM: '*' };
+    vm.createContext(ctx);
+    vm.runInContext(src.slice(at, end + to.length) + ';\n_f = ' + call + ';', ctx);
+    return ctx._f;
+  };
+
+  const ROWS = [
+    ['nobody has been asked (no column at all)', {},                            true,  true ],
+    ['null, which is the same question unasked', { raise_modules: null },        true,  true ],
+    ['any system',                               { raise_modules: ['*'] },       true,  true ],
+    ['this system, named',                       { raise_modules: ['scan'] },    true,  false],
+    ['another system, named',                    { raise_modules: ['mobile'] },  false, true ],
+    ['two systems, this one among them',         { raise_modules: ['audit', 'scan'] }, true, false],
+    ['NOBODY by hand — an automatic title',      { raise_modules: [] },          false, false],
+  ];
+
+  const deskFn = lift(dock, 'function mayRaiseFrom(c, moduleKey) {', '\n  }', 'mayRaiseFrom');
+  if (!deskFn) check('mayRaiseFrom is in the shipped dock', false, true);
+  else ROWS.forEach(([what, row, forScan, forMobile]) => {
+    check('dock · ' + what,
+          [deskFn(row, 'scan'), deskFn(row, 'mobile')], [forScan, forMobile]);
+  });
+
+  if (!fs.existsSync(MOBILE)) {
+    console.log('  --   Mobile not checked out; the phone copy is unread');
+  } else {
+    const phoneFn = lift(fs.readFileSync(MOBILE, 'utf8'),
+                         'const mayRaiseFrom = (c, key) => {', '\n  };', 'mayRaiseFrom');
+    if (!phoneFn) check('mayRaiseFrom is in the shipped phone form', false, true);
+    else ROWS.forEach(([what, row, forScan, forMobile]) => {
+      check('phone · ' + what,
+            [phoneFn(row, 'scan'), phoneFn(row, 'mobile')], [forScan, forMobile]);
+    });
   }
 }
 

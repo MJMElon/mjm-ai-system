@@ -116,6 +116,12 @@ A quantity KEYED BY HAND still wins over all of this, which is the one way an
 interrow row can go on showing the old smaller number;
 `shared/CHECK_interrow_qty_keyed.sql` names those rows on every plot.
 
+**And interrow is not the only thing that keeps the 2nd culling standing** —
+a 3rd culling does too, because it already contains it. That is the Summary
+Report's own condition and the link obeys it now; see *"A 2ND CULLING WAS
+BEING TAKEN OFF TWICE"* below. Two unrelated reasons, one skip, and
+`cull2Superseded` is where the second one lives.
+
 The Nursery Movement Report and the phone's batch list still subtract the 2nd
 culling, because they answer "what is standing", which is a different
 question. That difference is deliberate and is written out in that file.
@@ -353,6 +359,48 @@ what is stored — so the sentence cannot say one thing while the save does
 another. Typing over a field figure reads as yours the moment it is typed,
 which is also when it becomes yours.
 
+#### THE PHONE HAS NO QUANTITY BOX, AND IT SENDS A QUANTITY ALL THE SAME
+
+The next question that same sentence left, asked over a P & D Spraying row
+on N12 that nobody had keyed an amount into: *"他自动有了830，说是从工人手
+机进来，是什么意思？工人手机并没有capacity这个概念"*.
+
+**They are right about their own phone, and the figure is real.** What the
+conductor does on the maintenance form is **TICK WHICH BATCHES** are
+standing in the plot. The figure beside them is READ-ONLY and is added up —
+`MaintenanceModule.jsx` has no input, no `onChange` and no setter for it,
+and both save paths pass the same computed number. It is the **Main Nursery
+Movement Report balance of exactly the batches ticked**
+(`shared_plot_batch_balance`, which is the same view this page links off),
+and the phone labels it *Quantity (seedlings) · from the batches ticked*.
+
+So the hint now says what the figure IS as well as where it came from —
+*"…from a verified phone record: the batches ticked on the phone, added
+up"*. **A sentence naming only the SOURCE sends somebody looking for a box
+that does not exist**, which is the same fault one turn further on from
+"the field reported" naming nobody.
+
+**AND THE TWO FIGURES ARE WORKED OUT BY DIFFERENT RULES**, which is the
+half worth knowing before anybody calls one of them wrong:
+
+| | |
+|---|---|
+| what the PHONE sent | the balance of the batches ticked, **as at the day the record was saved**. The 1st and 2nd cullings take no part in that report at all — `plotBatches.js` says so in its own words. |
+| what this page LINKS | the same balance **as at the WORK DATE**, less the 2nd culling — for every job but Interrow Spraying, where it is deliberately left standing. |
+
+Neither is wrong. On a plot with a 2nd culling they differ by exactly that
+culling, and a record saved before a sale or a 3rd culling landed holds the
+older figure — which is the point of `applyFieldRecords` filling only an
+EMPTY cell and never writing over a full one.
+
+`shared/CHECK_what_the_phone_sent_as_the_quantity.sql` prints the three
+figures side by side on every record — what the phone sent, what is
+standing now, the 2nd culling, and what this page would link — and says
+which of those the gap is. **One thing it cannot reproduce**: the link is
+cut off at the WORK DATE and that column is not, so a culling dated after
+the work day is in the check and not in the cell. The row already says that
+itself, in amber, naming the day (`cull2Later`).
+
 **THE REFRESH IS A PRESS NOW.** *"每个月请直接刷新变成linked amount"* — and
 the only way to put a row back on the link was to know that emptying the box
 does it, which no screen says. **Use the linked amount** empties it, so there
@@ -379,6 +427,123 @@ recent month is what to open, because nothing recorded who keyed it.
 `tests/the_linked_quantity_says_whose_it_is.cjs` drives the real modal over
 the real `shared_plot_movement` with the office's own 2,353; five of its
 eleven checks fail on the previous code, the first in their own terms.
+
+#### AND THE ANSWER WAS TO TAKE THE FIGURE AWAY, not to word it better
+
+Three wordings, each correct, each one turn further from the thing to do —
+*"your 2,353"*, then *"the field reported it"*, then *"a phone record by
+Akbar: the batches ticked, added up"*. The office ended it in one line:
+*"link的capacity完全不要管手机送进来的，我要link这个summary report，一样
+interrow spray要包括2nd cull amount"*.
+
+**A SENTENCE EXPLAINING A FIGURE THAT SHOULD NOT BE THERE IS THE SCREEN
+ARGUING FOR IT.** That is the lesson worth keeping, because the next person
+will be tempted to word it a fourth time. Each wording was a true answer to
+the question actually asked, and three turns went by without anybody asking
+whether the figure belonged in the cell at all.
+
+**IT DID NOT, FOR THREE REASONS, and the first is money.** The phone's
+figure is `shared_plot_batch_balance`, which **counts neither culling**
+(`plotBatches.js` says so in its own words), **as at the day the record was
+SAVED** rather than the work date, and **nobody keyed it** — so a plot 2nd
+culled read high against the one report the office reconciles with, a sale
+in between left the cell holding a figure no screen agrees with, and for a
+month this page called it the office's own answer.
+
+So `applyFieldRecords` writes **no quantity**. The DATE and the BATCHES it
+still writes, because those are what somebody standing in the plot
+observed, and the batch cell is what the report is then asked about.
+`_fieldWho` went with the sentence that was its only reader; `_fieldIds`
+STAYS, because the Audit column finds a verdict by it.
+
+**THE ONES ALREADY WRITTEN COME BACK OFF, and it is a RECORD rather than a
+deletion** — `dropPhoneQty()`, run beside `stampRecordMonths()` before
+anything draws. The figure moves to `_phoneQty`, which nothing reads and
+nothing prices, so what the phone had put there can still be seen. Three
+things in it:
+
+- **It runs BEFORE the first sync**, because `applyFieldRecords` drops the
+  MARK off a row whose field record stopped pairing while leaving the
+  VALUE — so a repair run after it has nothing left to find the row by.
+- **A CHECKED ROW IS NOT LEFT AS A FORMULA.** Taking the figure off and
+  stopping there would put a settled row back on the live link, which is
+  the one thing Checked exists to stop. `freezeCheckedRows` writes the
+  report's figure into `qtyFrozen` once the ledger lands, so the row is a
+  number again — the report's number this time. **Its outer guard had to
+  be asked per FIELD**: "either mark is set, leave the row alone" skipped
+  exactly the row this creates, one carrying a `batchFrozen` and no
+  `qtyFrozen`.
+- **WHAT IT COSTS: a checked row's figure MOVES**, to the Summary Report's
+  own answer, which is what was asked for. The check below names every one.
+
+**And the payroll claim reads the repaired rows only once the maintenance
+page has run the repair** — it reads the same `nops_maint_records` and does
+not repair it. One page load, self-healing, the same exposure
+`stampRecordMonths` has always had.
+
+#### A 2ND CULLING WAS BEING TAKEN OFF TWICE, and nothing could say so
+
+The other half of that sentence, and the one that moved money. `liveCount`
+deducted the 2nd culling unconditionally. **The Summary Report deducts it
+only while the same plot and batch carries no EVIDENCED 3rd culling**,
+because a 3rd culling already contains the seedlings 2nd culled on the way
+to it — the rule `netOfRow`'s `superseded` already carried, and the Batch
+Report's own words: cull2 *"is inside cull3"*.
+
+So every plot 2nd culled and then 3rd culled read **LOW by exactly its 2nd
+culling** — on the Work Maintenance list, on the Worker Record capacity
+totals and on the payroll claim alike, because all three read `recQty`.
+**Invisible by construction**, the same shape as *"It SUBTRACTED and could
+not say so"* one section up: a figure with one loss taken off twice and a
+figure with it taken off once are both just numbers.
+
+Five things in it:
+
+- **`cull2Superseded(evs)` is the one place that says it**, and
+  `liveCount` skips the 2nd culling when it OR `keepCull2` holds. Two
+  reasons, two unrelated causes, one skip.
+- **ASKED PER PLOT AND BATCH**, which is the bucket the report asks it of
+  (`e.place + SEP + e.batch` in `buildMovementSection`). A plot with one
+  batch 3rd culled and one not has half its 2nd culling off and half
+  standing, so `cull2Off` and `cull2Inside` are the two halves of `cull2`
+  and add up to it.
+- **AN UNEVIDENCED 3RD CULLING SUPERSEDES NOTHING.** It is a claim, and it
+  never became an event at all (`_load` drops it), so this falls out rather
+  than being a second condition — which is right, or keying an unflown 3rd
+  culling would silently raise every maintenance figure on that plot.
+- **INTERROW IS UNTOUCHED and the office reaffirmed it** — *"一样interrow
+  spray要包括2nd cull amount"*. It keeps the whole culling standing for a
+  reason of its own (the ground between the rows is the same walk), and
+  that has to go on holding on a plot where both rules apply: on a batch
+  3rd culled, interrow counts the 2nd culling in and `cull2Off` and
+  `cull2Inside` are both nought, because neither sentence is the reason.
+- **The row SAYS which** — `link.cull2Inside`, *"2nd culling of 273 is
+  inside the 3rd culling of 6,000, so it is not taken off again"*. The
+  whole argument for the rule above was that a silent figure cannot be told
+  from a broken one.
+
+`tests/the_link_is_the_summary_report.cjs` is the proof, and the one check
+in it that cannot drift compares the shipped link against **`netOfRow` and
+`MOVE_COLS` lifted out of the shipped `operation_reports.html`**, plot and
+batch by plot and batch, over one ledger. A comment claiming the two agree
+is not agreement — LOS's own comment made exactly that claim and was wrong.
+**8 of its 12 checks fail on the previous code**, and the headline one
+names the batches: *every plot and batch reads what the report reads → got
+["U1|250","U2|260"]*. It also had to learn the house trap: the previous
+build exports no `cull2Superseded`, so calling it bare took the harness
+down and the report comparison underneath was never asked.
+
+**`shared/CHECK_what_the_link_change_moves.sql` is what the office asked
+for next** — *"link完了检查linked quantity和之前有什么不同 应该要是一模一样
+的"*. It works out every record BOTH WAYS off the real ledger and prints
+the ones that differ, with what each read before and reads now, plus every
+row still carrying a phone figure. **"0 of them move" is a real possible
+answer** and is the one they are expecting: it means no plot in the system
+is both 2nd culled and 3rd culled on the same batch. Tested on the scratch
+Postgres against the node test's own ledger, so the two agree figure for
+figure, and against a database where neither thing moves — which draws the
+*nothing to report* lines, because an empty section reads as a query that
+did not run.
 
 ## The field fills an empty cell. It never writes over a full one.
 
@@ -3911,6 +4076,156 @@ element as "not shown", so the first section passed over the very page it
 was written about — the previous markup had no id on that row at all. It
 answers `'no such row'` now, which is a different thing from `false`.
 
+### And then Case Routing turned over: the TITLE names the queue, not the page
+
+Everything above this line is the history of one rule, and the office
+restarted it in a sentence: *"the nelos case routing setting change to case
+category, from system, PIC. meaning the case category under that system is
+the type of case that portal PIC need to solve."*
+
+So the screen turned over. The block used to be the system that RAISES a
+title, with a *Solve by* half on the right:
+
+    FC Portal                      <- raises
+      # | Case Category | System | PIC
+      1 | Request Transplanting Signboard | Admin Portal | Admin 2
+
+It is now the system that **SOLVES** it, and the titles under a portal are
+that portal's work:
+
+    Admin Portal                   <- solves
+      # | Case Category | From System | PIC
+      1 | Request Transplanting Signboard | FC Portal | Admin 2
+
+**`nelos_categories.module_key` MEANS THE OPPOSITE OF WHAT IT MEANT**, which
+is the one thing to know before reading any of the code around it.
+`migration_nelos_category_system.sql` made it the system that raises a
+title; `shared/RUN_ME_nelos_routing_is_the_category.sql` makes it the system
+that solves one. Who may raise it is **`raise_modules`**, the From System
+tick list, and the PIC rides on the title as `pic_seat_no` / `pic_user_id`.
+
+**THE PAGE SOMEBODY IS STANDING ON NOW DECIDES NOTHING, and that is the
+whole gain.** A rule was keyed on `(source_module, category)` and the source
+is the PAGE — and the dock is on 49 pages. So Akbar picking *Request
+Transplanting Signboard* from Seedling Stock matched no rule, and the case
+**stayed with Seedling Stock** instead of going to Admin. The solver rides
+on the title, so it lands in the right queue wherever it was raised.
+`tests/the_destination_follows_the_work.cjs` drives that title from three
+different pages and gets Admin seat 2 every time.
+
+**`to_module` DISAPPEARED.** It IS the block. One less thing to set and one
+less thing to disagree with itself.
+
+**`raise_modules` HAS THREE STATES AND ALL THREE ARE USED**, and folding any
+two of them together breaks something:
+
+| | |
+|---|---|
+| **NULL** | nobody has been asked. Only possible before the SQL runs, which is what makes the flip safe to re-run — it looks for exactly this. Every reader treats it as *any system*, because an absent answer is not a no anywhere here. |
+| **`{*}`** | any system. What a newly ADDED title gets, because a title nobody can raise is on no Work list, which is invisible and reads as broken. |
+| **`{}`** | nobody raises it by hand. What an **automatic** title wants, and why the empty case must never be read as the absent one: fold them and either every automatic title turns up in every Work list, or every Work list empties itself over a column. |
+| **`{scan,operation}`** | those systems, and no others. |
+
+The star is a sentinel inside the array rather than a column of its own,
+because **four** readers ask this question and one array is one thing for
+each of them to read.
+
+**THE FALLBACK IN BOTH RAISE FORMS COULD GO, and its absence is the measure
+of the change.** A system with no titles of its own used to borrow the
+DESTINATION's list — a crutch for the hub, where the source is Nelos and
+Nelos owns nothing. A title left open to any system is in every Work list
+including that one, so the exception is answered by the rule.
+
+**THE SEAT HAD NEVER ONCE REACHED A CASE.** `nelos_route_case()` returns
+early on a case that already names its queue — *routing is the default, not
+a rule* — and both raise forms always name one, so a PIC set as **Admin 2**
+on Case Routing was dead for everything raised from a form. Both forms write
+`assigned_seat_no` now, and `isMine()` has read it all along. Two rules in
+it: the box asks for a PERSON and the setting is a SEAT, so `seatHolder()`
+resolves one to the other; and **the seat does not travel to an overridden
+destination**, because that number is a different person in another system,
+or nobody.
+
+**FOUR SCREENS READ THE COLUMN, and the two that were nearly missed are the
+instructive ones.** The two raise forms are the obvious pair — `shared/
+shared_nelos_dock.js` and `Mobile/src/components/NelosNewCase.jsx`, the
+same-decision-twice this file keeps finding. The other two:
+
+- **The hub drawer** (`nelos_dashboard.html`) was deliberately left out of
+  the previous change, and could not be left out of this one: its
+  `routedTo()` and its category list both read `module_key`, so one case
+  opened from the hub and the identical case opened from a module would go
+  to two different queues. It also defaulted the PIC to the **#1** of the
+  destination while both raise forms honoured the office's seat.
+- **Automate Cases** (`nelos_automation.html`) wrote its *Open case action*
+  into a `nelos_routes` row, which is now inert — a setting saved and
+  obeyed by nothing, which this file has a heading about. It writes the
+  TITLE now, so the two screens stay two views of one row. Its cards are
+  the QUEUE a case lands in rather than the system that raises it, because
+  the old pair was the same word twice as often as not.
+
+**WHAT IS LEFT OF `nelos_routes` is the SECTION DEFAULT** (`category IS
+NULL`) — the catch-all for a title no screen has heard of, which is a line
+somebody typed. The per-category rows are **deliberately not deleted**: they
+are the record of what was set, and the check at the foot of the SQL reads
+every one of them back and says **AGREES** or **MOVED**, which is how you
+know the flip carried the office's own settings rather than guessing at
+them. Nothing on any screen reads them any more.
+
+**NOTHING HAD TO BE RE-DECIDED.** The flip reads off the rules already set:
+the new block is the old *Solve by*, the From System is the old block, the
+PIC does not move, and a title with no rule stays where it is. Tested on the
+scratch Postgres against the state production is actually in, then run twice
+more — the guard is `raise_modules IS NULL`, so a second run moves nothing.
+
+**TWO TITLES SPELLED THE SAME UNDER TWO SOLVERS IS THE ONE THING THAT MAKES
+ROUTING A GUESS**, and the flip creates them: *Repair Maintenance Work*
+raised from the FC Portal and from Seedling Stock, both solved by Admin, are
+one title with two doors in. PART 3 of the SQL **merges** them — the keeper
+takes both doors and fills its blanks from the copies — and the unique index
+is dropped for the length of the flip, because Postgres checks it row by row
+and no order of updates avoids the collision. The check names any that a
+later hand edit creates, the trigger breaks the tie the same way every time,
+and Automate Cases reports a 23505 in those words rather than as a code.
+
+**The one gesture deliberately NOT built is moving a title between
+solvers** from Case Routing. The block is the solver, so a move is a retire
+and an add under the other portal — which keeps its own From list and PIC
+where the office left it, and is a rare act. Automate Cases can move an
+automatic one, because its action column was already that control.
+
+`tests/the_work_list_is_the_raising_system.cjs` keeps its name — the Work
+list IS still the raising system's — and was rewritten to the column that
+now answers it: 37 checks over all four screens plus the trigger order, **27
+of them failing on the previous code**.
+`tests/the_destination_follows_the_work.cjs` is 39, **17 of them red before
+this**, and it drives the three states of `raise_modules` over the REAL
+function out of both forms. Three things they had to learn:
+
+- **The browser half has to FAIL rather than die.** Against the new fixture
+  the previous dock leaves the Work dropdown hidden, so `selectOption` times
+  out and the harness stops at the first throw with every check underneath
+  never asked — the trap this file already names. `pickWork` catches it and
+  records one named failure instead, which is why the 17 above is a count of
+  checks rather than a stack trace.
+
+- **The sentinel is handed INTO the lifted function**, as the literal both
+  files declare, so a file that changes the spelling fails here instead of
+  quietly reading `undefined`.
+- **A fixture whose titles are open to any system cannot test the typed-line
+  fallback**, because then no system has an empty Work list. Every title in
+  that fixture is raisable from the FC Portal and nowhere else, and the
+  three states are driven as a unit instead.
+
+And one about searching a page for a column that went: `/Solve by/` was
+still true of `nelos_user_setting.html`, because the page **explains at
+length** what that column was and why it went — in prose, in the stylesheet
+and the script, which share comment delimiters. The comments come out
+first. Same trap, third time.
+
+`nelos_automation.html` gained the three no-cache metas: every line of its
+code is inline, so the page IS the deploy, and it is the page being changed.
+
 ## A case category is retired, never deleted — and adding it back revives it
 
 The office asked for a cross on each row of Case Routing: *"i want to delete
@@ -4072,6 +4387,70 @@ never a `confirm()` — names the cases and takes ONE remark for them all.
 - Same `close_remark` fallback as closing one case.
 
 `tests/close_many_cases_at_once.cjs`.
+
+### The same shape on the SENT-BACK list, plus the scheduled rows
+
+*"加一个select all button，可以一次过删掉"*, said over twelve rejected
+records in UNN 2 whose reasons are one sentence written twelve times
+("kerja belum di buat", "pekerja salah tekan"). Twelve confirms for one
+decision, and the decision was never per-record — the same argument the
+audit board's section × already won.
+
+Everything above is repeated here and is not worth restating: the box rides
+in the **date cell** (this table already runs off the side of the screen at
+ten columns, and an eleventh would push the buttons further out of reach of
+the thing it is for), Select all takes the **filtered** list, a tick only
+stands for a row the list can show, and it is ONE write whose count is what
+came BACK — `.in('id', …)` **and `.not('rejected_at','is',null)`**, so a
+record somebody approved between the draw and the press is theirs and is
+left alone.
+
+**WHAT IS THIS SCREEN'S OWN IS THE SCHEDULED ROWS.** A single Del already
+takes the office row its record was paired to, because a record deleted is a
+job that is not happening and the row left behind puts it on next month's
+list as outstanding work. A bulk delete that forgot that would leave twelve
+of them. Three things in it:
+
+- **The pairing is asked ONCE, per record, BEFORE the write**
+  (`pairOf`). `_submissionScheduleRow` pairs the field record against
+  `records`, so after the delete there is nothing left to pair against and
+  the schedule would survive every time — and a second walk of the rule
+  after the fact is a second answer to one question.
+- **Only the schedule of what ACTUALLY went.** A row the database refused
+  still has its work outstanding, so `pairOf` is read against the ids that
+  came back and not the ids that were sent.
+- **It still refuses to guess.** Where the rule cannot pick out exactly one
+  row the confirm says how many are in that state and deletes only the
+  worker's record — deleting the wrong round's row is not something a
+  confirm box can take back.
+
+**It is a `confirm()` and not a dialog**, which is the one place this
+differs from the Nelos close: that one takes a REMARK, and a box somebody
+has to type into cannot be an OK/Cancel. This takes nothing, and the single
+Del beside it has always been a confirm — two shapes for one act on one
+screen is worse than the plainer of them.
+
+**`applyI18n` writes `textContent`**, so the `data-i18n` sits on the SPAN
+beside the Select all box and never on the `<th>` that holds it, or every
+language switch wipes the box out. The test asks that by name.
+
+`tests/many_sent_back_records_go_at_once.cjs` drives the real page with
+UNN 2's own rows; **29 of its 41 checks fail on the previous code**. Three
+things it had to learn, each of which makes a browser test lie:
+
+- **A data row is counted without asking for its box.** Counting rows by
+  their checkbox reads the previous page's whole list as empty, and then
+  "every row is ticked" is true of nothing.
+- **The filter select is HIDDEN by `shared_cf_select.js`**, so Playwright
+  cannot act on it; the value is set and `change` dispatched the way the
+  skin's own button does it. Same for the presses, which go through
+  `el.click()` in the page — a control that is missing must fail the check
+  underneath by NAME and not time out for thirty seconds.
+- **The stub honours both halves of the write and both call shapes.** One
+  that applied `.in` and ignored `.not` would sign off a delete that takes
+  an approved record with it, which is the one thing that guard exists to
+  stop; and the single Del writes `.eq('id', …)`, so a stub reading only
+  `.in` reads a working button as a dead one.
 
 ## A permission that is saved but not obeyed is worse than no permission
 
@@ -4392,10 +4771,11 @@ metas that page would have gone on asking for the old `?v=` for ever.
 **`nursery_ops_user_access.html` now carries them too**, for the same reason
 one page along: the tick list lives in that page, so a cached copy goes on
 offering yesterday's labels — and the label on *Open Setting* was the thing
-being corrected. **Five pages are still unguarded** — the two PALMS pages,
-Life of Plot, `operation_delivery.html` and `operation_settings.html` — and
-the test prints them every run, so do not trust the list in this paragraph
-over the one the test gives you.
+being corrected. **Four pages are still unguarded** — the two PALMS pages,
+Life of Plot and `operation_settings.html` — and the test prints them every
+run, so do not trust the list in this paragraph over the one the test gives
+you. It said five until `operation_delivery.html` was guarded, which is the
+whole reason for that sentence.
 
 **Any new page that loads a script with `?v=` needs all three** to be
 deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is

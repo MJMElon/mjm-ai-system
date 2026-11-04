@@ -730,6 +730,9 @@ function _mergeCapacityPlots() {
      plotTrays[stock], plotTrays[n], aliasBucket(plotTrays, n)].forEach(b => {
       if (b) Object.keys(b).forEach(p => candidates.add(p));
     });
+    /* The capacity is the LIVE figure now, so a Seedling Stock plot with
+       seedlings standing in it qualifies whether or not anybody keyed it. */
+    [stock, n].forEach(k => (stockPlots[k] || []).forEach(p => candidates.add(p)));
     candidates.forEach(p => {
       const k = norm(p);
       if (!k || have.has(k)) return;
@@ -4462,6 +4465,9 @@ const I18N = {
     'rej.approve':'Approve', 'rej.approveTip':'Accept this record — it moves up into the approved list',
     'rej.editTitle':'Edit Sent-Back Record', 'rej.saveOnly':'Save (still sent back)',
     'rej.delTip':'Delete this record from the database, and the scheduled row it is paired to',
+    'rej.pickTip':'Tick this record to delete it with the others',
+    'rej.nSelected':'{n} selected', 'rej.delSelected':'Delete {n} selected',
+    'rej.clearSel':'Clear selection',
     'rej.dateNote':'Changing the date moves which week and month this record is paired against — the schedule row it lands on follows the date.',
     'jenis.pd':'P & D Spraying', 'jenis.interrow':'Interrow Spraying',
     'jenis.weeding':'Weeding', 'jenis.manuring':'Manuring',
@@ -4485,26 +4491,15 @@ const I18N = {
     'link.asAt':'as at {x}', 'link.today':'standing today — no date picked yet',
     'link.willUse':'{x} will be used',
     'link.overridden':'Linked value is {x} — your {y} overrides it',
-    /* The same sentence about a figure NOBODY here typed. It was saved on a
-       PHONE -- the FC Portal or the Worker Portal, both of which write
-       nops_maint_field_records -- and a Field Conductor verified it, which
-       is what let applyFieldRecords fill the empty cell with it.
-
-       IT NAMES THE PERSON WHERE IT CAN. The first wording said "the field
-       reported it", and the office asked the only question that leaves:
-       "这是谁 只有我可以填". They are right that nobody else types into that
-       box; the answer is that typing is not the only way a figure gets
-       there. A screen that can name who saved the record and instead says
-       "the field" has made the reader ask.
-
-       The last is for a row saved before either mark existed, where nothing
-       knows who put it there and the sentence says exactly that rather than
-       guessing at a person. */
-    'link.fieldQtyWho':'Linked value is {x} — {y} is from a phone record by {w}, verified',
-    'link.fieldQty':'Linked value is {x} — {y} is from a verified phone record',
+    /* `link.fieldQtyWho` and `link.fieldQty` WERE HERE, and both are gone
+       with the thing they explained. They worded a figure a PHONE had put
+       in the cell -- two turns of wording it, each correct and each one
+       turn further from the answer, which the office gave in one line:
+       *"link的capacity完全不要管手机送进来的"*. No figure arrives that way
+       any more, so there is nothing left to word. */
     'link.savedQty':'Linked value is {x} — the saved {y} is being used',
     'link.useLink':'Use the linked amount',
-    'link.basis':'movement report closing balance',
+    'link.basis':'Summary Report closing balance',
     'link.negative':'Batch report nets to {x} here — check that plot\'s records.',
     'link.interrow':'Interrow keeps the 2nd culling in — {x} culled seedlings counted, because their rows are still sprayed.',
     /* The other half of the sentence above, which was never said. A figure
@@ -4512,6 +4507,12 @@ const I18N = {
        the same on screen, so the office could not tell a working rule from a
        broken one and said so. */
     'link.cull2Off':'2nd culling taken off: {x} seedlings.',
+    /* And the case where it is NOT taken off and the figure is still right:
+       a 3rd culling already contains the 2nd culling that happened on the
+       way to it, which is the Summary Report's own condition. Said because
+       a figure that has had one loss taken off twice looks exactly like one
+       that has not, which is how it went unnoticed. */
+    'link.cull2Inside':'2nd culling of {x} is inside the 3rd culling of {y}, so it is not taken off again — same as the Summary Report.',
     'bal.q':'Moved out to the -R plot: batch {b}. {x} seedlings are left behind — is that balance capacity for this work?',
     'bal.include':'Include balance',
     'bal.exclude':'Exclude balance (culled balance)',
@@ -4653,6 +4654,9 @@ const I18N = {
     'rej.approve':'Luluskan', 'rej.approveTip':'Terima rekod ini — ia naik ke senarai yang diluluskan',
     'rej.editTitle':'Sunting Rekod Dihantar Balik', 'rej.saveOnly':'Simpan (masih dihantar balik)',
     'rej.delTip':'Hapus rekod ini dari pangkalan data, berserta baris jadual yang dipadankan dengannya',
+    'rej.pickTip':'Tandakan rekod ini untuk dihapus bersama yang lain',
+    'rej.nSelected':'{n} dipilih', 'rej.delSelected':'Hapus {n} yang dipilih',
+    'rej.clearSel':'Kosongkan pilihan',
     'rej.dateNote':'Menukar tarikh menukar minggu dan bulan rekod ini dipadankan — baris jadual yang dipadankan mengikut tarikh.',
     'jenis.pd':'Penyemburan racun kulat dan serangga', 'jenis.interrow':'Meracun rumput secara selingan',
     'jenis.weeding':'Merumput', 'jenis.manuring':'Membaja',
@@ -4676,14 +4680,13 @@ const I18N = {
     'link.asAt':'pada {x}', 'link.today':'baki semasa — tarikh belum dipilih',
     'link.willUse':'{x} akan digunakan',
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
-    'link.fieldQtyWho':'Nilai dari laporan ialah {x} — {y} dari rekod telefon oleh {w}, disahkan',
-    'link.fieldQty':'Nilai dari laporan ialah {x} — {y} dari rekod telefon yang disahkan',
     'link.savedQty':'Nilai dari laporan ialah {x} — {y} yang tersimpan digunakan',
     'link.useLink':'Guna nilai pautan',
-    'link.basis':'baki akhir laporan pergerakan',
+    'link.basis':'baki akhir Summary Report',
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
     'link.cull2Off':'Pembuangan ke-2 ditolak: {x} anak benih.',
+    'link.cull2Inside':'Pembuangan ke-2 sebanyak {x} sudah termasuk dalam pembuangan ke-3 sebanyak {y}, jadi ia tidak ditolak dua kali — sama seperti Summary Report.',
     'bal.q':'Dipindah ke plot -R: batch {b}. Baki {x} anak benih tertinggal — adakah baki itu kapasiti untuk kerja ini?',
     'bal.include':'Masukkan baki',
     'bal.exclude':'Kecualikan baki (baki culling)',
@@ -6170,13 +6173,33 @@ function applyFieldRecords(nursery, monthLbl) {
       r.batch = g.batches.join(', ');
       r._fromFieldBatch = 1;
     }
-    // The field counted the batches it ticked, so the quantity is already
-    // answered — leaving the cell to fall back to the linked figure asked the
-    // batch report a question the record had already settled.
-    if (g.qty != null && g.qty !== '' && !r._qtyByHand && r.qty == null) {
-      r.qty = Number(g.qty);
-      r._fromFieldQty = 1;
-    }
+    /* THE QUANTITY IS NOT TAKEN FROM THE PHONE, and it used to be.
+
+       The field record carries one — the phone has no quantity box, and it
+       sends a figure all the same: what the conductor ticks is WHICH
+       BATCHES are standing, and the read-only number beside them is
+       `shared_plot_batch_balance`, the Movement Report balance of exactly
+       those batches as at the day the record was SAVED. That filled an
+       empty cell here, and the office asked for it out in one line:
+       *"link的capacity完全不要管手机送进来的，我要link这个summary report"*.
+
+       THREE REASONS IT WAS THE WRONG FIGURE, and the first is the one that
+       cost money:
+
+         · the phone's view counts NEITHER CULLING — `plotBatches.js` says
+           so in its own words — so a plot 2nd culled read high by exactly
+           the culling, against the report the office reconciles with;
+         · it is as at the day the record was SAVED, not as at the WORK
+           DATE, so a sale or a 3rd culling in between left the cell
+           holding a figure no report on any screen agrees with;
+         · nobody keyed it, and for a month this page called it the
+           office's own answer.
+
+       The DATE and the BATCHES above are still taken, because those are
+       what a conductor standing in the plot actually observed, and the
+       batch cell is what this page then asks the report about. The figure
+       is the report's answer and nothing else's. `dropPhoneQty()` takes
+       the ones already written back off. */
     syncTicks(r, g);
   });
 
@@ -6866,6 +6889,12 @@ function switchRecordView(view) {
    count on the tab is right without the section having been visited. */
 let _recSection = 'approved';
 function switchRecSection(section, btn) {
+  /* LEAVING THE TAB DROPS THE SELECTION. Coming back to a list carrying
+     ticks somebody made before they went somewhere else is a delete made
+     against a screen nobody has read — the same reason the ticks are pruned
+     to what is shown. Cleared whichever way the tab is left, including back
+     onto itself. */
+  if (typeof _rejPickedIds !== 'undefined' && _rejPickedIds.size) _rejPickedIds.clear();
   _recSection = section;
   const bar = btn ? btn.closest('.subtabs-bar') : null;
   if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
@@ -7997,12 +8026,14 @@ function _qtyCell(r) {
      the P & D row beside it on the same plot. Said here, because a number
      that differs from the one above it with no explanation reads as a fault. */
   const plus = i.keptCull2
-    ? ` Interrow spraying keeps the 2nd culling in — ${i.cull2.toLocaleString()} culled seedlings are counted, because the rows they stood in are still sprayed.`
-    : '';
+    ? ` Interrow spraying keeps the 2nd culling in — ${numMY(i.cull2)} culled seedlings are counted, because the rows they stood in are still sprayed.`
+    : (i.cull2Inside
+        ? ` A 2nd culling of ${numMY(i.cull2Inside)} is inside the 3rd culling of ${numMY(i.cull3)} and is not taken off again, same as the Summary Report.`
+        : '');
   const off = i.exclBal
-    ? ` The ${i.culledBal.toLocaleString('en-MY')} left behind a transfer to the -R plot is the culled balance and is NOT counted.`
+    ? ` The ${numMY(i.culledBal)} left behind a transfer to the -R plot is the culled balance and is NOT counted.`
     : '';
-  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${plus}${off} Key a number here to override.`;
+  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Summary Report's closing balance for the same plot, batch and date.${plus}${off} Key a number here to override.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
@@ -8387,6 +8418,70 @@ function _rejSentBackCell(f) {
   return `${esc(who || '—')}${when ? `<br><span style="color:var(--text-faint);font-size:10.5px;">${esc(_tarikhDisplay(when))}</span>` : ''}`;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   MANY AT ONCE — *"加一个select all button，可以一次过删掉"*
+
+   Twelve records sent back for one reason ("pekerja salah tekan") are twelve
+   confirms for one decision, and the decision was never per-record. So the
+   list carries a tick per row and one Delete for all of them.
+
+   WHAT IS TICKED IS WHAT IS ON SCREEN. The ids live in a Set and
+   `renderRejectedSubmissions` PRUNES it to the rows it actually drew, so a
+   filter narrowed, a nursery changed or a record approved underneath takes
+   its tick with it. A tick standing for a row nobody can see is a row that
+   goes in a delete nobody looked at.
+
+   Leaving the tab clears it outright — coming back to a list carrying a
+   selection somebody made before lunch is the same fault, one step further
+   on.
+   ══════════════════════════════════════════════════════════════ */
+const _rejPickedIds = new Set();
+
+function _rejSelCount() { return _rejPickedIds.size; }
+
+/* Draw the bar, the count and the header box off the rows ON SCREEN. The
+   header box is INDETERMINATE on a part selection rather than ticked or
+   clear, because either of those is a claim about rows it is not making. */
+function _rejPaintSelection(shownIds) {
+  const n = _rejPickedIds.size;
+  const bar = document.getElementById('rej-bulk');
+  if (bar) bar.style.display = n ? '' : 'none';
+  const lbl = document.getElementById('rej-bulk-n');
+  if (lbl) lbl.textContent = t('rej.nSelected', { n });
+  const del = document.getElementById('rej-bulk-del');
+  if (del) del.textContent = t('rej.delSelected', { n });
+  const clr = document.getElementById('rej-bulk-clear');
+  if (clr) clr.textContent = t('rej.clearSel');
+  const all = document.getElementById('rej-all');
+  if (all) {
+    const total = (shownIds || []).length;
+    all.checked = total > 0 && n >= total;
+    all.indeterminate = n > 0 && n < total;
+    all.disabled = total === 0;
+  }
+}
+
+/* One row's box. Gated on what is SHOWN, so a handler left on a cell drawn
+   before the list moved cannot tick a row that is no longer in it. */
+function toggleRejPick(id, on) {
+  const key = String(id);
+  if (on) _rejPickedIds.add(key); else _rejPickedIds.delete(key);
+  renderRecords();
+}
+
+function toggleRejAll(on) {
+  _rejPickedIds.clear();
+  if (on) (_rejShownIds || []).forEach((x) => _rejPickedIds.add(String(x)));
+  renderRecords();
+}
+
+function clearRejSelection() { _rejPickedIds.clear(); renderRecords(); }
+
+/* The ids the last draw actually put on screen. Select all reads this and
+   never `mine`, or a nursery's whole backlog would be ticked by a press made
+   over a list of three. */
+let _rejShownIds = [];
+
 function renderRejectedSubmissions(f) {
   const body = document.getElementById('rej-body');
   if (!body) return;
@@ -8419,17 +8514,31 @@ function renderRejectedSubmissions(f) {
   }).sort((a, b) => String(b.work_date || '').localeCompare(String(a.work_date || ''))
                  || (b.id || 0) - (a.id || 0));
 
+  /* PRUNE FIRST, DRAW SECOND. Everything about the selection is read off
+     this list, so it has to be settled before the bar or the header box is
+     painted — otherwise a count drawn from the Set disagrees with the ticks
+     drawn from the rows, over a delete. */
+  _rejShownIds = shown.map((r) => String(r.id));
+  const onScreen = new Set(_rejShownIds);
+  [..._rejPickedIds].forEach((id) => { if (!onScreen.has(id)) _rejPickedIds.delete(id); });
+
   if (!shown.length) {
+    _rejPaintSelection(_rejShownIds);
     body.innerHTML = `<tr><td colspan="10" class="rej-none">${
       mine.length ? t('rec.none') : t('rej.none')}</td></tr>`;
     return;
   }
+  _rejPaintSelection(_rejShownIds);
 
   body.innerHTML = shown.map((r) => {
     const jenis = _rejJenis(r);
     const worked = _rejWorkedBy(r);
-    return `<tr>
-      <td style="font-weight:600;color:var(--green-text);">${esc(_tarikhDisplay(r.work_date))}</td>
+    const on = _rejPickedIds.has(String(r.id));
+    return `<tr${on ? ' class="rej-row-picked"' : ''}>
+      <td style="font-weight:600;color:var(--green-text);"><input type="checkbox"
+            class="rej-pick" ${on ? 'checked' : ''}
+            onclick="toggleRejPick(${r.id}, this.checked)"
+            title="${esc(t('rej.pickTip'))}">${esc(_tarikhDisplay(r.work_date))}</td>
       <td>${esc(jenisLabel(jenis) || '—')}</td>
       <td><span class="pill ${pillCls(jenis)}">${esc(r.chemical || '—')}</span></td>
       <td style="text-align:center;font-weight:700;color:var(--green-text);">${esc(r.plot_name || '—')}</td>
@@ -8560,6 +8669,86 @@ async function deleteSubmission(id) {
   // persistRecords writes back — done only after the record itself is gone,
   // so a failed delete does not take a scheduled row with it.
   if (row) records = records.filter((r) => r.id !== row.id);
+  await _reloadSubmissions();
+}
+
+/* DELETE EVERY TICKED ROW, IN ONE WRITE.
+
+   `.in('id', …)` and nothing else would be wrong in a way nobody would see:
+   between the draw and the press somebody can APPROVE one of these, and an
+   approved record is not a rejected one — deleting it would throw away a
+   decision this screen never asked about. So the write carries
+   `.not('rejected_at','is',null)`, the same shape as closing many Nelos
+   cases on `.eq('status','resolved')`, and **the count is what came BACK**
+   rather than what was sent. A row somebody else has moved is theirs.
+
+   THE SCHEDULED ROWS GO TOO, exactly as a single Del takes one: a record
+   deleted is a job that is not happening, and the paired office row left
+   behind puts it on next month's list as outstanding work. The pairing is a
+   RULE and not a key, so `_submissionScheduleRow` is asked per record and
+   says nothing where it cannot pick out exactly one — the confirm counts
+   those separately rather than guessing, because deleting the wrong round's
+   row is not something a confirm box can take back.
+
+   The pairs are worked out BEFORE the delete, off `records` as it stands.
+   Afterwards the field record is gone and the rule has nothing left to pair
+   against, so the schedule would survive every time. */
+async function deleteSelectedSubmissions() {
+  const ids = [..._rejPickedIds];
+  if (!ids.length) return;
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+
+  const picked = ids.map(_submissionById).filter(Boolean);
+  if (!picked.length) { clearRejSelection(); return; }
+
+  /* ASKED ONCE, per record, and kept. A second walk of the pairing rule
+     after the delete would be a second answer to one question — and it
+     would be asked of a `records` list this function is about to edit. */
+  const pairOf = new Map();
+  let unpaired = 0;
+  picked.forEach((f) => {
+    const row = _submissionScheduleRow(f);
+    if (row) pairOf.set(String(f.id), row); else unpaired++;
+  });
+  const rows = [...new Set([...pairOf.values()].map((r) => r.id))];
+
+  /* The confirm NAMES them rather than counting them, up to a point: a list
+     somebody can read is what makes this a decision instead of a leap. Past
+     ten it is a wall, and the count is the honest summary. */
+  const names = picked.slice(0, 10).map((f) =>
+    `    ${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · ${_tarikhDisplay(f.work_date)}`);
+  if (picked.length > 10) names.push(`    …and ${picked.length - 10} more`);
+
+  const tail = rows.length
+    ? `\n${rows.length} scheduled row${rows.length === 1 ? '' : 's'} paired to them will go as well.`
+    : '';
+  const warn = unpaired
+    ? `\n${unpaired} of them could not be paired to a scheduled row — guessing `
+      + `would delete the wrong round, so only the worker's record goes for `
+      + `those and the schedule is left alone.`
+    : '';
+  if (!confirm(`Delete ${picked.length} record${picked.length === 1 ? '' : 's'} `
+    + `from the database?\n\n${names.join('\n')}\n${tail}${warn}\n\nThis cannot be undone.`)) return;
+
+  const { data, error } = await _supabase.from('nops_maint_field_records')
+    .delete().in('id', picked.map((f) => f.id))
+    .not('rejected_at', 'is', null)
+    .select('id');
+  if (error) { alert('Could not delete them: ' + (error.message || error)); return; }
+
+  /* ONLY THE SCHEDULE OF WHAT ACTUALLY WENT. A row whose record the database
+     refused to delete still has its work outstanding. */
+  const gone = new Set((data || []).map((d) => String(d.id)));
+  const kill = new Set();
+  gone.forEach((id) => { const row = pairOf.get(id); if (row) kill.add(row.id); });
+  if (kill.size) records = records.filter((r) => !kill.has(r.id));
+
+  _rejPickedIds.clear();
+  if (gone.size < picked.length) {
+    alert(`${gone.size} of ${picked.length} were deleted. The rest are no `
+      + `longer sent back — somebody has approved or removed them since this `
+      + `list was drawn, so they were left alone.`);
+  }
   await _reloadSubmissions();
 }
 
@@ -8814,13 +9003,67 @@ function freezeCheckedRows() {
   let n = 0;
   records.forEach(r => {
     if (!r || !r.checked) return;
-    if (r.qtyFrozen != null || r.batchFrozen != null) return;
     const f = MJMMovementFreeze(r);
+    /* NEVER OVER A FIGURE ALREADY WRITTEN DOWN. The outer test used to be
+       "either mark is set, leave the row alone", which is wrong in one case
+       and it is the case dropPhoneQty creates: a checked row carrying a
+       batchFrozen and no qtyFrozen was skipped, so after the phone figure
+       came off it had neither a keyed figure nor a frozen one and a settled
+       row went back to being a live formula. Asked per field it is right
+       either way, and it is idempotent. */
+    if (r.qtyFrozen   != null) delete f.qtyFrozen;
+    if (r.batchFrozen != null) delete f.batchFrozen;
     if (!Object.keys(f).length) return;
     Object.assign(r, f);
     n++;
   });
   if (n) persistRecords();
+  return n;
+}
+
+/* ── THE PHONE'S QUANTITY COMES BACK OFF THE ROWS IT ALREADY FILLED ──────
+
+   applyFieldRecords no longer writes one (the comment there is the whole of
+   why). This is the other half: every row it already wrote one into is
+   still carrying it, and those are the rows the office is looking at — the
+   N12 row that "automatically had 830" is one of them.
+
+   IT IS A RECORD AND NEVER A DELETION, the same choice the admin-closed
+   plot and the rejected signup made: the figure moves to `_phoneQty`, which
+   nothing reads and nothing prices, so what the phone had put there is
+   still on the row to be seen and `CHECK_rows_the_phone_filled.sql` can
+   name every one of them with what the report says instead. A repair that
+   quietly throws away a number somebody was reading is worse than the
+   fault.
+
+   A CHECKED ROW IS NOT LEFT AS A FORMULA. Taking the figure off a settled
+   row would put it back on the live link, which is the one thing Checked
+   exists to stop. freezeCheckedRows runs once the ledger lands and writes
+   the report's figure into qtyFrozen, so the row is a number again — the
+   report's number this time.
+
+   WHAT IT COSTS, and it is worth saying plainly rather than discovering:
+   a checked row's figure MOVES. It moves to the Summary Report's own
+   answer, which is what the office asked for, and the row goes on wearing
+   the signature that was given to the figure before it. The check names
+   every one and by how much, so it can be looked at rather than taken on
+   trust.
+
+   A figure somebody KEYED is untouched — `_qtyByHand` or no mark at all is
+   not this. Only a row the phone filled, which is exactly the rows carrying
+   `_fromFieldQty`. Self-correcting and then still: once they are off,
+   nothing writes one again and this finds nothing on every later load. */
+function dropPhoneQty() {
+  let n = 0;
+  (records || []).forEach(r => {
+    if (!r || !r._fromFieldQty) return;
+    if (!(r.qty === 0 || r.qty)) { delete r._fromFieldQty; return; }
+    r._phoneQty = Number(r.qty);
+    delete r.qty;
+    delete r._fromFieldQty;
+    n++;
+  });
+  if (n) console.info('[maint] took the phone quantity off ' + n + ' row(s); they read the Summary Report now');
   return n;
 }
 function togRec(id,f){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); r[f]=r[f]?0:1; renderRecords(); persistRecords(); }
@@ -8840,29 +9083,16 @@ function openRecModal(pre) {
   document.getElementById('rec-modal').classList.add('open');
 }
 
-/* WHO SAVED THE PHONE RECORDS THIS ROW WAS FILLED FROM.
+/* `_fieldWho(row)` WAS HERE, and it is gone with the sentence that was its
+   only reader — it named, off `_fieldIds`, whoever saved the phone records a
+   row's quantity had been filled from. The quantity is not filled from them
+   any more (see applyFieldRecords), so the function answered a question
+   nothing asks. It is removed rather than left standing: a half-removal that
+   keeps the function is the kind that comes back, and `git log` is where a
+   reader of this file should go for it rather than reading a dead one.
 
-   `_fieldIds` is set by `applyFieldRecords` and by nothing else, off records
-   `loadFieldRecords` has already filtered to the VERIFIED ones — so a name
-   here is somebody whose work a Field Conductor has agreed, never a draft
-   sitting on a handset.
-
-   One row can be several records (three workers on one job), so it is a
-   LIST, distinct and in the order the ids are in. The email is resolved to
-   a name the same way every other "by <person>" on this page is, and it
-   fails open to the stored value for the same reason. */
-function _fieldWho(row) {
-  const ids = Array.isArray(row && row._fieldIds) ? row._fieldIds : [];
-  if (!ids.length) return '';
-  const names = [];
-  ids.forEach((id) => {
-    const rec = (fieldRecords || []).find((f) => f && String(f.id) === String(id));
-    if (!rec) return;
-    const who = _maintWho(rec.reported_by || '');
-    if (who && names.indexOf(who) < 0) names.push(who);
-  });
-  return names.join(', ');
-}
+   `_fieldIds` itself STAYS and is not dead — the Audit column finds a field
+   record's verdict by it. */
 
 /* INCLUDE OR EXCLUDE THE CULLED BALANCE — the record dialog's answer to
    *"如果有transfer去plot-R，在maintenance capacity那里加一个选项，include
@@ -8938,7 +9168,7 @@ function refreshLinkedQty() {
   const when  = link.asOf ? t('link.asAt').replace('{x}', _tarikhDisplay(link.asOf)) : t('link.today');
   /* WHOSE FIGURE IS IN THE BOX. It used to say "your {y} overrides it" about
      every number sitting there, whoever put it there — and three different
-     things can put one there:
+     things could put one there:
 
        · somebody KEYED it, which really is theirs;
        · the FIELD reported it, and applyFieldRecords filled the empty cell
@@ -8952,32 +9182,50 @@ function refreshLinkedQty() {
      `records_are_per_month.cjs` drives that), but nothing on the screen
      could say so.
 
+     THE SECOND ONE NO LONGER EXISTS, and that is the answer the office
+     chose in the end. Saying which of the three it was, and then saying
+     what the phone's figure WAS, were two turns of explaining a number
+     that had no business in the cell — *"link的capacity完全不要管手机送进
+     来的"*. applyFieldRecords writes no quantity and `dropPhoneQty` took
+     the written ones off, so a figure in this box is somebody's own or it
+     is one saved before the marks existed. Two sentences, both true, and
+     neither of them about a box that does not exist on the phone.
+
      The test for "being typed right now" is the SAME one `saveRec` uses to
      decide whether to mark the cell — the box against what is stored — so
      the sentence cannot say one thing while the save does another. */
   const was   = editRecId ? (records || []).find(r => r && r.id === editRecId) : null;
   const stored = was && (was.qty === 0 || was.qty) ? String(was.qty) : '';
   const mine   = !was || typed !== stored || was._qtyByHand;
-  /* AND IT NAMES THE PERSON, because "the field" is not a person. The office
-     read that sentence and asked the only question it leaves — *"田间报上来
-     的 — 这是谁 只有我可以填"*. They are right that nobody else types into
-     THIS box; what fills it without anybody typing is a maintenance record
-     saved ON A PHONE (the FC Portal and the Worker Portal both write
-     `nops_maint_field_records`) and then VERIFIED by a Field Conductor.
-     Until somebody presses Verify it reaches no cell at all.
+  /* THE TWO TURNS THAT GOT HERE ARE WORTH KEEPING, because the answer was
+     to take the figure away rather than to word it better, and the next
+     person will be tempted to word it better again.
 
-     So the row already knows: `_fieldIds` are the records it was filled
-     from, and each one carries who reported it. A screen that can name them
-     and instead says "the field" is making the reader ask. */
+     First it read "the field reported it", and the office asked the only
+     question that leaves — *"田间报上来的 — 这是谁 只有我可以填"*. So it
+     named the person off `_fieldIds`. Then they asked what the figure even
+     was — *"工人手机并没有capacity这个概念"* — and they were right: the
+     phone has NO quantity box. What a conductor ticks is which BATCHES are
+     standing, and the read-only number beside them is
+     `shared_plot_batch_balance` as at the day the record was saved, which
+     counts neither culling and is not cut off at the work date. So it said
+     that as well.
+
+     A SENTENCE EXPLAINING A FIGURE THAT SHOULD NOT BE THERE IS THE SCREEN
+     ARGUING FOR IT. Three wordings, each correct, each one turn further
+     from the thing to do — which the office then asked for in one line.
+     The DATE and the BATCH are still taken from a phone record, because
+     those are what somebody standing in the plot observed; the quantity is
+     the Summary Report's and nobody else's.
+     `shared/CHECK_rows_the_phone_filled.sql` names every row it had
+     filled, what it had put there and what the report says instead. */
   const headKey = typed === '' ? 'link.willUse'
-                : mine              ? 'link.overridden'
-                : was._fromFieldQty ? (_fieldWho(was) ? 'link.fieldQtyWho' : 'link.fieldQty')
+                : mine         ? 'link.overridden'
                 : 'link.savedQty';
   const head  = typed === ''
     ? t('link.willUse').replace('{x}', `<b style="color:var(--green-text);">${numMY(link.qty)}</b>`)
     : t(headKey).replace('{x}', `<b>${numMY(link.qty)}</b>`)
-                .replace('{y}', numMY(Number(typed)))
-                .replace('{w}', esc(_fieldWho(was)));
+                .replace('{y}', numMY(Number(typed)));
   /* THE REFRESH IS A PRESS, not a thing to work out. The office asked for a
      row to go back to the linked amount — *"每个月请直接刷新变成linked
      amount"* — and the only way to do it was to know that emptying the box
@@ -9008,17 +9256,27 @@ function refreshLinkedQty() {
      The third is amber because it is the one that may want looking at: a
      2nd culling saved with no CullDate falls back to the day it was KEYED,
      which can be weeks after the work. */
+  /* And the fourth, which is the Summary Report's own condition: a 2nd
+     culling on a batch that has since been 3rd culled is INSIDE that 3rd
+     culling and is not taken off again. This page took it off twice until
+     the office asked for the link to be the Summary Report, and nothing on
+     screen could have said so — a figure short by one culling and a figure
+     with no culling to take off are the same number. */
   const plus = link.keptCull2
     ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', numMY(link.cull2))}</span>`
     : (link.cull2Off
         ? `<br><span style="color:var(--text-muted);">${t('link.cull2Off').replace('{x}', numMY(link.cull2Off))}</span>` : '');
+  const inside = (!link.keptCull2 && link.cull2Inside)
+    ? `<br><span style="color:var(--text-muted);">${t('link.cull2Inside')
+        .replace('{x}', numMY(link.cull2Inside))
+        .replace('{y}', numMY(link.cull3))}</span>` : '';
   const later = link.cull2Later
     ? `<br><span style="color:#a16207;">${t('link.cull2Later')
         .replace('{x}', numMY(link.cull2Later))
         .replace('{d}', esc(_maintWhen(link.cull2LaterOn) || link.cull2LaterOn))}</span>` : '';
   const balOff = link.exclBal
     ? `<br><span style="color:var(--text-muted);">${t('bal.off').replace('{x}', numMY(link.culledBal))}</span>` : '';
-  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${balOff}${later}${warn}`;
+  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${inside}${balOff}${later}${warn}`;
 }
 
 /* Put the row back on the live linked figure. The box is what decides, so
@@ -9179,13 +9437,16 @@ function saveRec(){
     const was = records[i];
     const byHand = was._racunByHand
       || (was._src && String(obj.racun || '') !== String(was.racun || ''));
-    /* And the same for the three cells the FIELD fills — the date, the batch
-       and the quantity.
+    /* And the same for the cells the FIELD fills — the date and the batch.
+       It filled the QUANTITY too until the office asked for that out (see
+       applyFieldRecords); `_fromFieldQty` is still cleared here, because a
+       row saved before `dropPhoneQty` ran can still be carrying the mark
+       and a stale licence to refill is the one thing it must not keep.
 
-       _fromFieldDate / _fromFieldBatch / _fromFieldQty mark a cell this page
-       filled from a verified field record. That mark is also the licence to
-       fill it AGAIN, so typing over one and leaving it on had the next sync
-       put the field's figure straight back: a quantity keyed as 4755 read
+       _fromFieldDate / _fromFieldBatch mark a cell this page filled from a
+       verified field record. That mark is also the licence to fill it
+       AGAIN, so typing over one and leaving it on had the next sync put the
+       field's figure straight back: a quantity keyed as 4755 read
        something else by the time somebody looked, and read blank once the
        field record went (loadFieldRecords clears a marked cell whose record
        has gone). Nothing on either screen said why, and nobody had touched it.
@@ -10365,6 +10626,12 @@ async function initDb() {
      screen, and a September list opened in October would become October. */
   try { if (stampRecordMonths()) persistRecords(); }
   catch (e) { console.warn('[maint] could not stamp the months:', e); }
+  /* And before the first sync as well, because applyFieldRecords drops the
+     MARK off a row whose field record stopped pairing while leaving the
+     VALUE — so a repair run after it would have nothing left to find the
+     row by, and the phone figure would sit there for good. */
+  try { if (dropPhoneQty()) persistRecords(); }
+  catch (e) { console.warn('[maint] could not take the phone quantity off:', e); }
   renderAll();
   autoSyncRecords();
 
@@ -10373,9 +10640,14 @@ async function initDb() {
   loadMovementData().then(() => {
     if (!PlotMovement.ready()) return;
     try { freezeCheckedRows(); } catch (e) { console.warn('[maint] freeze pass failed:', e); }
+    /* The capacities follow the ledger now (currentCapacity), so the plot
+       lists, the schedules and the Setting grid all draw again off it. */
+    try { _mergeCapacityPlots(); } catch (_) {}
     /* The ledger is what says when a -R plot appeared, so the -R plots can
        only be given their parent's rounds now — see seedReplantRounds. */
     try { autoSyncRecords(); } catch (e) { console.warn('[maint] -R sync failed:', e); }
+    try { renderAll(); } catch (_) {}
+    try { renderCapacity(); } catch (_) {}
     try { renderRecords(); } catch (_) {}
     try { renderPayroll(); } catch (_) {}
     try { refreshLinkedQty(); } catch (_) {}
@@ -10517,7 +10789,59 @@ function traySizeOf(n) {
 
 /* What the dosage is worked out from, whichever way the plot is counted. */
 function capacityOf(n, p) {
-  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : getPlotQty(n, p);
+  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : currentCapacity(n, p);
+}
+
+/* A MAIN NURSERY CAPACITY IS WHAT IS STANDING IN THE PLOT NOW.
+   The office asked for the Setting grid to link the current figure rather
+   than a number somebody keyed once and nobody kept up: it is the batch
+   ledger through PlotMovement.linkedQty with no batch and no date -- every
+   batch standing there, as at today -- read as the Movement Report balance
+   (see below). One rule, not a second count.
+
+   Three things in it:
+   - A plot with nothing standing is NOUGHT, not the keyed figure. That is
+     the point of the change: an emptied plot is an empty plot.
+   - It is never below nought. The ledger can read negative, which is a
+     figure to look into on the Movement Report, not a capacity to dose.
+   - Until the ledger has been READ, the keyed figure stands in. The page
+     paints before that larger read lands, and a schedule of noughts for the
+     first second, or for good on a read that failed, would be a dosage of
+     nothing. Everything redraws when it lands.
+   PlotMovement is asked directly, never through linkedPlotQty: this runs at
+   load from _mergeCapacityPlots, before that const further down the file
+   exists. */
+function currentCapacity(n, p) {
+  const M = (typeof PlotMovement !== 'undefined') ? PlotMovement : null;
+  if (!M || !M.ready()) return getPlotQty(n, p);
+  /* IT IS THE MAIN NURSERY MOVEMENT REPORT BALANCE, read exactly the way
+     that report reads it -- netOfRow('main2', ...) in operation_reports.html.
+     Per plot and batch: transplanted + transferred in - sold - 3rd culled
+     (MapQty only) - transferred out + approved adjustment, and the 2nd
+     culling comes off ONLY while that batch has no 3rd culling on the plot,
+     because a 3rd culling already includes what was 2nd culled. The plot
+     figure is the sum of its batches, which is the Balance column.
+
+     Twice wrong before this: less the 2nd culling always (N20 read 531),
+     then never (the office: still not right, link THIS balance). The
+     report decides per batch, so this does too. */
+  const pk = M.plotKey(p);
+  const per = {};
+  (M.events() || []).forEach(ev => {
+    if (ev.plotKey !== pk) return;
+    const b = per[ev.batchKey] || (per[ev.batchKey] = { sum: 0, cull2: 0, cull3: 0 });
+    if (ev.type === '2nd_Culling') { b.cull2 += Math.abs(Number(ev.qty || 0)); return; }
+    // netOfRow asks cull3 > 0, the figure and not merely a row
+    if (ev.type === '3rd_Culling') b.cull3 += Math.abs(Number(ev.qty || 0));
+    b.sum += M.signed(ev.type, ev.qty);
+  });
+  const keys = Object.keys(per);
+  if (!keys.length) return 0;
+  const total = keys.reduce((t, k) => t + per[k].sum - (per[k].cull3 > 0 ? 0 : per[k].cull2), 0);
+  return Math.max(0, Math.round(total));
+}
+function capacityIsLive() {
+  return typeof PlotMovement !== 'undefined' && PlotMovement.ready();
 }
 
 /* The nurseries this block offers, and the plots under each. Both come from
@@ -11017,8 +11341,15 @@ function renderCapacity() {
   const wrap = document.getElementById('cap-cols');
   if (!wrap) return;
 
+  /* Only the Pre Nursery trays are keyed now, so a page with no Pre Nursery
+     has nothing for Edit to open. */
+  const anyPre = capNurseries().some(n => isPreNursery(n) && capPlots(n).length);
   const editBtn = document.getElementById('cap-edit-btn');
-  if (editBtn) editBtn.style.display = capEditing ? 'none' : '';
+  if (editBtn) editBtn.style.display = (capEditing || !anyPre) ? 'none' : '';
+  const note = document.getElementById('cap-live-note');
+  if (note) note.textContent = capacityIsLive()
+    ? 'Main nursery: linked to the Movement Report balance, what is standing in each plot now.'
+    : 'Main nursery: the batch report is still loading, so these are the keyed figures for now.';
   const acts = document.getElementById('cap-actions');
   if (acts) acts.style.display = capEditing ? 'flex' : 'none';
 
@@ -11072,15 +11403,18 @@ function capNurseryHtml(n) {
 }
 
 function capRowHtml(n, p, pre) {
-  const shown = pre ? trayQty(n, p) : getPlotQty(n, p);
+  const shown = pre ? trayQty(n, p) : currentCapacity(n, p);
   const draft = capEditing ? (capDraft[n].plots[p] ?? '') : null;
+  /* A main nursery figure is LINKED -- there is nothing to key, so it stays
+     a figure while the Pre Nursery trays are being edited beside it. */
+  const editable = capEditing && pre;
   return '<div class="cap-row" data-nursery="' + esc(n) + '" data-plot="' + esc(p) + '">' +
     '<span class="cap-row-n">' + esc(p) + '</span>' +
-    (capEditing
+    (editable
       ? '<input type="number" min="0" step="1" value="' + draft + '" placeholder="0" ' +
           'oninput="onDraftInput(\'' + esc(n) + '\', \'' + esc(p) + '\', this.value)">'
       : '<span class="cap-row-v' + (shown ? '' : ' muted') + '">' +
-          (shown ? shown.toLocaleString() : '—') + '</span>') +
+          (shown ? shown.toLocaleString('en-MY') : '—') + '</span>') +
     (pre ? '<span class="cap-row-d" data-derived>' + derivedText(n, p) + '</span>' : '') +
     '</div>';
 }
@@ -11091,7 +11425,7 @@ function derivedText(n, p) {
   const trays = capEditing ? (+capDraft[n].plots[p] || 0) : trayQty(n, p);
   const per   = capEditing ? (+capDraft[n].perTray || 0) : (traySize[n] || 0);
   if (!per || !trays) return '—';
-  return (trays * per).toLocaleString();
+  return (trays * per).toLocaleString('en-MY');
 }
 
 /* ── The edit cycle ────────────────────────────────────────────────────
@@ -11174,6 +11508,8 @@ async function saveCapEdit() {
 
   for (const n of nurseries) {
     const pre = isPreNursery(n);
+    // A main nursery capacity is linked, never keyed, so nothing of it is written.
+    if (!pre) continue;
     const stamp = new Date().toISOString();
     /* ONLY the plots whose figure actually changed.
        This used to write every plot of every nursery on every Save. Two things

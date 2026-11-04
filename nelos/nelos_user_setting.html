@@ -294,15 +294,19 @@
             padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; }
 
   /* The table inside an open block. Five columns: number, case category,
-     destination system, PIC, and the cross that retires the category. */
+     the systems that may RAISE it, the PIC who solves it, and the cross
+     that retires the category.
+
+     THE BLOCK IS THE SYSTEM THAT SOLVES. It used to be the system that
+     raises, with a Solve by half on the right — so the old table carried a
+     two-part band. There is one statement now ("these are the cases this
+     portal solves"), so the band is a sentence rather than two headings. */
   .rt { padding:0 18px 16px; background:#fefbfd; }
-  .rt-band, .rt-sub, .rt-row { display:grid; grid-template-columns:38px 1fr 1.05fr 1.05fr 34px; gap:12px;
-                               align-items:center; }
-  .rt-band { padding:14px 0 8px; }
-  .rt-band span:first-child { grid-column:1 / 3; }
-  .rt-band span:last-child  { grid-column:3 / 6; }
-  .rt-band span { font-size:13px; font-weight:900; letter-spacing:.1em; text-transform:uppercase;
-                  color:#511f41; border-bottom:2.5px solid #bc4996; padding-bottom:6px; }
+  .rt-sub, .rt-row { display:grid; grid-template-columns:38px 1fr 1.6fr .95fr 34px; gap:12px;
+                     align-items:center; }
+  .rt-lead { padding:14px 0 9px; font-size:11.5px; font-weight:800; color:#64748b;
+             line-height:1.5; border-bottom:2.5px solid #bc4996; }
+  .rt-lead strong { color:#511f41; font-weight:900; }
   .rt-sub { padding:8px 0; border-bottom:1.5px solid #f8e2f1; }
   .rt-sub span { font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase;
                  color:#94a3b8; }
@@ -322,6 +326,19 @@
   .cell .inp { padding:7px 10px; font-size:12.5px; }
   .cell-note { font-size:10px; font-weight:700; color:#94a3b8; }
   .warn-txt { color:#b45309; }
+  /* FROM SYSTEM is a tick list, so it is chips and not a dropdown: more
+     than one answer is the ordinary case, and a dropdown that can hold
+     several is a control nobody can read at a glance. Any system sits
+     first because it is the widest answer and the one a new title gets. */
+  .fsys { display:flex; flex-wrap:wrap; gap:5px; }
+  .fchip { font-size:10.5px; font-weight:900; letter-spacing:.03em; padding:5px 9px;
+           border-radius:999px; border:1.5px solid #e9d5e4; background:#fff;
+           color:#94a3b8; cursor:pointer; line-height:1.15; }
+  .fchip:hover:not(:disabled) { border-color:#e4a0ce; color:#bc4996; }
+  .fchip.on { background:#bc4996; border-color:#bc4996; color:#fff; }
+  .fchip.any { border-style:dashed; }
+  .fchip.any.on { background:#511f41; border-color:#511f41; border-style:solid; }
+  .fchip:disabled { opacity:.45; cursor:not-allowed; }
   /* Retire this case category. Its own cell at the end of the row rather
      than anything tucked inside the PIC cell: the two selects are a row of
      targets already, and a cross among them is one somebody hits by
@@ -337,7 +354,8 @@
   .rt-empty { padding:18px 0 6px; font-size:12.5px; font-weight:700; color:#94a3b8; }
   .rt-empty a { color:#bc4996; font-weight:900; }
   /* Case titles used to live on their own page. They belong to the system
-     that raises them, so they are added here, in that system's own block. */
+     that SOLVES them, so they are added here, in that system's own block —
+     and then the From System chips say who may raise each one. */
   .rt-add { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
             padding:13px 0 2px; border-top:1.5px dashed #f8e2f1; margin-top:4px; }
   .rt-add .inp { flex:1; min-width:170px; padding:7px 10px; font-size:12.5px; }
@@ -350,7 +368,7 @@
              color:#b91c1c; }
   .r-clear:hover { text-decoration:underline; }
   @media (max-width:760px) {
-    .rt-band, .rt-sub { display:none; }
+    .rt-sub { display:none; }
     .rt-row { grid-template-columns:34px 1fr; gap:6px 10px; padding:12px 0; }
     .rt-row .cell { grid-column:2; }
   }
@@ -425,6 +443,13 @@ let hasAccessCol = false;
    and the column is not saved, rather than saved as false. */
 let hasSeesAll = false;
 let openRoute = null;  // which system's routing block is open
+/* True once nelos_categories carries raise_modules — i.e. once
+   shared/RUN_ME_nelos_routing_is_the_category.sql has run. Until then
+   module_key still means the system that RAISES a title, so the whole
+   Case Routing tab would be reading the old answer under the new heading:
+   the tab says so in a banner, the chips are shut, and the save refuses.
+   Nothing is written as empty. */
+let hasRaiseCol = false;
 let me = { name: '' };
 
 /* The search on User Access. nelos_directory() is the staff list — every
@@ -475,15 +500,34 @@ const liveRights = () =>
 
 const initials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 const labelOf = key => (modules.find(m => m.key === key) || {}).label || key || '';
-const handlerCount = key => people.filter(p => p.primary_module === key).length;
-/* What one handler in a system is called, e.g. 'Admin' — always shown with
-   their number after it, so "Admin 1". */
-/* A system's name as it reads in a picker. HQ is marked so it is obvious in
-   the list that everyone there oversees every case, not just this queue. */
-/* A system's own case titles, in order. Categories carry module_key since
-   migration_nelos_category_system.sql; a row without one (an older database)
-   is treated as belonging to nowhere rather than to everywhere. */
+/* handlerCount() and pickLabel() went with the Solve by column. They
+   counted the people in a DESTINATION system and spelled its name in a
+   picker, and there is no destination to pick any more: the block a title
+   is listed under IS the system that solves it. A function nothing calls is
+   the half-removal this codebase has a rule about, so they are gone rather
+   than left for somebody to wonder about. */
+/* THE CASE TITLES ONE SYSTEM SOLVES, in order — its work.
+
+   module_key used to mean the system that RAISES a title.
+   RUN_ME_nelos_routing_is_the_category.sql turned it over: it is the system
+   that SOLVES it, which is the block this title is listed under, and which
+   systems may raise it is nelos_categories.raise_modules.
+
+   A row with no module_key (an older database) is treated as belonging to
+   nowhere rather than to everywhere. */
 const categoriesIn = key => categories.filter(c => c.module_key === key).map(c => c.name);
+
+/* The whole row behind a cell, which is where the From list and the PIC
+   live now. Looked up the same way everything on this screen is: the
+   solving system plus the title. */
+const catRow = (key, name) =>
+  categories.find(c => c.module_key === key && c.name === name) || null;
+
+/* "Any system may raise this." A sentinel inside raise_modules rather than
+   a column of its own, because three readers ask this question and one
+   array is one thing for each of them to read. The SQL file that adds the
+   column says the same in its own words. */
+const ANY_SYSTEM = '*';
 
 /* The plain words from Automate Cases, when this category is one the system
    opens by itself. Empty for every category somebody raises by hand, which
@@ -495,8 +539,12 @@ const autoOf = (key, name) => {
   const c = categories.find(x => x.module_key === key && x.name === name);
   return (c && c.auto_condition) || '';
 };
-const pickLabel = m => m.label + (m.sees_all_cases ? '  (HQ)' : '');
+/* The SHORT name a system goes by (migration_nelos_short_labels.sql) —
+   what the From System chips are spelled with, because a row of chips
+   reading "Seedling Stock System" is a row nobody can scan. */
 const handlerLabel = key => (modules.find(m => m.key === key) || {}).handler_label || labelOf(key);
+/* What one handler in a system is called, e.g. 'Admin' — always shown with
+   their number after it, so "Admin 1". */
 const seatName = (key, n) => n ? `${handlerLabel(key)} ${n}` : '';
 /* Who may be given a number in a system: the people ticked for it on User
    Access, plus whoever already holds a number there.
@@ -517,11 +565,14 @@ const eligibleFor = key => people.filter(p =>
 const peopleIn = key => people
   .filter(p => p.primary_module === key)
   .sort((a, b) => (a.seat_no || 99) - (b.seat_no || 99));
-/* The rule for one (section, category), or the section default when that
-   category has none of its own — the same order the database trigger uses. */
-const routeFor = (mod, cat) =>
-  routes.find(r => r.source_module === mod && r.category === cat) ||
-  routes.find(r => r.source_module === mod && r.category === null) || null;
+/* `routes` is still LOADED and is deliberately not read here any more. A
+   per-category row in nelos_routes is inert once the title names its own
+   solver — the trigger answers off the title before it looks at a rule —
+   and the rows are kept as the record of what was set. The one part of that
+   table still live is a section DEFAULT (category IS NULL), which catches a
+   title this screen has never heard of, and nothing on this screen sets
+   one. The check at the foot of
+   shared/RUN_ME_nelos_routing_is_the_category.sql reads them back. */
 
 /* ── Case Handlers ─────────────────────────────────────────────────
    System first, not person first.
@@ -1147,8 +1198,8 @@ const draftKey = (mod, cat) => mod + '|' + cat;
 const draftOf = (mod, cat) => draft[draftKey(mod, cat)];
 const dirty = mod => Object.keys(draft).some(k => k.split('|')[0] === mod);
 
-/* SOLVE BY — which system takes the case, and which person in it. Reads the
-   pending edit if there is one, so the row shows what Save would write. */
+/* FROM SYSTEM and PIC. Both read the pending edit if there is one, so the
+   row shows what Save would write. */
 /* A seat number, compared as a NUMBER whatever it arrived as.
 
    A <select>'s value is always a string, so a seat staged from the dropdown
@@ -1165,29 +1216,73 @@ function sameSeat(a, b) {
   return Number(a) === Number(b);
 }
 
-function solveCells(mod, cat) {
+/* WHICH SYSTEMS MAY RAISE THIS TITLE. Three states and every one of them is
+   used, so the cell has to be able to say all three:
+
+     • ANY SYSTEM — nobody has narrowed it. What a newly added title gets,
+       because a title nobody can raise is invisible and reads as broken,
+       and what an unanswered question means everywhere else here.
+     • a LIST — those systems and no others.
+     • NOBODY — an automatic title. Said in words, because a row of empty
+       chips is not an answer anybody can read.
+
+   A database that has not run the SQL answers `undefined` for the column,
+   which is NOT the same as nobody: it is the question never having been
+   asked, so it reads as any system and the chips are shut rather than
+   offering an edit that would save into a 400. */
+function raiseListOf(mod, cat) {
   const pend = draftOf(mod, cat);
-  const rule = pend || routes.find(r => r.source_module === mod && r.category === cat);
-  const toModule = rule ? rule.to_module : mod;
-  const toSeat = rule ? rule.to_seat_no : null;
-  const staff = peopleIn(toModule).filter(p => p.seat_no);
-  const n = handlerCount(toModule);
+  if (pend) return pend.raise_modules;
+  const c = catRow(mod, cat);
+  return (c && Array.isArray(c.raise_modules)) ? c.raise_modules : [ANY_SYSTEM];
+}
+
+function picSeatOf(mod, cat) {
+  const pend = draftOf(mod, cat);
+  if (pend) return pend.pic_seat_no;
+  const c = catRow(mod, cat);
+  return c && c.pic_seat_no != null ? c.pic_seat_no : null;
+}
+
+function routeCells(mod, cat) {
+  const picked = raiseListOf(mod, cat) || [];
+  const any = picked.indexOf(ANY_SYSTEM) >= 0;
+  /* The PIC is a seat in THIS block, because this block is the system that
+     solves it. There is no destination to read first any more. */
+  const staff = peopleIn(mod).filter(p => p.seat_no);
+  const seat = picSeatOf(mod, cat);
+  const shut = hasRaiseCol ? '' : 'disabled';
+
+  const chip = (key, name, on, extra) =>
+    `<button type="button" class="fchip${on ? ' on' : ''}${extra || ''}"
+             data-fsys="${esc(key)}" data-rule="${esc(mod)}" data-cat="${esc(cat)}" ${shut}
+             >${esc(name)}</button>`;
+
+  const note = any
+    ? '<span class="cell-note">Anybody who may add a case can raise this.</span>'
+    : picked.length
+      ? ''
+      : '<span class="cell-note warn-txt">Nobody raises this by hand'
+        + (autoOf(mod, cat) ? ' — it is opened by itself.' : ' — it is on no Work list.')
+        + '</span>';
 
   return `
     <div class="cell">
-      <select class="inp r-dest" data-rule="${esc(mod)}" data-cat="${esc(cat)}">
-        ${modules.map(x =>
-          `<option value="${esc(x.key)}" ${toModule === x.key ? 'selected' : ''}>${esc(pickLabel(x))}</option>`).join('')}
-      </select>
-      ${n ? '' : '<span class="cell-note warn-txt">⚠ nobody tagged there</span>'}
+      <div class="fsys">
+        ${chip(ANY_SYSTEM, 'Any system', any, ' any')}
+        ${modules.map(x => chip(x.key, handlerLabel(x.key),
+                                !any && picked.indexOf(x.key) >= 0)).join('')}
+      </div>
+      ${note}
     </div>
     <div class="cell">
-      <select class="inp r-seat" data-rule="${esc(mod)}" data-cat="${esc(cat)}"
-              ${staff.length ? '' : 'disabled'}>
-        <option value="">${staff.length ? 'Anyone' : 'Nobody tagged'}</option>
-        ${staff.map(p => `<option value="${p.seat_no}" ${sameSeat(toSeat, p.seat_no) ? 'selected' : ''}>${
-          esc(seatName(toModule, p.seat_no))} — ${esc(p.full_name || p.email)}</option>`).join('')}
+      <select class="inp r-pic" data-rule="${esc(mod)}" data-cat="${esc(cat)}"
+              ${staff.length ? shut : 'disabled'}>
+        <option value="">${staff.length ? 'Anyone here' : 'Nobody tagged'}</option>
+        ${staff.map(p => `<option value="${p.seat_no}" ${sameSeat(seat, p.seat_no) ? 'selected' : ''}>${
+          esc(seatName(mod, p.seat_no))} — ${esc(p.full_name || p.email)}</option>`).join('')}
       </select>
+      ${staff.length ? '' : '<span class="cell-note warn-txt">⚠ nobody tagged here</span>'}
     </div>`;
 }
 
@@ -1201,7 +1296,26 @@ function renderRouting() {
     return;
   }
 
-  $('routing').innerHTML = modules.map(m => {
+  /* SAID LOUD, because this is the one state where every heading on the tab
+     is wrong rather than merely incomplete: until the SQL has run,
+     module_key still means the system that RAISES a title, so each block
+     lists the cases that system raises under a heading saying it solves
+     them. A screen that quietly reads the old answer under the new words is
+     worse than one that cannot be edited. */
+  const behind = hasRaiseCol ? '' : `
+    <div class="note" style="background:#fff7ed;border-color:#fdba74">
+      <div style="font-size:12.5px;font-weight:900;color:#9a3412">
+        Run <strong>shared/RUN_ME_nelos_routing_is_the_category.sql</strong> in Supabase.</div>
+      <div style="font-size:11.5px;font-weight:700;color:#9a3412;margin-top:5px;line-height:1.5">
+        Until it is run, each block below is still the system that RAISES these
+        titles rather than the one that solves them, and neither From System nor
+        the PIC has a column to be read out of — so both read as not set. The
+        rules already on the old screen are untouched and the SQL carries every
+        one of them over. Nothing on this tab can be saved meanwhile, so nothing
+        is written half way.</div>
+    </div>`;
+
+  $('routing').innerHTML = behind + modules.map(m => {
     const openHere = openRoute === m.key;
     const titles = categoriesIn(m.key);
     let inner = '';
@@ -1210,14 +1324,17 @@ function renderRouting() {
       const addRow = `
         <div class="rt-add">
           <input class="inp cat-new" data-mod="${esc(m.key)}" maxlength="60"
-                 placeholder="Add a case category for ${esc(m.label)}…">
+                 placeholder="Add a case ${esc(m.label)} has to solve…">
           <button class="btn btn-save cat-add" data-mod="${esc(m.key)}"><span class="plus">+</span> Add</button>
         </div>`;
 
       inner = titles.length ? `
         <div class="rt">
-          <div class="rt-band"><span>From</span><span>Solve by</span></div>
-          <div class="rt-sub"><span>#</span><span>Case Category</span><span>System</span><span>PIC</span><span></span></div>
+          <div class="rt-lead">These are the cases <strong>${esc(m.label)}</strong> solves.
+            <em>From System</em> is who may raise each one, and that is the Work list
+            they are offered when they add a case. <em>PIC</em> is who in
+            ${esc(m.label)} it lands on.</div>
+          <div class="rt-sub"><span>#</span><span>Case Category</span><span>From System</span><span>PIC</span><span></span></div>
           ${titles.map((cat, i) => {
             /* A category the SYSTEM raises by itself cannot be retired from
                here, and the cross says so rather than doing nothing. The
@@ -1231,7 +1348,7 @@ function renderRouting() {
               <span class="rt-n">${i + 1}.</span>
               <span class="rt-cat">${esc(cat)}
                 ${draftOf(m.key, cat) ? '<span class="cell-note pend">unsaved</span>' : ''}</span>
-              ${solveCells(m.key, cat)}
+              ${routeCells(m.key, cat)}
               <button class="rt-x" data-del="${esc(m.key)}" data-cat="${esc(cat)}"
                       ${auto ? 'disabled' : ''}
                       title="${auto
@@ -1241,13 +1358,14 @@ function renderRouting() {
             </div>`; }).join('')}
           ${addRow}
           <div class="rt-foot">
-            <span class="rt-fallback">A case with no rule set stays with ${esc(m.label)}.</span>
+            <span class="rt-fallback">A case whose title is not on any of these
+              lists stays with the system it was raised in.</span>
             <button class="btn btn-save rt-save" data-mod="${esc(m.key)}" ${dirty(m.key) ? '' : 'disabled'}>Save</button>
             <button class="btn btn-ghost rt-cancel" data-mod="${esc(m.key)}" ${dirty(m.key) ? '' : 'disabled'}>Cancel</button>
           </div>
         </div>`
       : `<div class="rt">
-           <div class="rt-empty">No case categories for ${esc(m.label)} yet.</div>
+           <div class="rt-empty">${esc(m.label)} has no cases to solve yet.</div>
            ${addRow}
          </div>`;
     }
@@ -1275,24 +1393,41 @@ function renderRouting() {
       renderRouting();
     }));
 
-  /* Staging an edit, rather than writing it. Changing the system clears the
-     PIC, because a number belongs to one system and whoever was chosen in
-     the old one would route nowhere. */
-  const stage = (mod, cat, toModule, toSeatNo) => {
-    draft[draftKey(mod, cat)] = { to_module: toModule, to_seat_no: toSeatNo };
+  /* Staging an edit, rather than writing it. The PIC is a seat in THIS
+     block, so unlike the old screen nothing here can move it out from under
+     the person: changing who may raise a title does not change who solves
+     it. */
+  const stage = (mod, cat, list, seatNo) => {
+    draft[draftKey(mod, cat)] = { raise_modules: list, pic_seat_no: seatNo };
     renderRouting();
   };
 
-  $('routing').querySelectorAll('.r-dest').forEach(el =>
-    el.addEventListener('change', () => stage(el.dataset.rule, el.dataset.cat, el.value, null)));
+  $('routing').querySelectorAll('.fchip').forEach(el =>
+    el.addEventListener('click', () => {
+      const mod = el.dataset.rule, cat = el.dataset.cat, key = el.dataset.fsys;
+      const cur = (raiseListOf(mod, cat) || []).slice();
+      const seat = picSeatOf(mod, cat);
+      let next;
+      if (key === ANY_SYSTEM) {
+        /* Any system and a list of systems are two answers to one
+           question, so pressing one puts the other away. Pressing Any
+           again leaves NOBODY — a real answer, which the cell then says in
+           words rather than drawing a row of empty chips. */
+        next = cur.indexOf(ANY_SYSTEM) >= 0 ? [] : [ANY_SYSTEM];
+      } else {
+        next = cur.filter(k => k !== ANY_SYSTEM);
+        next = next.indexOf(key) >= 0 ? next.filter(k => k !== key) : next.concat([key]);
+      }
+      stage(mod, cat, next, seat);
+    }));
 
-  $('routing').querySelectorAll('.r-seat').forEach(el =>
+  $('routing').querySelectorAll('.r-pic').forEach(el =>
     el.addEventListener('change', () => {
-      const dest = $('routing').querySelector(
-        `.r-dest[data-rule="${el.dataset.rule}"][data-cat="${el.dataset.cat}"]`);
       // A number, not the select's string, so the draft holds what the
       // database holds and the row redraws with the person still chosen.
-      stage(el.dataset.rule, el.dataset.cat, dest.value, el.value ? Number(el.value) : null);
+      stage(el.dataset.rule, el.dataset.cat,
+            raiseListOf(el.dataset.rule, el.dataset.cat),
+            el.value ? Number(el.value) : null);
     }));
 
   $('routing').querySelectorAll('.rt-save').forEach(b =>
@@ -1341,12 +1476,19 @@ async function retireCategory(mod, cat) {
      than guessed, and a count that cannot be read says so instead of
      reading as nought — "0 cases" over a category with forty is the one
      sentence that would make this the wrong decision. */
+  /* COUNTED ON THE TITLE ALONE, and that is not a simplification. It used
+     to ask for source_module as well, back when a block was the system
+     that RAISED the title and so every case under it carried that source.
+     The block is the system that SOLVES it now, and the whole point of the
+     change is that such a case can be raised from anywhere — so asking for
+     the source would count a fraction of them and report the rest as
+     nothing. */
   let count = null;
   try {
     const { count: n, error } = await _supabase
       .from('nelos_cases')
       .select('id', { count: 'exact', head: true })
-      .eq('source_module', mod).eq('category', cat);
+      .eq('category', cat);
     if (!error) count = n;
   } catch (e) { /* leave it null */ }
 
@@ -1406,12 +1548,21 @@ async function addCategory(mod) {
     return;
   }
 
-  const { error } = await _supabase.from('nelos_categories').insert([{
+  /* A NEW TITLE MAY BE RAISED FROM ANYWHERE until somebody narrows it. A
+     title nobody can raise is on no Work list, which is invisible and reads
+     as broken — and an unanswered question is not a no anywhere else here
+     either. The column is only named on a database that has it, because
+     naming one a table has not got is not an empty cell, it is the whole
+     insert refused. */
+  const row = {
     name,
     module_key: mod,
     default_priority: 'normal',
     sort_order: categories.reduce((mx, c) => Math.max(mx, c.sort_order || 0), 0) + 10
-  }]);
+  };
+  if (hasRaiseCol) row.raise_modules = [ANY_SYSTEM];
+
+  const { error } = await _supabase.from('nelos_categories').insert([row]);
   if (error) { toast('Could not add — ' + error.message, false); return; }
 
   if (box) box.value = '';
@@ -1424,9 +1575,17 @@ async function saveBlock(mod) {
   const pending = Object.entries(draft).filter(([k]) => k.split('|')[0] === mod);
   if (!pending.length) return;
 
+  /* Asked AGAIN at the write, not only when the chips were drawn. A
+     database without the column refuses a write that names it and takes
+     the whole save down, so this is a refusal and not a silent skip. */
+  if (!hasRaiseCol) {
+    toast('Run shared/RUN_ME_nelos_routing_is_the_category.sql in Supabase first.', false);
+    return;
+  }
+
   for (const [k, val] of pending) {
     const cat = k.slice(k.indexOf('|') + 1);
-    const ok = await saveRule(mod, cat, val.to_module, val.to_seat_no);
+    const ok = await saveRule(mod, cat, val);
     if (!ok) return;                       // stop on the first failure
   }
   draft = {};
@@ -1434,21 +1593,22 @@ async function saveBlock(mod) {
   await load();
 }
 
-/* Write one rule. Returns true on success — saveBlock() does the toast and
-   the reload once for the whole block, rather than per row. */
-async function saveRule(mod, cat, toModule, toSeatNo) {
-  const existing = routes.find(r => r.source_module === mod && r.category === cat);
+/* Write one row. Returns true on success — saveBlock() does the toast and
+   the reload once for the whole block, rather than per row.
+
+   IT WRITES THE CATEGORY, NOT A ROUTE. The solver is the block the title is
+   listed under, so there is no destination left to store: what this saves
+   is who may raise it and who in this system it lands on. The old
+   nelos_routes row is deliberately left where it is — see the note beside
+   `routes` above. */
+async function saveRule(mod, cat, val) {
   const row = {
-    source_module: mod,
-    category: cat,
-    to_module: toModule,
-    to_seat_no: toSeatNo ? Number(toSeatNo) : null,
-    updated_at: new Date().toISOString(),
-    updated_by: me.name
+    raise_modules: Array.isArray(val.raise_modules) ? val.raise_modules : [],
+    pic_seat_no: val.pic_seat_no == null || val.pic_seat_no === ''
+      ? null : Number(val.pic_seat_no)
   };
-  const { error } = existing
-    ? await _supabase.from('nelos_routes').update(row).eq('id', existing.id)
-    : await _supabase.from('nelos_routes').insert([row]);
+  const { error } = await _supabase.from('nelos_categories')
+    .update(row).eq('module_key', mod).eq('name', cat);
   if (error) { toast('Could not save — ' + error.message, false); return false; }
   return true;
 }
@@ -1491,6 +1651,10 @@ async function load() {
   modules = modRes.data || [];
   categories = catRes.data || [];
   routes = routeRes.data || [];
+  /* The select is `*`, so the key is present and null on a database that
+     has the column and absent on one that does not. With no categories at
+     all there is nothing to save either way. */
+  hasRaiseCol = categories.some(c => c.raise_modules !== undefined);
 
   if (pplRes.error || !pplRes.data) {
     people = [];
