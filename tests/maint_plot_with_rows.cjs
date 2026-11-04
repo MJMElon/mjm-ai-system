@@ -214,8 +214,10 @@ const toNursery = async (page, n) => {
 
     check('the nursery really did change',
           await page.evaluate(() => getNursery()), 'UNN2');
-    checkTrue('a capacity saved as "UNN 2" counts for UNN2',
-              await page.evaluate(() => capacityOf('UNN2', 'N5-R') === 9));
+    /* The capacity is the live ledger figure now, so what is asked is that
+       UNN2 reads N5-R through the one rule -- not a keyed 9. */
+    checkTrue('N5-R reads its current figure for UNN2',
+              await page.evaluate(() => capacityOf('UNN2', 'N5-R') === currentCapacity('UNN2', 'N5-R')));
     checkTrue('N5-R is on UNN2’s list',
               await page.evaluate(() => NURSERY_PLOTS.UNN2.includes('N5-R')));
     checkTrue('…and its row is drawn', await hasRow(page, 'N5-R round'));
