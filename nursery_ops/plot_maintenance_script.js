@@ -6358,11 +6358,23 @@ let _replantJoined = {};   // 'n|m' -> [{ plot, parent, day }]
    once per load, and the second run finds the plot already seeded (done) -
    which hid the notice before anybody had pressed Save Schedule. */
 let _replantUnsent = new Set();   // 'n|m|plot'
+/* NOVEMBER 2026 ON, AND NOT A MONTH BEFORE. October was Checked row by row
+   before either rule existed, and the office asked for it to stay exactly as
+   it was signed - so neither the -R seeding nor the Include / Exclude balance
+   choice reaches a month before this one. */
+const REPLANT_RULE_FROM = 2026 * 12 + 10;   // Nov 2026
+function _replantRuleOn(m) {
+  const mm = /^([A-Za-z]{3})\s+(\d{4})$/.exec(String(m || '').trim());
+  if (!mm) return false;
+  const mi = MONTH_ABBR.findIndex(x => x.toLowerCase() === mm[1].toLowerCase());
+  return mi >= 0 && (+mm[2]) * 12 + mi >= REPLANT_RULE_FROM;
+}
 function _replantParent(plot) {
   return String(plot || '').split('#')[0].trim().replace(/-R\d*$/i, '');
 }
 function seedReplantRounds(n, m) {
   if (!window.PlotMovement || !PlotMovement.ready() || !NURSERY_PLOTS[n]) return false;
+  if (!_replantRuleOn(m)) return false;
   const isR = (p) => /-R\d*$/i.test(String(p || '').split('#')[0].trim());
   const mm = /^([A-Za-z]{3})\s+(\d{4})$/.exec(String(m || '').trim());
   if (!mm) return false;
@@ -8868,7 +8880,7 @@ function setRecExclBal(on) { _rfExclBal = !!on; refreshLinkedQty(); }
 function _drawExclBal(plot, batch, tarikh, jenis) {
   const box = document.getElementById('rf-bal');
   if (!box) return;
-  const probe = plot && PlotMovement.ready()
+  const probe = plot && PlotMovement.ready() && _replantRuleOn(getMonth())
     ? linkedPlotQty(plot, batch, tarikh, PlotMovement.qtyOpts({ jenis })) : null;
   const bal = probe ? probe.culledBal || 0 : 0;
   if (!bal) {
@@ -9146,6 +9158,8 @@ function saveRec(){
     // turn it OFF as well as on.
     exclBal: _rfExclBal ? 1 : 0,
   };
+  // A month before the rule (October and earlier) gets no new field on its rows.
+  if (!_replantRuleOn(getMonth()) && !_rfExclBal) delete obj.exclBal;
   if(!obj.plot){ alert('Please enter a plot number.'); return; }
   /* A new row nobody has numbered is the next round on this plot and job —
      an extra pass after the scheduled ones. Only on a NEW row, and only when

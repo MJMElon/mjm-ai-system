@@ -1865,8 +1865,23 @@ claim read the same figure. Only the transferred batches drop; other batches
 on the plot are untouched. A keyed figure still wins, and Checked freezes
 the excluded figure.
 
+**BOTH START IN NOVEMBER 2026, AND OCTOBER IS LEFT EXACTLY AS IT WAS SIGNED.**
+The office had Checked every October row before either rule existed and said
+so in one line: *"10月的work record我已经checked了，所以不要有任何改动"*.
+`REPLANT_RULE_FROM` / `_replantRuleOn(m)` is the gate, asked in three places:
+`seedReplantRounds` (no -R plot is added to an earlier month's schedule), the
+dialog (no Include / Exclude offered) and `saveRec` (no `exclBal` field written
+onto an earlier row). In October N14 still carries the 657 keyed by hand,
+which is 626 standing on N14 plus 31 on N14-R, a plot that had no row of its
+own that month. That was the office's workaround and it stays.
+
+**A -R plot already standing on the 1st takes the parent's rounds for the
+WHOLE month**, the office's choice (A) when asked: N14-R appeared on 22 Oct,
+so in November it does everything N14 does. A -R plot somebody has already
+ticked by hand is still left alone.
+
 `tests/a_replant_plot_takes_its_rounds.cjs` drives both through the shipped
-files and the real dialog. **Nothing to run in the database.**
+files and the real dialog, October included. **Nothing to run in the database.**
 
 ## A worker is the register ROW, not the name on it
 

@@ -27,8 +27,11 @@ const log = (type, date, plot, batch, qty, remark) => ({
 const LOGS = [
   log('Transplanted', '2026-07-01', 'U6', '250', 5000),
   log('Transplanted', '2026-07-01', 'U6', '251', 2000),
-  // 18 Oct: 250's good seedlings go to U6-R, 600 are left behind to be culled.
-  log('Cull3_Transfer', '2026-10-18', 'U6-R', '250', 4400, 'From: [U6|250]'),
+  // 18 Nov: 250's good seedlings go to U6-R, 600 are left behind to be culled.
+  log('Cull3_Transfer', '2026-11-18', 'U6-R', '250', 4400, 'From: [U6|250]'),
+  // U7-R appeared in OCTOBER, a month the office had already checked.
+  log('Transplanted', '2026-07-01', 'U7', '260', 3000),
+  log('Cull3_Transfer', '2026-10-10', 'U7-R', '260', 500, 'From: [U7|260]'),
 ];
 
 function fakeSupabase() {
@@ -40,9 +43,9 @@ function fakeSupabase() {
 }
 
 const RECORDS = [
-  { id: 901, _month: 'Oct 2026', tarikh: '2026-10-25', jenis: 'Membaja', racun: 'Round 4: Compound 20gm',
+  { id: 901, _month: 'Nov 2026', tarikh: '2026-11-25', jenis: 'Membaja', racun: 'Round 4: Compound 20gm',
     plot: 'U6', batch: '', qty: null, carlos: 0, gaia: 0, remark: '' },
-  { id: 902, _month: 'Oct 2026', tarikh: '2026-10-05', jenis: 'Membaja', racun: 'Round 1: Compound 20gm',
+  { id: 902, _month: 'Nov 2026', tarikh: '2026-11-05', jenis: 'Membaja', racun: 'Round 1: Compound 20gm',
     plot: 'U6', batch: '', qty: null, carlos: 0, gaia: 0, remark: '' },
 ];
 async function boot(browser) {
@@ -52,7 +55,7 @@ async function boot(browser) {
 
   await page.addInitScript((seed) => {
     try { localStorage.setItem('mjm_maint_nursery', 'UNN1');
-          localStorage.setItem('mjm_maint_month', 'Oct 2026'); } catch (_) {}
+          localStorage.setItem('mjm_maint_month', 'Nov 2026'); } catch (_) {}
     window.__DB = {
       nops_maint_records: [{ id: 1, records: seed.records }],
       shared_inventory_logs: seed.logs,
@@ -145,18 +148,18 @@ async function boot(browser) {
   check('the fake ledger loaded', PM.ready(), true);
 
   console.log('\n1  the balance left behind a transfer');
-  const before = PM.recQty({ plot: 'U6', batch: '', tarikh: '2026-10-10', jenis: 'Membaja' });
+  const before = PM.recQty({ plot: 'U6', batch: '', tarikh: '2026-11-10', jenis: 'Membaja' });
   check('before the transfer the plot is all of it', before.value, 7000);
   check('and there is no culled balance to offer', before.info.culledBal, 0);
-  const inc = PM.recQty({ plot: 'U6', batch: '', tarikh: '2026-10-25', jenis: 'Membaja' });
+  const inc = PM.recQty({ plot: 'U6', batch: '', tarikh: '2026-11-25', jenis: 'Membaja' });
   check('after it, Include balance reads what it always read', inc.value, 2600);
   check('and names the balance left behind batch 250', [inc.info.culledBal, inc.info.culledBatches], [600, ['250']]);
-  const exc = PM.recQty({ plot: 'U6', batch: '', tarikh: '2026-10-25', jenis: 'Membaja', exclBal: 1 });
+  const exc = PM.recQty({ plot: 'U6', batch: '', tarikh: '2026-11-25', jenis: 'Membaja', exclBal: 1 });
   check('Exclude balance takes it off, and only that batch', exc.value, 2000);
-  check('the batches it covers drop 250', PM.recBatches({ plot: 'U6', batch: '', tarikh: '2026-10-25', jenis: 'Membaja', exclBal: 1 }).value, '251');
-  check('a keyed figure still wins', PM.recQty({ plot: 'U6', tarikh: '2026-10-25', qty: 1234, exclBal: 1 }).value, 1234);
-  check('Checked freezes the excluded figure', PM.freezeFor({ plot: 'U6', batch: '', tarikh: '2026-10-25', jenis: 'Membaja', exclBal: 1 }).qtyFrozen, 2000);
-  check('the -R plot links what arrived', PM.recQty({ plot: 'U6-R', tarikh: '2026-10-25', jenis: 'Membaja' }).value, 4400);
+  check('the batches it covers drop 250', PM.recBatches({ plot: 'U6', batch: '', tarikh: '2026-11-25', jenis: 'Membaja', exclBal: 1 }).value, '251');
+  check('a keyed figure still wins', PM.recQty({ plot: 'U6', tarikh: '2026-11-25', qty: 1234, exclBal: 1 }).value, 1234);
+  check('Checked freezes the excluded figure', PM.freezeFor({ plot: 'U6', batch: '', tarikh: '2026-11-25', jenis: 'Membaja', exclBal: 1 }).qtyFrozen, 2000);
+  check('the -R plot links what arrived', PM.recQty({ plot: 'U6-R', tarikh: '2026-11-25', jenis: 'Membaja' }).value, 4400);
 
   console.log('\n2  a -R plot that appeared mid-month takes its parent rounds from then on');
   const src = fs.readFileSync(path.join(__dirname, '..', 'nursery_ops', 'plot_maintenance_script.js'), 'utf8');
@@ -171,22 +174,23 @@ async function boot(browser) {
     interrow: [{ slot: 2, from: 15 }],
   };
   const state = {
-    pd: { W1: { U6: { P: true, D: false } }, W2: { U6: { P: true, D: true } },
-          W3: { U6: { P: false, D: false } }, W4: { U6: { P: true, D: false } } },
+    pd: { W1: { U6: { P: true, D: false }, U7: { P: true, D: false } }, W2: { U6: { P: true, D: true } },
+          W3: { U6: { P: false, D: false } }, W4: { U6: { P: true, D: false }, U7: { P: false, D: true } } },
     manuring: { U6: [[true], [], [], [true]] },
     weeding: { U6: { R2: true, R4: true } },
     interrow: { U6: [[], [], [true], []] },
   };
   const page = Object.assign(ctx, {
-    NURSERY_PLOTS: { UNN1: ['U6'] }, stockPlots: { 'UNN 1': ['U6', 'U6-R'] },
+    NURSERY_PLOTS: { UNN1: ['U6', 'U7'] }, stockPlots: { 'UNN 1': ['U6', 'U6-R', 'U7', 'U7-R'] },
     schedKey: (x) => String(x).replace(/[^A-Z0-9]/gi, '').toUpperCase(),
     MONTH_ABBR: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
     _sortNurseryPlots: () => {}, getState: () => state,
     weeksOf: (n, m, k) => weeks[k], persistState: () => { saved++; },
   });
   vm.runInContext(src.slice(a, b) + '\nthis.seed = seedReplantRounds; this.joined = () => _replantJoined;', page);
-  check('September: U6-R did not exist yet, nothing happens', page.seed('UNN1', 'Sep 2026'), false);
-  check('October: it is seeded', page.seed('UNN1', 'Oct 2026'), true);
+  check('October: U6-R did not exist yet, nothing happens', page.seed('UNN1', 'Oct 2026'), false);
+  check('and U7-R, which DID appear in October, is not seeded into October either', [state.pd.W1['U7-R'], page.NURSERY_PLOTS.UNN1.includes('U7-R')], [undefined, false]);
+  check('November: it is seeded', page.seed('UNN1', 'Nov 2026'), true);
   check('U6-R joins the schedule off Seedling Stock', page.NURSERY_PLOTS.UNN1.includes('U6-R'), true);
   check('P&D: only the round starting after the 18th', [state.pd.W1['U6-R'], state.pd.W2['U6-R'], state.pd.W4['U6-R']],
         [undefined, undefined, { P: true, D: false }]);
@@ -194,9 +198,12 @@ async function boot(browser) {
   check('weeding: R4 only', state.weeding['U6-R'], { R4: true });
   check('interrow: its round started on the 15th, before U6-R existed', state.interrow['U6-R'], [[], [], [false], []]);
   check('it was saved as a draft', saved, 1);
-  check('the notice names it', page.joined()['UNN1|Oct 2026'], [{ plot: 'U6-R', parent: 'U6', day: 18, done: false }]);
+  check('U7-R, there since October, takes U7 rounds for the WHOLE of November', [state.pd.W1['U7-R'], state.pd.W4['U7-R']],
+        [{ P: true, D: false }, { P: false, D: true }]);
+  check('the notice names both', page.joined()['UNN1|Nov 2026'],
+        [{ plot: 'U6-R', parent: 'U6', day: 18, done: false }, { plot: 'U7-R', parent: 'U7', day: 1, done: false }]);
   state.pd.W4['U6-R'] = { P: false, D: false };   // the office takes it off
-  check('a second run does not put back what the office unticked', [page.seed('UNN1', 'Oct 2026'), state.pd.W4['U6-R']],
+  check('a second run does not put back what the office unticked', [page.seed('UNN1', 'Nov 2026'), state.pd.W4['U6-R']],
         [false, { P: false, D: false }]);
 
   console.log('\n3  the record dialog offers the choice, and the row keeps it');
@@ -227,7 +234,7 @@ async function boot(browser) {
     const rows = await page.evaluate(() => {
       if (!NURSERY_PLOTS.UNN1.includes('U6')) NURSERY_PLOTS.UNN1.push('U6');
       stockPlots = { 'UNN 1': ['U6', 'U6-R'] };
-      const s = getState('UNN1', 'Oct 2026');
+      const s = getState('UNN1', 'Nov 2026');
       s.weeksByWork = s.weeksByWork || {};
       s.weeksByWork.pd = [{ from: 1, to: 7 }, { from: 8, to: 14 }, { from: 15, to: 21 }, { from: 22, to: 31 }];
       s.pd = {};
@@ -250,8 +257,22 @@ async function boot(browser) {
     check('the notice is up after the seed', await notice(), true);
     await page.evaluate(() => autoSyncRecords());
     check('and is still up after a second sync in the same load', await notice(), true);
-    await page.evaluate(() => publishSchedule('UNN1', 'Oct 2026', [], {}));
+    await page.evaluate(() => publishSchedule('UNN1', 'Nov 2026', [], {}));
     check('Save Schedule takes it down', await notice(), false);
+    // October was checked before this rule: its dialog offers no choice and a
+    // save adds no new field to the row.
+    const oct = await page.evaluate(() => {
+      document.getElementById('global-month').value = '2026-10';   // the month on screen
+      records.push({ id: 903, _month: 'Oct 2026', tarikh: '2026-10-25', jenis: 'Membaja', racun: 'Round 4: Compound 20gm',
+                     plot: 'U7', batch: '', qty: null, carlos: 0, gaia: 0, remark: '' });
+      openRecModal(records.find(r => r.id === 903));
+      const shown = document.getElementById('rf-bal').style.display;
+      saveRec();
+      return [shown, 'exclBal' in records.find(r => r.id === 903)];
+    });
+    check('the page now reads October', await page.evaluate(() => getMonth()), 'Oct 2026');
+    check('an October row offers no Include / Exclude, and a save adds nothing', oct, ['none', false]);
+    check('and October seeds nothing', await page.evaluate(() => seedReplantRounds('UNN1', 'Oct 2026')), false);
     await page.close();
   } finally { await browser.close(); }
 
