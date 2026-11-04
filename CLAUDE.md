@@ -3558,13 +3558,92 @@ and `saveAudit` took the **insert** branch rather than the edit one, because
 dates say it in the data: a first walk on 12 Oct and a second on the 21st,
 22nd or 23rd, which is the day the table went past the cap.
 
-**SO THERE IS NO REPAIR FILE BESIDE THE CHECK, and that is the decision
-rather than an omission.** Both rows record a real walk — the auditor was
-told the plot needed auditing and audited it. Deleting the later row throws
-away work somebody did; deleting the earlier one throws away the record the
-board had already lost once. Which of a disagreeing pair stands is the
-office's call, and a file that guessed at it would be inventing a decision
-nobody made.
+**THE FIRST ANSWER WAS TO WRITE NO REPAIR, and the office overruled it in
+one line** — *"remove all the duplicate cases. and never did this again."*
+The reasoning for holding back was that both rows record a real walk, so
+deleting either throws away something somebody did and which of a
+disagreeing pair stands is the office's call. That is still true of exactly
+two tasks. It was wrong about the other 466, and the drill-down is what
+showed why.
+
+#### 188 DISAGREEMENTS, AND ONLY TWO ARE TWO AUDITORS
+
+Read the second section of the drill-down before reaching for a rule. Of
+the 188 pairs whose results differ, all but **two** pair an **admin
+CLOSURE** with a **real audit** — *first Closed by admin on 2026-10-12 by
+Ruth Wong, then Unsatisfactory on 2026-10-22 by Main Nursery Auditor*, over
+and over. Only tasks **1443** and **1791441167950** are one auditor
+disagreeing with another, and both go Satisfactory then Unsatisfactory.
+
+So the pile that looked like 188 verdicts needing arbitration was 2, and
+the rest answer to a rule: **a closure says nobody is ever going to walk
+this plot, and an auditor walked it.** The audit is the better record.
+
+**AND THOSE PAIRS NAME A SECOND FAULT IN THE SAME CAP**, which is the part
+worth keeping. It runs in BOTH directions:
+
+- a closure written on 12 Oct did not stop the board offering the task on
+  the 18th to the 23rd, so auditors walked plots the office had already
+  written off;
+- and five Interrow Spray tasks read *first Unsatisfactory on 13 Oct by the
+  auditor, then Closed by admin on 23 Oct* — the × was offered over work
+  already done.
+
+**Both are one fault**: the board asks whether a task is audited by looking
+in a list that had been cut at a thousand rows, so it could see neither the
+closures nor the audits that had fallen out. The pager closes both.
+
+#### THE REPAIR, AND THE ORDER IS THE WHOLE DECISION
+
+`shared/RUN_ME_remove_duplicate_audits.sql`. One row survives per task:
+
+1. **A REAL AUDIT BEATS A CLOSURE**, in both date orders.
+2. **Among audits, the NEWEST**, by the audit date then the day it was
+   saved — the rule the whole board already follows, that the latest audit
+   is the state of the plot. On both genuine disagreements that keeps the
+   **Unsatisfactory**, which is the safe direction: a problem stays visible.
+3. **Among closures, the newest likewise**, so one decision is recorded
+   once.
+
+A task with ONE audit is untouched, a row with no task at all is untouched,
+and `nops_maint_field_records` is neither read nor written — the field did
+that work and said so, and no audit decision gets to unsay it.
+
+**WHAT IT COSTS is NAMED rather than buried.** Section 2 prints every task
+whose verdict moved, with what it read before and reads now and which of
+the three kinds of pair it was. An October figure also moves wherever the
+row that went was dated in October and the row that stays is not.
+
+#### THE INDEX IS THE "NEVER AGAIN", BECAUSE THE APP IS NOT THE ONLY WRITER
+
+A fixed reader stops the board re-offering a task. It does nothing about a
+phone holding an older build, a retry out of an outbox, or a hand edit in
+the dashboard. So the repair ends by putting a **UNIQUE index on
+`task_id`** (`audit_maint_one_per_task`, partial, so the rows with no task
+are unaffected), and a second insert on one task now cannot land at all.
+
+Three things in it:
+
+- **The index is only added once the table really holds one row per task.**
+  A run that could not finish the clearing leaves it off and SAYS so,
+  rather than failing the whole paste.
+- **It creates no TEMP table.** The first version did, and the SQL Editor
+  warns that a table was made without row level security — a warning
+  somebody has to click past is a bad thing to hand over. Everything the
+  report needs is collected in ONE pass before the delete, because
+  afterwards the rows are gone, and every `set_config` piece is
+  `COALESCE`d for the reason the save-probe file already learned.
+- **A SECOND RUN RAISES NO NOTICE.** `CREATE UNIQUE INDEX IF NOT EXISTS`
+  prints *relation already exists, skipping*, which is one more line
+  somebody has to read past, so the guard is `to_regclass` instead.
+
+**AND TWO DIFFERENT THINGS NOW COME BACK 23505.** The outbox has always
+retired a duplicate key quietly, on the correct reasoning that the row
+reached the table and only the acknowledgement was lost. The index makes a
+second meaning reachable: the task already carries an audit somebody else
+keyed. *"Already saved (duplicate record)"* sends that auditor looking for
+their own record, which is not what is in the table, so `describeSbError`
+tells the two apart on the constraint name.
 
 `shared/CHECK_what_the_duplicate_audits_say.sql` is the drill-down that
 makes it decidable: the 468 split into same-result, **DISAGREE** and

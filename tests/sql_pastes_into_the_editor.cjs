@@ -55,6 +55,7 @@ const SWEPT = [
   'CHECK_the_alert_board_every_month.sql',
   'CHECK_is_the_same_case_audited_twice.sql',
   'CHECK_what_the_duplicate_audits_say.sql',
+  'RUN_ME_remove_duplicate_audits.sql',
   'CHECK_the_report_reads_the_auditors_records.sql',
   'CHECK_why_no_plot_condition_alert.sql',
 ];
