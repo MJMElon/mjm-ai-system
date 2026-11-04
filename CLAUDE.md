@@ -4022,6 +4022,70 @@ never a `confirm()` — names the cases and takes ONE remark for them all.
 
 `tests/close_many_cases_at_once.cjs`.
 
+### The same shape on the SENT-BACK list, plus the scheduled rows
+
+*"加一个select all button，可以一次过删掉"*, said over twelve rejected
+records in UNN 2 whose reasons are one sentence written twelve times
+("kerja belum di buat", "pekerja salah tekan"). Twelve confirms for one
+decision, and the decision was never per-record — the same argument the
+audit board's section × already won.
+
+Everything above is repeated here and is not worth restating: the box rides
+in the **date cell** (this table already runs off the side of the screen at
+ten columns, and an eleventh would push the buttons further out of reach of
+the thing it is for), Select all takes the **filtered** list, a tick only
+stands for a row the list can show, and it is ONE write whose count is what
+came BACK — `.in('id', …)` **and `.not('rejected_at','is',null)`**, so a
+record somebody approved between the draw and the press is theirs and is
+left alone.
+
+**WHAT IS THIS SCREEN'S OWN IS THE SCHEDULED ROWS.** A single Del already
+takes the office row its record was paired to, because a record deleted is a
+job that is not happening and the row left behind puts it on next month's
+list as outstanding work. A bulk delete that forgot that would leave twelve
+of them. Three things in it:
+
+- **The pairing is asked ONCE, per record, BEFORE the write**
+  (`pairOf`). `_submissionScheduleRow` pairs the field record against
+  `records`, so after the delete there is nothing left to pair against and
+  the schedule would survive every time — and a second walk of the rule
+  after the fact is a second answer to one question.
+- **Only the schedule of what ACTUALLY went.** A row the database refused
+  still has its work outstanding, so `pairOf` is read against the ids that
+  came back and not the ids that were sent.
+- **It still refuses to guess.** Where the rule cannot pick out exactly one
+  row the confirm says how many are in that state and deletes only the
+  worker's record — deleting the wrong round's row is not something a
+  confirm box can take back.
+
+**It is a `confirm()` and not a dialog**, which is the one place this
+differs from the Nelos close: that one takes a REMARK, and a box somebody
+has to type into cannot be an OK/Cancel. This takes nothing, and the single
+Del beside it has always been a confirm — two shapes for one act on one
+screen is worse than the plainer of them.
+
+**`applyI18n` writes `textContent`**, so the `data-i18n` sits on the SPAN
+beside the Select all box and never on the `<th>` that holds it, or every
+language switch wipes the box out. The test asks that by name.
+
+`tests/many_sent_back_records_go_at_once.cjs` drives the real page with
+UNN 2's own rows; **29 of its 41 checks fail on the previous code**. Three
+things it had to learn, each of which makes a browser test lie:
+
+- **A data row is counted without asking for its box.** Counting rows by
+  their checkbox reads the previous page's whole list as empty, and then
+  "every row is ticked" is true of nothing.
+- **The filter select is HIDDEN by `shared_cf_select.js`**, so Playwright
+  cannot act on it; the value is set and `change` dispatched the way the
+  skin's own button does it. Same for the presses, which go through
+  `el.click()` in the page — a control that is missing must fail the check
+  underneath by NAME and not time out for thirty seconds.
+- **The stub honours both halves of the write and both call shapes.** One
+  that applied `.in` and ignored `.not` would sign off a delete that takes
+  an approved record with it, which is the one thing that guard exists to
+  stop; and the single Del writes `.eq('id', …)`, so a stub reading only
+  `.in` reads a working button as a dead one.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened four times in this codebase now. A screen writes a setting, the

@@ -4458,6 +4458,9 @@ const I18N = {
     'rej.approve':'Approve', 'rej.approveTip':'Accept this record — it moves up into the approved list',
     'rej.editTitle':'Edit Sent-Back Record', 'rej.saveOnly':'Save (still sent back)',
     'rej.delTip':'Delete this record from the database, and the scheduled row it is paired to',
+    'rej.pickTip':'Tick this record to delete it with the others',
+    'rej.nSelected':'{n} selected', 'rej.delSelected':'Delete {n} selected',
+    'rej.clearSel':'Clear selection',
     'rej.dateNote':'Changing the date moves which week and month this record is paired against — the schedule row it lands on follows the date.',
     'jenis.pd':'P & D Spraying', 'jenis.interrow':'Interrow Spraying',
     'jenis.weeding':'Weeding', 'jenis.manuring':'Manuring',
@@ -4643,6 +4646,9 @@ const I18N = {
     'rej.approve':'Luluskan', 'rej.approveTip':'Terima rekod ini — ia naik ke senarai yang diluluskan',
     'rej.editTitle':'Sunting Rekod Dihantar Balik', 'rej.saveOnly':'Simpan (masih dihantar balik)',
     'rej.delTip':'Hapus rekod ini dari pangkalan data, berserta baris jadual yang dipadankan dengannya',
+    'rej.pickTip':'Tandakan rekod ini untuk dihapus bersama yang lain',
+    'rej.nSelected':'{n} dipilih', 'rej.delSelected':'Hapus {n} yang dipilih',
+    'rej.clearSel':'Kosongkan pilihan',
     'rej.dateNote':'Menukar tarikh menukar minggu dan bulan rekod ini dipadankan — baris jadual yang dipadankan mengikut tarikh.',
     'jenis.pd':'Penyemburan racun kulat dan serangga', 'jenis.interrow':'Meracun rumput secara selingan',
     'jenis.weeding':'Merumput', 'jenis.manuring':'Membaja',
@@ -6689,6 +6695,12 @@ function switchRecordView(view) {
    count on the tab is right without the section having been visited. */
 let _recSection = 'approved';
 function switchRecSection(section, btn) {
+  /* LEAVING THE TAB DROPS THE SELECTION. Coming back to a list carrying
+     ticks somebody made before they went somewhere else is a delete made
+     against a screen nobody has read — the same reason the ticks are pruned
+     to what is shown. Cleared whichever way the tab is left, including back
+     onto itself. */
+  if (typeof _rejPickedIds !== 'undefined' && _rejPickedIds.size) _rejPickedIds.clear();
   _recSection = section;
   const bar = btn ? btn.closest('.subtabs-bar') : null;
   if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
@@ -8205,6 +8217,70 @@ function _rejSentBackCell(f) {
   return `${esc(who || '—')}${when ? `<br><span style="color:var(--text-faint);font-size:10.5px;">${esc(_tarikhDisplay(when))}</span>` : ''}`;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   MANY AT ONCE — *"加一个select all button，可以一次过删掉"*
+
+   Twelve records sent back for one reason ("pekerja salah tekan") are twelve
+   confirms for one decision, and the decision was never per-record. So the
+   list carries a tick per row and one Delete for all of them.
+
+   WHAT IS TICKED IS WHAT IS ON SCREEN. The ids live in a Set and
+   `renderRejectedSubmissions` PRUNES it to the rows it actually drew, so a
+   filter narrowed, a nursery changed or a record approved underneath takes
+   its tick with it. A tick standing for a row nobody can see is a row that
+   goes in a delete nobody looked at.
+
+   Leaving the tab clears it outright — coming back to a list carrying a
+   selection somebody made before lunch is the same fault, one step further
+   on.
+   ══════════════════════════════════════════════════════════════ */
+const _rejPickedIds = new Set();
+
+function _rejSelCount() { return _rejPickedIds.size; }
+
+/* Draw the bar, the count and the header box off the rows ON SCREEN. The
+   header box is INDETERMINATE on a part selection rather than ticked or
+   clear, because either of those is a claim about rows it is not making. */
+function _rejPaintSelection(shownIds) {
+  const n = _rejPickedIds.size;
+  const bar = document.getElementById('rej-bulk');
+  if (bar) bar.style.display = n ? '' : 'none';
+  const lbl = document.getElementById('rej-bulk-n');
+  if (lbl) lbl.textContent = t('rej.nSelected', { n });
+  const del = document.getElementById('rej-bulk-del');
+  if (del) del.textContent = t('rej.delSelected', { n });
+  const clr = document.getElementById('rej-bulk-clear');
+  if (clr) clr.textContent = t('rej.clearSel');
+  const all = document.getElementById('rej-all');
+  if (all) {
+    const total = (shownIds || []).length;
+    all.checked = total > 0 && n >= total;
+    all.indeterminate = n > 0 && n < total;
+    all.disabled = total === 0;
+  }
+}
+
+/* One row's box. Gated on what is SHOWN, so a handler left on a cell drawn
+   before the list moved cannot tick a row that is no longer in it. */
+function toggleRejPick(id, on) {
+  const key = String(id);
+  if (on) _rejPickedIds.add(key); else _rejPickedIds.delete(key);
+  renderRecords();
+}
+
+function toggleRejAll(on) {
+  _rejPickedIds.clear();
+  if (on) (_rejShownIds || []).forEach((x) => _rejPickedIds.add(String(x)));
+  renderRecords();
+}
+
+function clearRejSelection() { _rejPickedIds.clear(); renderRecords(); }
+
+/* The ids the last draw actually put on screen. Select all reads this and
+   never `mine`, or a nursery's whole backlog would be ticked by a press made
+   over a list of three. */
+let _rejShownIds = [];
+
 function renderRejectedSubmissions(f) {
   const body = document.getElementById('rej-body');
   if (!body) return;
@@ -8237,17 +8313,31 @@ function renderRejectedSubmissions(f) {
   }).sort((a, b) => String(b.work_date || '').localeCompare(String(a.work_date || ''))
                  || (b.id || 0) - (a.id || 0));
 
+  /* PRUNE FIRST, DRAW SECOND. Everything about the selection is read off
+     this list, so it has to be settled before the bar or the header box is
+     painted — otherwise a count drawn from the Set disagrees with the ticks
+     drawn from the rows, over a delete. */
+  _rejShownIds = shown.map((r) => String(r.id));
+  const onScreen = new Set(_rejShownIds);
+  [..._rejPickedIds].forEach((id) => { if (!onScreen.has(id)) _rejPickedIds.delete(id); });
+
   if (!shown.length) {
+    _rejPaintSelection(_rejShownIds);
     body.innerHTML = `<tr><td colspan="10" class="rej-none">${
       mine.length ? t('rec.none') : t('rej.none')}</td></tr>`;
     return;
   }
+  _rejPaintSelection(_rejShownIds);
 
   body.innerHTML = shown.map((r) => {
     const jenis = _rejJenis(r);
     const worked = _rejWorkedBy(r);
-    return `<tr>
-      <td style="font-weight:600;color:var(--green-text);">${esc(_tarikhDisplay(r.work_date))}</td>
+    const on = _rejPickedIds.has(String(r.id));
+    return `<tr${on ? ' class="rej-row-picked"' : ''}>
+      <td style="font-weight:600;color:var(--green-text);"><input type="checkbox"
+            class="rej-pick" ${on ? 'checked' : ''}
+            onclick="toggleRejPick(${r.id}, this.checked)"
+            title="${esc(t('rej.pickTip'))}">${esc(_tarikhDisplay(r.work_date))}</td>
       <td>${esc(jenisLabel(jenis) || '—')}</td>
       <td><span class="pill ${pillCls(jenis)}">${esc(r.chemical || '—')}</span></td>
       <td style="text-align:center;font-weight:700;color:var(--green-text);">${esc(r.plot_name || '—')}</td>
@@ -8378,6 +8468,86 @@ async function deleteSubmission(id) {
   // persistRecords writes back — done only after the record itself is gone,
   // so a failed delete does not take a scheduled row with it.
   if (row) records = records.filter((r) => r.id !== row.id);
+  await _reloadSubmissions();
+}
+
+/* DELETE EVERY TICKED ROW, IN ONE WRITE.
+
+   `.in('id', …)` and nothing else would be wrong in a way nobody would see:
+   between the draw and the press somebody can APPROVE one of these, and an
+   approved record is not a rejected one — deleting it would throw away a
+   decision this screen never asked about. So the write carries
+   `.not('rejected_at','is',null)`, the same shape as closing many Nelos
+   cases on `.eq('status','resolved')`, and **the count is what came BACK**
+   rather than what was sent. A row somebody else has moved is theirs.
+
+   THE SCHEDULED ROWS GO TOO, exactly as a single Del takes one: a record
+   deleted is a job that is not happening, and the paired office row left
+   behind puts it on next month's list as outstanding work. The pairing is a
+   RULE and not a key, so `_submissionScheduleRow` is asked per record and
+   says nothing where it cannot pick out exactly one — the confirm counts
+   those separately rather than guessing, because deleting the wrong round's
+   row is not something a confirm box can take back.
+
+   The pairs are worked out BEFORE the delete, off `records` as it stands.
+   Afterwards the field record is gone and the rule has nothing left to pair
+   against, so the schedule would survive every time. */
+async function deleteSelectedSubmissions() {
+  const ids = [..._rejPickedIds];
+  if (!ids.length) return;
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+
+  const picked = ids.map(_submissionById).filter(Boolean);
+  if (!picked.length) { clearRejSelection(); return; }
+
+  /* ASKED ONCE, per record, and kept. A second walk of the pairing rule
+     after the delete would be a second answer to one question — and it
+     would be asked of a `records` list this function is about to edit. */
+  const pairOf = new Map();
+  let unpaired = 0;
+  picked.forEach((f) => {
+    const row = _submissionScheduleRow(f);
+    if (row) pairOf.set(String(f.id), row); else unpaired++;
+  });
+  const rows = [...new Set([...pairOf.values()].map((r) => r.id))];
+
+  /* The confirm NAMES them rather than counting them, up to a point: a list
+     somebody can read is what makes this a decision instead of a leap. Past
+     ten it is a wall, and the count is the honest summary. */
+  const names = picked.slice(0, 10).map((f) =>
+    `    ${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · ${_tarikhDisplay(f.work_date)}`);
+  if (picked.length > 10) names.push(`    …and ${picked.length - 10} more`);
+
+  const tail = rows.length
+    ? `\n${rows.length} scheduled row${rows.length === 1 ? '' : 's'} paired to them will go as well.`
+    : '';
+  const warn = unpaired
+    ? `\n${unpaired} of them could not be paired to a scheduled row — guessing `
+      + `would delete the wrong round, so only the worker's record goes for `
+      + `those and the schedule is left alone.`
+    : '';
+  if (!confirm(`Delete ${picked.length} record${picked.length === 1 ? '' : 's'} `
+    + `from the database?\n\n${names.join('\n')}\n${tail}${warn}\n\nThis cannot be undone.`)) return;
+
+  const { data, error } = await _supabase.from('nops_maint_field_records')
+    .delete().in('id', picked.map((f) => f.id))
+    .not('rejected_at', 'is', null)
+    .select('id');
+  if (error) { alert('Could not delete them: ' + (error.message || error)); return; }
+
+  /* ONLY THE SCHEDULE OF WHAT ACTUALLY WENT. A row whose record the database
+     refused to delete still has its work outstanding. */
+  const gone = new Set((data || []).map((d) => String(d.id)));
+  const kill = new Set();
+  gone.forEach((id) => { const row = pairOf.get(id); if (row) kill.add(row.id); });
+  if (kill.size) records = records.filter((r) => !kill.has(r.id));
+
+  _rejPickedIds.clear();
+  if (gone.size < picked.length) {
+    alert(`${gone.size} of ${picked.length} were deleted. The rest are no `
+      + `longer sent back — somebody has approved or removed them since this `
+      + `list was drawn, so they were left alone.`);
+  }
   await _reloadSubmissions();
 }
 

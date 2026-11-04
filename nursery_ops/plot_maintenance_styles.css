@@ -310,6 +310,26 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
 .rej-why{color:#a83020;font-weight:700;line-height:1.4;}
 .rej-none{text-align:center;padding:2.2rem;color:var(--text-faint);
   font-size:12px;font-weight:600;}
+/* ── SELECT MANY, DELETE ONCE ──────────────────────────────────────────
+   The box rides in the DATE cell rather than taking a column of its own:
+   this table already runs off the side of the screen at ten columns. It is
+   pulled tight against the date so the pair reads as one cell. */
+.rej-pick{width:14px;height:14px;margin:0 7px 0 0;vertical-align:-2px;
+  accent-color:#a83020;cursor:pointer;flex:0 0 auto;}
+.rej-th-pick{white-space:nowrap;}
+/* A picked row is tinted the colour of the button that will act on it, so
+   what is about to go is obvious without counting the ticks. It beats the
+   zebra and the hover, which would otherwise hide it on every other row. */
+.rec-table tbody tr.rej-row-picked td,
+.rec-table tbody tr.rej-row-picked:nth-child(even) td,
+.rec-table tbody tr.rej-row-picked:hover td{background:#fdeeea;}
+/* The bar is drawn only while something is ticked (the renderer hides it),
+   so it never stands over the list saying nothing. */
+.rej-bulk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:0 0 10px;padding:9px 13px;border-radius:10px;
+  background:#fdeeea;border:1px solid #f0c4ba;}
+.rej-bulk-n{font-size:12px;font-weight:800;color:#a83020;
+  letter-spacing:.02em;margin-right:auto;}
 .rec-table tbody tr:last-child td{border-bottom:none;}
 .rec-table tbody tr:nth-child(even) td{background:var(--bg-row-alt);}
 .rec-table tbody tr:hover td{background:var(--green-bg);}

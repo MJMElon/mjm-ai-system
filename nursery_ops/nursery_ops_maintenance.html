@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=112">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=113">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -339,6 +339,17 @@
              so the confirm names the row that will go and refuses to guess
              when the pairing is ambiguous. -->
         <div id="recsec-rejected" class="recsec">
+        <!-- MANY AT ONCE, and the bar is drawn only once something is
+             ticked. A Delete button standing over a list with nothing
+             selected is a button that answers "select something first",
+             which is a sentence a screen should not have to say. The count
+             in it is what WILL go, so nobody presses it on a guess. -->
+        <div id="rej-bulk" class="rej-bulk" style="display:none;">
+          <span class="rej-bulk-n" id="rej-bulk-n"></span>
+          <button class="btn btn-sm btn-danger" onclick="deleteSelectedSubmissions()"
+                  id="rej-bulk-del"></button>
+          <button class="btn btn-sm" onclick="clearRejSelection()" id="rej-bulk-clear"></button>
+        </div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table rej-table">
             <!-- Pinned the same way and for the same reason as the table
@@ -356,7 +367,21 @@
               <col style="width:158px;"><!-- Approve / Edit / Del -->
             </colgroup>
             <thead><tr>
-              <th class="th-left"            data-i18n="rec.tarikh">Tarikh</th>
+              <!-- SELECT ALL RIDES IN THE DATE HEADING, and its box rides in
+                   the date CELL, rather than either taking a column of its
+                   own: this table already runs off the side of the screen at
+                   ten columns, and an eleventh would push the buttons on the
+                   right further out of reach of the thing it is for. It
+                   takes every row the FILTERED list is showing -- never the
+                   whole nursery -- so what it ticks is what is in front of
+                   the person pressing it. -->
+              <!-- The data-i18n is on the SPAN and never on the th: applyI18n
+                   writes textContent, which on the th would wipe the box out
+                   on every language switch. -->
+              <th class="th-left rej-th-pick">
+                <input type="checkbox" id="rej-all" class="rej-pick"
+                       onclick="toggleRejAll(this.checked)"
+                ><span data-i18n="rec.tarikh">Tarikh</span></th>
               <th class="th-left"            data-i18n="rec.jenis">Jenis Kerja</th>
               <th class="th-left"            data-i18n="rec.racun">Racun / Chemical</th>
               <th style="text-align:center;" data-i18n="rec.plot">Plot</th>
@@ -942,7 +967,7 @@
      The payroll module has read this since it was written; this page
      showed the raw address on three Checked badges. -->
 <script src="../shared/shared_people.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=170"></script>
+<script src="plot_maintenance_script.js?v=171"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
