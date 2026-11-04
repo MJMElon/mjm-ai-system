@@ -4481,7 +4481,7 @@ const I18N = {
     'link.loading':'Linking to the batch report…',
     'link.unreachable':'Could not reach the batch report — key the quantity manually.',
     'link.none':'No batch movement found for plot {x} — key the quantity manually.',
-    'link.allBatches':'all batches ({x})', 'link.someBatches':'batch {x}',
+    'link.allBatches':'all batches ({x})', 'link.someBatches':'batch {x}', 'link.noBatch':'no batch left on the plot',
     'link.asAt':'as at {x}', 'link.today':'standing today — no date picked yet',
     'link.willUse':'{x} will be used',
     'link.overridden':'Linked value is {x} — your {y} overrides it',
@@ -4512,7 +4512,7 @@ const I18N = {
        the same on screen, so the office could not tell a working rule from a
        broken one and said so. */
     'link.cull2Off':'2nd culling taken off: {x} seedlings.',
-    'bal.q':'Batch {b} was transferred out to the -R plot. {x} seedlings are left behind — is that balance capacity for this work?',
+    'bal.q':'Moved out to the -R plot: batch {b}. {x} seedlings are left behind — is that balance capacity for this work?',
     'bal.include':'Include balance',
     'bal.exclude':'Exclude balance (culled balance)',
     'bal.off':'Culled balance left out: {x} seedlings.',
@@ -4672,7 +4672,7 @@ const I18N = {
     'link.loading':'Menyambung ke laporan batch…',
     'link.unreachable':'Laporan batch tidak dapat dicapai — sila isi kuantiti sendiri.',
     'link.none':'Tiada pergerakan batch dijumpai untuk plot {x} — sila isi kuantiti sendiri.',
-    'link.allBatches':'semua batch ({x})', 'link.someBatches':'batch {x}',
+    'link.allBatches':'semua batch ({x})', 'link.someBatches':'batch {x}', 'link.noBatch':'tiada batch tinggal di plot',
     'link.asAt':'pada {x}', 'link.today':'baki semasa — tarikh belum dipilih',
     'link.willUse':'{x} akan digunakan',
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
@@ -4684,7 +4684,7 @@ const I18N = {
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
     'link.cull2Off':'Pembuangan ke-2 ditolak: {x} anak benih.',
-    'bal.q':'Batch {b} telah dipindah ke plot -R. Baki {x} anak benih tertinggal — adakah baki itu kapasiti untuk kerja ini?',
+    'bal.q':'Dipindah ke plot -R: batch {b}. Baki {x} anak benih tertinggal — adakah baki itu kapasiti untuk kerja ini?',
     'bal.include':'Masukkan baki',
     'bal.exclude':'Kecualikan baki (baki culling)',
     'bal.off':'Baki culling dikecualikan: {x} anak benih.',
@@ -6354,6 +6354,10 @@ function nextRoundFor(jenis, plot) {
    publish: what the phones see changes when somebody presses Save Schedule,
    and the notice above the schedule says which plots are waiting for it. */
 let _replantJoined = {};   // 'n|m' -> [{ plot, parent, day }]
+/* Seeded in THIS page load and not yet published. The page syncs more than
+   once per load, and the second run finds the plot already seeded (done) -
+   which hid the notice before anybody had pressed Save Schedule. */
+let _replantUnsent = new Set();   // 'n|m|plot'
 function _replantParent(plot) {
   return String(plot || '').split('#')[0].trim().replace(/-R\d*$/i, '');
 }
@@ -6431,6 +6435,7 @@ function seedReplantRounds(n, m) {
     });
     s.replantSeeded[rp] = 1;
     changed = true;
+    _replantUnsent.add(`${n}|${m}|${rp}`);
     joined.push({ plot: rp, parent, day, done: false });
   });
   _replantJoined[`${n}|${m}`] = joined;
@@ -6444,7 +6449,8 @@ function seedReplantRounds(n, m) {
 function updateReplantNotice() {
   const box = document.getElementById('replant-notice');
   if (!box) return;
-  const list = (_replantJoined[`${getNursery()}|${getMonth()}`] || []).filter(j => !j.done);
+  const nm = `${getNursery()}|${getMonth()}`;
+  const list = (_replantJoined[nm] || []).filter(j => !j.done || _replantUnsent.has(`${nm}|${j.plot}`));
   if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = '';
   box.innerHTML = '➕ ' + list.map(j => t('replant.joined')
@@ -7693,6 +7699,8 @@ function toggleAllInterrow(ri, ci){
    nops_maint_published.payload — see RUN_ME_maint_published_payload.sql. */
 function publishSchedule(n, m, tasks, payload) {
   if (!_supabase) return;
+  [..._replantUnsent].forEach(k => { if (k.startsWith(`${n}|${m}|`)) _replantUnsent.delete(k); });
+  try { updateReplantNotice(); } catch (_) {}
   _supabase.from('nops_maint_published')
     .upsert({ nursery: n, month: m, tasks: tasks, payload: payload, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
     .then(({ error }) => { if (error) console.warn('[maint] publish failed:', error.message); });
@@ -8912,7 +8920,8 @@ function refreshLinkedQty() {
     return;
   }
   const list  = link.batches.join(', ');
-  const scope = link.allBatches ? t('link.allBatches').replace('{x}', list)
+  const scope = !list ? t('link.noBatch')
+              : link.allBatches ? t('link.allBatches').replace('{x}', list)
                                 : t('link.someBatches').replace('{x}', list);
   const when  = link.asOf ? t('link.asAt').replace('{x}', _tarikhDisplay(link.asOf)) : t('link.today');
   /* WHOSE FIGURE IS IN THE BOX. It used to say "your {y} overrides it" about

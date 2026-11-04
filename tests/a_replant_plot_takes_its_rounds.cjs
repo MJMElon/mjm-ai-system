@@ -241,6 +241,17 @@ async function boot(browser) {
       return records.filter(r => r.plot === 'U6-R' && /^Penyemburan/.test(r.jenis)).map(r => r.racun.split(':')[0] + ':' + r.racun.split(':')[1].trim().split(' ')[0]);
     });
     check('U6-R joining in week 4 is doing U6 Round 4 with Antracol, not its own Round 1', rows, ['Round 4:Antracol']);
+    // The page syncs more than once per load; the second run must not hide the
+    // notice before anybody has pressed Save Schedule. Publishing does.
+    const notice = () => page.evaluate(() => {
+      const b = document.getElementById('replant-notice');
+      return !!b && b.style.display !== 'none' && b.textContent.includes('U6-R');
+    });
+    check('the notice is up after the seed', await notice(), true);
+    await page.evaluate(() => autoSyncRecords());
+    check('and is still up after a second sync in the same load', await notice(), true);
+    await page.evaluate(() => publishSchedule('UNN1', 'Oct 2026', [], {}));
+    check('Save Schedule takes it down', await notice(), false);
     await page.close();
   } finally { await browser.close(); }
 
