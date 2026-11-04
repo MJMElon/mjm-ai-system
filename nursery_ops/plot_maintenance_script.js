@@ -4502,8 +4502,8 @@ const I18N = {
        The last is for a row saved before either mark existed, where nothing
        knows who put it there and the sentence says exactly that rather than
        guessing at a person. */
-    'link.fieldQtyWho':'Linked value is {x} — {y} is from a phone record by {w}, verified',
-    'link.fieldQty':'Linked value is {x} — {y} is from a verified phone record',
+    'link.fieldQtyWho':'Linked value is {x} — {y} is from a phone record by {w}, verified: the batches ticked on the phone, added up',
+    'link.fieldQty':'Linked value is {x} — {y} is from a verified phone record: the batches ticked on the phone, added up',
     'link.savedQty':'Linked value is {x} — the saved {y} is being used',
     'link.useLink':'Use the linked amount',
     'link.basis':'movement report closing balance',
@@ -4675,8 +4675,8 @@ const I18N = {
     'link.asAt':'pada {x}', 'link.today':'baki semasa — tarikh belum dipilih',
     'link.willUse':'{x} akan digunakan',
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
-    'link.fieldQtyWho':'Nilai dari laporan ialah {x} — {y} dari rekod telefon oleh {w}, disahkan',
-    'link.fieldQty':'Nilai dari laporan ialah {x} — {y} dari rekod telefon yang disahkan',
+    'link.fieldQtyWho':'Nilai dari laporan ialah {x} — {y} dari rekod telefon oleh {w}, disahkan: jumlah batch yang ditanda di telefon',
+    'link.fieldQty':'Nilai dari laporan ialah {x} — {y} dari rekod telefon yang disahkan: jumlah batch yang ditanda di telefon',
     'link.savedQty':'Nilai dari laporan ialah {x} — {y} yang tersimpan digunakan',
     'link.useLink':'Guna nilai pautan',
     'link.basis':'baki akhir laporan pergerakan',
@@ -8919,7 +8919,24 @@ function refreshLinkedQty() {
 
      So the row already knows: `_fieldIds` are the records it was filled
      from, and each one carries who reported it. A screen that can name them
-     and instead says "the field" is making the reader ask. */
+     and instead says "the field" is making the reader ask.
+
+     AND IT SAYS WHAT THE FIGURE IS, which is the next question the office
+     asked of this same sentence: *"工人手机并没有capacity这个概念"*. They
+     are right — the phone has NO quantity box, and it sends one all the
+     same. What the conductor does there is TICK WHICH BATCHES are standing
+     in the plot; the figure beside them is read-only and is the Main
+     Nursery Movement Report balance of exactly those batches, which is
+     `shared_plot_batch_balance`, the same view this page links off. The
+     phone labels it "Quantity (seedlings) · from the batches ticked" and
+     `MaintenanceModule.jsx` has no input, no onChange and no setter for it.
+
+     So a sentence naming only where the figure came FROM leaves somebody
+     looking for a box that does not exist. It says what it IS as well.
+     `shared/CHECK_what_the_phone_sent_as_the_quantity.sql` prints the two
+     figures side by side on every record, because they are worked out by
+     different rules: the phone never counts the 2nd culling and this page
+     takes it off for every job but interrow. */
   const headKey = typed === '' ? 'link.willUse'
                 : mine              ? 'link.overridden'
                 : was._fromFieldQty ? (_fieldWho(was) ? 'link.fieldQtyWho' : 'link.fieldQty')

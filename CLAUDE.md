@@ -353,6 +353,48 @@ what is stored — so the sentence cannot say one thing while the save does
 another. Typing over a field figure reads as yours the moment it is typed,
 which is also when it becomes yours.
 
+#### THE PHONE HAS NO QUANTITY BOX, AND IT SENDS A QUANTITY ALL THE SAME
+
+The next question that same sentence left, asked over a P & D Spraying row
+on N12 that nobody had keyed an amount into: *"他自动有了830，说是从工人手
+机进来，是什么意思？工人手机并没有capacity这个概念"*.
+
+**They are right about their own phone, and the figure is real.** What the
+conductor does on the maintenance form is **TICK WHICH BATCHES** are
+standing in the plot. The figure beside them is READ-ONLY and is added up —
+`MaintenanceModule.jsx` has no input, no `onChange` and no setter for it,
+and both save paths pass the same computed number. It is the **Main Nursery
+Movement Report balance of exactly the batches ticked**
+(`shared_plot_batch_balance`, which is the same view this page links off),
+and the phone labels it *Quantity (seedlings) · from the batches ticked*.
+
+So the hint now says what the figure IS as well as where it came from —
+*"…from a verified phone record: the batches ticked on the phone, added
+up"*. **A sentence naming only the SOURCE sends somebody looking for a box
+that does not exist**, which is the same fault one turn further on from
+"the field reported" naming nobody.
+
+**AND THE TWO FIGURES ARE WORKED OUT BY DIFFERENT RULES**, which is the
+half worth knowing before anybody calls one of them wrong:
+
+| | |
+|---|---|
+| what the PHONE sent | the balance of the batches ticked, **as at the day the record was saved**. The 1st and 2nd cullings take no part in that report at all — `plotBatches.js` says so in its own words. |
+| what this page LINKS | the same balance **as at the WORK DATE**, less the 2nd culling — for every job but Interrow Spraying, where it is deliberately left standing. |
+
+Neither is wrong. On a plot with a 2nd culling they differ by exactly that
+culling, and a record saved before a sale or a 3rd culling landed holds the
+older figure — which is the point of `applyFieldRecords` filling only an
+EMPTY cell and never writing over a full one.
+
+`shared/CHECK_what_the_phone_sent_as_the_quantity.sql` prints the three
+figures side by side on every record — what the phone sent, what is
+standing now, the 2nd culling, and what this page would link — and says
+which of those the gap is. **One thing it cannot reproduce**: the link is
+cut off at the WORK DATE and that column is not, so a culling dated after
+the work day is in the check and not in the cell. The row already says that
+itself, in amber, naming the day (`cull2Later`).
+
 **THE REFRESH IS A PRESS NOW.** *"每个月请直接刷新变成linked amount"* — and
 the only way to put a row back on the link was to know that emptying the box
 does it, which no screen says. **Use the linked amount** empties it, so there
