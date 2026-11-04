@@ -50,7 +50,7 @@ What that SQL should be:
   comment.**
 
   Three paste rules are still owed across the older files, each its own
-  sweep, and the test prints the count every run: **145 carry a semicolon in a
+  sweep, and the test prints the count every run: **147 carry a semicolon in a
   comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
@@ -3539,6 +3539,44 @@ apart because it shows neither `task_id` nor `audit_id`**:
 `shared/CHECK_is_the_same_case_audited_twice.sql` counts both and names
 them, so the question is answered off the data rather than off the look of
 the screen. **Do not answer this one by reading the page.**
+
+#### It was 472 of them, and the READING CAP is what made every one
+
+The count settled it: **2,037 audit rows over 1,565 tasks, 472 rows past the
+first on 468 tasks**, and 1,748 look-alike rows beside them. So the office
+was right that something was duplicated and the rows they were looking at
+were not it — the three B05 rows are three tasks, and the real duplicates
+are elsewhere on the same report.
+
+**THE CAUSE IS THE 1,000-ROW READ, one section up.** `loadAll` reads the
+WHOLE audit table with no filter, so once it passed a thousand the OLDEST
+audits fell out of what the module could see — the read is newest first —
+and `getAuditForTask` answered *not yet audited* for a task whose audit had
+fallen out. The board offered the plot again, the auditor walked it again,
+and `saveAudit` took the **insert** branch rather than the edit one, because
+`isEdit` is false when nothing on screen knows an audit already exists. The
+dates say it in the data: a first walk on 12 Oct and a second on the 21st,
+22nd or 23rd, which is the day the table went past the cap.
+
+**SO THERE IS NO REPAIR FILE BESIDE THE CHECK, and that is the decision
+rather than an omission.** Both rows record a real walk — the auditor was
+told the plot needed auditing and audited it. Deleting the later row throws
+away work somebody did; deleting the earlier one throws away the record the
+board had already lost once. Which of a disagreeing pair stands is the
+office's call, and a file that guessed at it would be inventing a decision
+nobody made.
+
+`shared/CHECK_what_the_duplicate_audits_say.sql` is the drill-down that
+makes it decidable: the 468 split into same-result, **DISAGREE** and
+three-or-more, every disagreeing pair named with what each walk said, when
+and by whom, and a tally by month. **"Both walks found the same result" is
+the answer that needs nobody** — the only cost there is the report counting
+the task twice.
+
+The pager stops new pairs being made this way. **What it also moves is every
+figure on the report**: October reads 1,783 maintenance audits where it read
+1,000, so a count that had been quietly short for weeks jumps the first time
+somebody hard-reloads.
 
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
