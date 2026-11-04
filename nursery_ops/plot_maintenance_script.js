@@ -10486,9 +10486,9 @@ function capacityOf(n, p) {
 /* A MAIN NURSERY CAPACITY IS WHAT IS STANDING IN THE PLOT NOW.
    The office asked for the Setting grid to link the current figure rather
    than a number somebody keyed once and nobody kept up: it is the batch
-   ledger read the way the Work Maintenance rows already read it,
-   PlotMovement.linkedQty with no batch and no date -- every batch standing
-   there, as at today. One rule, not a second count.
+   ledger through PlotMovement.linkedQty with no batch and no date -- every
+   batch standing there, as at today -- read as the Movement Report balance
+   (see below). One rule, not a second count.
 
    Three things in it:
    - A plot with nothing standing is NOUGHT, not the keyed figure. That is
@@ -10505,7 +10505,15 @@ function capacityOf(n, p) {
 function currentCapacity(n, p) {
   const M = (typeof PlotMovement !== 'undefined') ? PlotMovement : null;
   if (!M || !M.ready()) return getPlotQty(n, p);
-  const link = M.linkedQty(p, '', null);
+  /* IT IS THE MOVEMENT REPORT BALANCE, and the 2nd culling is NOT taken off.
+     The first version read it the way a Work Maintenance row does, less the
+     2nd culling, and N20 came out at 531; the office asked for the plain
+     Movement Report figure instead (重新link 直接link movement report的
+     balance). keepCull2 is exactly that: linkedQty with the 2nd culling left
+     standing is transplanted + transferred in - sold - 3rd culled with a
+     MapQty - transferred out + approved adjustment, which is what
+     shared_plot_batch_balance adds up. */
+  const link = M.linkedQty(p, '', null, { keepCull2: true });
   return link ? Math.max(0, +link.qty || 0) : 0;
 }
 function capacityIsLive() {
@@ -11016,7 +11024,7 @@ function renderCapacity() {
   if (editBtn) editBtn.style.display = (capEditing || !anyPre) ? 'none' : '';
   const note = document.getElementById('cap-live-note');
   if (note) note.textContent = capacityIsLive()
-    ? 'Main nursery: linked to the batch report, what is standing in each plot now.'
+    ? 'Main nursery: linked to the Movement Report balance, what is standing in each plot now.'
     : 'Main nursery: the batch report is still loading, so these are the keyed figures for now.';
   const acts = document.getElementById('cap-actions');
   if (acts) acts.style.display = capEditing ? 'flex' : 'none';
