@@ -1832,6 +1832,40 @@ undefined one. Its untick check is asked as a PAIR — was on, now off —
 because on a page that refused the first press there is nothing to untick and
 "it is absent now" passes for the wrong reason.
 
+## A -R plot near culling: its rounds, and the balance it leaves behind
+
+The office: non-collecting plots and collecting plots were right; a plot
+with a -R and near its culling was not, for two reasons.
+
+**A -R plot that appears mid-month takes its PARENT's rounds from that day
+on** — *"u6-R在round 4 和round 3之间出现，那u6-R就默认要做round 4 pnd using
+antracol，其他工作也一样"*. `seedReplantRounds(n, m)` runs at the top of
+`autoSyncRecords` once the ledger is in: the day the -R plot appeared is its
+first `Cull3_Transfer` in, and every round of every job whose week STARTS on
+or after that day is ticked as the parent's is (a -R plot already there on
+the 1st takes the whole month). A -R plot Seedling Stock files under the
+nursery joins `NURSERY_PLOTS` here even with no capacity keyed, or there is
+nowhere to seed. It is a DEFAULT: once per plot per month
+(`replantSeeded`, saved with the schedule), a hand-ticked -R row is left
+alone, and a parent with nothing ticked seeds nothing. It writes the draft
+and does NOT publish — the green notice above the schedule says to press
+Save Schedule.
+
+**The balance left behind a transfer can be excluded, by the office, per
+row** — *"include balance or exclude balance，如果我按exclude balance就代表
+那个balance是culled balance"*. Only the office knows whether a round was done
+before the culling or after, so it is a choice and never a rule: `exclBal`
+on the record, offered in the record dialog only where a batch has a
+`Cull3_Transfer` out of that plot by the work date, Include by default. The
+rule is in `PlotMovement` (`qtyOpts` carries it, `linkedQty` returns
+`culledBal` / `culledBatches`), so the Worker Record capacity and the salary
+claim read the same figure. Only the transferred batches drop; other batches
+on the plot are untouched. A keyed figure still wins, and Checked freezes
+the excluded figure.
+
+`tests/a_replant_plot_takes_its_rounds.cjs` drives both through the shipped
+files and the real dialog. **Nothing to run in the database.**
+
 ## A worker is the register ROW, not the name on it
 
 The Worker Record keys its ticks by NAME, because a column header is a name:

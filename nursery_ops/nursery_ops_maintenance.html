@@ -472,6 +472,7 @@
       </div>
 
       <!-- Shown when this month's sheet was carried forward from an earlier one. -->
+      <div id="replant-notice" style="display:none;background:#ecfdf5;border:1.5px solid #6ee7b7;border-radius:var(--r-md);padding:9px 13px;margin:0 0 10px;font-size:12.5px;color:#065f46;line-height:1.5;"></div>
       <div id="carry-notice" style="display:none;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:var(--r-md);
            padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:600;color:#78350f;"></div>
 
@@ -797,6 +798,10 @@
         <label data-i18n="mod.qty">Quantity</label>
         <input type="number" min="0" id="rf-qty" data-i18n-ph="mod.ph.qty" placeholder="Leave blank to link from the batch report" oninput="refreshLinkedQty()">
         <div id="rf-qty-link" style="font-size:11px;font-weight:600;color:var(--text-muted);margin-top:5px;line-height:1.45;"></div>
+        <!-- Drawn only on a plot a batch has transferred OUT of (to a -R plot):
+             whether what it left behind, the balance waiting to be culled,
+             is capacity for this round of work. See refreshLinkedQty. -->
+        <div id="rf-bal" style="display:none;margin-top:7px;font-size:12px;"></div>
       </div>
       <div class="frow"><label data-i18n="mod.gaia">Gaia Workdone</label><select id="rf-gaia">
         <option value="0" data-i18n="mod.gaiaPending">— Pending</option>
@@ -921,7 +926,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_plot_movement.js?v=8"></script>
+<script src="../shared/shared_plot_movement.js?v=9"></script>
 <!-- Which nursery a plot belongs to. Shared with the payroll module's salary
      claim, which has to put a work record back under its nursery. -->
 <script src="../shared/shared_maint_plots.js?v=2"></script>
@@ -942,7 +947,7 @@
      The payroll module has read this since it was written; this page
      showed the raw address on three Checked badges. -->
 <script src="../shared/shared_people.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=170"></script>
+<script src="plot_maintenance_script.js?v=171"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

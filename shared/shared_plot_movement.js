@@ -258,8 +258,24 @@
   /* How a record's quantity is to be counted. One place, so the quantity, the
      batch names and every caller agree. */
   function qtyOpts(r) {
-    return { keepCull2: isInterrow(r && (r.jenis || r.work_type)) };
+    return { keepCull2: isInterrow(r && (r.jenis || r.work_type)),
+             exclBal:   !!(r && r.exclBal) };
   }
+
+  /* ── A BALANCE LEFT BEHIND A TRANSFER IS THE CULLED BALANCE ─────────────
+     A 3rd-culling transfer moves the good seedlings of a batch onto a -R
+     plot. What that batch still shows on the plot it LEFT is what is about
+     to be culled, and the link went on quoting it as capacity — so a plot
+     near culling paid the workers for seedlings nobody was keeping.
+
+     Only the office can tell whether a given round of work was done before
+     the culling or after it, so it is a CHOICE on the row, never a rule:
+     `exclBal` on the record ("Exclude balance"). Off, the figure is what it
+     always was. On, every batch that has had a Cull3_Transfer out of this
+     plot by the work date contributes nothing; the other batches standing on
+     the plot are untouched. `culledBal` is that balance, returned whether or
+     not it is excluded, so a screen can offer the choice only where there is
+     one to make. */
 
   /* What one plot and batch is worth, up to a date. Every event already
      carries its own sign and the ones that take no part never became
@@ -297,6 +313,7 @@
        the day somebody sprayed had not happened when they sprayed, and the
        seedlings were standing. It is here so a screen can SAY so. */
     let cull2Later = 0, laterOn = null;
+    const leftBy = new Set();   // batches transferred OUT of this plot by the cut-off
     for (const ev of _events) {
       if (ev.plotKey !== pk) continue;
       if (wanted.length && !wanted.includes(ev.batchKey)) continue;
@@ -311,13 +328,18 @@
         }
         continue;
       }
+      if (ev.type === 'Cull3_Transfer_Out') leftBy.add(ev.batchKey);
       (per[ev.batchKey] ||= { evs: [], label: ev.batch }).evs.push(ev);
     }
     const keep2 = !!(opts && opts.keepCull2);
     Object.values(per).forEach(b => { b.closing = liveCount(b.evs, opts); });
 
-    const keys = Object.keys(per);
-    if (!keys.length) return null;
+    const allKeys = Object.keys(per);
+    if (!allKeys.length) return null;
+    let culledBal = 0;
+    allKeys.forEach(k => { if (leftBy.has(k)) culledBal += Math.max(0, per[k].closing); });
+    const excl = !!(opts && opts.exclBal) && culledBal > 0;
+    const keys = excl ? allKeys.filter(k => !leftBy.has(k)) : allKeys;
     let raw = 0, cull2 = 0;
     keys.forEach(k => {
       raw += per[k].closing;
@@ -345,7 +367,12 @@
       /* And the one the date left out — see the loop above. `cull2LaterOn`
          is the day it is dated, as YYYY-MM-DD, so the screen can name it. */
       cull2Later: Math.round(cull2Later),
-      cull2LaterOn: laterOn == null ? null : new Date(laterOn).toISOString().slice(0, 10)
+      cull2LaterOn: laterOn == null ? null : new Date(laterOn).toISOString().slice(0, 10),
+      /* The balance left behind a transfer out — see "the culled balance"
+         above — and whether this figure has it taken off. */
+      culledBal: Math.round(culledBal),
+      culledBatches: allKeys.filter(k => leftBy.has(k)).map(k => per[k].label),
+      exclBal: excl
     };
   }
 

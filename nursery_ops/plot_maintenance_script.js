@@ -4237,6 +4237,10 @@ function persistState(n, m) {
     weeks:          s.weeks,
     weeksByWork:    s.weeksByWork,
     _savedPd:       s._savedPd,
+    /* Which -R plots have already been given their parent's rounds this
+       month — see seedReplantRounds. Saved so a tick the office takes OFF a
+       -R plot is not put back on the next load. */
+    replantSeeded:  s.replantSeeded,
   };
   dbStateCache[stateKey(n, m)] = JSON.parse(JSON.stringify(_payload));
   delete s._carriedFrom;          // it is this month's own schedule now
@@ -4508,6 +4512,12 @@ const I18N = {
        the same on screen, so the office could not tell a working rule from a
        broken one and said so. */
     'link.cull2Off':'2nd culling taken off: {x} seedlings.',
+    'bal.q':'Batch {b} was transferred out to the -R plot. {x} seedlings are left behind — is that balance capacity for this work?',
+    'bal.include':'Include balance',
+    'bal.exclude':'Exclude balance (culled balance)',
+    'bal.off':'Culled balance left out: {x} seedlings.',
+    'replant.joined':'{r} appeared on day {d} of this month and has been given {p}’s rounds from then on (same work, same chemicals). Untick anything it did not do.',
+    'replant.save':'Press Save Schedule to send it to the phones.',
     'link.cull2Later':'A 2nd culling of {x} is dated {d}, after this work, so it is NOT in the figure above. Check its Cull Date on the batch report if that looks wrong.',
     /* Piece rate save / lock */
     'rate.saveLock':'Save & Lock', 'rate.unlock':'Unlock to edit',
@@ -4674,6 +4684,12 @@ const I18N = {
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
     'link.cull2Off':'Pembuangan ke-2 ditolak: {x} anak benih.',
+    'bal.q':'Batch {b} telah dipindah ke plot -R. Baki {x} anak benih tertinggal — adakah baki itu kapasiti untuk kerja ini?',
+    'bal.include':'Masukkan baki',
+    'bal.exclude':'Kecualikan baki (baki culling)',
+    'bal.off':'Baki culling dikecualikan: {x} anak benih.',
+    'replant.joined':'{r} muncul pada hari {d} bulan ini dan diberi pusingan {p} mulai hari itu (kerja dan racun yang sama). Buang tanda pada kerja yang tidak dibuat.',
+    'replant.save':'Tekan Save Schedule untuk menghantarnya ke telefon.',
     'link.cull2Later':'Pembuangan ke-2 sebanyak {x} bertarikh {d}, selepas kerja ini, jadi ia TIDAK termasuk dalam angka di atas. Semak Cull Date pada laporan batch jika itu nampak salah.',
     /* Simpan / kunci kadar upah */
     'rate.saveLock':'Simpan & Kunci', 'rate.unlock':'Buka untuk sunting',
@@ -5315,6 +5331,7 @@ function renderAll() {
   renderSchedCounts();
   renderSchedSummary();
   updateCarryNotice();
+  try { updateReplantNotice(); } catch (_) {}
   // Re-render analytics when its sub-view inside Work Record is showing
   const chartView = document.getElementById('recview-chart');
   if (chartView && chartView.classList.contains('active')) renderPerformance();
@@ -6302,8 +6319,139 @@ function nextRoundFor(jenis, plot) {
   return top + 1;
 }
 
+/* ── A -R PLOT THAT APPEARS MID-MONTH TAKES ITS PARENT'S ROUNDS FROM THAT DAY ──
+   A 3rd-culling transfer makes a -R plot halfway through a month, and the
+   month's schedule was drawn before it existed — so the workers who sprayed
+   it had no row to be recorded against. The office set the rule in one
+   example: *"plot U6 要用antracol做round 4 的pnd，u6-R在round 4 和round 3
+   之间出现，那u6-R就默认要做round 4 pnd using antracol，其他工作也一样"*.
+
+   So for every -R plot standing in this nursery this month, every round of
+   every job whose week STARTS on or after the day the plot appeared (its
+   first Cull3_Transfer in) is ticked exactly as its parent plot is ticked —
+   same chemical, because the chemical belongs to the round. A -R plot that
+   was already there when the month began takes the whole month.
+
+   THE DEFAULT, NEVER A RULE OVER SOMEBODY. It runs once per -R plot per
+   month (`replantSeeded`, saved with the schedule), so a tick the office
+   takes off stays off. A -R plot somebody has already ticked by hand is left
+   alone and marked. A parent with nothing ticked yet seeds nothing and is
+   asked again next time, rather than marking the plot done over an empty
+   schedule.
+
+   It writes the SCHEDULE DRAFT, the same as ticking a box does, and does NOT
+   publish: what the phones see changes when somebody presses Save Schedule,
+   and the notice above the schedule says which plots are waiting for it. */
+let _replantJoined = {};   // 'n|m' -> [{ plot, parent, day }]
+function _replantParent(plot) {
+  return String(plot || '').split('#')[0].trim().replace(/-R\d*$/i, '');
+}
+function seedReplantRounds(n, m) {
+  if (!window.PlotMovement || !PlotMovement.ready() || !NURSERY_PLOTS[n]) return false;
+  const isR = (p) => /-R\d*$/i.test(String(p || '').split('#')[0].trim());
+  const mm = /^([A-Za-z]{3})\s+(\d{4})$/.exec(String(m || '').trim());
+  if (!mm) return false;
+  const mi = MONTH_ABBR.findIndex(x => x.toLowerCase() === mm[1].toLowerCase());
+  if (mi < 0) return false;
+  const y = +mm[2];
+  const monthStart = Date.UTC(y, mi, 1), monthEnd = Date.UTC(y, mi + 1, 0);
+
+  // When each -R plot first received seedlings.
+  const firstIn = {};
+  (PlotMovement.events() || []).forEach(ev => {
+    if (ev.type !== 'Cull3_Transfer_In') return;
+    if (firstIn[ev.plotKey] == null || ev.ms < firstIn[ev.plotKey]) firstIn[ev.plotKey] = ev.ms;
+  });
+  const pk = PlotMovement.plotKey;
+
+  /* A -R plot Seedling Stock files under this nursery, and that has had a
+     transfer in by the end of the month, belongs on the schedule even before
+     anybody has keyed its capacity — otherwise there is nowhere to seed. */
+  const have = new Set(NURSERY_PLOTS[n].map(pk));
+  Object.keys(stockPlots || {}).forEach(stockName => {
+    if (schedKey(stockName) !== n) return;
+    (stockPlots[stockName] || []).forEach(p => {
+      const k = pk(p);
+      if (!isR(p) || have.has(k) || firstIn[k] == null || firstIn[k] > monthEnd) return;
+      NURSERY_PLOTS[n].push(p); have.add(k);
+    });
+  });
+  try { _sortNurseryPlots(); } catch (_) {}
+
+  const s = getState(n, m);
+  if (!s) return false;
+  s.replantSeeded = s.replantSeeded || {};
+  const joined = [];
+  let changed = false;
+  const anyTick = (plot) =>
+    Object.values(s.pd || {}).some(w => w && w[plot] && (w[plot].P || w[plot].D))
+    || ((s.manuring || {})[plot] || []).some(r => (r || []).some(Boolean))
+    || Object.values((s.weeding || {})[plot] || {}).some(Boolean)
+    || ((s.interrow || {})[plot] || []).some(r => (r || []).some(Boolean));
+
+  NURSERY_PLOTS[n].forEach(rp => {
+    if (!isR(rp)) return;
+    const at = firstIn[pk(rp)];
+    if (at == null || at > monthEnd) return;
+    const parent = NURSERY_PLOTS[n].find(p => pk(p) === pk(_replantParent(rp)));
+    if (!parent) return;
+    const day = at < monthStart ? 1 : new Date(at).getUTCDate();
+    if (s.replantSeeded[rp]) { joined.push({ plot: rp, parent, day, done: true }); return; }
+    if (anyTick(rp)) { s.replantSeeded[rp] = 1; changed = true; return; }   // ticked by hand
+    if (!anyTick(parent)) return;                                         // nothing to copy yet
+    const from = (kind) => weeksOf(n, m, kind).filter(w => w.from >= day).map(w => w.slot);
+    from('pd').forEach(slot => {
+      const w = 'W' + (slot + 1);
+      const src = s.pd && s.pd[w] && s.pd[w][parent];
+      if (src && (src.P || src.D)) { s.pd[w][rp] = { P: !!src.P, D: !!src.D }; }
+    });
+    ['manuring', 'interrow'].forEach(kind => {
+      const rows = (s[kind] || {})[parent];
+      if (!Array.isArray(rows)) return;
+      const mine = Array.isArray(s[kind][rp]) ? s[kind][rp] : rows.map(r => (r || []).map(() => false));
+      from(kind).forEach(slot => { if (Array.isArray(rows[slot])) mine[slot] = rows[slot].slice(); });
+      s[kind][rp] = mine;
+    });
+    from('weeding').forEach(slot => {
+      const r = 'R' + (slot + 1);
+      if (s.weeding && s.weeding[parent] && s.weeding[parent][r]) {
+        (s.weeding[rp] = s.weeding[rp] || {})[r] = true;
+      }
+    });
+    s.replantSeeded[rp] = 1;
+    changed = true;
+    joined.push({ plot: rp, parent, day, done: false });
+  });
+  _replantJoined[`${n}|${m}`] = joined;
+  if (changed) persistState(n, m);
+  return changed;
+}
+
+/* Says which -R plots took their parent's rounds this month, and that the
+   phones see them once the schedule is saved. Drawn beside the carry
+   notice, for the nursery and month on screen. */
+function updateReplantNotice() {
+  const box = document.getElementById('replant-notice');
+  if (!box) return;
+  const list = (_replantJoined[`${getNursery()}|${getMonth()}`] || []).filter(j => !j.done);
+  if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '➕ ' + list.map(j => t('replant.joined')
+      .replace('{r}', `<b>${esc(j.plot)}</b>`).replace('{p}', `<b>${esc(j.parent)}</b>`)
+      .replace('{d}', j.day)).join('<br>➕ ')
+    + `<br><span style="font-weight:600;">${t('replant.save')}</span>`;
+}
+
 /* Auto-sync: silently regenerate records from current schedule (no confirm, no alert) */
 function autoSyncRecords() {
+  /* A -R plot that appeared this month is given its parent's remaining rounds
+     first, so the rows built below include it — see seedReplantRounds. */
+  let seeded = false;
+  try {
+    Object.keys(NURSERY_PLOTS).forEach(k => { if (seedReplantRounds(k, getMonth())) seeded = true; });
+  } catch (e) { console.warn('[maint] -R plots were not given their rounds:', e); }
+  if (seeded) { try { renderAll(); } catch (_) {} }
+  try { updateReplantNotice(); } catch (_) {}
   const n=getNursery(), m=getMonth(), s=getState(n,m), cfg=s.pdConfig;
   const plots=NURSERY_PLOTS[n];
   const R=roundMaps(n,m,s);
@@ -7820,7 +7968,10 @@ function _qtyCell(r) {
   const plus = i.keptCull2
     ? ` Interrow spraying keeps the 2nd culling in — ${i.cull2.toLocaleString()} culled seedlings are counted, because the rows they stood in are still sprayed.`
     : '';
-  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${plus} Key a number here to override.`;
+  const off = i.exclBal
+    ? ` The ${i.culledBal.toLocaleString('en-MY')} left behind a transfer to the -R plot is the culled balance and is NOT counted.`
+    : '';
+  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${plus}${off} Key a number here to override.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
@@ -8653,6 +8804,7 @@ function openRecModal(pre) {
   document.getElementById('rf-qty').value=(pre && (pre.qty===0||pre.qty)) ? pre.qty : '';
   document.getElementById('rf-gaia').value=pre?.gaia||0;
   document.getElementById('rf-remark').value=pre?.remark||'';
+  _rfExclBal = !!(pre && pre.exclBal);
   refreshLinkedQty();
   document.getElementById('rec-modal').classList.add('open');
 }
@@ -8681,9 +8833,47 @@ function _fieldWho(row) {
   return names.join(', ');
 }
 
+/* INCLUDE OR EXCLUDE THE CULLED BALANCE — the record dialog's answer to
+   *"如果有transfer去plot-R，在maintenance capacity那里加一个选项，include
+   balance or exclude balance，如果我按exclude balance就代表那个balance是
+   culled balance"*. The rule itself is PlotMovement's (`exclBal` in
+   qtyOpts), so the Worker Record capacity and the salary claim read the
+   same figure this dialog shows. Held here while the dialog is open and
+   written onto the row by saveRec. */
+let _rfExclBal = false;
+function setRecExclBal(on) { _rfExclBal = !!on; refreshLinkedQty(); }
+
+/* Draw the two choices, and only where there is a choice: a plot with no
+   batch transferred out by the work date has no culled balance to leave
+   out. Off by default, so every row reads exactly as it did before. */
+function _drawExclBal(plot, batch, tarikh, jenis) {
+  const box = document.getElementById('rf-bal');
+  if (!box) return;
+  const probe = plot && PlotMovement.ready()
+    ? linkedPlotQty(plot, batch, tarikh, PlotMovement.qtyOpts({ jenis })) : null;
+  const bal = probe ? probe.culledBal || 0 : 0;
+  if (!bal) {
+    box.style.display = 'none'; box.innerHTML = '';
+    return;
+  }
+  const which = esc((probe.culledBatches || []).join(', '));
+  const opt = (on, label) => `<label style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;cursor:pointer;">`
+    + `<input type="radio" name="rf-bal" ${(!!_rfExclBal) === on ? 'checked' : ''} onchange="setRecExclBal(${on})"> ${label}</label>`;
+  box.style.display = '';
+  box.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">${t('bal.q')
+      .replace('{x}', `<b>${numMY(bal)}</b>`).replace('{b}', which)}</div>`
+    + opt(false, t('bal.include')) + opt(true, t('bal.exclude'));
+}
+
 /* Live preview of the linked quantity while the record is being keyed, so the
    number is visible before saving rather than only after. */
 function refreshLinkedQty() {
+  try {
+    _drawExclBal((document.getElementById('rf-plot')?.value || '').trim(),
+      document.getElementById('rf-batch')?.value || '',
+      document.getElementById('rf-tarikh')?.value || '',
+      document.getElementById('rf-jenis')?.value);
+  } catch (e) { console.warn('[maint] the culled-balance choice was not drawn:', e); }
   const box = document.getElementById('rf-qty-link');
   if (!box) return;
   const plot   = (document.getElementById('rf-plot').value || '').trim();
@@ -8703,7 +8893,7 @@ function refreshLinkedQty() {
      record is being keyed, so it asks the same question of the form that
      recQty asks of a saved row, through the same function. */
   const link = linkedPlotQty(plot, batch, tarikh, PlotMovement.qtyOpts({
-    jenis: document.getElementById('rf-jenis').value
+    jenis: document.getElementById('rf-jenis').value, exclBal: _rfExclBal
   }));
   if (!link) {
     const where = `${plot}${batch ? ` / ${batch}` : ''}`;
@@ -8794,7 +8984,9 @@ function refreshLinkedQty() {
     ? `<br><span style="color:#a16207;">${t('link.cull2Later')
         .replace('{x}', numMY(link.cull2Later))
         .replace('{d}', esc(_maintWhen(link.cull2LaterOn) || link.cull2LaterOn))}</span>` : '';
-  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${later}${warn}`;
+  const balOff = link.exclBal
+    ? `<br><span style="color:var(--text-muted);">${t('bal.off').replace('{x}', numMY(link.culledBal))}</span>` : '';
+  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${balOff}${later}${warn}`;
 }
 
 /* Put the row back on the live linked figure. The box is what decides, so
@@ -8930,6 +9122,9 @@ function saveRec(){
     qty:(document.getElementById('rf-qty').value ?? '').trim()==='' ? null : Math.max(0, parseInt(document.getElementById('rf-qty').value)||0),
     gaia:+document.getElementById('rf-gaia').value,
     remark:document.getElementById('rf-remark').value,
+    // 1 or 0, never left out: a spread over the saved row must be able to
+    // turn it OFF as well as on.
+    exclBal: _rfExclBal ? 1 : 0,
   };
   if(!obj.plot){ alert('Please enter a plot number.'); return; }
   /* A new row nobody has numbered is the next round on this plot and job —
@@ -10144,6 +10339,9 @@ async function initDb() {
   loadMovementData().then(() => {
     if (!PlotMovement.ready()) return;
     try { freezeCheckedRows(); } catch (e) { console.warn('[maint] freeze pass failed:', e); }
+    /* The ledger is what says when a -R plot appeared, so the -R plots can
+       only be given their parent's rounds now — see seedReplantRounds. */
+    try { autoSyncRecords(); } catch (e) { console.warn('[maint] -R sync failed:', e); }
     try { renderRecords(); } catch (_) {}
     try { renderPayroll(); } catch (_) {}
     try { refreshLinkedQty(); } catch (_) {}
