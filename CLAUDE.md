@@ -1779,24 +1779,58 @@ claim read the same function. A row checked before this existed is frozen
 once, on the next load, at what it reads then: nothing recorded what it read
 on the day, and that is the figure the office last saw.
 
-**And Checked locks the Worker Record's ticks on that row, not just the Work
-Maintenance row.** A row's capacity is SHARED between the workers ticked on
-it, so adding or removing one tick changes what everybody else on that row is
-paid while the row's own figure does not move a seedling. Locking the figure
-and leaving the split open would settle half of it.
+### CHECKED LOCKS THE CAPACITY. IT DOES NOT LOCK WHO DID THE WORK.
 
-There are two ways a tick is written and a lock on one of them is decoration:
-`togglePayrollTick` when somebody presses the cell, and `syncTicks` inside
-`applyFieldRecords`, which runs on every page load. The second is the one that
-matters — without it the next load would quietly move the ticks under a row
-the office has agreed. Both are gated on `_recLocked(rec)`, read off the
-RECORD rather than off what the cell was drawn as, because a cell drawn before
-the row was checked still carries its old handler.
+For a month it locked both, and **the office never asked for that half** —
+it was added here on 6 Oct, reasoning that a row's capacity is SHARED between
+the workers ticked on it, so moving a tick moves what the others are paid
+while the row's own figure does not budge; freeze one and leave the other
+open and you have settled half of it. The office met the refusal on their own
+October Manuring sheet and said what the rule is in one line: *"这边lock的只
+有capacity 但是是哪一个工人做的 还是可以改"*.
 
-A locked row still SHOWS its ticks — who did the work is what the sheet is for
-— and pressing one says why rather than doing nothing.
-`tests/payroll_ticks_locked_when_checked.cjs` sends a saved row through both
-paths.
+**They are right about what the two things ARE, which is the part worth
+keeping.** The QUANTITY is a live sum of the ledger that goes on moving after
+the row is agreed — that is the whole reason Checked writes it down
+(`qtyFrozen`), and that half is untouched. The CREW is a fact about a
+morning, **recorded nowhere else in this system**, so a wrong name has
+exactly one place to be put right; and the office, who read the claim and are
+the ones who find it, were being told to unpick a settled row to correct a
+spelling. A lock that makes the only record of something uncorrectable is not
+protecting a figure, it is protecting a mistake.
+
+**TWO WRITERS, AND THEY NO LONGER ANSWER THE SAME WAY.** That asymmetry is
+deliberate and is the whole of what is left:
+
+| | |
+|---|---|
+| `togglePayrollTick` — somebody presses the cell | **allowed**, checked or not |
+| `syncTicks` in `applyFieldRecords`, on every page load | still **refused** on a checked row |
+
+A person correcting a name is what was asked for. A page load re-writing an
+agreed row is not a person: it moves the piece-rate split with nobody acting
+and nothing on screen saying so — the same shape as *the field fills an empty
+cell, it never writes over a full one*, one row along. `_recLocked` therefore
+stays in `syncTicks` and is gone from the screen.
+
+**The cell carries NO lock state at all**, rather than being greyed with a
+handler that explains itself. A greyed cell over a gate that allows the press
+is the worst kind of wrong, because it looks configured — and once the press
+is allowed, an explanation is a sentence about a rule that no longer exists.
+
+**The Loading Seedlings sheet's own lock is a different thing and did not
+move.** That one is a 🔒 somebody deliberately presses on a DO's gang, stored
+as `worked_by_locked_at` / `worked_by_locked_by` (`_doLocked`,
+`_denyDoLocked`), and taking the Checked lock off must not take it with it —
+the test says so by name.
+
+`tests/checked_locks_the_qty_not_the_crew.cjs` drives the real
+`togglePayrollTick` and the real `syncTicks`; **9 of its 15 checks fail on
+the previous code**, and the harness keeps the old `_denyPayrollLocked` in
+scope on purpose so they fail by NAME rather than the file dying on an
+undefined one. Its untick check is asked as a PAIR — was on, now off —
+because on a page that refused the first press there is nothing to untick and
+"it is absent now" passes for the wrong reason.
 
 ## A worker is the register ROW, not the name on it
 
