@@ -323,16 +323,24 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
       shared_inventory_logs: [
         { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
           remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 3100 },
-        /* The Movement Report balance does not take the 2nd culling off, so
-           neither does the capacity. */
+        /* The Movement Report (Summary, the one with a 2nd Culled column)
+           takes a 2nd culling off ONLY while that batch has no 3rd culling:
+           batch 260 has none, so its 200 comes off; batch 261 has a 3rd
+           culling with a MapQty, so its 50 does not. */
         { transaction_type: '2nd_Culling', transaction_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z',
-          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 200 }
+          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 200 },
+        { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '261', quantity_change: 1000 },
+        { transaction_type: '2nd_Culling', transaction_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '261', quantity_change: 50 },
+        { transaction_type: '3rd_Culling', transaction_date: '2026-09-01', created_at: '2026-09-01T00:00:00Z',
+          remark: 'MapQty: 900', plot_name: 'B3', batch_name: '261', quantity_change: 100 }
       ]
     });
     await page.waitForFunction(() => PlotMovement.ready(), { timeout: 15000 });
 
-    check('B3 reads the Movement Report balance, 2nd culling left standing, not what was keyed',
-          await page.evaluate(() => capacityOf('BNN', 'B3')), 3100);
+    check('B3 reads the Movement Report balance (2900 + 900), not what was keyed',
+          await page.evaluate(() => capacityOf('BNN', 'B3')), 3800);
     check('a plot with nothing standing reads nought',
           await page.evaluate(() => capacityOf('BNN', 'B1')), 0);
 
