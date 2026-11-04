@@ -3693,6 +3693,51 @@ figure on the report**: October reads 1,783 maintenance audits where it read
 1,000, so a count that had been quietly short for weeks jumps the first time
 somebody hard-reloads.
 
+#### AND THE OFFICE SAID IT STILL LOOKS DUPLICATE, which was the SCREEN
+
+They opened the report after the repair and sent a screenshot: B01, two
+Weeding rows on 14 Oct, then three more on the 21st, two Interrow Spray and
+two Manuring. *"still looks duplicate"*.
+
+**They were right about the screen and the data was right.** Those are the
+1,748 LOOK-ALIKES -- separate cases, same plot, same job, same day -- and
+the first answer given was the SENTENCE explaining that. Saying it again
+would have been the fourth wording of *"your 2,353"*: a true answer to the
+question asked, three turns from the thing to do. **The report shows neither
+`task_id` nor `audit_id`**, which this file had already written down as the
+fault, and then the fix went into the database and not onto the screen.
+
+So `MOD_COLS.maint` carries a **Case** column. Four things in it:
+
+- **IT IS A PROOF, NOT A LABEL.** The unique index means two rows cannot
+  share a case any more, so three different numbers ARE three different
+  cases, by construction. Nothing on the page has to argue it.
+- **No sentence underneath.** A note saying *these are separate cases* is
+  the screen arguing for a figure; the column simply shows it.
+- **MONO AND FULL LENGTH.** The ids differ only in their last digits
+  (…487117, …487131, …487134), so they are set in a monospace face: equal
+  length plus fixed advance means the differing digits line up in a column
+  and the eye lands on them. **Truncating to a readable tail is the one
+  thing not to do** -- two cases sharing a tail would read as a duplicate
+  again, which is the fault this column exists to end.
+- **THE SELECT HAD TO LEARN IT.** `task_id` was not in the maintenance
+  query, so the column would have printed *no case* on every row -- the
+  alert board lost a whole fix that way once. The test reads the SHIPPED
+  select and fails if it stops asking.
+
+**A case is one maintenance work record**, and there are two sources: a
+record saved on a phone (`nops_maint_field_records`, a small serial id) and
+a row of the office schedule (`nops_maint_records`, a `Date.now()` id near
+1.79e12). The office screenshot carries the second kind. Do not write a
+check that joins a case to one table only.
+
+`tests/the_report_says_who_did_the_maintenance.cjs` grew the office own
+three rows as a fixture and asks the thing they asked: three rows alike in
+every other cell, each naming a different case. **5 of its 32 checks fail
+on the previous page**, and `SHOT=/path.png` draws the block as they see it
+-- a column added to a table that PRINTS is a width question as much as a
+content one, and a check cannot read a layout.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated
