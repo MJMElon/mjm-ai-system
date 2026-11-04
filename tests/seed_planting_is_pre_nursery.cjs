@@ -187,7 +187,13 @@ const sheetOf = (page) => page.evaluate(() => {
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
-  // ── 1. The sidebar: two parts, every existing job under Main Nursery ──
+  /* ── 1. The sidebar: ONE alphabetical list, no Pre / Main headings ──
+     It was two groups, Main Nursery over seven jobs and Pre Nursery over
+     this one. The office took both headings off -- "main page 不会跟着pre
+     和 main 分了" -- because the nursery CIRCLES say it now, about the job
+     somebody actually has open. Where each job is done is kept on Settings
+     and held by tests/where_each_job_is_done.cjs; what this one still has
+     to say is that the Pre Nursery sheet is IN the list and lit. */
   const saved = [{ batch_name: '278', month: 'Oct 2026', qty_planted: 3000, workers: { Siti: 2000, Rina: 1000 } },
                  { batch_name: '279', month: 'Oct 2026', qty_planted: 800, workers: { Siti: 500, 'Old Name': 200 } }];
   const names = [{ month: 'Oct 2026', names: ['Siti', 'Rina'] }, { month: 'Sep 2026', names: ['Ana', 'Budi'] }];
@@ -197,9 +203,9 @@ const sheetOf = (page) => page.evaluate(() => {
     return [...sub.children].map(el => el.classList.contains('pn-subgroup')
       ? '#' + el.textContent.trim() : el.id.replace('pn-subtab-', ''));
   });
-  check('Worker Activity reads Main Nursery, its seven jobs, then ONE Pre Nursery sheet', nav,
-    ['#Main Nursery', 'pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive',
-     '#Pre Nursery', 'seed_planting']);
+  check('Worker Activity is one list of eight jobs with no group heading', nav,
+    ['cull_incentive', 'interrow', 'loading_seedlings', 'manuring', 'pd',
+     'seed_planting', 'transplanting', 'weeding']);
   check('Seed Planting is the button lit', await page.evaluate(() =>
     document.getElementById('pn-subtab-seed_planting').classList.contains('active')
     && !document.getElementById('pn-subtab-pd').classList.contains('active')), true);

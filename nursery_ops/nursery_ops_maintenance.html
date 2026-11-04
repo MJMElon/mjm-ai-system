@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=113">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=114">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -99,8 +99,21 @@
                current tab — same sibling rule as Work Records' own sub-nav
                above. switchPayrollView(type) is the one function that keeps
                this and the panel's own sub-tab bar in step. -->
+          <!-- ONE LIST, ALPHABETICAL, AND NO PRE / MAIN HEADINGS.
+               It was two groups, Main Nursery over seven and Pre Nursery
+               over one, and the office took both off in a line: "main page
+               不会跟着pre 和 main 分了 所以如果两边都有 当我按那个工作的
+               时候上面的圈圈就会show PN BNN UNN1 UNN2". The split is said by
+               the nursery CIRCLES now, which can say it about the job
+               somebody actually has open — a job in both rows shows all
+               four — and a heading saying it again above the list is the
+               same answer twice, in the place with less room for it.
+
+               THE ORDER IS SET AT RUN TIME, by orderJobSubnav(), because
+               the labels are translated and alphabetical in English is not
+               alphabetical in Malay. The order written here is only what
+               shows before the script runs. -->
           <div class="pn-sub">
-            <div class="pn-subgroup" data-i18n="tab.mainNursery">Main Nursery</div>
             <button type="button" class="pn-subtab active" id="pn-subtab-pd" onclick="switchPayrollView('pd')">
               <span data-i18n="tab.pd">P &amp; D — Spraying</span>
             </button>
@@ -122,7 +135,6 @@
             <button type="button" class="pn-subtab" id="pn-subtab-cull_incentive" onclick="switchPayrollView('cull_incentive')">
               <span data-i18n="tab.cullIncentive">Culling Monitoring</span>
             </button>
-            <div class="pn-subgroup" data-i18n="tab.preNursery">Pre Nursery</div>
             <!-- ONE SHEET, BOTH PRE NURSERY JOBS, one under the other.
                  Sowing the seed and filling the hyplug trays before it were
                  two entries here for a day and the office asked for them
@@ -713,6 +725,35 @@
         </div>
         <div id="cm-set-body"></div>
       </div>
+
+      <!-- WHERE EACH JOB IS DONE ————————————————————————————
+           The office asked for a setting splitting the jobs between the
+           Pre Nursery and the Main Nursery, dragged between rows the way
+           the Team Board moves a worker, with the nursery circles over
+           Worker Activity following it.
+
+           THREE ROWS, not the two asked for, and the reason is the
+           office's own next sentence: 如果两边都有 — a job really can be
+           done in both, and a chip that lives in exactly one cell could
+           never say so. Both is a row, which keeps the gesture to one
+           drag and makes every state reachable. The long version is in
+           plot_maintenance_script.js above JOB_SCOPE_ROWS.
+
+           LAST on this page, after the three blocks somebody opens
+           Settings to key: it is set once and then left, the same
+           judgement that put the Culling Monitoring rule above it here
+           rather than ahead of the capacities. `#js-set-corner` is an
+           EMPTY SLOT the renderer fills, for the reason written against
+           `#cm-set-corner`: whether Edit may be offered depends on the
+           permission, and it is empty while editing because Cancel and
+           Save are the pair at the foot. -->
+      <div class="card" style="padding:18px;margin-bottom:16px;">
+        <div class="lst-top">
+          <div class="set-h">Where Each Job Is Done</div>
+          <div id="js-set-corner"></div>
+        </div>
+        <div id="js-set-body"></div>
+      </div>
     </div>
 
     </div><!-- /.sm-body -->
@@ -973,7 +1014,7 @@
      The payroll module has read this since it was written; this page
      showed the raw address on three Checked badges. -->
 <script src="../shared/shared_people.js?v=1"></script>
-<script src="plot_maintenance_script.js?v=177"></script>
+<script src="plot_maintenance_script.js?v=178"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
