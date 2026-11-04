@@ -730,6 +730,9 @@ function _mergeCapacityPlots() {
      plotTrays[stock], plotTrays[n], aliasBucket(plotTrays, n)].forEach(b => {
       if (b) Object.keys(b).forEach(p => candidates.add(p));
     });
+    /* The capacity is the LIVE figure now, so a Seedling Stock plot with
+       seedlings standing in it qualifies whether or not anybody keyed it. */
+    [stock, n].forEach(k => (stockPlots[k] || []).forEach(p => candidates.add(p)));
     candidates.forEach(p => {
       const k = norm(p);
       if (!k || have.has(k)) return;
@@ -10331,6 +10334,11 @@ async function initDb() {
   loadMovementData().then(() => {
     if (!PlotMovement.ready()) return;
     try { freezeCheckedRows(); } catch (e) { console.warn('[maint] freeze pass failed:', e); }
+    /* The capacities follow the ledger now (currentCapacity), so the plot
+       lists, the schedules and the Setting grid all draw again off it. */
+    try { _mergeCapacityPlots(); } catch (_) {}
+    try { renderAll(); } catch (_) {}
+    try { renderCapacity(); } catch (_) {}
     try { renderRecords(); } catch (_) {}
     try { renderPayroll(); } catch (_) {}
     try { refreshLinkedQty(); } catch (_) {}
@@ -10472,7 +10480,36 @@ function traySizeOf(n) {
 
 /* What the dosage is worked out from, whichever way the plot is counted. */
 function capacityOf(n, p) {
-  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : getPlotQty(n, p);
+  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : currentCapacity(n, p);
+}
+
+/* A MAIN NURSERY CAPACITY IS WHAT IS STANDING IN THE PLOT NOW.
+   The office asked for the Setting grid to link the current figure rather
+   than a number somebody keyed once and nobody kept up: it is the batch
+   ledger read the way the Work Maintenance rows already read it,
+   PlotMovement.linkedQty with no batch and no date -- every batch standing
+   there, as at today. One rule, not a second count.
+
+   Three things in it:
+   - A plot with nothing standing is NOUGHT, not the keyed figure. That is
+     the point of the change: an emptied plot is an empty plot.
+   - It is never below nought. The ledger can read negative, which is a
+     figure to look into on the Movement Report, not a capacity to dose.
+   - Until the ledger has been READ, the keyed figure stands in. The page
+     paints before that larger read lands, and a schedule of noughts for the
+     first second, or for good on a read that failed, would be a dosage of
+     nothing. Everything redraws when it lands.
+   PlotMovement is asked directly, never through linkedPlotQty: this runs at
+   load from _mergeCapacityPlots, before that const further down the file
+   exists. */
+function currentCapacity(n, p) {
+  const M = (typeof PlotMovement !== 'undefined') ? PlotMovement : null;
+  if (!M || !M.ready()) return getPlotQty(n, p);
+  const link = M.linkedQty(p, '', null);
+  return link ? Math.max(0, +link.qty || 0) : 0;
+}
+function capacityIsLive() {
+  return typeof PlotMovement !== 'undefined' && PlotMovement.ready();
 }
 
 /* The nurseries this block offers, and the plots under each. Both come from
@@ -10972,8 +11009,15 @@ function renderCapacity() {
   const wrap = document.getElementById('cap-cols');
   if (!wrap) return;
 
+  /* Only the Pre Nursery trays are keyed now, so a page with no Pre Nursery
+     has nothing for Edit to open. */
+  const anyPre = capNurseries().some(n => isPreNursery(n) && capPlots(n).length);
   const editBtn = document.getElementById('cap-edit-btn');
-  if (editBtn) editBtn.style.display = capEditing ? 'none' : '';
+  if (editBtn) editBtn.style.display = (capEditing || !anyPre) ? 'none' : '';
+  const note = document.getElementById('cap-live-note');
+  if (note) note.textContent = capacityIsLive()
+    ? 'Main nursery: linked to the batch report, what is standing in each plot now.'
+    : 'Main nursery: the batch report is still loading, so these are the keyed figures for now.';
   const acts = document.getElementById('cap-actions');
   if (acts) acts.style.display = capEditing ? 'flex' : 'none';
 
@@ -11027,15 +11071,18 @@ function capNurseryHtml(n) {
 }
 
 function capRowHtml(n, p, pre) {
-  const shown = pre ? trayQty(n, p) : getPlotQty(n, p);
+  const shown = pre ? trayQty(n, p) : currentCapacity(n, p);
   const draft = capEditing ? (capDraft[n].plots[p] ?? '') : null;
+  /* A main nursery figure is LINKED -- there is nothing to key, so it stays
+     a figure while the Pre Nursery trays are being edited beside it. */
+  const editable = capEditing && pre;
   return '<div class="cap-row" data-nursery="' + esc(n) + '" data-plot="' + esc(p) + '">' +
     '<span class="cap-row-n">' + esc(p) + '</span>' +
-    (capEditing
+    (editable
       ? '<input type="number" min="0" step="1" value="' + draft + '" placeholder="0" ' +
           'oninput="onDraftInput(\'' + esc(n) + '\', \'' + esc(p) + '\', this.value)">'
       : '<span class="cap-row-v' + (shown ? '' : ' muted') + '">' +
-          (shown ? shown.toLocaleString() : '—') + '</span>') +
+          (shown ? shown.toLocaleString('en-MY') : '—') + '</span>') +
     (pre ? '<span class="cap-row-d" data-derived>' + derivedText(n, p) + '</span>' : '') +
     '</div>';
 }
@@ -11046,7 +11093,7 @@ function derivedText(n, p) {
   const trays = capEditing ? (+capDraft[n].plots[p] || 0) : trayQty(n, p);
   const per   = capEditing ? (+capDraft[n].perTray || 0) : (traySize[n] || 0);
   if (!per || !trays) return '—';
-  return (trays * per).toLocaleString();
+  return (trays * per).toLocaleString('en-MY');
 }
 
 /* ── The edit cycle ────────────────────────────────────────────────────
@@ -11129,6 +11176,8 @@ async function saveCapEdit() {
 
   for (const n of nurseries) {
     const pre = isPreNursery(n);
+    // A main nursery capacity is linked, never keyed, so nothing of it is written.
+    if (!pre) continue;
     const stamp = new Date().toISOString();
     /* ONLY the plots whose figure actually changed.
        This used to write every plot of every nursery on every Save. Two things

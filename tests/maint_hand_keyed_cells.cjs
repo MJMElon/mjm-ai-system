@@ -306,10 +306,12 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     await page.close();
   }
 
-  console.log('\nPlot Capacity — Save writes only what changed');
+  console.log('\nPlot Capacity — a main nursery figure is LINKED, never keyed');
   {
-    /* B3 is on record as 4755. The hardcoded default for B3 is 5655, so if
-       anything writes the default this is where it shows. */
+    /* The office asked for Setting to link the current capacity: what is
+       standing in the plot now, off the batch ledger. So a main nursery box
+       is no longer offered, and Save writes none of it -- the keyed 4755
+       stays in the database untouched, it is simply no longer read. */
     const page = await boot(browser, {
       shared_plots: [
         { nursery_name: 'BNN', plot_name: 'B1' },
@@ -317,42 +319,30 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
         { nursery_name: 'BNN', plot_name: 'B3' }
       ],
       operation_nurseries: [{ name: 'BNN' }],
-      nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B3', qty: 4755 }]
+      nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B3', qty: 4755 }],
+      shared_inventory_logs: [
+        { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 3100 }
+      ]
     });
+    await page.waitForFunction(() => PlotMovement.ready(), { timeout: 15000 });
 
-    check('B3 reads what was keyed, not the built-in figure',
-          await page.evaluate(() => getPlotQty('BNN', 'B3')), 4755);
-    check('B1 has nothing on record, so it reads the built-in figure',
-          await page.evaluate(() => [getPlotQty('BNN', 'B1'), savedPlotQty('BNN', 'B1')]),
-          [2352, null]);
+    check('B3 reads what is standing in it, not what was keyed',
+          await page.evaluate(() => capacityOf('BNN', 'B3')), 3100);
+    check('a plot with nothing standing reads nought',
+          await page.evaluate(() => capacityOf('BNN', 'B1')), 0);
 
-    // Open the editor, change ONE box, save.
     await page.evaluate(() => { window.__WRITES.length = 0; startCapEdit();
                                 onDraftInput('BNN', 'B2', '1234'); });
+    check('the editor offers no box for a main nursery plot',
+          await page.evaluate(() => document.querySelectorAll('.cap-row[data-nursery="BNN"] input').length), 0);
     await page.evaluate(() => saveCapEdit());
     await page.waitForTimeout(250);
-
-    const wrote = await page.evaluate(() => window.__WRITES
-      .filter((w) => w.table === 'nops_maint_plot_qty')
-      .map((w) => w.row.plot + '=' + w.row.qty).sort());
-    check('ONLY THE BOX THAT CHANGED IS WRITTEN', wrote, ['B2=1234']);
-
-    check('B3’s keyed figure is untouched in the database',
+    check('Save writes no main nursery capacity', await page.evaluate(() => window.__WRITES
+      .filter((w) => w.table === 'nops_maint_plot_qty').length), 0);
+    check('B3 keyed figure is untouched in the database',
           await page.evaluate(() => (window.__DB.nops_maint_plot_qty
             .find((r) => r.plot === 'B3') || {}).qty), 4755);
-    checkFalse('and B1 was not given the built-in figure as a saved decision',
-      await page.evaluate(() => window.__DB.nops_maint_plot_qty.some((r) => r.plot === 'B1')));
-    check('what was typed is on screen', await page.evaluate(() => getPlotQty('BNN', 'B2')), 1234);
-
-    /* Clearing a box to nothing IS a change, and must be saved as 0 rather
-       than read as "left alone". */
-    await page.evaluate(() => { window.__WRITES.length = 0; startCapEdit();
-                                onDraftInput('BNN', 'B3', ''); });
-    await page.evaluate(() => saveCapEdit());
-    await page.waitForTimeout(250);
-    check('clearing a keyed box is saved', await page.evaluate(() => window.__WRITES
-      .filter((w) => w.table === 'nops_maint_plot_qty')
-      .map((w) => w.row.plot + '=' + w.row.qty).sort()), ['B3=0']);
     await page.close();
   }
 
