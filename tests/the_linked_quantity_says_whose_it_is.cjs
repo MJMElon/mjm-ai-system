@@ -223,6 +223,17 @@ const hintFor = (page, row) => page.evaluate((r) => {
   check('a phone record names WHO saved it',
         [/by Akbar/.test(named.text), /the field/i.test(named.text)],
         [true, false]);
+  /* AND IT SAYS WHAT THE FIGURE IS, which is the next question that same
+     sentence left — *"工人手机并没有capacity这个概念"*. They are right: the
+     phone has no quantity box. What it sends is the batches the conductor
+     TICKED, added up off the Movement Report balance, and a sentence that
+     names only where a figure came from sends somebody looking for a box
+     that does not exist. Asked of BOTH wordings, named and unnamed, because
+     the two are separate strings and only one of them is on most rows. */
+  check('…and says WHAT the phone figure is, not only where it came from',
+        [/batches ticked on the phone, added up/.test(field.text),
+         /batches ticked on the phone, added up/.test(named.text)],
+        [true, true]);
   /* Two workers on one job is two records and one row, so it is a LIST. */
   const two = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77, 78] });
   check('…and two records on one row name both, once each',
