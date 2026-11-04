@@ -144,7 +144,14 @@ async function planTwoRows(page) {
 }
 
 /* The field's side: one verified record per plot, each carrying a date, a
-   batch and a quantity. */
+   batch and a quantity.
+
+   THE QUANTITY IT CARRIES NO LONGER REACHES A CELL. The phone has no
+   quantity box and sends one all the same (the batches ticked, added up off
+   a view that counts neither culling), and the office asked for it out --
+   the capacity links the Summary Report and nothing else. It is still on
+   the fixture record, because the record really does carry one and half the
+   point of these checks is that it stays there and goes nowhere. */
 const JENIS = 'Penyemburan racun kulat dan serangga';
 function fieldRow(id, plot, month, qty) {
   const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
@@ -190,9 +197,15 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     await pull(page);
 
     const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
-    check('the field filled B1', await cell(page, 'B1'),
-          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
-    check('…and B2', (await cell(page, 'B2')).qty, 200);
+    /* THE DATE AND THE BATCH, AND NOT THE QUANTITY. Those two are what
+       somebody standing in the plot observed; the quantity is the Summary
+       Report's answer, and this plot has no ledger behind it in this
+       fixture, so the cell is empty and reads as a dash. */
+    check('the field filled B1 date and batch', await cell(page, 'B1'),
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: null });
+    check('…and left the QUANTITY alone, on both rows',
+          [(await cell(page, 'B1')).qty, (await cell(page, 'B2')).qty],
+          [null, null]);
 
     // The office disagrees about B1's quantity, and types it.
     await editRow(page, 'B1', { qty: '4755' });
@@ -200,8 +213,8 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
 
     await pull(page);
     check('IT SURVIVES THE NEXT SYNC', (await cell(page, 'B1')).qty, 4755);
-    check('…and B2, which nobody touched, still follows the field',
-          (await cell(page, 'B2')).qty, 200);
+    check('…and B2, which nobody touched, is empty rather than the field',
+          (await cell(page, 'B2')).qty, null);
 
     // Now the field record goes — unverified again, or deleted.
     await page.evaluate(() => { window.__DB.nops_maint_field_records = []; });
@@ -213,8 +226,8 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
        untrue, and blanking it is how a corrected date went empty and then
        filled itself back in with the field's. The LINK goes, the value
        stays. */
-    check('…and neither is B2’s, which the field had filled',
-          (await cell(page, 'B2')).qty, 200);
+    check('…and neither is B2 DATE, which the field had filled',
+          (await cell(page, 'B2')).tarikh, ym + '-03');
     await page.close();
   }
 
@@ -256,7 +269,7 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     await pull(page);
     const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
     check('B1 has the field\u2019s answer', await cell(page, 'B1'),
-          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: null });
 
     // The record is re-filed under another round, so it no longer pairs here.
     await page.evaluate(() => {
@@ -265,7 +278,7 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     });
     await pull(page);
     check('THE ROW KEEPS WHAT IT HAD', await cell(page, 'B1'),
-          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: null });
     await page.close();
   }
 
