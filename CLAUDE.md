@@ -3468,6 +3468,78 @@ in a real browser, and asks for the filter as a CHECK rather than waiting
 on it: waited on, a page without it fails with a timeout, which says
 nothing about what is wrong.
 
+### And the check it was handed over with found the report had been CUT
+
+The linkage check came back *agrees record for record* on all four
+modules, which is what it was written to say. The line underneath it is
+what mattered: **October, 1,783 maintenance audits**, against a report
+the office had screenshotted reading **1,000**.
+
+**PostgREST answers at most `db-max-rows` rows and Supabase sets that to
+1,000.** There is no error and no flag on the body — the read simply
+ends. `sb.select` in `audit_supabase.js` sent no Range and no limit, so
+every audit screen in the module has been taking the first thousand rows
+of anything bigger and calling it the month. 783 October records were on
+no report, and every figure derived from them — the summary card, the
+section total, the records badge — was short by the same amount, with
+nothing anywhere saying so.
+
+**A ROUND NUMBER ON A SCREEN IS THE WHOLE TELL**, and it is worth knowing
+because nothing else is: a truncated read and a quiet month are the same
+list. 1,000 maintenance over 1,154 total audits is the shape to look at
+twice.
+
+`sbSelectAll` pages through the Range header. Three things in it:
+
+- **A SHORT page is the end and a FULL one is not.** A table holding
+  exactly 2,000 rows answers page two full, so the loop has to ask a
+  third time and get nothing — stopping on a full page loses a round
+  number of rows, which is the same fault one page along.
+- **Rows repeated across pages are DROPPED, on `id`.**
+  `order=created_at.desc` leaves rows written in the same millisecond in
+  no defined order, and a phone pushes a plot batch by batch in ONE
+  insert, so the same row really can answer on two pages while another is
+  skipped. The skip cannot be repaired from here; the double can, and it
+  is the one that would inflate the very figure this exists to correct.
+- **It stops at 50 pages and logs it.** A loop with no ceiling on a read
+  that keeps answering full is a page that hangs for ever.
+
+**The office pages are NOT swept and have their own clients** — this is
+`audit_supabase.js` only. Any office read of more than a thousand rows has
+the same silent cut, and that is its own sweep.
+
+`tests/a_read_over_a_thousand_rows_is_not_cut.cjs` drives the real `sb`
+against a fake PostgREST that caps at 1,000 the way Supabase does; **8 of
+its 9 checks fail on the previous reader**, the first in the office's own
+figures. It **blocks the service worker**, for the reason the board test
+already names: `page.route` does not reach a fetch the WORKER makes, so
+`audit_sw.js` answers its own synthetic 503 partway through and the whole
+thing reads as a broken pager.
+
+### Three rows the same is usually three TASKS, and the report showed neither id
+
+*"is there duplicated cases? it feels like same case duplicated in the
+report"* — over three rows reading 22 Oct, B05, Interrow Spray,
+Unsatisfactory, Main Nursery Auditor.
+
+Two quite different things produce that, and **the report cannot tell them
+apart because it shows neither `task_id` nor `audit_id`**:
+
+- **A TRUE DUPLICATE** — two rows against the SAME `task_id`. One task is
+  meant to have one audit, so every row past the first is a record of
+  nothing: a save that went in twice, a phone that retried after the row
+  was already there, the same task walked on two devices.
+- **SEPARATE TASKS THAT LOOK ALIKE** — different `task_id`, same plot,
+  same job, same day, and **all of them belong on the report**. A
+  maintenance task comes from one work record, so a plot sprayed by three
+  workers, or over three batches, is three tasks and three audits. The
+  audit is dated the day it was SAVED (`date: todayISO()`), so a backlog
+  walked in one sitting lands on one date and stacks up.
+
+`shared/CHECK_is_the_same_case_audited_twice.sql` counts both and names
+them, so the question is answered off the data rather than off the look of
+the screen. **Do not answer this one by reading the page.**
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated
