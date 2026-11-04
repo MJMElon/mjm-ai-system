@@ -10582,16 +10582,31 @@ function capacityOf(n, p) {
 function currentCapacity(n, p) {
   const M = (typeof PlotMovement !== 'undefined') ? PlotMovement : null;
   if (!M || !M.ready()) return getPlotQty(n, p);
-  /* IT IS THE MOVEMENT REPORT BALANCE, and the 2nd culling is NOT taken off.
-     The first version read it the way a Work Maintenance row does, less the
-     2nd culling, and N20 came out at 531; the office asked for the plain
-     Movement Report figure instead (重新link 直接link movement report的
-     balance). keepCull2 is exactly that: linkedQty with the 2nd culling left
-     standing is transplanted + transferred in - sold - 3rd culled with a
-     MapQty - transferred out + approved adjustment, which is what
-     shared_plot_batch_balance adds up. */
-  const link = M.linkedQty(p, '', null, { keepCull2: true });
-  return link ? Math.max(0, +link.qty || 0) : 0;
+  /* IT IS THE MAIN NURSERY MOVEMENT REPORT BALANCE, read exactly the way
+     that report reads it -- netOfRow('main2', ...) in operation_reports.html.
+     Per plot and batch: transplanted + transferred in - sold - 3rd culled
+     (MapQty only) - transferred out + approved adjustment, and the 2nd
+     culling comes off ONLY while that batch has no 3rd culling on the plot,
+     because a 3rd culling already includes what was 2nd culled. The plot
+     figure is the sum of its batches, which is the Balance column.
+
+     Twice wrong before this: less the 2nd culling always (N20 read 531),
+     then never (the office: still not right, link THIS balance). The
+     report decides per batch, so this does too. */
+  const pk = M.plotKey(p);
+  const per = {};
+  (M.events() || []).forEach(ev => {
+    if (ev.plotKey !== pk) return;
+    const b = per[ev.batchKey] || (per[ev.batchKey] = { sum: 0, cull2: 0, cull3: 0 });
+    if (ev.type === '2nd_Culling') { b.cull2 += Math.abs(Number(ev.qty || 0)); return; }
+    // netOfRow asks cull3 > 0, the figure and not merely a row
+    if (ev.type === '3rd_Culling') b.cull3 += Math.abs(Number(ev.qty || 0));
+    b.sum += M.signed(ev.type, ev.qty);
+  });
+  const keys = Object.keys(per);
+  if (!keys.length) return 0;
+  const total = keys.reduce((t, k) => t + per[k].sum - (per[k].cull3 > 0 ? 0 : per[k].cull2), 0);
+  return Math.max(0, Math.round(total));
 }
 function capacityIsLive() {
   return typeof PlotMovement !== 'undefined' && PlotMovement.ready();
