@@ -721,7 +721,42 @@ function preNurseryClaim(recs, rateOf) {
      that is entirely HELD still is, because a claim short of work reads
      exactly like a quiet month. */
   const shown = jobs.filter(j => j.claim.people.length || j.claim.held.length);
-  return { jobs, shown, people: list,
+  /* ── THE SUMMARY AT THE TOP IS PER BATCH ─────────────────────────────
+     *"Payroll那里的seed planting我要像transplanting那样，上边有summary 有
+     batch, amount, total workdone"*. Transplanting opens with one card per
+     JOB -- its label, its capacity, and `Total Workdone (RM)`. This sheet's
+     COLUMNS are the batches, so the same ribbon asked of this sheet is one
+     card per BATCH, which is the unit the office named.
+
+     IT IS COLLECTED, NEVER RECOMPUTED. Every figure here comes off
+     `j.claim.rows`, which seedPlantingClaim already worked out for the
+     column feet -- so a card cannot disagree with the column under it. Two
+     walks of the same records is the fault this file has a heading about.
+
+     AND IT CARRIES THE JOB SPLIT, because the two jobs are priced at
+     different rates: 5,000 biji and RM 117.08 cannot be checked against
+     each other by anybody who does not know how the 5,000 divides. `byJob`
+     is what the card's muted line prints, and it is drawn only where both
+     jobs have something on that batch. */
+  const bat = {};
+  const byBatch = [];
+  jobs.forEach(j => j.claim.rows.forEach(r => {
+    const b = bat[r.batch] || (bat[r.batch] = { batch: r.batch, date: r.date || '',
+      qty: 0, amount: 0, byJob: {} });
+    if (!bat[r.batch]._in) { bat[r.batch]._in = true; byBatch.push(b); }
+    b.byJob[j.job] = { label: j.label, qty: r.qty, amount: r.amount, rate: j.rate };
+    b.qty += r.qty;
+    b.amount = Math.round((b.amount + r.amount) * 100) / 100;
+    // The planted day is the batch's own and both jobs report it; the
+    // earliest stands, so a blank on one of them cannot wipe it.
+    if (!b.date || (r.date && String(r.date) < String(b.date))) b.date = r.date || b.date;
+  }));
+  byBatch.forEach(b => { delete b._in; });
+  /* The column order of the sheet itself -- planted day, then the batch --
+     so a reader going from a card to its column travels in a straight line. */
+  byBatch.sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))
+    || String(a.batch).localeCompare(String(b.batch), undefined, { numeric: true }));
+  return { jobs, shown, people: list, byBatch,
            held: jobs.reduce((a, j) => a.concat(j.claim.held.map(h =>
              Object.assign({ _job: j.job, _label: j.label }, h))), []),
            qty: jobs.reduce((a, j) => a + j.claim.qty, 0),
@@ -739,6 +774,52 @@ async function loadSeedPlanting(month) {
   if (activeSub() === 'seedplant') renderSeedPlanting(true);
 }
 
+/* THE SUMMARY RIBBON, the same cards Transplanting opens with.
+
+   `.pt-glance` / `.pt-card` are that sheet's own classes, reused rather than
+   copied: one office reads both claims, and a summary that answers the same
+   question in a different shape is a shape somebody has to learn twice.
+   What differs is the UNIT -- Transplanting's cards are its four jobs, and
+   this sheet's columns are batches, so these are batches.
+
+   Three things in it:
+
+     · THE FIGURES ARE `preNurseryClaim`'s, handed in rather than
+       re-derived. A card that disagreed with the column foot under it would
+       be the worse of the two faults, because the card is what somebody
+       reads first.
+     · A BATCH WORKED ON BOTH JOBS SAYS SO, with each job's biji and its
+       money. The rates differ, so the card's own total cannot be checked
+       without it.
+     · NOTHING CHECKED DRAWS NOTHING, rather than a row of empty cards.
+       The table underneath already says why the month is empty, and a
+       ribbon of dashes over it is the same sentence in a worse place. */
+function renderPreNurseryGlance(c) {
+  const box = document.getElementById('seedplant-glance');
+  if (!box) return;
+  const list = (c && c.byBatch) || [];
+  if (!list.length) { box.innerHTML = ''; return; }
+  const fig = v => Number(v || 0).toLocaleString('en-MY');
+  const dayTxt = (d) => {
+    if (!d) return '';
+    const t = new Date(d);
+    return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+  };
+  box.innerHTML = list.map(b => {
+    const jobs = Object.keys(b.byJob);
+    const split = jobs.length > 1
+      ? `<div class="pt-sub">${jobs.map(k => `${esc(b.byJob[k].label)}: ${fig(b.byJob[k].qty)} · ${money(b.byJob[k].amount)}`).join('<br>')}</div>`
+      : '';
+    const d = dayTxt(b.date);
+    return `<div class="pt-card">
+        <div class="pt-label">Batch ${esc(b.batch)}${d ? ` · ${esc(d)}` : ''}</div>
+        <div class="pt-val">${fig(b.qty)}</div>
+        <div class="pt-wd">Total Workdone (RM) : ${money(b.amount)}</div>
+        ${split}
+      </div>`;
+  }).join('');
+}
+
 function renderSeedPlanting(fromLoad) {
   const tbl = $('seedplant-table'), note = $('seedplant-note'), sub = $('seedplant-sub');
   if (!tbl) return;
@@ -751,15 +832,21 @@ function renderSeedPlanting(fromLoad) {
   if (_seedPlant.month !== month || _seedPlant.rows === null) {
     tbl.innerHTML = '<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-light);">Loading…</td></tr></tbody>';
     if (note) note.textContent = '';
+    /* THE RIBBON GOES WITH IT. Left standing it is last month's figures
+       over this month's Loading, which is the one kind of wrong a summary
+       must not be. */
+    renderPreNurseryGlance(null);
     return;
   }
   if (_seedPlant.err) {
     tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:#b91c1c;">Could not read the Seed Planting records: ${esc(_seedPlant.err)}</td></tr></tbody>`;
     if (note) note.textContent = 'If this says the table does not exist, run shared/RUN_ME_seed_planting_workers.sql in Supabase.';
+    renderPreNurseryGlance(null);
     return;
   }
   const c = preNurseryClaim(_seedPlant.rows);
   const fig = v => v ? Number(v).toLocaleString('en-MY') : '\u2014';
+  renderPreNurseryGlance(c);
   /* A WORKER A ROW, A BATCH A COLUMN \u2014 the office asked for it back.
      The planted day rides UNDER the batch in its own HEADING, which is the
      one thing the turn is worth keeping: the columns are in date order, so a
@@ -4816,6 +4903,81 @@ function _seedPlantingPDF(how) {
   let y = pdfTitle(doc, ['SALARY CLAIM FORM — PRE NURSERY', 'Pre Nursery',
                          `Month ${monthTxt}`],
                    { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
+
+  /* THE SUMMARY RIBBON, ON THE PAPER TOO.
+
+     A figure on the screen belongs on the paper — the rule this module
+     already learned the hard way, when the four cards the Transplanting
+     sheet opens with were nowhere on its form. So the cards the office
+     asked for go on this one, the same drawing as `drawCapRibbon` there,
+     off the same `c.byBatch` the screen reads.
+
+     IT WRAPS, which is the one thing Transplanting's does not have to do.
+     That sheet has exactly four cards; this one has a card per BATCH and a
+     month can carry a dozen, which at four to a row is three rows rather
+     than twelve slivers 14mm wide with their money cut off. `CARD_MIN` is
+     what decides how many fit, so the row count follows the paper rather
+     than a number typed here.
+
+     SAID ONCE, on page one, exactly as Transplanting says it: these are the
+     month's totals and not this page of them, so repeating them overleaf
+     states the same figures twice and invites somebody to add the two pages
+     together. The column HEADS do repeat, because those label the rows
+     under them. */
+  const fitLine = (str, maxW, size, minSize) => {
+    for (;;) { doc.setFontSize(size); if (doc.getTextWidth(str) <= maxW || size <= minSize) break; size -= 0.25; }
+    return size;
+  };
+  const drawBatchRibbon = (top) => {
+    const cards = c.byBatch || [];
+    if (!cards.length) return top;
+    const GAP = 3, CARD_MIN = 38;
+    const perRow = Math.max(1, Math.min(cards.length,
+      Math.floor((INNER + GAP) / (CARD_MIN + GAP))));
+    const cardW = (INNER - GAP * (perRow - 1)) / perRow, padX = 3;
+    const maxW = cardW - padX * 2;
+    /* ONE HEIGHT for every card in the band, so the rows line up: a card
+       carrying the job split is taller, and sizing each to its own content
+       would draw a ragged band. */
+    const split = cards.some(b => Object.keys(b.byJob).length > 1);
+    const cardH = split ? 20 : 14;
+    /* `fig` reads a nought as a dash, which is right in a table cell and
+       wrong on a card the screen prints as 0 -- the two have to agree. */
+    const num = v => Number(v || 0).toLocaleString('en-MY');
+    let yy = top;
+    cards.forEach((b, i) => {
+      const col = i % perRow;
+      if (col === 0 && i) yy += cardH + GAP;
+      if (col === 0 && yy + cardH > FLOOR) { doc.addPage(); yy = 25; }
+      const x = MARGIN + col * (cardW + GAP);
+      doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
+      doc.setFillColor(255, 255, 255); doc.rect(x, yy, cardW, cardH, 'FD');
+      const d = dayTxt(b.date);
+      const head = ('BATCH ' + b.batch + (d ? '  ·  ' + d : '')).toUpperCase();
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 110, 130);
+      fitLine(head, maxW, 6.5, 4.5);
+      doc.text(head, x + padX, yy + 5);
+      doc.setTextColor(67, 56, 202);
+      const qtyTxt = num(b.qty);
+      fitLine(qtyTxt, maxW, 9.5, 7);
+      doc.text(qtyTxt, x + padX, yy + 10.2);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
+      const wdTxt = 'Total Workdone (RM) : ' + money(b.amount);
+      fitLine(wdTxt, maxW, 6.5, 4);
+      doc.text(wdTxt, x + padX, yy + 13);
+      const jobs = Object.keys(b.byJob);
+      if (jobs.length > 1) {
+        doc.setTextColor(120, 120, 140);
+        jobs.forEach((k, n) => {
+          const t = b.byJob[k].label + ': ' + num(b.byJob[k].qty) + ' · ' + money(b.byJob[k].amount);
+          fitLine(t, maxW, 5.5, 3.5);
+          doc.text(t, x + padX, yy + 16 + n * 3);
+        });
+      }
+    });
+    return yy + cardH + 2;
+  };
+  y = drawBatchRibbon(y);
 
   /* ONE JOB, DRAWN. Its own batch columns inside the shared width, its own
      rate, its own subtotal. Walked rather than written out twice, so a third
