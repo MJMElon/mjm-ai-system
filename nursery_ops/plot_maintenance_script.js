@@ -4487,26 +4487,15 @@ const I18N = {
     'link.asAt':'as at {x}', 'link.today':'standing today — no date picked yet',
     'link.willUse':'{x} will be used',
     'link.overridden':'Linked value is {x} — your {y} overrides it',
-    /* The same sentence about a figure NOBODY here typed. It was saved on a
-       PHONE -- the FC Portal or the Worker Portal, both of which write
-       nops_maint_field_records -- and a Field Conductor verified it, which
-       is what let applyFieldRecords fill the empty cell with it.
-
-       IT NAMES THE PERSON WHERE IT CAN. The first wording said "the field
-       reported it", and the office asked the only question that leaves:
-       "这是谁 只有我可以填". They are right that nobody else types into that
-       box; the answer is that typing is not the only way a figure gets
-       there. A screen that can name who saved the record and instead says
-       "the field" has made the reader ask.
-
-       The last is for a row saved before either mark existed, where nothing
-       knows who put it there and the sentence says exactly that rather than
-       guessing at a person. */
-    'link.fieldQtyWho':'Linked value is {x} — {y} is from a phone record by {w}, verified: the batches ticked on the phone, added up',
-    'link.fieldQty':'Linked value is {x} — {y} is from a verified phone record: the batches ticked on the phone, added up',
+    /* `link.fieldQtyWho` and `link.fieldQty` WERE HERE, and both are gone
+       with the thing they explained. They worded a figure a PHONE had put
+       in the cell -- two turns of wording it, each correct and each one
+       turn further from the answer, which the office gave in one line:
+       *"link的capacity完全不要管手机送进来的"*. No figure arrives that way
+       any more, so there is nothing left to word. */
     'link.savedQty':'Linked value is {x} — the saved {y} is being used',
     'link.useLink':'Use the linked amount',
-    'link.basis':'movement report closing balance',
+    'link.basis':'Summary Report closing balance',
     'link.negative':'Batch report nets to {x} here — check that plot\'s records.',
     'link.interrow':'Interrow keeps the 2nd culling in — {x} culled seedlings counted, because their rows are still sprayed.',
     /* The other half of the sentence above, which was never said. A figure
@@ -4514,6 +4503,12 @@ const I18N = {
        the same on screen, so the office could not tell a working rule from a
        broken one and said so. */
     'link.cull2Off':'2nd culling taken off: {x} seedlings.',
+    /* And the case where it is NOT taken off and the figure is still right:
+       a 3rd culling already contains the 2nd culling that happened on the
+       way to it, which is the Summary Report's own condition. Said because
+       a figure that has had one loss taken off twice looks exactly like one
+       that has not, which is how it went unnoticed. */
+    'link.cull2Inside':'2nd culling of {x} is inside the 3rd culling of {y}, so it is not taken off again — same as the Summary Report.',
     'link.cull2Later':'A 2nd culling of {x} is dated {d}, after this work, so it is NOT in the figure above. Check its Cull Date on the batch report if that looks wrong.',
     /* Piece rate save / lock */
     'rate.saveLock':'Save & Lock', 'rate.unlock':'Unlock to edit',
@@ -4675,14 +4670,13 @@ const I18N = {
     'link.asAt':'pada {x}', 'link.today':'baki semasa — tarikh belum dipilih',
     'link.willUse':'{x} akan digunakan',
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
-    'link.fieldQtyWho':'Nilai dari laporan ialah {x} — {y} dari rekod telefon oleh {w}, disahkan: jumlah batch yang ditanda di telefon',
-    'link.fieldQty':'Nilai dari laporan ialah {x} — {y} dari rekod telefon yang disahkan: jumlah batch yang ditanda di telefon',
     'link.savedQty':'Nilai dari laporan ialah {x} — {y} yang tersimpan digunakan',
     'link.useLink':'Guna nilai pautan',
-    'link.basis':'baki akhir laporan pergerakan',
+    'link.basis':'baki akhir Summary Report',
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
     'link.cull2Off':'Pembuangan ke-2 ditolak: {x} anak benih.',
+    'link.cull2Inside':'Pembuangan ke-2 sebanyak {x} sudah termasuk dalam pembuangan ke-3 sebanyak {y}, jadi ia tidak ditolak dua kali — sama seperti Summary Report.',
     'link.cull2Later':'Pembuangan ke-2 sebanyak {x} bertarikh {d}, selepas kerja ini, jadi ia TIDAK termasuk dalam angka di atas. Semak Cull Date pada laporan batch jika itu nampak salah.',
     /* Simpan / kunci kadar upah */
     'rate.saveLock':'Simpan & Kunci', 'rate.unlock':'Buka untuk sunting',
@@ -6162,13 +6156,33 @@ function applyFieldRecords(nursery, monthLbl) {
       r.batch = g.batches.join(', ');
       r._fromFieldBatch = 1;
     }
-    // The field counted the batches it ticked, so the quantity is already
-    // answered — leaving the cell to fall back to the linked figure asked the
-    // batch report a question the record had already settled.
-    if (g.qty != null && g.qty !== '' && !r._qtyByHand && r.qty == null) {
-      r.qty = Number(g.qty);
-      r._fromFieldQty = 1;
-    }
+    /* THE QUANTITY IS NOT TAKEN FROM THE PHONE, and it used to be.
+
+       The field record carries one — the phone has no quantity box, and it
+       sends a figure all the same: what the conductor ticks is WHICH
+       BATCHES are standing, and the read-only number beside them is
+       `shared_plot_batch_balance`, the Movement Report balance of exactly
+       those batches as at the day the record was SAVED. That filled an
+       empty cell here, and the office asked for it out in one line:
+       *"link的capacity完全不要管手机送进来的，我要link这个summary report"*.
+
+       THREE REASONS IT WAS THE WRONG FIGURE, and the first is the one that
+       cost money:
+
+         · the phone's view counts NEITHER CULLING — `plotBatches.js` says
+           so in its own words — so a plot 2nd culled read high by exactly
+           the culling, against the report the office reconciles with;
+         · it is as at the day the record was SAVED, not as at the WORK
+           DATE, so a sale or a 3rd culling in between left the cell
+           holding a figure no report on any screen agrees with;
+         · nobody keyed it, and for a month this page called it the
+           office's own answer.
+
+       The DATE and the BATCHES above are still taken, because those are
+       what a conductor standing in the plot actually observed, and the
+       batch cell is what this page then asks the report about. The figure
+       is the report's answer and nothing else's. `dropPhoneQty()` takes
+       the ones already written back off. */
     syncTicks(r, g);
   });
 
@@ -7833,9 +7847,11 @@ function _qtyCell(r) {
      the P & D row beside it on the same plot. Said here, because a number
      that differs from the one above it with no explanation reads as a fault. */
   const plus = i.keptCull2
-    ? ` Interrow spraying keeps the 2nd culling in — ${i.cull2.toLocaleString()} culled seedlings are counted, because the rows they stood in are still sprayed.`
-    : '';
-  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${plus} Key a number here to override.`;
+    ? ` Interrow spraying keeps the 2nd culling in — ${numMY(i.cull2)} culled seedlings are counted, because the rows they stood in are still sprayed.`
+    : (i.cull2Inside
+        ? ` A 2nd culling of ${numMY(i.cull2Inside)} is inside the 3rd culling of ${numMY(i.cull3)} and is not taken off again, same as the Summary Report.`
+        : '');
+  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Summary Report's closing balance for the same plot, batch and date.${plus} Key a number here to override.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
@@ -8805,13 +8821,67 @@ function freezeCheckedRows() {
   let n = 0;
   records.forEach(r => {
     if (!r || !r.checked) return;
-    if (r.qtyFrozen != null || r.batchFrozen != null) return;
     const f = MJMMovementFreeze(r);
+    /* NEVER OVER A FIGURE ALREADY WRITTEN DOWN. The outer test used to be
+       "either mark is set, leave the row alone", which is wrong in one case
+       and it is the case dropPhoneQty creates: a checked row carrying a
+       batchFrozen and no qtyFrozen was skipped, so after the phone figure
+       came off it had neither a keyed figure nor a frozen one and a settled
+       row went back to being a live formula. Asked per field it is right
+       either way, and it is idempotent. */
+    if (r.qtyFrozen   != null) delete f.qtyFrozen;
+    if (r.batchFrozen != null) delete f.batchFrozen;
     if (!Object.keys(f).length) return;
     Object.assign(r, f);
     n++;
   });
   if (n) persistRecords();
+  return n;
+}
+
+/* ── THE PHONE'S QUANTITY COMES BACK OFF THE ROWS IT ALREADY FILLED ──────
+
+   applyFieldRecords no longer writes one (the comment there is the whole of
+   why). This is the other half: every row it already wrote one into is
+   still carrying it, and those are the rows the office is looking at — the
+   N12 row that "automatically had 830" is one of them.
+
+   IT IS A RECORD AND NEVER A DELETION, the same choice the admin-closed
+   plot and the rejected signup made: the figure moves to `_phoneQty`, which
+   nothing reads and nothing prices, so what the phone had put there is
+   still on the row to be seen and `CHECK_rows_the_phone_filled.sql` can
+   name every one of them with what the report says instead. A repair that
+   quietly throws away a number somebody was reading is worse than the
+   fault.
+
+   A CHECKED ROW IS NOT LEFT AS A FORMULA. Taking the figure off a settled
+   row would put it back on the live link, which is the one thing Checked
+   exists to stop. freezeCheckedRows runs once the ledger lands and writes
+   the report's figure into qtyFrozen, so the row is a number again — the
+   report's number this time.
+
+   WHAT IT COSTS, and it is worth saying plainly rather than discovering:
+   a checked row's figure MOVES. It moves to the Summary Report's own
+   answer, which is what the office asked for, and the row goes on wearing
+   the signature that was given to the figure before it. The check names
+   every one and by how much, so it can be looked at rather than taken on
+   trust.
+
+   A figure somebody KEYED is untouched — `_qtyByHand` or no mark at all is
+   not this. Only a row the phone filled, which is exactly the rows carrying
+   `_fromFieldQty`. Self-correcting and then still: once they are off,
+   nothing writes one again and this finds nothing on every later load. */
+function dropPhoneQty() {
+  let n = 0;
+  (records || []).forEach(r => {
+    if (!r || !r._fromFieldQty) return;
+    if (!(r.qty === 0 || r.qty)) { delete r._fromFieldQty; return; }
+    r._phoneQty = Number(r.qty);
+    delete r.qty;
+    delete r._fromFieldQty;
+    n++;
+  });
+  if (n) console.info('[maint] took the phone quantity off ' + n + ' row(s); they read the Summary Report now');
   return n;
 }
 function togRec(id,f){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); r[f]=r[f]?0:1; renderRecords(); persistRecords(); }
@@ -8830,29 +8900,16 @@ function openRecModal(pre) {
   document.getElementById('rec-modal').classList.add('open');
 }
 
-/* WHO SAVED THE PHONE RECORDS THIS ROW WAS FILLED FROM.
+/* `_fieldWho(row)` WAS HERE, and it is gone with the sentence that was its
+   only reader — it named, off `_fieldIds`, whoever saved the phone records a
+   row's quantity had been filled from. The quantity is not filled from them
+   any more (see applyFieldRecords), so the function answered a question
+   nothing asks. It is removed rather than left standing: a half-removal that
+   keeps the function is the kind that comes back, and `git log` is where a
+   reader of this file should go for it rather than reading a dead one.
 
-   `_fieldIds` is set by `applyFieldRecords` and by nothing else, off records
-   `loadFieldRecords` has already filtered to the VERIFIED ones — so a name
-   here is somebody whose work a Field Conductor has agreed, never a draft
-   sitting on a handset.
-
-   One row can be several records (three workers on one job), so it is a
-   LIST, distinct and in the order the ids are in. The email is resolved to
-   a name the same way every other "by <person>" on this page is, and it
-   fails open to the stored value for the same reason. */
-function _fieldWho(row) {
-  const ids = Array.isArray(row && row._fieldIds) ? row._fieldIds : [];
-  if (!ids.length) return '';
-  const names = [];
-  ids.forEach((id) => {
-    const rec = (fieldRecords || []).find((f) => f && String(f.id) === String(id));
-    if (!rec) return;
-    const who = _maintWho(rec.reported_by || '');
-    if (who && names.indexOf(who) < 0) names.push(who);
-  });
-  return names.join(', ');
-}
+   `_fieldIds` itself STAYS and is not dead — the Audit column finds a field
+   record's verdict by it. */
 
 /* Live preview of the linked quantity while the record is being keyed, so the
    number is visible before saving rather than only after. */
@@ -8889,7 +8946,7 @@ function refreshLinkedQty() {
   const when  = link.asOf ? t('link.asAt').replace('{x}', _tarikhDisplay(link.asOf)) : t('link.today');
   /* WHOSE FIGURE IS IN THE BOX. It used to say "your {y} overrides it" about
      every number sitting there, whoever put it there — and three different
-     things can put one there:
+     things could put one there:
 
        · somebody KEYED it, which really is theirs;
        · the FIELD reported it, and applyFieldRecords filled the empty cell
@@ -8903,49 +8960,50 @@ function refreshLinkedQty() {
      `records_are_per_month.cjs` drives that), but nothing on the screen
      could say so.
 
+     THE SECOND ONE NO LONGER EXISTS, and that is the answer the office
+     chose in the end. Saying which of the three it was, and then saying
+     what the phone's figure WAS, were two turns of explaining a number
+     that had no business in the cell — *"link的capacity完全不要管手机送进
+     来的"*. applyFieldRecords writes no quantity and `dropPhoneQty` took
+     the written ones off, so a figure in this box is somebody's own or it
+     is one saved before the marks existed. Two sentences, both true, and
+     neither of them about a box that does not exist on the phone.
+
      The test for "being typed right now" is the SAME one `saveRec` uses to
      decide whether to mark the cell — the box against what is stored — so
      the sentence cannot say one thing while the save does another. */
   const was   = editRecId ? (records || []).find(r => r && r.id === editRecId) : null;
   const stored = was && (was.qty === 0 || was.qty) ? String(was.qty) : '';
   const mine   = !was || typed !== stored || was._qtyByHand;
-  /* AND IT NAMES THE PERSON, because "the field" is not a person. The office
-     read that sentence and asked the only question it leaves — *"田间报上来
-     的 — 这是谁 只有我可以填"*. They are right that nobody else types into
-     THIS box; what fills it without anybody typing is a maintenance record
-     saved ON A PHONE (the FC Portal and the Worker Portal both write
-     `nops_maint_field_records`) and then VERIFIED by a Field Conductor.
-     Until somebody presses Verify it reaches no cell at all.
+  /* THE TWO TURNS THAT GOT HERE ARE WORTH KEEPING, because the answer was
+     to take the figure away rather than to word it better, and the next
+     person will be tempted to word it better again.
 
-     So the row already knows: `_fieldIds` are the records it was filled
-     from, and each one carries who reported it. A screen that can name them
-     and instead says "the field" is making the reader ask.
+     First it read "the field reported it", and the office asked the only
+     question that leaves — *"田间报上来的 — 这是谁 只有我可以填"*. So it
+     named the person off `_fieldIds`. Then they asked what the figure even
+     was — *"工人手机并没有capacity这个概念"* — and they were right: the
+     phone has NO quantity box. What a conductor ticks is which BATCHES are
+     standing, and the read-only number beside them is
+     `shared_plot_batch_balance` as at the day the record was saved, which
+     counts neither culling and is not cut off at the work date. So it said
+     that as well.
 
-     AND IT SAYS WHAT THE FIGURE IS, which is the next question the office
-     asked of this same sentence: *"工人手机并没有capacity这个概念"*. They
-     are right — the phone has NO quantity box, and it sends one all the
-     same. What the conductor does there is TICK WHICH BATCHES are standing
-     in the plot; the figure beside them is read-only and is the Main
-     Nursery Movement Report balance of exactly those batches, which is
-     `shared_plot_batch_balance`, the same view this page links off. The
-     phone labels it "Quantity (seedlings) · from the batches ticked" and
-     `MaintenanceModule.jsx` has no input, no onChange and no setter for it.
-
-     So a sentence naming only where the figure came FROM leaves somebody
-     looking for a box that does not exist. It says what it IS as well.
-     `shared/CHECK_what_the_phone_sent_as_the_quantity.sql` prints the two
-     figures side by side on every record, because they are worked out by
-     different rules: the phone never counts the 2nd culling and this page
-     takes it off for every job but interrow. */
+     A SENTENCE EXPLAINING A FIGURE THAT SHOULD NOT BE THERE IS THE SCREEN
+     ARGUING FOR IT. Three wordings, each correct, each one turn further
+     from the thing to do — which the office then asked for in one line.
+     The DATE and the BATCH are still taken from a phone record, because
+     those are what somebody standing in the plot observed; the quantity is
+     the Summary Report's and nobody else's.
+     `shared/CHECK_rows_the_phone_filled.sql` names every row it had
+     filled, what it had put there and what the report says instead. */
   const headKey = typed === '' ? 'link.willUse'
-                : mine              ? 'link.overridden'
-                : was._fromFieldQty ? (_fieldWho(was) ? 'link.fieldQtyWho' : 'link.fieldQty')
+                : mine         ? 'link.overridden'
                 : 'link.savedQty';
   const head  = typed === ''
     ? t('link.willUse').replace('{x}', `<b style="color:var(--green-text);">${numMY(link.qty)}</b>`)
     : t(headKey).replace('{x}', `<b>${numMY(link.qty)}</b>`)
-                .replace('{y}', numMY(Number(typed)))
-                .replace('{w}', esc(_fieldWho(was)));
+                .replace('{y}', numMY(Number(typed)));
   /* THE REFRESH IS A PRESS, not a thing to work out. The office asked for a
      row to go back to the linked amount — *"每个月请直接刷新变成linked
      amount"* — and the only way to do it was to know that emptying the box
@@ -8976,15 +9034,25 @@ function refreshLinkedQty() {
      The third is amber because it is the one that may want looking at: a
      2nd culling saved with no CullDate falls back to the day it was KEYED,
      which can be weeks after the work. */
+  /* And the fourth, which is the Summary Report's own condition: a 2nd
+     culling on a batch that has since been 3rd culled is INSIDE that 3rd
+     culling and is not taken off again. This page took it off twice until
+     the office asked for the link to be the Summary Report, and nothing on
+     screen could have said so — a figure short by one culling and a figure
+     with no culling to take off are the same number. */
   const plus = link.keptCull2
     ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', numMY(link.cull2))}</span>`
     : (link.cull2Off
         ? `<br><span style="color:var(--text-muted);">${t('link.cull2Off').replace('{x}', numMY(link.cull2Off))}</span>` : '');
+  const inside = (!link.keptCull2 && link.cull2Inside)
+    ? `<br><span style="color:var(--text-muted);">${t('link.cull2Inside')
+        .replace('{x}', numMY(link.cull2Inside))
+        .replace('{y}', numMY(link.cull3))}</span>` : '';
   const later = link.cull2Later
     ? `<br><span style="color:#a16207;">${t('link.cull2Later')
         .replace('{x}', numMY(link.cull2Later))
         .replace('{d}', esc(_maintWhen(link.cull2LaterOn) || link.cull2LaterOn))}</span>` : '';
-  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${later}${warn}`;
+  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${inside}${later}${warn}`;
 }
 
 /* Put the row back on the live linked figure. The box is what decides, so
@@ -9140,13 +9208,16 @@ function saveRec(){
     const was = records[i];
     const byHand = was._racunByHand
       || (was._src && String(obj.racun || '') !== String(was.racun || ''));
-    /* And the same for the three cells the FIELD fills — the date, the batch
-       and the quantity.
+    /* And the same for the cells the FIELD fills — the date and the batch.
+       It filled the QUANTITY too until the office asked for that out (see
+       applyFieldRecords); `_fromFieldQty` is still cleared here, because a
+       row saved before `dropPhoneQty` ran can still be carrying the mark
+       and a stale licence to refill is the one thing it must not keep.
 
-       _fromFieldDate / _fromFieldBatch / _fromFieldQty mark a cell this page
-       filled from a verified field record. That mark is also the licence to
-       fill it AGAIN, so typing over one and leaving it on had the next sync
-       put the field's figure straight back: a quantity keyed as 4755 read
+       _fromFieldDate / _fromFieldBatch mark a cell this page filled from a
+       verified field record. That mark is also the licence to fill it
+       AGAIN, so typing over one and leaving it on had the next sync put the
+       field's figure straight back: a quantity keyed as 4755 read
        something else by the time somebody looked, and read blank once the
        field record went (loadFieldRecords clears a marked cell whose record
        has gone). Nothing on either screen said why, and nobody had touched it.
@@ -10326,6 +10397,12 @@ async function initDb() {
      screen, and a September list opened in October would become October. */
   try { if (stampRecordMonths()) persistRecords(); }
   catch (e) { console.warn('[maint] could not stamp the months:', e); }
+  /* And before the first sync as well, because applyFieldRecords drops the
+     MARK off a row whose field record stopped pairing while leaving the
+     VALUE — so a repair run after it would have nothing left to find the
+     row by, and the phone figure would sit there for good. */
+  try { if (dropPhoneQty()) persistRecords(); }
+  catch (e) { console.warn('[maint] could not take the phone quantity off:', e); }
   renderAll();
   autoSyncRecords();
 

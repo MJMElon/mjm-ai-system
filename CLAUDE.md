@@ -116,6 +116,12 @@ A quantity KEYED BY HAND still wins over all of this, which is the one way an
 interrow row can go on showing the old smaller number;
 `shared/CHECK_interrow_qty_keyed.sql` names those rows on every plot.
 
+**And interrow is not the only thing that keeps the 2nd culling standing** —
+a 3rd culling does too, because it already contains it. That is the Summary
+Report's own condition and the link obeys it now; see *"A 2ND CULLING WAS
+BEING TAKEN OFF TWICE"* below. Two unrelated reasons, one skip, and
+`cull2Superseded` is where the second one lives.
+
 The Nursery Movement Report and the phone's batch list still subtract the 2nd
 culling, because they answer "what is standing", which is a different
 question. That difference is deliberate and is written out in that file.
@@ -421,6 +427,123 @@ recent month is what to open, because nothing recorded who keyed it.
 `tests/the_linked_quantity_says_whose_it_is.cjs` drives the real modal over
 the real `shared_plot_movement` with the office's own 2,353; five of its
 eleven checks fail on the previous code, the first in their own terms.
+
+#### AND THE ANSWER WAS TO TAKE THE FIGURE AWAY, not to word it better
+
+Three wordings, each correct, each one turn further from the thing to do —
+*"your 2,353"*, then *"the field reported it"*, then *"a phone record by
+Akbar: the batches ticked, added up"*. The office ended it in one line:
+*"link的capacity完全不要管手机送进来的，我要link这个summary report，一样
+interrow spray要包括2nd cull amount"*.
+
+**A SENTENCE EXPLAINING A FIGURE THAT SHOULD NOT BE THERE IS THE SCREEN
+ARGUING FOR IT.** That is the lesson worth keeping, because the next person
+will be tempted to word it a fourth time. Each wording was a true answer to
+the question actually asked, and three turns went by without anybody asking
+whether the figure belonged in the cell at all.
+
+**IT DID NOT, FOR THREE REASONS, and the first is money.** The phone's
+figure is `shared_plot_batch_balance`, which **counts neither culling**
+(`plotBatches.js` says so in its own words), **as at the day the record was
+SAVED** rather than the work date, and **nobody keyed it** — so a plot 2nd
+culled read high against the one report the office reconciles with, a sale
+in between left the cell holding a figure no screen agrees with, and for a
+month this page called it the office's own answer.
+
+So `applyFieldRecords` writes **no quantity**. The DATE and the BATCHES it
+still writes, because those are what somebody standing in the plot
+observed, and the batch cell is what the report is then asked about.
+`_fieldWho` went with the sentence that was its only reader; `_fieldIds`
+STAYS, because the Audit column finds a verdict by it.
+
+**THE ONES ALREADY WRITTEN COME BACK OFF, and it is a RECORD rather than a
+deletion** — `dropPhoneQty()`, run beside `stampRecordMonths()` before
+anything draws. The figure moves to `_phoneQty`, which nothing reads and
+nothing prices, so what the phone had put there can still be seen. Three
+things in it:
+
+- **It runs BEFORE the first sync**, because `applyFieldRecords` drops the
+  MARK off a row whose field record stopped pairing while leaving the
+  VALUE — so a repair run after it has nothing left to find the row by.
+- **A CHECKED ROW IS NOT LEFT AS A FORMULA.** Taking the figure off and
+  stopping there would put a settled row back on the live link, which is
+  the one thing Checked exists to stop. `freezeCheckedRows` writes the
+  report's figure into `qtyFrozen` once the ledger lands, so the row is a
+  number again — the report's number this time. **Its outer guard had to
+  be asked per FIELD**: "either mark is set, leave the row alone" skipped
+  exactly the row this creates, one carrying a `batchFrozen` and no
+  `qtyFrozen`.
+- **WHAT IT COSTS: a checked row's figure MOVES**, to the Summary Report's
+  own answer, which is what was asked for. The check below names every one.
+
+**And the payroll claim reads the repaired rows only once the maintenance
+page has run the repair** — it reads the same `nops_maint_records` and does
+not repair it. One page load, self-healing, the same exposure
+`stampRecordMonths` has always had.
+
+#### A 2ND CULLING WAS BEING TAKEN OFF TWICE, and nothing could say so
+
+The other half of that sentence, and the one that moved money. `liveCount`
+deducted the 2nd culling unconditionally. **The Summary Report deducts it
+only while the same plot and batch carries no EVIDENCED 3rd culling**,
+because a 3rd culling already contains the seedlings 2nd culled on the way
+to it — the rule `netOfRow`'s `superseded` already carried, and the Batch
+Report's own words: cull2 *"is inside cull3"*.
+
+So every plot 2nd culled and then 3rd culled read **LOW by exactly its 2nd
+culling** — on the Work Maintenance list, on the Worker Record capacity
+totals and on the payroll claim alike, because all three read `recQty`.
+**Invisible by construction**, the same shape as *"It SUBTRACTED and could
+not say so"* one section up: a figure with one loss taken off twice and a
+figure with it taken off once are both just numbers.
+
+Five things in it:
+
+- **`cull2Superseded(evs)` is the one place that says it**, and
+  `liveCount` skips the 2nd culling when it OR `keepCull2` holds. Two
+  reasons, two unrelated causes, one skip.
+- **ASKED PER PLOT AND BATCH**, which is the bucket the report asks it of
+  (`e.place + SEP + e.batch` in `buildMovementSection`). A plot with one
+  batch 3rd culled and one not has half its 2nd culling off and half
+  standing, so `cull2Off` and `cull2Inside` are the two halves of `cull2`
+  and add up to it.
+- **AN UNEVIDENCED 3RD CULLING SUPERSEDES NOTHING.** It is a claim, and it
+  never became an event at all (`_load` drops it), so this falls out rather
+  than being a second condition — which is right, or keying an unflown 3rd
+  culling would silently raise every maintenance figure on that plot.
+- **INTERROW IS UNTOUCHED and the office reaffirmed it** — *"一样interrow
+  spray要包括2nd cull amount"*. It keeps the whole culling standing for a
+  reason of its own (the ground between the rows is the same walk), and
+  that has to go on holding on a plot where both rules apply: on a batch
+  3rd culled, interrow counts the 2nd culling in and `cull2Off` and
+  `cull2Inside` are both nought, because neither sentence is the reason.
+- **The row SAYS which** — `link.cull2Inside`, *"2nd culling of 273 is
+  inside the 3rd culling of 6,000, so it is not taken off again"*. The
+  whole argument for the rule above was that a silent figure cannot be told
+  from a broken one.
+
+`tests/the_link_is_the_summary_report.cjs` is the proof, and the one check
+in it that cannot drift compares the shipped link against **`netOfRow` and
+`MOVE_COLS` lifted out of the shipped `operation_reports.html`**, plot and
+batch by plot and batch, over one ledger. A comment claiming the two agree
+is not agreement — LOS's own comment made exactly that claim and was wrong.
+**8 of its 12 checks fail on the previous code**, and the headline one
+names the batches: *every plot and batch reads what the report reads → got
+["U1|250","U2|260"]*. It also had to learn the house trap: the previous
+build exports no `cull2Superseded`, so calling it bare took the harness
+down and the report comparison underneath was never asked.
+
+**`shared/CHECK_what_the_link_change_moves.sql` is what the office asked
+for next** — *"link完了检查linked quantity和之前有什么不同 应该要是一模一样
+的"*. It works out every record BOTH WAYS off the real ledger and prints
+the ones that differ, with what each read before and reads now, plus every
+row still carrying a phone figure. **"0 of them move" is a real possible
+answer** and is the one they are expecting: it means no plot in the system
+is both 2nd culled and 3rd culled on the same batch. Tested on the scratch
+Postgres against the node test's own ledger, so the two agree figure for
+figure, and against a database where neither thing moves — which draws the
+*nothing to report* lines, because an empty section reads as a query that
+did not run.
 
 ## The field fills an empty cell. It never writes over a full one.
 
