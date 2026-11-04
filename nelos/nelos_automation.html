@@ -2,6 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- This page carries every line of its own code inline, so the PAGE is the
+     deploy: a cached copy goes on running yesterday's rules for ever. It is
+     being changed today — the Open case action now writes the TITLE rather
+     than a route row — which is the condition the house rule names: these
+     go on a page when somebody needs a fix in it to arrive. One hard reload
+     per machine picks them up, and it stays fresh by itself after that. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NELOS — Automate Cases</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23efc7e2%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%233b162f%27 text-anchor=%27middle%27%3ENL%3C/text%3E%3C/svg%3E">
@@ -557,17 +566,19 @@ $('a-save').addEventListener('click', save);
    the module code's and are read here, never set: changing them here would
    change the label, not the behaviour, which is the worst kind of setting.
 
-   Where the case goes IS set here, and it is set where routing already
-   lives — the nelos_routes row for that (system, work). So this page and
-   the Case Routing tab on User Setting are two views of one table rather
-   than two tables that can disagree, and nelos_route_case() picks up either
-   without knowing which screen wrote it. */
+   Where the case goes IS set here, and it is set where routing lives — ON
+   THE TITLE, since RUN_ME_nelos_routing_is_the_category.sql turned
+   nelos_categories.module_key over into the system that SOLVES it. So this
+   page and the Case Routing tab on User Setting are two views of one ROW
+   rather than two rows that can disagree, and nelos_route_case() picks up
+   either without knowing which screen wrote it. */
 
 let conds = [];   // nelos_categories rows with auto_condition set
-let routes = [];  // nelos_routes rows
 
-const routeFor = (mod, work) =>
-  routes.find(r => r.source_module === mod && r.category === work) || null;
+/* nelos_routes is no longer read here, and routeFor() went with it. A
+   per-category row in that table is inert since the title names its own
+   solver, and this page sets that title — so reading the old rule would be
+   showing an answer nothing obeys. */
 
 /* The people who could be the PIC: those pinned to the system the case is
    being sent to, by name. Same rule as the raise form — the pin decides who
@@ -588,36 +599,47 @@ function renderConds() {
   /* Every system gets a card, including the ones with nothing — an absent
      section reads as "not loaded", a section saying "none yet" reads as an
      answer. */
+  /* A CARD IS THE QUEUE THESE CASES LAND IN, which is what module_key says
+     since RUN_ME_nelos_routing_is_the_category.sql turned it over. It used
+     to be the system that RAISED them, with the destination read out of
+     nelos_routes beside it — and the two were the same word twice as often
+     as not. Changing the dropdown now moves the row to another card, which
+     is the re-pointing this page is for. */
   $('conds').innerHTML = modules.map(m => {
     const mine = conds.filter(c => c.module_key === m.key);
     const rows = mine.length
-      ? `<div class="cond-head"><span>Condition</span><span>Open case action</span></div>` +
+      ? `<div class="cond-head"><span>Condition</span><span>Lands with</span></div>` +
         mine.map(c => {
-          const r = routeFor(m.key, c.name);
-          const to = r?.to_module || m.key;
-          const pics = picsFor(to);
+          const pics = picsFor(m.key);
+          /* The PIC is a person here and a SEAT on Case Routing, and both
+             write the same row. A seat is resolved to whoever holds it so
+             the two screens show one answer rather than each showing the
+             half it stores. */
+          const seatId = c.pic_seat_no == null ? '' : (handlers.find(h =>
+            h.primary_module === m.key && Number(h.seat_no) === Number(c.pic_seat_no)) || {}).user_id || '';
+          const picId = c.pic_user_id || seatId || '';
           return `
           <div class="cond-row" data-mod="${esc(m.key)}" data-work="${esc(c.name)}">
             <div class="cond-work">${esc(c.name)}</div>
             <div class="cond-act">
               <select data-to>
-                ${modules.map(x => `<option value="${esc(x.key)}"${x.key === to ? ' selected' : ''}
+                ${modules.map(x => `<option value="${esc(x.key)}"${x.key === m.key ? ' selected' : ''}
                   >${esc(x.handler_label || x.label)}</option>`).join('')}
               </select>
               <select data-pic>
                 <option value="">Anyone in that system</option>
                 ${pics.map(pp => `<option value="${esc(pp.id)}"${
-                    r && r.to_user_id === pp.id ? ' selected' : ''}>${esc(pp.name)}</option>`).join('')}
+                    picId === pp.id ? ' selected' : ''}>${esc(pp.name)}</option>`).join('')}
               </select>
             </div>
           </div>`;
         }).join('')
-      : `<div class="cond-empty">Nothing here opens a case on its own yet.</div>`;
+      : `<div class="cond-empty">Nothing lands here on its own yet.</div>`;
 
-    /* A "+" per system rather than one for the page: a condition belongs
-       to the system that raises it, and the corner of that system's card is
-       where you would reach for it. Writing one is not built yet — see
-       addCond() — so it says so rather than opening something empty. */
+    /* A "+" per system rather than one for the page: a card is a queue and
+       the corner of it is where you would reach to add something that lands
+       there. Writing one is not built yet — see addCond() — so it says so
+       rather than opening something empty. */
     return `<div class="cond-sys">
       <div class="cond-sys-h">${esc(m.handler_label || m.label)}
         <button class="cond-add" data-add="${esc(m.key)}" title="Add a condition to ${esc(m.handler_label || m.label)}"
@@ -643,10 +665,19 @@ function addCond(modKey) {
         `the module has to raise it before this page can point it.`, false);
 }
 
-/* One rule, written where routing lives. Changing the system clears the PIC
-   in the same breath: a person pinned to Auditor is not a PIC for a case
-   that now goes to Stock, and leaving them there would send it to somebody
-   who cannot see it. */
+/* WRITTEN ON THE TITLE, which is where routing lives now — the same two
+   fields the Case Routing tab writes, so the two screens remain two views
+   of one row rather than two rows that can disagree.
+
+   Changing the system clears the PIC in the same breath: a person pinned to
+   Auditor is not a PIC for a case that now goes to Stock, and leaving them
+   there would send it to somebody who cannot see it.
+
+   THE SEAT IS CLEARED WHENEVER A PERSON IS NAMED, and the other way round.
+   Both reach the case — pic_user_id puts a name on it, pic_seat_no puts it
+   in a seat — so leaving the old one behind would hand the case to two
+   different people at once. This screen asks for a person, so a person is
+   what it sets. */
 async function saveCond(row, systemChanged) {
   const mod  = row.dataset.mod;
   const work = row.dataset.work;
@@ -658,28 +689,34 @@ async function saveCond(row, systemChanged) {
   const picId    = picSel.value || null;
   const picName  = picId ? picSel.options[picSel.selectedIndex].text : null;
 
-  const existing = routeFor(mod, work);
   const patch = {
-    source_module: mod,
-    category:      work,
-    to_module:     toModule,
-    to_user_id:    picId,
-    to_user_name:  picName,
-    updated_at:    new Date().toISOString(),
-    updated_by:    me.name
+    module_key:    toModule,
+    pic_user_id:   picId,
+    pic_user_name: picName,
+    pic_seat_no:   null
   };
 
-  const { error } = existing
-    ? await _supabase.from('nelos_routes').update(patch).eq('id', existing.id)
-    : await _supabase.from('nelos_routes').insert([patch]);
+  const { error } = await _supabase.from('nelos_categories')
+    .update(patch).eq('module_key', mod).eq('name', work);
 
-  if (error) { toast('Could not save — ' + error.message, false); await load(); return; }
-  toast(`${work} now opens for ${labelOf(toModule)}${picName ? ' · ' + picName : ''}.`);
+  if (error) {
+    /* The unique index is (module_key, lower(name)) and takes no notice of
+       `active`, so moving a title onto a system that already has one of
+       that name comes back 23505 — and the office cannot see the clash
+       coming, because a retired title is not on any screen. Said in those
+       terms rather than as a database code. */
+    toast(error.code === '23505'
+      ? `${labelOf(toModule)} already has a case called “${work}”.`
+      : 'Could not save — ' + error.message, false);
+    await load();
+    return;
+  }
+  toast(`${work} now lands with ${labelOf(toModule)}${picName ? ' · ' + picName : ''}.`);
   await load();
 }
 
 async function load() {
-  const [tRes, aRes, mRes, hRes, pRes, cRes, rRes] = await Promise.all([
+  const [tRes, aRes, mRes, hRes, pRes, cRes] = await Promise.all([
     _supabase.from('nelos_work_types').select('*').eq('active', true).order('sort_order')
       .then(r => r, e => ({ error: e })),
     _supabase.from('nelos_automations').select('*').order('id')
@@ -690,15 +727,17 @@ async function load() {
       .then(r => r, () => ({ data: [] })),
     _supabase.from('shared_plots').select('plot_name,nursery_name')
       .then(r => r, () => ({ data: [] })),
-    /* auto_condition and the PIC columns arrive with
-       migration_nelos_auto_conditions.sql. On a database that has not run it
-       these come back as errors and the section says so, rather than the
-       page failing to load. */
+    /* EVERY COLUMN, because the PIC fields this page writes arrive with two
+       different migrations and naming one a table has not got is not an
+       empty cell in PostgREST — the whole select comes back 400 and the
+       section reads as not set up. The filter still asks for
+       auto_condition, which arrives with
+       migration_nelos_auto_conditions.sql: on a database without it this
+       comes back an error and the section says so, rather than the page
+       failing to load. */
     _supabase.from('nelos_categories')
-      .select('name,module_key,auto_condition,sort_order')
+      .select('*')
       .eq('active', true).not('auto_condition', 'is', null).order('sort_order')
-      .then(r => r, e => ({ error: e })),
-    _supabase.from('nelos_routes').select('id,source_module,category,to_module,to_user_id,to_user_name')
       .then(r => r, e => ({ error: e }))
   ]);
 
@@ -715,9 +754,8 @@ async function load() {
   modules  = mRes.data || [];
   handlers = hRes.data || [];
   plots    = pRes.data || [];
-  hasConds = !cRes.error && !rRes.error;
+  hasConds = !cRes.error;
   conds    = cRes.data || [];
-  routes   = rRes.data || [];
   fillTypes();
   render();
   renderConds();

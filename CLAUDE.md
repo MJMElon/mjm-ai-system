@@ -4025,6 +4025,156 @@ element as "not shown", so the first section passed over the very page it
 was written about — the previous markup had no id on that row at all. It
 answers `'no such row'` now, which is a different thing from `false`.
 
+### And then Case Routing turned over: the TITLE names the queue, not the page
+
+Everything above this line is the history of one rule, and the office
+restarted it in a sentence: *"the nelos case routing setting change to case
+category, from system, PIC. meaning the case category under that system is
+the type of case that portal PIC need to solve."*
+
+So the screen turned over. The block used to be the system that RAISES a
+title, with a *Solve by* half on the right:
+
+    FC Portal                      <- raises
+      # | Case Category | System | PIC
+      1 | Request Transplanting Signboard | Admin Portal | Admin 2
+
+It is now the system that **SOLVES** it, and the titles under a portal are
+that portal's work:
+
+    Admin Portal                   <- solves
+      # | Case Category | From System | PIC
+      1 | Request Transplanting Signboard | FC Portal | Admin 2
+
+**`nelos_categories.module_key` MEANS THE OPPOSITE OF WHAT IT MEANT**, which
+is the one thing to know before reading any of the code around it.
+`migration_nelos_category_system.sql` made it the system that raises a
+title; `shared/RUN_ME_nelos_routing_is_the_category.sql` makes it the system
+that solves one. Who may raise it is **`raise_modules`**, the From System
+tick list, and the PIC rides on the title as `pic_seat_no` / `pic_user_id`.
+
+**THE PAGE SOMEBODY IS STANDING ON NOW DECIDES NOTHING, and that is the
+whole gain.** A rule was keyed on `(source_module, category)` and the source
+is the PAGE — and the dock is on 49 pages. So Akbar picking *Request
+Transplanting Signboard* from Seedling Stock matched no rule, and the case
+**stayed with Seedling Stock** instead of going to Admin. The solver rides
+on the title, so it lands in the right queue wherever it was raised.
+`tests/the_destination_follows_the_work.cjs` drives that title from three
+different pages and gets Admin seat 2 every time.
+
+**`to_module` DISAPPEARED.** It IS the block. One less thing to set and one
+less thing to disagree with itself.
+
+**`raise_modules` HAS THREE STATES AND ALL THREE ARE USED**, and folding any
+two of them together breaks something:
+
+| | |
+|---|---|
+| **NULL** | nobody has been asked. Only possible before the SQL runs, which is what makes the flip safe to re-run — it looks for exactly this. Every reader treats it as *any system*, because an absent answer is not a no anywhere here. |
+| **`{*}`** | any system. What a newly ADDED title gets, because a title nobody can raise is on no Work list, which is invisible and reads as broken. |
+| **`{}`** | nobody raises it by hand. What an **automatic** title wants, and why the empty case must never be read as the absent one: fold them and either every automatic title turns up in every Work list, or every Work list empties itself over a column. |
+| **`{scan,operation}`** | those systems, and no others. |
+
+The star is a sentinel inside the array rather than a column of its own,
+because **four** readers ask this question and one array is one thing for
+each of them to read.
+
+**THE FALLBACK IN BOTH RAISE FORMS COULD GO, and its absence is the measure
+of the change.** A system with no titles of its own used to borrow the
+DESTINATION's list — a crutch for the hub, where the source is Nelos and
+Nelos owns nothing. A title left open to any system is in every Work list
+including that one, so the exception is answered by the rule.
+
+**THE SEAT HAD NEVER ONCE REACHED A CASE.** `nelos_route_case()` returns
+early on a case that already names its queue — *routing is the default, not
+a rule* — and both raise forms always name one, so a PIC set as **Admin 2**
+on Case Routing was dead for everything raised from a form. Both forms write
+`assigned_seat_no` now, and `isMine()` has read it all along. Two rules in
+it: the box asks for a PERSON and the setting is a SEAT, so `seatHolder()`
+resolves one to the other; and **the seat does not travel to an overridden
+destination**, because that number is a different person in another system,
+or nobody.
+
+**FOUR SCREENS READ THE COLUMN, and the two that were nearly missed are the
+instructive ones.** The two raise forms are the obvious pair — `shared/
+shared_nelos_dock.js` and `Mobile/src/components/NelosNewCase.jsx`, the
+same-decision-twice this file keeps finding. The other two:
+
+- **The hub drawer** (`nelos_dashboard.html`) was deliberately left out of
+  the previous change, and could not be left out of this one: its
+  `routedTo()` and its category list both read `module_key`, so one case
+  opened from the hub and the identical case opened from a module would go
+  to two different queues. It also defaulted the PIC to the **#1** of the
+  destination while both raise forms honoured the office's seat.
+- **Automate Cases** (`nelos_automation.html`) wrote its *Open case action*
+  into a `nelos_routes` row, which is now inert — a setting saved and
+  obeyed by nothing, which this file has a heading about. It writes the
+  TITLE now, so the two screens stay two views of one row. Its cards are
+  the QUEUE a case lands in rather than the system that raises it, because
+  the old pair was the same word twice as often as not.
+
+**WHAT IS LEFT OF `nelos_routes` is the SECTION DEFAULT** (`category IS
+NULL`) — the catch-all for a title no screen has heard of, which is a line
+somebody typed. The per-category rows are **deliberately not deleted**: they
+are the record of what was set, and the check at the foot of the SQL reads
+every one of them back and says **AGREES** or **MOVED**, which is how you
+know the flip carried the office's own settings rather than guessing at
+them. Nothing on any screen reads them any more.
+
+**NOTHING HAD TO BE RE-DECIDED.** The flip reads off the rules already set:
+the new block is the old *Solve by*, the From System is the old block, the
+PIC does not move, and a title with no rule stays where it is. Tested on the
+scratch Postgres against the state production is actually in, then run twice
+more — the guard is `raise_modules IS NULL`, so a second run moves nothing.
+
+**TWO TITLES SPELLED THE SAME UNDER TWO SOLVERS IS THE ONE THING THAT MAKES
+ROUTING A GUESS**, and the flip creates them: *Repair Maintenance Work*
+raised from the FC Portal and from Seedling Stock, both solved by Admin, are
+one title with two doors in. PART 3 of the SQL **merges** them — the keeper
+takes both doors and fills its blanks from the copies — and the unique index
+is dropped for the length of the flip, because Postgres checks it row by row
+and no order of updates avoids the collision. The check names any that a
+later hand edit creates, the trigger breaks the tie the same way every time,
+and Automate Cases reports a 23505 in those words rather than as a code.
+
+**The one gesture deliberately NOT built is moving a title between
+solvers** from Case Routing. The block is the solver, so a move is a retire
+and an add under the other portal — which keeps its own From list and PIC
+where the office left it, and is a rare act. Automate Cases can move an
+automatic one, because its action column was already that control.
+
+`tests/the_work_list_is_the_raising_system.cjs` keeps its name — the Work
+list IS still the raising system's — and was rewritten to the column that
+now answers it: 37 checks over all four screens plus the trigger order, **27
+of them failing on the previous code**.
+`tests/the_destination_follows_the_work.cjs` is 39, **17 of them red before
+this**, and it drives the three states of `raise_modules` over the REAL
+function out of both forms. Three things they had to learn:
+
+- **The browser half has to FAIL rather than die.** Against the new fixture
+  the previous dock leaves the Work dropdown hidden, so `selectOption` times
+  out and the harness stops at the first throw with every check underneath
+  never asked — the trap this file already names. `pickWork` catches it and
+  records one named failure instead, which is why the 17 above is a count of
+  checks rather than a stack trace.
+
+- **The sentinel is handed INTO the lifted function**, as the literal both
+  files declare, so a file that changes the spelling fails here instead of
+  quietly reading `undefined`.
+- **A fixture whose titles are open to any system cannot test the typed-line
+  fallback**, because then no system has an empty Work list. Every title in
+  that fixture is raisable from the FC Portal and nowhere else, and the
+  three states are driven as a unit instead.
+
+And one about searching a page for a column that went: `/Solve by/` was
+still true of `nelos_user_setting.html`, because the page **explains at
+length** what that column was and why it went — in prose, in the stylesheet
+and the script, which share comment delimiters. The comments come out
+first. Same trap, third time.
+
+`nelos_automation.html` gained the three no-cache metas: every line of its
+code is inline, so the page IS the deploy, and it is the page being changed.
+
 ## A case category is retired, never deleted — and adding it back revives it
 
 The office asked for a cross on each row of Case Routing: *"i want to delete
@@ -4570,10 +4720,11 @@ metas that page would have gone on asking for the old `?v=` for ever.
 **`nursery_ops_user_access.html` now carries them too**, for the same reason
 one page along: the tick list lives in that page, so a cached copy goes on
 offering yesterday's labels — and the label on *Open Setting* was the thing
-being corrected. **Five pages are still unguarded** — the two PALMS pages,
-Life of Plot, `operation_delivery.html` and `operation_settings.html` — and
-the test prints them every run, so do not trust the list in this paragraph
-over the one the test gives you.
+being corrected. **Four pages are still unguarded** — the two PALMS pages,
+Life of Plot and `operation_settings.html` — and the test prints them every
+run, so do not trust the list in this paragraph over the one the test gives
+you. It said five until `operation_delivery.html` was guarded, which is the
+whole reason for that sentence.
 
 **Any new page that loads a script with `?v=` needs all three** to be
 deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is
