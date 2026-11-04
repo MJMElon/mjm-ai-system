@@ -223,6 +223,24 @@ async function boot(browser) {
     await open(902);
     check('a row dated before the transfer offers no choice', await page.evaluate(() =>
       document.getElementById('rf-bal').style.display), 'none');
+    // The -R plot is doing the PARENT's round, so its row carries the parent's number.
+    const rows = await page.evaluate(() => {
+      if (!NURSERY_PLOTS.UNN1.includes('U6')) NURSERY_PLOTS.UNN1.push('U6');
+      stockPlots = { 'UNN 1': ['U6', 'U6-R'] };
+      const s = getState('UNN1', 'Oct 2026');
+      s.weeksByWork = s.weeksByWork || {};
+      s.weeksByWork.pd = [{ from: 1, to: 7 }, { from: 8, to: 14 }, { from: 15, to: 21 }, { from: 22, to: 31 }];
+      s.pd = {};
+      ['W1', 'W2', 'W3', 'W4'].forEach(w => {
+        s.pdConfig[w] = Object.assign({}, s.pdConfig[w] || s.pdConfig.W1,
+          w === 'W4' ? { D: 'Antracol', D_dose: 50, D_unit: 'gm' } : {});
+        s.pd[w] = { U6: { P: false, D: true } };
+      });
+      delete s.replantSeeded;
+      autoSyncRecords();
+      return records.filter(r => r.plot === 'U6-R' && /^Penyemburan/.test(r.jenis)).map(r => r.racun.split(':')[0] + ':' + r.racun.split(':')[1].trim().split(' ')[0]);
+    });
+    check('U6-R joining in week 4 is doing U6 Round 4 with Antracol, not its own Round 1', rows, ['Round 4:Antracol']);
     await page.close();
   } finally { await browser.close(); }
 

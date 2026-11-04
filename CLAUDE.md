@@ -1847,7 +1847,9 @@ the 1st takes the whole month). A -R plot Seedling Stock files under the
 nursery joins `NURSERY_PLOTS` here even with no capacity keyed, or there is
 nowhere to seed. It is a DEFAULT: once per plot per month
 (`replantSeeded`, saved with the schedule), a hand-ticked -R row is left
-alone, and a parent with nothing ticked seeds nothing. It writes the draft
+alone, and a parent with nothing ticked seeds nothing. It also carries the
+PARENT's round NUMBER (`roundMaps`): N14-R joining in week 4 reads *Round 4:
+Antracol*, not its own Round 1. It writes the draft
 and does NOT publish — the green notice above the schedule says to press
 Save Schedule.
 

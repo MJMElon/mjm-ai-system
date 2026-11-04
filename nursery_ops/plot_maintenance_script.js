@@ -6293,6 +6293,17 @@ function roundMaps(n, m, s) {
       else [1, 2, 3, 4].forEach(w => { map[w] = w; });
       out[p] = map;
     });
+    /* A -R plot given its parent's rounds (seedReplantRounds) is doing the
+       PARENT's round, so it carries the parent's number: U6-R joining in
+       week 4 is doing U6's Round 4, not its own Round 1. Only for a week the
+       parent has; a round ticked on the -R plot alone keeps its own count. */
+    plots.forEach(p => {
+      if (!(s.replantSeeded || {})[p]) return;
+      const parent = String(p).replace(/-R\d*$/i, '');
+      const pm = out[parent];
+      if (!pm || parent === p) return;
+      [...new Set(byPlot[p])].forEach(w => { if (pm[w]) out[p][w] = pm[w]; });
+    });
     return { get: (plot, week) => ((out[plot] || {})[week]) || week };
   };
   return { pd: rank(pd), mn: rank(mn), wd: rank(wd), ir: rank(ir), num };
@@ -8857,8 +8868,8 @@ function _drawExclBal(plot, batch, tarikh, jenis) {
     return;
   }
   const which = esc((probe.culledBatches || []).join(', '));
-  const opt = (on, label) => `<label style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;cursor:pointer;">`
-    + `<input type="radio" name="rf-bal" ${(!!_rfExclBal) === on ? 'checked' : ''} onchange="setRecExclBal(${on})"> ${label}</label>`;
+  const opt = (on, label) => `<label style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;cursor:pointer;font-size:12.5px;font-weight:600;text-transform:none;letter-spacing:0;">`
+    + `<input type="radio" name="rf-bal" style="width:16px;height:16px;margin:0;padding:0;flex:0 0 auto;" ${(!!_rfExclBal) === on ? 'checked' : ''} onchange="setRecExclBal(${on})"> ${label}</label>`;
   box.style.display = '';
   box.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">${t('bal.q')
       .replace('{x}', `<b>${numMY(bal)}</b>`).replace('{b}', which)}</div>`
