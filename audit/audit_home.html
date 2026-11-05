@@ -1785,13 +1785,74 @@ function loadAuditTodo(){
      into per-work-type groups (Manuring / Weeding / Interrow / P&D /
      Others). Tapping a chip deep-links straight into that plot's audit
      form via ?plot= on the maintenance page. */
+  /* ── A PHONE RECORD RAISES AN AUDIT ONCE THE CONDUCTOR HAS VERIFIED IT ──
+     The office asked for it in one line -- "it should be shown here after FC
+     verified the job" -- over a board carrying 77 weeding chips on one day.
+
+     A maintenance record saved on a phone is a CLAIM until a Field Conductor
+     presses Verify, and the conductor can also SEND IT BACK. This board asked
+     for neither column, so it raised a task for all three states at once:
+
+       - a record nobody has looked at yet, which is work the conductor has
+         still to accept;
+       - a record the conductor REJECTED, which `add_maint_field_reject.sql`
+         says in its own words goes back on the week as still outstanding --
+         so the auditor was being sent to audit a record the conductor had
+         explicitly refused;
+       - and then the record the worker keyed AGAIN to replace it, which is
+         how one morning on one plot comes to wear two chips.
+
+     The office own Work Maintenance page has always read the verified ones
+     only (`_verifiedOnly` in plot_maintenance_script.js). This is that rule,
+     asked one screen along, and it is applied ONCE to the row list so the
+     strict walk, the fallback walk and the diagnostics all see the same
+     records -- two filters is two answers.
+
+     IT FAILS OPEN. A database that predates those columns refuses the WHOLE
+     read over a column it has not got, which would take every maintenance
+     row off the board rather than show one too many. So the columns are
+     asked for by name, a refusal that names them drops them, and that
+     database behaves exactly as this page did before the gate. */
+  async function _readMaintFieldRecords(diag){
+    const BASE = 'id,work_date,nursery_name,plot_name,work_type,jenis';
+    try {
+      const rows = await sb.select('nops_maint_field_records',
+                                   'select=' + BASE + ',verified_at,rejected_at');
+      diag.fGate = 'verified only';
+      diag.fRaw  = (rows || []).length;
+      const out = [];
+      let unverified = 0, rejected = 0;
+      (rows || []).forEach(r => {
+        if (r && r.rejected_at)  { rejected++;   return; }
+        if (!r || !r.verified_at){ unverified++; return; }
+        out.push(r);
+      });
+      diag.fUnverified = unverified;
+      diag.fRejected   = rejected;
+      return out;
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      if (/verified_at|rejected_at/i.test(msg)) {
+        console.warn('[audit-home] no verified_at/rejected_at on '
+                   + 'nops_maint_field_records — every record raises a task');
+        diag.fGate = 'NOT INSTALLED - every record raises a task';
+        try {
+          const rows = await sb.select('nops_maint_field_records', 'select=' + BASE);
+          diag.fRaw = (rows || []).length;
+          return rows || [];
+        } catch (e2) { diag.fError = String(e2?.message || e2); return []; }
+      }
+      diag.fError = msg;
+      return [];
+    }
+  }
   async function loadMaintTimeline(){
     const diag = { fRows: 0, oRecs: 0, audited: 0, kept: 0, skippedPd: 0,
                    skippedAudited: 0, skippedNoPlot: 0, skippedOutOfScope: 0,
                    skippedNoDate: 0, sampleKept: [] };
     try {
       const [fRows, aRows, oRows, cRows] = await Promise.all([
-        sb.select('nops_maint_field_records', 'select=id,work_date,nursery_name,plot_name,work_type,jenis').catch(e => { diag.fError = String(e?.message||e); return []; }),
+        _readMaintFieldRecords(diag),
         sb.select('audit_maintenance_audits', 'select=task_id').catch(e => { diag.aError = String(e?.message||e); return []; }),
         sb.select('nops_maint_records',       'select=records').catch(e => { diag.oError = String(e?.message||e); return []; }),
         /* The plots this yard added by hand. Fails open: without it the

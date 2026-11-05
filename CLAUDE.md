@@ -3952,6 +3952,71 @@ twice and another never answer at all. **4 of its 16 checks fail on the
 previous reader**, and the headline one names the rows: *1,003 to 1,007
 went missing*.
 
+#### AND THE CHIPS WERE CLAIMS, not verified work
+
+Same board, next question, over a Maintenance card carrying **77 weeding
+chips** on one day with B06 three times and U02 seven: *"and where is all
+these link from? it should be shown here after FC verified the job"*.
+
+**WHERE THEY COME FROM IS TWO TABLES AND NOTHING ELSE**, and it is worth
+writing down because the chips look alike:
+
+| | |
+|---|---|
+| a **phone record** | `nops_maint_field_records`, one row per worker per plot per job, written by the FC Portal or the Worker Portal. A small serial id. |
+| an **office schedule row** | one element of the single `nops_maint_records.records` JSONB list, drawn by the Work Maintenance schedule. A `Date.now()` id near 1.79e12. |
+
+Each row becomes ONE task, its deadline is the work date plus that job own
+window out of `audit_settings`, and the one thing that retires it is a row
+in `audit_maintenance_audits` carrying its `task_id`. So **a plot worked by
+seven people is seven chips** -- the look-alike lesson again, one screen
+along.
+
+**AND THE OFFICE WAS RIGHT ABOUT THE GATE, WHICH WAS SIMPLY NOT THERE.** A
+phone record is a CLAIM until a Field Conductor presses Verify, and the
+conductor can also SEND IT BACK. `loadMaintTimeline` asked for neither
+column, so it raised a task for all three states at once:
+
+- a record nobody has looked at yet, which the conductor has still to
+  accept;
+- a record the conductor REJECTED -- and `add_maint_field_reject.sql` says
+  in its own words that such a record goes back on the week as still
+  outstanding, so **the auditor was being sent to audit a record the
+  conductor had explicitly refused**;
+- and then the record the worker keyed AGAIN to replace it, which is how
+  one morning on one plot comes to wear two chips.
+
+The office own Work Maintenance page has read the verified ones only since
+that column existed (`_verifiedOnly` in `plot_maintenance_script.js`).
+`_readMaintFieldRecords` is that rule asked one screen along, and it is
+applied ONCE to the row list so the strict walk, the fallback walk and the
+diagnostics all see the same records -- two filters is two answers.
+
+**IT FAILS OPEN.** A database that predates those columns refuses the WHOLE
+read over a column it has not got, which would take every maintenance row
+off the board rather than show one too many. The columns are asked for by
+name, a refusal that names them drops them, and that database behaves
+exactly as this page did before the gate. `diag.fGate` says which of the
+two it is, beside `fRaw`, `fUnverified` and `fRejected`, so `?debug=1`
+answers *what did the gate take off* without a query.
+
+**THE OFFICE SCHEDULE HALF IS DELIBERATELY UNTOUCHED, and that is the open
+question rather than an oversight.** It has no Verify of its own -- a row
+there carries a date because the office keyed one, or because
+`applyFieldRecords` filled an empty cell from a record a conductor HAD
+verified. Gating it on a column that does not exist would be inventing a
+decision, and the sweep below shows what it costs to leave it: in the
+office own run, October own 145 unanswered deadlines are **every one of
+them an office schedule row**, so that half is most of what they are
+looking at. Ask before changing it.
+
+`tests/a_phone_record_waits_for_the_conductor.cjs` drives the real board
+through all three states and the fail-open; **3 of its 6 checks fail on the
+previous board**, and `admin_can_close_a_dead_plot.cjs` grew a third
+fixture row that is unverified, so a gate applied backwards is caught
+there too. **Nothing to run in the database** -- both columns have existed
+since `add_maint_field_verify.sql` and `add_maint_field_reject.sql`.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated

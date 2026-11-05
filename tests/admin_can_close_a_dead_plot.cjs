@@ -83,9 +83,18 @@ const DUE_SHOWN = ['en', 'en-MY', 'ms'].map((loc) =>
   new Date(DUE_ISO + 'T00:00:00')
     .toLocaleDateString(loc, { day:'numeric', month:'short', year:'numeric' }));
 
+/* VERIFIED, because a phone record raises no audit task until the Field
+   Conductor has pressed Verify -- and a REJECTED one raises none ever. The
+   board reads both columns now, so a fixture row without verified_at is a
+   record nobody has checked and is correctly invisible. The third row is
+   here to prove exactly that. */
 const FIELD = [
-  { id: 9001, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N01', work_type:'weeding', jenis:'Merumput' },
-  { id: 9002, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N02', work_type:'weeding', jenis:'Merumput' }
+  { id: 9001, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N01', work_type:'weeding', jenis:'Merumput',
+    verified_at: LONG_AGO + 'T02:00:00Z', rejected_at: null },
+  { id: 9002, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N02', work_type:'weeding', jenis:'Merumput',
+    verified_at: LONG_AGO + 'T02:00:00Z', rejected_at: null },
+  { id: 9003, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N03', work_type:'weeding', jenis:'Merumput',
+    verified_at: null, rejected_at: null }
 ];
 
 const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); return m ? m[1] : ''; };
