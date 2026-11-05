@@ -268,9 +268,19 @@ const classOf = (s) => (s && typeof s === 'object') ? s.cls : String(s);
     check('and the confirm said what it signs and what it does not',
       dialogs.some(d => /salary claim is signed separately/i.test(d)), true);
 
+    /* THE SIGNATURE IS THE PAGE'S OWN ANSWER. The first version sent a
+       global `userEmail` that THIS PAGE HAS NEVER HAD, so every row went in
+       with no name and the strip had nothing to print — which is what put
+       the word "somebody" on the office's screen. */
+    check('the row carries WHO signed it',
+      await ev(page, () => ((window.__DB.mjmnpayroll_verifications || [])[0] || {}).verified_by),
+      'Elon Ting');
+
     const s = await strip(page);
     check('the strip turns over to Verified, with a name and an Unlock',
       [s.cls, s.buttons], ['verify-bar verify-done', ['↺ Unlock']]);
+    check('and it NAMES them rather than saying somebody',
+      [s.text.includes('Elon Ting'), /somebody/i.test(s.text)], [true, false]);
 
     /* THE PAINT. It is only the paint, which is why the gate is checked
        separately below. */
@@ -285,8 +295,8 @@ const classOf = (s) => (s && typeof s === 'object') ? s.cls : String(s);
     await ev(page, () => togglePayrollTick(1, 'Muhamad Azhar'));
     check('a tick called straight out is REFUSED, not merely greyed',
       await ev(page, () => JSON.stringify(payrollData)), before);
-    check('and it says who shut it',
-      dialogs.slice(said).some(d => /^alert/.test(d) && /verified by/i.test(d)), true);
+    check('and it says who shut it, by name',
+      dialogs.slice(said).some(d => /^alert/.test(d) && /verified by Elon Ting/.test(d)), true);
 
     /* A sheet signed off is one sheet. Signing P & D must not shut work
        nobody has finished keying. */
@@ -407,6 +417,55 @@ const classOf = (s) => (s && typeof s === 'object') ? s.cls : String(s);
       await ev(page, () => { try { togglePayrollTick(3, 'Awaludin'); } catch (_) {} });
       return ev(page, () => !!(payrollData[payrollKey(getNursery(), getMonth(), 'pd')] || {})[3]);
     })(), true);
+    check('no page error', errs, []);
+    await page.close();
+  }
+
+  /* ── 7. NO NAME IS NO NAME ──────────────────────────────────────────── */
+  console.log('— 7. a signature with no name does not invent one: 不要放somebody');
+  {
+    /* A row verified before the signer was fixed carries no name and never
+       will. The sentence has to say what IS known and stop — a word
+       standing where the name belongs reads as a person this screen could
+       name, which is exactly how the office read it. */
+    const { page, errs, dialogs } = await boot(browser, {
+      mjmnpayroll_workers: REGISTER,
+      mjmnpayroll_verifications: [
+        { month: MONTH, sheet: 'workrec:pd', scope: 'UNN2',
+          verified_by: null, verified_at: '2026-11-01T02:00:00Z' },
+      ],
+    });
+    await openJob(page, 'pd');
+    const s = await strip(page);
+    check('it is shut all the same', classOf(s), 'verify-bar verify-done');
+    check('the strip gives the day and names nobody',
+      [/01 Nov 2026/.test(s.text || ''), /somebody/i.test(s.text || '')], [true, false]);
+
+    const said = dialogs.length;
+    await ev(page, () => togglePayrollTick(1, 'Muhamad Azhar'));
+    const alerts = dialogs.slice(said).filter(d => /^alert/.test(d));
+    check('the refusal reads "was verified on <day>", never "by somebody"',
+      [alerts.some(d => /was verified on 01 Nov 2026/.test(d)),
+       alerts.some(d => /somebody/i.test(d))], [true, false]);
+
+    const was = dialogs.length;
+    await ev(page, () => unverifyWorkRec());
+    check('and so does the Unlock confirm',
+      dialogs.slice(was).some(d => /^confirm/.test(d)
+        && /It was verified on 01 Nov 2026\./.test(d) && !/somebody/i.test(d)), true);
+
+    /* The word is gone from the CODE of the verify block, not only from the
+       three sentences — the next one will be written the same way
+       otherwise. The COMMENTS come out first: this block explains in prose
+       why the word is not there, and so does the one about a button drawn
+       before somebody's access changed. Same trap as every other search of
+       a file that documents what it removed. */
+    const js = read('nursery_ops', 'plot_maintenance_script.js');
+    const block = js.slice(js.indexOf('const WORKREC_PREFIX'), js.indexOf('function togglePayrollTick'))
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+    check('and nothing the screen can print says it at all',
+      /somebody/i.test(block), false);
+
     check('no page error', errs, []);
     await page.close();
   }

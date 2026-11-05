@@ -2293,6 +2293,38 @@ straight out of the console on a shut sheet, which is the only way to tell
 the gate from the paint. **22 of its 36 checks fail on the previous code**,
 each by name.
 
+#### A WORD STANDING WHERE A NAME GOES, and the signature was never stored
+
+It shipped saying *"was verified by somebody"* in three places, and the
+office took it off in two words: *不要放somebody*. **They are right, and the
+wording was the symptom.** The signature was going in as NULL on every
+single row, so the strip had nothing to print — `verifyWorkRec` passed a
+global `userEmail`, which **THIS PAGE HAS NEVER HAD**: it occurs three
+times in the file and all three are a defensive `typeof` read, so it was
+always undefined and the stand-in was reached every time.
+
+`_wrSigner()` is the page's OWN answer — `window.currentUserEmail` then
+`_signingAs()`, the two the Checked ticks already ask in that order, a few
+hundred lines down. Nothing resolving stores **nothing**, never 'office' or
+any other word: a second stand-in is the same fault spelled differently.
+
+**AND THE SENTENCE SAYS WHAT IS KNOWN AND STOPS.** A row verified before
+this carries no name and never will, so `_wrSignedBy(v)` answers *verified
+by X on <day>*, *verified on <day>* or just *verified*, and the strip
+**DROPS the cell** rather than filling it with a word or a dash. The NAME is
+the one thing a signature carries that nothing else on that strip does, and
+a word in its place reads as a person whose name nobody wrote down.
+
+**One helper, because the sentence is said three times** — the refusal, the
+strip and the Unlock confirm — and three wordings for one fact is how they
+drift.
+
+Section 7 of the test is the no-name row, and its source check **strips the
+comments first**: this block explains in prose why the word is not there,
+which a plain search reads as the word still being there. Same trap, fourth
+time. **7 of its 44 checks fail on the previous code**, the first of them on
+the cause rather than the wording — *the row carries WHO signed it*.
+
 ## A -R plot near culling: its rounds, and the balance it leaves behind
 
 The office: non-collecting plots and collecting plots were right; a plot
