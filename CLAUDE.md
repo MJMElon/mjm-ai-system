@@ -1356,6 +1356,125 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+### A TIMEOUT IS NOT A REFUSAL, and one press wrote seven audits
+
+The office opened U03 on 04 Nov and found the same maintenance audit
+listed over and over — same plot, same day, same task, same result, the
+same remark — and handed over the seven photo files behind the copies:
+
+    audit_maintenance_audits_photo_url_1793750892246_…jpeg
+    audit_maintenance_audits_photo_url_1793750950196_…jpeg
+    … about a minute apart
+
+**A DIFFERENT FILE EACH TIME IS THE WHOLE DIAGNOSIS, and it is what ruled
+out the obvious suspect.** A record the sweep sends again carries the link
+it uploaded the first time — `_rememberPhotoUrl` writes it into the queue
+row before the photo leaves the phone, which is the rule one section up —
+so sweep retries share ONE file. Seven files means seven uploads, which
+means the picture was uploaded and then uploaded again.
+
+It was, and the fault is two lines long. `smartSave`'s online path copies
+the payload into `clean` and uploads each photo INTO THAT COPY. **`clean`
+was declared inside the `try`**, so when the insert failed the catch fell
+through to the offline branch carrying `payload` — the original, still
+holding the photo as a `data:` URL. The queued copy therefore uploaded the
+same picture a second time under a new name.
+
+**And the insert that "failed" had very often not failed at all.** It is
+wrapped in an eight-second cap, and a nursery signal takes longer than
+that while the row still lands. So one press wrote **two rows and two
+files**, and the auditor was told *"Saved offline — will sync later"* over
+a record that was already in the table.
+
+**NOTHING IN ANY OF THESE TABLES HAS EVER BEEN UNIQUE**, which is the half
+that let it run to seven. `syncNow` has retired a **23505** as *"already
+present"* since the day it was written — that path had simply never had
+anything to fire on. `audit_id` looks like the key and is not: it is the
+number of audits the phone can see plus one, so two auditors saving at the
+same moment both answer the same, and a unique index on it would refuse
+the second person their work. `audit_script.js` says so in its own
+comment.
+
+So **`client_uid`** is the stamp — one id per press of Save, carried on
+every retry of that press, with a partial unique index behind it
+(`shared/RUN_ME_one_audit_per_save.sql`, on all four tables `smartSave`
+writes). The repeat now comes back 23505 and the sweep retires it quietly.
+Four things in it:
+
+- **The column is ASKED ABOUT, once per table per session.** Naming a
+  column a table has not got is not an empty cell in PostgREST, it is the
+  whole insert refused — which on this screen is an auditor standing in a
+  plot being told the save failed.
+- **ONLY A REFUSAL THAT NAMES THE COLUMN IS AN ANSWER.** No signal, a
+  policy, a dropped connection: none of those is the column being absent,
+  and caching one as that would switch the guard off for the rest of the
+  session over a bad moment. Those are not remembered, so the next save
+  asks again.
+- **An UPDATE is not stamped.** It names the row it changes, so it cannot
+  land twice.
+- **The index is PARTIAL** (`WHERE client_uid IS NOT NULL`). Every row
+  already in these tables has no stamp, and a plain unique index would
+  read all of them as one value and refuse the lot. **Nothing is
+  backfilled**: a stamp invented by the SQL would be that file claiming
+  two old rows were one press, which it cannot know. So the check's
+  STAMPED line reads **0 of N on the first run and that is correct** — it
+  climbs as phones pick up the new build.
+
+**The index is the half that protects a phone still running the old
+build**, and there are always some: the fix in the file reaches a handset
+only when it next loads the page, and an outbox can hold a week.
+
+**A PARALLEL SESSION FIXED THE DATABASE HALF THE SAME MORNING**, and the
+two were merged rather than one replacing the other.
+`shared/RUN_ME_remove_duplicate_audits.sql` removed the copies and put a
+unique index on **`task_id`**. That is a STRONGER key than the stamp and
+fires first on maintenance, and it was chosen against the real table —
+188 disagreeing pairs, with a rule for which verdict survives, which is a
+judgement no file written from here could make.
+
+It is also a BLUNTER key: one audit per task **for ever**, so a second
+audit of the same task — the **Re-audit** button on the detail screen — is
+now refused by the database. That is worth knowing and is the office's
+call, not this file's. So: that file owns the maintenance table and this
+one does not de-duplicate it, because two repairs for one fault is how
+they come to disagree; the stamp still goes on all four tables, since the
+other three are written by the same function and were left unguarded, and
+so that there is something underneath task_id the day it is reconsidered.
+
+`shared/CHECK_duplicate_audits.sql` is what answers this from the data
+rather than from a reading of the code — it names the worst-copied audits,
+how far apart the copies landed, and **how many different photo files are
+behind them**, which is the line that says which of the two faults you are
+looking at: one file is the sweep sending a row again, a file each is this
+one. `RUN_ME_one_audit_per_save.sql` then takes the copies off the record,
+keeping the earliest of each set, comparing the WHOLE row through
+`to_jsonb` less the id, the insert time, the photo and the running number
+— so a column added later is compared too. **The photos stay in storage**:
+this takes a row off the record, and a blob costs nothing where it sits.
+Two audits of one plot on two different days differ on the date and are
+both kept.
+
+`tests/one_press_of_save_is_one_audit.cjs` drives the real `smartSave` and
+the real `syncNow` in a real browser; **9 of its 15 checks fail on the
+previous code**. One thing it had to learn, and it is the same shape as
+the fault: **the second upload does not happen inside the save.** The
+first version of the headline check counted uploads after `smartSave`
+returned and passed on the broken code — the duplicate only appears when
+the press is followed through the sweep as well, which is what the office
+counted. A check that stops where the function stops passes over the very
+thing being fixed.
+
+**What was NOT changed, having no evidence for it:** the Save button has
+no in-flight guard, but `#loading-overlay` is `position:fixed; inset:0` at
+z-index 9998 while a save runs, so a second tap cannot reach it. Four
+copies of that form exist and adding a guard to one of them is the
+thinner-copy fault this file is full of. The shared `smartSave` is where
+all four meet, and that is where this was fixed.
+
+`audit_dexie_offline.js` is loaded with a `?v=` on **seven** pages, all
+bumped together, and `audit_sw.js` precaches those pages so `VER` moved
+with them — to `mjm-26110501`.
+
 ## A to-do list that hides what is coming is a diary
 
 The audit home page opens with TODAY selected — `selDay = day` — so the day
