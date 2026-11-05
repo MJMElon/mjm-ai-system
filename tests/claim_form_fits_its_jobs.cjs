@@ -185,8 +185,11 @@ const run = (page, fn) => page.evaluate(async (name) => {
      carry one again, whichever job somebody adds next. */
   checkTrue('no claim form hard-codes its column widths',
             !/const COL = \[11, 47, 17, 23, 17, 23, 17, 23, 17, 23, 29\]/.test(PAY));
+  /* MAINT_SHEET_TYPES since Loading Seedlings left the Work Maintenance
+     sheet for its own tab — the form divides by the jobs it actually
+     draws, which is that list. */
   checkTrue('Work Maintenance divides the room by its own job count',
-            /const PAIR_W = \(PAGE_W - MARGIN \* 2 - W_NO - W_WORKER - W_SUB\) \/ MAINT_TYPES\.length;/.test(PAY));
+            /const PAIR_W = \(PAGE_W - MARGIN \* 2 - W_NO - W_WORKER - W_SUB\) \/ MAINT_SHEET_TYPES\.length;/.test(PAY));
   checkTrue('and Transplanting by its own',
             /const PAIR_W = \(PAGE_W - MARGIN \* 2 - W_NO - W_WORKER - W_SUB\) \/ TRANSPLANT_JOBS\.length;/.test(PAY));
   checkTrue('the bands divide by the count too',
@@ -231,8 +234,13 @@ const run = (page, fn) => page.evaluate(async (name) => {
   {
     const { page } = await boot(browser);
     await page.evaluate(() => {
-      MAINT_TYPES.push({ code: 'fencing', label: 'Fencing', unit: 'Bag',
-                         jenis: 'Memagar', mark: ['fencing'] });
+      const j = { code: 'fencing', label: 'Fencing', unit: 'Bag',
+                  jenis: 'Memagar', mark: ['fencing'] };
+      MAINT_TYPES.push(j);
+      /* MAINT_SHEET_TYPES is derived from MAINT_TYPES once at load, so a
+         job added in the FILE flows into it by construction; this runtime
+         push has to feed both to simulate that. */
+      MAINT_SHEET_TYPES.push(j);
     });
     const maint = await run(page, 'downloadMaintPDF');
     checkTrue('six jobs still produce a form', maint.ok);

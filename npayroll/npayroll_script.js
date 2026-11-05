@@ -3244,6 +3244,22 @@ const MAINT_TYPES = [
    source for it. */
 function loadingJob() { return MAINT_TYPES.find(t => t.code === 'loading_seedlings'); }
 
+/* The jobs the Work Maintenance SHEET draws — its glance cards, its table,
+   its notes and its PDF. Loading Seedlings came off that screen at the
+   office's own ask ("Remove the loading seedlings column in work
+   maintenance but make it to the tab named Loading Seedlings") and shows on
+   its own tab alone — renderLoading() / downloadLoadingPDF(), which were
+   already a complete second screen onto the same sheet. NOTHING ABOUT THE
+   MONEY MOVED: maintTotals() still prices loading_seedlings, the Monthly
+   Payroll still pays it inside its Maintenance figure (its earnedAfterAdj
+   deliberately iterates MAINT_TYPES), and buildMaintSnapshot() still
+   freezes all five under the ONE 'maint' verification — verifying Work
+   Maintenance closes Loading Seedlings with it, exactly as before. This
+   list is about what the Work Maintenance screen SHOWS, never about what
+   the sheet pays, so its Subtotal column adds up the four columns beside
+   it rather than quoting a five-job figure its own rows cannot explain. */
+const MAINT_SHEET_TYPES = MAINT_TYPES.filter(t => t.code !== 'loading_seedlings');
+
 /* ── A Work Maintenance row on the Piece Rate screen, actually linked ──────
    mjmnpayroll_piece_rates (this screen) carries no field naming which of
    the four jobs a row prices, unlike MAINT_TYPES' own jenis — job_desc is
@@ -3604,7 +3620,7 @@ function maintWhyEmpty(code) {
 function renderMaintGlance(view) {
   const box = document.getElementById('maint-glance');
   if (!box) return;
-  box.innerHTML = MAINT_TYPES.map(t => {
+  box.innerHTML = MAINT_SHEET_TYPES.map(t => {
     const capAll = view.capAll(t.code);
     const rate = view.rateOf(t.code);
     const wd = rate == null ? null
@@ -3812,12 +3828,12 @@ function renderMaint() {
       <tr>
         <th rowspan="4" style="width:44px;">No.</th>
         <th rowspan="4" class="l" style="width:165px;">Worker</th>
-        ${MAINT_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
+        ${MAINT_SHEET_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
         <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
-      <tr>${MAINT_TYPES.map(t =>
+      <tr>${MAINT_SHEET_TYPES.map(t =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
-      <tr>${MAINT_TYPES.map(t =>
+      <tr>${MAINT_SHEET_TYPES.map(t =>
         workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code), { compact: true })).join('')}</tr>
       <!-- Worker is now bounded (above) so the job columns sit beside it
            instead of at the far end of whatever space Worker didn't use, and
@@ -3826,33 +3842,42 @@ function renderMaint() {
            on both sides, which is what reads as a gap before the NEXT group
            starts. The first group needs none: there is nothing to its left
            but Worker, already bounded. -->
-      <tr>${MAINT_TYPES.map((t, i) =>
+      <tr>${MAINT_SHEET_TYPES.map((t, i) =>
         `<th style="width:${i ? 112 : 90}px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
+
+  /* The row's Subtotal is the sum of the four columns BESIDE it, not the
+     view's own earned(), which still carries Loading Seedlings — a subtotal
+     the row's own cells cannot add up to reads as a mistake, and the
+     loading money has its own Grand Total on its own tab. Computed from
+     payOf so it works identically off a live view and a frozen snapshot
+     (an old snapshot's earned is the five-job figure and is left alone). */
+  const subOf = w => MAINT_SHEET_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
+  const sheetGrand = wk.reduce((s, w) => s + subOf(w), 0);
 
   const body = wk.map((w, i) => `
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
-        calibrationLine(capCalibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+        calibrationLine(capCalibrationOf('maint', n, w, MAINT_SHEET_TYPES.map(t => t.code),
                                          (c) => capWorked(w, c)), 'cap')}${
-        calibrationLine(calibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+        calibrationLine(calibrationOf('maint', n, w, MAINT_SHEET_TYPES.map(t => t.code),
                                       (c) => rmOf(w, c)))}</td>
-      ${MAINT_TYPES.map(t => {
+      ${MAINT_SHEET_TYPES.map(t => {
         const c = capOf(w, t.code);
         return capCell('maint', 'maint', n, w, t.code, capWorked(w, t.code))
              + earnedCell('maint', 'maint', n, w, t.code, t.label,
                           c ? rmOf(w, t.code) : 0);
       }).join('')}
-      <td class="money">${money(earned(w))}</td>
+      <td class="money">${money(subOf(w))}</td>
     </tr>`).join('');
 
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
-      ${MAINT_TYPES.map(t =>
+      ${MAINT_SHEET_TYPES.map(t =>
         `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
-      <td>${money(grand)}</td>
+      <td>${money(sheetGrand)}</td>
     </tr></tfoot>`;
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
@@ -3878,7 +3903,7 @@ function renderMaint() {
      has the same thing wrong with all four columns, and saying it four times
      over reads as four separate problems. */
   const whyGroups = new Map();
-  MAINT_TYPES.forEach(t => {
+  MAINT_SHEET_TYPES.forEach(t => {
     const w = maintWhyEmpty(t.code);
     if (!w) return;
     if (!whyGroups.has(w)) whyGroups.set(w, []);
@@ -3891,7 +3916,7 @@ function renderMaint() {
      this file exists to avoid. Named per job with what it comes to, so the
      office can see how much is waiting on a tick rather than discovering it
      at the end of the month. */
-  const held = MAINT_TYPES
+  const held = MAINT_SHEET_TYPES
     .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
     .filter(x => x.d.unchecked);
   if (held.length) {
@@ -3907,7 +3932,7 @@ function renderMaint() {
      and the cure is to open Work Maintenance for its nursery -- stampRecordMonths
      runs before the first draw and gives it a month. Rows of ANOTHER month are
      not mentioned: they are on their own claim and nothing is wrong with them. */
-  const unstamped = MAINT_TYPES
+  const unstamped = MAINT_SHEET_TYPES
     .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
     .filter(x => x.d.noMonth);
   if (unstamped.length) {
@@ -3928,7 +3953,7 @@ function renderMaint() {
   /* A name ticked on the Worker Record with no row here loses that worker's
      share of the plot, and the row still looks complete on both screens. */
   const stray = [...new Set(
-    MAINT_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])])
+    MAINT_SHEET_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])])
       .concat(maint.fieldUnmatched || []))];
   if (stray.length) {
     notes.push(`Credited for work but with no row here, so their share is not priced: `
@@ -3938,7 +3963,7 @@ function renderMaint() {
     notes.push('The batch report has not loaded, so any work record with no quantity keyed on it '
              + 'reads as nothing. Reload the page.');
   }
-  const missing = MAINT_TYPES.filter(t => rateOf(t.code) == null).map(t => t.label);
+  const missing = MAINT_SHEET_TYPES.filter(t => rateOf(t.code) == null).map(t => t.label);
   if (missing.length) {
     notes.push(`No piece rate set for ${missing.join(', ')} — set it under `
              + 'Nursery Operation → Work Maintenance → Setting → Piece Rate.');
@@ -4073,6 +4098,16 @@ function renderLoading() {
   const why = maintWhyEmpty(t.code);
   if (why) notes.push(why);
   const d = (maint.why || {})[t.code] || {};
+  /* A DO with no delivery date answers to no month, so it is on no claim at
+     all — the one shape of missing work this file always names. It used to
+     be named under the Work Maintenance table (with a cure that was wrong
+     for a DO); this tab is where the column lives now, so the note lives
+     here, with the right cure. */
+  if (d.noMonth) {
+    notes.push(`${d.noMonth} delivery order${d.noMonth === 1 ? '' : 's'} carr${d.noMonth === 1 ? 'ies' : 'y'} `
+      + 'no delivery date, so the loading on '
+      + `${d.noMonth === 1 ? 'it' : 'them'} is on no claim at all. Key the date on the DO and it prices here.`);
+  }
   if (d.stray && d.stray.size) {
     notes.push(`Credited for work but with no row here, so their share is not priced: `
       + `${[...d.stray].join(', ')}. File them under this nursery in Worker System as a general worker.`);
@@ -5123,12 +5158,17 @@ function _downloadMaintPDF() {
 
      So the fixed columns keep their widths and the jobs divide what is
      left, in the 17:23 the pair has always been drawn in -- which gives the
-     old eleven numbers back exactly when there are four of them. */
+     old eleven numbers back exactly when there are four of them.
+
+     MAINT_SHEET_TYPES, not MAINT_TYPES: this form prints what the Work
+     Maintenance sheet shows, and Loading Seedlings left that sheet for its
+     own tab (see MAINT_SHEET_TYPES). Its claim prints from its own form,
+     downloadLoadingPDF, below. */
   const W_NO = 11, W_WORKER = 47, W_SUB = 29;
-  const PAIR_W = (PAGE_W - MARGIN * 2 - W_NO - W_WORKER - W_SUB) / MAINT_TYPES.length;
+  const PAIR_W = (PAGE_W - MARGIN * 2 - W_NO - W_WORKER - W_SUB) / MAINT_SHEET_TYPES.length;
   const W_CAP = PAIR_W * 0.425, W_TOT = PAIR_W - W_CAP;
   const COL = [W_NO, W_WORKER].concat(
-    ...MAINT_TYPES.map(() => [W_CAP, W_TOT])).concat([W_SUB]);
+    ...MAINT_SHEET_TYPES.map(() => [W_CAP, W_TOT])).concat([W_SUB]);
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
@@ -5157,9 +5197,9 @@ function _downloadMaintPDF() {
   };
   const drawCapRibbon = (y) => {
     const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
-    const N = MAINT_TYPES.length;
+    const N = MAINT_SHEET_TYPES.length;
     const cardW = (W - GAP * (N - 1)) / N, cardH = 18, padX = 3, maxW = cardW - padX * 2;
-    MAINT_TYPES.forEach((t, i) => {
+    MAINT_SHEET_TYPES.forEach((t, i) => {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
       doc.setFillColor(255, 255, 255); doc.rect(x, y, cardW, cardH, 'FD');
@@ -5199,7 +5239,7 @@ function _downloadMaintPDF() {
     y = drawCapRibbon(y);
     pdfCell(doc, X[0], y, COL[0], HEAD_HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HEAD_HT, 'Worker', { bold: true, size: 8.5, fill: HF });
-    MAINT_TYPES.forEach((t, i) => {
+    MAINT_SHEET_TYPES.forEach((t, i) => {
       const c = PAIR(i);
       pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7, fill: HF });
       pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
@@ -5212,7 +5252,12 @@ function _downloadMaintPDF() {
   };
 
   let y = drawHead();
-  const CODES = MAINT_TYPES.map(t => t.code);
+  const CODES = MAINT_SHEET_TYPES.map(t => t.code);
+  /* Same rule and same reason as the screen's subOf — the printed Subtotal
+     has to be what the printed row adds up to, and the loading money has
+     its own form with its own Grand Total. */
+  const subOf = w => MAINT_SHEET_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
+  const sheetGrand = wk.reduce((s, w) => s + subOf(w), 0);
   const calTxtOf = (w) => calibrationText(
     capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
     calibrationOf('maint', n, w, CODES, (c) => rmOf(w, c)));
@@ -5232,23 +5277,23 @@ function _downloadMaintPDF() {
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], rh, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], rh, w, calTxtOf(w), { size: 8, fill: z });
-    MAINT_TYPES.forEach((t, k) => {
+    MAINT_SHEET_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
       pdfCell(doc, X[c],   y, COL[c],   rh, capFmt(cap), { size: 7.5, nowrap: true, fill: z });
       pdfCell(doc, X[c+1], y, COL[c+1], rh, (cap || adjOf('maint', n, w, t.code))
               ? money(payOf(w, t.code)) : '—', { size: 7, nowrap: true, fill: z });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], rh, money(earned(w)), { bold: true, size: 8, nowrap: true, fill: z });
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], rh, money(subOf(w)), { bold: true, size: 8, nowrap: true, fill: z });
     y += rh;
   });
 
   pdfCell(doc, X[0], y, COL[0] + COL[1], FOOT_H, 'Grand Total', { bold: true, size: 8.5, fill: TF });
-  MAINT_TYPES.forEach((t, k) => {
+  MAINT_SHEET_TYPES.forEach((t, k) => {
     const c = PAIR(k);
     pdfCell(doc, X[c],   y, COL[c],   FOOT_H, capFmt(capSum(t.code)), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], FOOT_H, money(rmSum(t.code)), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
-  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], FOOT_H, money(grand),
+  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], FOOT_H, money(sheetGrand),
           { bold: true, size: 9, nowrap: true, fill: TF });
   y += FOOT_H;
   y = pdfVerifiedNote(doc, y, 'maint', n, CONTENT_R);
