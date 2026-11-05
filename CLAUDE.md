@@ -2315,6 +2315,15 @@ by X on <day>*, *verified on <day>* or just *verified*, and the strip
 the one thing a signature carries that nothing else on that strip does, and
 a word in its place reads as a person whose name nobody wrote down.
 
+**THE NAME ON THE STRIP CARRIES ITS OWN "by"**, which was the next two
+words out of the office once it had a name to read: *by Esther*. A name
+standing on its own between the month and the date is a cell somebody has
+to work out — the two other sentences had always said *verified by*, and
+the strip, which is the one of the three nobody has to press anything to
+see, said it the least. The word and the name sit in **ONE span**, or the
+strip's 10px flex gap opens between them, and only the name is set heavy:
+that is what the cell is being read for.
+
 **One helper, because the sentence is said three times** — the refusal, the
 strip and the Unlock confirm — and three wordings for one fact is how they
 drift.

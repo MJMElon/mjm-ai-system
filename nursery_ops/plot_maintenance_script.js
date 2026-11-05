@@ -1442,11 +1442,17 @@ function renderWorkRecVerify() {
     /* A cell is DROPPED where there is nothing in it, rather than filled
        with a word or a dash. The strip has already said what is verified;
        an empty slot says nobody wrote the name down, which is the truth,
-       and "somebody" said it was a person this screen could name. */
+       and "somebody" said it was a person this screen could name.
+
+       THE NAME CARRIES ITS OWN "by", because a name on its own is not a
+       sentence — the office read the bare one and said what it should say:
+       *by Esther*. The two sit in ONE span, or the strip's 10px gap opens
+       between the word and the person it belongs to, and only the NAME is
+       set heavy: that is what somebody is reading the cell for. */
     const who = _maintWho(v.verified_by), when = _maintWhen(v.verified_at);
     el.innerHTML = `<span>✔ Verified — ${what}</span>`
       + `<span class="vb-spacer"></span>`
-      + (who  ? `<span class="vb-who">${esc(who)}</span>` : '')
+      + (who  ? `<span>by <span class="vb-who">${esc(who)}</span></span>` : '')
       + (when ? `<span>${esc(when)}</span>` : '')
       + (mayMaintAct('unverify', 'worker_record')
           ? `<button class="btn btn-sm" style="margin-left:10px;"

@@ -279,8 +279,12 @@ const classOf = (s) => (s && typeof s === 'object') ? s.cls : String(s);
     const s = await strip(page);
     check('the strip turns over to Verified, with a name and an Unlock',
       [s.cls, s.buttons], ['verify-bar verify-done', ['↺ Unlock']]);
-    check('and it NAMES them rather than saying somebody',
-      [s.text.includes('Elon Ting'), /somebody/i.test(s.text)], [true, false]);
+    /* A NAME ON ITS OWN IS NOT A SENTENCE: the office read the bare one and
+       said what the cell should say — by Esther. The word and the name must
+       be in ONE span or the strip's gap opens between them, so this asks
+       the rendered TEXT rather than the markup. */
+    check('and it NAMES them, with the by, rather than saying somebody',
+      [s.text.includes('by Elon Ting'), /somebody/i.test(s.text)], [true, false]);
 
     /* THE PAINT. It is only the paint, which is why the gate is checked
        separately below. */
