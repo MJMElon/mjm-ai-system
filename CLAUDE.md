@@ -4031,6 +4031,69 @@ fixture row that is unverified, so a gate applied backwards is caught
 there too. **Nothing to run in the database** -- both columns have existed
 since `add_maint_field_verify.sql` and `add_maint_field_reject.sql`.
 
+#### AND THE SEPTEMBER CASES CAME OFF, with the cross rather than a delete
+
+*"remove all the sep maintenance cases in the to do list"*, and the second
+half of the same message: *"check if auditor audited and saved the x plot,
+the x plot will no more shown in to do list right"*.
+
+**THE ANSWER TO THE SECOND IS YES, AND IT IS DRIVEN RATHER THAN ASSERTED.**
+There is exactly one thing that takes a maintenance row off that board -- a
+row in `audit_maintenance_audits` carrying its `task_id` -- and it does not
+care which kind: an ordinary audit an auditor walked and saved, and a
+closure an admin pressed the cross on, both retire the chip. Section 2 of
+`tests/a_phone_record_waits_for_the_conductor.cjs` drives both through the
+real board, **with the unanswered plot as the control**, because without it
+the two checks pass just as green on a board that drew nothing at all.
+
+**AND THE FIRST IS THAT SAME CROSS, IN BULK.**
+`shared/RUN_ME_close_september_maintenance.sql` writes the row the cross
+writes -- `MTA-CL<task_id>`, `Closed by admin`, the remark naming the
+deadline and how far past it had gone -- for every September 2026 deadline
+carrying nothing, from BOTH sources. Nothing is deleted: the work records
+are never written and the closures land in Audit History with a date on
+them, where `CHECK_audits_closed_by_admin.sql` is the register of them.
+
+Five things in it, and three are faults it had first:
+
+- **THE PROOF CANNOT BE A DATA-MODIFYING CTE.** Written as one
+  `WITH written AS (INSERT ...)` the final SELECT reads the snapshot from
+  BEFORE the statement, so the check at the foot counted every row it had
+  just closed as still on the board and reported **6 where it should read
+  nought**. The insert is a `DO` block now and the proof is read inside it,
+  after the write. A verification has to be its own statement to be a
+  verification at all -- and it is what caught this.
+- **`sum(x.n)`, never `count(*)`.** The subquery behind the by-nursery
+  lines is ONE ROW PER NURSERY, so a plain count printed *3 closed* above
+  a list adding to 6.
+- **THE RULE IS WRITTEN ONCE, as a VIEW that does not outlive the run.**
+  It has to be read twice -- once to insert, once to prove -- and a second
+  copy of the plot-to-nursery arithmetic is a second thing to get wrong.
+  It is DROPPED before the block ends, so the project is not left carrying
+  an object the Supabase linter warns about: the same reason this file
+  creates no temp table.
+- **THE NURSERY IS THE BOARD OWN ORDER** -- `nops_maint_custom_plots`
+  first, then the fixed ranges P01-P52, B01-B14, U01-U18, N01-N20, then
+  the record own `nursery_name`. That third step is not decoration: a plot
+  outside every range still places when the phone record names a nursery,
+  and a transfer plot like U12-R places only off the custom list.
+- **A PLOT THAT PLACES NOWHERE IS NAMED, never closed quietly.** It was on
+  no board to begin with, so closing it would be writing a decision about
+  something nobody could see.
+
+October, November and P & D (whose window is 0, so it raises no audit at
+all) are untouched, a task already carrying an audit or a closure is
+untouched, and a second run closes 0 and reads nought again. Tested on the
+scratch Postgres against the office own September shapes, against a
+database with no `audit_settings` table, and against a plot nothing can
+place.
+
+**WHAT IT COSTS, and it is worth saying before the next report is read:**
+the closures are dated TODAY, so they land in this month Monthly Audit
+Report as a run of maintenance records done by an admin. The Done By
+filter is what separates them from an auditor work, and the remark on each
+says what it was due and how overdue.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated

@@ -73,6 +73,26 @@ const FIELD = [
   { id: 7005, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N04', work_type:'weeding',
     jenis:'Merumput', verified_at: LONG_AGO + 'T04:00:00Z', rejected_at: null }
 ];
+/* ── AND THE OTHER HALF OF THE QUESTION ──
+   "check if auditor audited and saved the x plot, the x plot will no more
+   shown in to do list right". N06 is a verified record an auditor HAS
+   walked and saved, and N07 is one an admin closed with the cross. Neither
+   belongs on the board, and the only thing that takes either off is the
+   row in audit_maintenance_audits carrying its task id -- which is why
+   both are driven here rather than taken on trust. */
+const FIELD_DONE = [
+  { id: 7006, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N06', work_type:'weeding',
+    jenis:'Merumput', verified_at: LONG_AGO + 'T02:00:00Z', rejected_at: null },
+  { id: 7007, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N07', work_type:'weeding',
+    jenis:'Merumput', verified_at: LONG_AGO + 'T02:00:00Z', rejected_at: null }
+];
+const AUDITS = [
+  { audit_id:'MTA-1', task_id: 7006, nursery:'UNN2', plot:'N06', task_type:'Weeding',
+    result:'Satisfactory',    auditor_name:'Main Nursery Auditor', date: LONG_AGO },
+  { audit_id:'MTA-CL7007', task_id: 7007, nursery:'UNN2', plot:'N07', task_type:'Weeding',
+    result:'Closed by admin', auditor_name:'Esther',               date: LONG_AGO }
+];
+
 /* The office schedule half, which has no Verify of its own and must not be
    quietly gated on one. */
 const OFFICE = [
@@ -105,8 +125,9 @@ const OFFICE = [
         body: JSON.stringify({ code: '42703',
           message: 'column nops_maint_field_records.verified_at does not exist' }) });
     }
-    const body = t === 'nops_maint_field_records' ? FIELD
-               : t === 'nops_maint_records'       ? [{ records: OFFICE }]
+    const body = t === 'nops_maint_field_records'  ? FIELD.concat(FIELD_DONE)
+               : t === 'nops_maint_records'        ? [{ records: OFFICE }]
+               : t === 'audit_maintenance_audits'  ? AUDITS
                : [];
     return route.fulfill({ status: 200, contentType: 'application/json',
                            body: JSON.stringify(body) });
@@ -154,7 +175,15 @@ const OFFICE = [
         seen.filter((x) => x === 'N01').length);
   check('and the office schedule half is untouched', seen.includes('N05'), true);
 
-  /* \u2500\u2500 2. fail OPEN on a database without the columns \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+  /* \u2500\u2500 2. a plot that WAS audited leaves the list \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+  console.log('\nA plot somebody audited and saved is off the list');
+  check('an audited plot is no longer on the to do list', seen.includes('N06'), false);
+  check('nor is one an admin closed with the cross', seen.includes('N07'), false);
+  /* The control. Without it the two checks above pass just as green on a
+     board that drew nothing at all. */
+  check('while the one nobody answered is still there', seen.includes('N01'), true);
+
+  /* \u2500\u2500 3. fail OPEN on a database without the columns \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
   console.log('\nA database that has not got the columns keeps its board');
   noCols = true;
   await page.reload({ waitUntil:'domcontentloaded' });
