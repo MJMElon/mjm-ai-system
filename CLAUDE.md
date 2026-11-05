@@ -1475,6 +1475,97 @@ all four meet, and that is where this was fixed.
 bumped together, and `audit_sw.js` precaches those pages so `VER` moved
 with them — to `mjm-26110501`.
 
+#### AND THE FILENAME WAS NEVER FIXED, so the stamp only did half the job
+
+The office read the result of the repair and said it in one line: *"it
+should queue the original and save the original only no matter how many
+tries to upload the data."* They are right, and the fix above stopped
+one press short of it in two places.
+
+**THE PHOTO PATH WAS STILL THE CLOCK, TWICE OVER.** Look again at the
+files they handed over —
+
+    audit_maintenance_audits_photo_url_1793750892246_1793750892318.jpeg
+
+— and read the two numbers rather than the gap between the files. That
+is `Date.now()` called **twice**: once in `uploadPhoto` here, and again
+inside `sb.uploadPhoto`, which appended its own. So the path of a photo
+**could not help being different on every attempt**, and nothing about
+sending the same picture twice could ever be recognised as sending the
+same picture twice. The stamp fixed the ROW; the bucket went on
+collecting a file per try, and the first fix only reduced the number of
+tries rather than making a retry cost nothing.
+
+**AND A SAVE WITH NO SIGNAL WAS NOT STAMPED AT ALL**, which is the
+office's own path. The stamp was gated on `navigator.onLine && await
+_tableTakesUid(table)` — a read of the database before the phone would
+write an id of its own — so an audit keyed in a plot with no bars went
+into the outbox carrying nothing, and when the sweep sent it hours later
+and the insert timed out while landing, the second arrival was a second
+row again. **The id needs no network.** It is made on the phone, and
+asking permission to make it was the mistake.
+
+So there is **ONE id per press of Save**, made locally every time, and it
+does both halves:
+
+- it is **`client_uid` on the row**, as before;
+- it **NAMES THE PHOTO** — `<table>_<field>_<press>` — uploaded with the
+  `x-upsert` that header was already sending, so a second upload of that
+  press **writes the same object** instead of a new file beside it.
+
+**THAT CLOSES RACES NOBODY HAS ENUMERATED, which is the argument for it
+over counting uploads more carefully.** The 15-second cap on the photo
+upload is a timeout too: an upload still in flight when it fires may well
+have landed, and `clean` may still be holding the raw picture when the
+catch queues it. The sweep then sends that picture again — and writes the
+same object. The press owning its filename is what makes a race that
+cannot be prevented cost nothing.
+
+Five things in it:
+
+- **`exact` on `sb.uploadPhoto` is what says the caller owns the path.**
+  Without it the clock is appended, which every caller before the stamp
+  relied on to avoid writing over somebody else. Removing the clock
+  outright would have been a trap for the next caller.
+- **THE WRITE IS WHAT SAYS WHETHER THE COLUMN IS THERE, not a read.** The
+  guard was a SELECT of `client_uid` before stamping, and that is the
+  wrong question: a read can be refused by a policy while the insert is
+  perfectly allowed, and in this module the grant, the policy and the
+  table itself have each failed on their own. A read that could not
+  answer then left the press unstamped — the one outcome worth avoiding.
+  Now the stamp goes on every insert and the ONE unambiguous answer takes
+  it off: a **42703 that NAMES the column**, remembered for the session,
+  with **the same row sent again at once** so the press is not lost over
+  it. A refusal for any other reason is not an answer and does not
+  disable anything.
+- **The PHOTO does not depend on the column at all**, so one press is one
+  file even on a database that has never had the SQL run.
+- **An UPDATE is still not stamped on the row** — it names the row it
+  changes and cannot land twice, and a fresh stamp written over an
+  existing row would claim it came from a press it did not. It is still
+  named after its press for the FILE, so one press of Edit is one file.
+  `__press` rides in the queue row to carry that, and is read for both
+  methods so there is one rule and not two.
+- **An OLD QUEUE ROW keeps the clock.** A record queued before any of
+  this has nothing to name itself after; one queued by the build that
+  stamped the row and not the file falls back to its `client_uid`.
+
+**Nothing to run in the database.** The column and its partial unique
+index are already on all four tables, and the whole of this change is on
+the phone.
+
+`tests/one_press_of_save_is_one_audit.cjs` is 31 checks and **10 fail on
+the previous code**, the first of them on the office's own path (*the
+queued record carries a stamp all the same*). Its last section drives the
+path expression **lifted out of the shipped `sb.uploadPhoto`** rather
+than restating it, so a clock put back into the exact branch fails here —
+and asks for the upsert header by name, because the same path without it
+is a refused upload rather than a replacement.
+
+Both files changed, so both `?v=` moved to **`20261105b`** across all
+seven pages (`audit_supabase.js` is on nine), and `VER` went to
+**`mjm-26110503`**.
+
 ## A to-do list that hides what is coming is a diary
 
 The audit home page opens with TODAY selected — `selDay = day` — so the day

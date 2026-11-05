@@ -1,7 +1,7 @@
 {
   "audit/audit_ribbon.css@20260826a": "233f766f489b",
   "audit/audit_login_guard.js@20261027a": "6177aedda8bf",
-  "audit/audit_supabase.js@20261105a": "8d4e0f1e8fc4",
+  "audit/audit_supabase.js@20261105b": "b255dfc81b52",
   "audit/audit_pending.js@20261015a": "6c55856b6cea",
   "audit/audit_settings.js@4": "5ce03fae66d3",
   "audit/audit_ribbon.js@20261028a": "76b80a200f1d",
@@ -9,7 +9,7 @@
   "audit/audit_theme.css@20260827d": "7a8e60e511b3",
   "audit/audit_wide.css@20260827a": "add7ec19a012",
   "audit/audit_lang.js@20261022e": "4deb0c5b5c76",
-  "audit/audit_dexie_offline.js@20261105a": "0a77ac7c53dc",
+  "audit/audit_dexie_offline.js@20261105b": "12b3a5a8ca71",
   "audit/audit_deeplink.js@20260824a": "a4b3b5333ae5",
   "audit/audit_height_script.js@20261022e": "2e3bf04e8151",
   "audit/audit_history.js@20261012e": "393964a2768b",
