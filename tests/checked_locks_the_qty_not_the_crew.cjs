@@ -80,6 +80,16 @@ const ok = (cond, what) => {
     const _recLocked = (r) => !!(r && r.checked);
     const alert = () => { env.alerts++; };
     const _denyPayrollLocked = () => { alert(); };
+    /* THE SHEET'S OWN VERIFY & LOCK is a different gate and arrived later:
+       wrAllows() refuses every press on a sheet somebody has signed off
+       (tests/the_worker_record_is_verified_and_locked.cjs holds it). This
+       file is about the per-ROW Checked rule, so the sheet is OPEN here.
+       env.sheetShut drives it, and the pair of checks after section 1 turns
+       it on, so the two gates are seen not to have become one.
+       NO BACKTICK IN THIS COMMENT: it is inside a template literal, and one
+       would end it -- the trap CLAUDE.md names about a design note in a
+       template literal, met here in a test harness. */
+    const wrAllows = () => { if (!env.sheetShut) return true; alert(); return false; };
     ${body}
     return togglePayrollTick;
   `)(env);
@@ -108,6 +118,7 @@ const ok = (cond, what) => {
      '...and a second press takes it off a checked row again');
 
   ok(env.alerts === 0, 'nothing is alerted at a person correcting a name');
+
   ok(env.renders === 3 && env.persists === 3,
      'every press redraws and saves, the checked row included');
 
@@ -119,6 +130,23 @@ const ok = (cond, what) => {
   fn(1, 'Yuyak');
   ok(env.payrollData[k][1] && env.payrollData[k][1]['Yuyak'] === 1,
      'checking a row between the draw and the press changes nothing');
+
+  /* ── THE TWO GATES ARE NOT ONE ──────────────────────────────────────
+     Checked is per ROW and about the CAPACITY; Verify & lock is per SHEET
+     and shuts the lot, which the office asked for later. The whole value
+     of this file is that the first one does not refuse a press, so the
+     second one arriving must not quietly make it look as though it does.
+     Driven as a PAIR, for the reason the untick above is: a press that
+     changes nothing proves nothing unless something changed before it. */
+  const beforeShut = JSON.stringify(env.payrollData);
+  env.sheetShut = true;
+  fn(1, 'Sabri');
+  ok(JSON.stringify(env.payrollData) === beforeShut,
+     'a VERIFIED sheet refuses the same press the checked row allows');
+  env.sheetShut = false;
+  fn(1, 'Sabri');
+  ok(env.payrollData[k][1] && env.payrollData[k][1]['Sabri'] === 1,
+     '...and unlocking the sheet gives the press straight back');
 }
 
 /* ── 2. the field, on every page load, is NOT a person ────────────────── */

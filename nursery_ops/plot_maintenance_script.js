@@ -1108,6 +1108,19 @@ function renderPayroll() {
      empty. */
   const namesBar = document.getElementById('payroll-names');
   if (namesBar) namesBar.innerHTML = '';
+  /* The strip and the paint, BEFORE the four early returns below — every one
+     of the eight sheets carries them, and a strip on one sheet is a strip
+     that lies about the other seven.
+
+     THE PAINT IS NOT THE GATE. `.wr-shut` greys what can no longer be
+     pressed and takes the pointer off it; `wrAllows()` inside each handler
+     is what actually refuses, because a class cannot stop the keyboard and
+     cannot stop a call — which this codebase has a heading about. */
+  try {
+    renderWorkRecVerify();
+    const shut = workRecLocked(_payrollView);
+    [tbl, extra, namesBar].forEach(el => { if (el) el.classList.toggle('wr-shut', shut); });
+  } catch (e) { console.warn('[maint] worker record verify strip:', e); }
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
@@ -1254,8 +1267,212 @@ function renderPayroll() {
    syncTicks. A person pressing a cell is the thing that was asked for; a page
    load quietly re-writing an agreed row is not a person. */
 
+/* ══ VERIFY & LOCK, ON THE WORKER RECORD ITSELF ═══════════════════════════
+   The office asked for it in four words — 加一个verified and lock 按钮 —
+   standing on the P & D sheet for UNN 2.
+
+   WHAT IT SIGNS IS THE RECORD, WHICH IS NOT WHAT THE CLAIM SIGNS. The
+   payroll module has had a verify strip for months and it closes the CLAIM:
+   `maint` in its LOCK_SHEETS freezes what the claim shows (buildMaintSnapshot)
+   and says so in its own words — *"Worker Record stays exactly as editable as
+   it always was; this is the claim choosing to stop listening to it."* So the
+   money was protected and the record underneath it was not: anybody could go
+   on moving ticks on a month somebody had signed, and nothing on this screen
+   said a word.
+
+   SO IT IS ITS OWN SIGNATURE, under its own key, and the two stay apart on
+   purpose. They are two acts, usually in this order: the nursery agrees who
+   did the work, then the office agrees the money. A button here that wrote
+   the payroll's own `maint` row would write a THINNER one — that row carries
+   a snapshot this page has no rates or adjustments to build — and two buttons
+   writing one row with different consequences is the fault this codebase has
+   a heading about.
+
+   sheet = `workrec:<job>`, scope = the NURSERY. Both columns used for what
+   they mean, and the key is PER JOB rather than per nursery because the
+   office signs the sheet in front of them: a press on P & D that also shut
+   Transplanting would shut work they have not finished keying. One press per
+   sheet, and the strip names the sheet it is about.
+
+   IT IS ONLY EVER ITS OWN VERIFICATION — `verificationOf`, never
+   `isSheetLocked`. The payroll MONTH lock auto-shuts on the 2nd of the
+   following month, so reading that here would have turned every Worker
+   Record sheet for October read-only the morning this shipped, which is a
+   change nobody asked for. The month lock is about the money being settled;
+   correcting who did the work is a thing the office goes on doing, and the
+   Checked rule one block up is the whole argument for that.
+
+   NOTHING TO RUN IN THE DATABASE. `mjmnpayroll_verifications.sheet` is plain
+   TEXT with no CHECK constraint (RUN_ME_npayroll_locks.sql), so a new sheet
+   name needs nothing — the same thing that was true when `seedplant` was
+   added. Re-opening the month on Lock Controls still takes these rows with
+   it, because that screen deletes every verification of the month. */
+const WORKREC_PREFIX = 'workrec:';
+const workRecSheet = (job) => WORKREC_PREFIX + (job || _payrollView);
+/* The nursery the sheet is about. After the job-scope setting it is always
+   one the circles are offering, so there is no second rule here. */
+const workRecScope = () => getNursery();
+/* A MONTH IS A LABEL ON ONE SCREEN AND A KEY ON THE NEXT, and this is the
+   seam. Everything on this page works in the LABEL — `getMonth()` answers
+   "Nov 2026", which is what `nops_maint_payroll.month` is keyed on — and
+   the payroll lock works in "YYYY-MM" throughout, which is what
+   `mjmnpayroll_verifications.month` holds and what the payroll's own strip
+   writes. Handing the label to the lock stores a row the payroll module can
+   never find, which is exactly what the first version of this did: it
+   verified, said nothing, and the sheet stayed open. The hidden
+   `#global-month` input IS the key, and `_cullYm()` has read it that way
+   since Culling Monitoring was written. */
+const workRecYm = () => {
+  const el = document.getElementById('global-month');
+  return (el && el.value) || '';
+};
+
+function workRecLockRow(job) {
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) return null;
+  const ym = workRecYm();
+  if (!ym) return null;
+  return MJMPayrollLock.verificationOf(ym, workRecSheet(job), workRecScope());
+}
+function workRecLocked(job) { return !!workRecLockRow(job); }
+
+/* Refuse a write and SAY WHO SHUT IT. A message that only says "locked"
+   leaves somebody hunting for a switch; the Unlock button is on the strip
+   right above the table they are looking at. */
+function wrAllows(job) {
+  const v = workRecLockRow(job);
+  if (!v) return true;
+  alert(`${jobLabel(job || _payrollView)} for ${NURSERY_NAMES[workRecScope()] || workRecScope()}, `
+      + `${getMonth()} was verified by ${_maintWho(v.verified_by) || 'somebody'}`
+      + `${v.verified_at ? ' on ' + _maintWhen(v.verified_at) : ''}, so this sheet is closed.\n\n`
+      + 'Press Unlock on the strip above the table to open it again.');
+  return false;
+}
+
+/* The two ticks this asks for, read the way the User Access screen writes
+   them — `effectiveActions` in shared_module_access.js, which is what
+   maySetting() above already obeys and says at length why.
+
+   `fallbackTo` is the half that matters on the day this ships: a row the
+   office saved before these keys existed carries neither, and reading an
+   absent key as OFF would take the button away from everybody who has one.
+   What they ANSWERED is the Worker Record tick — until now, whoever could
+   tick the sheet could change anything on it — so that is what is read
+   until somebody saves the row again. It is declared on the action in
+   nursery_ops_user_access.html as well, and the test holds the two
+   together. */
+function mayMaintAct(key, fallbackKey) {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    const acts = p && p.nursery_ops_actions && p.nursery_ops_actions.maintenance;
+    if (acts) {
+      const k = (fallbackKey && !(key in acts)) ? fallbackKey : key;
+      return !!acts.view && !!acts[k];
+    }
+  } catch (_) { /* fall through to the module level */ }
+  /* NO saved row is nobody having been asked, so the module level decides —
+     what governed this before the tick existed. Neither action is
+     `adminOnly`, so `effectiveActions` gives it to anybody the module is
+     open to at all, and this says the same thing rather than a second
+     version of it. */
+  return _nopsLevel() !== 'none';
+}
+function _nopsLevel() {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    return (p && p.modules && p.modules.nursery_ops) || 'none';
+  } catch (_) { return 'none'; }
+}
+
+/* ── The strip above the sheet ────────────────────────────────────────────
+   Drawn on every render of Worker Activity, because the job, the nursery
+   and the month all change what it is answering about. Three states, and
+   the shape is the payroll's own `renderVerifyBar` so one office reading
+   both screens does not have to learn it twice. */
+function renderWorkRecVerify() {
+  const el = document.getElementById('vb-workrec');
+  if (!el) return;
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    /* Not set up, or a read that failed. Nothing is drawn and nothing is
+       locked — the same fail-open the lock module promises in its header,
+       and the reason a load error cannot shut a nursery out of its own
+       record. */
+    el.className = 'verify-bar'; el.innerHTML = ''; return;
+  }
+  const job = _payrollView;
+  const v   = workRecLockRow(job);
+  const what = `${esc(jobLabel(job))} · ${esc(NURSERY_NAMES[workRecScope()] || workRecScope())}`
+             + ` · ${esc(getMonth())}`;
+  if (v) {
+    el.className = 'verify-bar verify-done';
+    el.innerHTML = `<span>✔ Verified — ${what}</span>`
+      + `<span class="vb-spacer"></span>`
+      + `<span class="vb-who">${esc(_maintWho(v.verified_by) || 'somebody')}</span>`
+      + `<span>${esc(_maintWhen(v.verified_at) || '—')}</span>`
+      + (mayMaintAct('unverify', 'worker_record')
+          ? `<button class="btn btn-sm" style="margin-left:10px;"
+               onclick="unverifyWorkRec()">↺ Unlock</button>` : '');
+    return;
+  }
+  el.className = 'verify-bar verify-open';
+  el.innerHTML = `<span>Open — ${what}</span>`
+    + `<span class="vb-spacer"></span>`
+    + (mayMaintAct('verify', 'worker_record')
+        ? `<button class="btn btn-primary btn-sm" onclick="verifyWorkRec()">✔ Verify &amp; lock</button>`
+        : `<span>Verifying needs the Verify tick on Nursery Maintenance in User Access.</span>`);
+}
+
+/* The permission is asked AGAIN here: a button drawn before somebody's
+   access changed is still sitting on the screen. */
+async function verifyWorkRec() {
+  const job = _payrollView;
+  if (!mayMaintAct('verify', 'worker_record')) {
+    alert('You do not have permission to verify this sheet.\n\n'
+        + 'Ask an admin to tick Verify on Nursery Maintenance in User Access.');
+    return;
+  }
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    alert('The payroll lock tables could not be read, so nothing can be verified.\n\n'
+        + 'Run shared/RUN_ME_npayroll_locks.sql in the Supabase SQL Editor if this is new.');
+    return;
+  }
+  const n = workRecScope();
+  if (!confirm(`Verify ${jobLabel(job)} for ${NURSERY_NAMES[n] || n}, ${getMonth()}?\n\n`
+             + 'It locks straight away: the ticks and the figures on this sheet cannot be '
+             + 'changed after that. Press Unlock on the strip to take it back.\n\n'
+             + 'This signs the RECORD. The salary claim is signed separately, on the payroll.')) return;
+  const error = await MJMPayrollLock.verify(_supabase, workRecYm(), workRecSheet(job), n,
+                                            (typeof userEmail !== 'undefined' && userEmail) || null, null);
+  if (error) { alert('Could not verify — ' + (error.message || 'try again')); return; }
+  renderPayroll();
+}
+
+/* Taking one sheet's signature back. Its own tick, for the reason the
+   payroll's own Unlock has one: being trusted to say a sheet is right is
+   not the same as being trusted to unsay it. */
+async function unverifyWorkRec() {
+  const job = _payrollView;
+  if (!mayMaintAct('unverify', 'worker_record')) {
+    alert('You do not have permission to unlock this sheet.\n\n'
+        + 'Ask an admin to tick Unlock on Nursery Maintenance in User Access.');
+    return;
+  }
+  const v = workRecLockRow(job);
+  if (!v) { renderPayroll(); return; }
+  const n = workRecScope();
+  if (!confirm(`Unlock ${jobLabel(job)} for ${NURSERY_NAMES[n] || n}, ${getMonth()}?\n\n`
+             + `It was verified by ${_maintWho(v.verified_by) || 'somebody'}`
+             + `${v.verified_at ? ' on ' + _maintWhen(v.verified_at) : ''}.\n\n`
+             + 'The sheet becomes editable again and will have to be verified a second time.')) return;
+  const error = await MJMPayrollLock.unverify(_supabase, workRecYm(), workRecSheet(job), v.scope || '');
+  if (error) { alert('Could not unlock — ' + (error.message || 'try again')); return; }
+  renderPayroll();
+}
+
 /* Tick / untick a worker on a payroll row. */
 function togglePayrollTick(recId, worker) {
+  if (!wrAllows(_payrollView)) return;
   const n = getNursery(), m = getMonth();
   const k = payrollKey(n, m, _payrollView);
   if (!payrollData[k]) payrollData[k] = {};
@@ -1435,6 +1652,7 @@ function _denyDoLocked() {
 }
 
 function toggleDoWorkerTick(doId, nKey, worker) {
+  if (!wrAllows('loading_seedlings')) return;
   const n = getNursery(), m = getMonth();
   const key = _doPayrollKey(n, m);
   const rows = _doRecordsCache[key] || [];
@@ -1464,6 +1682,7 @@ function persistDoWorkerTick(d) {
 }
 
 function lockDoWorkers(doId) {
+  if (!wrAllows('loading_seedlings')) return;
   const n = getNursery(), m = getMonth();
   const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
   const d = rows.find(x => x.id === doId);
@@ -1952,6 +2171,7 @@ function _tpCheckCell(r, key) {
    refused write puts it back and says so rather than leaving a tick on
    screen that is not in the database. */
 async function toggleTransplantChecked(id) {
+  if (!wrAllows('transplanting')) return;
   const n = getNursery(), m = getMonth(), key = _tpPayrollKey(n, m);
   const r = (_tpRecordsCache[key] || []).find(x => x.id === id);
   if (!r || !_supabase) return;
@@ -2284,6 +2504,7 @@ function renderCullIncentivePayroll() {
    the row read. Optimistic with a rollback, the same shape
    toggleTransplantChecked uses. */
 async function toggleCullChecked(plot) {
+  if (!wrAllows('cull_incentive')) return;
   const n = getNursery(), ym = _cullYm(), st = _cullCache[ym];
   if (!st || !_supabase) return;
   if (!st.checksReady) {
@@ -2322,6 +2543,7 @@ async function toggleCullChecked(plot) {
    It is still a RECORD and never a deletion — one `remove` row per plot per
    month, carrying who and when. That record IS the Put back. */
 async function cullRemovePlot(plot) {
+  if (!wrAllows('cull_incentive')) return;
   if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
   const n = getNursery(), ym = _cullYm(), st = _cullCache[ym], CI = MJMCullIncentive;
   if (!st || !st.overridesReady) {
@@ -2364,6 +2586,7 @@ async function cullRemovePlot(plot) {
    every other plot. */
 let _cullAddEl = null;
 function openCullAdd() {
+  if (!wrAllows('cull_incentive')) return;
   if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
   const ym = _cullYm(), st = _cullCache[ym];
   if (!st || !st.overridesReady) {
@@ -2545,6 +2768,7 @@ async function saveCullAdd() {
 }
 
 async function cullDeleteOverride(id) {
+  if (!wrAllows('cull_incentive')) return;
   if (!_cullMayHand()) return;
   const ym = _cullYm(), st = _cullCache[ym];
   const o = st && st.overrides.find(x => Number(x.id) === Number(id));
@@ -2997,7 +3221,11 @@ function renderSeedPlantingPayroll() {
       rows.forEach((r, ri) => {
         const s = saved[_spKey(r.key, j.job)];
         const cells = (s && s.workers) || {};
-        const locked = !!(s && s.checked_at);
+        /* Checked shuts the row; the sheet being VERIFIED shuts every row
+           on it. The paint and the gate have to agree — wrAllows() is
+           what actually refuses, and a box left live over it would be the
+           lock-in-the-stylesheet fault pointing the other way. */
+        const locked = !!(s && s.checked_at) || workRecLocked('seed_planting');
         qtyTotal += r.qty;
         const keyed = _spKeyed(s);
         wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
@@ -3069,6 +3297,7 @@ function _spCheckCell(job, ri, s, keyed, noTable) {
 }
 
 async function toggleSeedPlantingCheck(job, ri) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noTable || (st.noJob && job !== 'seed') || !_supabase) return;
   const r = st.rows[ri];
@@ -3208,6 +3437,7 @@ function _spReloadAll(m) {
 }
 
 async function addSeedPlantingBatch() {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   const el = document.getElementById('sp-new-batch');
   if (!st || st.noMoveTable || !el || !_supabase) return;
@@ -3227,6 +3457,7 @@ async function addSeedPlantingBatch() {
 }
 
 async function removeSeedPlantingBatch(b) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noMoveTable || !_supabase) return;
   const back = _spMonthOfDate(st.home[b]);
@@ -3251,6 +3482,7 @@ function _spSaveNames(m) {
 }
 
 function addSeedPlantingWorker() {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   const el = document.getElementById('sp-new-name');
   if (!st || st.noTable || !el) return;
@@ -3275,6 +3507,7 @@ function addSeedPlantingWorker() {
    off this list from the Seed Planting sheet, and its figures would reappear
    on the other one as a column marked unknown. */
 function removeSeedPlantingWorker(i) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noTable) return;
   const w = st.names[i];
@@ -3303,6 +3536,7 @@ function useLastMonthSeedPlantingNames() {
    back where it went -- a redraw inside `change` would otherwise throw away
    the box the Tab key was moving to. */
 function setSeedPlantingQty(job, ri, wi, raw) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth();
   const st = _spCache[m];
   if (!st || st.noTable || (st.noJob && job !== 'seed')) return;
@@ -10667,7 +10901,14 @@ async function initDb() {
       loadMaintAudits(),
       // The Setting tab's own four lists, and the plot names they hang off.
       loadSharedPlots(),
-      loadSettingLists()
+      loadSettingLists(),
+      /* The Verify & lock strip on Worker Activity. Read in the boot's own
+         wave so the first paint of a verified sheet already shows it shut —
+         a sheet that draws open for a beat and then greys is a sheet
+         somebody has already pressed. It FAILS OPEN by itself: the module
+         swallows its own read errors and answers "nothing verified". */
+      (typeof MJMPayrollLock !== 'undefined'
+        ? MJMPayrollLock.load(_supabase) : Promise.resolve())
     ]);
     (stRes.data || []).forEach(r => {
       dbStateCache[`${r.nursery}_${r.month}`] = r.payload;
