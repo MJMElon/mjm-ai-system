@@ -4280,6 +4280,108 @@ for every one of them. The register
 *Office bulk close* dated 5 Nov, and November Monthly Audit Report counts
 them as maintenance records done by an admin.
 
+#### AND AN AUDITED OCTOBER PLOT WAS STILL THERE: one morning, seven cases
+
+*"and why Oct cases that audited and saved still shown in to do list?"*
+
+**THE AUDIT HAD WORKED, AND THE FIRST ANSWER WAS THE SENTENCE EXPLAINING
+WHY.** A chip is retired by one thing only -- a row in
+`audit_maintenance_audits` carrying its `task_id` -- so a plot that is
+still there has a case nobody answered, and
+`CHECK_the_same_morning_on_two_cases.sql` was written to prove that off
+the data rather than off a reading of the code. What it found is that the
+chips left behind are **a DIFFERENT CASE FOR THE SAME MORNING**: 2,037
+rows over 1,565 tasks earlier in this file is the same shape one screen
+along, and the November card they had sent over said it in the open -- B06
+three times, U02 seven, U13 nine, on one day, under one job.
+
+**Explaining that a fourth time would have been "your 2,353" again.** The
+office ended it in one line: *"as long as is the same work, no matter
+submitted by how many workers, it should consider as 1 time only."*
+
+**A MAINTENANCE TASK HAS ALWAYS BEEN ONE WORK RECORD, and one morning is
+several of them** -- one phone record per worker (`nops_maint_field_records`),
+plus the office schedule row for the same morning
+(`nops_maint_records.records`). Seven people weeding U02 on the 18th is
+seven records and was seven cases. The auditor walks that plot ONCE,
+saves ONCE, answers ONE task id, and the other six go on asking for ever.
+
+So **the unit is the MORNING**: nursery, plot, the job, and the day the
+work was done. The key is the office own sentence and nothing else in it
+-- **not the batch** (two workers on one plot may well tick different
+ones, and that is still one morning), not the worker, not which of the two
+tables it came from.
+
+Seven things in it, and four are rules this file already has:
+
+- **THE GROUP IS A VIEW AND NEVER A ROW.** Every record is still its own
+  row in both tables, still carries its own deadline into `MAINT_DUE`
+  (which Audit History reads), and nothing is deleted or rewritten. What
+  is one is the QUESTION the board asks. Same rule as the Tab 3 card.
+- **ANY ANSWER ON ANY OF ITS RECORDS ANSWERS THE WHOLE CASE.** That is the
+  half that takes the audited October plot off the board, and it treats an
+  auditor own audit and an admin closure identically, because both have
+  always been a row in the same table.
+- **TWO SCREENS, ONE RULE.** The board groups the chips
+  (`audit_home.html`) and the module page groups the cards
+  (`audit_maintenance_script.js`), because the chip deep-links into that
+  page -- a chip that cleared over three cards still waiting is two
+  answers again. The spellings differ (one labels the work type, the other
+  canonicalises it) so what has to agree is the PARTITION, and
+  `tests/one_morning_is_one_case.cjs` drives both real pages over one
+  ledger and compares the cases they name.
+- **THE NARROWER DEDUPE ON THE MODULE PAGE HAD TO GO**, and it is the
+  instructive one. It dropped an office row matching a field record on
+  (nursery, plot, **batch**, work type, work date) -- narrower in one
+  direction, since two workers ticking different batches were two cards,
+  and worse, it dropped the office row **ID** before anything could ask
+  whether THAT id carried the answer. The board never dropped it, so a
+  morning the admin had closed under the office id read as answered there
+  and as still waiting here.
+- **THE CASE IS NAMED AFTER ITS LOWEST ID**, so it is the same chip and
+  the same card on every load whatever order the read came back in -- and
+  that is a phone record rather than an office schedule row, a BIGSERIAL
+  id being small where a `Date.now()` one is near 1.79e12. Every id rides
+  on `ids`.
+- **ONE DECISION, ONE ROW.** The admin cross writes ONE closure for the
+  case and not one per worker: three identical rows for one walk is the
+  *"still looks duplicate"* screenshot all over again, this time
+  deservedly. It is safe because the retire test is ANY -- and the 23505
+  second pass is still there for a chip whose answer was not visible when
+  the board was drawn.
+- **A CASE OF SEVERAL RECORDS SAYS SO**, on the card: *8 records, one
+  job*, with every worker named rather than one of the seven. A card that
+  quietly stood for eight records would be the screen deciding something
+  on its own.
+
+**WHAT IT DOES NOT MERGE**, and both are in the test: the same plot and
+job on **two mornings** is two cases, because that is two walks of work;
+and **two jobs on one morning** is a case each, because the chips sit
+under their own job and the windows differ.
+
+**WHAT IT COSTS on the DIAGNOSTICS, which is the only thing that moved
+besides the screens:** the audited test is applied to the group rather
+than to the record, so `skippedNoPlot` and `skippedOutOfScope` now count
+every record walked rather than only the unanswered ones, and
+`skippedAudited` is counted at the grouping. The unplaceable COUNT still
+asks per record, because that figure drives a sentence calling those
+records pending.
+
+`shared/CHECK_one_morning_is_one_case.sql` is the measure, and the figure
+the office is owed: every record carrying a past deadline, the cases they
+group into, how many the board draws now and **how many chips it drew
+before**, with the worst folds named -- a morning with one answer and
+seven records is seven chips becoming nought. Tested on the scratch
+Postgres against their own U02 and B06 shapes, against a database with no
+`audit_settings`, with no office blob, and with nothing past its deadline
+at all, which draws the *nothing to report* lines because an empty section
+reads as a query that did not run.
+
+**Nothing to run in the database.** The whole of this change is on the
+screens. **7 of the test own 19 checks fail on the previous code**, the
+first of them in the office own figures: *the plot seven people weeded
+wears ONE chip in a row -> got 8*.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated
