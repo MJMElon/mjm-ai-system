@@ -1143,7 +1143,7 @@
 </div>
 
 <script src="audit_lang.js?v=20261022e"></script>
-<script src="audit_supabase.js?v=20261104a"></script>
+<script src="audit_supabase.js?v=20261105a"></script>
 <script src="audit_ribbon.js?v=20261028a"></script>
 <!-- Works out which plots still owe work, for the circles under each
      to-do row. Needs sb.select from audit_supabase.js above it. -->
@@ -2895,6 +2895,44 @@ function loadAuditTodo(){
       if (typeof loadHistory === 'function') await loadHistory();
       else if (typeof renderHistory === 'function') renderHistory();
     } catch (err) {
+      /* ── A CHIP THAT IS ALREADY AUDITED MUST NOT COST THE SECTION ──
+         The rows go up as ONE insert, and `audit_maint_one_per_task` is a
+         UNIQUE index on task_id (RUN_ME_remove_duplicate_audits.sql), so
+         PostgREST refuses the WHOLE insert over a single task that already
+         carries a row -- the section closes NONE of its plots and the
+         alert reads as a constraint name.
+
+         A chip like that should not be on the board at all; it is there
+         because the task's audit was not visible when the board was drawn
+         (see the paging tiebreaker in audit_supabase.js). But a stale
+         chip must not be able to block the plots beside it, so the rows
+         that really do need a closure are sent again on their own, still
+         as ONE insert, and the ones that were already answered are NAMED
+         rather than reported as a failure. */
+      const msg = (err && err.message) ? String(err.message) : '';
+      if (/23505/.test(msg) && list.length > 1) {
+        try {
+          const have = new Set((await sb.select('audit_maintenance_audits', 'select=task_id') || [])
+                                 .map(a => String(a.task_id)));
+          const left = rows.filter(r => !have.has(String(r.task_id)));
+          const already = rows.length - left.length;
+          if (left.length) {
+            const res2 = await sb.insert('audit_maintenance_audits', left);
+            if (res2 && res2.error) throw new Error(res2.error.message || 'refused');
+          }
+          await loadMaintTimeline();
+          renderAll();
+          if (typeof loadHistory === 'function') await loadHistory();
+          else if (typeof renderHistory === 'function') renderHistory();
+          if (already) alert(already + ' of these ' + rows.length
+                             + ' were already audited or closed, so they needed no closing. '
+                             + (left.length ? 'The other ' + left.length + ' are closed now.'
+                                            : 'Nothing was left to close.'));
+          return;
+        } catch (err2) {
+          console.error('[audit-home] second pass could not close the plots:', err2);
+        }
+      }
       console.error('[audit-home] could not close the plot:', err);
       alert(t('close_plot_failed') + ' ' + (err && err.message ? err.message : ''));
     }

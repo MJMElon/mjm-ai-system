@@ -119,15 +119,44 @@ const OCTOBER = 1783;
     const want = (cfg && cfg.tables && cfg.tables[tbl]) || null;
     const range = req.headers()['range'] || '';
     await page.evaluate((a) => { (window.__ASKS = window.__ASKS || []).push(a); },
-                        { table: tbl, range });
+                        { table: tbl, range, order: url.searchParams.get('order') || '' });
     if (!want) { await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }); return; }
     const MAX = 1000;
     let from = 0, to = MAX - 1;
     const m = /^(\d+)-(\d+)$/.exec(range);
     if (m) { from = +m[1]; to = Math.min(+m[2], from + MAX - 1); }
+    const order = url.searchParams.get('order') || '';
+    /* A column in the order clause that this table has not got. PostgREST
+       rejects the WHOLE read with a 400, which is the one thing a reader
+       must survive rather than hand the screen an empty list. */
+    const absent = (want.absent || []).filter((c) => order.indexOf(c) !== -1);
+    if (absent.length) {
+      await route.fulfill({ status: 400, contentType: 'application/json',
+        body: JSON.stringify({ code: '42703',
+          message: 'column ' + tbl + '.' + absent[0] + ' does not exist' }) });
+      return;
+    }
+    /* ── THE TIE ──
+       `want.tie` is a run of rows written in the same millisecond, sitting
+       across the page boundary. With no unique tiebreaker in the order
+       clause the database is free to answer that run one way for page one
+       and another way for page two -- which is not a fault of its own, it
+       is what an unstable sort IS. So this answers the run REVERSED on
+       every page after the first, which is the cheapest arrangement that
+       makes one row answer twice and another never answer at all.
+
+       Given `id` in the order, the sequence is total and the run is
+       answered in the same order every time, so nothing is lost. */
+    const ids = [];
+    for (let i = 0; i < want.n; i++) ids.push(i + 1);
+    if (want.tie && order.indexOf('id') === -1 && from > 0) {
+      const run = ids.slice(want.tie.at, want.tie.at + want.tie.len);
+      run.reverse();
+      for (let k = 0; k < run.length; k++) ids[want.tie.at + k] = run[k];
+    }
     const rows = [];
     for (let i = from; i <= to && i < want.n; i++) {
-      rows.push({ id: want.repeat && i === want.repeat.at ? want.repeat.id : i + 1,
+      rows.push({ id: want.repeat && i === want.repeat.at ? want.repeat.id : ids[i],
                   plot: 'B' + (i % 14 + 1) });
     }
     await route.fulfill({ status: 200, contentType: 'application/json',
@@ -141,9 +170,16 @@ const OCTOBER = 1783;
   const read = async (n, extra) => page.evaluate(async (cfg) => {
     window.__FIX  = { tables: { probe: cfg } };
     window.__ASKS = [];
+    try { localStorage.removeItem('mjm_sb_no_created_at'); } catch (e) {}
+    try { localStorage.removeItem('mjm_sb_no_id'); } catch (e) {}
     const rows = await sb.select('probe', 'select=*');
+    const seen = new Set(rows.map((r) => r.id));
+    const missing = [];
+    for (let i = 1; i <= cfg.n && missing.length < 5; i++) if (!seen.has(i)) missing.push(i);
     return { got: rows.length,
              asks: window.__ASKS.filter((a) => a.table === 'probe').map((a) => a.range),
+             orders: window.__ASKS.filter((a) => a.table === 'probe').map((a) => a.order),
+             missing,
              ids: rows.length <= 12 ? rows.map((r) => r.id) : null };
   }, Object.assign({ n }, extra || {}));
 
@@ -179,7 +215,30 @@ const OCTOBER = 1783;
   const dup = await read(1500, { repeat: { at: 1000, id: 1 } });
   check('1,500 rows with one repeated reads 1,499', dup.got, 1499);
 
-  /* ── 5. nothing at all is still nothing ───────────────────────────── */
+  /* ── 5. the tie across the boundary ───────────────────────────────── */
+  console.log('\nA tie across the page boundary loses a row');
+  /* THE AUDITOR BOARD IS WHAT THIS COSTS. It asks this table one question
+     -- select=task_id, is this task audited -- so an audit row skipped at
+     the boundary reads as a task NOBODY HAS AUDITED, and its plot comes
+     back onto the To Do list over work that was done in September. */
+  const tie = await read(1500, { tie: { at: 995, len: 12 } });
+  check('1,500 rows with a tie across the boundary still read 1,500', tie.got, 1500);
+  check('…and no row went missing', tie.missing, []);
+  check('because the order carries a unique tiebreaker', tie.orders[0],
+        'created_at.desc,id.desc');
+
+  /* ── 6. a table with no id, and one with neither column ───────────── */
+  console.log('\nA column the table has not got is dropped, not fatal');
+  const noId = await read(1200, { absent: ['id.desc'] });
+  check('a table with no id still comes back whole', noId.got, 1200);
+  check('…asked created_at first, then without the id', noId.orders.slice(0, 2),
+        ['created_at.desc,id.desc', 'created_at.desc']);
+  const neither = await read(1200, { absent: ['id.desc', 'created_at.desc'] });
+  check('a table with neither column still comes back whole', neither.got, 1200);
+  check('…and the last ask carries no order at all',
+        neither.orders[neither.orders.length - 1], '');
+
+  /* ── 7. nothing at all is still nothing ───────────────────────────── */
   console.log('\nAnd an empty table is empty');
   const none = await read(0);
   check('no rows, one ask, no error', [none.got, none.asks], [0, ['0-999']]);

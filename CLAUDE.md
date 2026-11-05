@@ -3738,6 +3738,101 @@ on the previous page**, and `SHOT=/path.png` draws the block as they see it
 -- a column added to a table that PRINTS is a width question as much as a
 content one, and a check cannot read a layout.
 
+#### AND SEPTEMBER CAME BACK, because paging a non-unique order loses rows
+
+The office looked at the auditor board and asked *"why sep work
+maintenance come back again?"* over four **Maintenance SEP 2026 Overdue**
+cards — due 6 to 9 Sep, sixty days gone, Weeding and Manuring plot chips
+under each.
+
+**THE DUPLICATE REMOVAL DID NOT DO IT, and that is provable rather than
+reassuring.** The board retires a maintenance chip on one test —
+`audited.has(String(id))`, a Set of `task_id` read off
+`audit_maintenance_audits` — and the repair only ever deleted rows from a
+task that had two or more, keeping one. So every task that was answered
+before is answered now; its own run says so, 2,037 rows over 1,565 tasks
+becoming 1,565 over 1,565. **Set membership did not move, so no chip could
+come back by that route.** Answering a question like this by reading the
+repair is how an afternoon goes; the arithmetic settles it in a line.
+
+**WHAT DID IT IS THE PAGER, one section up, and the fault is in the ORDER
+and not in the paging.** `sb.select` reads `&order=created_at.desc` and
+asks for 1,000 rows at a time through the Range header. Those are TWO
+SEPARATE REQUESTS, and `created_at` is not unique — a phone pushes a plot
+batch by batch in ONE insert and the board's own section close writes a
+dozen rows in one go, so runs of rows sharing a timestamp to the
+microsecond are the ordinary case. **The database is free to answer such a
+run one way for page one and the other way for page two**, which is not a
+fault of its own: it is what an unstable sort IS. A row then comes back
+TWICE, which the de-dupe catches, and another row is **SKIPPED**, which
+nothing catches.
+
+A skipped audit row is not a cosmetic loss on this screen. The board asks
+that table one question — is this task audited — so **a task id that falls
+through the page boundary reads as NOT AUDITED**, and its plot is drawn
+onto the To Do list over work somebody walked in September or an admin
+closed on 12 October. It is intermittent by construction, which is exactly
+what *came back again* describes.
+
+So the order carries a UNIQUE tiebreaker, `created_at.desc,id.desc`.
+Newest-first is untouched; what changes is that the sequence is TOTAL,
+which is the only thing that makes a page boundary mean anything. Three
+things in it:
+
+- **A LADDER, not two ifs.** Some audit tables were made by hand and have
+  no `created_at`; a view may have no `id`. PostgREST rejects the WHOLE
+  read with a 400 on the order clause, which reaches the screen as an
+  empty list — indistinguishable from "no records" — so each absent column
+  is dropped, remembered in `localStorage` the way `_noCreatedAt` already
+  was, and asked for again. The third ask carries no order at all and so
+  cannot fail on one.
+- **The de-dupe STAYS**, as a belt. With a total order it cannot fire.
+- **ONE STALE CHIP MUST NOT COST THE SECTION.** `audit_maint_one_per_task`
+  is a UNIQUE index, and the section × sends its closures as ONE insert, so
+  a single task that already carries a row made PostgREST refuse the whole
+  insert: the section closed NONE of its plots and the alert read as a
+  constraint name. That is the consequence this file had already named and
+  left for whoever met it — and it composes with the skip exactly into the
+  office's sentence, because the stale chip is the one the office presses ×
+  on. On a 23505 the rows are now re-read against the table, the ones
+  already answered are dropped and NAMED, and the rest go up as one insert.
+
+`shared/CHECK_why_a_september_maintenance_row_is_back.sql` is what makes
+it decidable off the data rather than off the screen: every maintenance
+task from BOTH sources (a phone record, and a row of the office schedule
+with its `dd-mm-yyyy` tarikh), its deadline worked out from the windows
+keyed in `audit_settings`, and which of two things it is —
+
+| | |
+|---|---|
+| **owed** | the task carries NO row. Nobody audited it and nobody closed it. The board is right and the work is real. |
+| **ALREADY ANSWERED** | the task carries a row. **None of these belongs on the board**, so a plot on a September card that is in this list is the READ and not the record. |
+
+Three things about it: it answers for **every** deadline month and not the
+one on screen; it keeps `audit_settings` out of the query entirely, in a
+`DO` block into session settings, because that table is optional and a
+query naming it would fail to PARSE on the databases this most needs to
+answer on — the same trick the save probe uses for `storage.buckets`; and
+its first row says whether the unique index is installed and whether any
+task still carries two rows, because a task with two rows is a different
+fault and has to be cleared first.
+
+**And the version check could not see any of this.** `?v=` on the audit
+module carries a revision LETTER — `20261105a` — and
+`tests/asset_version_bumped.cjs` matched `?v=(\d+)`, so **every reference
+in that module matched nothing at all** and the whole module sat outside
+the one check that says a changed file got a new number, looking exactly as
+covered as the rest. This file already warned about a digits-only pattern
+against these numbers, one test along. It matches `[0-9a-z]+` now, which
+took the check from 43 references to 112.
+
+Sections 5 and 6 of `tests/a_read_over_a_thousand_rows_is_not_cut.cjs` are
+the proof, through a fake PostgREST that answers a tie REVERSED on every
+page after the first — the cheapest arrangement that makes one row answer
+twice and another never answer at all. **4 of its 16 checks fail on the
+previous reader**, and the headline one names the rows: *1,003 to 1,007
+went missing*.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated

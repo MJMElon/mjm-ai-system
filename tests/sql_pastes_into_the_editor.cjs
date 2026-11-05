@@ -58,6 +58,7 @@ const SWEPT = [
   'RUN_ME_remove_duplicate_audits.sql',
   'CHECK_the_report_reads_the_auditors_records.sql',
   'CHECK_why_no_plot_condition_alert.sql',
+  'CHECK_why_a_september_maintenance_row_is_back.sql',
 ];
 
 const DQ = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;
