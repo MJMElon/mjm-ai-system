@@ -48,6 +48,25 @@ MJMModuleAccess.init({
         { key:'add_record',   label:'Add & edit work records', desc:'Key in a maintenance job, or change one already keyed' },
         { key:'tick_schedule',label:'Tick and save the schedule', desc:'Set which plots are treated in each week of the month' },
         { key:'worker_record',label:'Tick the Worker Record', desc:'Mark which worker did which job, feeding the salary claim' },
+        /* VERIFY AND UNLOCK ARE TWO TICKS, the same split the payroll
+           module's own strip has: being trusted to say a sheet is right is
+           not the same as being trusted to unsay it.
+
+           `fallbackTo` is what keeps the day this shipped from taking the
+           button away. A row the office saved before these keys existed
+           carries neither, and effectiveActions reads an absent key as OFF
+           — so every configured person would have lost a button they never
+           had taken from them. What they ANSWERED is the Worker Record
+           tick: until this existed, whoever could tick the sheet could
+           change anything on it. That is what is read until the row is
+           saved again. plot_maintenance_script.js declares the same
+           fallback in mayMaintAct(), and a test holds the two together. */
+        { key:'verify',       label:'Verify & lock a Worker Record sheet',
+          desc:'Sign off one job for one nursery and month, so its ticks and figures stop being editable',
+          fallbackTo:'worker_record' },
+        { key:'unverify',     label:'Unlock a verified Worker Record sheet',
+          desc:'Take one sheet’s signature back so it can be corrected',
+          fallbackTo:'worker_record' },
         /* THE LABEL IS WHAT THE TAB ACTUALLY HOLDS, and it took a wrong one
            to learn that. It read "Open Setting (piece rates, plots,
            workers)", which was true when it was written and has not been for

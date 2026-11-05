@@ -1856,3 +1856,29 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 #js-set-corner:empty{display:none;}
 /* The label column is wider than half a phone, so the row stacks there. */
 @media (max-width:560px){.jb-row{grid-template-columns:1fr;}}
+
+/* ── VERIFY & LOCK on the Worker Record ───────────────────────────────────
+   The strip above the Worker Activity sheet. Copied from the payroll
+   module's own `.verify-bar` rather than drawn afresh: one office reads
+   both screens, and a signature bar that looks different on each is a
+   second thing to learn. `:empty` hides it, so a page whose lock tables
+   could not be read shows no band at all rather than an empty one. */
+.verify-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+            padding:10px 14px;border-radius:12px;margin-bottom:12px;
+            font-size:12px;font-weight:700;line-height:1.4;}
+.verify-bar:empty{display:none;}
+.verify-open{background:#f8fafc;border:1.5px solid var(--border);color:var(--text-faint);}
+.verify-done{background:#ecfdf5;border:1.5px solid #6ee7b7;color:#065f46;}
+.verify-bar .vb-who{font-weight:800;}
+.verify-bar .vb-spacer{flex:1;}
+
+/* THE PAINT, AND IT IS ONLY THE PAINT. A verified sheet greys what can no
+   longer be pressed; `wrAllows()` in the handler is what refuses, because
+   `pointer-events:none` stops neither the keyboard nor a call. The TABLE
+   stays perfectly readable — a signed-off month is a thing people go on
+   reading — so only the controls are dimmed. */
+.wr-shut .check-td,
+.wr-shut .btn,
+.wr-shut .sp-in,
+.wr-shut select{opacity:.5;pointer-events:none;}
+.wr-shut .check-td{cursor:default;}

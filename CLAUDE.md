@@ -2207,6 +2207,92 @@ undefined one. Its untick check is asked as a PAIR — was on, now off —
 because on a page that refused the first press there is nothing to untick and
 "it is absent now" passes for the wrong reason.
 
+### AND THE SHEET ITSELF IS VERIFIED AND LOCKED, which is a different gate
+
+The office asked for it in four words, standing on the P & D sheet for
+UNN 2: *加一个verified and lock 按钮*.
+
+**CHECKED IS PER ROW AND ABOUT THE CAPACITY. THIS IS PER SHEET AND SHUTS THE
+LOT**, and the two must not be folded together — the section above is the
+whole argument for the first one refusing nothing, and this one arriving
+must not quietly make it look as though it does. A crew corrected on a
+settled row is still what the office asked for; what they can now also do is
+say *this sheet is finished* and have it stop moving.
+
+**WHAT IT SIGNS IS THE RECORD, WHICH IS NOT WHAT THE CLAIM SIGNS.** The
+payroll module has had a verify strip for months and it closes the CLAIM:
+`maint` in its `LOCK_SHEETS` freezes what the claim shows
+(`buildMaintSnapshot`) and says so in its own words — *"Worker Record stays
+exactly as editable as it always was; this is the claim choosing to stop
+listening to it."* So the money was protected and the record underneath it
+was not: anybody could go on moving ticks under a signature, and nothing on
+this screen said a word.
+
+**SO IT IS ITS OWN SIGNATURE, UNDER ITS OWN KEY, and the two stay apart on
+purpose.** They are two acts, usually in this order: the nursery agrees who
+did the work, then the office agrees the money. A button here that wrote the
+payroll's own `maint` row would write a THINNER one — that row carries a
+snapshot this page has no rates and no adjustments to build — and two
+buttons writing one row with different consequences is the fault this file
+has a heading about.
+
+`sheet = 'workrec:<job>'`, `scope = the NURSERY`, in the payroll module's own
+`mjmnpayroll_verifications` through the SHARED
+`shared/shared_npayroll_lock.js` rather than a second copy of the rules.
+Both columns used for what they mean, and **the key is per JOB rather than
+per nursery because the office signs the sheet in front of them**: a press on
+P & D that also shut Transplanting would shut work they have not finished
+keying.
+
+**NOTHING TO RUN IN THE DATABASE.** `mjmnpayroll_verifications.sheet` is
+plain TEXT with no CHECK constraint (`RUN_ME_npayroll_locks.sql`), so a new
+sheet name needs nothing — the same thing that was true when `seedplant` was
+added. Re-opening a month on Lock Controls still takes these rows with it,
+because that screen deletes every verification of the month.
+
+Six things in it, and four are rules this file already has:
+
+- **IT READS ITS OWN VERIFICATION AND NEVER `isSheetLocked`.** The payroll
+  MONTH lock auto-shuts on the **2nd of the following month**, so reading it
+  here would have turned every October Worker Record sheet read-only the
+  morning this shipped — a change nobody asked for, over a screen the office
+  goes on correcting. The month lock is about the money being settled.
+- **THE PAINT IS NOT THE GATE.** `.wr-shut` greys what can no longer be
+  pressed; `wrAllows()` inside each of the fourteen handlers is what
+  refuses, because a class stops neither the keyboard nor a call — the
+  lock-in-the-stylesheet fault, met here before it could bite.
+- **A MONTH IS A LABEL ON ONE SCREEN AND A KEY ON THE NEXT**, and this is
+  the seam. Everything on this page works in the LABEL (`getMonth()` answers
+  "Nov 2026", which is what `nops_maint_payroll.month` is keyed on) and the
+  lock works in `YYYY-MM` throughout. The first version handed the label to
+  the lock: it verified, said nothing, and the sheet stayed open, because
+  the row it wrote was one the payroll module can never find. `workRecYm()`
+  reads the hidden `#global-month`, which IS the key.
+- **`fallbackTo:'worker_record'` IS WHAT KEEPS THE BUTTON ON THE DAY IT
+  SHIPS.** `verify` and `unverify` are two new ticks, and `effectiveActions`
+  reads a key absent from a SAVED row as OFF — so every person the office
+  has already configured would have lost a button nobody took from them.
+  What they ANSWERED is the Worker Record tick: until this existed, whoever
+  could tick the sheet could change anything on it. Declared on the action
+  in `nursery_ops_user_access.html` AND in `mayMaintAct()`, and section 0 of
+  the test reads both out of the source.
+- **The permission is asked AGAIN at the write**, because a button drawn
+  before somebody's access changed is still sitting on the screen.
+- **IT FAILS OPEN.** The lock module swallows its own read errors and
+  answers "nothing verified", the strip then draws nothing at all
+  (`.verify-bar:empty`), and every sheet stays editable. A load error must
+  not take a nursery out of its own record.
+
+**The strip is on EVERY one of the eight sheets**, drawn at the top of
+`renderPayroll` before its four early returns, because a strip on one sheet
+is a strip that lies about the other seven.
+
+`tests/the_worker_record_is_verified_and_locked.cjs` drives the real page in
+a real browser — the real Verify, the real Unlock, and a tick called
+straight out of the console on a shut sheet, which is the only way to tell
+the gate from the paint. **22 of its 36 checks fail on the previous code**,
+each by name.
+
 ## A -R plot near culling: its rounds, and the balance it leaves behind
 
 The office: non-collecting plots and collecting plots were right; a plot
