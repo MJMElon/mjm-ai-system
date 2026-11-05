@@ -253,17 +253,45 @@ const MAINT = [
 
   /* ── 4. the column ────────────────────────────────────────────────── */
   console.log('\nThe Done By column');
+  /* A RECORD IS DRAWN AS ONE BLOCK NOW, with its #, Date, Plot and Task
+     merged down the side of its cases (see MOD_RECORD_KEY in the page). So
+     a continuation line emits FEWER cells than the heading has columns, and
+     reading `tr.children` by position answers about the wrong column on
+     every line but the first.
+
+     `grid` is the table as it READS: a rowspan carried down into the lines
+     it covers, so row two of the B05 record still says B05 / Interrow
+     Spray / 22 Oct, which is what somebody looking at it sees. `body` is
+     the raw cells, kept so the merge itself can be asserted. */
   const t = await page.evaluate(() => {
     const d = document.createElement('div');
     d.innerHTML = buildModTable('maint', window.__MAINT);
     document.body.appendChild(d);
     const head = [...d.querySelectorAll('thead th')].map((x) => x.textContent.trim());
-    const body = [...d.querySelectorAll('tbody tr')]
-      .filter((tr) => !tr.classList.contains('total-row'))
-      .map((tr) => [...tr.children].map((td) => td.textContent.trim()));
+    const trs = [...d.querySelectorAll('tbody tr')]
+      .filter((tr) => !tr.classList.contains('total-row'));
+    const body = trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()));
+    const grid = [];
+    const carry = {};
+    trs.forEach((tr) => {
+      const cells = [...tr.children];
+      const row = [];
+      let k = 0;
+      for (let ci = 0; ci < head.length; ci++) {
+        if (carry[ci] && carry[ci].left > 0) { row[ci] = carry[ci].text; carry[ci].left--; continue; }
+        const td = cells[k++];
+        if (!td) { row[ci] = null; continue; }
+        const txt = td.textContent.trim();
+        row[ci] = txt;
+        const rs = parseInt(td.getAttribute('rowspan') || '1', 10);
+        if (rs > 1) carry[ci] = { text: txt, left: rs - 1 };
+      }
+      grid.push(row);
+    });
     const tags = [...d.querySelectorAll('tbody .doneby-tag')].length;
+    const cont = trs.filter((tr) => tr.classList.contains('rec-cont')).length;
     d.remove();
-    return { head, body, tags };
+    return { head, body, grid, tags, cont };
   });
   /* SHOT=/path.png draws the maintenance block as the office sees it. A
      check cannot read a layout, and this table is printed -- a column
@@ -287,7 +315,7 @@ const MAINT = [
         t.head.slice(-2), ['Result', 'Done By']);
   const nameCol = t.head.indexOf('Done By');
   const plotCol = t.head.indexOf('Plot');
-  const rowOn = (plot) => (t.body.find((r) => r[plotCol] === plot) || []);
+  const rowOn = (plot) => (t.grid.find((r) => r[plotCol] === plot) || []);
   check('an audit names the auditor', rowOn('B01')[nameCol], 'Suhaedi');
   check('a closure names the ADMIN who pressed the button',
         rowOn('B09')[nameCol], 'Elon Ting admin');
@@ -299,8 +327,13 @@ const MAINT = [
         t.head.slice(0, 4), ['#', 'Date', 'Plot', 'Task']);
   check('Result and Done By still close the row',
         t.head.slice(-2), ['Result', 'Done By']);
-  check('every row still carries all seven cells',
-        [...new Set(t.body.map((r) => r.length))], [7]);
+  check('every row still READS as all seven cells',
+        [...new Set(t.grid.map((r) => r.length))], [7]);
+  /* And the merge is real rather than the same four values written out
+     three times: a continuation line emits only Case, Result and Done By,
+     which is the whole of what differs between the cases of one record. */
+  check('a line that continues a record emits only what differs',
+        [...new Set(t.body.map((r) => r.length))].sort(), [3, 7]);
 
   /* ── 6. the question the office asked twice ───────────────────────────
      Three rows reading B05 / Interrow Spray / Unsatisfied on 22 Oct are
@@ -312,13 +345,23 @@ const MAINT = [
   check('the Case column is drawn, after the job it belongs to',
         caseCol > t.head.indexOf('Task') && caseCol < t.head.indexOf('Result'), true);
 
-  const alike = t.body.filter((r) => r[plotCol] === 'B05');
+  const alike = t.grid.filter((r) => r[plotCol] === 'B05');
   check('the office own three rows are all on the report', alike.length, 3);
   check('and each one names a DIFFERENT case',
         new Set(alike.map((r) => r[caseCol])).size, 3);
   check('the case is the task id, not something invented',
         alike.map((r) => r[caseCol]).sort(),
         ['1791248487117', '1791248487131', '1791248487134']);
+  /* AND THE OFFICE ASKED FOR THE OTHER HALF OF THIS AFTERWARDS: those three
+     cases are one morning's work on one plot, so they are ONE record now --
+     numbered once, counted once, with the three cases still each on their
+     own line above. The column proves they are separate cases; the record
+     says they are one visit. Both answers at once, which is what was
+     asked. `one_record_is_one_visit.cjs` holds the rule itself. */
+  const recCol = t.head.indexOf('#');
+  check('…and the three are ONE record, not three',
+        new Set(alike.map((r) => r[recCol])).size, 1);
+  check('two of the three lines are continuations of it', t.cont, 2);
 
   /* The quietest way this fix does nothing is the SELECT not asking for the
      column -- the alert board lost a whole fix that way once. A fixture can

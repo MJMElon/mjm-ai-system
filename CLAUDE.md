@@ -4414,6 +4414,116 @@ screens. **7 of the test own 19 checks fail on the previous code**, the
 first of them in the office own figures: *the plot seven people weeded
 wears ONE chip in a row -> got 8*.
 
+### The report is the DATES somebody picked, and one record is one VISIT
+
+Three asks in one message, and the last two are the same sentence about
+two different keys:
+
+> *"change the month and year to 'from date' to 'to date'. so the report
+> generated based on date selected."*
+>
+> *"for the plot condition, group same plot same audit date as 1 record
+> although different batch. but here still need to show the batches"*
+>
+> *"maintenance do the same. group same task same plot same audit date as
+> 1 record although diff case number"*
+
+**THE PERIOD WAS A MONTH SELECT AND A YEAR SELECT**, so a fortnight, a
+single day, or a run that crosses the 1st could not be asked for at all.
+It is a From date and a To date now, **both ends inclusive**, which is what
+"from the 5th to the 9th" means to anybody reading it. It still OPENS on
+the current month, first day to last, so somebody who ticks a module and
+presses Generate gets exactly the report this page has always given them —
+and `MONTHS` went with the change rather than being left behind as a list
+nothing reads.
+
+**A ROW IS WHAT THE DATABASE HOLDS, AND ON TWO OF THESE MODULES THAT IS
+FINER THAN THE THING THE OFFICE COUNTS.** Plot Condition in the main
+nursery is one row per plot per BATCH — `audit_script.js` says why, and the
+alert board already has a heading in this file about it — so one walk round
+B01 with three batches standing in it read as three audits. Maintenance is
+one row per CASE, and a case is one work record, so a plot sprayed by three
+workers on one morning read as three. **The office asked twice whether the
+report was counting one thing three times.** It was not, and the Case
+column was built to prove it; what the column could not do is say that the
+three are one morning's work.
+
+So a RECORD is the **visit**: the same plot on the same day whatever the
+batch, the same plot and the same task on the same day whatever the case.
+`MOD_RECORD_KEY` is the one place that says it, matched on letters and
+digits like every other plot comparison here, so a stray space cannot split
+a visit in two.
+
+**AND A PARALLEL SESSION REACHED THE SAME UNIT ON THE BOARD THE SAME
+MORNING**, from the office's other sentence — *"as long as is the same
+work, no matter submitted by how many workers, it should consider as 1
+time only"* — which is the section immediately above this one. That one
+groups the CHIPS on nursery, plot, job and the day the work was done; this
+one groups the REPORT ROWS on plot, task and the day of the audit. They are
+the same morning counted once, arrived at from two directions and two
+screens, which is why the two sections sit together. **They are not one
+rule in two files**, and must not be merged into one: the board asks which
+work is still owed and keys on the day the WORK was done, while the report
+asks what was audited and keys on the day the AUDIT was saved, and a
+backlog walked in one sitting lands those on different days on purpose.
+
+**AND THE BATCHES AND THE CASES ARE STILL THERE, each on its own line** —
+the other half of what was asked, and the only safe way to do it. **A
+plot's readings are PER BATCH**: the rat on 253 with nothing on 268 is the
+whole reason the alert board is per batch, so folding four readings into
+one cell could hide the one worth walking to. Only the record number, the
+day, the plot (and for maintenance the task) are merged over the lines;
+everything that can differ stays per line, Result included — a closure and
+a real audit on one plot, task and day are two cases saying different
+things, which is the pair the duplicate repair had to arbitrate 188 of.
+
+Six things in it, and four are rules this file already has:
+
+- **THE MERGE IS THE PAGE'S OWN MECHANISM, not a second one.** `group` on a
+  column has drawn one cell over a run of rows since the plot average was
+  added. It is asked of three more columns now, and of four on maintenance.
+- **A RUN HAS TO BE CONSECUTIVE, which the SORT is what makes.** The task
+  had to join the sort for that reason: B01 weeded and manured on the 21st
+  is two records, and sorted on plot and day alone their cases interleave —
+  which draws each record as two broken blocks with the other one's line in
+  the middle. The fixture puts the manuring case BETWEEN the interrow ones
+  on purpose, because a fixture in tidy order proves nothing about a sort.
+- **EVERY FIGURE ON THE PAGE GOES THROUGH `recordCount`** — the summary
+  card, the section total, the records badge and the table's own foot. The
+  Done By filter already states the reason in its own comment: one of them
+  counted differently is one of them disagreeing with the rest.
+- **THE FOOT SAYS BOTH FIGURES** — *"Total: 3 records · 6 batches"*.
+  Somebody who knew that table as six rows has to be able to see where the
+  six went; printing only the smaller number is how a count that was
+  deliberately changed reads as work that vanished. **`noun+'s'` gives "6
+  batchs"**, which nobody notices in code and everybody notices on a printed
+  sheet, so both spellings are written out.
+- **ON A PHONE A ROWSPAN MEANS NOTHING.** Below 720px each row folds into
+  its own card, so the cards after the first would open on a batch with no
+  plot and no day on them. A continuation line carries `.rec-cont` and the
+  sentence it is a continuation OF — *same plot · same day*, and for
+  maintenance *same plot · same task · same day*. The table is unchanged on
+  a desk and on paper, where the merge says it by itself.
+- **PAPAN TANDA AND SEEDLING HEIGHT ARE NOT GROUPED.** One sign per plot and
+  one measurement per plot: neither has a row the office reads as a repeat,
+  so neither has a record key and both go on counting rows.
+
+**WHAT IS DELIBERATELY NOT CHANGED is the NAME.** The heading still reads
+*Monthly Audit Report* over a range that need not be a month, because that
+is what the office calls this screen — the same reason System Setting's
+keys did not move with its labels. It is one line to change the day they
+ask.
+
+`tests/one_record_is_one_visit.cjs` holds all three asks — **32 of its 41
+checks fail on the previous page**, each by NAME, because every reader is
+guarded: a test that dies on the first throw leaves everything under it
+unasked. `SHOT=/path.png` draws it as the office sees it, and the phone
+card view was looked at as well, a check being unable to read a layout.
+`the_report_says_who_did_the_maintenance.cjs` had to learn the merged shape
+— it read cells by POSITION, which a rowspan breaks on every line but the
+first, so it now expands the spans into a grid and reads that. **Nothing to
+run in the database.**
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated
