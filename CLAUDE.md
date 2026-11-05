@@ -4005,10 +4005,24 @@ question rather than an oversight.** It has no Verify of its own -- a row
 there carries a date because the office keyed one, or because
 `applyFieldRecords` filled an empty cell from a record a conductor HAD
 verified. Gating it on a column that does not exist would be inventing a
-decision, and the sweep below shows what it costs to leave it: in the
-office own run, October own 145 unanswered deadlines are **every one of
+decision, so the office was asked, with the size of it in front of them:
+in their own run, October own 145 unanswered deadlines are **every one of
 them an office schedule row**, so that half is most of what they are
-looking at. Ask before changing it.
+looking at.
+
+**THEY CHOSE TO LEAVE IT RAISING AUDITS**, and the reason is sound: the
+office keying a date IS the office saying the work was done, so the row
+stands on its own and the auditor still walks it. Two consequences to know
+before anybody "finishes" this:
+
+- **A plot can still wear two chips for one morning** -- once as the phone
+  record, once as the schedule row that record filled -- and that is now a
+  decision rather than a fault. The pair is derivable (`_fieldIds` on the
+  schedule row names the records it was filled from) the day somebody asks
+  for it.
+- **The gate only ever moves the PHONE half**, so a month whose work came
+  in off the schedule reads the same before and after. September is the
+  month that moves.
 
 `tests/a_phone_record_waits_for_the_conductor.cjs` drives the real board
 through all three states and the fail-open; **3 of its 6 checks fail on the
