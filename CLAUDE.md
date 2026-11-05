@@ -4185,6 +4185,15 @@ Report as a run of maintenance records done by an admin. The Done By
 filter is what separates them from an auditor work, and the remark on each
 says what it was due and how overdue.
 
+**WHAT IT ACTUALLY MOVED.** Run on 5 Nov 2026: **214 September cases
+closed** -- 64 BNN, 125 UNN 1, 25 UNN 2 -- which is exactly the 214 the
+check had said carried nothing, and the proof read **nought left on the
+board**. No plot went unplaced, so the nursery arithmetic above answered
+for every one of them. The register
+(`CHECK_audits_closed_by_admin.sql`) therefore carries 214 rows under
+*Office bulk close* dated 5 Nov, and November Monthly Audit Report counts
+them as maintenance records done by an admin.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated
