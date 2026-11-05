@@ -1335,15 +1335,48 @@ function workRecLockRow(job) {
 }
 function workRecLocked(job) { return !!workRecLockRow(job); }
 
-/* Refuse a write and SAY WHO SHUT IT. A message that only says "locked"
+/* WHOEVER IS SIGNING, and it is the page's OWN answer. The first version
+   read a global `userEmail`, which THIS PAGE HAS NEVER HAD — it is only
+   ever read defensively here, so every signature went in as NULL and the
+   strip could not name anybody. `_signingAs()` is the house rule a few
+   hundred lines down and `window.currentUserEmail` is what the Checked
+   ticks prefer, so this asks the two in that order and nothing else.
+   Nothing resolving stores NOTHING, never a word standing in for a person:
+   see _wrSignedBy. */
+function _wrSigner() {
+  return (typeof window !== 'undefined' && window.currentUserEmail)
+      || (typeof _signingAs === 'function' && _signingAs())
+      || null;
+}
+
+/* WHO AND WHEN, AND NO STAND-IN FOR EITHER. Three sentences said "verified
+   by somebody" where the name would not resolve, and the office took it off
+   in two words: 不要放somebody. They are right — the NAME is the one thing
+   a signature carries that nothing else on the strip does, and a word
+   standing where it belongs reads as a person whose name nobody wrote down.
+   A row verified before the signer above was fixed carries no name at all
+   and never will, so what is honest is to say what IS known and stop.
+
+   ONE helper, because the sentence is said in three places — the refusal,
+   the strip and the Unlock confirm — and three wordings for one fact is how
+   they drift. */
+function _wrSignedBy(v) {
+  const who  = (v && _maintWho(v.verified_by)) || '';
+  const when = (v && _maintWhen(v.verified_at)) || '';
+  if (who && when) return `verified by ${who} on ${when}`;
+  if (who)  return `verified by ${who}`;
+  if (when) return `verified on ${when}`;
+  return 'verified';
+}
+
+/* Refuse a write and SAY WHAT SHUT IT. A message that only says "locked"
    leaves somebody hunting for a switch; the Unlock button is on the strip
    right above the table they are looking at. */
 function wrAllows(job) {
   const v = workRecLockRow(job);
   if (!v) return true;
   alert(`${jobLabel(job || _payrollView)} for ${NURSERY_NAMES[workRecScope()] || workRecScope()}, `
-      + `${getMonth()} was verified by ${_maintWho(v.verified_by) || 'somebody'}`
-      + `${v.verified_at ? ' on ' + _maintWhen(v.verified_at) : ''}, so this sheet is closed.\n\n`
+      + `${getMonth()} was ${_wrSignedBy(v)}, so this sheet is closed.\n\n`
       + 'Press Unlock on the strip above the table to open it again.');
   return false;
 }
@@ -1406,10 +1439,15 @@ function renderWorkRecVerify() {
              + ` · ${esc(getMonth())}`;
   if (v) {
     el.className = 'verify-bar verify-done';
+    /* A cell is DROPPED where there is nothing in it, rather than filled
+       with a word or a dash. The strip has already said what is verified;
+       an empty slot says nobody wrote the name down, which is the truth,
+       and "somebody" said it was a person this screen could name. */
+    const who = _maintWho(v.verified_by), when = _maintWhen(v.verified_at);
     el.innerHTML = `<span>✔ Verified — ${what}</span>`
       + `<span class="vb-spacer"></span>`
-      + `<span class="vb-who">${esc(_maintWho(v.verified_by) || 'somebody')}</span>`
-      + `<span>${esc(_maintWhen(v.verified_at) || '—')}</span>`
+      + (who  ? `<span class="vb-who">${esc(who)}</span>` : '')
+      + (when ? `<span>${esc(when)}</span>` : '')
       + (mayMaintAct('unverify', 'worker_record')
           ? `<button class="btn btn-sm" style="margin-left:10px;"
                onclick="unverifyWorkRec()">↺ Unlock</button>` : '');
@@ -1443,7 +1481,7 @@ async function verifyWorkRec() {
              + 'changed after that. Press Unlock on the strip to take it back.\n\n'
              + 'This signs the RECORD. The salary claim is signed separately, on the payroll.')) return;
   const error = await MJMPayrollLock.verify(_supabase, workRecYm(), workRecSheet(job), n,
-                                            (typeof userEmail !== 'undefined' && userEmail) || null, null);
+                                            _wrSigner(), null);
   if (error) { alert('Could not verify — ' + (error.message || 'try again')); return; }
   renderPayroll();
 }
@@ -1462,8 +1500,7 @@ async function unverifyWorkRec() {
   if (!v) { renderPayroll(); return; }
   const n = workRecScope();
   if (!confirm(`Unlock ${jobLabel(job)} for ${NURSERY_NAMES[n] || n}, ${getMonth()}?\n\n`
-             + `It was verified by ${_maintWho(v.verified_by) || 'somebody'}`
-             + `${v.verified_at ? ' on ' + _maintWhen(v.verified_at) : ''}.\n\n`
+             + `It was ${_wrSignedBy(v)}.\n\n`
              + 'The sheet becomes editable again and will have to be verified a second time.')) return;
   const error = await MJMPayrollLock.unverify(_supabase, workRecYm(), workRecSheet(job), v.scope || '');
   if (error) { alert('Could not unlock — ' + (error.message || 'try again')); return; }
