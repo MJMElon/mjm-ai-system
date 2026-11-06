@@ -201,6 +201,19 @@ input.input:focus{border-color:var(--green);background:var(--card);
 .tbtn-primary{background:var(--pn);border-color:var(--pn);color:#fff}
 .tbtn-primary:hover{background:#144a14;border-color:#144a14;color:#fff}
 
+/* The height unit pair. Narrower than a .tbtn because the label is one or
+   two characters, and the two sit tight together so they read as one
+   control with two settings rather than as two more toolbar buttons. The
+   ON one is filled -- a pair where neither is filled is a pair that does
+   not say which unit the sheet is in. */
+.tbtn-unit-bar{display:inline-flex;align-items:center;gap:6px}
+.tbtn-unit-label{font-size:10.5px;font-weight:800;letter-spacing:.08em;
+                 text-transform:uppercase;color:var(--ink3)}
+.tbtn-unit{padding:0 14px;min-width:52px;justify-content:center;text-transform:none;
+           letter-spacing:0;font-size:13px}
+.tbtn-unit.is-on{background:var(--batch);border-color:var(--batch);color:#fff}
+.tbtn-unit.is-on:hover{background:var(--batch);border-color:var(--batch);color:#fff}
+
 /* ── REPORT HEADER (the letterhead) ──
    Just the title/period/generated line now — no MJM Nursery wordmark or
    company address. This report only ever opens inside the admin portal
@@ -407,6 +420,10 @@ body.is-full #btn-full{display:none}
   .mod-head{padding:14px 15px}
   .filter-card{padding:15px}
   .tbtn{flex:1;justify-content:center;padding:0 12px}
+  /* The pair takes a row of its own rather than being squeezed in beside
+     three buttons that have each just been told to take an equal share. */
+  .tbtn-unit-bar{flex:1 0 100%;justify-content:center}
+  .tbtn-unit{flex:0 0 auto}
 }
 
 /* ── PRINT ──
@@ -595,6 +612,19 @@ body.is-full #btn-full{display:none}
         <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
         <span>Refresh</span>
       </button>
+      <!-- THE UNIT HEIGHTS ARE READ IN. Two chips rather than one button
+           that toggles its own label: a segmented pair says both answers
+           exist and which one is on, where "Show in m" makes somebody read
+           the label to work out where they are. Refresh is beside it and
+           reads the database again; this one does not. Hidden until a
+           report with a height in it has been drawn -- syncHeightUnitBar. -->
+      <div class="tbtn-unit-bar" id="unit-bar" style="display:none">
+        <span class="tbtn-unit-label">Height in</span>
+        <button class="tbtn tbtn-unit is-on" data-unit="cm" aria-pressed="true"
+                onclick="setHeightUnit('cm')">cm</button>
+        <button class="tbtn tbtn-unit" data-unit="m" aria-pressed="false"
+                onclick="setHeightUnit('m')">m</button>
+      </div>
     </div>
 
     <!-- OUTPUT -->
@@ -906,6 +936,73 @@ function _recNo(rows,i,keyOf){
   return m.no[i];
 }
 
+/* ── THE UNIT HEIGHTS ARE READ IN ─────────────────────────────────────
+   The office asked for it over the Plot Avg column: *plot avg 我要可以
+   选择cm or换算m*.
+
+   IT IS EVERY HEIGHT ON THE SHEET, not the one column they were looking
+   at. A row reading 141.7 · 161.1 · 120 · 1.417 is four centimetres and
+   one metre side by side, which is a worse sheet than one with no choice
+   on it at all; and there are TWO Plot Avg columns here — the Seedling
+   Height table and the Height by Batch table — so moving one would be two
+   answers on one page. The samples, both averages, the batch average and
+   the four age cards all move together.
+
+   A HEADING NAMES THE UNIT, which is what carries the choice onto PAPER:
+   the control is in the toolbar and the toolbar does not print, so the
+   heading is the only thing a printed sheet can say it with. That is why
+   every figure that moves sits under a heading carrying `(cm)` or `(m)`.
+
+   PRECISION DOES NOT MOVE. A reading is keyed to a tenth of a centimetre,
+   which is a millimetre, and three decimals of a metre is the same
+   millimetre — so 141.7 cm is 1.417 m and nothing is rounded away.
+   Two decimals would have read 1.42 and thrown a measurement out.
+
+   It is NOT remembered between page loads. This sheet gets printed and
+   passed round, and a unit that is whatever somebody last picked on one
+   machine is how two copies of one report come to disagree; the heading
+   names it either way, so the predictable default is worth more. One line
+   of localStorage the day the office asks. */
+let _heightUnit='cm';
+const HEIGHT_UNITS={ cm:{label:'cm',dp:1,per:1}, m:{label:'m',dp:3,per:100} };
+const heightUnitLabel=()=>HEIGHT_UNITS[_heightUnit].label;
+/* Appended to a heading, so there is one spelling of "(cm)" and the
+   headings cannot come to disagree with the figures under them. */
+const hgtHead=(name)=>name+' ('+heightUnitLabel()+')';
+
+/* WHAT THE AUDITOR KEYED. In cm it is printed EXACTLY as it is stored —
+   not re-rounded — so nothing whatever on this sheet moves until somebody
+   picks metres. A value that is not a number is passed through as it is,
+   because it is text somebody keyed and not a height to convert. */
+function hgtKeyed(v){
+  if(v===null||v===undefined||String(v).trim()==='') return '—';
+  if(_heightUnit==='cm') return String(v);
+  const n=Number(v);
+  return Number.isFinite(n)?_hgtNum(n):String(v);
+}
+/* A figure this page WORKED OUT — a mean, which has as many decimals as
+   the division left it, so it is rounded to the unit's own precision. */
+function hgtMean(n){
+  return (n==null||!Number.isFinite(Number(n)))?'—':_hgtNum(Number(n));
+}
+/* en-MY, pinned, for the reason the whole system pins it: unpinned, a
+   handset set to a language that writes decimals with a comma prints a
+   plot of 6,515 as 6.515. These are the lines this change touched. */
+function _hgtNum(cm){
+  const u=HEIGHT_UNITS[_heightUnit];
+  return (cm/u.per).toLocaleString('en-MY',{maximumFractionDigits:u.dp});
+}
+
+/* A HEADING MAY BE A FUNCTION, because a height column does not know its
+   own unit until somebody picks one -- see hgtHead. Asked at DRAW time by
+   everything that draws, so the heading, the figures under it and the
+   spreadsheet column come out of one choice in one pass and cannot
+   disagree. `label` is the same heading one line down: what the cell
+   announces itself as on a phone, where it is a card row and not a
+   column. */
+const colHead =c=>typeof c.h==='function'?c.h():c.h;
+const colLabel=c=>typeof c.label==='function'?c.label():(c.label||colHead(c));
+
 /* ── COLUMNS ──
    The four table shapes as data rather than as four hand-written blocks
    of HTML. Each column knows its own heading, and that heading is what
@@ -933,13 +1030,15 @@ const MOD_COLS={
     {h:'Date',     v:r=>fmtDate(r.date), xlDate:r=>r.date},
     {h:'Plot',     v:r=>`<b>${esc(r.plot)}</b>`,   raw:true},
     {h:'Batch',    v:r=>r.batch||'—'},
-    {h:'S1 (cm)',  v:r=>r.sample_1||'—',           num:true},
-    {h:'S2 (cm)',  v:r=>r.sample_2||'—',           num:true},
-    {h:'S3 (cm)',  v:r=>r.sample_3||'—',           num:true},
-    {h:'Avg (cm)', v:r=>`<b>${esc(r.avg_height||'—')}</b>`, raw:true, num:true},
+    /* THE HEADING IS A FUNCTION because the unit is chosen after the page
+       loads -- see hgtHead. buildTable asks for it at draw time. */
+    {h:()=>hgtHead('S1'),  v:r=>hgtKeyed(r.sample_1),  num:true},
+    {h:()=>hgtHead('S2'),  v:r=>hgtKeyed(r.sample_2),  num:true},
+    {h:()=>hgtHead('S3'),  v:r=>hgtKeyed(r.sample_3),  num:true},
+    {h:()=>hgtHead('Avg'), v:r=>`<b>${esc(hgtKeyed(r.avg_height))}</b>`, raw:true, num:true},
     /* One cell for the whole group, not the same figure on every line --
        see `group` in buildModTable. */
-    {h:'Plot Avg (cm)', label:'Plot average that day',
+    {h:()=>hgtHead('Plot Avg'), label:()=>'Plot average that day ('+heightUnitLabel()+')',
      group:r=>String(r.date||'')+'|'+String(r.plot||'').trim().toUpperCase(),
      v:(r,i,rows)=>`<b>${_heightPlotAvg(r,rows)}</b>`, raw:true, num:true}
   ],
@@ -1057,8 +1156,7 @@ function _heightPlotAvg(r, rows){
                        .map(Number)
                        .filter(v=>Number.isFinite(v));
   if(!vals.length) return '—';
-  const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
-  return (Math.round(mean*10)/10).toLocaleString();
+  return hgtMean(vals.reduce((a,b)=>a+b,0)/vals.length);
 }
 
 /* ── HEIGHT BY BATCH ──────────────────────────────────────────────────
@@ -1102,10 +1200,10 @@ function _logDay(r){
   const v=r&&(r.transaction_date||r.created_at);
   return v?String(v).slice(0,10):'';
 }
-function fmt1(n){
-  return n==null||!Number.isFinite(Number(n))?'—'
-    :(Math.round(Number(n)*10)/10).toLocaleString();
-}
+/* `fmt1` stood here and every one of its callers was a HEIGHT, so it is
+   `hgtMean` now -- one figure that knows the unit it is being read in,
+   rather than a rounder beside a unit written into a heading by hand.
+   Do not put a second plain formatter back here for a height. */
 
 /* Supabase answers with AT MOST 1000 rows and says nothing about it, so one
    read of the inventory ledger drops the oldest batches in silence. The
@@ -1235,9 +1333,10 @@ const BATCH_HEIGHT_COLS=[
   {h:'Plot',     v:r=>`<b>${esc(r.plot)}</b>`, raw:true},
   {h:'Audited',  label:'Last audited', v:r=>r.h?fmtDate(r.h.date):'—',
                  xlDate:r=>r.h?r.h.date:null},
-  {h:'Plot Avg (cm)', label:'Plot height', v:r=>r.h?fmt1(r.h.value):'—', num:true},
-  {h:'Batch Avg (cm)',label:'Batch average', group:r=>r.batch,
-   v:r=>`<b>${fmt1(r.batchAvg)}</b>`, raw:true, num:true}
+  {h:()=>hgtHead('Plot Avg'), label:()=>'Plot height ('+heightUnitLabel()+')',
+   v:r=>r.h?hgtMean(r.h.value):'—', num:true},
+  {h:()=>hgtHead('Batch Avg'),label:()=>'Batch average ('+heightUnitLabel()+')', group:r=>r.batch,
+   v:r=>`<b>${hgtMean(r.batchAvg)}</b>`, raw:true, num:true}
 ];
 
 function buildBatchHeightSection(bh){
@@ -1256,7 +1355,7 @@ function buildBatchHeightSection(bh){
   const cards=BATCH_AGE_GROUPS.map(g=>{
     const s=bh.groups[g];
     return`<div class="sum-card">
-      <div class="sum-val" style="color:var(--batch)">${fmt1(s.avg)}</div>
+      <div class="sum-val" style="color:var(--batch)">${hgtMean(s.avg)}</div>
       <div class="sum-label">${g} Month${g>1?'s':''} Old</div>
       <div class="sum-foot">${fmtNum(s.batches)} batch${s.batches===1?'':'es'}${
         s.unmeasured?' · '+fmtNum(s.unmeasured)+' unmeasured':''}</div>
@@ -1276,7 +1375,9 @@ function buildBatchHeightSection(bh){
     </div>
     <div class="mod-block">
       <div class="mod-block-head">
-        <span class="mod-block-name">Average Height by Age (cm)</span>
+        <!-- The four cards under this carry no unit of their own, so this
+             line is what says which they are in. -->
+        <span class="mod-block-name">${hgtHead('Average Height by Age')}</span>
         ${unmeasured?`<span class="badge badge-batch">${fmtNum(unmeasured)} with no reading</span>`:''}
       </div>
       <div class="mod-block-body">
@@ -1317,7 +1418,7 @@ function buildTable(cols, rows, noun, opts){
 
   /* A merged column's heading is centred over it, or the heading and the
      figure it names sit at opposite ends of the same column. */
-  const head='<tr>'+cols.map(c=>`<th${c.group?' class="grp"':''}>${esc(c.h)}</th>`).join('')+'</tr>';
+  const head='<tr>'+cols.map(c=>`<th${c.group?' class="grp"':''}>${esc(colHead(c))}</th>`).join('')+'</tr>';
 
   /* A COLUMN THAT IS ONE CELL FOR A WHOLE GROUP.
      The plot average is one figure about seven rows, and seven copies of it
@@ -1359,10 +1460,10 @@ function buildTable(cols, rows, noun, opts){
       const val=c.v(r,i,rows);
       const span=spans[ci] && spans[ci][i]>1 ? ` rowspan="${spans[ci][i]}"` : '';
       const cls=[c.num?'num':'', spans[ci]?'grp':''].filter(Boolean).join(' ');
-      /* c.label is what the cell announces itself as on a phone, where
+      /* colLabel is what the cell announces itself as on a phone, where
          it is a card row rather than a column: "#" is a column heading
          and says nothing on its own once the heading row is gone. */
-      return `<td data-label="${esc(c.label||c.h)}"${cls?` class="${cls}"`:''}${span}>${c.raw?val:esc(val)}</td>`;
+      return `<td data-label="${esc(colLabel(c))}"${cls?` class="${cls}"`:''}${span}>${c.raw?val:esc(val)}</td>`;
     }).join('')+'</tr>';
   });
   const word=noun||'record';
@@ -1384,8 +1485,12 @@ const NURSERY_MODS=['plot','height','papan','maint'];
    function every module shares. Null means nothing was narrowed. */
 let _maintNarrowed = null;
 
-function buildNurserySection(label, sub, headClass, data, nurseries){
-  const mods=[...selectedMods].filter(m=>NURSERY_MODS.indexOf(m)>=0);
+/* `mods` is PASSED, never read off the panel. The sheet can be redrawn
+   after it was generated -- a unit change does exactly that -- and the
+   ticks may have been moved in between, so a section built off the live
+   panel would draw a module the report was never generated for. */
+function buildNurserySection(label, sub, headClass, data, nurseries, allMods){
+  const mods=allMods.filter(m=>NURSERY_MODS.indexOf(m)>=0);
   const modLabels={plot:'📋 Plot Condition',height:'📏 Seedling Height',papan:'🪧 Papan Tanda',maint:'🔧 Maintenance'};
   const modBadge={plot:'badge-plot',height:'badge-height',papan:'badge-papan',maint:'badge-maint'};
   let total=0;
@@ -1694,7 +1799,10 @@ function _xlCell(c, r, i, rows){
 }
 function _xlSheetOf(cols, rows, lead){
   if(!cols||!rows||!rows.length) return null;
-  const head=(lead?[lead.h]:[]).concat(cols.map(c=>c.h));
+  /* colHead, not `c.h`: a height column's heading is a function of the
+     unit on screen, and a spreadsheet headed (cm) over a column of metres
+     is the worst of the three places this could go wrong. */
+  const head=(lead?[lead.h]:[]).concat(cols.map(colHead));
   const body=rows.map((r,i)=>
     (lead?[{v:lead.v(r),t:'s'}]:[]).concat(cols.map(c=>_xlCell(c,r,i,rows))));
   return {head,rows:body};
@@ -1707,7 +1815,11 @@ function _modSheet(mod, rows){
                     {h:'Nursery', v:r=>r.nursery||''});
 }
 
-let _lastReport=null;   // set by generateReport; what the Excel is of
+/* The last report DRAWN: what the Excel is of, and what a height-unit
+   change redraws from. One object rather than two, because the two would
+   be the same report answering in two units. Null until somebody has
+   generated one, which is what both readers check first. */
+let _lastReport=null;
 
 function downloadExcel(){
   const R=_lastReport;
@@ -1740,8 +1852,11 @@ function downloadExcel(){
 
     const labels={plot:'Plot Condition',height:'Seedling Height',
                   papan:'Papan Tanda',maint:'Maintenance'};
-    [...selectedMods].filter(m=>NURSERY_MODS.indexOf(m)>=0).forEach(mod=>{
-      const s=_modSheet(mod,R.data[mod]);
+    /* R.mods and not the live panel, the same rule the sections follow:
+       the spreadsheet is of the report that was DRAWN, and the ticks may
+       have been moved since without anybody pressing Generate. */
+    (R.mods||[]).filter(m=>NURSERY_MODS.indexOf(m)>=0).forEach(mod=>{
+      const s=_modSheet(mod,R.sheetData[mod]);
       if(s) sheets.push({name:labels[mod]||mod,head:s.head,rows:s.rows});
     });
     /* Height by Batch is about BATCHES rather than about a nursery's
@@ -1840,8 +1955,6 @@ async function generateReport(){
     } else {
       _maintNarrowed = null;
     }
-    const countAll=(d,n)=>[...selectedMods].filter(m=>NURSERY_MODS.indexOf(m)>=0)
-                                           .reduce((s,m)=>s+recordCount(m,filterByNursery(d[m],n)),0);
     /* The ledger reads are the one part of this report that can fail on its
        own, and a section that quietly draws nothing is a section that says
        there are no batches. It says what went wrong instead. */
@@ -1850,10 +1963,43 @@ async function generateReport(){
       try{ batchHeight=buildBatchHeight(await fetchBatchLedger(to),data.height||[]); }
       catch(e){ console.error('[batch-height]',e); batchHeight={error:e.message}; }
     }
+    /* EVERYTHING THE DRAWING HALF NEEDS, and nothing it can read off the
+       panel. The reads above are the expensive part -- the batch half
+       pages the whole inventory ledger -- so changing the UNIT must not go
+       near them, and the only way to be sure of that is for the drawing to
+       take its inputs rather than fetch them.
+
+       `at` rides along for the same reason: the Generated line is when the
+       report was GENERATED, and reading it in another unit a minute later
+       has not generated anything. */
+    drawReport({ data, batchHeight, from, to, plotQuery,
+                 showPN, showMN, mnNurseries,
+                 mods:[...selectedMods], maintNarrowed:_maintNarrowed,
+                 at:new Date() });
+    document.getElementById('print-bar').classList.remove('hidden');
+    /* Only on a phone: on a desk the filters and the report both fit. */
+    if(window.matchMedia('(max-width:720px)').matches) setFilters(false);
+    showToast('✓ Report generated');
+  }catch(e){
+    console.error(e);
+    showToast('⚠ Failed: '+e.message);
+  }
+  setLoading(false);
+}
+
+function drawReport(rep){
+  const {data,batchHeight,from,to,plotQuery,showPN,showMN,mnNurseries,mods,at}=rep;
+  /* Read by buildNurserySection a moment later -- restored here rather
+     than left standing, because a redraw must say exactly what the
+     generate said. */
+  _maintNarrowed=rep.maintNarrowed;
+  const periodStr=periodLabel(from,to);
+  const has=(m)=>mods.indexOf(m)!==-1;
+  const countAll=(d,n)=>mods.filter(m=>NURSERY_MODS.indexOf(m)>=0)
+                            .reduce((s,m)=>s+recordCount(m,filterByNursery(d[m],n)),0);
     const pnTotal=showPN?countAll(data,PN_NURSERIES):0;
     const mnTotal=showMN?countAll(data,mnNurseries):0;
     const grandTotal=pnTotal+mnTotal;
-    const now=new Date();
     /* What the heading says is what was DRAWN. With only Height by Batch
        ticked there is no nursery section at all, so naming the nursery that
        happens to be ticked would name a section that is not on the page. */
@@ -1872,14 +2018,14 @@ async function generateReport(){
     const maintTotal  = recordCount('maint', filterByNursery(data.maint||[],  countedNurseries));
 
     let summaryCards=`<div class="sum-card"><div class="sum-val">${fmtNum(grandTotal)}</div><div class="sum-label">Total Audits</div></div>`;
-    if(selectedMods.has('plot'))   summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--pn)">${fmtNum(plotTotal)}</div><div class="sum-label">Plot Condition</div></div>`;
-    if(selectedMods.has('height')) summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--mn)">${fmtNum(heightTotal)}</div><div class="sum-label">Seedling Height</div></div>`;
-    if(selectedMods.has('papan'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--papan)">${fmtNum(papanTotal)}</div><div class="sum-label">Papan Tanda</div></div>`;
-    if(selectedMods.has('maint'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--maint)">${fmtNum(maintTotal)}</div><div class="sum-label">Maintenance</div></div>`;
+    if(has('plot'))   summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--pn)">${fmtNum(plotTotal)}</div><div class="sum-label">Plot Condition</div></div>`;
+    if(has('height')) summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--mn)">${fmtNum(heightTotal)}</div><div class="sum-label">Seedling Height</div></div>`;
+    if(has('papan'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--papan)">${fmtNum(papanTotal)}</div><div class="sum-label">Papan Tanda</div></div>`;
+    if(has('maint'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--maint)">${fmtNum(maintTotal)}</div><div class="sum-label">Maintenance</div></div>`;
     if(batchHeight&&!batchHeight.error) summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--batch)">${fmtNum(batchHeight.batches)}</div><div class="sum-label">Batches 1–4 Mth</div></div>`;
 
     let sections='';
-    if(showPN) sections+=buildNurserySection('Pre Nursery (PN)','Plots P01 – P52','mod-head-pn',data,PN_NURSERIES);
+    if(showPN) sections+=buildNurserySection('Pre Nursery (PN)','Plots P01 – P52','mod-head-pn',data,PN_NURSERIES,mods);
     if(showMN){
       // Range shown under the heading follows whichever of BNN/UNN1/UNN2
       // actually made it in, not always all three.
@@ -1887,7 +2033,7 @@ async function generateReport(){
       sections+=buildNurserySection(
         `Main Nursery (${mnNurseries.join(' + ')})`,
         mnNurseries.map(n=>MN_RANGES[n]).join(' · '),
-        'mod-head-mn',data,mnNurseries);
+        'mod-head-mn',data,mnNurseries,mods);
     }
     /* Last, and outside both: these batches are in the Pre-Nursery by
        definition (they have not been transplanted), but the section answers
@@ -1899,42 +2045,69 @@ async function generateReport(){
       <div class="report-header">
         <div class="report-title">Monthly Audit Report</div>
         <div class="report-period">${periodStr} · ${nurseryLabel}${plotQuery?' · Plot: '+esc(plotQuery):''}</div>
-        <div class="report-generated">Generated: ${now.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="report-generated">Generated: ${at.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
       </div>
       <div class="summary-row">${summaryCards}</div>
       ${sections}`;
-    /* WHAT THE EXCEL IS OF, recorded here and nowhere else. The sheets are
-       the rows that were DRAWN -- narrowed by plot, by Done By and by
-       nursery exactly as the tables above are -- so a figure in the
-       spreadsheet cannot disagree with the card it was read off. A second
-       read scoped its own way is how the two come to differ. */
-    _lastReport={
-      from, to, period:periodStr, nurseryLabel, plotQuery,
-      generated:now.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),
-      counts:[
-        ...(selectedMods.has('plot')   ?[['Plot Condition',  plotTotal]]  :[]),
-        ...(selectedMods.has('height') ?[['Seedling Height', heightTotal]]:[]),
-        ...(selectedMods.has('papan')  ?[['Papan Tanda',     papanTotal]] :[]),
-        ...(selectedMods.has('maint')  ?[['Maintenance',     maintTotal]] :[]),
-        ['Total Audits', grandTotal]
-      ],
-      data:{
-        plot:  filterByNursery(data.plot||[],  countedNurseries),
-        height:filterByNursery(data.height||[],countedNurseries),
-        papan: filterByNursery(data.papan||[], countedNurseries),
-        maint: filterByNursery(data.maint||[], countedNurseries)
-      },
-      batchHeight
-    };
-    document.getElementById('print-bar').classList.remove('hidden');
-    /* Only on a phone: on a desk the filters and the report both fit. */
-    if(window.matchMedia('(max-width:720px)').matches) setFilters(false);
-    showToast('✓ Report generated');
-  }catch(e){
-    console.error(e);
-    showToast('⚠ Failed: '+e.message);
-  }
-  setLoading(false);
+  /* WHAT THE EXCEL IS OF, recorded here and nowhere else. The sheets are
+     the rows that were DRAWN -- narrowed by plot, by Done By and by
+     nursery exactly as the tables above are -- so a figure in the
+     spreadsheet cannot disagree with the card it was read off. A second
+     read scoped its own way is how the two come to differ.
+
+     IT RIDES ON THE DRAWING PAYLOAD rather than in a second variable: a
+     unit change REDRAWS (see setHeightUnit) and the spreadsheet has to
+     come down in the unit on screen -- which it does by construction,
+     because _xlSheetOf asks the same columns for the same headings and
+     the same values this draw just did. Worked out here, where the
+     figures it quotes are, and so re-made identically on every redraw. */
+  _lastReport=Object.assign({},rep,{
+    period:periodStr, nurseryLabel,
+    generated:at.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+    counts:[
+      ...(has('plot')   ?[['Plot Condition',  plotTotal]]  :[]),
+      ...(has('height') ?[['Seedling Height', heightTotal]]:[]),
+      ...(has('papan')  ?[['Papan Tanda',     papanTotal]] :[]),
+      ...(has('maint')  ?[['Maintenance',     maintTotal]] :[]),
+      ['Total Audits', grandTotal]
+    ],
+    sheetData:{
+      plot:  filterByNursery(data.plot||[],  countedNurseries),
+      height:filterByNursery(data.height||[],countedNurseries),
+      papan: filterByNursery(data.papan||[], countedNurseries),
+      maint: filterByNursery(data.maint||[], countedNurseries)
+    }
+  });
+  syncHeightUnitBar(has('height')||has('bheight'));
+}
+
+/* ── THE HEIGHT UNIT CONTROL ──────────────────────────────────────────
+   In the TOOLBAR and not the filter panel, because it is not a filter:
+   nothing is read, nothing is narrowed, and the same report is simply
+   read in another unit. Pressing it goes nowhere near the database --
+   see drawReport for why that matters.
+
+   It is OFFERED ONLY where the report has a height on it, the same rule
+   the Done By row follows: a control over a module that is not on the
+   page is a control that does nothing. */
+function syncHeightUnitBar(show){
+  const bar=document.getElementById('unit-bar');
+  if(!bar) return;
+  bar.style.display=show?'':'none';
+  bar.querySelectorAll('.tbtn-unit').forEach(b=>{
+    const on=b.dataset.unit===_heightUnit;
+    b.classList.toggle('is-on',on);
+    b.setAttribute('aria-pressed',on?'true':'false');
+  });
+}
+
+function setHeightUnit(u){
+  if(!HEIGHT_UNITS[u]||u===_heightUnit) return;
+  _heightUnit=u;
+  /* The redraw is what repaints the buttons as well (drawReport ends on
+     syncHeightUnitBar), so there is one place that says which is on. With
+     no report drawn the bar is not on screen to be pressed. */
+  if(_lastReport) drawReport(_lastReport);
 }
 
 document.addEventListener('DOMContentLoaded',initFilters);
