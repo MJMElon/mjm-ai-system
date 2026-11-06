@@ -61,9 +61,10 @@
 <div id="mjm-ribbon" data-center="Nursery Payroll System" data-center-scale="0.75"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
-<!-- Second row: what used to be three top tabs (Payroll / Settings / User
-     Access) is now the date picker plus two icon shortcuts — Settings and
-     User Access move here as colour icon buttons, and Payroll itself has
+<!-- Second row: what used to be three top tabs (Payroll / Settings / Module
+     Assess Control) is now the date picker plus two icon shortcuts —
+     Settings and Module Assess Control move here as colour icon buttons,
+     and Payroll itself has
      no button of its own any more, because clicking any of the five work
      tabs below (switchSub) already returns to it. tab-btn-locks and
      user-access-tab keep their ids and onclick/visibility wiring exactly
@@ -118,7 +119,7 @@
         </svg>
       </button>
       <a class="icon-btn icon-btn-access hidden" id="user-access-tab" href="npayroll_user_access.html"
-         title="User Access" aria-label="User Access">
+         title="Module Assess Control" aria-label="Module Assess Control">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
           <circle cx="12" cy="8.2" r="3.6" fill="#fff"/>
           <path d="M4.2 20c0-4.3 3.5-6.8 7.8-6.8s7.8 2.5 7.8 6.8" fill="#fff"/>
@@ -563,7 +564,7 @@
 </div>
 
 <!-- ═══ WORK ENTRY MODAL ═══ -->
-<!-- Changing what a job earned. Its own tick on User Access (Adjust Pay),
+<!-- Changing what a job earned. Its own tick on Module Assess Control (Adjust Pay),
      and its own modal rather than a prompt(): a figure that decides somebody's
      pay is worth a form that shows what it was, what it becomes, and asks why. -->
 <div class="modal-bg" id="adjust-modal">
@@ -638,7 +639,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=101"></script>
+<script src="npayroll_script.js?v=102"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

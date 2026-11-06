@@ -461,7 +461,7 @@ function maintMonthLabel(m) { return monthLabel(m); }
 
 /* ════════════ TABS ════════════ */
 /* Can this user open a tab or use a function on it? Set on this module's
-   own User Access page; unset means the module level decides, as before. */
+   own Module Assess Control page; unset means the module level decides, as before. */
 function may(page, action) {
   // Fail OPEN if the helper is an older cached copy without canDo: this
   // module has always been governed by the module level, and a stale script
@@ -1043,7 +1043,7 @@ let rateGroup   = 'MN';
    settled before the form opens — same as a worker's section. */
 function openRate(id, group) {
   if (!mayDo('rates', 'manage',
-      'You do not have permission to set piece rates. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to set piece rates. Ask an admin to grant it in Module Assess Control.')) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
   const r = id ? rates.find(x => x.id === id) : null;
   editRateId = r ? r.id : null;
@@ -1113,7 +1113,7 @@ async function removeRate(id) {
   const r = rates.find(x => x.id === id);
   if (!r) return;
   if (!mayDo('rates', 'remove',
-      'You do not have permission to remove a job. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to remove a job. Ask an admin to grant it in Module Assess Control.')) return;
   // Entries keep their own copy of the rate, so removing the job here cannot
   // change a month that has already been keyed.
   if (!confirm(`Remove "${r.job_desc}"?\n\nWork already keyed against it keeps its own rate and stays correct.`)) return;
@@ -1139,7 +1139,7 @@ async function removeRate(id) {
    shared/RUN_ME_earn_adjustments.sql in this repository. */
 let earnAdj = [];            // this month's overrides, both sheets
 
-/* Its own tick on User Access, per sheet — 'maint' or 'transpl'. Reading what
+/* Its own tick on Module Assess Control, per sheet — 'maint' or 'transpl'. Reading what
    a month pays and changing it are different jobs, so holding the sheet is
    not holding this.
 
@@ -1254,7 +1254,7 @@ function calibrateStep(sheet, page, section, name, code, worked, dir) {
      again at the press — the two must not be able to disagree. */
   if (!mayAdjust(page)) {
     alert('You do not have permission to change what a job earned.\n\n'
-        + 'Ask an admin to grant Adjust Pay in User Access.');
+        + 'Ask an admin to grant Adjust Pay in Module Assess Control.');
     return;
   }
   if (!lockAllows(page)) return;
@@ -1432,7 +1432,7 @@ function openAdjust(sheet, page, section, name, code, jobLabel, worked) {
      the click — the two must not be able to disagree. */
   if (!mayAdjust(page)) {
     alert('You do not have permission to change what a job earned.\n\n'
-        + 'Ask an admin to grant Adjust Pay in User Access.');
+        + 'Ask an admin to grant Adjust Pay in Module Assess Control.');
     return;
   }
   /* An adjustment is money on a sheet, so a closed month refuses it the same
@@ -3098,13 +3098,13 @@ const fmtDay = d => {
 
 let editEntryId = null, entryCategory = null;
 function openEntry(category, id) {
-  /* Which User Access page decides whether this may be keyed. One per sheet;
+  /* Which Module Assess Control page decides whether this may be keyed. One per sheet;
      a sheet answering to another sheet's tick would grant access nobody
      granted. */
   const page = { transplanting: 'transpl', seedlings: 'seedling', other: 'other' }[category]
             || 'seedling';
   if (!mayDo(page, 'manage',
-      'You do not have permission to key in this work. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to key in this work. Ask an admin to grant it in Module Assess Control.')) return;
   /* A closed month refuses here as well as hiding its buttons: the buttons are
      what somebody sees, this is what actually stops the write. */
   if (!lockAllows(page)) return;
@@ -4280,14 +4280,14 @@ function renderVerifyBar(sheet, targetId) {
                + `<span class="vb-spacer"></span>`
                + (mayVerify
                    ? `<button class="btn btn-primary btn-sm" onclick="verifySheet('${sheet}')">✔ Verify &amp; lock</button>`
-                   : `<span>Verifying needs the Verify tick on this sheet in User Access.</span>`);
+                   : `<span>Verifying needs the Verify tick on this sheet in Module Assess Control.</span>`);
 }
 
 /* Verifying is the act that closes a sheet, so it asks plainly first: it
    cannot be taken back from this screen, only by re-opening the month. */
 async function verifySheet(sheet) {
   if (!mayDo(sheet, 'verify',
-      'You do not have permission to verify this sheet. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to verify this sheet. Ask an admin to grant it in Module Assess Control.')) return;
   if (!MJMPayrollLock.ready()) {
     alert('Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.');
     return;
@@ -4321,7 +4321,7 @@ async function verifySheet(sheet) {
    to say a sheet is right is not the same as being trusted to unsay it. */
 async function unverifySheet(sheet) {
   if (!mayDo(sheet, 'unverify',
-      'You do not have permission to unlock this sheet. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to unlock this sheet. Ask an admin to grant it in Module Assess Control.')) return;
   if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
     alert('Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.');
     return;
@@ -4404,7 +4404,7 @@ function renderLockCalendar() {
     : mayLock
       ? 'Re-opening a month also takes back every verification on it, so the sheets go back to '
       + 'being editable and whoever checked them has to check them again.'
-      : 'You can see this calendar, but changing it needs Lock Controls in User Access.';
+      : 'You can see this calendar, but changing it needs Lock Controls in Module Assess Control.';
 }
 
 /* Forcing one month either way. Re-opening takes its verifications with it:
@@ -4412,7 +4412,7 @@ function renderLockCalendar() {
    showing somebody's name against it as checked, which is the worst of both. */
 async function toggleLockMonth(month) {
   if (!mayDo('locks', 'manage',
-      'You do not have permission to change the lock calendar. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to change the lock calendar. Ask an admin to grant it in Module Assess Control.')) return;
   const locked = MJMPayrollLock.isMonthLocked(_lockYear, month);
   const ym = `${_lockYear}-${String(month).padStart(2, '0')}`;
   const vers = MJMPayrollLock.verificationsFor(ym);
@@ -4443,7 +4443,7 @@ async function toggleLockMonth(month) {
    Same reasoning as the Delivery Order calendar's own button. */
 async function toggleLockYear() {
   if (!mayDo('locks', 'manage',
-      'You do not have permission to change the lock calendar. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to change the lock calendar. Ask an admin to grant it in Module Assess Control.')) return;
   const allOpen = LOCK_MONTHS.every((_, i) => !MJMPayrollLock.isMonthLocked(_lockYear, i + 1));
   if (!confirm(allOpen
       ? `Lock ${_lockYear} back to the calendar?\n\nEvery month whose lock day has passed closes; the rest stay open.`
@@ -4458,7 +4458,7 @@ async function toggleLockYear() {
 
 async function saveLockDay() {
   if (!mayDo('locks', 'manage',
-      'You do not have permission to change the lock day. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to change the lock day. Ask an admin to grant it in Module Assess Control.')) return;
   const day = parseInt($('lk-day').value, 10);
   if (!(day >= 1 && day <= 28)) { alert('Pick a day between 1 and 28.'); return; }
   const error = await MJMPayrollLock.setLockDay(_supabase, day, userEmail || null);

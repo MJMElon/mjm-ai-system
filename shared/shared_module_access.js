@@ -1,11 +1,13 @@
 /* ================================================================
-   MJM AI POWERED SYSTEM — MODULE USER ACCESS PAGE
+   MJM AI POWERED SYSTEM — MODULE ASSESS CONTROL PAGE
    shared/shared_module_access.js
 
-   The per-module User Access screen, as first built for Nursery
-   Seedling Stock Management (operation/operation_user_access.html).
-   That page is the design; this file is that design made reusable so
-   every module gets the same screen instead of four drifting copies.
+   The per-module Module Assess Control screen (called User Access until
+   this file was renamed — the keys it writes never moved, only what it
+   is called on screen), as first built for Nursery Seedling Stock
+   Management (operation/operation_user_access.html). That page is the
+   design; this file is that design made reusable so every module gets
+   the same screen instead of four drifting copies.
 
    A module's page is then only its configuration:
 
@@ -97,11 +99,12 @@
     let canFullSave = false;
 
     /* A module may file this screen under a broader name — the Audit
-       module calls it Settings and puts User Access inside it — and may
-       hang its own sections beside the user list. Both are opt-in: with
-       neither, the page is exactly the User Access screen it has always
-       been. */
-    const PAGE_LABEL = cfg.pageLabel || 'User Access';
+       module calls it Settings and puts Module Assess Control inside it —
+       and may hang its own sections beside the user list. Both are
+       opt-in: with neither, the page is exactly the Module Assess Control
+       screen it has always been (the keys it writes never moved; only
+       what it is called on screen). */
+    const PAGE_LABEL = cfg.pageLabel || 'Module Assess Control';
     const TABS       = cfg.tabs || [];
     /* Per-user settings beyond the access ticks — the Audit module uses
        this for the portal an auditor lands on. Stored on the same
@@ -648,7 +651,7 @@
     return `
 <div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
   <a href="${esc(BACK.href)}" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-slate-800 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; ${esc(BACK.label)}</a>
-  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">${esc(cfg.barLabel || 'Module User Access')}</span>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">${esc(cfg.barLabel || 'Module Assess Control')}</span>
   <div class="justify-self-end flex items-center gap-2">
     ${cfg.portal ? `<a href="${esc(cfg.portal.href)}" target="_blank" rel="noopener"
        class="text-[10px] font-bold ${A.text} hover:brightness-90 uppercase tracking-widest bg-white px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors whitespace-nowrap">${esc(cfg.portal.label)} &#8599;</a>` : ''}
@@ -682,7 +685,7 @@
 
   ${TABS.length ? `
   <div class="ma-tabs" role="tablist">
-    <button id="ma-tab-access" role="tab" class="ma-tab">${esc(cfg.accessLabel || 'User Access')}</button>
+    <button id="ma-tab-access" role="tab" class="ma-tab">${esc(cfg.accessLabel || 'Module Assess Control')}</button>
     ${TABS.map(s => `<button id="ma-tab-${esc(s.key)}" role="tab" class="ma-tab">${esc(s.label)}</button>`).join('')}
   </div>` : ''}
 
@@ -745,7 +748,7 @@
         <div>
           <div class="font-black text-slate-800 text-sm">Able to change user roles</div>
           <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            Lets this user open the <strong>User Access</strong> pages and set every other user's
+            Lets this user open the <strong>Module Assess Control</strong> pages and set every other user's
             access — pages, functions, and roles. Give this only to admins you trust to manage access for you.
           </p>
           <p id="d-manage-users-note" class="text-[10px] font-black text-rose-600 uppercase tracking-widest mt-1 hidden">Only a Manage Users admin can change this</p>
