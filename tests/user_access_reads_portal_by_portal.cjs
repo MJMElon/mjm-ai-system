@@ -156,8 +156,8 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
 console.log('\n── 1. Five portals, in the order the office listed them ──');
 {
   const page = await open(browser);
-  checkTrue('the screen is called User Access, not User Setting',
-            (await page.locator('.page-title').textContent()).trim() === 'User Access');
+  checkTrue('the screen is called Module Assess Control',
+            (await page.locator('.page-title').textContent()).trim() === 'Module Assess Control');
 
   /* Azlan holds audit and nothing else. He was invisible here until this
      change, which made the Auditor Portal block ungrantable to the one kind
@@ -191,7 +191,7 @@ console.log('\n── 2. Worker System and Setting are INSIDE the back office �
   check('and they are drawn with the office’s own words',
         await manage.locator('.page-block .text-\\[13px\\]')
           .evaluateAll((els) => els.map((e) => e.textContent.trim())),
-        ['Worker System', 'User Access Setting']);
+        ['Worker System', 'Module Assess Control']);
   checkTrue('the register’s description is the one the office wrote',
             (await manage.locator('.page-block .text-\\[11px\\]').first().textContent())
               .indexOf('who is on the books, their section and their PIN') >= 0);

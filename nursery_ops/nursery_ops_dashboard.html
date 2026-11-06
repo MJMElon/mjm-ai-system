@@ -559,7 +559,9 @@ $('next-month').addEventListener('click', () => { boardMonth = shiftMonth(boardM
       document.querySelectorAll('.tool-btn[data-module]').forEach(a => {
         if (MJMAccess.canAccess(a.dataset.module)) a.classList.remove('hidden');
       });
-      if (MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
+      // Admin of nursery_ops may now open this module's own Module Assess
+      // Control too, not only Manage Users -- see shared_module_access.js.
+      if (MJMAccess.isAdminOf('nursery_ops') || MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
     } catch (_) { /* keep the dashboard usable */ }
 
     // Pending Nelos cases for this module. Only for people who hold Nelos;

@@ -423,9 +423,20 @@
             const userCard    = document.getElementById('user-access-card');
             const reportsCard = document.getElementById('reports-card');
             const auditCard   = document.getElementById('audit-trail-card');
-            if (userCard    && MJMAccess.canManageUsers())          userCard.classList.remove('hidden');
-            if (reportsCard && MJMAccess.canAccess('reports'))      reportsCard.classList.remove('hidden');
-            if (auditCard   && MJMAccess.canAccess('audit_trail'))  auditCard.classList.remove('hidden');
+            // Admin of operation may now open this module's own Module
+            // Assess Control too, not only Manage Users (shared_access.js).
+            if (userCard    && (MJMAccess.isAdminOf('operation') || MJMAccess.canManageUsers())) userCard.classList.remove('hidden');
+            /* Reports and Audit Trail are legacy top-level modules folded
+               into operation's own page list (MODULE_STORED_PAGES in
+               shared_access.js) — canOpenOperationPage() reads
+               operation_actions.<page> FIRST and modules.<page> only as a
+               fallback for a row operation_user_access.html has never
+               saved. Reading modules.<page> directly here skipped that
+               and would have gone stale the moment a module Admin's save
+               (which writes operation_actions but, deliberately, not this
+               legacy mirror) updated one of these two pages. */
+            if (reportsCard && MJMAccess.canOpenOperationPage('reports'))      reportsCard.classList.remove('hidden');
+            if (auditCard   && MJMAccess.canOpenOperationPage('audit_trail')) auditCard.classList.remove('hidden');
             // Per-page access inside this module, set in the module's own
             // User Access page. Unset keys default to allowed. Customer
             // Order Documentation (DO/BA/AL) and Seedling Sales Control

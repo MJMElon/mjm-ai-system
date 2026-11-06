@@ -74,7 +74,7 @@
   <div class="card p-10 text-center">
     <div class="text-4xl mb-3">🔒</div>
     <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
-    <p class="text-xs text-slate-500 mt-2">Only users with <strong>Manage Users</strong> permission can open this page.</p>
+    <p class="text-xs text-slate-500 mt-2">Only an <strong>Admin</strong> of this module, or someone with <strong>Manage Users</strong> permission, can open this page.</p>
     <a href="operation_dashboard.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Main Page</a>
   </div>
 </div>
@@ -257,6 +257,13 @@ let allUsers   = [];   // system users opened for this module
 let totalSystem = 0;   // ALL system users (incl. ones not opened here)
 let editingUid = null;
 let editingPerms = null; // FULL permissions object of the row being edited
+/* Set once at bootstrap, off the VIEWER's own permissions. true = Manage
+   Users: the fuller save, every field on this drawer, as before. false =
+   Admin of operation only: the narrower RPC save -- operation_pages/
+   operation_actions and (because the database's own RLS on
+   operation_batch_verifications reads it directly) can_verify_operation,
+   nothing else. See shared/RUN_ME_super_admin_and_module_access.sql. */
+let canFullSave = false;
 
 function showToast(msg, kind) {
   const t = document.getElementById('toast');
@@ -473,29 +480,69 @@ async function saveDrawer() {
   const p = allUsers.find(x => x.id === editingUid);
   if (!p) return;
 
-  // Mutate ONLY this module's fields on the full permissions object so
-  // nothing managed elsewhere (module levels…) is touched.
-  const next = JSON.parse(JSON.stringify(editingPerms));
-  next.modules = next.modules || {};
-  next.operation_pages = next.operation_pages || {};
-  next.operation_actions = next.operation_actions || {};
+  // This module's own page/action ticks, built either way.
+  const actsPatch  = JSON.parse(JSON.stringify(editingPerms.operation_actions || {}));
+  const pagesPatch = JSON.parse(JSON.stringify(editingPerms.operation_pages   || {}));
   PAGE_DEFS.forEach(d => {
     const view = document.getElementById('d-view-' + d.key).checked;
     const acts = { view };
     d.actions.forEach(a => {
       acts[a.key] = view && document.getElementById(`d-act-${d.key}-${a.key}`).checked;
     });
-    next.operation_actions[d.key] = acts;
-    // Mirror the legacy fields so older cached pages and the other
-    // portals (which only check open/closed) keep agreeing with this.
-    if (d.store === 'modules') {
-      next.modules[d.key] = !view ? 'none'
-        : (d.key === 'audit_trail' && acts.clear_logs) ? 'admin' : 'normal';
-    } else {
-      next.operation_pages[d.key] = view ? 'normal' : 'none';
-    }
+    actsPatch[d.key] = acts;
+    if (d.store !== 'modules') pagesPatch[d.key] = view ? 'normal' : 'none';
   });
-  next.can_verify_operation = !!(next.operation_actions.batch && next.operation_actions.batch.verify);
+  const canVerify = !!(actsPatch.batch && actsPatch.batch.verify);
+
+  if (!canFullSave) {
+    /* Admin of operation, not Manage Users. operation_pages/
+       operation_actions go through the narrow RPC; can_verify_operation
+       through its own, because the database's own RLS on
+       operation_batch_verifications reads that column directly (see
+       shared/RUN_ME_super_admin_and_module_access.sql). The legacy
+       modules.reports/modules.audit_trail mirror is deliberately NOT
+       written here: nothing reads it once operation_actions exists
+       (canOpenOperationPage in shared_access.js prefers that, and
+       operation_dashboard.html / operation_reports.html /
+       operation_audit_trail.html were fixed to ask it the same way), and
+       this RPC has no business touching an arbitrary top-level
+       modules.* key regardless. manage_users and super_admin cannot be
+       reached from this drawer by this viewer at all (the toggle below
+       stays disabled for them), so there is nothing else to send. */
+    const saveBtn = document.getElementById('d-save');
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+    let error = (await _supabase.rpc('mjm_set_module_access', {
+      target_id: editingUid, p_module: 'operation', p_pages: pagesPatch, p_actions: actsPatch
+    })).error;
+    if (!error) {
+      error = (await _supabase.rpc('mjm_set_operation_verify', {
+        target_id: editingUid, can_verify: canVerify
+      })).error;
+    }
+    saveBtn.disabled = false; saveBtn.textContent = 'Save Changes';
+    if (error) { console.error(error); showToast('Save failed: ' + error.message, 'err'); return; }
+    p.permissions = { ...p.permissions, operation_pages: pagesPatch, operation_actions: actsPatch, can_verify_operation: canVerify };
+    showToast('Saved. Changes apply on the user’s next refresh.');
+    render();
+    closeDrawer();
+    return;
+  }
+
+  // Manage Users: the fuller save, unchanged from before a module Admin
+  // could reach this page.
+  const next = JSON.parse(JSON.stringify(editingPerms));
+  next.modules = next.modules || {};
+  next.operation_pages = pagesPatch;
+  next.operation_actions = actsPatch;
+  // Mirror the legacy fields so older cached pages and the other
+  // portals (which only check open/closed) keep agreeing with this.
+  PAGE_DEFS.forEach(d => {
+    if (d.store !== 'modules') return;
+    const acts = actsPatch[d.key];
+    next.modules[d.key] = !acts.view ? 'none'
+      : (d.key === 'audit_trail' && acts.clear_logs) ? 'admin' : 'normal';
+  });
+  next.can_verify_operation = canVerify;
 
   const manageEl = document.getElementById('d-manage-users');
   if (editingUid === (MJMAccess.user() && MJMAccess.user().id)
@@ -557,9 +604,11 @@ async function bootstrap() {
 
   await MJMAccess.load(_supabase);
   if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
-  // Saving other users' permissions requires the Manage Users flag (enforced
-  // by the database RLS policy), so the page is gated on the same flag.
-  if (!MJMAccess.canManageUsers()) {
+  // Admin of operation may open this module's own Module Assess Control
+  // too, not only Manage Users. canFullSave decides WHICH save path
+  // saveDrawer() takes -- see the note on that variable above.
+  canFullSave = MJMAccess.canManageUsers();
+  if (!MJMAccess.isAdminOf('operation') && !canFullSave) {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('forbidden').classList.remove('hidden');
     return;

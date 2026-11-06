@@ -30,9 +30,24 @@
                                page that only asks "open or closed?" agrees
    Read them back with MJMAccess.canDo(module, page, action).
 
-   Who may open it: anyone with the Manage Users flag — the same flag the
-   database RLS policy requires to write another user's permissions, so the
-   page cannot promise an edit the database would refuse.
+   Who may open it: anyone who is Admin of THIS module, or holds Manage
+   Users. A module Admin saves through mjm_set_module_access() (shared/
+   RUN_ME_super_admin_and_module_access.sql), a SECURITY DEFINER function
+   that lets them touch ONLY this module's <module>_pages/<module>_actions
+   on somebody else's row — nothing else on that profile, and the database
+   checks the same isAdminOf(module)-or-manage_users test again before it
+   writes a thing, so a wrong screen can never do what the database
+   disagrees with. Manage Users keeps the fuller save it always had (every
+   field on this drawer, in one plain update) because that flag is what
+   the database's own RLS policy asks for on a bare UPDATE.
+
+   Two things on this drawer stay Manage-Users-only even for a module
+   Admin: "Able to change user roles" (manage_users is a company-wide
+   flag with nothing to do with this one module) and any per-user FIELD
+   a module declares (e.g. audit's "lands on after sign-in") — those are
+   not <module>_pages/<module>_actions, so the narrow RPC has no business
+   touching them. Both are drawn disabled, with a note, rather than
+   hidden: a module Admin should SEE what they are, just not move them.
    ================================================================ */
 (function (global) {
 
@@ -73,6 +88,13 @@
     const supa    = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 
     let allUsers = [], totalSystem = 0, editingUid = null, editingPerms = null;
+    /* Set once at bootstrap, off the VIEWER's own permissions (never the
+       row being edited). true = Manage Users: the fuller save, every
+       field on this drawer. false = Admin of this module only: the
+       narrower RPC save, pages/actions for this module alone. The page
+       gate already refuses anybody who is neither, so by the time this
+       is read it is always one or the other. */
+    let canFullSave = false;
 
     /* A module may file this screen under a broader name — the Audit
        module calls it Settings and puts User Access inside it — and may
@@ -329,11 +351,14 @@
       $('d-level').innerHTML =
         `<span class="chip chip-${lvl === 'admin' ? 'admin' : 'normal'}">Module level · ${LEVEL_LABEL[lvl] || lvl}</span>
          <span class="chip chip-info">set on main portal</span>`;
-      $('d-fields').innerHTML = FIELDS.map(f => userFieldHtml(f, editingPerms[f.key])).join('');
+      $('d-fields').innerHTML = FIELDS.map(f => userFieldHtml(f, editingPerms[f.key], !canFullSave)).join('');
       $('d-pages').innerHTML = PAGES.map(d => pageCardHtml(d, effectiveActions(editingPerms, d))).join('')
                              + SCOPES.map(s => scopeCardHtml(s, editingPerms)).join('');
       SCOPES.forEach(s => syncScopeCard(s.key));
       $('d-manage-users').checked = !!editingPerms.manage_users;
+      $('d-manage-users').disabled = !canFullSave;
+      $('d-manage-users-section').style.opacity = canFullSave ? '' : '.55';
+      $('d-manage-users-note').classList.toggle('hidden', canFullSave);
       $('drawer').classList.add('open');
       $('drawer-backdrop').classList.add('open');
       $('drawer').setAttribute('aria-hidden', 'false');
@@ -363,18 +388,47 @@
       const p = allUsers.find(x => x.id === editingUid);
       if (!p) return;
 
-      // Mutate ONLY this module's fields on the full permissions object, so
-      // nothing managed elsewhere (module levels, other modules) is touched.
-      const next = JSON.parse(JSON.stringify(editingPerms));
-      next[ACT_KEY] = next[ACT_KEY] || {};
-      next[PG_KEY]  = next[PG_KEY]  || {};
+      // This module's own page/action ticks, built either way — a module
+      // Admin's RPC save and a Manage Users admin's full save both end
+      // with exactly these two objects on the row.
+      const actsPatch  = JSON.parse(JSON.stringify(editingPerms[ACT_KEY] || {}));
+      const pagesPatch = JSON.parse(JSON.stringify(editingPerms[PG_KEY]  || {}));
       PAGES.forEach(d => {
         const view = $('d-view-' + d.key).checked;
         const acts = { view };
         (d.actions || []).forEach(a => { acts[a.key] = view && $(`d-act-${d.key}-${a.key}`).checked; });
-        next[ACT_KEY][d.key] = acts;
-        next[PG_KEY][d.key]  = view ? 'normal' : 'none';
+        actsPatch[d.key]  = acts;
+        pagesPatch[d.key] = view ? 'normal' : 'none';
       });
+
+      if (!canFullSave) {
+        /* Admin of this module, not Manage Users. The narrow RPC touches
+           ONLY <module>_pages/<module>_actions on this row — FIELDS,
+           SCOPES and manage_users are disabled on this drawer for exactly
+           this viewer and are never read here, so there is nothing to
+           silently drop or smuggle through. The database asks
+           isAdminOf(module)-or-manage_users again before it writes
+           anything, so this screen being wrong could never save what the
+           database disagrees with. */
+        const btn = $('d-save');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        const { error } = await supa.rpc('mjm_set_module_access', {
+          target_id: editingUid, p_module: MODULE, p_pages: pagesPatch, p_actions: actsPatch
+        });
+        btn.disabled = false; btn.textContent = 'Save Changes';
+        if (error) { console.error(error); showToast('Save failed: ' + error.message, 'err'); return; }
+        p.permissions = { ...p.permissions, [PG_KEY]: pagesPatch, [ACT_KEY]: actsPatch };
+        showToast('Saved. Changes apply on the user’s next refresh.');
+        render();
+        closeDrawer();
+        return;
+      }
+
+      // Manage Users: the fuller save, every field on this drawer, one
+      // write — unchanged from before a module Admin could reach this page.
+      const next = JSON.parse(JSON.stringify(editingPerms));
+      next[ACT_KEY] = actsPatch;
+      next[PG_KEY]  = pagesPatch;
 
       FIELDS.forEach(f => {
         const el = $('d-field-' + f.key);
@@ -449,13 +503,33 @@
 
       await MJMAccess.load(supa);
       if (!MJMAccess.user()) { window.location.href = BACK.href; return; }
-      // Writing another user's permissions needs the Manage Users flag (the
-      // database RLS policy enforces it), so gate the page on the same flag
-      // rather than letting somebody fill a form that cannot save.
-      if (!MJMAccess.canManageUsers()) {
+      // Admin = may see and use this module's own Module Assess Control.
+      // Manage Users may always open every one of these screens, same as
+      // before. canFullSave decides WHICH save path runs — see the file
+      // header comment and saveDrawer() below.
+      canFullSave = MJMAccess.canManageUsers();
+      if (!MJMAccess.isAdminOf(MODULE) && !canFullSave) {
         $('loading').classList.add('hidden');
         $('forbidden').classList.remove('hidden');
         return;
+      }
+
+      /* TABS are Manage-Users-only, whatever a module put in them — the
+         Audit module's "System Setting" is installation-wide config, not
+         a <module>_pages/<module>_actions tick, so the narrow RPC a
+         module Admin saves through has no business reaching it and
+         nothing inside a section's own mount() can be trusted to ask
+         again (audit_system_setting.js asks nothing itself; it has
+         always trusted this page's own gate completely). Removed outright
+         rather than left hidden: mounting already ran in init(), before
+         this was known, so a tab's own listeners go with its node. */
+      if (TABS.length && !canFullSave) {
+        TABS.forEach(s => {
+          const tab = $('ma-tab-' + s.key);
+          const panel = $('ma-sec-' + s.key);
+          if (tab) tab.remove();
+          if (panel) panel.remove();
+        });
       }
 
       // A scope's choices may come from the database (the nursery list), so
@@ -551,13 +625,14 @@
   /* One extra per-user setting. Only a select for now — the one thing
      asked for is a choice from a short list, and a text box would invite
      values nothing can honour. */
-  function userFieldHtml(f, value) {
+  function userFieldHtml(f, value, disabled) {
     const v = value == null ? '' : String(value);
     return `
-    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4" style="${disabled ? 'opacity:.55' : ''}">
       <div class="font-black text-slate-800 text-sm">${esc(f.label)}</div>
       ${f.help ? `<p class="text-[11px] text-slate-600 mt-1 leading-relaxed">${f.help}</p>` : ''}
-      <select id="d-field-${esc(f.key)}"
+      ${disabled ? `<p class="text-[10px] font-black text-rose-600 uppercase tracking-widest mt-1">Only a Manage Users admin can change this</p>` : ''}
+      <select id="d-field-${esc(f.key)}" ${disabled ? 'disabled' : ''}
               class="mt-3 w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-semibold outline-none">
         ${(f.options || []).map(o =>
           `<option value="${esc(o.value)}"${o.value === v ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}
@@ -587,7 +662,7 @@
   <div class="card p-10 text-center">
     <div class="text-4xl mb-3">🔒</div>
     <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
-    <p class="text-xs text-slate-500 mt-2">Only users with <strong>Manage Users</strong> permission can open this page.</p>
+    <p class="text-xs text-slate-500 mt-2">Only an <strong>Admin</strong> of this module, or someone with <strong>Manage Users</strong> permission, can open this page.</p>
     <a href="${esc(BACK.href)}" class="inline-block mt-6 text-[10px] font-bold ${A.text} uppercase tracking-widest bg-slate-50 border border-slate-200 rounded-full px-4 py-2 no-underline">${esc(BACK.label)}</a>
   </div>
 </div>
@@ -664,7 +739,7 @@
       </div>
     </section>
 
-    <section class="px-6 py-5 border-t border-slate-200 bg-rose-50/40">
+    <section id="d-manage-users-section" class="px-6 py-5 border-t border-slate-200 bg-rose-50/40">
       <div class="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-2">User Management</div>
       <div class="flex items-start justify-between gap-4">
         <div>
@@ -673,6 +748,7 @@
             Lets this user open the <strong>User Access</strong> pages and set every other user's
             access — pages, functions, and roles. Give this only to admins you trust to manage access for you.
           </p>
+          <p id="d-manage-users-note" class="text-[10px] font-black text-rose-600 uppercase tracking-widest mt-1 hidden">Only a Manage Users admin can change this</p>
         </div>
         <label class="tog mt-1">
           <input id="d-manage-users" type="checkbox">

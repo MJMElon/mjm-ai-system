@@ -166,6 +166,47 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.mjm_set_module_access(uuid, text, jsonb, jsonb) TO authenticated;
 
+-- 6. can_verify_operation is a LEGACY top-level flag, not an
+--    operation_actions entry, and the app's own JS mostly stopped
+--    needing it the day a saved operation_actions.batch.view existed
+--    (canDoOperation prefers that). It is NOT legacy to the database,
+--    though: shared/migration_batch_verifications.sql's own RLS policy
+--    on operation_batch_verifications reads this exact column, directly,
+--    with no knowledge of operation_actions at all. So the one caller
+--    this exists for is operation_user_access.html's module-Admin save
+--    path -- it cannot reach this column through mjm_set_module_access
+--    (which only ever touches <module>_pages/<module>_actions), and
+--    without a way to update it the Verify tick would look set in the
+--    UI while the database went on refusing the insert underneath it.
+CREATE OR REPLACE FUNCTION public.mjm_set_operation_verify(target_id uuid, can_verify boolean)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  caller_level text;
+  caller_mu boolean;
+BEGIN
+  SELECT permissions -> 'modules' ->> 'operation',
+         COALESCE((permissions ->> 'manage_users')::boolean, false)
+    INTO caller_level, caller_mu
+    FROM public.shared_profiles
+   WHERE id = auth.uid();
+
+  IF NOT (caller_mu OR COALESCE(caller_level = 'admin', false)) THEN
+    RAISE EXCEPTION 'Not an admin of operation and not Manage Users';
+  END IF;
+
+  UPDATE public.shared_profiles
+     SET permissions = COALESCE(permissions, '{}'::jsonb)
+                        || jsonb_build_object('can_verify_operation', can_verify)
+   WHERE id = target_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.mjm_set_operation_verify(uuid, boolean) TO authenticated;
+
 NOTIFY pgrst, 'reload schema';
 
 -- ── Check: run this and read the result ──────────────────────────
@@ -177,10 +218,12 @@ SELECT
   (SELECT count(*) FROM pg_trigger WHERE tgname='shared_profiles_guard_super_admin') AS guard_trigger_installed,
   (SELECT count(*) FROM pg_proc WHERE proname='mjm_set_super_admin') AS promote_function_installed,
   (SELECT count(*) FROM pg_proc WHERE proname='mjm_set_module_access') AS module_access_function_installed,
+  (SELECT count(*) FROM pg_proc WHERE proname='mjm_set_operation_verify') AS operation_verify_function_installed,
   (
     (SELECT COALESCE((permissions->>'super_admin')::boolean,false) FROM public.shared_profiles WHERE lower(email)=lower('nursery.mjsb@gmail.com')) = true
     AND (SELECT COALESCE((permissions->>'manage_users')::boolean,false) FROM public.shared_profiles WHERE lower(email)=lower('nursery.mjsb@gmail.com')) = true
     AND (SELECT count(*) FROM pg_trigger WHERE tgname='shared_profiles_guard_super_admin') = 1
     AND (SELECT count(*) FROM pg_proc WHERE proname='mjm_set_super_admin') = 1
     AND (SELECT count(*) FROM pg_proc WHERE proname='mjm_set_module_access') = 1
+    AND (SELECT count(*) FROM pg_proc WHERE proname='mjm_set_operation_verify') = 1
   ) AS ok;

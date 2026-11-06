@@ -522,11 +522,14 @@
         </div>
       </a>
 
-      <!-- Settings: user access, and the settings that belong to the
-           installation rather than to a person. Revealed only for a portal
-           user who may change other people's access — the same rule the
-           auditor home used. Being an audit admin is not on its own enough
-           to hand out user management. -->
+      <!-- Settings: Module Assess Control (who may open and record each
+           audit), and the settings that belong to the installation rather
+           than to a person. Revealed for an audit Admin too, now that the
+           page itself can tell the two halves apart — the door opens, but
+           System Setting and "able to change user roles" inside it stay
+           Manage-Users-only regardless (shared_module_access.js). Being
+           an audit admin is still not on its own enough for either of
+           those. -->
       <a class="fc-card" id="card-user-access" href="audit_user_access.html" style="display:none">
         <div class="fc-ico" style="background:#fdeaea">
           <svg viewBox="0 0 24 24" style="stroke:#b91c4a"><path d="M12 11a4 4 0 100-8 4 4 0 000 8z"/><path d="M4 20v-1c0-2.66 5.33-4 8-4s8 1.34 8 4v1"/></svg>
@@ -991,7 +994,11 @@ setInterval(function(){
   try {
     const supa = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     await MJMAccess.load(supa);
-    if (MJMAccess.user() && MJMAccess.canManageUsers()) {
+    /* Admin of audit may now open this module's own Module Assess Control
+       too, not only Manage Users -- see shared_module_access.js. The
+       page itself keeps the "System Setting" half of this door
+       Manage-Users-only regardless of what gets somebody this far. */
+    if (MJMAccess.user() && (MJMAccess.isAdminOf('audit') || MJMAccess.canManageUsers())) {
       document.getElementById('card-user-access').style.display = 'flex';
     }
     // Open audit cases, for people who hold Nelos.

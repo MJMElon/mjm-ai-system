@@ -6133,7 +6133,9 @@ document.addEventListener('keydown', (e) => {
     userEmail = u.email || '';
     isAdmin   = MJMAccess.isAdminOf('npayroll');
     // One missing helper must not take the whole module down with it.
-    try { if (MJMAccess.canManageUsers()) $('user-access-tab').classList.remove('hidden'); } catch (_) {}
+    // Admin of npayroll may now open this module's own Module Assess
+    // Control too, not only Manage Users -- see shared_module_access.js.
+    try { if (isAdmin || MJMAccess.canManageUsers()) $('user-access-tab').classList.remove('hidden'); } catch (_) {}
 
     let savedMonth = null;
     try { savedMonth = localStorage.getItem('npayroll_month'); } catch (_) {}

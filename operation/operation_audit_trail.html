@@ -364,7 +364,11 @@ document.getElementById('results').addEventListener('click', (e) => {
 async function bootstrap() {
   await MJMAccess.load(_pub);
   if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
-  if (!MJMAccess.canAccess('audit_trail')) {
+  // canOpenOperationPage reads operation_actions.audit_trail FIRST and the
+  // legacy modules.audit_trail only as a fallback -- a module Admin's save
+  // on operation_user_access.html writes the former and not the latter, so
+  // reading the legacy field alone here would go stale the moment one did.
+  if (!MJMAccess.canOpenOperationPage('audit_trail')) {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('forbidden').classList.remove('hidden');
     return;

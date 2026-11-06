@@ -5656,7 +5656,11 @@ async function runSalesListing() {
 async function bootstrap() {
   await MJMAccess.load(_supabase);
   if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
-  if (!MJMAccess.canAccess('reports')) {
+  // canOpenOperationPage reads operation_actions.reports FIRST and the
+  // legacy modules.reports only as a fallback -- a module Admin's save on
+  // operation_user_access.html writes the former and not the latter, so
+  // reading the legacy field alone here would go stale the moment one did.
+  if (!MJMAccess.canOpenOperationPage('reports')) {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('report-area').classList.add('hidden');
     document.getElementById('forbidden').classList.remove('hidden');
