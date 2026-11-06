@@ -357,6 +357,32 @@ const AREAS = [
     store: 'audit', pages: AUDIT_PAGES },
 ];
 
+/* Four modules that are not one of the 8 Nursery Sector ones and so have no
+   hub tile of their own — their admin/normal/none controller used to live
+   on the main User Access page and moved here, because every one of their
+   doors is reached from THIS page (Admin Portal and Portal Demo from
+   scan_admin.html's own grid) or from the module beside it (Stock from
+   Nursery Operation Manage's tool grid; Training Center is the one
+   exception — it has no door here at all, but the office asked for all
+   four moved together rather than leaving one behind on its own).
+
+   Plain admin/normal/none, same three levels and the same key
+   (`permissions.modules.<key>`) the main screen always wrote — moving
+   the control does not move the data, so nobody's access changes the day
+   this ships. `mobile` is the SAME key the Admin Portal area above
+   already reads as its fallback (`moduleLevel(mods.mobile)`), so this is
+   not a new field, only a new place to set the old one. */
+const OTHER_MODULES = [
+  { key:'stock', label:'Stock Inventory System',
+    desc:'Nobody holds it until it is granted here. Opened from Nursery Operation Manage’s own tool grid' },
+  { key:'mobile', label:'555 Admin Portal',
+    desc:'Collection DO issuing, customer consent & collection booking — mobile.mjmnursery.com' },
+  { key:'training', label:'Training Center',
+    desc:'Training slides, practical logbook, certificates' },
+  { key:'demo555', label:'555 Portal Demo',
+    desc:'The four phone portals at phone size, for showing the system' },
+];
+
 /* Every block that carries pages, by the module its ticks are stored under.
    `scan` keeps its own rules — see openRow — and the other two follow
    shared_module_access.js, which is what their own screens use. */
@@ -626,11 +652,47 @@ function rowHtml(p) {
 function panelHtml() {
   return '<div class="panel space-y-2.5">' +
     AREAS.map(areaBlockHtml).join('') +
+    otherModulesBlockHtml() +
     `<div class="flex items-center justify-end gap-2 pt-1">
        <button class="btn btn-ghost" data-cancel="1">Cancel</button>
        <button class="btn btn-save" id="save-btn">Save</button>
      </div>` +
     '</div>';
+}
+
+/* The four modules with no door of their own on this screen — see
+   OTHER_MODULES above. A plain admin/normal/none select per row, reading
+   and writing `draft.modules.<key>` the same way the main screen's drawer
+   always did. Not an "area block": those are doors INTO this page's own
+   portals, and these four are not. */
+function otherModulesBlockHtml() {
+  const mods = draft.modules || {};
+  return `
+    <div class="area-block">
+      <div class="min-w-0">
+        <span class="block text-[14px] font-black text-slate-800">Other Modules</span>
+        <span class="block text-[11px] text-slate-400 leading-snug">Not one of the 8 Nursery Sector modules, moved here from the main User Access page</span>
+      </div>
+      <div class="area-pages" style="margin-top:10px;">
+        <div class="space-y-2.5">
+          ${OTHER_MODULES.map((m) => {
+            const lvl = moduleLevel(mods[m.key]);
+            return `
+            <div class="page-block ${lvl !== 'none' ? 'on' : ''}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <span class="min-w-0">
+                <span class="block text-[13px] font-black text-slate-800">${esc(m.label)}</span>
+                <span class="block text-[11px] text-slate-400 leading-snug">${esc(m.desc || '')}</span>
+              </span>
+              <select class="othermod-select" data-othermod="${m.key}" style="flex-shrink:0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-radius:10px;border:1.5px solid #e2e8f0;">
+                <option value="admin" ${lvl === 'admin' ? 'selected' : ''}>Admin</option>
+                <option value="normal" ${lvl === 'normal' ? 'selected' : ''}>Normal</option>
+                <option value="none" ${lvl === 'none' ? 'selected' : ''}>None</option>
+              </select>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>`;
 }
 
 /* One PORTAL: its tick, whatever doors are nested under it, the nurseries it
@@ -850,6 +912,7 @@ function openRow(uid) {
   draft.scan_nurseries = draft.scan_nurseries || {};
   draft.scan_areas = draft.scan_areas || {};
   draft.scan_area_nurseries = draft.scan_area_nurseries || {};
+  draft.modules = draft.modules || {};
 
   /* The five doors, settled the same way and for the same reason as the pages
      below: areaOn() falls back to whatever governed each door before this
@@ -1000,6 +1063,11 @@ document.addEventListener('change', (e) => {
     draft.scan_actions[t.dataset.act] = acts;
     return render();
   }
+  if (t.dataset.othermod) {
+    draft.modules = draft.modules || {};
+    draft.modules[t.dataset.othermod] = t.value;
+    return render();
+  }
   if (t.id === 'q') render();
 });
 $('q').addEventListener('input', render);
@@ -1124,13 +1192,16 @@ function buildNurseries(register, people) {
        Setting up pages for somebody who cannot open any of them is a setting
        with no effect, and a list of every account to scroll past.
 
-       THREE MODULES, not one. It was `scan` alone, from when this screen
-       governed the FC Portal and the back office and nothing else. It now
-       carries the Admin Portal and the Auditor Portal too, and an Admin
-       Portal person with no scan access of their own — which is an ordinary
-       thing to be, and scan_admin.html says so in its own words — would have
-       been missing from the one screen that grants them anything. */
-    const PORTAL_MODULES = ['scan', 'mobile', 'audit'];
+       SEVEN MODULES, not three. It was `scan` alone, from when this screen
+       governed the FC Portal and the back office and nothing else. It then
+       grew the Admin Portal and the Auditor Portal, because an Admin Portal
+       person with no scan access of their own — which is an ordinary thing
+       to be, and scan_admin.html says so in its own words — would have been
+       missing from the one screen that grants them anything. The four
+       OTHER_MODULES keys join them for the same reason: the day somebody is
+       granted ONLY Stock, Training or Portal Demo and holds none of the
+       other six, they still have to appear here to be granted it at all. */
+    const PORTAL_MODULES = ['scan', 'mobile', 'audit', ...OTHER_MODULES.map((m) => m.key)];
     profiles = (((people && people.data) || [])).filter((p) => {
       const mods = (p.permissions || {}).modules || {};
       return PORTAL_MODULES.some((m) => {

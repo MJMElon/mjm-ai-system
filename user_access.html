@@ -191,9 +191,15 @@
   </header>
 
   <div class="flex-1 overflow-y-auto">
-    <!-- Module access -->
+    <!-- Module access — the 8 Nursery Sector modules only, in the hub's own
+         order. Stock Inventory System, 555 Admin Portal, Training Center and
+         555 Portal Demo came off this screen on purpose: they are not one of
+         the 8, and their admin/normal/none controller moved to Nursery 555
+         Team's own Module Assess Control screen (scan_user_access.html),
+         under "Other Modules" — nothing was dropped, nothing lost, only
+         moved to sit beside the doors those four actually live behind. -->
     <section class="px-6 py-5">
-      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Module Access</div>
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Module Access — Nursery Sector</div>
       <div class="space-y-3">
         <div class="flex items-center justify-between gap-4">
           <div>
@@ -204,31 +210,10 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">Stock Inventory System</div>
-            <div class="text-[11px] text-slate-500">Nobody holds it until it is granted here</div>
-          </div>
-          <select id="d-mod-stock" class="lvl-select"></select>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <div class="font-black text-slate-800 text-sm">Seal Manage</div>
-            <div class="text-[11px] text-slate-500">Seal orders, HQ stock, deliveries to site and who holds which seal. Admin sees Settings</div>
-          </div>
-          <select id="d-mod-seal" class="lvl-select"></select>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div>
             <div class="font-black text-slate-800 text-sm">Nursery Operation Manage</div>
             <div class="text-[11px] text-slate-500">Seeds, monthly work schedule, life of plot</div>
           </div>
           <select id="d-mod-nursery_ops" class="lvl-select"></select>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <div class="font-black text-slate-800 text-sm">Nursery Payroll System</div>
-            <div class="text-[11px] text-slate-500">Worker register, pay periods, payslips</div>
-          </div>
-          <select id="d-mod-npayroll" class="lvl-select"></select>
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
@@ -239,13 +224,6 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">555 Audit Portal</div>
-            <div class="text-[11px] text-slate-500">Field height audits</div>
-          </div>
-          <select id="d-mod-audit" class="lvl-select"></select>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div>
             <div class="font-black text-slate-800 text-sm">Nelos</div>
             <div class="text-[11px] text-slate-500">Nursery Carlos — the case log every module raises into</div>
           </div>
@@ -253,34 +231,35 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">555 Admin Portal</div>
-            <div class="text-[11px] text-slate-500">Collection DO issuing, customer consent &amp; collection booking</div>
+            <div class="font-black text-slate-800 text-sm">Nursery Audit System</div>
+            <div class="text-[11px] text-slate-500">Field height audits</div>
           </div>
-          <select id="d-mod-mobile" class="lvl-select"></select>
+          <select id="d-mod-audit" class="lvl-select"></select>
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">Training Center</div>
-            <div class="text-[11px] text-slate-500">Training slides, practical logbook, certificates</div>
+            <div class="font-black text-slate-800 text-sm">Nursery Payroll System</div>
+            <div class="text-[11px] text-slate-500">Worker register, pay periods, payslips</div>
           </div>
-          <select id="d-mod-training" class="lvl-select"></select>
+          <select id="d-mod-npayroll" class="lvl-select"></select>
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <!-- Called 555 FC Portal until the hub tile was renamed. Same app,
-                 same `scan` key, same saved access: only the words changed, so
-                 nobody's permissions move on the day this ships. -->
-            <div class="font-black text-slate-800 text-sm">555 Worker Portal</div>
+            <!-- Called 555 FC Portal until the hub tile was renamed, then
+                 renamed again to Nursery 555 Team. Same app, same `scan`
+                 key, same saved access: only the words changed, so nobody's
+                 permissions move on the day this ships. -->
+            <div class="font-black text-slate-800 text-sm">Nursery 555 Team</div>
             <div class="text-[11px] text-slate-500">Barcode scanner, seal counting, work maintenance &amp; plot status</div>
           </div>
           <select id="d-mod-scan" class="lvl-select"></select>
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">555 Portal Demo</div>
-            <div class="text-[11px] text-slate-500">The four phone portals at phone size, for showing the system</div>
+            <div class="font-black text-slate-800 text-sm">Seal Manage</div>
+            <div class="text-[11px] text-slate-500">Seal orders, HQ stock, deliveries to site and who holds which seal. Admin sees Settings</div>
           </div>
-          <select id="d-mod-demo555" class="lvl-select"></select>
+          <select id="d-mod-seal" class="lvl-select"></select>
         </div>
       </div>
 
@@ -329,9 +308,16 @@
 
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
-// Top-level modules only — page access INSIDE a module (batch record,
-// stock, reports…) is managed from that module's own User Access page.
-const MODULES = ['operation', 'stock', 'nursery_ops', 'nelos', 'npayroll', 'salesweb', 'audit', 'mobile', 'training', 'scan', 'demo555', 'seal'];
+// The 8 Nursery Sector modules only, in the hub's own order. Page access
+// INSIDE a module (batch record, stock, reports…) is managed from that
+// module's own Module Assess Control page. Stock Inventory System, 555
+// Admin Portal, Training Center and 555 Portal Demo are NOT in this list
+// any more — their admin/normal/none controller moved to Nursery 555
+// Team's own screen (scan_user_access.html). Their keys (`stock`,
+// `mobile`, `training`, `demo555`) are untouched on every profile; this
+// page simply no longer reads or writes them, so nothing here can carry
+// them back to 'none' by omission.
+const MODULES = ['operation', 'nursery_ops', 'salesweb', 'nelos', 'audit', 'npayroll', 'scan', 'seal'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
