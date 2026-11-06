@@ -433,7 +433,7 @@
          the three no-cache metas, so the PAGE is always fresh and asking
          for a new number here is enough. Bump it in the same commit as
          `shared_cf_select.js`. -->
-    <script src="../shared/shared_cf_select.js?v=2"></script>
+    <script src="../shared/shared_cf_select.js?v=3"></script>
 </head>
 <body>
 
@@ -17621,13 +17621,13 @@ Thank you.`;
           window.location.href = 'operation_dashboard.html';
           return;
         }
-        // Page-level lock (batch pages), set in the module's User Access.
+        // Page-level lock (batch pages), set in the module's Module Assess Control.
         if (!MJMAccess.canOpenOperationPage('batch')) {
           alert('You do not have access to Batch Records.');
           window.location.href = 'operation_dashboard.html';
           return;
         }
-        // Function-level ticks from the module's User Access page.
+        // Function-level ticks from the module's Module Assess Control page.
         if (isNewBatch && !MJMAccess.canDoOperation('batch', 'add_new')) {
           alert('You do not have permission to add new batch records.');
           window.location.href = 'operation_batch_record.html';

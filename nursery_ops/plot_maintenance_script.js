@@ -645,13 +645,13 @@ const _supabase = (typeof supabase !== 'undefined' && typeof SHARED_SUPA_URL !==
   ? supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY)
   : null;
 let dbStateCache = {};   // `${nursery}_${month}` → saved schedule payload
-/* Admin of the "Nursery Operation Manage" module in User Access.
+/* Admin of the "Nursery Operation Manage" module in Module Assess Control.
    Only admins may edit a record once it has been marked Checked. */
 let isNopsAdmin = false;
 
 /* ── MAY THIS PERSON OPEN SETTING ──────────────────────────────────────
    The Setting tab was the module LEVEL and nothing else, so the tick the
-   office sets on User Access — "Open Setting (piece rates, plots,
+   office sets on Module Assess Control — "Open Setting (piece rates, plots,
    workers)" — was written, shown as set on the screen, and read by
    nothing. Somebody granted it saw no change at all, which is the fault
    this codebase has a heading about: a permission saved and not obeyed
@@ -1381,7 +1381,7 @@ function wrAllows(job) {
   return false;
 }
 
-/* The two ticks this asks for, read the way the User Access screen writes
+/* The two ticks this asks for, read the way the Module Assess Control screen writes
    them — `effectiveActions` in shared_module_access.js, which is what
    maySetting() above already obeys and says at length why.
 
@@ -1464,7 +1464,7 @@ function renderWorkRecVerify() {
     + `<span class="vb-spacer"></span>`
     + (mayMaintAct('verify', 'worker_record')
         ? `<button class="btn btn-primary btn-sm" onclick="verifyWorkRec()">✔ Verify &amp; lock</button>`
-        : `<span>Verifying needs the Verify tick on Nursery Maintenance in User Access.</span>`);
+        : `<span>Verifying needs the Verify tick on Nursery Maintenance in Module Assess Control.</span>`);
 }
 
 /* The permission is asked AGAIN here: a button drawn before somebody's
@@ -1473,7 +1473,7 @@ async function verifyWorkRec() {
   const job = _payrollView;
   if (!mayMaintAct('verify', 'worker_record')) {
     alert('You do not have permission to verify this sheet.\n\n'
-        + 'Ask an admin to tick Verify on Nursery Maintenance in User Access.');
+        + 'Ask an admin to tick Verify on Nursery Maintenance in Module Assess Control.');
     return;
   }
   if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
@@ -1499,7 +1499,7 @@ async function unverifyWorkRec() {
   const job = _payrollView;
   if (!mayMaintAct('unverify', 'worker_record')) {
     alert('You do not have permission to unlock this sheet.\n\n'
-        + 'Ask an admin to tick Unlock on Nursery Maintenance in User Access.');
+        + 'Ask an admin to tick Unlock on Nursery Maintenance in Module Assess Control.');
     return;
   }
   const v = workRecLockRow(job);
@@ -2587,7 +2587,7 @@ async function toggleCullChecked(plot) {
    month, carrying who and when. That record IS the Put back. */
 async function cullRemovePlot(plot) {
   if (!wrAllows('cull_incentive')) return;
-  if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in Module Assess Control.'); return; }
   const n = getNursery(), ym = _cullYm(), st = _cullCache[ym], CI = MJMCullIncentive;
   if (!st || !st.overridesReady) {
     alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
@@ -2630,7 +2630,7 @@ async function cullRemovePlot(plot) {
 let _cullAddEl = null;
 function openCullAdd() {
   if (!wrAllows('cull_incentive')) return;
-  if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in Module Assess Control.'); return; }
   const ym = _cullYm(), st = _cullCache[ym];
   if (!st || !st.overridesReady) {
     alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
@@ -4250,7 +4250,7 @@ function onRateInput(code, val) {
 /* Write all four rates for this nursery, then lock. */
 async function savePieceRates() {
   const n = getNursery();
-  if (!maySetting()) { alert('You are not allowed to change piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
+  if (!maySetting()) { alert('You are not allowed to change piece rates.\n\nAsk an admin to tick "Open Setting" on Module Assess Control.'); return; }
   if (rateLocked(n)) return;
   // Never write before the saved rates have arrived — otherwise a save made
   // during startup would push empty boxes over real values.
@@ -4304,7 +4304,7 @@ async function savePieceRates() {
 
 async function unlockPieceRates() {
   const n = getNursery();
-  if (!maySetting()) { alert('You are not allowed to unlock piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
+  if (!maySetting()) { alert('You are not allowed to unlock piece rates.\n\nAsk an admin to tick "Open Setting" on Module Assess Control.'); return; }
   if (!confirm(`Unlock the piece rates for ${NURSERY_NAMES[n]} so they can be edited?`)) return;
   if (_supabase) {
     const { error } = await _supabase.from('nops_maint_rate_lock')
@@ -7198,7 +7198,7 @@ function switchTab(name, btn) {
   // button, a restored tab or a console call can't get in either.
   if (name === 'setting' && !maySetting()) {
     alert('Setting is not open to you.\n\nAsk an admin to tick "Open Setting" on '
-          + 'User Access, or to change the plot capacity, chemical or fertiliser '
+          + 'Module Assess Control, or to change the plot capacity, chemical or fertiliser '
           + 'for you.');
     return;
   }

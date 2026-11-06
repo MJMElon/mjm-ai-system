@@ -254,7 +254,7 @@ console.log('\n── 6. The three refusals say where they are set ──');
     check('`' + key + '` is written in both languages', hits, 2);
   }
   checkTrue('and all of them say where the tick lives',
-            (lang.match(/User Access/g) || []).length >= 6);
+            (lang.match(/Module Assess Control/g) || []).length >= 6);
 }
 
 console.log('\n── 7. The mirror follows, so the versions had to move ──');

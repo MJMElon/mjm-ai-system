@@ -241,7 +241,7 @@ const PAGES = [
  * stores per-page access — `mobile_actions.<key>.view`, mirrored to
  * `mobile_pages.<key>` — and read back with MJMAccess.canDo('mobile', key,
  * 'view'). That is deliberately not a new shape: shared_module_access.js has
- * written exactly this for every module with its own User Access screen since
+ * written exactly this for every module with its own Module Assess Control screen since
  * it was written, the Admin Portal simply never had one.
  *
  * SEAL MANAGEMENT IS THE PORTAL'S OWN SCREEN, not the hub module of the same
@@ -472,7 +472,7 @@ function flatActions(pg) {
 /* ---- the Admin Portal's and the Auditor Portal's pages ----
 
    A DIFFERENT RULE FROM THE FC PORTAL'S, and it has to be: those two store
-   their ticks the way every module with its own User Access screen stores
+   their ticks the way every module with its own Module Assess Control screen stores
    them, and this screen must conclude exactly what that screen and
    MJMAccess.canDo() conclude or it lies about what it is showing.
 
@@ -767,7 +767,7 @@ function areaBlockHtml(area) {
     </div>`;
 }
 
-/* A door nested inside a portal — Worker System and User Access Setting,
+/* A door nested inside a portal — Worker System and Module Assess Control,
    inside Worker Portal Manage. The same `scan_areas` tick as the portal
    above it, with the same fallback; only where it is drawn has changed. */
 function childAreaHtml(child) {
@@ -802,7 +802,7 @@ function noteRowHtml(note) {
 }
 
 /* A page of the Admin Portal or the Auditor Portal: the same drawing as an FC
-   Portal page, reading and writing the keys that module's OWN User Access
+   Portal page, reading and writing the keys that module's OWN Module Assess Control
    screen uses. `data-mpage` / `data-mact` carry the store so one handler
    serves both. */
 function modPageBlockHtml(area, pg) {

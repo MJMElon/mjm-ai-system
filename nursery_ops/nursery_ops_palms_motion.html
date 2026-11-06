@@ -216,7 +216,7 @@
 
   <p class="text-[11px] text-slate-400 text-center mt-7">
     Page access is granted on this module's
-    <a href="nursery_ops_user_access.html" class="text-teal-700 font-bold underline underline-offset-2">User Access</a>.
+    <a href="nursery_ops_user_access.html" class="text-teal-700 font-bold underline underline-offset-2">Module Assess Control</a>.
   </p>
 </div>
 
@@ -422,7 +422,7 @@ function fillMonths() {
        out of a page they are entitled to. */
     if (typeof MJMAccess.canOpenPage === 'function' &&
         !MJMAccess.canOpenPage('nursery_ops', 'palms_motion')) {
-      alert('You do not have access to this page. Ask an admin to grant it in User Access.');
+      alert('You do not have access to this page. Ask an admin to grant it in Module Assess Control.');
       window.location.href = 'nursery_ops_dashboard.html';
       return;
     }

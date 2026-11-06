@@ -431,8 +431,8 @@ function normPerms(p) {
   if (!p || typeof p !== 'object') return out;
   /* KEEP EVERYTHING, tidy only what this page owns. This used to rebuild
      the object from a short list of keys, and Save writes it back whole —
-     so every save here silently threw away what the OTHER User Access
-     pages had set: scan_actions / scan_areas (FC Portal), nursery_ops_*,
+     so every save here silently threw away what the OTHER Module Assess
+     Control pages had set: scan_actions / scan_areas (FC Portal), nursery_ops_*,
      npayroll_*, audit_pages / audit_actions, every *_nurseries limit.
      Changing somebody's module level here wiped their ticks inside the
      modules, and nothing said so. Now every key is carried through, and

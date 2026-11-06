@@ -391,7 +391,7 @@ const classOf = (s) => (s && typeof s === 'object') ? s.cls : String(s);
     await openJob(shutOut.page, 'pd');
     const s = await strip(shutOut.page);
     check('a row with the Worker Record tick OFF offers no button, and says where it is set',
-      [s.buttons, /User Access/.test(s.text)], [[], true]);
+      [s.buttons, /Module Assess Control/.test(s.text)], [[], true]);
     /* ASKED AGAIN AT THE WRITE: a button drawn before somebody's access
        changed is still sitting on the screen, so the call has to refuse on
        its own rather than trusting the render. */

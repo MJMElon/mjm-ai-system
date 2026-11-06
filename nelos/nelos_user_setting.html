@@ -258,7 +258,7 @@
   .slot.over-up   { box-shadow:inset 0 2.5px 0 #bc4996; background:#fcf5fa; }
   .slot.over-down { box-shadow:inset 0 -2.5px 0 #bc4996; background:#fcf5fa; }
 
-  /* The home system on User Access: ticked, and not this screen's to change. */
+  /* The home system on Module Assess Control: ticked, and not this screen's to change. */
   .right-home { background:#fcf5fa; border-color:#f2cfe7; cursor:default; }
   .right-home:hover { border-color:#f2cfe7; }
 
@@ -399,7 +399,7 @@
 
   <div class="tabs">
     <button class="tab on" data-tab="people">Case Handlers</button>
-    <button class="tab"    data-tab="access">User Access</button>
+    <button class="tab"    data-tab="access">Module Assess Control</button>
     <button class="tab"    data-tab="routing">Case Routing</button>
   </div>
 
@@ -408,7 +408,7 @@
     <div id="people"></div>
   </div>
 
-  <!-- ── User Access: who may use Nelos where ─────────────────── -->
+  <!-- ── Module Assess Control: who may use Nelos where ────────── -->
   <div id="tab-access" class="hidden">
     <div id="access"></div>
   </div>
@@ -452,9 +452,9 @@ let openRoute = null;  // which system's routing block is open
 let hasRaiseCol = false;
 let me = { name: '' };
 
-/* The search on User Access. nelos_directory() is the staff list — every
-   account that is not a Salesweb customer, the same population the main
-   portal's own User Access screen shows (migration_nelos_directory_staff
+/* The search on Module Assess Control. nelos_directory() is the staff list —
+   every account that is not a Salesweb customer, the same population the
+   main portal's own User Access screen shows (migration_nelos_directory_staff
    .sql). Fetched once, then filtered here, so typing does not hit the
    network. */
 let directory = null;  // null until the first search asks for it
@@ -555,8 +555,8 @@ const seatName = (key, n) => n ? `${handlerLabel(key)} ${n}` : '';
    still not be able to open a case in it. The tick is the qualification;
    this is the list of people who have it.
 
-   A person's home queue counts as ticked. User Access shows it that way
-   too, fixed on and not editable there, since Case Handlers is what sets
+   A person's home queue counts as ticked. Module Assess Control shows it
+   that way too, fixed on and not editable there, since Case Handlers is what sets
    it — so somebody seated in a system is never missing from its own list. */
 const eligibleFor = key => people.filter(p =>
   p.primary_module === key || (p.access_modules || []).includes(key));
@@ -589,7 +589,7 @@ const peopleIn = key => people
    because a person handles one queue.
 
    Everything else about a person — which systems they may use, what they
-   may do to a case — is on User Access. This tab is only the roster. */
+   may do to a case — is on Module Assess Control. This tab is only the roster. */
 
 let moreSeats = {};   // module key → extra empty slots the + button opened
 let editCard = null;  // the one system whose slots are showing their pickers
@@ -719,7 +719,7 @@ function renderPeople() {
         <div class="slots">${slots.join('')}</div>
         ${editCard === m.key && !eligibleFor(m.key).length ? `
           <p class="slot-none">Nobody is ticked for ${esc(m.label)} yet, so there is
-             nobody to put here. Tick it for them on <strong>User Access</strong>.</p>` : ''}
+             nobody to put here. Tick it for them on <strong>Module Assess Control</strong>.</p>` : ''}
         <button type="button" class="seat-add" data-more="${esc(m.key)}">+ add another person</button>
       </div>`;
   }).join('') + '</div>';
@@ -869,7 +869,7 @@ async function setSeat(moduleKey, seatNo, userId) {
   await load();
 }
 
-/* ── User Access ───────────────────────────────────────────────────
+/* ── Module Assess Control ────────────────────────────────────────
    Person first, and the other half of the split: which systems somebody
    may USE Nelos in, and what they may do to a case once they are in it.
 

@@ -179,7 +179,7 @@
     <!-- STRAIGHT TO THE PAGE, not to a list of one.
          This used to open scan_settings_hub.html, a page of five sections
          that were doors to doors: FC Portal Setting led to a page whose
-         only tile was User Access, which is already a tile RIGHT HERE;
+         only tile was Module Assess Control, which is already a tile RIGHT HERE;
          Admin Portal Setting led to the Admin Portal, which is a door
          right here too; Worker Portal Setting led into the phone app; and
          Auditor Portal Setting led to the Audit back office, which is its
@@ -306,7 +306,7 @@ $('worker-portal-link').addEventListener('click', (e) => {
     const u = MJMAccess.user();
     if (u) $('welcome-heading').textContent = 'Welcome, ' + (u.full_name || u.email || '') + '!';
 
-    // User Access writes other people's permissions, which the database policy
+    // Module Assess Control writes other people's permissions, which the database policy
     // only lets a user-manager do — so it is not offered to anyone else.
     /* Each door on this page, by its own tick on Setting. Every one of them
        falls back to the rule that governed it before that screen existed, so
