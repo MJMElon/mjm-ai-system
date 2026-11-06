@@ -77,6 +77,22 @@
   .user-row { padding:18px 22px; display:flex; align-items:center; gap:16px; border-bottom:1px solid #f1f5f9; transition:background .15s; }
   .user-row:hover { background:#f8fafc; }
   .user-row:last-child { border-bottom:none; }
+  .user-row[draggable="true"] { cursor:grab; }
+  .user-row.sa-row-dragging { opacity:.4; }
+
+  /* Super Admins — a drop target, not a dropdown. Only a super admin ever
+     sees this card at all; MJMAccess.isSuperAdmin() gates it, and the
+     database's own trigger is what actually enforces every drop and every
+     cross, so a stale screen can draw this wrong but can never DO anything
+     the database disagrees with. */
+  .sa-card { border:1.5px solid #fde68a; background:#fffbeb; border-radius:20px; }
+  .sa-drop { display:flex; flex-wrap:wrap; gap:8px; min-height:48px; padding:10px; border-radius:14px; border:2px dashed #fcd34d; transition:background .15s, border-color .15s; }
+  .sa-drop.drag-over { background:#fef3c7; border-color:#d97706; }
+  .sa-empty { font-size:11px; font-weight:700; color:#b45309; align-self:center; padding:4px 6px; }
+  .sa-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px 6px 12px; border-radius:999px; background:#fff; border:1.5px solid #fbbf24; font-size:12px; font-weight:800; color:#78350f; }
+  .sa-chip .sa-lock { font-size:11px; }
+  .sa-chip-x { border:none; background:none; cursor:pointer; color:#b45309; font-weight:900; font-size:14px; line-height:1; padding:0 2px; border-radius:999px; }
+  .sa-chip-x:hover { color:#dc2626; background:#fee2e2; }
 </style>
     <script src="shared/shared_cf_select.js"></script>
 </head>
@@ -111,6 +127,20 @@
       <span class="text-lg leading-none">+</span> Add User
     </button>
     <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
+  </div>
+
+  <!-- Super Admins — hidden unless YOU hold it. Drag a system user's row
+       in from the list below to promote them; the × demotes. The one
+       account the whole system is rooted on (nursery.mjsb@gmail.com)
+       carries a lock instead of a cross -- the database refuses to take
+       it off that account whoever asks, not just this screen. -->
+  <div id="super-admin-card" class="card sa-card p-5 hidden">
+    <div class="text-[10px] font-black text-amber-700 uppercase tracking-widest">Super Admins</div>
+    <p class="text-[11px] text-amber-800/80 mt-1 mb-3 leading-relaxed">
+      Drag a system user from the list below into this box to make them a super admin too.
+      Only a super admin can do this, and it takes a super admin to undo it.
+    </p>
+    <div id="super-admin-drop" class="sa-drop"></div>
   </div>
 
   <!-- View tabs: system users vs every account (incl. Salesweb customers) -->
@@ -313,6 +343,88 @@ let pending     = null;        // working copy of permissions while drawer is op
 function systemProfiles()   { return allProfiles.filter(p => (p.user_type || 'system') === 'system'); }
 function customerProfiles() { return allProfiles.filter(p => (p.user_type || 'system') === 'customer'); }
 
+/* ── Super Admins ──────────────────────────────────────────────
+   The one account the whole system is rooted on. This email is ONLY
+   used here to draw the lock instead of a cross -- a screen decision,
+   not the security. The real refusal lives in the database trigger
+   (shared/RUN_ME_super_admin_and_module_access.sql), which stops
+   ANYONE taking super_admin off this account through any door, this
+   screen included, whatever this constant says. */
+const SUPER_ADMIN_ANCHOR_EMAIL = 'nursery.mjsb@gmail.com';
+
+function superAdminProfiles() {
+  return allProfiles.filter(p => p.permissions && p.permissions.super_admin);
+}
+
+function renderSuperAdminCard() {
+  const card = document.getElementById('super-admin-card');
+  const isSup = MJMAccess.isSuperAdmin && MJMAccess.isSuperAdmin();
+  card.classList.toggle('hidden', !isSup);
+  if (!isSup) return;
+  const zone = document.getElementById('super-admin-drop');
+  const sups = superAdminProfiles();
+  zone.innerHTML = sups.length ? sups.map(p => {
+    const locked = (p.email || '').trim().toLowerCase() === SUPER_ADMIN_ANCHOR_EMAIL;
+    const name = (p.full_name || p.email || '?').replace(/[<>&]/g, '');
+    return `<span class="sa-chip" data-uid="${p.id}">
+        ${locked ? '<span class="sa-lock" title="Permanent — the database refuses to remove this one">🔒</span>' : ''}
+        <span>${name}</span>
+        ${locked ? '' : `<button type="button" class="sa-chip-x" data-action="demote-super" data-uid="${p.id}" title="Remove super admin">×</button>`}
+      </span>`;
+  }).join('') : '<span class="sa-empty">No super admins yet — drag a system user in.</span>';
+}
+
+/* Both directions go through the one RPC
+   (shared/RUN_ME_super_admin_and_module_access.sql) so a screen that is
+   wrong about who may do this cannot act on it — the database asks the
+   same question again and refuses regardless of what got this far. */
+async function setSuperAdmin(uid, makeSuper) {
+  const p = allProfiles.find(x => x.id === uid);
+  if (!p) return;
+  const { error } = await _supabase.rpc('mjm_set_super_admin', { target_id: uid, make_super: makeSuper });
+  if (error) {
+    showToast((makeSuper ? 'Could not promote: ' : 'Could not remove: ') + error.message, 'err');
+    return;
+  }
+  p.permissions = Object.assign({}, p.permissions, { super_admin: makeSuper });
+  if (makeSuper) p.permissions.manage_users = true;
+  renderSuperAdminCard();
+  render();
+  showToast(makeSuper
+    ? `${p.full_name || p.email} is now a super admin.`
+    : `${p.full_name || p.email} is no longer a super admin.`);
+}
+
+/* Wired ONCE, on the containers rather than on each row — rows are
+   rebuilt by every render(), a listener on the row would have to be
+   re-attached on every one of those and dragstart bubbles fine for
+   delegation like any other event. */
+function setupSuperAdminDnD() {
+  const list = document.getElementById('users-list');
+  const zone = document.getElementById('super-admin-drop');
+  list.addEventListener('dragstart', (e) => {
+    if (!MJMAccess.isSuperAdmin || !MJMAccess.isSuperAdmin()) { e.preventDefault(); return; }
+    const row = e.target.closest('.user-row[data-uid]');
+    const p = row && allProfiles.find(x => x.id === row.dataset.uid);
+    if (!p || (p.user_type || 'system') !== 'system') { e.preventDefault(); return; }
+    e.dataTransfer.effectAllowed = 'copy';
+    try { e.dataTransfer.setData('text/plain', p.id); } catch (err) {}
+    row.classList.add('sa-row-dragging');
+  });
+  list.addEventListener('dragend', (e) => {
+    const row = e.target.closest('.user-row[data-uid]');
+    if (row) row.classList.remove('sa-row-dragging');
+  });
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const uid = e.dataTransfer.getData('text/plain');
+    if (uid) setSuperAdmin(uid, true);
+  });
+}
+
 function showToast(msg, kind) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -375,8 +487,11 @@ function customerRowHtml(p) {
 
 function rowHtml(p) {
   if ((p.user_type || 'system') === 'customer') return customerRowHtml(p);
+  /* draggable only matters once dragstart is wired, which only happens for
+     a super admin (setupSuperAdminDnD gates on it there too) -- harmless to
+     leave the attribute on for everybody else, since nothing listens. */
   return `
-    <div class="user-row" data-uid="${p.id}">
+    <div class="user-row" data-uid="${p.id}" draggable="true">
       <div class="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">${initials(p)}</div>
       <div class="flex-1 min-w-0">
         <div class="font-black text-slate-800 text-sm leading-tight truncate">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
@@ -456,6 +571,7 @@ function render() {
   list.innerHTML = filtered.length
     ? filtered.map(rowHtml).join('')
     : emptyHtml(q, pool, cust);
+  renderSuperAdminCard();
   // Always show the full tally so nobody wonders where users "went".
   const cl = document.getElementById('count-line');
   if (cl) {
@@ -692,6 +808,9 @@ document.addEventListener('click', (e) => {
   const preset = e.target.closest('[data-preset]');
   if (preset) { applyPresetToPending(preset.dataset.preset); return; }
 
+  const demoteSuper = e.target.closest('[data-action="demote-super"]');
+  if (demoteSuper) { setSuperAdmin(demoteSuper.dataset.uid, false); return; }
+
   const promote = e.target.closest('[data-action="promote"]');
   if (promote) { promoteCustomer(promote.dataset.uid); return; }
 
@@ -795,6 +914,7 @@ async function bootstrap() {
   render();
 }
 
+setupSuperAdminDnD();
 bootstrap();
 </script>
 
