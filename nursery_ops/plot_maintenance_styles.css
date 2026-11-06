@@ -195,6 +195,26 @@ td.check-td.ticked::after{content:"";position:absolute;left:50%;top:50%;width:6p
 td.check-td.modified::before{border-color:#f0b429;background:#fef3c7;}
 td.check-td.modified.ticked::before{border-color:#d97706;background:#d97706;}
 tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background:var(--green-light) !important;color:var(--green-text) !important;border-top:2px solid var(--green-mid);text-transform:uppercase;vertical-align:middle;white-space:normal;line-height:1.3;}
+
+/* ── THE PRE NURSERY SHEET IS TWO JOBS, ONE UNDER THE OTHER ──────────────
+   Sowing the seed and filling the hyplug trays before it. The office asked
+   for them together rather than as two entries in the side bar -- "不要分开
+   放一起 分上下两部分就好" -- so the head belongs to the SECTION and cannot
+   be a <thead>, there being two of them. These carry the look `thead th`
+   gives the rest of the table, or a head reads as an ordinary row. */
+tr.sp-job-row td.sp-job{background:var(--green-mid);color:var(--green-text);font-size:12px;font-weight:800;
+  letter-spacing:0.6px;text-transform:uppercase;text-align:left;padding:11px 14px 7px;border-bottom:none;}
+tr.sp-head th{background:var(--green-light);color:var(--green-text);font-size:11px;font-weight:800;
+  letter-spacing:0.4px;padding:8px 10px 10px;text-align:center;vertical-align:middle;
+  border-bottom:2px solid var(--green-mid);}
+/* A JOB TOTAL IS NOT THE SHEET'S TOTAL. There are two of them a scroll
+   apart, so each names its own job -- two rows reading the same word is how
+   somebody writes the wrong figure down -- and the row closes its section
+   rather than wearing the foot's full weight. */
+tr.sp-sub-row td{font-weight:700;font-size:12px;letter-spacing:0.3px;background:var(--green-light) !important;
+  color:var(--green-text) !important;border-top:2px solid var(--green-mid);
+  border-bottom:3px solid var(--green-mid);vertical-align:middle;white-space:normal;line-height:1.3;}
+tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
 /* Fixed layout, so the colgroup in the HTML decides the columns and the
    content never does. Auto layout gave every nursery a different table —
    UNN 2's longer chemical names squeezed the date column until the year
@@ -290,6 +310,26 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 .rej-why{color:#a83020;font-weight:700;line-height:1.4;}
 .rej-none{text-align:center;padding:2.2rem;color:var(--text-faint);
   font-size:12px;font-weight:600;}
+/* ── SELECT MANY, DELETE ONCE ──────────────────────────────────────────
+   The box rides in the DATE cell rather than taking a column of its own:
+   this table already runs off the side of the screen at ten columns. It is
+   pulled tight against the date so the pair reads as one cell. */
+.rej-pick{width:14px;height:14px;margin:0 7px 0 0;vertical-align:-2px;
+  accent-color:#a83020;cursor:pointer;flex:0 0 auto;}
+.rej-th-pick{white-space:nowrap;}
+/* A picked row is tinted the colour of the button that will act on it, so
+   what is about to go is obvious without counting the ticks. It beats the
+   zebra and the hover, which would otherwise hide it on every other row. */
+.rec-table tbody tr.rej-row-picked td,
+.rec-table tbody tr.rej-row-picked:nth-child(even) td,
+.rec-table tbody tr.rej-row-picked:hover td{background:#fdeeea;}
+/* The bar is drawn only while something is ticked (the renderer hides it),
+   so it never stands over the list saying nothing. */
+.rej-bulk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:0 0 10px;padding:9px 13px;border-radius:10px;
+  background:#fdeeea;border:1px solid #f0c4ba;}
+.rej-bulk-n{font-size:12px;font-weight:800;color:#a83020;
+  letter-spacing:.02em;margin-right:auto;}
 .rec-table tbody tr:last-child td{border-bottom:none;}
 .rec-table tbody tr:nth-child(even) td{background:var(--bg-row-alt);}
 .rec-table tbody tr:hover td{background:var(--green-bg);}
@@ -1732,3 +1772,113 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
            font-weight:800; color:var(--text-head); background:#fff;
            border:1.5px solid var(--border); border-radius:var(--r-sm); }
 .cm-days:focus { outline:none; border-color:var(--green-mid); }
+
+/* ─── MONTHLY PERFORMANCE — the Table/Chart view switch and the table ───
+   The table links the WORK SCHEDULE (Program: rounds planned, capacity ×
+   rounds) against the WORK RECORD (Actual: rounds done, the recorded
+   figures) with a Variance per job, the capacity straight off Settings,
+   and an editable Remarks box per plot. One clean house style whatever
+   the nursery — the office asked for tidy and standard, not a copy of
+   their spreadsheet. */
+.perf-toggle{display:flex;gap:8px;margin-bottom:14px;align-items:center;}
+.perf-btn{padding:8px 18px;font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.04em;
+          color:var(--text-body);background:var(--bg-white);border:1.5px solid var(--border);
+          border-radius:var(--r-sm);cursor:pointer;}
+.perf-btn.active{color:#fff;background:var(--green-mid);border-color:var(--green-mid);}
+.perf-btn.perf-print{margin-left:auto;display:flex;align-items:center;gap:6px;padding:8px 12px;}
+.perf-btn.perf-print:hover{background:#eef7f1;}
+.perf-hint{margin:0 0 10px;padding:8px 12px;font-size:12px;font-weight:700;color:#92400e;
+           background:#fef3c7;border:1.5px solid #fcd34d;border-radius:var(--r-sm);}
+.perf-head{margin:2px 0 12px;}
+.perf-head .ph-1{font-size:15px;font-weight:900;color:var(--text-head);}
+.perf-head .ph-2{font-size:12px;font-weight:700;color:var(--text-faint);margin-top:2px;
+                 text-transform:uppercase;letter-spacing:.05em;}
+.perf-scroll{overflow-x:auto;background:var(--bg-white);border:1.5px solid var(--border);
+             border-radius:var(--r-md);box-shadow:var(--shadow-sm);}
+table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:12px;}
+.perf-table th,.perf-table td{border:1px solid var(--border);padding:5px 8px;}
+.perf-table thead th{background:#f0f6f1;color:var(--text-head);font-weight:800;text-align:center;
+                     font-size:11px;letter-spacing:.02em;}
+.perf-table thead th.pf-job{background:#e3efe6;text-transform:uppercase;letter-spacing:.05em;}
+.perf-table thead th.pf-grp{font-weight:700;font-size:10.5px;color:var(--text-body);}
+.perf-table thead th.pf-sub{font-weight:700;font-size:10px;color:var(--text-faint);
+                            text-transform:uppercase;letter-spacing:.04em;}
+/* A job group reads as a group: a heavier rule on its left edge. The
+   header lays the 5 job columns as Rounds/Qty/Rounds/Qty/Variance, so
+   the rule falls on every 5th figure column (Plot and Capacity first). */
+.perf-table td:nth-child(5n+3),.perf-table tbody td:nth-child(3),
+.perf-table thead th.pf-job{border-left:2px solid #b9c9bd;}
+.perf-table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.perf-table td.pf-plot{font-weight:900;color:var(--text-head);text-align:center;}
+.perf-table td.pf-act{font-weight:700;}
+.perf-table td.pf-neg{color:#b91c1c;font-weight:800;}
+.perf-table td.pf-pos{color:var(--green-text);font-weight:800;}
+.perf-table td.pf-zero{color:var(--text-faint);}
+.perf-table tbody tr:nth-child(even) td{background:#fafcfa;}
+.perf-table td.pf-empty{text-align:center;color:var(--text-faint);font-weight:700;padding:26px 10px;}
+.perf-table tfoot td{font-weight:900;color:var(--text-head);background:#f0f6f1;}
+.perf-table td.pf-remark{min-width:180px;padding:3px 4px;}
+.pf-remark-box{width:100%;min-height:30px;box-sizing:border-box;resize:vertical;border:1px solid transparent;
+               border-radius:6px;padding:5px 7px;font-family:inherit;font-size:12px;color:var(--text-body);
+               background:transparent;}
+.pf-remark-box:hover{border-color:var(--border);}
+.pf-remark-box:focus{outline:none;border-color:var(--green-mid);background:#fff;}
+.pf-remark-box:disabled{background:transparent;color:var(--text-faint);}
+
+/* ── WHERE EACH JOB IS DONE ───────────────────────────────────────────────
+   Three rows, a label on the left and a cell of job chips on the right —
+   the Team Board's shape, which is what the office compared it to. The
+   label carries the nurseries that row MEANS (PN, or BNN · UNN 1 · UNN 2),
+   because "Main Nursery" does not say which three and the circles the
+   setting drives do.
+
+   The cell keeps its height with nothing in it (`min-height`), or an empty
+   row collapses to a line of type and stops looking like somewhere a chip
+   can be dropped — which is the one thing it has to look like. */
+.jb-row{display:grid;grid-template-columns:200px 1fr;gap:12px;align-items:stretch;
+        border:1.5px solid var(--border);border-radius:var(--r-sm);margin-bottom:10px;
+        overflow:hidden;}
+.jb-lab{display:flex;flex-direction:column;justify-content:center;gap:3px;
+        padding:10px 12px;background:var(--green-pale,#f0f7f2);}
+.jb-lab b{font-size:13px;font-weight:900;color:var(--green-text);}
+.jb-lab span{font-size:11px;font-weight:700;color:var(--text-faint);
+             font-variant-numeric:tabular-nums;}
+.jb-cell{display:flex;flex-wrap:wrap;gap:6px;align-items:center;align-content:center;
+         padding:10px 12px;min-height:52px;background:#fff;}
+.jb-cell-over{background:#eef7f1;box-shadow:inset 0 0 0 2px var(--green-mid);}
+.jb-chip{display:inline-block;padding:5px 10px;border:1.5px solid var(--border);
+         border-radius:999px;background:#fff;font-size:12.5px;font-weight:800;
+         color:var(--text-head);white-space:nowrap;}
+.jb-chip[draggable="true"]{cursor:grab;}
+.jb-chip-drag{opacity:.45;}
+.jb-none{font-size:12px;font-weight:700;color:var(--text-faint);}
+.jb-note{font-size:12px;line-height:1.7;color:var(--text-faint);margin:2px 0 10px;}
+#js-set-corner:empty{display:none;}
+/* The label column is wider than half a phone, so the row stacks there. */
+@media (max-width:560px){.jb-row{grid-template-columns:1fr;}}
+
+/* ── VERIFY & LOCK on the Worker Record ───────────────────────────────────
+   The strip above the Worker Activity sheet. Copied from the payroll
+   module's own `.verify-bar` rather than drawn afresh: one office reads
+   both screens, and a signature bar that looks different on each is a
+   second thing to learn. `:empty` hides it, so a page whose lock tables
+   could not be read shows no band at all rather than an empty one. */
+.verify-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+            padding:10px 14px;border-radius:12px;margin-bottom:12px;
+            font-size:12px;font-weight:700;line-height:1.4;}
+.verify-bar:empty{display:none;}
+.verify-open{background:#f8fafc;border:1.5px solid var(--border);color:var(--text-faint);}
+.verify-done{background:#ecfdf5;border:1.5px solid #6ee7b7;color:#065f46;}
+.verify-bar .vb-who{font-weight:800;}
+.verify-bar .vb-spacer{flex:1;}
+
+/* THE PAINT, AND IT IS ONLY THE PAINT. A verified sheet greys what can no
+   longer be pressed; `wrAllows()` in the handler is what refuses, because
+   `pointer-events:none` stops neither the keyboard nor a call. The TABLE
+   stays perfectly readable — a signed-off month is a thing people go on
+   reading — so only the controls are dimmed. */
+.wr-shut .check-td,
+.wr-shut .btn,
+.wr-shut .sp-in,
+.wr-shut select{opacity:.5;pointer-events:none;}
+.wr-shut .check-td{cursor:default;}

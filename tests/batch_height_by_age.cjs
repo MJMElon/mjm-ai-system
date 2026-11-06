@@ -170,17 +170,22 @@ const LOG = (r, type) => ({
       return window.__LEDGER.filter((r) => types.includes(r.transaction_type))
                             .slice(offset, offset + limit);
     };
-    const led = await fetchBatchLedger(9, 2026);
+    /* The TO date now, where it used to be (month, year). The whole of
+       September is what that pair asked for. */
+    const led = await fetchBatchLedger('2026-09-30');
     return buildBatchHeight(led, window.__HEIGHT);
   });
 
   console.log('\nThe window it reads');
-  check('as at the END of the month being reported, not today', bh.asOf, '2026-09-30');
-  /* A month still running cannot be read as at its last day — that would
-     age every batch by however much of it is left to come. */
-  check('…and a month that has not finished is as at today',
-        await page.evaluate(async () => (await fetchBatchLedger(12, 2026)).asOf),
-        new Date().toISOString().slice(0, 10));
+  check('as at the END of the range being reported, not today', bh.asOf, '2026-09-30');
+  /* A range running past today cannot be read as at its last day — that
+     would age every batch by however much of it is still to come.
+     Compared against the PAGE's own local today, not toISOString(): that
+     one is the day before in Malaysia for the whole of the early morning,
+     so a test pinned to it fails for four hours a day. */
+  check('…and a range that has not finished is as at today',
+        await page.evaluate(async () => (await fetchBatchLedger('2026-12-31')).asOf),
+        await page.evaluate(() => _localISO(new Date())));
   check('only the batches that are 1 to 4 months old and still in the PN',
         [...new Set(bh.rows.map((r) => r.batch))].sort(),
         ['302', '303', '304', '305', '306', '309', '310']);
@@ -289,12 +294,16 @@ const LOG = (r, type) => ({
   console.log('\nThe tick on the filter card draws it');
   {
     /* End to end through generateReport, because the wiring is where this
-       could still be broken: the tick, the month, the fetch, the section
-       order. Height by Batch on its own needs no nursery tick -- the
-       batches it lists have not left the Pre-Nursery. */
+       could still be broken: the tick, the date range, the fetch, the
+       section order. Height by Batch on its own needs no nursery tick --
+       the batches it lists have not left the Pre-Nursery.
+
+       THE PERIOD IS A FROM/TO PAIR, not a month and a year, and the whole
+       of September is what the old pair asked for -- so the section reads
+       as at 30 Sep exactly as it did before. */
     await page.evaluate(() => {
-      document.getElementById('f-month').value = '9';
-      document.getElementById('f-year').value = '2026';
+      document.getElementById('f-from').value = '2026-09-01';
+      document.getElementById('f-to').value   = '2026-09-30';
       [...document.querySelectorAll('.mod-cb')].forEach((cb) => { cb.checked = false; });
       const cb = [...document.querySelectorAll('.mod-cb')]
         .find((x) => /Height by Batch/.test(x.parentElement.textContent));
@@ -312,7 +321,12 @@ const LOG = (r, type) => ({
     check('the section is on the page, and it is the only one', out.sections, 1);
     check('the four figures came through the whole path', out.cards,
           ['15', '45', '—', '60']);
-    check('…for the month that was picked', /September 2026/.test(out.period), true);
+    /* THE DATES THAT WERE PICKED, both ends, where this used to read
+       "September 2026" off a month select. The heading has to say the range
+       and not a month, or a report of a fortnight is indistinguishable from
+       a report of the month it falls in. */
+    check('…for the date range that was picked',
+          out.period.indexOf('01 Sep 2026 – 30 Sep 2026') >= 0, true);
   }
 
   await browser.close();

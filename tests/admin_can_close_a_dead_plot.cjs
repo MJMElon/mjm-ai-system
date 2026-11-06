@@ -72,12 +72,29 @@ const LONG_AGO = iso(new Date(NOW.getFullYear(), NOW.getMonth() - 2, 5));
 const WEEDING_DAYS = 3;
 const dueOf = (d) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + WEEDING_DAYS); return iso(x); };
 const DUE_ISO   = dueOf(LONG_AGO);
-const DUE_SHOWN = new Date(DUE_ISO + 'T00:00:00')
-  .toLocaleDateString('en-MY', { day:'numeric', month:'short', year:'numeric' });
+/* THE SHORT MONTH IS NOT ONE SPELLING, and September is the only month
+   it shows on. The page formats with the UI language -- `lang`, which is
+   'en' or 'ms' -- and this test cannot know which, so pinning one locale
+   here is pinning a spelling the page may not use: 'en' gives "8 Sep
+   2026" where 'en-MY' gives "8 Sept 2026", and a correct page failed this
+   check for the whole of September and October. Every locale the page can
+   be in is accepted instead. */
+const DUE_SHOWN = ['en', 'en-MY', 'ms'].map((loc) =>
+  new Date(DUE_ISO + 'T00:00:00')
+    .toLocaleDateString(loc, { day:'numeric', month:'short', year:'numeric' }));
 
+/* VERIFIED, because a phone record raises no audit task until the Field
+   Conductor has pressed Verify -- and a REJECTED one raises none ever. The
+   board reads both columns now, so a fixture row without verified_at is a
+   record nobody has checked and is correctly invisible. The third row is
+   here to prove exactly that. */
 const FIELD = [
-  { id: 9001, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N01', work_type:'weeding', jenis:'Merumput' },
-  { id: 9002, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N02', work_type:'weeding', jenis:'Merumput' }
+  { id: 9001, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N01', work_type:'weeding', jenis:'Merumput',
+    verified_at: LONG_AGO + 'T02:00:00Z', rejected_at: null },
+  { id: 9002, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N02', work_type:'weeding', jenis:'Merumput',
+    verified_at: LONG_AGO + 'T02:00:00Z', rejected_at: null },
+  { id: 9003, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N03', work_type:'weeding', jenis:'Merumput',
+    verified_at: null, rejected_at: null }
 ];
 
 const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); return m ? m[1] : ''; };
@@ -303,7 +320,7 @@ async function run(asAdmin, action){
   check('and how far past the deadline it had gone',
         sect.after.hist.every(h => !/Closed by admin/i.test(h) || /days overdue/i.test(h)));
   check('which is the deadline the board itself drew',
-        sect.after.hist.some(h => h.indexOf(DUE_SHOWN) !== -1));
+        sect.after.hist.some(h => DUE_SHOWN.some(d => h.indexOf(d) !== -1)));
   check('the record keeps it too, in its own remark',
         sRows.length > 0 && sRows.every(r => (r.remarks || '').indexOf('Due ' + DUE_ISO) === 0));
   check('which it did not say before the close',

@@ -144,7 +144,14 @@ async function planTwoRows(page) {
 }
 
 /* The field's side: one verified record per plot, each carrying a date, a
-   batch and a quantity. */
+   batch and a quantity.
+
+   THE QUANTITY IT CARRIES NO LONGER REACHES A CELL. The phone has no
+   quantity box and sends one all the same (the batches ticked, added up off
+   a view that counts neither culling), and the office asked for it out --
+   the capacity links the Summary Report and nothing else. It is still on
+   the fixture record, because the record really does carry one and half the
+   point of these checks is that it stays there and goes nowhere. */
 const JENIS = 'Penyemburan racun kulat dan serangga';
 function fieldRow(id, plot, month, qty) {
   const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
@@ -190,9 +197,15 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     await pull(page);
 
     const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
-    check('the field filled B1', await cell(page, 'B1'),
-          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
-    check('…and B2', (await cell(page, 'B2')).qty, 200);
+    /* THE DATE AND THE BATCH, AND NOT THE QUANTITY. Those two are what
+       somebody standing in the plot observed; the quantity is the Summary
+       Report's answer, and this plot has no ledger behind it in this
+       fixture, so the cell is empty and reads as a dash. */
+    check('the field filled B1 date and batch', await cell(page, 'B1'),
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: null });
+    check('…and left the QUANTITY alone, on both rows',
+          [(await cell(page, 'B1')).qty, (await cell(page, 'B2')).qty],
+          [null, null]);
 
     // The office disagrees about B1's quantity, and types it.
     await editRow(page, 'B1', { qty: '4755' });
@@ -200,8 +213,8 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
 
     await pull(page);
     check('IT SURVIVES THE NEXT SYNC', (await cell(page, 'B1')).qty, 4755);
-    check('…and B2, which nobody touched, still follows the field',
-          (await cell(page, 'B2')).qty, 200);
+    check('…and B2, which nobody touched, is empty rather than the field',
+          (await cell(page, 'B2')).qty, null);
 
     // Now the field record goes — unverified again, or deleted.
     await page.evaluate(() => { window.__DB.nops_maint_field_records = []; });
@@ -213,8 +226,8 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
        untrue, and blanking it is how a corrected date went empty and then
        filled itself back in with the field's. The LINK goes, the value
        stays. */
-    check('…and neither is B2’s, which the field had filled',
-          (await cell(page, 'B2')).qty, 200);
+    check('…and neither is B2 DATE, which the field had filled',
+          (await cell(page, 'B2')).tarikh, ym + '-03');
     await page.close();
   }
 
@@ -256,7 +269,7 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     await pull(page);
     const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
     check('B1 has the field\u2019s answer', await cell(page, 'B1'),
-          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: null });
 
     // The record is re-filed under another round, so it no longer pairs here.
     await page.evaluate(() => {
@@ -265,7 +278,7 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     });
     await pull(page);
     check('THE ROW KEEPS WHAT IT HAD', await cell(page, 'B1'),
-          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: null });
     await page.close();
   }
 
@@ -306,10 +319,12 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     await page.close();
   }
 
-  console.log('\nPlot Capacity — Save writes only what changed');
+  console.log('\nPlot Capacity — a main nursery figure is LINKED, never keyed');
   {
-    /* B3 is on record as 4755. The hardcoded default for B3 is 5655, so if
-       anything writes the default this is where it shows. */
+    /* The office asked for Setting to link the current capacity: what is
+       standing in the plot now, off the batch ledger. So a main nursery box
+       is no longer offered, and Save writes none of it -- the keyed 4755
+       stays in the database untouched, it is simply no longer read. */
     const page = await boot(browser, {
       shared_plots: [
         { nursery_name: 'BNN', plot_name: 'B1' },
@@ -317,42 +332,42 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
         { nursery_name: 'BNN', plot_name: 'B3' }
       ],
       operation_nurseries: [{ name: 'BNN' }],
-      nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B3', qty: 4755 }]
+      nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B3', qty: 4755 }],
+      shared_inventory_logs: [
+        { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 3100 },
+        /* The Movement Report (Summary, the one with a 2nd Culled column)
+           takes a 2nd culling off ONLY while that batch has no 3rd culling:
+           batch 260 has none, so its 200 comes off; batch 261 has a 3rd
+           culling with a MapQty, so its 50 does not. */
+        { transaction_type: '2nd_Culling', transaction_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '260', quantity_change: 200 },
+        { transaction_type: 'Transplanted', transaction_date: '2026-07-01', created_at: '2026-07-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '261', quantity_change: 1000 },
+        { transaction_type: '2nd_Culling', transaction_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z',
+          remark: '', plot_name: 'B3', batch_name: '261', quantity_change: 50 },
+        { transaction_type: '3rd_Culling', transaction_date: '2026-09-01', created_at: '2026-09-01T00:00:00Z',
+          remark: 'MapQty: 900', plot_name: 'B3', batch_name: '261', quantity_change: 100 }
+      ]
     });
+    await page.waitForFunction(() => PlotMovement.ready(), { timeout: 15000 });
 
-    check('B3 reads what was keyed, not the built-in figure',
-          await page.evaluate(() => getPlotQty('BNN', 'B3')), 4755);
-    check('B1 has nothing on record, so it reads the built-in figure',
-          await page.evaluate(() => [getPlotQty('BNN', 'B1'), savedPlotQty('BNN', 'B1')]),
-          [2352, null]);
+    check('B3 reads the Movement Report balance (2900 + 900), not what was keyed',
+          await page.evaluate(() => capacityOf('BNN', 'B3')), 3800);
+    check('a plot with nothing standing reads nought',
+          await page.evaluate(() => capacityOf('BNN', 'B1')), 0);
 
-    // Open the editor, change ONE box, save.
     await page.evaluate(() => { window.__WRITES.length = 0; startCapEdit();
                                 onDraftInput('BNN', 'B2', '1234'); });
+    check('the editor offers no box for a main nursery plot',
+          await page.evaluate(() => document.querySelectorAll('.cap-row[data-nursery="BNN"] input').length), 0);
     await page.evaluate(() => saveCapEdit());
     await page.waitForTimeout(250);
-
-    const wrote = await page.evaluate(() => window.__WRITES
-      .filter((w) => w.table === 'nops_maint_plot_qty')
-      .map((w) => w.row.plot + '=' + w.row.qty).sort());
-    check('ONLY THE BOX THAT CHANGED IS WRITTEN', wrote, ['B2=1234']);
-
-    check('B3’s keyed figure is untouched in the database',
+    check('Save writes no main nursery capacity', await page.evaluate(() => window.__WRITES
+      .filter((w) => w.table === 'nops_maint_plot_qty').length), 0);
+    check('B3 keyed figure is untouched in the database',
           await page.evaluate(() => (window.__DB.nops_maint_plot_qty
             .find((r) => r.plot === 'B3') || {}).qty), 4755);
-    checkFalse('and B1 was not given the built-in figure as a saved decision',
-      await page.evaluate(() => window.__DB.nops_maint_plot_qty.some((r) => r.plot === 'B1')));
-    check('what was typed is on screen', await page.evaluate(() => getPlotQty('BNN', 'B2')), 1234);
-
-    /* Clearing a box to nothing IS a change, and must be saved as 0 rather
-       than read as "left alone". */
-    await page.evaluate(() => { window.__WRITES.length = 0; startCapEdit();
-                                onDraftInput('BNN', 'B3', ''); });
-    await page.evaluate(() => saveCapEdit());
-    await page.waitForTimeout(250);
-    check('clearing a keyed box is saved', await page.evaluate(() => window.__WRITES
-      .filter((w) => w.table === 'nops_maint_plot_qty')
-      .map((w) => w.row.plot + '=' + w.row.qty).sort()), ['B3=0']);
     await page.close();
   }
 

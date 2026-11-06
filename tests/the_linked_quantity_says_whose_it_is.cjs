@@ -13,7 +13,7 @@
    month on screen — and `records_are_per_month.cjs` drives exactly that
    across the boundary. This file does not restate it.
 
-   WHAT THE SCREEN GOT WRONG is "your". THREE different things can put a
+   WHAT THE SCREEN GOT WRONG is "your". THREE different things could put a
    figure in that box:
 
      · somebody KEYED it, which really is theirs (`_qtyByHand`);
@@ -26,6 +26,19 @@
    says which, and carries the refresh they asked for as a BUTTON: the only
    way to put a row back on the link was to know that emptying the box does
    it, and no screen says that.
+
+   THE SECOND ONE IS GONE, and that is what the second half of this file is
+   about now. Saying WHICH of the three it was, and then saying what the
+   phone figure WAS, were two turns of wording a number that had no business
+   in the cell: the phone has no quantity box, what it sends is the batches
+   ticked added up off a view that counts neither culling, as at the day the
+   record was SAVED rather than the work date. The office asked for it out
+   in one line, and for the capacity to be the Summary Report instead. So:
+   applyFieldRecords writes no quantity (`maint_hand_keyed_cells.cjs` drives
+   that end), the two phone wordings are gone, and `dropPhoneQty` takes the
+   ones already written back off — to `_phoneQty`, which nothing reads and
+   nothing prices, because a repair that throws away a number somebody was
+   reading is worse than the fault.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/the_linked_quantity_says_whose_it_is.cjs
    with a static server on 8777 serving the repository root.               */
@@ -206,33 +219,31 @@ const hintFor = (page, row) => page.evaluate((r) => {
         live.useBtn, false);
 
   console.log('\n— whose figure is in the box');
-  /* THE ONE THE OFFICE WAS LOOKING AT. A phone record carried 2,353 and
-     applyFieldRecords filled the empty cell with it; the screen called it
-     theirs, so they went looking for last month. */
+  /* THE ROW THE OFFICE WAS LOOKING AT, and the two sentences it used to
+     get. A phone record had put 2,353 in the cell; the hint called it
+     theirs, then named who saved it, then said what the figure was. All
+     three were one turn further from the answer, which was to take the
+     figure away.
+
+     Asked of a row still CARRYING the mark, because that is the state a
+     database written by the previous version is in, and the hint must not
+     go on explaining a figure the rule no longer allows. */
   const field = await hintFor(page, { qty: 2353, mark: '_fromFieldQty' });
-  check('a figure from a PHONE RECORD is not called yours',
-        [/from a verified phone record/.test(field.text), /your/i.test(field.text)],
-        [true, false]);
+  check('the hint says nothing about a phone record any more',
+        [/phone record/i.test(field.text),
+         /batches ticked on the phone/.test(field.text),
+         /the field/i.test(field.text)],
+        [false, false, false]);
+  /* And it does not call it theirs either, which is the fault this file was
+     written for: a figure nobody here typed reads as SAVED. */
+  const named = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77] });
+  check('…it reads as saved, named record or not',
+        [/the saved 2,353 is being used/.test(field.text),
+         /the saved 2,353 is being used/.test(named.text),
+         /your/i.test(field.text)],
+        [true, true, false]);
   check('…and it still names the linked figure beside it',
         /Linked value is 2,353/.test(field.text), true);
-  /* AND IT NAMES THE PERSON WHERE IT CAN — *"田间报上来的 — 这是谁 只有我
-     可以填"*. "The field" is not a person, and the row already knows which
-     records it was filled from. A screen that can answer that question and
-     does not is the screen that made them ask it. */
-  const named = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77] });
-  check('a phone record names WHO saved it',
-        [/by Akbar/.test(named.text), /the field/i.test(named.text)],
-        [true, false]);
-  /* Two workers on one job is two records and one row, so it is a LIST. */
-  const two = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77, 78] });
-  check('…and two records on one row name both, once each',
-        /by Akbar, Lalu Aenal/.test(two.text), true);
-  /* A record the page cannot see — a month moved on, a read that failed —
-     falls back to the sentence with no name rather than to "by ". */
-  const gone = await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [999] });
-  check('…and an id nothing matches says it without a name',
-        [/from a verified phone record/.test(gone.text), /\bby\b/.test(gone.text)],
-        [true, false]);
 
   const hand = await hintFor(page, { qty: 2000, mark: '_qtyByHand' });
   check('a figure somebody KEYED is still called theirs',
@@ -294,6 +305,61 @@ const hintFor = (page, row) => page.evaluate((r) => {
         await page.evaluate(() => [...new Set(records.filter(r => r.plot === 'B1')
                                                      .map(r => r._month))]),
         ['Oct 2026']);
+
+  console.log('\n— and the phone figures already written come back off');
+  /* THE STATE A DATABASE WRITTEN BY THE PREVIOUS VERSION IS IN. Stopping
+     applyFieldRecords is only half of it: every row it already filled is
+     still carrying the figure, and those are the rows the office is looking
+     at — the N12 row that "automatically had 830" is one of them.
+
+     Three rows, because the three cases are decided differently:
+
+       · an UNCHECKED row goes back on the link, which is the whole ask;
+       · a CHECKED row must NOT be left as a live formula — taking the
+         figure off and stopping there would undo the one thing Checked is
+         for — so freezeCheckedRows writes the report figure into
+         qtyFrozen and the row is a number again;
+       · a figure somebody KEYED is nobody's business but theirs.
+
+     And it is a RECORD, never a deletion: `_phoneQty` keeps what the phone
+     had put there, so the change can be looked at rather than taken on
+     trust. */
+  const repaired = await page.evaluate(() => {
+    if (typeof dropPhoneQty !== 'function') return { err: 'no dropPhoneQty' };
+    const row = (id, extra) => Object.assign({
+      id, _month: 'Oct 2026', plot: 'B1', batch: '268', tarikh: '2026-10-03',
+      jenis: 'Penyemburan racun kulat dan serangga', racun: 'Round 1: Antracol',
+      carlos: 0, gaia: 0, remark: ''
+    }, extra);
+    records.length = 0;
+    records.push(row(1, { qty: 830, _fromFieldQty: 1 }));
+    records.push(row(2, { qty: 830, _fromFieldQty: 1, checked: 1 }));
+    records.push(row(3, { qty: 4755, _qtyByHand: 1 }));
+    const n1 = dropPhoneQty();
+    const froze = freezeCheckedRows();
+    const n2 = dropPhoneQty();            // and again, which must find nothing
+    const read = (id) => {
+      const r = records.find((x) => x.id === id);
+      const q = PlotMovement.recQty(r);
+      return { qty: r.qty === undefined ? null : r.qty,
+               phone: r._phoneQty == null ? null : r._phoneQty,
+               mark: r._fromFieldQty || 0,
+               frozen: r.qtyFrozen == null ? null : r.qtyFrozen,
+               value: q.value, linked: !!q.linked };
+    };
+    return { n1, n2, froze, a: read(1), b: read(2), c: read(3) };
+  });
+  check('both phone figures came off, and a second pass finds nothing',
+        [repaired.n1, repaired.n2, repaired.froze], [2, 0, 1]);
+  check('an UNCHECKED row reads the Summary Report, and keeps what the phone sent',
+        repaired.a,
+        { qty: null, phone: 830, mark: 0, frozen: null, value: 2353, linked: true });
+  check('a CHECKED row is a frozen number, never a live formula again',
+        repaired.b,
+        { qty: null, phone: 830, mark: 0, frozen: 2353, value: 2353, linked: false });
+  check('a figure somebody KEYED is untouched',
+        repaired.c,
+        { qty: 4755, phone: null, mark: 0, frozen: null, value: 4755, linked: false });
 
   if (process.env.SHOT) {
     await hintFor(page, { qty: 2353, mark: '_fromFieldQty', fieldIds: [77] });

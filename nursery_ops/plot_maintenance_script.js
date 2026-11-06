@@ -730,6 +730,9 @@ function _mergeCapacityPlots() {
      plotTrays[stock], plotTrays[n], aliasBucket(plotTrays, n)].forEach(b => {
       if (b) Object.keys(b).forEach(p => candidates.add(p));
     });
+    /* The capacity is the LIVE figure now, so a Seedling Stock plot with
+       seedlings standing in it qualifies whether or not anybody keyed it. */
+    [stock, n].forEach(k => (stockPlots[k] || []).forEach(p => candidates.add(p)));
     candidates.forEach(p => {
       const k = norm(p);
       if (!k || have.has(k)) return;
@@ -863,7 +866,128 @@ function switchPayrollView(type) {
   _payrollView = type;
   _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
   _syncSubNav('pn-subtab-', PAYROLL_VIEW_KEYS, type);
+  /* The circles follow the side tab — 上面nursery的圈圈就会跟着side tab
+     show. Before the render, or the sheet draws against a nursery that is
+     about to be taken off the row above it. */
+  syncJobNurseries();
   renderPayroll();
+}
+
+/* ══ WHERE EACH JOB IS DONE ═══════════════════════════════════════════════
+   The office asked for a setting splitting the jobs between the PRE NURSERY
+   and the MAIN NURSERY, dragged between rows the way the Team Board moves a
+   worker, with the side bar and the nursery circles following it:
+
+     "P&D drag to main nursery only, so when click P&D, will only show BNN,
+      UNN1, UNN2, 不会有PN"
+
+   TWO ROWS WERE ASKED FOR AND THERE ARE THREE, because the office's own
+   next sentence describes a state two rows cannot hold: 如果两边都有 ——
+   if both sides have it, the circles show all four. A chip that lives in
+   exactly one cell is right for a WORKER (a person works at one nursery)
+   and wrong for a JOB, since one job really is done in both places. So
+   BOTH is a row of its own, which keeps the gesture the office named — one
+   drag, nothing else — and makes every state reachable. The row stands
+   empty rather than hiding, for the same reason the Team Board keeps a
+   company section's column standing empty: it is where something IS
+   dragged.
+
+   THE SCOPE IS STORED, NEVER THE NURSERY LIST. `main` means whatever the
+   main nursery is, so a fifth nursery added next year is picked up by every
+   job scoped to it without anybody re-keying eight rows.
+
+   AN ABSENT ANSWER IS NOBODY HAVING BEEN ASKED, so the default is exactly
+   what the page did before this existed: Seed Planting & Hyplug in the Pre
+   Nursery, the other seven in the Main Nursery. A database that cannot be
+   read, or one nobody has keyed, behaves identically. */
+const JOB_SCOPE_ROWS = ['pre', 'main', 'both'];
+/* Seed Planting is the only Pre Nursery job there has ever been; everything
+   else falls through to the main nursery, which is where it was. */
+const JOB_SCOPE_WAS = { seed_planting: 'pre' };
+let jobScopes = {};          // job key → 'pre' | 'main' | 'both', only what is KEYED
+const JOB_SCOPE_PREFIX = 'job_scope:';
+
+function jobScopeOf(key) {
+  const keyed = jobScopes[key];
+  return JOB_SCOPE_ROWS.includes(keyed) ? keyed : (JOB_SCOPE_WAS[key] || 'main');
+}
+/* ONE list of nurseries, derived, so there is no second copy of which of
+   them is the pre nursery. MAINT_NURSERIES decides the ORDER, which is the
+   order the circles are drawn in. */
+function scopeNurseries(scope) {
+  if (scope === 'both') return MAINT_NURSERIES.slice();
+  if (scope === 'pre')  return MAINT_NURSERIES.filter(n => n === 'PN');
+  return MAINT_NURSERIES.filter(n => n !== 'PN');
+}
+function jobNurseries(key) { return scopeNurseries(jobScopeOf(key)); }
+
+/* A JOB'S NAME COMES OFF THE SIDE BAR'S OWN BUTTON, never a second list
+   here — the same rule the section head follows, so one wording and one
+   language toggle. */
+function jobLabel(key) {
+  const btn = document.getElementById('pn-subtab-' + key);
+  const span = btn && btn.querySelector('[data-i18n]');
+  if (span) return t(span.getAttribute('data-i18n'));
+  return btn ? btn.textContent.trim() : key;
+}
+
+/* ── THE SIDE BAR IS ONE ALPHABETICAL LIST ────────────────────────────────
+   It was two groups under a Main Nursery and a Pre Nursery heading. The
+   office took both headings off in one line — main page 不会跟着pre 和 main
+   分了 — because the split is now said by the CIRCLES, which is the place
+   it can be said about the job somebody actually has open, and a heading
+   saying it again above a list is the same answer twice.
+
+   ORDERED AT RUN TIME AND NOT IN THE MARKUP, because the labels are
+   translated: P & D sorts before Transplanting in English and Pemindahan
+   before Racun in Malay. So applyLang re-orders it. */
+function orderJobSubnav() {
+  /* THE BOX IS FOUND THROUGH A JOB BUTTON, never by `.pn-sub`. There are
+     TWO of those bars — Work Record's list/chart is the other — and
+     `querySelector` answers with the first, which is not this one: the
+     reorder then found none of its own buttons in it and silently did
+     nothing. Same trap `_syncSubNav` names in its own comment, which is
+     why it takes the exact set of ids it owns. */
+  const first = document.getElementById('pn-subtab-' + PAYROLL_VIEW_KEYS[0]);
+  const box = first && first.parentNode;
+  if (!box) return;
+  const btns = PAYROLL_VIEW_KEYS
+    .map(k => document.getElementById('pn-subtab-' + k))
+    .filter(el => el && el.parentNode === box);
+  if (btns.length < 2) return;
+  btns
+    .slice()
+    .sort((a, b) => a.textContent.trim()
+      .localeCompare(b.textContent.trim(), currentLang === 'bm' ? 'ms' : 'en'))
+    .forEach(el => box.appendChild(el));
+}
+
+/* ── THE CIRCLES FOLLOW THE SIDE TAB ──────────────────────────────────────
+   "例如我按pnd，而后面的setting pnd是drag去main nursery，上面的圈圈只会show
+   BNN UNN1 UNN2".
+
+   A NURSERY SOMEBODY CHOSE IS NOT FORGOTTEN by a job that does not have it.
+   Without that, opening Seed Planting from UNN 1 forces PN, and going back
+   to P & D would land on BNN rather than the UNN 1 they were working in —
+   so the two jobs would walk the picked nursery away from them.
+
+   It sets the hidden select rather than calling pickNursery, because that
+   one re-renders and this is called from the renderers' own callers. */
+let _nurseryChosen = '';
+function syncJobNurseries() {
+  const box = document.getElementById('nursery-circles');
+  if (!box) return;
+  const onPayroll = !!document.querySelector('#tab-payroll.tab-panel.active');
+  const allowed = onPayroll ? jobNurseries(_payrollView) : MAINT_NURSERIES.slice();
+  box.querySelectorAll('.nursery-circle').forEach(b => {
+    b.style.display = allowed.includes(b.dataset.n) ? '' : 'none';
+  });
+  if (allowed.length && !allowed.includes(getNursery())) {
+    const want = allowed.includes(_nurseryChosen) ? _nurseryChosen : allowed[0];
+    const sel = document.getElementById('global-nursery');
+    if (sel) sel.value = want;
+  }
+  syncNurseryCircles();
 }
 
 function payrollRowsFor(type) {
@@ -984,10 +1108,23 @@ function renderPayroll() {
      empty. */
   const namesBar = document.getElementById('payroll-names');
   if (namesBar) namesBar.innerHTML = '';
+  /* The strip and the paint, BEFORE the four early returns below — every one
+     of the eight sheets carries them, and a strip on one sheet is a strip
+     that lies about the other seven.
+
+     THE PAINT IS NOT THE GATE. `.wr-shut` greys what can no longer be
+     pressed and takes the pointer off it; `wrAllows()` inside each handler
+     is what actually refuses, because a class cannot stop the keyboard and
+     cannot stop a call — which this codebase has a heading about. */
+  try {
+    renderWorkRecVerify();
+    const shut = workRecLocked(_payrollView);
+    [tbl, extra, namesBar].forEach(el => { if (el) el.classList.toggle('wr-shut', shut); });
+  } catch (e) { console.warn('[maint] worker record verify strip:', e); }
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
-  if (_payrollView === 'seed_planting')     { renderSeedPlantingPayroll(); return; }
+  if (SP_VIEWS[_payrollView])               { renderSeedPlantingPayroll(); return; }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -1077,17 +1214,17 @@ function renderPayroll() {
       const share  = ticked.length ? cap / ticked.length : 0;   // capacity / ticks
       ticked.forEach(w => { totals[w] += share; });
       capTotal += cap;
-      /* Checked on the Work Maintenance list locks this row's workers too --
-         see _denyPayrollLocked. A locked row still SHOWS its ticks, because
-         who did the work is the thing the sheet is for; it just will not take
-         a new one. The cell keeps an onclick so pressing it says why rather
-         than doing nothing, which reads as a broken page. */
-      const locked = _recLocked(r);
-      h += `<tr${locked ? ' class="pay-row-locked"' : ''}>
+      /* CHECKED LOCKS THE CAPACITY AND NOT THE CREW. A checked row's figure
+         is frozen -- that is what Checked is for -- and WHO DID THE WORK goes
+         on being keyable, because that is a fact about the day somebody may
+         have got wrong and this sheet is the only place it is recorded.
+         The office asked for it in one line: "这边lock的只有capacity 但是是
+         哪一个工人做的 还是可以改". So no lock class and no refusal here. */
+      h += `<tr>
         <td style="font-weight:600;white-space:nowrap;">${_tarikhDisplay(r.tarikh)}</td>
         <td class="plot-td">${r.plot}</td>
         <td>${cap ? cap.toLocaleString() : '—'}</td>
-        ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}${locked ? ' locked' : ''}" onclick="${locked ? '_denyPayrollLocked()' : `togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')`}" title="${locked ? t('pay.lockedTitle') + ' — ' + w : w}"></td>`).join('')}
+        ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}" onclick="togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')" title="${w}"></td>`).join('')}
         <td style="font-weight:700;">${capFmt(share)}</td>
       </tr>`;
     });
@@ -1108,32 +1245,278 @@ function renderPayroll() {
   tbl.innerHTML = h;
 }
 
-/* Why a checked row cannot be ticked here either.
+/* A CHECKED ROW IS STILL TICKABLE, and that is the office's decision.
 
-   The Work Maintenance list locks a Checked row because Checked is what sends
-   it to the payroll claim. The Worker Record decides something the claim reads
-   just as directly: the row's capacity is split among the workers ticked on
-   it, so adding or removing one tick changes what everybody else on that row
-   is paid, without the row's own figure moving a seedling.
+   It was not for a month. The reasoning was that a row's capacity is split
+   among the workers ticked on it, so moving a tick moves what the others are
+   paid while the row's own figure does not budge -- freeze one and leave the
+   other open and you have settled half of it. True as far as it goes, and it
+   was never asked for: the Checked lock the office DID ask for is on the
+   capacity. They said so when they met the refusal: "这边lock的只有capacity
+   但是是哪一个工人做的 还是可以改".
 
-   So the SAME rule, row by row: Checked locks the ticks too. Uncheck the row
-   on the Work Maintenance list first — that is one press, it says on screen
-   what it undoes, and it puts the quantity back to live at the same time. */
-function _denyPayrollLocked() {
-  alert('This row is Checked, so its workers are locked.\n\n'
-    + 'Its capacity is shared between the workers ticked on it, so changing a '
-    + 'tick changes what the others are paid.\n\n'
-    + 'Uncheck the row on the Work Maintenance list first.');
+   And they are right about what the two things ARE. The quantity is a figure
+   the ledger goes on moving, which is the whole reason Checked writes it down
+   (qtyFrozen). WHO DID THE WORK is a fact about a morning, recorded nowhere
+   else in this system -- so a wrong name has one place to be put right, and
+   making that place refuse means unticking a settled row to correct a
+   spelling. The office reads the claim and signs it; they are the ones who
+   find the wrong name, and they must be able to fix it where they find it.
+
+   WHAT THE FIELD SYNC DOES IS A DIFFERENT QUESTION and is unchanged -- see
+   syncTicks. A person pressing a cell is the thing that was asked for; a page
+   load quietly re-writing an agreed row is not a person. */
+
+/* ══ VERIFY & LOCK, ON THE WORKER RECORD ITSELF ═══════════════════════════
+   The office asked for it in four words — 加一个verified and lock 按钮 —
+   standing on the P & D sheet for UNN 2.
+
+   WHAT IT SIGNS IS THE RECORD, WHICH IS NOT WHAT THE CLAIM SIGNS. The
+   payroll module has had a verify strip for months and it closes the CLAIM:
+   `maint` in its LOCK_SHEETS freezes what the claim shows (buildMaintSnapshot)
+   and says so in its own words — *"Worker Record stays exactly as editable as
+   it always was; this is the claim choosing to stop listening to it."* So the
+   money was protected and the record underneath it was not: anybody could go
+   on moving ticks on a month somebody had signed, and nothing on this screen
+   said a word.
+
+   SO IT IS ITS OWN SIGNATURE, under its own key, and the two stay apart on
+   purpose. They are two acts, usually in this order: the nursery agrees who
+   did the work, then the office agrees the money. A button here that wrote
+   the payroll's own `maint` row would write a THINNER one — that row carries
+   a snapshot this page has no rates or adjustments to build — and two buttons
+   writing one row with different consequences is the fault this codebase has
+   a heading about.
+
+   sheet = `workrec:<job>`, scope = the NURSERY. Both columns used for what
+   they mean, and the key is PER JOB rather than per nursery because the
+   office signs the sheet in front of them: a press on P & D that also shut
+   Transplanting would shut work they have not finished keying. One press per
+   sheet, and the strip names the sheet it is about.
+
+   IT IS ONLY EVER ITS OWN VERIFICATION — `verificationOf`, never
+   `isSheetLocked`. The payroll MONTH lock auto-shuts on the 2nd of the
+   following month, so reading that here would have turned every Worker
+   Record sheet for October read-only the morning this shipped, which is a
+   change nobody asked for. The month lock is about the money being settled;
+   correcting who did the work is a thing the office goes on doing, and the
+   Checked rule one block up is the whole argument for that.
+
+   NOTHING TO RUN IN THE DATABASE. `mjmnpayroll_verifications.sheet` is plain
+   TEXT with no CHECK constraint (RUN_ME_npayroll_locks.sql), so a new sheet
+   name needs nothing — the same thing that was true when `seedplant` was
+   added. Re-opening the month on Lock Controls still takes these rows with
+   it, because that screen deletes every verification of the month. */
+const WORKREC_PREFIX = 'workrec:';
+const workRecSheet = (job) => WORKREC_PREFIX + (job || _payrollView);
+/* The nursery the sheet is about. After the job-scope setting it is always
+   one the circles are offering, so there is no second rule here. */
+const workRecScope = () => getNursery();
+/* A MONTH IS A LABEL ON ONE SCREEN AND A KEY ON THE NEXT, and this is the
+   seam. Everything on this page works in the LABEL — `getMonth()` answers
+   "Nov 2026", which is what `nops_maint_payroll.month` is keyed on — and
+   the payroll lock works in "YYYY-MM" throughout, which is what
+   `mjmnpayroll_verifications.month` holds and what the payroll's own strip
+   writes. Handing the label to the lock stores a row the payroll module can
+   never find, which is exactly what the first version of this did: it
+   verified, said nothing, and the sheet stayed open. The hidden
+   `#global-month` input IS the key, and `_cullYm()` has read it that way
+   since Culling Monitoring was written. */
+const workRecYm = () => {
+  const el = document.getElementById('global-month');
+  return (el && el.value) || '';
+};
+
+function workRecLockRow(job) {
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) return null;
+  const ym = workRecYm();
+  if (!ym) return null;
+  return MJMPayrollLock.verificationOf(ym, workRecSheet(job), workRecScope());
+}
+function workRecLocked(job) { return !!workRecLockRow(job); }
+
+/* WHOEVER IS SIGNING, and it is the page's OWN answer. The first version
+   read a global `userEmail`, which THIS PAGE HAS NEVER HAD — it is only
+   ever read defensively here, so every signature went in as NULL and the
+   strip could not name anybody. `_signingAs()` is the house rule a few
+   hundred lines down and `window.currentUserEmail` is what the Checked
+   ticks prefer, so this asks the two in that order and nothing else.
+   Nothing resolving stores NOTHING, never a word standing in for a person:
+   see _wrSignedBy. */
+function _wrSigner() {
+  return (typeof window !== 'undefined' && window.currentUserEmail)
+      || (typeof _signingAs === 'function' && _signingAs())
+      || null;
+}
+
+/* WHO AND WHEN, AND NO STAND-IN FOR EITHER. Three sentences said "verified
+   by somebody" where the name would not resolve, and the office took it off
+   in two words: 不要放somebody. They are right — the NAME is the one thing
+   a signature carries that nothing else on the strip does, and a word
+   standing where it belongs reads as a person whose name nobody wrote down.
+   A row verified before the signer above was fixed carries no name at all
+   and never will, so what is honest is to say what IS known and stop.
+
+   ONE helper, because the sentence is said in three places — the refusal,
+   the strip and the Unlock confirm — and three wordings for one fact is how
+   they drift. */
+function _wrSignedBy(v) {
+  const who  = (v && _maintWho(v.verified_by)) || '';
+  const when = (v && _maintWhen(v.verified_at)) || '';
+  if (who && when) return `verified by ${who} on ${when}`;
+  if (who)  return `verified by ${who}`;
+  if (when) return `verified on ${when}`;
+  return 'verified';
+}
+
+/* Refuse a write and SAY WHAT SHUT IT. A message that only says "locked"
+   leaves somebody hunting for a switch; the Unlock button is on the strip
+   right above the table they are looking at. */
+function wrAllows(job) {
+  const v = workRecLockRow(job);
+  if (!v) return true;
+  alert(`${jobLabel(job || _payrollView)} for ${NURSERY_NAMES[workRecScope()] || workRecScope()}, `
+      + `${getMonth()} was ${_wrSignedBy(v)}, so this sheet is closed.\n\n`
+      + 'Press Unlock on the strip above the table to open it again.');
+  return false;
+}
+
+/* The two ticks this asks for, read the way the User Access screen writes
+   them — `effectiveActions` in shared_module_access.js, which is what
+   maySetting() above already obeys and says at length why.
+
+   `fallbackTo` is the half that matters on the day this ships: a row the
+   office saved before these keys existed carries neither, and reading an
+   absent key as OFF would take the button away from everybody who has one.
+   What they ANSWERED is the Worker Record tick — until now, whoever could
+   tick the sheet could change anything on it — so that is what is read
+   until somebody saves the row again. It is declared on the action in
+   nursery_ops_user_access.html as well, and the test holds the two
+   together. */
+function mayMaintAct(key, fallbackKey) {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    const acts = p && p.nursery_ops_actions && p.nursery_ops_actions.maintenance;
+    if (acts) {
+      const k = (fallbackKey && !(key in acts)) ? fallbackKey : key;
+      return !!acts.view && !!acts[k];
+    }
+  } catch (_) { /* fall through to the module level */ }
+  /* NO saved row is nobody having been asked, so the module level decides —
+     what governed this before the tick existed. Neither action is
+     `adminOnly`, so `effectiveActions` gives it to anybody the module is
+     open to at all, and this says the same thing rather than a second
+     version of it. */
+  return _nopsLevel() !== 'none';
+}
+function _nopsLevel() {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    return (p && p.modules && p.modules.nursery_ops) || 'none';
+  } catch (_) { return 'none'; }
+}
+
+/* ── The strip above the sheet ────────────────────────────────────────────
+   Drawn on every render of Worker Activity, because the job, the nursery
+   and the month all change what it is answering about. Three states, and
+   the shape is the payroll's own `renderVerifyBar` so one office reading
+   both screens does not have to learn it twice. */
+function renderWorkRecVerify() {
+  const el = document.getElementById('vb-workrec');
+  if (!el) return;
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    /* Not set up, or a read that failed. Nothing is drawn and nothing is
+       locked — the same fail-open the lock module promises in its header,
+       and the reason a load error cannot shut a nursery out of its own
+       record. */
+    el.className = 'verify-bar'; el.innerHTML = ''; return;
+  }
+  const job = _payrollView;
+  const v   = workRecLockRow(job);
+  const what = `${esc(jobLabel(job))} · ${esc(NURSERY_NAMES[workRecScope()] || workRecScope())}`
+             + ` · ${esc(getMonth())}`;
+  if (v) {
+    el.className = 'verify-bar verify-done';
+    /* A cell is DROPPED where there is nothing in it, rather than filled
+       with a word or a dash. The strip has already said what is verified;
+       an empty slot says nobody wrote the name down, which is the truth,
+       and "somebody" said it was a person this screen could name.
+
+       THE NAME CARRIES ITS OWN "by", because a name on its own is not a
+       sentence — the office read the bare one and said what it should say:
+       *by Esther*. The two sit in ONE span, or the strip's 10px gap opens
+       between the word and the person it belongs to, and only the NAME is
+       set heavy: that is what somebody is reading the cell for. */
+    const who = _maintWho(v.verified_by), when = _maintWhen(v.verified_at);
+    el.innerHTML = `<span>✔ Verified — ${what}</span>`
+      + `<span class="vb-spacer"></span>`
+      + (who  ? `<span>by <span class="vb-who">${esc(who)}</span></span>` : '')
+      + (when ? `<span>${esc(when)}</span>` : '')
+      + (mayMaintAct('unverify', 'worker_record')
+          ? `<button class="btn btn-sm" style="margin-left:10px;"
+               onclick="unverifyWorkRec()">↺ Unlock</button>` : '');
+    return;
+  }
+  el.className = 'verify-bar verify-open';
+  el.innerHTML = `<span>Open — ${what}</span>`
+    + `<span class="vb-spacer"></span>`
+    + (mayMaintAct('verify', 'worker_record')
+        ? `<button class="btn btn-primary btn-sm" onclick="verifyWorkRec()">✔ Verify &amp; lock</button>`
+        : `<span>Verifying needs the Verify tick on Nursery Maintenance in User Access.</span>`);
+}
+
+/* The permission is asked AGAIN here: a button drawn before somebody's
+   access changed is still sitting on the screen. */
+async function verifyWorkRec() {
+  const job = _payrollView;
+  if (!mayMaintAct('verify', 'worker_record')) {
+    alert('You do not have permission to verify this sheet.\n\n'
+        + 'Ask an admin to tick Verify on Nursery Maintenance in User Access.');
+    return;
+  }
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    alert('The payroll lock tables could not be read, so nothing can be verified.\n\n'
+        + 'Run shared/RUN_ME_npayroll_locks.sql in the Supabase SQL Editor if this is new.');
+    return;
+  }
+  const n = workRecScope();
+  if (!confirm(`Verify ${jobLabel(job)} for ${NURSERY_NAMES[n] || n}, ${getMonth()}?\n\n`
+             + 'It locks straight away: the ticks and the figures on this sheet cannot be '
+             + 'changed after that. Press Unlock on the strip to take it back.\n\n'
+             + 'This signs the RECORD. The salary claim is signed separately, on the payroll.')) return;
+  const error = await MJMPayrollLock.verify(_supabase, workRecYm(), workRecSheet(job), n,
+                                            _wrSigner(), null);
+  if (error) { alert('Could not verify — ' + (error.message || 'try again')); return; }
+  renderPayroll();
+}
+
+/* Taking one sheet's signature back. Its own tick, for the reason the
+   payroll's own Unlock has one: being trusted to say a sheet is right is
+   not the same as being trusted to unsay it. */
+async function unverifyWorkRec() {
+  const job = _payrollView;
+  if (!mayMaintAct('unverify', 'worker_record')) {
+    alert('You do not have permission to unlock this sheet.\n\n'
+        + 'Ask an admin to tick Unlock on Nursery Maintenance in User Access.');
+    return;
+  }
+  const v = workRecLockRow(job);
+  if (!v) { renderPayroll(); return; }
+  const n = workRecScope();
+  if (!confirm(`Unlock ${jobLabel(job)} for ${NURSERY_NAMES[n] || n}, ${getMonth()}?\n\n`
+             + `It was ${_wrSignedBy(v)}.\n\n`
+             + 'The sheet becomes editable again and will have to be verified a second time.')) return;
+  const error = await MJMPayrollLock.unverify(_supabase, workRecYm(), workRecSheet(job), v.scope || '');
+  if (error) { alert('Could not unlock — ' + (error.message || 'try again')); return; }
+  renderPayroll();
 }
 
 /* Tick / untick a worker on a payroll row. */
 function togglePayrollTick(recId, worker) {
+  if (!wrAllows(_payrollView)) return;
   const n = getNursery(), m = getMonth();
-  /* Gated on the RECORD, not on what the cell was drawn as. A cell drawn
-     before the row was checked still carries its old onclick, and the lock
-     has to hold for the write and not only for the pointer. */
-  const rec = records.find(x => x.id === recId);
-  if (_recLocked(rec)) { _denyPayrollLocked(); return; }
   const k = payrollKey(n, m, _payrollView);
   if (!payrollData[k]) payrollData[k] = {};
   if (!payrollData[k][recId]) payrollData[k][recId] = {};
@@ -1209,6 +1592,15 @@ async function loadDoRecordsForPayroll(n, m) {
   _doRecordsErr[key] = '';
   renderPayroll();
 
+  // Once per page: the Seedling Stock plot index the DO lines resolve
+  // through (see _doQtyForNursery). Soft — loadAll hands back what it
+  // could read, and with nothing at all the base index still covers every
+  // ordinary plot while NURSERY_PLOTS stays the fallback.
+  if (!_doPlotIndex) {
+    const extra = await MJMMaintPlots.loadAll(_supabase).then(r => r, () => ({}));
+    _doPlotIndex = MJMMaintPlots.index(extra);
+  }
+
   const { data, error } = await _supabase
     .from('shared_do_records')
     .select('id, do_number, al_number, delivery_date, total_qty, remark, status, plot_1, plot_2, plot_3, plot_4, plot_5, qty_1, qty_2, qty_3, qty_4, qty_5, worked_by_by_nursery, worked_by_locked_at, worked_by_locked_by')
@@ -1227,16 +1619,62 @@ async function loadDoRecordsForPayroll(n, m) {
   renderPayroll();
 }
 
+/* A DO counts as loading work only when it is a real customer collection.
+   A CAL- DO is a stock correction — no lorry was loaded — and a DO
+   cancelled through its remark ([CANCELLED]) is as cancelled as one whose
+   status says so. August 2026 carried 110 CAL- lines (125,110 seedlings)
+   that this sheet counted and the Nursery Report's Sales Listing rightly
+   did not, so the two totals could never tally.
+
+   SHARED RULE — the Sales Listing (runSalesListing in
+   operation/operation_reports.html) and the payroll claim's own copy
+   (_doIsLoadingWork in npayroll/npayroll_script.js) apply the same line
+   rule. Change one, change the others. */
+function _doIsLoadingWork(d) {
+  if (!d) return false;
+  if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return false;
+  if (/^CAL-/i.test(d.do_number || '')) return false;
+  return true;
+}
+
 /* The qty a DO contributed to ONE nursery — a DO's five item rows can span
    more than one, same reasoning DoSigning.jsx's own nurseriesOfDO carries
-   (see Mobile repo). plot_N resolves to its nursery through NURSERY_PLOTS,
-   the same list the rest of this page already keys every plot off. */
+   (see Mobile repo).
+
+   THE PLOT RESOLVES THROUGH SEEDLING STOCK, not through this page's own
+   schedule list. NURSERY_PLOTS is the schedule's rows — base plus custom
+   plus whatever earned a capacity — and a DO regularly collects off a
+   plot the schedule never drew: a "-R" transfer plot is made by a
+   3rd-culling transfer and joins no schedule until somebody keys a
+   capacity for it. Matched against NURSERY_PLOTS alone, those DO lines
+   read as no nursery's and the sheet ran short of the Nursery Report's
+   Sales Listing by exactly the -R collections (Oct 2026: 85 + 418 + 557
+   seedlings across the three nurseries). shared_plots is where the
+   office says whose plot it is — the same table the Sales Listing maps
+   its lines with and the same index the payroll claim already resolves
+   through (maintDoQtyForNursery in npayroll_script.js, via
+   MJMMaintPlots.loadAll) — so all three screens give one total. The
+   page's own list stays as the fallback for a plot Seedling Stock does
+   not know.
+
+   A single-line DO whose per-line qty was never keyed reads the DO's own
+   total instead — the same fallback the Sales Listing and the batch
+   report's Sales figure use, so a DO keyed that way is the same loading
+   work on every screen. */
+let _doPlotIndex = null; // plotKey -> nursery code, set by loadDoRecordsForPayroll
 function _doQtyForNursery(d, n) {
   const plots = new Set(NURSERY_PLOTS[n] || []);
+  let filled = 0;
+  for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
   let qty = 0;
   for (let i = 1; i <= 5; i++) {
     const plot = d[`plot_${i}`];
-    if (plot && plots.has(plot)) qty += Number(d[`qty_${i}`]) || 0;
+    if (!plot) continue;
+    const owner = _doPlotIndex ? MJMMaintPlots.nurseryOfPlot(plot, _doPlotIndex) : null;
+    if (owner ? owner !== n : !plots.has(plot)) continue;
+    let q = Number(d[`qty_${i}`]) || 0;
+    if (!q && filled === 1) q = Number(d.total_qty) || 0;
+    qty += q;
   }
   return qty;
 }
@@ -1244,6 +1682,7 @@ function _doQtyForNursery(d, n) {
 function loadingSeedlingsRows(n, m) {
   const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
   return rows
+    .filter(_doIsLoadingWork)
     .map(d => ({ d, qty: _doQtyForNursery(d, n) }))
     .filter(x => x.qty > 0)
     .sort((a, b) => String(a.d.delivery_date || '').localeCompare(String(b.d.delivery_date || '')));
@@ -1256,6 +1695,7 @@ function _denyDoLocked() {
 }
 
 function toggleDoWorkerTick(doId, nKey, worker) {
+  if (!wrAllows('loading_seedlings')) return;
   const n = getNursery(), m = getMonth();
   const key = _doPayrollKey(n, m);
   const rows = _doRecordsCache[key] || [];
@@ -1285,6 +1725,7 @@ function persistDoWorkerTick(d) {
 }
 
 function lockDoWorkers(doId) {
+  if (!wrAllows('loading_seedlings')) return;
   const n = getNursery(), m = getMonth();
   const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
   const d = rows.find(x => x.id === doId);
@@ -1773,6 +2214,7 @@ function _tpCheckCell(r, key) {
    refused write puts it back and says so rather than leaving a tick on
    screen that is not in the database. */
 async function toggleTransplantChecked(id) {
+  if (!wrAllows('transplanting')) return;
   const n = getNursery(), m = getMonth(), key = _tpPayrollKey(n, m);
   const r = (_tpRecordsCache[key] || []).find(x => x.id === id);
   if (!r || !_supabase) return;
@@ -2105,6 +2547,7 @@ function renderCullIncentivePayroll() {
    the row read. Optimistic with a rollback, the same shape
    toggleTransplantChecked uses. */
 async function toggleCullChecked(plot) {
+  if (!wrAllows('cull_incentive')) return;
   const n = getNursery(), ym = _cullYm(), st = _cullCache[ym];
   if (!st || !_supabase) return;
   if (!st.checksReady) {
@@ -2143,6 +2586,7 @@ async function toggleCullChecked(plot) {
    It is still a RECORD and never a deletion — one `remove` row per plot per
    month, carrying who and when. That record IS the Put back. */
 async function cullRemovePlot(plot) {
+  if (!wrAllows('cull_incentive')) return;
   if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
   const n = getNursery(), ym = _cullYm(), st = _cullCache[ym], CI = MJMCullIncentive;
   if (!st || !st.overridesReady) {
@@ -2185,6 +2629,7 @@ async function cullRemovePlot(plot) {
    every other plot. */
 let _cullAddEl = null;
 function openCullAdd() {
+  if (!wrAllows('cull_incentive')) return;
   if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
   const ym = _cullYm(), st = _cullCache[ym];
   if (!st || !st.overridesReady) {
@@ -2366,6 +2811,7 @@ async function saveCullAdd() {
 }
 
 async function cullDeleteOverride(id) {
+  if (!wrAllows('cull_incentive')) return;
   if (!_cullMayHand()) return;
   const ym = _cullYm(), st = _cullCache[ym];
   const o = st && st.overrides.find(x => Number(x.id) === Number(id));
@@ -2496,6 +2942,57 @@ function renderLoadingSeedlingsPayroll() {
    NOT ON ANY CLAIM YET. The office asked for the record first -- nothing in
    npayroll reads this table. */
 const SP_NURSERY = 'PN';
+
+/* ── TWO JOBS, ONE SHEET EACH ─────────────────────────────────────────────
+   The Pre Nursery had one job on it, tanam biji benih, and the office added
+   a second: *"这个工作是tanam biji benih 现在我要加多一个工作是Mengisi tanah
+   ke hyplug RM0.027 per biji"* -- filling the hyplug trays with soil, which
+   happens BEFORE the seeds go in and is paid by the same unit, a biji.
+
+   THEY ARE ONE SHEET, ONE JOB UNDER THE OTHER. They were two entries in
+   the side bar for a day and the office asked for them together -- *"不要分
+   开 放一起 分上下两部分就好 flow进去payroll system的时候也是一样"* -- which
+   is how the claim they flow into is laid out, so the screen and the paper
+   read the same way round.
+
+   The worker COLUMNS are asked of both jobs and shared, because stacked
+   sections whose columns do not line up are two tables sharing a scrollbar.
+
+   WHAT THE TWO SHARE IS EVERYTHING EXCEPT THE FIGURES: the same batch rows
+   off the ledger, the same month moves, and the SAME NAME LIST -- the crew
+   that fills the trays is the crew that sows them, and a second list would
+   be the same names keyed twice and drifting. What differs is the figures,
+   the Check and the rate.
+
+   THE JOB IS A COLUMN ON THE RECORD (`job`), not a table of its own. A
+   second table of the same shape is the thinner-copy fault this codebase is
+   full of: one reader, one writer, one trigger, one set of policies. The key
+   is (batch_name, job).
+
+   A row's figures are looked up by `_spKey(batch, job)`, so the two halves
+   cannot see each other's. THE VIEW KEY DID NOT MOVE: `seed_planting` is
+   what the side bar still addresses, so a link carrying it opens this. */
+const SP_VIEWS = { seed_planting: 'seed' };
+/* The JOB names, which are not the side bar's label: that one entry opens
+   a sheet carrying both, so it says so, while each band inside names the
+   one job it heads. */
+const SP_JOBS = [
+  { job: 'seed',   label: 'pay.jobSeed' },
+  { job: 'hyplug', label: 'pay.jobHyplug' },
+];
+function _spKey(batch, job) { return String(batch) + '|' + (job || 'seed'); }
+
+/* THE JOB IS SENT ONLY BY A DATABASE THAT HAS THE COLUMN. Naming a column a
+   table has not got is not an empty cell, it is the whole row refused -- so
+   a database still waiting on the SQL writes exactly the row it always
+   wrote, on the one job it has ever had, and the Hyplug sheet is the one
+   that says to run the file. Same rule, and the same reason, as the
+   not-done flag on the FC Portal's transplanting record. */
+function _spRow(row, job, st) {
+  if (st && st.noJob) return row;
+  return Object.assign({}, row, { job: job || 'seed' });
+}
+function _spConflict(st) { return (st && st.noJob) ? 'batch_name' : 'batch_name,job'; }
 const _spCache = {};      // month -> { rows, saved, names, prevNames, noTable }
 const _spLoading = {};
 const _spErr = {};
@@ -2609,10 +3106,29 @@ async function loadSeedPlantingForPayroll(m) {
       console.warn('[maint] seed planting read:', se.message);
     } else {
       const want = new Set(bs);
+      /* ONE READ SERVES BOTH SHEETS. The rows come back for every job and
+         are filed under (batch, job), so switching between Seed Planting
+         and Mengisi Tanah ke Hyplug asks the database nothing.
+
+         A row written before the `job` column existed has none, and reads
+         as `seed` -- which is what it is, since that was the only job there
+         was. That is why a database still without the column goes on
+         showing the Seed Planting sheet exactly as it did. */
       (sv || []).forEach(r => {
         const k = String(r.batch_name || '').trim();
-        if (want.has(k)) saved[k] = r;
+        if (want.has(k)) saved[_spKey(k, String(r.job || 'seed'))] = r;
       });
+    }
+    /* AND WHETHER THE COLUMN IS THERE AT ALL, asked on its own. A read
+       cannot find out -- `select('*')` is happy on a table without it --
+       but a SAVE carrying `job` is refused by the whole row. So the Hyplug
+       sheet would take figures all morning and store none of them, which is
+       the one shape this must not have. Asked once per month read. */
+    let noJob = false;
+    if (!noTable) {
+      const { error: je } = await _supabase.from('nops_seed_planting_batch_workers')
+        .select('batch_name, job').limit(1);
+      if (je) { noJob = true; console.warn('[maint] seed planting job column:', je.message); }
     }
     /* The month's names, and last month's to offer when this one has none. */
     let names = [], prevNames = [];
@@ -2639,7 +3155,7 @@ async function loadSeedPlantingForPayroll(m) {
       if (b && d && (!home[b] || d < home[b])) home[b] = d;
       if (b && d) homeQty[b] = (homeQty[b] || 0) + (Number(l.quantity_change) || 0);
     });
-    _spCache[m] = { rows, saved, names, prevNames, noTable, moved, noMoveTable, home, homeQty };
+    _spCache[m] = { rows, saved, names, prevNames, noTable, noJob, moved, noMoveTable, home, homeQty };
   } catch (e) {
     _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
   } finally {
@@ -2660,15 +3176,21 @@ function _spPrevMonth(m) {
 /* The month's names as keyed, then any name a row still carries a figure
    for that is no longer on the list -- that figure would otherwise leave
    the sheet with nothing saying so. */
+/* ONE COLUMN SET FOR THE WHOLE SHEET, asked of BOTH jobs. The office wanted
+   the two stacked rather than split (*"不要分开 放一起 分上下两部分就好"*),
+   and stacked sections whose columns do not line up are two tables sharing
+   a scrollbar. The name list is shared anyway, so the only thing that could
+   differ is a name carrying figures while off the list, and that belongs in
+   both halves or neither. */
 function spWorkerColumns(rows, saved, names) {
   const wk = (names || []).slice();
   const extra = [];
-  rows.forEach(r => {
-    const s = saved[r.key];
+  rows.forEach(r => SP_JOBS.forEach(j => {
+    const s = saved[_spKey(r.key, j.job)];
     Object.keys((s && s.workers) || {}).forEach(w => {
       if (!wk.includes(w) && !extra.includes(w)) extra.push(w);
     });
-  });
+  }));
   return { wk: wk.concat(extra), extra };
 }
 
@@ -2683,7 +3205,17 @@ function renderSeedPlantingPayroll() {
   if (!tbl) return;
   const m = getMonth();
   const line = document.getElementById('payroll-form-line');
-  if (line) line.textContent = `${t('tab.seedPlanting')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
+  /* THE LINE NAMES WHAT THE CIRCLES NAME. The sheet's rows are keyed on
+     the batch and the job and on no nursery at all, so it reads the same
+     whichever circle is on — which is honest while the Pre Nursery is the
+     only circle, and a lie the moment somebody drags this job onto a row
+     that offers three more. So where the scope is wider than the pre
+     nursery the line names the nursery that is actually picked. What the
+     nursery will then DECIDE is the name list, which is PART 2. */
+  const spN = getNursery();
+  if (line) line.textContent = (spN === SP_NURSERY
+    ? `${t('tab.preNursery')} (${NURSERY_NAMES[SP_NURSERY]})`
+    : (NURSERY_NAMES[spN] || spN)) + ` — ${t('pay.month')} ${m}`;
   const off = document.getElementById('payroll-offreg');
   if (off) { off.style.display = 'none'; }
 
@@ -2692,8 +3224,13 @@ function renderSeedPlantingPayroll() {
   const hint = document.getElementById('payroll-hint');
   if (hint) {
     const noTable = !!(st && st.noTable);
-    hint.textContent = noTable ? t('pay.spNoTable') : t('pay.spHint');
-    hint.classList.toggle('pay-hint-warn', noTable);
+    /* The job column is missing: the soil filling half cannot be stored, so
+       say so and name the file rather than letting figures be keyed into
+       boxes whose save the database will refuse. Seed Planting is
+       unaffected -- those rows save as they always have. */
+    const noJob = !!(st && !st.noTable && st.noJob);
+    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol') : t('pay.spHint');
+    hint.classList.toggle('pay-hint-warn', noTable || noJob);
   }
   if (_spLoading[m] || !st) {
     tbl.innerHTML = _spErr[m]
@@ -2702,64 +3239,82 @@ function renderSeedPlantingPayroll() {
     return;
   }
 
-  const { rows, saved, noTable } = st;
+  const { rows, saved } = st;
   const { wk, extra } = spWorkerColumns(rows, saved, st.names);
   _spDrawNames(m, st);
   const payTh = (txt, w) =>
     `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
   const span = 3 + wk.length + 2;
-  let h = `<thead>
-    <tr><th class="wk-th" colspan="${span}">${t('tab.seedPlanting')}</th></tr>
-    <tr>
-      ${payTh(t('pay.spPlantedDate'), 100)}
-      ${payTh(t('pay.batch'), 96)}
-      ${payTh(t('pay.qtyPlanted'), 100)}
-      ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
-      ${payTh(t('pay.spKeyed'), 120)}
-      ${payTh(t('pay.checked'), 132)}
-    </tr></thead><tbody>`;
-
-  const totals = {}; wk.forEach(w => totals[w] = 0);
-  let qtyTotal = 0;
-  if (!rows.length) {
-    h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.spNone', { m })}</td></tr>`;
-  } else {
-    rows.forEach((r, ri) => {
-      const s = saved[r.key];
-      const cells = (s && s.workers) || {};
-      const locked = !!(s && s.checked_at);
-      qtyTotal += r.qty;
-      const keyed = _spKeyed(s);
-      wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
-      const diff = keyed - r.qty;
-      const state = !keyed ? '<span style="color:var(--text-faint);">—</span>'
-        : diff === 0 ? `<span style="color:#15803d;font-weight:700;">✓ ${keyed.toLocaleString(USAGE_LOCALE)}</span>`
-        : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
-      h += `<tr>
-        <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
-        <td class="plot-td">${esc(r.batch)}</td>
-        <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
-        ${wk.map((w, wi) => {
-          const v = cells[w];
-          return `<td class="sp-cell"><input type="number" min="0" step="1" inputmode="numeric" class="sp-in"
-            id="sp-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${noTable || locked ? ' disabled' : ''}
-            onchange="setSeedPlantingQty(${ri}, ${wi}, this.value)" aria-label="${esc(w)}"></td>`;
-        }).join('')}
-        <td style="white-space:nowrap;">${state}</td>
-        <td style="white-space:nowrap;">${_spCheckCell(ri, s, keyed, noTable)}</td>
-      </tr>`;
-    });
-  }
-  const grand = wk.reduce((a, w) => a + totals[w], 0);
   const fig = v => v ? v.toLocaleString(USAGE_LOCALE) : '—';
-  h += `</tbody><tfoot>
-    <tr class="jumlah-tr">
-      <td class="th-left" colspan="2">${t('pay.totalCap')}</td>
-      <td>${fig(qtyTotal)}</td>
-      ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
-      <td>${fig(grand)}</td><td></td></tr>
-  </tfoot>`;
-  tbl.innerHTML = h;
+
+  /* ONE SHEET, THE TWO JOBS ONE UNDER THE OTHER. They were two sub-tabs for
+     a day and the office asked for them together -- *"不要分开 放一起 分上
+     下两部分就好"* -- which is also how the claim they flow into is laid
+     out, so the screen and the paper read the same way round. */
+  const section = (j) => {
+    /* The soil filling half cannot be stored without the column; the seed
+       half always can, because that is the row the table has always had. */
+    const shut = st.noTable || (st.noJob && j.job !== 'seed');
+    const totals = {}; wk.forEach(w => totals[w] = 0);
+    let qtyTotal = 0;
+    let body = '';
+    if (!rows.length) {
+      body = `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.spNone', { m })}</td></tr>`;
+    } else {
+      rows.forEach((r, ri) => {
+        const s = saved[_spKey(r.key, j.job)];
+        const cells = (s && s.workers) || {};
+        /* Checked shuts the row; the sheet being VERIFIED shuts every row
+           on it. The paint and the gate have to agree — wrAllows() is
+           what actually refuses, and a box left live over it would be the
+           lock-in-the-stylesheet fault pointing the other way. */
+        const locked = !!(s && s.checked_at) || workRecLocked('seed_planting');
+        qtyTotal += r.qty;
+        const keyed = _spKeyed(s);
+        wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
+        const diff = keyed - r.qty;
+        const state = !keyed ? '<span style="color:var(--text-faint);">—</span>'
+          : diff === 0 ? `<span style="color:#15803d;font-weight:700;">✓ ${keyed.toLocaleString(USAGE_LOCALE)}</span>`
+          : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
+        body += `<tr>
+          <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
+          <td class="plot-td">${esc(r.batch)}</td>
+          <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
+          ${wk.map((w, wi) => {
+            const v = cells[w];
+            return `<td class="sp-cell"><input type="number" min="0" step="1" inputmode="numeric" class="sp-in"
+              id="sp-${j.job}-${ri}-${wi}" value="${v != null && v !== '' ? esc(String(v)) : ''}"${shut || locked ? ' disabled' : ''}
+              onchange="setSeedPlantingQty('${j.job}', ${ri}, ${wi}, this.value)" aria-label="${esc(w)}"></td>`;
+          }).join('')}
+          <td style="white-space:nowrap;">${state}</td>
+          <td style="white-space:nowrap;">${_spCheckCell(j.job, ri, s, keyed, shut)}</td>
+        </tr>`;
+      });
+    }
+    const grand = wk.reduce((a, w) => a + totals[w], 0);
+    /* The band names the job and nothing else. Its own total sits under its
+       own rows: one figure under both would be two jobs added together, and
+       they are not the same thing even where the unit is. */
+    return `<tr class="sp-job-row"><td class="sp-job" colspan="${span}">${esc(t(j.label))}</td></tr>
+      <tr class="sp-head">
+        ${payTh(t('pay.spPlantedDate'), 100)}
+        ${payTh(t('pay.batch'), 96)}
+        ${payTh(t(j.job === 'hyplug' ? 'pay.qtyHoles' : 'pay.qtyPlanted'), 100)}
+        ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 96)).join('')}
+        ${payTh(t('pay.spKeyed'), 120)}
+        ${payTh(t('pay.checked'), 132)}
+      </tr>
+      ${body}
+      <tr class="sp-sub-row">
+        <td class="th-left" colspan="2">${esc(t(j.label))} — ${t('pay.totalCap')}</td>
+        <td>${fig(qtyTotal)}</td>
+        ${wk.map(w => `<td>${fig(totals[w])}</td>`).join('')}
+        <td>${fig(grand)}</td><td></td></tr>`;
+  };
+
+  tbl.innerHTML = `<thead>
+    <tr><th class="wk-th" colspan="${span}">${t('tab.preNursery')}</th></tr>
+  </thead><tbody>${SP_JOBS.map(section).join('')}</tbody>`;
 }
 
 /* CHECKED IS WHAT SENDS A ROW TO THE PAYROLL. The figures here are
@@ -2768,7 +3323,7 @@ function renderSeedPlantingPayroll() {
    A checked row is shut: its boxes are disabled, and the save refuses too,
    because a box drawn before the tick is still on the screen. Uncheck to
    correct it. */
-function _spCheckCell(ri, s, keyed, noTable) {
+function _spCheckCell(job, ri, s, keyed, noTable) {
   if (noTable) return '<span style="color:var(--text-faint);">—</span>';
   if (s && s.checked_at) {
     /* The NAME, not the stored email — this button has shown
@@ -2777,18 +3332,19 @@ function _spCheckCell(ri, s, keyed, noTable) {
        table that cannot be read hands the address back rather than
        leaving the button blank. */
     const when = _maintWhen(s.checked_at);
-    return `<button type="button" class="btn btn-sm sp-checked" onclick="toggleSeedPlantingCheck(${ri})"
+    return `<button type="button" class="btn btn-sm sp-checked" onclick="toggleSeedPlantingCheck('${job}', ${ri})"
       title="${esc(t('pay.spUncheckTip'))}">✓ ${esc(_maintWho(s.checked_by) || 'Checked')} · ${esc(when)}</button>`;
   }
   if (!keyed) return '<span style="color:var(--text-faint);">—</span>';
-  return `<button type="button" class="btn btn-sm btn-primary" onclick="toggleSeedPlantingCheck(${ri})">${esc(t('pay.spCheck'))}</button>`;
+  return `<button type="button" class="btn btn-sm btn-primary" onclick="toggleSeedPlantingCheck('${job}', ${ri})">${esc(t('pay.spCheck'))}</button>`;
 }
 
-async function toggleSeedPlantingCheck(ri) {
+async function toggleSeedPlantingCheck(job, ri) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
-  if (!st || st.noTable || !_supabase) return;
+  if (!st || st.noTable || (st.noJob && job !== 'seed') || !_supabase) return;
   const r = st.rows[ri];
-  const s = r && st.saved[r.key];
+  const s = r && st.saved[_spKey(r.key, job)];
   if (!r || !s) return;
   const keyed = _spKeyed(s);
   if (!s.checked_at) {
@@ -2797,7 +3353,7 @@ async function toggleSeedPlantingCheck(ri) {
   } else if (!confirm(t('pay.spUncheckQ', { b: r.batch }))) return;
   /* Any figure still waiting in the debounce goes with the tick, so the
      record that is agreed is the one on the screen. */
-  const tk = m + '|' + r.key;
+  const tk = m + '|' + _spKey(r.key, job);
   if (_spSaveTimers[tk]) { clearTimeout(_spSaveTimers[tk]); delete _spSaveTimers[tk]; }
   const was = { at: s.checked_at || null, by: s.checked_by || null };
   const at = s.checked_at ? null : new Date().toISOString();
@@ -2805,10 +3361,11 @@ async function toggleSeedPlantingCheck(ri) {
   s.checked_at = at; s.checked_by = by;
   renderPayroll();
   const { error } = await _supabase.from('nops_seed_planting_batch_workers')
-    .upsert({ batch_name: r.batch, month: m, planted_date: r.date, qty_planted: r.qty,
+    .upsert(_spRow({ batch_name: r.batch, month: m, planted_date: r.date, qty_planted: r.qty,
               workers: s.workers || {}, checked_at: at, checked_by: by,
               updated_by: window.currentUserEmail || _signingAs() || 'office',
-              updated_at: new Date().toISOString() }, { onConflict: 'batch_name' });
+              updated_at: new Date().toISOString() }, job, st),
+            { onConflict: _spConflict(st) });
   if (error) {
     s.checked_at = was.at; s.checked_by = was.by;
     renderPayroll();
@@ -2923,6 +3480,7 @@ function _spReloadAll(m) {
 }
 
 async function addSeedPlantingBatch() {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   const el = document.getElementById('sp-new-batch');
   if (!st || st.noMoveTable || !el || !_supabase) return;
@@ -2942,6 +3500,7 @@ async function addSeedPlantingBatch() {
 }
 
 async function removeSeedPlantingBatch(b) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noMoveTable || !_supabase) return;
   const back = _spMonthOfDate(st.home[b]);
@@ -2966,6 +3525,7 @@ function _spSaveNames(m) {
 }
 
 function addSeedPlantingWorker() {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   const el = document.getElementById('sp-new-name');
   if (!st || st.noTable || !el) return;
@@ -2983,16 +3543,22 @@ function addSeedPlantingWorker() {
 
 /* A name with figures against it is not taken off: its column would only
    come back as a name off the list, and the figures with it. Clearing the
-   figures first is the decision, made where it can be seen. */
+   figures first is the decision, made where it can be seen.
+
+   ASKED OF BOTH JOBS, because the list is shared. A name with no seed
+   planting against it and a morning of hyplug filling would otherwise come
+   off this list from the Seed Planting sheet, and its figures would reappear
+   on the other one as a column marked unknown. */
 function removeSeedPlantingWorker(i) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noTable) return;
   const w = st.names[i];
   if (w == null) return;
-  const used = st.rows.filter(r => {
-    const s = st.saved[r.key];
+  const used = st.rows.filter(r => SP_JOBS.some(j => {
+    const s = st.saved[_spKey(r.key, j.job)];
     return s && s.workers && Number(s.workers[w]) > 0;
-  }).length;
+  })).length;
   if (used) { alert(t('pay.spInUse', { w, n: used })); return; }
   if (!confirm(t('pay.spRemoveQ', { w, m }))) return;
   st.names.splice(i, 1);
@@ -3012,26 +3578,28 @@ function useLastMonthSeedPlantingNames() {
    once, written a moment later, and the sheet redrawn with the cursor put
    back where it went -- a redraw inside `change` would otherwise throw away
    the box the Tab key was moving to. */
-function setSeedPlantingQty(ri, wi, raw) {
+function setSeedPlantingQty(job, ri, wi, raw) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth();
   const st = _spCache[m];
-  if (!st || st.noTable) return;
+  if (!st || st.noTable || (st.noJob && job !== 'seed')) return;
   const r = st.rows[ri];
   const { wk } = spWorkerColumns(st.rows, st.saved, st.names);
   const w = wk[wi];
   if (!r || !w) return;
-  if (st.saved[r.key] && st.saved[r.key].checked_at) {
+  const k = _spKey(r.key, job);
+  if (st.saved[k] && st.saved[k].checked_at) {
     alert(t('pay.spLocked', { b: r.batch }));
     renderPayroll();
     return;
   }
-  const s = st.saved[r.key] || (st.saved[r.key] = { batch_name: r.batch, month: m, workers: {} });
+  const s = st.saved[k] || (st.saved[k] = { batch_name: r.batch, month: m, job, workers: {} });
   s.planted_date = r.date;
   const n = String(raw).trim() === '' ? null : Math.max(0, Math.round(Number(raw)));
   s.workers = Object.assign({}, s.workers || {});
   if (n == null || !isFinite(n) || n === 0) delete s.workers[w]; else s.workers[w] = n;
   s.qty_planted = r.qty;
-  persistSeedPlanting(m, r.key);
+  persistSeedPlanting(m, k, job);
   setTimeout(() => {
     const focusId = document.activeElement && document.activeElement.id;
     renderPayroll();
@@ -3040,20 +3608,21 @@ function setSeedPlantingQty(ri, wi, raw) {
   }, 0);
 }
 
-function persistSeedPlanting(m, key) {
+function persistSeedPlanting(m, key, job) {
   if (!_supabase) return;
   const tk = m + '|' + key;
   clearTimeout(_spSaveTimers[tk]);
   _spSaveTimers[tk] = setTimeout(() => {
     delete _spSaveTimers[tk];
-    const s = (_spCache[m] && _spCache[m].saved[key]) || null;
+    const st = _spCache[m];
+    const s = (st && st.saved[key]) || null;
     if (!s) return;
     _supabase.from('nops_seed_planting_batch_workers')
-      .upsert({ batch_name: s.batch_name, month: m, planted_date: s.planted_date,
+      .upsert(_spRow({ batch_name: s.batch_name, month: m, planted_date: s.planted_date,
                 qty_planted: s.qty_planted, workers: s.workers || {},
                 updated_by: window.currentUserEmail || _signingAs() || 'office',
-                updated_at: new Date().toISOString() },
-              { onConflict: 'batch_name' })
+                updated_at: new Date().toISOString() }, job || s.job, st),
+              { onConflict: _spConflict(st) })
       .then(({ error }) => {
         if (!error) { delete _spSaveErr[tk]; return; }
         _spSaveErr[tk] = error.message;
@@ -3101,7 +3670,9 @@ function downloadPayrollPDF() {
   const tpView = _payrollView === 'transplanting';
   /* Seed Planting is the Pre Nursery's own sheet, a figure in every worker
      cell like Transplanting, so it takes the wide page too. */
-  const spView = _payrollView === 'seed_planting';
+  /* Both Pre Nursery sheets take the wide page: they are the same table
+     with the same worker columns, and only the job differs. */
+  const spView = !!SP_VIEWS[_payrollView];
   const wide = tpView || spView;
   const doc = new jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
   const PW = wide ? 297 : 210, PH = wide ? 210 : 297, MARGIN = 25;
@@ -3372,16 +3943,21 @@ function downloadPayrollPDF() {
     doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
-  /* Seed Planting: one row per tray per day off the batch report, and what
-     each Pre Nursery worker keyed against it -- the sheet on screen, on
-     paper. */
+  /* THE PRE NURSERY SHEET: the batch report's rows, and what each worker
+     keyed against each of the TWO jobs -- the sheet on screen, on paper,
+     one job under the other in the same order.
+
+     EACH JOB STARTS ITS OWN PAGE. On screen they are two bands a scroll
+     apart; on paper a job beginning halfway down a sheet, under the other
+     one's total row, is two tables somebody has to tell apart by reading.
+     The workers already split across pages when too many for a line, so
+     this is the rule that was there, asked once more. */
   function drawSeedPlantingSheet() {
     const st = _spCache[m];
     if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
     const rows = st.rows, saved = st.saved;
     const { wk: cols } = spWorkerColumns(rows, saved, st.names);
     if (!cols.length) { alert(t('pay.spNoNames')); return; }
-    const label = t('tab.seedPlanting');
     const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
 
     const W_DATE = 24, W_BATCH = 24, W_QTY = 24, W_SUM = 26;
@@ -3390,64 +3966,74 @@ function downloadPayrollPDF() {
     const chunks = [];
     for (let i = 0; i < cols.length; i += per) chunks.push(cols.slice(i, i + per));
 
-    chunks.forEach((chunk, ci) => {
-      if (ci) doc.addPage();
-      const part = chunks.length > 1
-        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
-        : '';
-      let y = titleBlock(label, part);
-      const wkW = (CONTENT_W - FIX) / chunk.length;
-      const widths = [W_DATE, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
-      const xs = []; let x = MARGIN;
-      widths.forEach(w => { xs.push(x); x += w; });
-      const iSum = widths.length - 1;
-      const HEAD_H = headerHeightFor(chunk);
-      const drawHead = () => {
-        cell(xs[0], y, widths[0], HEAD_H, t('pay.spPlantedDate'), { bold: true, size: 7.5, fill: HEAD_FILL });
-        cell(xs[1], y, widths[1], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
-        cell(xs[2], y, widths[2], HEAD_H, t('pay.qtyPlanted'), { bold: true, size: 7.5, fill: HEAD_FILL });
-        chunk.forEach((w, i) => vHeaderCell(xs[3 + i], y, widths[3 + i], HEAD_H, w));
-        cell(xs[iSum], y, widths[iSum], HEAD_H, t('pay.spKeyed'), { bold: true, size: 7.5, fill: HEAD_FILL });
-        y += HEAD_H;
-      };
-      drawHead();
+    let started = false;
+    SP_JOBS.forEach((j) => {
+      const job = j.job, label = t(j.label);
+      chunks.forEach((chunk, ci) => {
+        if (started) doc.addPage();
+        started = true;
+        const part = chunks.length > 1
+          ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
+          : '';
+        let y = titleBlock(label, part);
+        const wkW = (CONTENT_W - FIX) / chunk.length;
+        const widths = [W_DATE, W_BATCH, W_QTY, ...chunk.map(() => wkW), W_SUM];
+        const xs = []; let x = MARGIN;
+        widths.forEach(w => { xs.push(x); x += w; });
+        const iSum = widths.length - 1;
+        const HEAD_H = headerHeightFor(chunk);
+        const drawHead = () => {
+          cell(xs[0], y, widths[0], HEAD_H, t('pay.spPlantedDate'), { bold: true, size: 7.5, fill: HEAD_FILL });
+          cell(xs[1], y, widths[1], HEAD_H, t('pay.batch'), { bold: true, size: 8.5, fill: HEAD_FILL });
+          cell(xs[2], y, widths[2], HEAD_H, t(job === 'hyplug' ? 'pay.qtyHoles' : 'pay.qtyPlanted'),
+               { bold: true, size: 7.5, fill: HEAD_FILL });
+          chunk.forEach((w, i) => vHeaderCell(xs[3 + i], y, widths[3 + i], HEAD_H, w));
+          cell(xs[iSum], y, widths[iSum], HEAD_H, t('pay.spKeyed'), { bold: true, size: 7.5, fill: HEAD_FILL });
+          y += HEAD_H;
+        };
+        drawHead();
 
-      const totals = {}; chunk.forEach(w => totals[w] = 0);
-      let qtyTotal = 0, keyedTotal = 0;
-      if (!rows.length) {
-        cell(MARGIN, y, CONTENT_W, 14, t('pay.spNone', { m }), { size: 9 });
-        y += 14;
-      } else {
-        const floor = PH - MARGIN - 20;
-        rows.forEach((r, ri) => {
-          if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
-          const cells = (saved[r.key] && saved[r.key].workers) || {};
-          const keyed = _spKeyed(saved[r.key]);
-          qtyTotal += r.qty; keyedTotal += keyed;
-          const z = ri % 2 ? ZEBRA : null;
-          cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
-          cell(xs[1], y, widths[1], ROW_H, r.batch, { size: 8.5, bold: true, nowrap: true, fill: z });
-          cell(xs[2], y, widths[2], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
-          chunk.forEach((w, i) => {
-            const v = Number(cells[w]) || 0;
-            totals[w] += v;
-            cell(xs[3 + i], y, widths[3 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
+        const totals = {}; chunk.forEach(w => totals[w] = 0);
+        let qtyTotal = 0, keyedTotal = 0;
+        if (!rows.length) {
+          cell(MARGIN, y, CONTENT_W, 14, t('pay.spNone', { m }), { size: 9 });
+          y += 14;
+        } else {
+          const floor = PH - MARGIN - 20;
+          rows.forEach((r, ri) => {
+            if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
+            const sv = saved[_spKey(r.key, job)];
+            const cells = (sv && sv.workers) || {};
+            const keyed = _spKeyed(sv);
+            qtyTotal += r.qty; keyedTotal += keyed;
+            const z = ri % 2 ? ZEBRA : null;
+            cell(xs[0], y, widths[0], ROW_H, _spDay(r.date), { size: 8, nowrap: true, fill: z });
+            cell(xs[1], y, widths[1], ROW_H, r.batch, { size: 8.5, bold: true, nowrap: true, fill: z });
+            cell(xs[2], y, widths[2], ROW_H, fig(r.qty) || '—', { size: 8.5, nowrap: true, fill: z });
+            chunk.forEach((w, i) => {
+              const v = Number(cells[w]) || 0;
+              totals[w] += v;
+              cell(xs[3 + i], y, widths[3 + i], ROW_H, fig(v), { size: 7.5, nowrap: true, fill: z });
+            });
+            cell(xs[iSum], y, widths[iSum], ROW_H, fig(keyed) || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
+            y += ROW_H;
           });
-          cell(xs[iSum], y, widths[iSum], ROW_H, fig(keyed) || '—', { size: 8.5, bold: true, nowrap: true, fill: z });
-          y += ROW_H;
-        });
-      }
-      cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
-      cell(xs[2], y, widths[2], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
-      chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1, fig(totals[w]) || '—',
-           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
-      cell(xs[iSum], y, widths[iSum], ROW_H + 1, fig(keyedTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+        }
+        /* The total names its own job. Two total rows a page apart reading
+           the same word is how somebody writes the wrong one down. */
+        cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, label + ' — ' + t('pay.totalCap'),
+             { bold: true, size: 8, fill: TOTAL_FILL });
+        cell(xs[2], y, widths[2], ROW_H + 1, fig(qtyTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
+        chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1, fig(totals[w]) || '—',
+             { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+        cell(xs[iSum], y, widths[iSum], ROW_H + 1, fig(keyedTotal) || '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
 
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
-      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+        doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+      });
     });
-    doc.save(`Worker_Record_Seed_Planting_${m.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`Worker_Record_Pre_Nursery_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
   /* Column widths for one chunk of workers. The three fixed columns and the
@@ -4062,6 +4648,10 @@ function persistState(n, m) {
     weeks:          s.weeks,
     weeksByWork:    s.weeksByWork,
     _savedPd:       s._savedPd,
+    /* Which -R plots have already been given their parent's rounds this
+       month — see seedReplantRounds. Saved so a tick the office takes OFF a
+       -R plot is not put back on the next load. */
+    replantSeeded:  s.replantSeeded,
   };
   dbStateCache[stateKey(n, m)] = JSON.parse(JSON.stringify(_payload));
   delete s._carriedFrom;          // it is this month's own schedule now
@@ -4151,7 +4741,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Monthly Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -4160,8 +4750,11 @@ const I18N = {
     'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
     'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
-    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Seed Planting payroll, where it is priced.',
+    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Pre Nursery payroll, where it is priced. The sheet carries BOTH Pre Nursery jobs, one under the other: sowing the seed on top, and filling the hyplug trays with soil below it, each with its own figures and its own Check.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
+    'pay.spNoJobCol':'Mengisi Tanah ke Hyplug cannot save yet: run shared/RUN_ME_hyplug_soil.sql in Supabase. The rows below are read from the batch report as normal, and Seed Planting is unaffected.',
+    'pay.qtyHoles':'Qty to fill',
+    'pay.jobSeed':'Seed Planting', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
     'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
     'pay.spPickWorker':'Pick a worker…', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
@@ -4225,7 +4818,6 @@ const I18N = {
     'pay.unpaired':'⚠ Verified in the field but matched no row on this month\u2019s schedule, so it was not ticked and is not paid. Add the row to the schedule for this month, then Sync from Schedule:',
     'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
-    'pay.lockedTitle':'Checked — locked',
     'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
     /* Salary claim form (PDF) */
     'pay.no':'No.', 'pay.worker':'Worker Name', 'pay.workersRange':'Workers', 'pay.ofTotal':'of',
@@ -4281,6 +4873,9 @@ const I18N = {
     'rej.approve':'Approve', 'rej.approveTip':'Accept this record — it moves up into the approved list',
     'rej.editTitle':'Edit Sent-Back Record', 'rej.saveOnly':'Save (still sent back)',
     'rej.delTip':'Delete this record from the database, and the scheduled row it is paired to',
+    'rej.pickTip':'Tick this record to delete it with the others',
+    'rej.nSelected':'{n} selected', 'rej.delSelected':'Delete {n} selected',
+    'rej.clearSel':'Clear selection',
     'rej.dateNote':'Changing the date moves which week and month this record is paired against — the schedule row it lands on follows the date.',
     'jenis.pd':'P & D Spraying', 'jenis.interrow':'Interrow Spraying',
     'jenis.weeding':'Weeding', 'jenis.manuring':'Manuring',
@@ -4300,30 +4895,19 @@ const I18N = {
     'link.loading':'Linking to the batch report…',
     'link.unreachable':'Could not reach the batch report — key the quantity manually.',
     'link.none':'No batch movement found for plot {x} — key the quantity manually.',
-    'link.allBatches':'all batches ({x})', 'link.someBatches':'batch {x}',
+    'link.allBatches':'all batches ({x})', 'link.someBatches':'batch {x}', 'link.noBatch':'no batch left on the plot',
     'link.asAt':'as at {x}', 'link.today':'standing today — no date picked yet',
     'link.willUse':'{x} will be used',
     'link.overridden':'Linked value is {x} — your {y} overrides it',
-    /* The same sentence about a figure NOBODY here typed. It was saved on a
-       PHONE -- the FC Portal or the Worker Portal, both of which write
-       nops_maint_field_records -- and a Field Conductor verified it, which
-       is what let applyFieldRecords fill the empty cell with it.
-
-       IT NAMES THE PERSON WHERE IT CAN. The first wording said "the field
-       reported it", and the office asked the only question that leaves:
-       "这是谁 只有我可以填". They are right that nobody else types into that
-       box; the answer is that typing is not the only way a figure gets
-       there. A screen that can name who saved the record and instead says
-       "the field" has made the reader ask.
-
-       The last is for a row saved before either mark existed, where nothing
-       knows who put it there and the sentence says exactly that rather than
-       guessing at a person. */
-    'link.fieldQtyWho':'Linked value is {x} — {y} is from a phone record by {w}, verified',
-    'link.fieldQty':'Linked value is {x} — {y} is from a verified phone record',
+    /* `link.fieldQtyWho` and `link.fieldQty` WERE HERE, and both are gone
+       with the thing they explained. They worded a figure a PHONE had put
+       in the cell -- two turns of wording it, each correct and each one
+       turn further from the answer, which the office gave in one line:
+       *"link的capacity完全不要管手机送进来的"*. No figure arrives that way
+       any more, so there is nothing left to word. */
     'link.savedQty':'Linked value is {x} — the saved {y} is being used',
     'link.useLink':'Use the linked amount',
-    'link.basis':'movement report closing balance',
+    'link.basis':'Summary Report closing balance',
     'link.negative':'Batch report nets to {x} here — check that plot\'s records.',
     'link.interrow':'Interrow keeps the 2nd culling in — {x} culled seedlings counted, because their rows are still sprayed.',
     /* The other half of the sentence above, which was never said. A figure
@@ -4331,6 +4915,18 @@ const I18N = {
        the same on screen, so the office could not tell a working rule from a
        broken one and said so. */
     'link.cull2Off':'2nd culling taken off: {x} seedlings.',
+    /* And the case where it is NOT taken off and the figure is still right:
+       a 3rd culling already contains the 2nd culling that happened on the
+       way to it, which is the Summary Report's own condition. Said because
+       a figure that has had one loss taken off twice looks exactly like one
+       that has not, which is how it went unnoticed. */
+    'link.cull2Inside':'2nd culling of {x} is inside the 3rd culling of {y}, so it is not taken off again — same as the Summary Report.',
+    'bal.q':'Moved out to the -R plot: batch {b}. {x} seedlings are left behind — is that balance capacity for this work?',
+    'bal.include':'Include balance',
+    'bal.exclude':'Exclude balance (culled balance)',
+    'bal.off':'Culled balance left out: {x} seedlings.',
+    'replant.joined':'{r} appeared on day {d} of this month and has been given {p}’s rounds from then on (same work, same chemicals). Untick anything it did not do.',
+    'replant.save':'Press Save Schedule to send it to the phones.',
     'link.cull2Later':'A 2nd culling of {x} is dated {d}, after this work, so it is NOT in the figure above. Check its Cull Date on the batch report if that looks wrong.',
     /* Piece rate save / lock */
     'rate.saveLock':'Save & Lock', 'rate.unlock':'Unlock to edit',
@@ -4345,7 +4941,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Penanaman Benih', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi Bulanan', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -4354,8 +4950,11 @@ const I18N = {
     'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
     'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
     'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
-    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Seed Planting, di mana ia diberi harga.',
+    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Pre Nursery, di mana ia diberi harga. Helaian ini membawa KEDUA-DUA kerja Pre Nursery, satu di bawah satu lagi: menanam benih di atas, mengisi tanah ke hyplug di bawahnya, masing-masing dengan angka dan Check sendiri.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
+    'pay.spNoJobCol':'Mengisi Tanah ke Hyplug belum boleh disimpan: jalankan shared/RUN_ME_hyplug_soil.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa, dan Penanaman Benih tidak terjejas.',
+    'pay.qtyHoles':'Kuantiti diisi',
+    'pay.jobSeed':'Penanaman Benih', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
     'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
     'pay.spPickWorker':'Pilih pekerja…', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
@@ -4415,7 +5014,6 @@ const I18N = {
     'pay.autoNote':'Rekod pekerja ini dijana secara automatik oleh sistem MJM Nursery AI.',
     'btn.claimPdf':'⬇ Rekod Pekerja (PDF)',
     'pay.noRows':'Tiada rekod untuk nurseri dan bulan ini — tandakan jadual, kemudian Sync from Schedule.',
-    'pay.lockedTitle':'Checked — dikunci',
     'pay.tickHint':'Tandakan setiap pekerja yang membuat kerja. Kapasiti setiap pekerja = kapasiti plot ÷ bilangan tanda pada baris itu. Gaji dikira daripada rekod ini di Sistem Penggajian Nurseri.',
     
     'badge.pd':'JADUAL PENYEMBURAN RACUN KULAT DAN SERANGGA', 'badge.manuring':'JADUAL MEMBAJA',
@@ -4464,6 +5062,9 @@ const I18N = {
     'rej.approve':'Luluskan', 'rej.approveTip':'Terima rekod ini — ia naik ke senarai yang diluluskan',
     'rej.editTitle':'Sunting Rekod Dihantar Balik', 'rej.saveOnly':'Simpan (masih dihantar balik)',
     'rej.delTip':'Hapus rekod ini dari pangkalan data, berserta baris jadual yang dipadankan dengannya',
+    'rej.pickTip':'Tandakan rekod ini untuk dihapus bersama yang lain',
+    'rej.nSelected':'{n} dipilih', 'rej.delSelected':'Hapus {n} yang dipilih',
+    'rej.clearSel':'Kosongkan pilihan',
     'rej.dateNote':'Menukar tarikh menukar minggu dan bulan rekod ini dipadankan — baris jadual yang dipadankan mengikut tarikh.',
     'jenis.pd':'Penyemburan racun kulat dan serangga', 'jenis.interrow':'Meracun rumput secara selingan',
     'jenis.weeding':'Merumput', 'jenis.manuring':'Membaja',
@@ -4483,18 +5084,23 @@ const I18N = {
     'link.loading':'Menyambung ke laporan batch…',
     'link.unreachable':'Laporan batch tidak dapat dicapai — sila isi kuantiti sendiri.',
     'link.none':'Tiada pergerakan batch dijumpai untuk plot {x} — sila isi kuantiti sendiri.',
-    'link.allBatches':'semua batch ({x})', 'link.someBatches':'batch {x}',
+    'link.allBatches':'semua batch ({x})', 'link.someBatches':'batch {x}', 'link.noBatch':'tiada batch tinggal di plot',
     'link.asAt':'pada {x}', 'link.today':'baki semasa — tarikh belum dipilih',
     'link.willUse':'{x} akan digunakan',
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
-    'link.fieldQtyWho':'Nilai dari laporan ialah {x} — {y} dari rekod telefon oleh {w}, disahkan',
-    'link.fieldQty':'Nilai dari laporan ialah {x} — {y} dari rekod telefon yang disahkan',
     'link.savedQty':'Nilai dari laporan ialah {x} — {y} yang tersimpan digunakan',
     'link.useLink':'Guna nilai pautan',
-    'link.basis':'baki akhir laporan pergerakan',
+    'link.basis':'baki akhir Summary Report',
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
     'link.cull2Off':'Pembuangan ke-2 ditolak: {x} anak benih.',
+    'link.cull2Inside':'Pembuangan ke-2 sebanyak {x} sudah termasuk dalam pembuangan ke-3 sebanyak {y}, jadi ia tidak ditolak dua kali — sama seperti Summary Report.',
+    'bal.q':'Dipindah ke plot -R: batch {b}. Baki {x} anak benih tertinggal — adakah baki itu kapasiti untuk kerja ini?',
+    'bal.include':'Masukkan baki',
+    'bal.exclude':'Kecualikan baki (baki culling)',
+    'bal.off':'Baki culling dikecualikan: {x} anak benih.',
+    'replant.joined':'{r} muncul pada hari {d} bulan ini dan diberi pusingan {p} mulai hari itu (kerja dan racun yang sama). Buang tanda pada kerja yang tidak dibuat.',
+    'replant.save':'Tekan Save Schedule untuk menghantarnya ke telefon.',
     'link.cull2Later':'Pembuangan ke-2 sebanyak {x} bertarikh {d}, selepas kerja ini, jadi ia TIDAK termasuk dalam angka di atas. Semak Cull Date pada laporan batch jika itu nampak salah.',
     /* Simpan / kunci kadar upah */
     'rate.saveLock':'Simpan & Kunci', 'rate.unlock':'Buka untuk sunting',
@@ -4546,6 +5152,10 @@ function applyLang(){
   // the language changes while it is open.
   const recTitle = document.getElementById('rec-modal-title');
   if (recTitle) recTitle.textContent = t(editRecId ? 'mod.editRec' : 'mod.addRec');
+  /* The side bar's job list is alphabetical by LABEL, so the language
+     toggle changes the order: P & D sorts before Transplanting in English
+     and Pemindahan before Racun in Malay. */
+  try { orderJobSubnav(); } catch (_) {}
   // Dynamic tables/records carry their own strings through t()
   if (typeof renderAll === 'function') renderAll();
 }
@@ -5136,9 +5746,10 @@ function renderAll() {
   renderSchedCounts();
   renderSchedSummary();
   updateCarryNotice();
+  try { updateReplantNotice(); } catch (_) {}
   // Re-render analytics when its sub-view inside Work Record is showing
   const chartView = document.getElementById('recview-chart');
-  if (chartView && chartView.classList.contains('active')) renderCharts();
+  if (chartView && chartView.classList.contains('active')) renderPerformance();
   const payTab = document.getElementById('tab-payroll');
   if (payTab && payTab.classList.contains('active')) renderPayroll();
 }
@@ -5844,10 +6455,14 @@ function applyFieldRecords(nursery, monthLbl) {
   const syncTicks = (rec, group) => {
     const type = _PAYROLL_TYPE_BY_JENIS[rec.jenis];
     if (!type) return;
-    /* A Checked row is settled, and the field does not reopen it. Without
-       this the lock would be only on the screen: the next page load would
-       re-sync and move the ticks under a row the office has agreed, which is
-       the piece-rate money moving after the fact. */
+    /* A Checked row is settled, and THE FIELD does not reopen it -- which is
+       not the same rule as the screen's, and the two deliberately parted
+       company the day the office asked for the ticks back (see
+       togglePayrollTick). A PERSON may now correct a name on a checked row;
+       a PAGE LOAD may not, because that moves the piece-rate split under a
+       row the office has agreed with nobody acting and nothing saying so.
+       Same shape as "the field fills an empty cell, it never writes over a
+       full one", one row along. */
     if (_recLocked(rec)) return;
     const k = payrollKey(nursery, monthLbl, type);
     const store = payrollData[k] || (payrollData[k] = {});
@@ -5970,13 +6585,33 @@ function applyFieldRecords(nursery, monthLbl) {
       r.batch = g.batches.join(', ');
       r._fromFieldBatch = 1;
     }
-    // The field counted the batches it ticked, so the quantity is already
-    // answered — leaving the cell to fall back to the linked figure asked the
-    // batch report a question the record had already settled.
-    if (g.qty != null && g.qty !== '' && !r._qtyByHand && r.qty == null) {
-      r.qty = Number(g.qty);
-      r._fromFieldQty = 1;
-    }
+    /* THE QUANTITY IS NOT TAKEN FROM THE PHONE, and it used to be.
+
+       The field record carries one — the phone has no quantity box, and it
+       sends a figure all the same: what the conductor ticks is WHICH
+       BATCHES are standing, and the read-only number beside them is
+       `shared_plot_batch_balance`, the Movement Report balance of exactly
+       those batches as at the day the record was SAVED. That filled an
+       empty cell here, and the office asked for it out in one line:
+       *"link的capacity完全不要管手机送进来的，我要link这个summary report"*.
+
+       THREE REASONS IT WAS THE WRONG FIGURE, and the first is the one that
+       cost money:
+
+         · the phone's view counts NEITHER CULLING — `plotBatches.js` says
+           so in its own words — so a plot 2nd culled read high by exactly
+           the culling, against the report the office reconciles with;
+         · it is as at the day the record was SAVED, not as at the WORK
+           DATE, so a sale or a 3rd culling in between left the cell
+           holding a figure no report on any screen agrees with;
+         · nobody keyed it, and for a month this page called it the
+           office's own answer.
+
+       The DATE and the BATCHES above are still taken, because those are
+       what a conductor standing in the plot actually observed, and the
+       batch cell is what this page then asks the report about. The figure
+       is the report's answer and nothing else's. `dropPhoneQty()` takes
+       the ones already written back off. */
     syncTicks(r, g);
   });
 
@@ -6093,6 +6728,17 @@ function roundMaps(n, m, s) {
       else [1, 2, 3, 4].forEach(w => { map[w] = w; });
       out[p] = map;
     });
+    /* A -R plot given its parent's rounds (seedReplantRounds) is doing the
+       PARENT's round, so it carries the parent's number: U6-R joining in
+       week 4 is doing U6's Round 4, not its own Round 1. Only for a week the
+       parent has; a round ticked on the -R plot alone keeps its own count. */
+    plots.forEach(p => {
+      if (!(s.replantSeeded || {})[p]) return;
+      const parent = String(p).replace(/-R\d*$/i, '');
+      const pm = out[parent];
+      if (!pm || parent === p) return;
+      [...new Set(byPlot[p])].forEach(w => { if (pm[w]) out[p][w] = pm[w]; });
+    });
     return { get: (plot, week) => ((out[plot] || {})[week]) || week };
   };
   return { pd: rank(pd), mn: rank(mn), wd: rank(wd), ir: rank(ir), num };
@@ -6119,8 +6765,157 @@ function nextRoundFor(jenis, plot) {
   return top + 1;
 }
 
+/* ── A -R PLOT THAT APPEARS MID-MONTH TAKES ITS PARENT'S ROUNDS FROM THAT DAY ──
+   A 3rd-culling transfer makes a -R plot halfway through a month, and the
+   month's schedule was drawn before it existed — so the workers who sprayed
+   it had no row to be recorded against. The office set the rule in one
+   example: *"plot U6 要用antracol做round 4 的pnd，u6-R在round 4 和round 3
+   之间出现，那u6-R就默认要做round 4 pnd using antracol，其他工作也一样"*.
+
+   So for every -R plot standing in this nursery this month, every round of
+   every job whose week STARTS on or after the day the plot appeared (its
+   first Cull3_Transfer in) is ticked exactly as its parent plot is ticked —
+   same chemical, because the chemical belongs to the round. A -R plot that
+   was already there when the month began takes the whole month.
+
+   THE DEFAULT, NEVER A RULE OVER SOMEBODY. It runs once per -R plot per
+   month (`replantSeeded`, saved with the schedule), so a tick the office
+   takes off stays off. A -R plot somebody has already ticked by hand is left
+   alone and marked. A parent with nothing ticked yet seeds nothing and is
+   asked again next time, rather than marking the plot done over an empty
+   schedule.
+
+   It writes the SCHEDULE DRAFT, the same as ticking a box does, and does NOT
+   publish: what the phones see changes when somebody presses Save Schedule,
+   and the notice above the schedule says which plots are waiting for it. */
+let _replantJoined = {};   // 'n|m' -> [{ plot, parent, day }]
+/* Seeded in THIS page load and not yet published. The page syncs more than
+   once per load, and the second run finds the plot already seeded (done) -
+   which hid the notice before anybody had pressed Save Schedule. */
+let _replantUnsent = new Set();   // 'n|m|plot'
+/* NOVEMBER 2026 ON, AND NOT A MONTH BEFORE. October was Checked row by row
+   before either rule existed, and the office asked for it to stay exactly as
+   it was signed - so neither the -R seeding nor the Include / Exclude balance
+   choice reaches a month before this one. */
+const REPLANT_RULE_FROM = 2026 * 12 + 10;   // Nov 2026
+function _replantRuleOn(m) {
+  const mm = /^([A-Za-z]{3})\s+(\d{4})$/.exec(String(m || '').trim());
+  if (!mm) return false;
+  const mi = MONTH_ABBR.findIndex(x => x.toLowerCase() === mm[1].toLowerCase());
+  return mi >= 0 && (+mm[2]) * 12 + mi >= REPLANT_RULE_FROM;
+}
+function _replantParent(plot) {
+  return String(plot || '').split('#')[0].trim().replace(/-R\d*$/i, '');
+}
+function seedReplantRounds(n, m) {
+  if (!window.PlotMovement || !PlotMovement.ready() || !NURSERY_PLOTS[n]) return false;
+  if (!_replantRuleOn(m)) return false;
+  const isR = (p) => /-R\d*$/i.test(String(p || '').split('#')[0].trim());
+  const mm = /^([A-Za-z]{3})\s+(\d{4})$/.exec(String(m || '').trim());
+  if (!mm) return false;
+  const mi = MONTH_ABBR.findIndex(x => x.toLowerCase() === mm[1].toLowerCase());
+  if (mi < 0) return false;
+  const y = +mm[2];
+  const monthStart = Date.UTC(y, mi, 1), monthEnd = Date.UTC(y, mi + 1, 0);
+
+  // When each -R plot first received seedlings.
+  const firstIn = {};
+  (PlotMovement.events() || []).forEach(ev => {
+    if (ev.type !== 'Cull3_Transfer_In') return;
+    if (firstIn[ev.plotKey] == null || ev.ms < firstIn[ev.plotKey]) firstIn[ev.plotKey] = ev.ms;
+  });
+  const pk = PlotMovement.plotKey;
+
+  /* A -R plot Seedling Stock files under this nursery, and that has had a
+     transfer in by the end of the month, belongs on the schedule even before
+     anybody has keyed its capacity — otherwise there is nowhere to seed. */
+  const have = new Set(NURSERY_PLOTS[n].map(pk));
+  Object.keys(stockPlots || {}).forEach(stockName => {
+    if (schedKey(stockName) !== n) return;
+    (stockPlots[stockName] || []).forEach(p => {
+      const k = pk(p);
+      if (!isR(p) || have.has(k) || firstIn[k] == null || firstIn[k] > monthEnd) return;
+      NURSERY_PLOTS[n].push(p); have.add(k);
+    });
+  });
+  try { _sortNurseryPlots(); } catch (_) {}
+
+  const s = getState(n, m);
+  if (!s) return false;
+  s.replantSeeded = s.replantSeeded || {};
+  const joined = [];
+  let changed = false;
+  const anyTick = (plot) =>
+    Object.values(s.pd || {}).some(w => w && w[plot] && (w[plot].P || w[plot].D))
+    || ((s.manuring || {})[plot] || []).some(r => (r || []).some(Boolean))
+    || Object.values((s.weeding || {})[plot] || {}).some(Boolean)
+    || ((s.interrow || {})[plot] || []).some(r => (r || []).some(Boolean));
+
+  NURSERY_PLOTS[n].forEach(rp => {
+    if (!isR(rp)) return;
+    const at = firstIn[pk(rp)];
+    if (at == null || at > monthEnd) return;
+    const parent = NURSERY_PLOTS[n].find(p => pk(p) === pk(_replantParent(rp)));
+    if (!parent) return;
+    const day = at < monthStart ? 1 : new Date(at).getUTCDate();
+    if (s.replantSeeded[rp]) { joined.push({ plot: rp, parent, day, done: true }); return; }
+    if (anyTick(rp)) { s.replantSeeded[rp] = 1; changed = true; return; }   // ticked by hand
+    if (!anyTick(parent)) return;                                         // nothing to copy yet
+    const from = (kind) => weeksOf(n, m, kind).filter(w => w.from >= day).map(w => w.slot);
+    from('pd').forEach(slot => {
+      const w = 'W' + (slot + 1);
+      const src = s.pd && s.pd[w] && s.pd[w][parent];
+      if (src && (src.P || src.D)) { s.pd[w][rp] = { P: !!src.P, D: !!src.D }; }
+    });
+    ['manuring', 'interrow'].forEach(kind => {
+      const rows = (s[kind] || {})[parent];
+      if (!Array.isArray(rows)) return;
+      const mine = Array.isArray(s[kind][rp]) ? s[kind][rp] : rows.map(r => (r || []).map(() => false));
+      from(kind).forEach(slot => { if (Array.isArray(rows[slot])) mine[slot] = rows[slot].slice(); });
+      s[kind][rp] = mine;
+    });
+    from('weeding').forEach(slot => {
+      const r = 'R' + (slot + 1);
+      if (s.weeding && s.weeding[parent] && s.weeding[parent][r]) {
+        (s.weeding[rp] = s.weeding[rp] || {})[r] = true;
+      }
+    });
+    s.replantSeeded[rp] = 1;
+    changed = true;
+    _replantUnsent.add(`${n}|${m}|${rp}`);
+    joined.push({ plot: rp, parent, day, done: false });
+  });
+  _replantJoined[`${n}|${m}`] = joined;
+  if (changed) persistState(n, m);
+  return changed;
+}
+
+/* Says which -R plots took their parent's rounds this month, and that the
+   phones see them once the schedule is saved. Drawn beside the carry
+   notice, for the nursery and month on screen. */
+function updateReplantNotice() {
+  const box = document.getElementById('replant-notice');
+  if (!box) return;
+  const nm = `${getNursery()}|${getMonth()}`;
+  const list = (_replantJoined[nm] || []).filter(j => !j.done || _replantUnsent.has(`${nm}|${j.plot}`));
+  if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '➕ ' + list.map(j => t('replant.joined')
+      .replace('{r}', `<b>${esc(j.plot)}</b>`).replace('{p}', `<b>${esc(j.parent)}</b>`)
+      .replace('{d}', j.day)).join('<br>➕ ')
+    + `<br><span style="font-weight:600;">${t('replant.save')}</span>`;
+}
+
 /* Auto-sync: silently regenerate records from current schedule (no confirm, no alert) */
 function autoSyncRecords() {
+  /* A -R plot that appeared this month is given its parent's remaining rounds
+     first, so the rows built below include it — see seedReplantRounds. */
+  let seeded = false;
+  try {
+    Object.keys(NURSERY_PLOTS).forEach(k => { if (seedReplantRounds(k, getMonth())) seeded = true; });
+  } catch (e) { console.warn('[maint] -R plots were not given their rounds:', e); }
+  if (seeded) { try { renderAll(); } catch (_) {} }
+  try { updateReplantNotice(); } catch (_) {}
   const n=getNursery(), m=getMonth(), s=getState(n,m), cfg=s.pdConfig;
   const plots=NURSERY_PLOTS[n];
   const R=roundMaps(n,m,s);
@@ -6418,7 +7213,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   const panel = document.getElementById('tab-'+name);
   if (panel) panel.classList.add('active');
-  if (name==='record') { renderRecords(); if (_recordView==='chart') renderCharts(); }
+  if (name==='record') { renderRecords(); if (_recordView==='chart') renderPerformance(); }
   // Re-read the register on the way in, so an amendment made in the payroll
   // module a moment ago is already reflected without reloading the page.
   /* Setting has its own nursery tabs and no month, so the two pickers in the
@@ -6426,6 +7221,9 @@ function switchTab(name, btn) {
   const topCtrl = document.getElementById('top-nursery-ctrl');
   const noNursery = (name === 'setting' || name === 'schedule');
   if (topCtrl) topCtrl.style.display = noNursery ? 'none' : '';
+  /* Asked on the way OUT as well as in: the scope hides circles on Worker
+     Activity, and a panel that shows every nursery has to get them back. */
+  try { syncJobNurseries(); } catch (_) {}
   // Setting is the one panel that is not about a month.
   const monthCtrl = document.getElementById('sm-month-ctrl');
   if (monthCtrl) monthCtrl.style.display = name === 'setting' ? 'none' : '';
@@ -6496,7 +7294,7 @@ function switchRecordView(view) {
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
-  if (view === 'chart') renderCharts(); else renderRecords();
+  if (view === 'chart') renderPerformance(); else renderRecords();
 }
 
 /* Inside the maintenance list: approved work, or what was sent back.
@@ -6506,6 +7304,12 @@ function switchRecordView(view) {
    count on the tab is right without the section having been visited. */
 let _recSection = 'approved';
 function switchRecSection(section, btn) {
+  /* LEAVING THE TAB DROPS THE SELECTION. Coming back to a list carrying
+     ticks somebody made before they went somewhere else is a delete made
+     against a screen nobody has read — the same reason the ticks are pruned
+     to what is shown. Cleared whichever way the tab is left, including back
+     onto itself. */
+  if (typeof _rejPickedIds !== 'undefined' && _rejPickedIds.size) _rejPickedIds.clear();
   _recSection = section;
   const bar = btn ? btn.closest('.subtabs-bar') : null;
   if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
@@ -6623,6 +7427,10 @@ function switchSchedView(name) { jumpToSched(name); }
 function pickNursery(n) {
   const sel = document.getElementById('global-nursery');
   if (sel) sel.value = n;
+  /* A press is a CHOICE, which is what syncJobNurseries goes back to when a
+     job that does not have it has moved the nursery on in between. A nursery
+     the scope forced is not a choice and is deliberately not recorded. */
+  _nurseryChosen = n;
   syncNurseryCircles();
   onNurseryChange();
 }
@@ -7351,6 +8159,8 @@ function toggleAllInterrow(ri, ci){
    nops_maint_published.payload — see RUN_ME_maint_published_payload.sql. */
 function publishSchedule(n, m, tasks, payload) {
   if (!_supabase) return;
+  [..._replantUnsent].forEach(k => { if (k.startsWith(`${n}|${m}|`)) _replantUnsent.delete(k); });
+  try { updateReplantNotice(); } catch (_) {}
   _supabase.from('nops_maint_published')
     .upsert({ nursery: n, month: m, tasks: tasks, payload: payload, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
     .then(({ error }) => { if (error) console.warn('[maint] publish failed:', error.message); });
@@ -7635,9 +8445,14 @@ function _qtyCell(r) {
      the P & D row beside it on the same plot. Said here, because a number
      that differs from the one above it with no explanation reads as a fault. */
   const plus = i.keptCull2
-    ? ` Interrow spraying keeps the 2nd culling in — ${i.cull2.toLocaleString()} culled seedlings are counted, because the rows they stood in are still sprayed.`
+    ? ` Interrow spraying keeps the 2nd culling in — ${numMY(i.cull2)} culled seedlings are counted, because the rows they stood in are still sprayed.`
+    : (i.cull2Inside
+        ? ` A 2nd culling of ${numMY(i.cull2Inside)} is inside the 3rd culling of ${numMY(i.cull3)} and is not taken off again, same as the Summary Report.`
+        : '');
+  const off = i.exclBal
+    ? ` The ${numMY(i.culledBal)} left behind a transfer to the -R plot is the culled balance and is NOT counted.`
     : '';
-  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${plus} Key a number here to override.`;
+  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Summary Report's closing balance for the same plot, batch and date.${plus}${off} Key a number here to override.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
@@ -8022,6 +8837,70 @@ function _rejSentBackCell(f) {
   return `${esc(who || '—')}${when ? `<br><span style="color:var(--text-faint);font-size:10.5px;">${esc(_tarikhDisplay(when))}</span>` : ''}`;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   MANY AT ONCE — *"加一个select all button，可以一次过删掉"*
+
+   Twelve records sent back for one reason ("pekerja salah tekan") are twelve
+   confirms for one decision, and the decision was never per-record. So the
+   list carries a tick per row and one Delete for all of them.
+
+   WHAT IS TICKED IS WHAT IS ON SCREEN. The ids live in a Set and
+   `renderRejectedSubmissions` PRUNES it to the rows it actually drew, so a
+   filter narrowed, a nursery changed or a record approved underneath takes
+   its tick with it. A tick standing for a row nobody can see is a row that
+   goes in a delete nobody looked at.
+
+   Leaving the tab clears it outright — coming back to a list carrying a
+   selection somebody made before lunch is the same fault, one step further
+   on.
+   ══════════════════════════════════════════════════════════════ */
+const _rejPickedIds = new Set();
+
+function _rejSelCount() { return _rejPickedIds.size; }
+
+/* Draw the bar, the count and the header box off the rows ON SCREEN. The
+   header box is INDETERMINATE on a part selection rather than ticked or
+   clear, because either of those is a claim about rows it is not making. */
+function _rejPaintSelection(shownIds) {
+  const n = _rejPickedIds.size;
+  const bar = document.getElementById('rej-bulk');
+  if (bar) bar.style.display = n ? '' : 'none';
+  const lbl = document.getElementById('rej-bulk-n');
+  if (lbl) lbl.textContent = t('rej.nSelected', { n });
+  const del = document.getElementById('rej-bulk-del');
+  if (del) del.textContent = t('rej.delSelected', { n });
+  const clr = document.getElementById('rej-bulk-clear');
+  if (clr) clr.textContent = t('rej.clearSel');
+  const all = document.getElementById('rej-all');
+  if (all) {
+    const total = (shownIds || []).length;
+    all.checked = total > 0 && n >= total;
+    all.indeterminate = n > 0 && n < total;
+    all.disabled = total === 0;
+  }
+}
+
+/* One row's box. Gated on what is SHOWN, so a handler left on a cell drawn
+   before the list moved cannot tick a row that is no longer in it. */
+function toggleRejPick(id, on) {
+  const key = String(id);
+  if (on) _rejPickedIds.add(key); else _rejPickedIds.delete(key);
+  renderRecords();
+}
+
+function toggleRejAll(on) {
+  _rejPickedIds.clear();
+  if (on) (_rejShownIds || []).forEach((x) => _rejPickedIds.add(String(x)));
+  renderRecords();
+}
+
+function clearRejSelection() { _rejPickedIds.clear(); renderRecords(); }
+
+/* The ids the last draw actually put on screen. Select all reads this and
+   never `mine`, or a nursery's whole backlog would be ticked by a press made
+   over a list of three. */
+let _rejShownIds = [];
+
 function renderRejectedSubmissions(f) {
   const body = document.getElementById('rej-body');
   if (!body) return;
@@ -8054,17 +8933,31 @@ function renderRejectedSubmissions(f) {
   }).sort((a, b) => String(b.work_date || '').localeCompare(String(a.work_date || ''))
                  || (b.id || 0) - (a.id || 0));
 
+  /* PRUNE FIRST, DRAW SECOND. Everything about the selection is read off
+     this list, so it has to be settled before the bar or the header box is
+     painted — otherwise a count drawn from the Set disagrees with the ticks
+     drawn from the rows, over a delete. */
+  _rejShownIds = shown.map((r) => String(r.id));
+  const onScreen = new Set(_rejShownIds);
+  [..._rejPickedIds].forEach((id) => { if (!onScreen.has(id)) _rejPickedIds.delete(id); });
+
   if (!shown.length) {
+    _rejPaintSelection(_rejShownIds);
     body.innerHTML = `<tr><td colspan="10" class="rej-none">${
       mine.length ? t('rec.none') : t('rej.none')}</td></tr>`;
     return;
   }
+  _rejPaintSelection(_rejShownIds);
 
   body.innerHTML = shown.map((r) => {
     const jenis = _rejJenis(r);
     const worked = _rejWorkedBy(r);
-    return `<tr>
-      <td style="font-weight:600;color:var(--green-text);">${esc(_tarikhDisplay(r.work_date))}</td>
+    const on = _rejPickedIds.has(String(r.id));
+    return `<tr${on ? ' class="rej-row-picked"' : ''}>
+      <td style="font-weight:600;color:var(--green-text);"><input type="checkbox"
+            class="rej-pick" ${on ? 'checked' : ''}
+            onclick="toggleRejPick(${r.id}, this.checked)"
+            title="${esc(t('rej.pickTip'))}">${esc(_tarikhDisplay(r.work_date))}</td>
       <td>${esc(jenisLabel(jenis) || '—')}</td>
       <td><span class="pill ${pillCls(jenis)}">${esc(r.chemical || '—')}</span></td>
       <td style="text-align:center;font-weight:700;color:var(--green-text);">${esc(r.plot_name || '—')}</td>
@@ -8195,6 +9088,86 @@ async function deleteSubmission(id) {
   // persistRecords writes back — done only after the record itself is gone,
   // so a failed delete does not take a scheduled row with it.
   if (row) records = records.filter((r) => r.id !== row.id);
+  await _reloadSubmissions();
+}
+
+/* DELETE EVERY TICKED ROW, IN ONE WRITE.
+
+   `.in('id', …)` and nothing else would be wrong in a way nobody would see:
+   between the draw and the press somebody can APPROVE one of these, and an
+   approved record is not a rejected one — deleting it would throw away a
+   decision this screen never asked about. So the write carries
+   `.not('rejected_at','is',null)`, the same shape as closing many Nelos
+   cases on `.eq('status','resolved')`, and **the count is what came BACK**
+   rather than what was sent. A row somebody else has moved is theirs.
+
+   THE SCHEDULED ROWS GO TOO, exactly as a single Del takes one: a record
+   deleted is a job that is not happening, and the paired office row left
+   behind puts it on next month's list as outstanding work. The pairing is a
+   RULE and not a key, so `_submissionScheduleRow` is asked per record and
+   says nothing where it cannot pick out exactly one — the confirm counts
+   those separately rather than guessing, because deleting the wrong round's
+   row is not something a confirm box can take back.
+
+   The pairs are worked out BEFORE the delete, off `records` as it stands.
+   Afterwards the field record is gone and the rule has nothing left to pair
+   against, so the schedule would survive every time. */
+async function deleteSelectedSubmissions() {
+  const ids = [..._rejPickedIds];
+  if (!ids.length) return;
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+
+  const picked = ids.map(_submissionById).filter(Boolean);
+  if (!picked.length) { clearRejSelection(); return; }
+
+  /* ASKED ONCE, per record, and kept. A second walk of the pairing rule
+     after the delete would be a second answer to one question — and it
+     would be asked of a `records` list this function is about to edit. */
+  const pairOf = new Map();
+  let unpaired = 0;
+  picked.forEach((f) => {
+    const row = _submissionScheduleRow(f);
+    if (row) pairOf.set(String(f.id), row); else unpaired++;
+  });
+  const rows = [...new Set([...pairOf.values()].map((r) => r.id))];
+
+  /* The confirm NAMES them rather than counting them, up to a point: a list
+     somebody can read is what makes this a decision instead of a leap. Past
+     ten it is a wall, and the count is the honest summary. */
+  const names = picked.slice(0, 10).map((f) =>
+    `    ${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · ${_tarikhDisplay(f.work_date)}`);
+  if (picked.length > 10) names.push(`    …and ${picked.length - 10} more`);
+
+  const tail = rows.length
+    ? `\n${rows.length} scheduled row${rows.length === 1 ? '' : 's'} paired to them will go as well.`
+    : '';
+  const warn = unpaired
+    ? `\n${unpaired} of them could not be paired to a scheduled row — guessing `
+      + `would delete the wrong round, so only the worker's record goes for `
+      + `those and the schedule is left alone.`
+    : '';
+  if (!confirm(`Delete ${picked.length} record${picked.length === 1 ? '' : 's'} `
+    + `from the database?\n\n${names.join('\n')}\n${tail}${warn}\n\nThis cannot be undone.`)) return;
+
+  const { data, error } = await _supabase.from('nops_maint_field_records')
+    .delete().in('id', picked.map((f) => f.id))
+    .not('rejected_at', 'is', null)
+    .select('id');
+  if (error) { alert('Could not delete them: ' + (error.message || error)); return; }
+
+  /* ONLY THE SCHEDULE OF WHAT ACTUALLY WENT. A row whose record the database
+     refused to delete still has its work outstanding. */
+  const gone = new Set((data || []).map((d) => String(d.id)));
+  const kill = new Set();
+  gone.forEach((id) => { const row = pairOf.get(id); if (row) kill.add(row.id); });
+  if (kill.size) records = records.filter((r) => !kill.has(r.id));
+
+  _rejPickedIds.clear();
+  if (gone.size < picked.length) {
+    alert(`${gone.size} of ${picked.length} were deleted. The rest are no `
+      + `longer sent back — somebody has approved or removed them since this `
+      + `list was drawn, so they were left alone.`);
+  }
   await _reloadSubmissions();
 }
 
@@ -8449,13 +9422,67 @@ function freezeCheckedRows() {
   let n = 0;
   records.forEach(r => {
     if (!r || !r.checked) return;
-    if (r.qtyFrozen != null || r.batchFrozen != null) return;
     const f = MJMMovementFreeze(r);
+    /* NEVER OVER A FIGURE ALREADY WRITTEN DOWN. The outer test used to be
+       "either mark is set, leave the row alone", which is wrong in one case
+       and it is the case dropPhoneQty creates: a checked row carrying a
+       batchFrozen and no qtyFrozen was skipped, so after the phone figure
+       came off it had neither a keyed figure nor a frozen one and a settled
+       row went back to being a live formula. Asked per field it is right
+       either way, and it is idempotent. */
+    if (r.qtyFrozen   != null) delete f.qtyFrozen;
+    if (r.batchFrozen != null) delete f.batchFrozen;
     if (!Object.keys(f).length) return;
     Object.assign(r, f);
     n++;
   });
   if (n) persistRecords();
+  return n;
+}
+
+/* ── THE PHONE'S QUANTITY COMES BACK OFF THE ROWS IT ALREADY FILLED ──────
+
+   applyFieldRecords no longer writes one (the comment there is the whole of
+   why). This is the other half: every row it already wrote one into is
+   still carrying it, and those are the rows the office is looking at — the
+   N12 row that "automatically had 830" is one of them.
+
+   IT IS A RECORD AND NEVER A DELETION, the same choice the admin-closed
+   plot and the rejected signup made: the figure moves to `_phoneQty`, which
+   nothing reads and nothing prices, so what the phone had put there is
+   still on the row to be seen and `CHECK_rows_the_phone_filled.sql` can
+   name every one of them with what the report says instead. A repair that
+   quietly throws away a number somebody was reading is worse than the
+   fault.
+
+   A CHECKED ROW IS NOT LEFT AS A FORMULA. Taking the figure off a settled
+   row would put it back on the live link, which is the one thing Checked
+   exists to stop. freezeCheckedRows runs once the ledger lands and writes
+   the report's figure into qtyFrozen, so the row is a number again — the
+   report's number this time.
+
+   WHAT IT COSTS, and it is worth saying plainly rather than discovering:
+   a checked row's figure MOVES. It moves to the Summary Report's own
+   answer, which is what the office asked for, and the row goes on wearing
+   the signature that was given to the figure before it. The check names
+   every one and by how much, so it can be looked at rather than taken on
+   trust.
+
+   A figure somebody KEYED is untouched — `_qtyByHand` or no mark at all is
+   not this. Only a row the phone filled, which is exactly the rows carrying
+   `_fromFieldQty`. Self-correcting and then still: once they are off,
+   nothing writes one again and this finds nothing on every later load. */
+function dropPhoneQty() {
+  let n = 0;
+  (records || []).forEach(r => {
+    if (!r || !r._fromFieldQty) return;
+    if (!(r.qty === 0 || r.qty)) { delete r._fromFieldQty; return; }
+    r._phoneQty = Number(r.qty);
+    delete r.qty;
+    delete r._fromFieldQty;
+    n++;
+  });
+  if (n) console.info('[maint] took the phone quantity off ' + n + ' row(s); they read the Summary Report now');
   return n;
 }
 function togRec(id,f){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); r[f]=r[f]?0:1; renderRecords(); persistRecords(); }
@@ -8470,37 +9497,63 @@ function openRecModal(pre) {
   document.getElementById('rf-qty').value=(pre && (pre.qty===0||pre.qty)) ? pre.qty : '';
   document.getElementById('rf-gaia').value=pre?.gaia||0;
   document.getElementById('rf-remark').value=pre?.remark||'';
+  _rfExclBal = !!(pre && pre.exclBal);
   refreshLinkedQty();
   document.getElementById('rec-modal').classList.add('open');
 }
 
-/* WHO SAVED THE PHONE RECORDS THIS ROW WAS FILLED FROM.
+/* `_fieldWho(row)` WAS HERE, and it is gone with the sentence that was its
+   only reader — it named, off `_fieldIds`, whoever saved the phone records a
+   row's quantity had been filled from. The quantity is not filled from them
+   any more (see applyFieldRecords), so the function answered a question
+   nothing asks. It is removed rather than left standing: a half-removal that
+   keeps the function is the kind that comes back, and `git log` is where a
+   reader of this file should go for it rather than reading a dead one.
 
-   `_fieldIds` is set by `applyFieldRecords` and by nothing else, off records
-   `loadFieldRecords` has already filtered to the VERIFIED ones — so a name
-   here is somebody whose work a Field Conductor has agreed, never a draft
-   sitting on a handset.
+   `_fieldIds` itself STAYS and is not dead — the Audit column finds a field
+   record's verdict by it. */
 
-   One row can be several records (three workers on one job), so it is a
-   LIST, distinct and in the order the ids are in. The email is resolved to
-   a name the same way every other "by <person>" on this page is, and it
-   fails open to the stored value for the same reason. */
-function _fieldWho(row) {
-  const ids = Array.isArray(row && row._fieldIds) ? row._fieldIds : [];
-  if (!ids.length) return '';
-  const names = [];
-  ids.forEach((id) => {
-    const rec = (fieldRecords || []).find((f) => f && String(f.id) === String(id));
-    if (!rec) return;
-    const who = _maintWho(rec.reported_by || '');
-    if (who && names.indexOf(who) < 0) names.push(who);
-  });
-  return names.join(', ');
+/* INCLUDE OR EXCLUDE THE CULLED BALANCE — the record dialog's answer to
+   *"如果有transfer去plot-R，在maintenance capacity那里加一个选项，include
+   balance or exclude balance，如果我按exclude balance就代表那个balance是
+   culled balance"*. The rule itself is PlotMovement's (`exclBal` in
+   qtyOpts), so the Worker Record capacity and the salary claim read the
+   same figure this dialog shows. Held here while the dialog is open and
+   written onto the row by saveRec. */
+let _rfExclBal = false;
+function setRecExclBal(on) { _rfExclBal = !!on; refreshLinkedQty(); }
+
+/* Draw the two choices, and only where there is a choice: a plot with no
+   batch transferred out by the work date has no culled balance to leave
+   out. Off by default, so every row reads exactly as it did before. */
+function _drawExclBal(plot, batch, tarikh, jenis) {
+  const box = document.getElementById('rf-bal');
+  if (!box) return;
+  const probe = plot && PlotMovement.ready() && _replantRuleOn(getMonth())
+    ? linkedPlotQty(plot, batch, tarikh, PlotMovement.qtyOpts({ jenis })) : null;
+  const bal = probe ? probe.culledBal || 0 : 0;
+  if (!bal) {
+    box.style.display = 'none'; box.innerHTML = '';
+    return;
+  }
+  const which = esc((probe.culledBatches || []).join(', '));
+  const opt = (on, label) => `<label style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;cursor:pointer;font-size:12.5px;font-weight:600;text-transform:none;letter-spacing:0;">`
+    + `<input type="radio" name="rf-bal" style="width:16px;height:16px;margin:0;padding:0;flex:0 0 auto;" ${(!!_rfExclBal) === on ? 'checked' : ''} onchange="setRecExclBal(${on})"> ${label}</label>`;
+  box.style.display = '';
+  box.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">${t('bal.q')
+      .replace('{x}', `<b>${numMY(bal)}</b>`).replace('{b}', which)}</div>`
+    + opt(false, t('bal.include')) + opt(true, t('bal.exclude'));
 }
 
 /* Live preview of the linked quantity while the record is being keyed, so the
    number is visible before saving rather than only after. */
 function refreshLinkedQty() {
+  try {
+    _drawExclBal((document.getElementById('rf-plot')?.value || '').trim(),
+      document.getElementById('rf-batch')?.value || '',
+      document.getElementById('rf-tarikh')?.value || '',
+      document.getElementById('rf-jenis')?.value);
+  } catch (e) { console.warn('[maint] the culled-balance choice was not drawn:', e); }
   const box = document.getElementById('rf-qty-link');
   if (!box) return;
   const plot   = (document.getElementById('rf-plot').value || '').trim();
@@ -8520,7 +9573,7 @@ function refreshLinkedQty() {
      record is being keyed, so it asks the same question of the form that
      recQty asks of a saved row, through the same function. */
   const link = linkedPlotQty(plot, batch, tarikh, PlotMovement.qtyOpts({
-    jenis: document.getElementById('rf-jenis').value
+    jenis: document.getElementById('rf-jenis').value, exclBal: _rfExclBal
   }));
   if (!link) {
     const where = `${plot}${batch ? ` / ${batch}` : ''}`;
@@ -8528,12 +9581,13 @@ function refreshLinkedQty() {
     return;
   }
   const list  = link.batches.join(', ');
-  const scope = link.allBatches ? t('link.allBatches').replace('{x}', list)
+  const scope = !list ? t('link.noBatch')
+              : link.allBatches ? t('link.allBatches').replace('{x}', list)
                                 : t('link.someBatches').replace('{x}', list);
   const when  = link.asOf ? t('link.asAt').replace('{x}', _tarikhDisplay(link.asOf)) : t('link.today');
   /* WHOSE FIGURE IS IN THE BOX. It used to say "your {y} overrides it" about
      every number sitting there, whoever put it there — and three different
-     things can put one there:
+     things could put one there:
 
        · somebody KEYED it, which really is theirs;
        · the FIELD reported it, and applyFieldRecords filled the empty cell
@@ -8547,32 +9601,50 @@ function refreshLinkedQty() {
      `records_are_per_month.cjs` drives that), but nothing on the screen
      could say so.
 
+     THE SECOND ONE NO LONGER EXISTS, and that is the answer the office
+     chose in the end. Saying which of the three it was, and then saying
+     what the phone's figure WAS, were two turns of explaining a number
+     that had no business in the cell — *"link的capacity完全不要管手机送进
+     来的"*. applyFieldRecords writes no quantity and `dropPhoneQty` took
+     the written ones off, so a figure in this box is somebody's own or it
+     is one saved before the marks existed. Two sentences, both true, and
+     neither of them about a box that does not exist on the phone.
+
      The test for "being typed right now" is the SAME one `saveRec` uses to
      decide whether to mark the cell — the box against what is stored — so
      the sentence cannot say one thing while the save does another. */
   const was   = editRecId ? (records || []).find(r => r && r.id === editRecId) : null;
   const stored = was && (was.qty === 0 || was.qty) ? String(was.qty) : '';
   const mine   = !was || typed !== stored || was._qtyByHand;
-  /* AND IT NAMES THE PERSON, because "the field" is not a person. The office
-     read that sentence and asked the only question it leaves — *"田间报上来
-     的 — 这是谁 只有我可以填"*. They are right that nobody else types into
-     THIS box; what fills it without anybody typing is a maintenance record
-     saved ON A PHONE (the FC Portal and the Worker Portal both write
-     `nops_maint_field_records`) and then VERIFIED by a Field Conductor.
-     Until somebody presses Verify it reaches no cell at all.
+  /* THE TWO TURNS THAT GOT HERE ARE WORTH KEEPING, because the answer was
+     to take the figure away rather than to word it better, and the next
+     person will be tempted to word it better again.
 
-     So the row already knows: `_fieldIds` are the records it was filled
-     from, and each one carries who reported it. A screen that can name them
-     and instead says "the field" is making the reader ask. */
+     First it read "the field reported it", and the office asked the only
+     question that leaves — *"田间报上来的 — 这是谁 只有我可以填"*. So it
+     named the person off `_fieldIds`. Then they asked what the figure even
+     was — *"工人手机并没有capacity这个概念"* — and they were right: the
+     phone has NO quantity box. What a conductor ticks is which BATCHES are
+     standing, and the read-only number beside them is
+     `shared_plot_batch_balance` as at the day the record was saved, which
+     counts neither culling and is not cut off at the work date. So it said
+     that as well.
+
+     A SENTENCE EXPLAINING A FIGURE THAT SHOULD NOT BE THERE IS THE SCREEN
+     ARGUING FOR IT. Three wordings, each correct, each one turn further
+     from the thing to do — which the office then asked for in one line.
+     The DATE and the BATCH are still taken from a phone record, because
+     those are what somebody standing in the plot observed; the quantity is
+     the Summary Report's and nobody else's.
+     `shared/CHECK_rows_the_phone_filled.sql` names every row it had
+     filled, what it had put there and what the report says instead. */
   const headKey = typed === '' ? 'link.willUse'
-                : mine              ? 'link.overridden'
-                : was._fromFieldQty ? (_fieldWho(was) ? 'link.fieldQtyWho' : 'link.fieldQty')
+                : mine         ? 'link.overridden'
                 : 'link.savedQty';
   const head  = typed === ''
     ? t('link.willUse').replace('{x}', `<b style="color:var(--green-text);">${numMY(link.qty)}</b>`)
     : t(headKey).replace('{x}', `<b>${numMY(link.qty)}</b>`)
-                .replace('{y}', numMY(Number(typed)))
-                .replace('{w}', esc(_fieldWho(was)));
+                .replace('{y}', numMY(Number(typed)));
   /* THE REFRESH IS A PRESS, not a thing to work out. The office asked for a
      row to go back to the linked amount — *"每个月请直接刷新变成linked
      amount"* — and the only way to do it was to know that emptying the box
@@ -8603,15 +9675,27 @@ function refreshLinkedQty() {
      The third is amber because it is the one that may want looking at: a
      2nd culling saved with no CullDate falls back to the day it was KEYED,
      which can be weeks after the work. */
+  /* And the fourth, which is the Summary Report's own condition: a 2nd
+     culling on a batch that has since been 3rd culled is INSIDE that 3rd
+     culling and is not taken off again. This page took it off twice until
+     the office asked for the link to be the Summary Report, and nothing on
+     screen could have said so — a figure short by one culling and a figure
+     with no culling to take off are the same number. */
   const plus = link.keptCull2
     ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', numMY(link.cull2))}</span>`
     : (link.cull2Off
         ? `<br><span style="color:var(--text-muted);">${t('link.cull2Off').replace('{x}', numMY(link.cull2Off))}</span>` : '');
+  const inside = (!link.keptCull2 && link.cull2Inside)
+    ? `<br><span style="color:var(--text-muted);">${t('link.cull2Inside')
+        .replace('{x}', numMY(link.cull2Inside))
+        .replace('{y}', numMY(link.cull3))}</span>` : '';
   const later = link.cull2Later
     ? `<br><span style="color:#a16207;">${t('link.cull2Later')
         .replace('{x}', numMY(link.cull2Later))
         .replace('{d}', esc(_maintWhen(link.cull2LaterOn) || link.cull2LaterOn))}</span>` : '';
-  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${later}${warn}`;
+  const balOff = link.exclBal
+    ? `<br><span style="color:var(--text-muted);">${t('bal.off').replace('{x}', numMY(link.culledBal))}</span>` : '';
+  box.innerHTML = `🔗 ${head}${undo}<br>${scope}, ${when} · ${t('link.basis')}${plus}${inside}${balOff}${later}${warn}`;
 }
 
 /* Put the row back on the live linked figure. The box is what decides, so
@@ -8747,7 +9831,12 @@ function saveRec(){
     qty:(document.getElementById('rf-qty').value ?? '').trim()==='' ? null : Math.max(0, parseInt(document.getElementById('rf-qty').value)||0),
     gaia:+document.getElementById('rf-gaia').value,
     remark:document.getElementById('rf-remark').value,
+    // 1 or 0, never left out: a spread over the saved row must be able to
+    // turn it OFF as well as on.
+    exclBal: _rfExclBal ? 1 : 0,
   };
+  // A month before the rule (October and earlier) gets no new field on its rows.
+  if (!_replantRuleOn(getMonth()) && !_rfExclBal) delete obj.exclBal;
   if(!obj.plot){ alert('Please enter a plot number.'); return; }
   /* A new row nobody has numbered is the next round on this plot and job —
      an extra pass after the scheduled ones. Only on a NEW row, and only when
@@ -8767,13 +9856,16 @@ function saveRec(){
     const was = records[i];
     const byHand = was._racunByHand
       || (was._src && String(obj.racun || '') !== String(was.racun || ''));
-    /* And the same for the three cells the FIELD fills — the date, the batch
-       and the quantity.
+    /* And the same for the cells the FIELD fills — the date and the batch.
+       It filled the QUANTITY too until the office asked for that out (see
+       applyFieldRecords); `_fromFieldQty` is still cleared here, because a
+       row saved before `dropPhoneQty` ran can still be carrying the mark
+       and a stale licence to refill is the one thing it must not keep.
 
-       _fromFieldDate / _fromFieldBatch / _fromFieldQty mark a cell this page
-       filled from a verified field record. That mark is also the licence to
-       fill it AGAIN, so typing over one and leaving it on had the next sync
-       put the field's figure straight back: a quantity keyed as 4755 read
+       _fromFieldDate / _fromFieldBatch mark a cell this page filled from a
+       verified field record. That mark is also the licence to fill it
+       AGAIN, so typing over one and leaving it on had the next sync put the
+       field's figure straight back: a quantity keyed as 4755 read
        something else by the time somebody looked, and read blank once the
        field record went (loadFieldRecords clears a marked cell whose record
        has gone). Nothing on either screen said why, and nobody had touched it.
@@ -9359,6 +10451,273 @@ function downloadPDF() {
 let staffInst = null;
 let plotInst  = null;
 
+/* ════════════════════════════════════════════════════════════════════════
+   MONTHLY PERFORMANCE — two selectable views, Table and Chart.
+
+   The TABLE answers the office's question in their own words: "Link the
+   data from work schedule and work record so that we can know B1 schedule
+   how many round and the how many the capacity verses the actual round
+   and capacity from work record. Come out with how many variance." So a
+   row per plot, and under each of the four jobs:
+
+   - PROGRAM is the WORK SCHEDULE's: the rows autoSyncRecords generated
+     for this month carry the slot they came from (_src), so the rounds
+     the schedule planned for a plot are exactly its _src rows, and the
+     program quantity is the plot's capacity times those rounds.
+   - CAPACITY comes STRAIGHT OFF SETTINGS (capacityOf — the Plot Capacity
+     grid), the office's own figure, never the ledger: "Get the full
+     capacity amount from settings and no need alive quantity as you will
+     link the capacity directly." The Alive column went with that.
+   - ACTUAL is the WORK RECORD's: a round counts when the row carries
+     work of its own — a keyed quantity (nought included), a figure
+     frozen by Checked, or the Checked tick — and the actual quantity is
+     the sum of recQty over those rows, the same figure the Worker Record
+     pays (keyed, else frozen, else the link). A generated row nobody
+     filled is a program round and not an actual one. The gaia flag is
+     NOT the test: October holds 539 records and no gaia tick at all.
+   - VARIANCE is actual less program, red short and green over.
+   - REMARKS is the office's own box, saved per plot per month per
+     nursery in nops_maint_perf_remarks
+     (shared/RUN_ME_monthly_performance_remarks.sql) — they asked to
+     write their own, so the records' remarks stay on the records. Until
+     the SQL is run the boxes are read-only and the hint names the file;
+     a sheet that silently dropped what somebody typed would be worse
+     than one that refuses to take it.
+
+   The CHART view is the panel this always was, untouched behind the
+   toggle. The choice is remembered per machine, and the printer icon
+   prints the table through the same builder that draws it — one
+   builder, two outputs, so the paper cannot drift from the screen. */
+const PERF_JOBS = [
+  { type: 'manuring', head: 'Manuring' },
+  { type: 'pd',       head: 'Pest & Disease Spraying' },
+  { type: 'weeding',  head: 'Weeding' },
+  { type: 'interrow', head: 'Interrow Spraying' }
+];
+let _perfView = 'table';
+try { const v = localStorage.getItem('mjm_maint_perfview'); if (v === 'chart' || v === 'table') _perfView = v; } catch (_) {}
+
+function switchPerfView(view) {
+  _perfView = view === 'chart' ? 'chart' : 'table';
+  try { localStorage.setItem('mjm_maint_perfview', _perfView); } catch (_) {}
+  renderPerformance();
+}
+window.switchPerfView = switchPerfView;
+
+function renderPerformance() {
+  const tBtn = document.getElementById('perf-view-table');
+  const cBtn = document.getElementById('perf-view-chart');
+  if (tBtn) tBtn.classList.toggle('active', _perfView === 'table');
+  if (cBtn) cBtn.classList.toggle('active', _perfView === 'chart');
+  const tw = document.getElementById('perf-table-wrap');
+  const cw = document.getElementById('perf-charts');
+  if (tw) tw.style.display = _perfView === 'table' ? '' : 'none';
+  if (cw) cw.style.display = _perfView === 'chart' ? '' : 'none';
+  if (_perfView === 'chart') renderCharts(); else renderPerfTable();
+}
+
+function _perfRowDone(r) {
+  if (!r) return false;
+  if (r.qty === 0 || (r.qty != null && r.qty !== '')) return true;
+  if (r.qtyFrozen != null) return true;
+  return !!r.checked;
+}
+const _perfEsc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/* The office's own remarks, one per plot per month per nursery. Loaded
+   once per (nursery, month); a failed read is asked again on the next
+   draw, a MISSING TABLE is remembered and said, and a redraw never lands
+   while somebody is typing into one of the boxes. */
+const PERF_REMARKS_TABLE = 'nops_maint_perf_remarks';
+let _perfRemarks = {};        // `${n}||${m}` -> { plot: remark }
+let _perfRemarksState = {};   // key -> 'ok' | 'missing' | 'failed'
+let _perfRemarksAsked = {};
+let _perfRemarkTimers = {};
+
+function _loadPerfRemarks(n, m) {
+  const key = n + '||' + m;
+  if (_perfRemarksAsked[key] || !_supabase) return;
+  _perfRemarksAsked[key] = true;
+  _supabase.from(PERF_REMARKS_TABLE).select('plot, remark').eq('nursery', n).eq('month', m)
+    .then(({ data, error }) => {
+      if (error) {
+        const gone = /does not exist|could not find|schema cache/i.test(error.message || '');
+        _perfRemarksState[key] = gone ? 'missing' : 'failed';
+        if (!gone) _perfRemarksAsked[key] = false; // a flaky read is asked again, a missing table is not
+      } else {
+        _perfRemarksState[key] = 'ok';
+        const map = {};
+        (data || []).forEach(r => { if (r && r.plot) map[r.plot] = r.remark || ''; });
+        _perfRemarks[key] = map;
+      }
+      const active = document.activeElement;
+      if (active && active.classList && active.classList.contains('pf-remark-box')) return;
+      const chartView = document.getElementById('recview-chart');
+      if (chartView && chartView.classList.contains('active') && _perfView === 'table') renderPerfTable();
+    }, () => { _perfRemarksAsked[key] = false; });
+}
+
+function perfRemarkInput(el) {
+  const n = getNursery(), m = getMonth();
+  const plot = el.dataset.plot || '';
+  const key = n + '||' + m;
+  (_perfRemarks[key] = _perfRemarks[key] || {})[plot] = el.value;
+  const tKey = key + '||' + plot;
+  clearTimeout(_perfRemarkTimers[tKey]);
+  _perfRemarkTimers[tKey] = setTimeout(() => {
+    if (!_supabase || _perfRemarksState[key] === 'missing') return;
+    _supabase.from(PERF_REMARKS_TABLE)
+      .upsert({
+        nursery: n, month: m, plot, remark: el.value,
+        updated_at: new Date().toISOString(),
+        updated_by: ((typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || {}).email || ''
+      }, { onConflict: 'nursery,month,plot' })
+      .then(({ error }) => { if (error) console.warn('[maint] performance remark save failed:', error.message); });
+  }, 600);
+}
+window.perfRemarkInput = perfRemarkInput;
+
+/* The figures, worked out once — the screen and the printed sheet both
+   draw from this, so the paper cannot disagree with the page. */
+function _perfData() {
+  const n = getNursery(), m = getMonth();
+  const monthRecs = records.filter(r => r && _recInMonth(r, m));
+  const key = n + '||' + m;
+  const remarks = _perfRemarks[key] || {};
+  const monthFull = (() => {
+    const v = monthLabelToInput(m);
+    const d = v ? new Date(v + '-01T00:00:00') : null;
+    return d && !isNaN(d) ? d.toLocaleString('en-MY', { month: 'long', year: 'numeric' }) : m;
+  })();
+  const tots = { cap: 0 };
+  PERF_JOBS.forEach(j => { tots[j.type] = { progR: 0, progQ: 0, actR: 0, actQ: 0 }; });
+  const rows = [];
+  (NURSERY_PLOTS[n] || []).forEach(plot => {
+    const cap = capacityOf(n, plot) || 0;
+    const plotRecs = monthRecs.filter(r => r.plot === plot);
+    // A plot with no capacity, no schedule, no record and no remark is a
+    // row of noughts nobody asked about — the tidy the office asked for.
+    if (!cap && !plotRecs.length && !(remarks[plot] || '').trim()) return;
+    const jobs = PERF_JOBS.map(j => {
+      const jenis = PAYROLL_TYPES[j.type].jenis;
+      const jr = plotRecs.filter(r => r.jenis === jenis);
+      const progR = jr.filter(r => r._src).length;      // the work schedule's rounds
+      const progQ = cap * progR;
+      const done  = jr.filter(_perfRowDone);            // the work record's rounds
+      const actR  = done.length;
+      const actQ  = done.reduce((s, r) => s + ((recQty(r) || {}).value || 0), 0);
+      const t = tots[j.type];
+      t.progR += progR; t.progQ += progQ; t.actR += actR; t.actQ += actQ;
+      return { progR, progQ, actR, actQ, vari: actQ - progQ };
+    });
+    tots.cap += cap;
+    rows.push({ plot, cap, jobs, remark: remarks[plot] || '' });
+  });
+  return { n, m, key, monthFull, rows, tots };
+}
+
+const _perfVarCell = (v) =>
+  `<td class="num ${v < 0 ? 'pf-neg' : v > 0 ? 'pf-pos' : 'pf-zero'}">${numMY(v)}</td>`;
+
+function _perfHeadHtml(d) {
+  return `
+    <div class="perf-head">
+      <div class="ph-1">Summary of Work Done — ${_perfEsc(NURSERY_LABELS[d.n] || d.n)}</div>
+      <div class="ph-2">Scheduled Maintenance Programme · ${_perfEsc(d.monthFull)}</div>
+    </div>`;
+}
+
+function _perfTableHtml(d, forPrint) {
+  const remarksOk = _perfRemarksState[d.key] === 'ok';
+  const bodyRows = d.rows.map(r => {
+    const cells = r.jobs.map(j =>
+      `<td class="num">${numMY(j.progR)}</td><td class="num">${numMY(j.progQ)}</td>`
+      + `<td class="num">${numMY(j.actR)}</td><td class="num pf-act">${numMY(j.actQ)}</td>`
+      + _perfVarCell(j.vari)).join('');
+    const remark = forPrint
+      ? `<td class="pf-remark">${_perfEsc(r.remark)}</td>`
+      : `<td class="pf-remark"><textarea class="pf-remark-box" data-plot="${_perfEsc(r.plot)}" rows="1"
+           oninput="perfRemarkInput(this)" ${remarksOk ? '' : 'disabled'}
+           placeholder="${remarksOk ? 'Write a remark…' : ''}">${_perfEsc(r.remark)}</textarea></td>`;
+    return `<tr><td class="pf-plot">${_perfEsc(r.plot)}</td><td class="num">${numMY(r.cap)}</td>${cells}${remark}</tr>`;
+  }).join('');
+  const footCells = PERF_JOBS.map(j => {
+    const t = d.tots[j.type];
+    return `<td class="num">${numMY(t.progR)}</td><td class="num">${numMY(t.progQ)}</td>`
+      + `<td class="num">${numMY(t.actR)}</td><td class="num pf-act">${numMY(t.actQ)}</td>`
+      + _perfVarCell(t.actQ - t.progQ);
+  }).join('');
+  return `
+    <table class="perf-table">
+      <thead>
+        <tr>
+          <th rowspan="3" class="pf-left">Plot</th><th rowspan="3">Capacity</th>
+          ${PERF_JOBS.map(j => `<th colspan="5" class="pf-job">${j.head}</th>`).join('')}
+          <th rowspan="3" class="pf-left">Remarks</th>
+        </tr>
+        <tr>${PERF_JOBS.map(() =>
+          '<th colspan="2" class="pf-grp">Program · Work Schedule</th>'
+          + '<th colspan="2" class="pf-grp">Actual · Work Record</th>'
+          + '<th rowspan="2" class="pf-sub">Variance</th>').join('')}</tr>
+        <tr>${PERF_JOBS.map(() =>
+          '<th class="pf-sub">Rounds</th><th class="pf-sub">Qty</th><th class="pf-sub">Rounds</th><th class="pf-sub">Qty</th>').join('')}</tr>
+      </thead>
+      <tbody>${bodyRows || '<tr><td colspan="23" class="pf-empty">Nothing scheduled or recorded for this month</td></tr>'}</tbody>
+      <tfoot><tr><td class="pf-plot pf-left">Total</td><td class="num">${numMY(d.tots.cap)}</td>${footCells}<td></td></tr></tfoot>
+    </table>`;
+}
+
+function renderPerfTable() {
+  const box = document.getElementById('perf-table-wrap');
+  if (!box) return;
+  const d = _perfData();
+  _loadPerfRemarks(d.n, d.m);
+  const state = _perfRemarksState[d.key];
+  const hint = state === 'missing'
+    ? `<div class="perf-hint">Remarks are not saved yet — run shared/RUN_ME_monthly_performance_remarks.sql in the Supabase SQL Editor. Until then the boxes are read-only.</div>`
+    : state === 'failed'
+      ? `<div class="perf-hint">The saved remarks could not be read just now — what you type still saves, and they come back on the next load.</div>`
+      : '';
+  box.innerHTML = `${_perfHeadHtml(d)}${hint}<div class="perf-scroll">${_perfTableHtml(d, false)}</div>`;
+}
+
+/* The printer icon. Same data, same builder, a sheet of its own — the
+   iframe route the other prints here use, because a popup blocker eating
+   a print is a button that does nothing. Remarks print as text. */
+function printPerfTable() {
+  const d = _perfData();
+  const css = `
+    @page { size: A4 landscape; margin: 9mm; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #1a2e22; margin: 0; }
+    .perf-head .ph-1 { font-size: 14px; font-weight: 800; }
+    .perf-head .ph-2 { font-size: 12px; font-weight: 600; margin: 2px 0 8px; }
+    table.perf-table { border-collapse: collapse; width: 100%; font-size: 9px; }
+    .perf-table th, .perf-table td { border: 0.5pt solid #9aa89f; padding: 2.5px 4px; }
+    .perf-table thead th { background: #eef3ef; font-weight: 700; text-align: center; }
+    .perf-table td.num { text-align: right; white-space: nowrap; }
+    .perf-table td.pf-plot { font-weight: 800; text-align: center; }
+    .perf-table td.pf-neg { color: #b91c1c; font-weight: 700; }
+    .perf-table td.pf-pos { color: #0d7a47; font-weight: 700; }
+    .perf-table td.pf-zero { color: #8a978f; }
+    .perf-table tfoot td { font-weight: 800; background: #eef3ef; }
+    .perf-table td.pf-remark { min-width: 110px; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Monthly Performance — ${_perfEsc(d.n)} ${_perfEsc(d.monthFull)}</title>
+    <style>${css}</style></head><body>${_perfHeadHtml(d)}${_perfTableHtml(d, true)}</body></html>`;
+  const f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(f);
+  f.onload = () => {
+    try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.warn('[maint] print failed:', e); }
+    setTimeout(() => f.remove(), 60000);
+  };
+  f.srcdoc = html;
+}
+window.printPerfTable = printPerfTable;
+
 function renderCharts() {
   const chartN = getNursery();
   const nurseryPlots = NURSERY_PLOTS[chartN];
@@ -9585,7 +10944,14 @@ async function initDb() {
       loadMaintAudits(),
       // The Setting tab's own four lists, and the plot names they hang off.
       loadSharedPlots(),
-      loadSettingLists()
+      loadSettingLists(),
+      /* The Verify & lock strip on Worker Activity. Read in the boot's own
+         wave so the first paint of a verified sheet already shows it shut —
+         a sheet that draws open for a beat and then greys is a sheet
+         somebody has already pressed. It FAILS OPEN by itself: the module
+         swallows its own read errors and answers "nothing verified". */
+      (typeof MJMPayrollLock !== 'undefined'
+        ? MJMPayrollLock.load(_supabase) : Promise.resolve())
     ]);
     (stRes.data || []).forEach(r => {
       dbStateCache[`${r.nursery}_${r.month}`] = r.payload;
@@ -9659,6 +11025,10 @@ async function initDb() {
     _mergeCapacityPlots();
   } catch (e) { console.warn('[maint] initial DB load failed:', e); }
   _dbReady = true;
+  /* The side bar's order and the circles both follow the keyed scopes,
+     which only exist once loadSettingLists has answered. Before switchTab,
+     so the landing panel already shows the right circles. */
+  try { orderJobSubnav(); } catch (e) { console.warn('[maint] job order:', e); }
   /* Land on the tab the markup marks active, through switchTab, so the side
      effects of being on it happen — Schedule hides the top bar's nursery
      picker, which it shows every nursery of. */
@@ -9686,6 +11056,12 @@ async function initDb() {
      screen, and a September list opened in October would become October. */
   try { if (stampRecordMonths()) persistRecords(); }
   catch (e) { console.warn('[maint] could not stamp the months:', e); }
+  /* And before the first sync as well, because applyFieldRecords drops the
+     MARK off a row whose field record stopped pairing while leaving the
+     VALUE — so a repair run after it would have nothing left to find the
+     row by, and the phone figure would sit there for good. */
+  try { if (dropPhoneQty()) persistRecords(); }
+  catch (e) { console.warn('[maint] could not take the phone quantity off:', e); }
   renderAll();
   autoSyncRecords();
 
@@ -9694,6 +11070,14 @@ async function initDb() {
   loadMovementData().then(() => {
     if (!PlotMovement.ready()) return;
     try { freezeCheckedRows(); } catch (e) { console.warn('[maint] freeze pass failed:', e); }
+    /* The capacities follow the ledger now (currentCapacity), so the plot
+       lists, the schedules and the Setting grid all draw again off it. */
+    try { _mergeCapacityPlots(); } catch (_) {}
+    /* The ledger is what says when a -R plot appeared, so the -R plots can
+       only be given their parent's rounds now — see seedReplantRounds. */
+    try { autoSyncRecords(); } catch (e) { console.warn('[maint] -R sync failed:', e); }
+    try { renderAll(); } catch (_) {}
+    try { renderCapacity(); } catch (_) {}
     try { renderRecords(); } catch (_) {}
     try { renderPayroll(); } catch (_) {}
     try { refreshLinkedQty(); } catch (_) {}
@@ -9781,11 +11165,27 @@ async function loadSettingLists() {
       .then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_fertilisers').select('*').order('sort_order').order('name')
       .then(r => r, () => ({ data: [] })),
-    _supabase.from('nops_maint_config').select('key, num_value').then(r => r, () => ({ data: [] }))
+    /* txt_value carries the job scopes, in the table that was made "in a
+       shape that will hold the next such setting without another
+       migration" — which this is, so there is nothing to run. A database
+       old enough to lack the column refuses the whole select, which the
+       fallback turns into no rows: every job then reads its default, which
+       is exactly what the page did before. */
+    _supabase.from('nops_maint_config').select('key, num_value, txt_value')
+      .then(r => r.error
+        ? _supabase.from('nops_maint_config').select('key, num_value')
+        : r, () => ({ data: [] }))
   ]);
   ((tsRes && tsRes.data) || []).forEach(r => { traySize[r.nursery] = +r.per_tray || 0; });
   const cfg = ((cfgRes && cfgRes.data) || []).find(r => r.key === 'pump_coverage');
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
+  jobScopes = {};
+  ((cfgRes && cfgRes.data) || []).forEach(r => {
+    if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
+    const key = String(r.key).slice(JOB_SCOPE_PREFIX.length);
+    const v = String(r.txt_value || '').trim().toLowerCase();
+    if (PAYROLL_VIEW_KEYS.includes(key) && JOB_SCOPE_ROWS.includes(v)) jobScopes[key] = v;
+  });
   chemicals   = (chRes && chRes.data) || [];
   fertilisers = (feRes && feRes.data) || [];
 }
@@ -9835,7 +11235,59 @@ function traySizeOf(n) {
 
 /* What the dosage is worked out from, whichever way the plot is counted. */
 function capacityOf(n, p) {
-  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : getPlotQty(n, p);
+  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : currentCapacity(n, p);
+}
+
+/* A MAIN NURSERY CAPACITY IS WHAT IS STANDING IN THE PLOT NOW.
+   The office asked for the Setting grid to link the current figure rather
+   than a number somebody keyed once and nobody kept up: it is the batch
+   ledger through PlotMovement.linkedQty with no batch and no date -- every
+   batch standing there, as at today -- read as the Movement Report balance
+   (see below). One rule, not a second count.
+
+   Three things in it:
+   - A plot with nothing standing is NOUGHT, not the keyed figure. That is
+     the point of the change: an emptied plot is an empty plot.
+   - It is never below nought. The ledger can read negative, which is a
+     figure to look into on the Movement Report, not a capacity to dose.
+   - Until the ledger has been READ, the keyed figure stands in. The page
+     paints before that larger read lands, and a schedule of noughts for the
+     first second, or for good on a read that failed, would be a dosage of
+     nothing. Everything redraws when it lands.
+   PlotMovement is asked directly, never through linkedPlotQty: this runs at
+   load from _mergeCapacityPlots, before that const further down the file
+   exists. */
+function currentCapacity(n, p) {
+  const M = (typeof PlotMovement !== 'undefined') ? PlotMovement : null;
+  if (!M || !M.ready()) return getPlotQty(n, p);
+  /* IT IS THE MAIN NURSERY MOVEMENT REPORT BALANCE, read exactly the way
+     that report reads it -- netOfRow('main2', ...) in operation_reports.html.
+     Per plot and batch: transplanted + transferred in - sold - 3rd culled
+     (MapQty only) - transferred out + approved adjustment, and the 2nd
+     culling comes off ONLY while that batch has no 3rd culling on the plot,
+     because a 3rd culling already includes what was 2nd culled. The plot
+     figure is the sum of its batches, which is the Balance column.
+
+     Twice wrong before this: less the 2nd culling always (N20 read 531),
+     then never (the office: still not right, link THIS balance). The
+     report decides per batch, so this does too. */
+  const pk = M.plotKey(p);
+  const per = {};
+  (M.events() || []).forEach(ev => {
+    if (ev.plotKey !== pk) return;
+    const b = per[ev.batchKey] || (per[ev.batchKey] = { sum: 0, cull2: 0, cull3: 0 });
+    if (ev.type === '2nd_Culling') { b.cull2 += Math.abs(Number(ev.qty || 0)); return; }
+    // netOfRow asks cull3 > 0, the figure and not merely a row
+    if (ev.type === '3rd_Culling') b.cull3 += Math.abs(Number(ev.qty || 0));
+    b.sum += M.signed(ev.type, ev.qty);
+  });
+  const keys = Object.keys(per);
+  if (!keys.length) return 0;
+  const total = keys.reduce((t, k) => t + per[k].sum - (per[k].cull3 > 0 ? 0 : per[k].cull2), 0);
+  return Math.max(0, Math.round(total));
+}
+function capacityIsLive() {
+  return typeof PlotMovement !== 'undefined' && PlotMovement.ready();
 }
 
 /* The nurseries this block offers, and the plots under each. Both come from
@@ -9854,6 +11306,170 @@ function renderSetting() {
      bootstrap follows for its trailing steps. */
   try { renderCullMonitoringSetting(); }
   catch (e) { console.warn('[maint] Culling Monitoring settings card:', e); }
+  /* Its own try for the same reason, and it matters more here: this card
+     decides what the side bar shows, so a throw in it must not take the
+     capacities down with it. */
+  try { renderJobScopeSetting(); }
+  catch (e) { console.warn('[maint] job scope settings card:', e); }
+}
+
+/* ══ THE CARD THE SCOPES ARE KEYED ON ════════════════════════════════════
+   Three rows, a chip per job, dragged between them — "这些工作可以drag来
+   drag去，像worker namelist 一样". The gesture is the Team Board's, copied
+   rather than invented: `_jsDrag` is its `_dragId`, and the row wears
+   `.jb-cell-over` while something is held over it.
+
+   A DROP MOVES, which is what a board of rows means and what the office
+   described ("drag to main nursery only"). Every state is reachable because
+   BOTH is a row — see the note above `JOB_SCOPE_ROWS` for why two rows
+   could not hold what the office asked for.
+
+   IT IS A DRAFT AND ONE SAVE, the same shape as the three blocks above it:
+   the eight jobs are one decision about what the side bar is, and saving
+   half of it is not a thing anybody means to do. The draft is also what
+   makes the drag free — eight round trips, one per chip somebody tried,
+   is a board that fights back.
+
+   SAVE WRITES ALL EIGHT, defaults included. That is not seeding a default
+   into an unasked row: pressing Save IS being asked, and a board half
+   keyed and half falling through to the code is two rules for one screen. */
+let jobScopeDraft = null;        // null = not editing
+let _jsDrag = null;              // the job key being dragged
+let _jsSaving = false;
+
+const JOB_ROW_NAME = { pre: 'Pre Nursery', main: 'Main Nursery', both: 'Both' };
+
+function _jsScopes() {
+  const out = {};
+  PAYROLL_VIEW_KEYS.forEach(k => { out[k] = jobScopeOf(k); });
+  return out;
+}
+
+function _jsRowHtml(scope, scopes, editing) {
+  const jobs = PAYROLL_VIEW_KEYS.filter(k => scopes[k] === scope);
+  const circles = scopeNurseries(scope).map(nurseryShort).join(' · ');
+  const chips = jobs.length
+    ? jobs.map(k => `<span class="jb-chip"${editing ? ' draggable="true"' : ''}
+          ondragstart="jsDragStart(event,'${esc(k)}')" ondragend="jsDragEnd(event)"
+        >${esc(jobLabel(k))}</span>`).join('')
+    /* An empty row STANDS, because it is where a job is dragged. The Team
+       Board keeps a company section's column up for the same reason. */
+    : `<span class="jb-none">${editing ? 'Drag a job here' : 'No job'}</span>`;
+  return `<div class="jb-row">
+      <div class="jb-lab"><b>${esc(JOB_ROW_NAME[scope])}</b><span>${esc(circles)}</span></div>
+      <div class="jb-cell" ondragover="jsDragOver(event)" ondragleave="jsDragLeave(event)"
+           ondrop="jsDrop(event,'${esc(scope)}')">${chips}</div>
+    </div>`;
+}
+
+function renderJobScopeSetting() {
+  const box = document.getElementById('js-set-body');
+  if (!box) return;
+  const corner = document.getElementById('js-set-corner');
+  const editing = !!jobScopeDraft;
+  const scopes = editing ? jobScopeDraft : _jsScopes();
+  box.innerHTML = JOB_SCOPE_ROWS.map(s => _jsRowHtml(s, scopes, editing)).join('')
+    + (editing
+      ? `<div class="jb-note">The side bar lists every job whatever row it is
+           in; it is the nursery circles above a sheet that follow this. Saving
+           writes all three rows.</div>
+         <div class="lst-foot">
+           <button class="btn" onclick="jsCancel()">Cancel</button>
+           <button class="btn btn-primary" id="js-save-btn" onclick="jsSave()">Save</button>
+         </div>`
+      : '');
+  if (corner) {
+    corner.innerHTML = editing || !maySetting() ? ''
+      : `<button class="btn btn-sm cm-set-open" onclick="jsEdit()">&#9998; Edit</button>`;
+  }
+}
+
+function jsEdit() {
+  if (!maySetting()) return;
+  jobScopeDraft = _jsScopes();
+  renderJobScopeSetting();
+}
+function jsCancel() { jobScopeDraft = null; renderJobScopeSetting(); }
+
+function jsDragStart(ev, key) {
+  if (!jobScopeDraft) { ev.preventDefault(); return; }
+  _jsDrag = key;
+  ev.dataTransfer.effectAllowed = 'move';
+  // Firefox will not start a drag at all unless something is carried.
+  try { ev.dataTransfer.setData('text/plain', key); } catch (_) {}
+  ev.currentTarget.classList.add('jb-chip-drag');
+}
+function jsDragEnd(ev) {
+  if (ev && ev.currentTarget) ev.currentTarget.classList.remove('jb-chip-drag');
+  _jsDrag = null;
+  document.querySelectorAll('.jb-cell-over').forEach(el => el.classList.remove('jb-cell-over'));
+}
+function jsDragOver(ev) {
+  if (!_jsDrag) return;                     // something dragged in from outside
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('jb-cell-over');
+}
+function jsDragLeave(ev) { ev.currentTarget.classList.remove('jb-cell-over'); }
+function jsDrop(ev, scope) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('jb-cell-over');
+  const key = _jsDrag;
+  _jsDrag = null;
+  if (!key || !jobScopeDraft) return;
+  if (!JOB_SCOPE_ROWS.includes(scope)) return;
+  if (jobScopeDraft[key] === scope) return;        // nothing moved
+  jobScopeDraft[key] = scope;
+  renderJobScopeSetting();
+}
+
+/* ONE ROW PER JOB in nops_maint_config, which is the table that was made
+   "in a shape that will hold the next such setting without another
+   migration". So there is nothing to run in the database for this.
+
+   The permission is asked AGAIN here: a button drawn before somebody's
+   access changed is still sitting on the screen. */
+async function jsSave() {
+  if (!jobScopeDraft || _jsSaving) return;
+  if (!maySetting()) { alert('Setting is not open to you.'); return; }
+  if (!_supabase) { alert('Not signed in — nothing was saved.'); return; }
+  const draft = jobScopeDraft;
+  const btn = document.getElementById('js-save-btn');
+  _jsSaving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const now = new Date().toISOString();
+    const { error } = await _supabase.from('nops_maint_config').upsert(
+      PAYROLL_VIEW_KEYS.map(k => ({
+        key: JOB_SCOPE_PREFIX + k,
+        txt_value: draft[k],
+        note: 'Which nurseries this job is done in: pre, main or both. Keyed on '
+            + 'Work Maintenance, Settings, Where Each Job Is Done.',
+        updated_by: (typeof userEmail !== 'undefined' && userEmail) || null,
+        updated_at: now,
+      })), { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+    if (error) {
+      /* A database old enough to have no txt_value refuses the whole write.
+         Dropping the column and writing anyway would store eight rows
+         saying nothing, so it REFUSES and names the file. */
+      alert('Could not save — ' + (error.message || 'try again')
+        + (/txt_value/i.test(error.message || '')
+          ? '\n\nThis database has no txt_value on nops_maint_config yet. '
+            + 'Run shared/RUN_ME_nops_maint_config.sql in the Supabase SQL '
+            + 'Editor once, then save again.' : ''));
+      return;
+    }
+    jobScopes = Object.assign({}, draft);
+    jobScopeDraft = null;
+    renderJobScopeSetting();
+    /* The side bar does not re-order — every job is in it whatever row it
+       is in — but the circles over Worker Activity do move, so a sheet
+       left open behind this card is put right before anybody goes back. */
+    syncJobNurseries();
+  } finally {
+    _jsSaving = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
 }
 
 /* ══ WHAT MOVES CULLING MONITORING ══════════════════════════════════════
@@ -10335,8 +11951,15 @@ function renderCapacity() {
   const wrap = document.getElementById('cap-cols');
   if (!wrap) return;
 
+  /* Only the Pre Nursery trays are keyed now, so a page with no Pre Nursery
+     has nothing for Edit to open. */
+  const anyPre = capNurseries().some(n => isPreNursery(n) && capPlots(n).length);
   const editBtn = document.getElementById('cap-edit-btn');
-  if (editBtn) editBtn.style.display = capEditing ? 'none' : '';
+  if (editBtn) editBtn.style.display = (capEditing || !anyPre) ? 'none' : '';
+  const note = document.getElementById('cap-live-note');
+  if (note) note.textContent = capacityIsLive()
+    ? 'Main nursery: linked to the Movement Report balance, what is standing in each plot now.'
+    : 'Main nursery: the batch report is still loading, so these are the keyed figures for now.';
   const acts = document.getElementById('cap-actions');
   if (acts) acts.style.display = capEditing ? 'flex' : 'none';
 
@@ -10390,15 +12013,18 @@ function capNurseryHtml(n) {
 }
 
 function capRowHtml(n, p, pre) {
-  const shown = pre ? trayQty(n, p) : getPlotQty(n, p);
+  const shown = pre ? trayQty(n, p) : currentCapacity(n, p);
   const draft = capEditing ? (capDraft[n].plots[p] ?? '') : null;
+  /* A main nursery figure is LINKED -- there is nothing to key, so it stays
+     a figure while the Pre Nursery trays are being edited beside it. */
+  const editable = capEditing && pre;
   return '<div class="cap-row" data-nursery="' + esc(n) + '" data-plot="' + esc(p) + '">' +
     '<span class="cap-row-n">' + esc(p) + '</span>' +
-    (capEditing
+    (editable
       ? '<input type="number" min="0" step="1" value="' + draft + '" placeholder="0" ' +
           'oninput="onDraftInput(\'' + esc(n) + '\', \'' + esc(p) + '\', this.value)">'
       : '<span class="cap-row-v' + (shown ? '' : ' muted') + '">' +
-          (shown ? shown.toLocaleString() : '—') + '</span>') +
+          (shown ? shown.toLocaleString('en-MY') : '—') + '</span>') +
     (pre ? '<span class="cap-row-d" data-derived>' + derivedText(n, p) + '</span>' : '') +
     '</div>';
 }
@@ -10409,7 +12035,7 @@ function derivedText(n, p) {
   const trays = capEditing ? (+capDraft[n].plots[p] || 0) : trayQty(n, p);
   const per   = capEditing ? (+capDraft[n].perTray || 0) : (traySize[n] || 0);
   if (!per || !trays) return '—';
-  return (trays * per).toLocaleString();
+  return (trays * per).toLocaleString('en-MY');
 }
 
 /* ── The edit cycle ────────────────────────────────────────────────────
@@ -10492,6 +12118,8 @@ async function saveCapEdit() {
 
   for (const n of nurseries) {
     const pre = isPreNursery(n);
+    // A main nursery capacity is linked, never keyed, so nothing of it is written.
+    if (!pre) continue;
     const stamp = new Date().toISOString();
     /* ONLY the plots whose figure actually changed.
        This used to write every plot of every nursery on every Save. Two things

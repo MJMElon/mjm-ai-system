@@ -1853,16 +1853,32 @@ async function loadCategories() {
   fillProblems(newSource);
 }
 
-/* The case categories. A category belongs to one system since
-   migration_nelos_category_system.sql, and the form offers Nelos's own —
-   which is the whole list on an older database that has no such column, as
-   it always was. A deep link raising a case for another system passes that
-   system's key instead, so its own categories are the ones offered.
-   "Other" is always last so something not listed yet can still be raised. */
+/* The case categories this system may RAISE.
+
+   It used to be the categories the system OWNED
+   (migration_nelos_category_system.sql), and that column turned over:
+   nelos_categories.module_key is the system that SOLVES a title now, and
+   who may raise one is raise_modules — the From System tick list on Case
+   Routing. RUN_ME_nelos_routing_is_the_category.sql states the three
+   meanings of that column in its own words, and both raise forms read it
+   the same way: change one, change the others.
+
+   A deep link raising a case for another system passes that system's key,
+   so what is offered is what THAT system may raise. "Other" is always last
+   so something not listed yet can still be raised. */
+const NELOS_ANY_SYSTEM = '*';
+function mayRaiseFrom(c, key) {
+  const rm = c.raise_modules;
+  /* Absent or null is nobody having been asked — which is every title on a
+     database that has not run the SQL, so the whole list is offered rather
+     than nothing. An EMPTY array is a deliberate nobody-by-hand, which is
+     what an automatic title wants, so the two are not folded together. */
+  if (rm === undefined || rm === null) return true;
+  if (!rm.length) return false;
+  return rm.includes(NELOS_ANY_SYSTEM) || rm.includes(key);
+}
 function fillProblems(systemKey) {
-  const scoped = categories.some(c => c.module_key)
-    ? categories.filter(c => c.module_key === systemKey)
-    : categories;
+  const scoped = categories.filter(c => mayRaiseFrom(c, systemKey));
   const keep = $('c-problem').value;
 
   $('c-problem').innerHTML =
@@ -1977,17 +1993,36 @@ const handlersIn = key => handlers
   .filter(h => h.primary_module === key && key)
   .sort((a, b) => (a.seat_no || 99) - (b.seat_no || 99));
 
-/* Where the routing rules would send this case — the exact-category rule
-   first, then the system's catch-all, then back to the system that raised
-   it, which is where a case with no rule has always stayed.
+/* Where this case goes, asked in exactly the order nelos_route_case() asks
+   it: THE TITLE names the system that solves it, then the raising system's
+   catch-all rule, then back to the system that raised it, which is where a
+   case with no answer has always stayed.
 
-   Except a Nelos case: Nelos is the case log, not a queue anybody works,
-   so there is nothing to fall back to and the form asks instead. */
+   The title comes first because that is what turned over: a rule used to be
+   keyed on (source_module, category) and the source is the PAGE, so the
+   same title raised from a page that was not its own system matched no rule
+   at all. The solver rides on the title now, so the page decides nothing —
+   and that is also why only the catch-all rows of nelos_routes are still
+   read here.
+
+   Except a Nelos case with no title answer: Nelos is the case log, not a
+   queue anybody works, so there is nothing to fall back to and the form
+   asks instead. */
 function routedTo(systemKey, problem) {
+  const c = categories.find(x => x.name === problem && x.module_key);
+  if (c) return c.module_key;
   const rule = routes.find(r => r.source_module === systemKey && r.category === problem) ||
                routes.find(r => r.source_module === systemKey && r.category === null);
   if (rule) return rule.to_module;
   return systemKey === 'nelos' ? '' : systemKey;
+}
+
+/* The PIC the office set for a title, as a SEAT. Shown and saved the same
+   way the two raise forms do it, so a case opened from the hub lands on the
+   same person as the identical case opened from a module. */
+function seatForTitle(problem) {
+  const c = categories.find(x => x.name === problem && x.module_key);
+  return c && c.pic_seat_no != null ? Number(c.pic_seat_no) : null;
 }
 
 /* Draws the system list and selects `want`, or the placeholder if that is
@@ -2019,7 +2054,19 @@ function fillPics() {
   $('c-pic').innerHTML = '<option value="">— choose a PIC —</option>' +
     staff.map(h => `<option value="${esc(h.user_id)}">#${h.seat_no || '—'} ${
       esc(h.full_name || h.email)}</option>`).join('');
-  if (staff.some(h => h.user_id === keep)) $('c-pic').value = keep;
+  if (staff.some(h => h.user_id === keep)) { $('c-pic').value = keep; return; }
+
+  /* THE PIC THE OFFICE SET FOR THIS TITLE, where nobody has chosen one.
+     Without it this drawer falls to the #1 of the destination while both
+     raise forms honour the seat on Case Routing — the same case landing on
+     two different people depending on which screen it was opened from. Not
+     while editing: changing an open case's category must not quietly move
+     it out from under the person working it, the same guard
+     applyCategoryDefaults() makes. */
+  if (editingId) return;
+  const seat = seatForTitle(problemName());
+  const hit = seat == null ? null : staff.find(h => Number(h.seat_no) === seat);
+  if (hit) $('c-pic').value = hit.user_id;
 }
 
 /* Who the case will actually go to: the person picked, or the #1 of the

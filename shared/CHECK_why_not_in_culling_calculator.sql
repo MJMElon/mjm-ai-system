@@ -6,7 +6,7 @@
 --
 -- The calculator lists a plot and batch (a block) when ALL of these hold,
 -- the same rules as loadPlots in FC-Portal src/modules/palms/cullingSource.js
---   1  PALMS has the PLOT open at Pengambilan or Saringan Anak Bibit
+--   1  PALMS has the PLOT open at Pengambilan, Saringan Anak Bibit or Tunggu buat culling
 --   2  the Batch Report has a Transplanted row for that plot and batch
 --   3  the batch is 224 or later
 --   4  its 3rd Culling row carries no drone MapQty yet (a MapQty ends it)
@@ -30,7 +30,7 @@ WITH st AS (
 open_logs AS (
   SELECT upper(trim(split_part(l.plot_name, '#', 1))) AS plot,
          string_agg(DISTINCT COALESCE(st.name, 'stage ' || l.act_n::text), ', ') AS stages,
-         bool_or(st.k IN ('PENGAMBILAN', 'SARINGANANAKBIBIT')) AS collecting
+         bool_or(st.k IN ('PENGAMBILAN', 'SARINGANANAKBIBIT', 'TUNGGUBUATCULLING')) AS collecting
     FROM public.fcportal_palms_plot_logs l
     LEFT JOIN st ON st.sort_order = l.act_n
    WHERE l.end_date IS NULL
@@ -83,7 +83,7 @@ SELECT p.plot,
          WHEN p.plot LIKE '%-R%' THEN 'NO -- a -R replant plot is never listed'
          WHEN COALESCE(o.collecting, false) AND pp.live_batches IS NOT NULL THEN 'YES'
          WHEN pp.live_batches IS NOT NULL
-           THEN 'NO -- PALMS does not have it at Pengambilan or Saringan Anak Bibit'
+           THEN 'NO -- PALMS does not have it at a collecting stage'
          WHEN pp.finished_batches IS NOT NULL
            THEN 'NO -- every batch has a MapQty on its 3rd Culling, so it is finished'
          ELSE 'NO -- at a collecting stage but no batch 224 or later was transplanted into it'

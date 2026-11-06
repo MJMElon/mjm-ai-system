@@ -152,13 +152,33 @@ async function boot(browser, opts) {
   return { page, errs, dialogs };
 }
 
+/* THE SHEET IS TWO JOBS STACKED NOW, which is what the office asked for --
+   *"不要分开 放一起 分上下两部分就好"*. So the head belongs to the SECTION
+   and cannot be a <thead>, there being two of them, and this reader walks
+   the tbody splitting on the job band.
+
+   `sheetOf` hands back the FIRST section flat, so every check below says
+   exactly what it said when the sheet had one job on it; `sections` is
+   there for the ones that are about both. */
 const sheetOf = (page) => page.evaluate(() => {
   const tbl = document.getElementById('payroll-table');
+  const cells = (tr) => [...tr.children].map(td => {
+    const i = td.querySelector('input'); return i ? (i.value || '_') : td.textContent.trim().replace(/\s+/g, ' '); });
+  const sections = [];
+  let cur = null;
+  [...tbl.querySelectorAll('tbody tr')].forEach(tr => {
+    if (tr.classList.contains('sp-job-row')) {
+      cur = { band: tr.textContent.trim(), head: [], body: [], foot: [] }; sections.push(cur); return;
+    }
+    if (!cur) { cur = { band: '', head: [], body: [], foot: [] }; sections.push(cur); }
+    if (tr.classList.contains('sp-head')) { cur.head = [...tr.children].map(th => th.textContent.trim()); return; }
+    if (tr.classList.contains('sp-sub-row')) { cur.foot = cells(tr); return; }
+    cur.body.push(cells(tr));
+  });
+  const first = sections[0] || { band: '', head: [], body: [], foot: [] };
   return {
-    head: [...tbl.querySelectorAll('thead tr:nth-child(2) th')].map(th => th.textContent.trim()),
-    body: [...tbl.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(td => {
-      const i = td.querySelector('input'); return i ? (i.value || '_') : td.textContent.trim().replace(/\s+/g, ' '); })),
-    foot: [...tbl.querySelectorAll('tfoot td')].map(td => td.textContent.trim()),
+    sections,
+    band: first.band, head: first.head, body: first.body, foot: first.foot,
     line: document.getElementById('payroll-form-line').textContent,
     bars: document.getElementById('payroll-names').textContent.replace(/\s+/g, ' ')
   };
@@ -167,7 +187,13 @@ const sheetOf = (page) => page.evaluate(() => {
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
-  // ── 1. The sidebar: two parts, every existing job under Main Nursery ──
+  /* ── 1. The sidebar: ONE alphabetical list, no Pre / Main headings ──
+     It was two groups, Main Nursery over seven jobs and Pre Nursery over
+     this one. The office took both headings off -- "main page 不会跟着pre
+     和 main 分了" -- because the nursery CIRCLES say it now, about the job
+     somebody actually has open. Where each job is done is kept on Settings
+     and held by tests/where_each_job_is_done.cjs; what this one still has
+     to say is that the Pre Nursery sheet is IN the list and lit. */
   const saved = [{ batch_name: '278', month: 'Oct 2026', qty_planted: 3000, workers: { Siti: 2000, Rina: 1000 } },
                  { batch_name: '279', month: 'Oct 2026', qty_planted: 800, workers: { Siti: 500, 'Old Name': 200 } }];
   const names = [{ month: 'Oct 2026', names: ['Siti', 'Rina'] }, { month: 'Sep 2026', names: ['Ana', 'Budi'] }];
@@ -177,9 +203,9 @@ const sheetOf = (page) => page.evaluate(() => {
     return [...sub.children].map(el => el.classList.contains('pn-subgroup')
       ? '#' + el.textContent.trim() : el.id.replace('pn-subtab-', ''));
   });
-  check('Worker Activity reads Main Nursery, its seven jobs, then Pre Nursery and Seed Planting', nav,
-    ['#Main Nursery', 'pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive',
-     '#Pre Nursery', 'seed_planting']);
+  check('Worker Activity is one list of eight jobs with no group heading', nav,
+    ['cull_incentive', 'interrow', 'loading_seedlings', 'manuring', 'pd',
+     'seed_planting', 'transplanting', 'weeding']);
   check('Seed Planting is the button lit', await page.evaluate(() =>
     document.getElementById('pn-subtab-seed_planting').classList.contains('active')
     && !document.getElementById('pn-subtab-pd').classList.contains('active')), true);
@@ -200,45 +226,83 @@ const sheetOf = (page) => page.evaluate(() => {
 
   // ── 3. The sheet ──
   let sh = await sheetOf(page);
-  check('it reads the Pre Nursery', /Seed Planting \(/.test(sh.line) && /Oct 2026/.test(sh.line), true);
+  check('it reads the Pre Nursery', /Pre Nursery \(/.test(sh.line) && /Oct 2026/.test(sh.line), true);
   check('no tray column: planted date, batch, total, a column per name keyed for the month, a saved name off it flagged, and Checked',
     sh.head, ['Planted date', 'Batch', 'Qty planted', 'Siti', 'Rina', 'Old Name ⚠', 'Keyed by workers', 'Checked']);
   check('rows carry the planted date, the batch, its total and the figures keyed -- and no money', sh.body,
     [['05/10/2026', '278', '3,000', '2000', '1000', '_', '✓ 3,000', 'Check'],
      ['20/10/2026', '279', '800', '500', '_', '200', '700 · short by 100', 'Check']]);
   check('nothing on the sheet is priced', /RM/.test(await page.evaluate(() => document.getElementById('payroll-table').textContent)), false);
-  check('the foot totals the batches and each worker', sh.foot.slice(1, 6), ['3,800', '2,500', '1,000', '200', '3,700']);
+  check('each job closes with its OWN total, naming the job',
+    [sh.foot[0], sh.foot.slice(1, 6)],
+    ['Seed Planting — Total (Capacity)', ['3,800', '2,500', '1,000', '200', '3,700']]);
+  /* AND THE SECOND JOB IS ON THE SAME SHEET, under the first, over the same
+     batches and the same columns. Two entries in the side bar is what the
+     office asked to be rid of. */
+  /* A page with one section -- which is what the previous one draws, the
+     soil filling being a sheet of its own there -- must FAIL this by name
+     rather than taking the harness down on `sections[1]` being undefined. */
+  const sec2 = () => sh.sections[1] || { band: '', head: [], body: [], foot: [] };
+  check('…and the soil filling is the section under it, same batches, same columns',
+    [sh.sections.length, sec2().band, sec2().body.map(r => r[1]),
+     sec2().head.length === sh.head.length && sh.head.length > 0],
+    [2, 'Mengisi Tanah ke Hyplug', ['278', '279'], true]);
+  check('…and its own quantity heading, since it is holes and not seeds',
+    [sh.head[2], sec2().head[2]], ['Qty planted', 'Qty to fill']);
 
   // ── 4. Keying a figure saves one record per batch ──
-  await page.fill('#sp-1-1', '100');
-  await page.dispatchEvent('#sp-1-1', 'change');
+  /* Wrapped, every one of them: the previous page has no `sp-seed-` boxes
+     and no job argument on its handlers, and a throw here would kill the
+     harness where the checks underneath say what is missing, by name. */
+  try {
+    await page.fill('#sp-seed-1-1', '100', { timeout: 4000 });
+    await page.dispatchEvent('#sp-seed-1-1', 'change');
+  } catch (e) { /* the check below says so */ }
   await page.waitForTimeout(900);
-  check('one upsert, keyed on the batch',
-    await page.evaluate(() => window.__WRITES.map(x => [x.row.batch_name, x.row.month, x.row.planted_date, x.row.qty_planted, x.row.workers, x.opt && x.opt.onConflict])),
-    [['279', 'Oct 2026', '2026-10-20', 800, { Siti: 500, 'Old Name': 200, Rina: 100 }, 'batch_name']]);
-  check('…and the row redraws as adding up', await page.evaluate(() =>
-    document.querySelector('#payroll-table tbody tr:nth-child(2) td:nth-last-child(2)').textContent.trim()), '✓ 800');
+  /* ONE UPSERT, KEYED ON THE BATCH AND THE JOB. The Pre Nursery has two
+     jobs now -- sowing the seed and filling the hyplug trays before it --
+     and the key moved with them, or the second job would write over the
+     first's figures on the same batch. */
+  check('one upsert, keyed on the batch AND the job',
+    await page.evaluate(() => window.__WRITES.map(x => [x.row.batch_name, x.row.job, x.row.month, x.row.planted_date, x.row.qty_planted, x.row.workers, x.opt && x.opt.onConflict])),
+    [['279', 'seed', 'Oct 2026', '2026-10-20', 800, { Siti: 500, 'Old Name': 200, Rina: 100 }, 'batch_name,job']]);
+  /* THE BAND AND THE HEAD ARE ROWS IN THE TBODY NOW, so a body row is no
+     longer an nth-child away. Asked by the classes the renderer sets, which
+     is what makes this read the same whichever section it is about. */
+  const bodyRows = () => page.evaluate(() => [...document.querySelectorAll('#payroll-table tbody tr')]
+    .filter(tr => !tr.classList.contains('sp-job-row') && !tr.classList.contains('sp-head')
+               && !tr.classList.contains('sp-sub-row'))
+    .map(tr => [...tr.children].map(td => {
+      const i = td.querySelector('input'); return i ? (i.value || '_') : td.textContent.trim().replace(/\s+/g, ' '); })));
+  check('…and the row redraws as adding up',
+    ((await bodyRows())[1] || []).slice(-2)[0], '✓ 800');
 
   // ── 4b. Checked is what sends a batch to the payroll ──
-  await page.evaluate(() => toggleSeedPlantingCheck(0));
+  try { await page.evaluate(() => toggleSeedPlantingCheck('seed', 0)); } catch (e) {}
   await page.waitForTimeout(300);
   const chk = await page.evaluate(() => {
-    const w = window.__WRITES.slice(-1)[0];
+    /* A write that never happened is read as an empty row, so the checks
+       below fail by name instead of throwing inside the page. */
+    const w = window.__WRITES.slice(-1)[0] || { row: {} };
     return { batch: w.row.batch_name, at: !!w.row.checked_at, by: w.row.checked_by, workers: w.row.workers,
-             boxes: [...document.querySelectorAll('#payroll-table tbody tr:nth-child(1) input.sp-in')].every(i => i.disabled),
-             cell: document.querySelector('#payroll-table tbody tr:nth-child(1) td:last-child').textContent.trim() };
+             boxes: [...document.querySelectorAll('#payroll-table tbody tr.sp-job-row ~ tr input.sp-in')]
+                      .slice(0, 3).every(i => i.disabled),
+             cell: (([...document.querySelectorAll('#payroll-table tbody tr')]
+                     .filter(tr => !tr.classList.contains('sp-job-row') && !tr.classList.contains('sp-head')
+                                && !tr.classList.contains('sp-sub-row'))[0] || {}).lastElementChild
+                     || { textContent: '' }).textContent.trim() };
   });
   check('Check writes the tick on the batch with its figures', [chk.batch, chk.at, chk.by, chk.workers],
     ['278', true, 'Elon Ting', { Siti: 2000, Rina: 1000 }]);
   check('…and the checked row is shut and says who', [chk.boxes, /^✓ Elon Ting/.test(chk.cell)], [true, true]);
-  await page.evaluate(() => setSeedPlantingQty(0, 0, '5'));
+  try { await page.evaluate(() => setSeedPlantingQty('seed', 0, 0, '5')); } catch (e) {}
   await page.waitForTimeout(800);
   check('a figure on a checked batch is refused, not saved', [/Batch 278 is Checked/.test(dialogs.pop() || ''),
     await page.evaluate(() => window.__WRITES.filter(x => x.row.batch_name === '278').length)], [true, 1]);
-  await page.evaluate(() => toggleSeedPlantingCheck(0));
+  try { await page.evaluate(() => toggleSeedPlantingCheck('seed', 0)); } catch (e) {}
   await page.waitForTimeout(300);
   check('Uncheck asks first, and clears the tick', [/^confirm: Uncheck batch 278/.test(dialogs.pop() || ''),
-    await page.evaluate(() => window.__WRITES.slice(-1)[0].row.checked_at)], [true, null]);
+    await page.evaluate(() => (window.__WRITES.slice(-1)[0] || { row: {} }).row.checked_at)], [true, null]);
 
   // ── 5. The names, from a dropdown ──
   const bar = await page.evaluate(() => [...document.querySelectorAll('#payroll-names .sp-chip')].map(c => c.firstChild.textContent));
@@ -260,7 +324,7 @@ const sheetOf = (page) => page.evaluate(() => {
   await page.waitForTimeout(200);
   check('Other opens a box for a name on no list, tidied', await page.evaluate(() => _spCache['Oct 2026'].names),
     ['Siti', 'Rina', 'Nur Aina', 'Pak Long']);
-  await page.evaluate(() => removeSeedPlantingWorker(0));
+  try { await page.evaluate(() => removeSeedPlantingWorker(0)); } catch (e) {}
   check('a name with figures is not removed', /Siti has figures on 2 row/.test(dialogs.pop() || ''), true);
 
   // ── 6. 277, sown on 28 Sep, added to October from a dropdown ──
@@ -291,7 +355,7 @@ const sheetOf = (page) => page.evaluate(() => {
   // Taken off again: back to September.
   await page.evaluate(() => { document.getElementById('global-month').value = '2026-10'; renderPayroll(); });
   await page.waitForTimeout(500);
-  await page.evaluate(() => removeSeedPlantingBatch('277'));
+  try { await page.evaluate(() => removeSeedPlantingBatch('277')); } catch (e) {}
   await page.waitForTimeout(700);
   check('taking it off asks, and deletes only the move', [/^confirm: Take batch 277 off Oct 2026\?/.test(dialogs.pop() || ''),
     await page.evaluate(() => window.__MOVES.slice(-1)[0])], [true, { op: 'delete', batch: '277' }]);
@@ -303,8 +367,16 @@ const sheetOf = (page) => page.evaluate(() => {
     const d = window.__PDFS[0] || { lines: [], o: {} };
     return { saved: d.saved, orient: d.o.orientation, lines: d.lines };
   });
-  check('Seed Planting downloads its own sheet, wide',
-    [/^Worker_Record_Seed_Planting_Oct_2026/.test(pdf.saved || ''), pdf.orient], [true, 'landscape']);
+  check('the Pre Nursery sheet downloads, wide',
+    [/^Worker_Record_Pre_Nursery_Oct_2026/.test(pdf.saved || ''), pdf.orient], [true, 'landscape']);
+  /* BOTH JOBS ARE ON THE PAPER, each with its own total naming it. A sheet
+     printing only the half that happened to be on screen is the fault the
+     Transplanting download already had once. */
+  check('…and BOTH jobs are on it, each total naming its own job',
+    [pdf.lines.includes('Seed Planting'), pdf.lines.includes('Mengisi Tanah ke Hyplug'),
+     pdf.lines.includes('Seed Planting — Total (Capacity)'),
+     pdf.lines.includes('Mengisi Tanah ke Hyplug — Total (Capacity)')],
+    [true, true, true, true]);
   check('…carrying the batches, their totals and every worker',
     ['278', '279', '3,000', '800', 'Siti', 'Rina', 'Old Name', '2,000', '100'].every(v => pdf.lines.includes(v)), true);
   check('…with no tray on it', pdf.lines.some(l => /^Tray$|^P[0-9]$/.test(l)), false);
@@ -322,24 +394,30 @@ const sheetOf = (page) => page.evaluate(() => {
   // ── 8. Before the SQL is run: the rows show, the boxes take nothing ──
   const b = await boot(browser, { logs: LOGS, saved: [], names: [], noTable: true });
   const nt = await b.page.evaluate(() => ({
-    rows: document.querySelectorAll('#payroll-table tbody tr').length,
+    rows: [...document.querySelectorAll('#payroll-table tbody tr')].filter(tr =>
+            !tr.classList.contains('sp-job-row') && !tr.classList.contains('sp-head')
+         && !tr.classList.contains('sp-sub-row')).length,
     disabled: [...document.querySelectorAll('#payroll-table input.sp-in')].every(i => i.disabled),
     hint: document.getElementById('payroll-hint').textContent,
     warn: document.getElementById('payroll-hint').classList.contains('pay-hint-warn')
   }));
   check('with no tables the batches still show, every box shut, and the file to run named',
-    [nt.rows, nt.disabled, /RUN_ME_seed_planting_workers\.sql/.test(nt.hint), nt.warn], [2, true, true, true]);
+    [nt.rows, nt.disabled, /RUN_ME_seed_planting_workers\.sql/.test(nt.hint), nt.warn], [4, true, true, true]);
   check('no page errors there either', b.errs, []);
 
   // ── 9. A new month starts empty and offers last month in one press ──
   const c = await boot(browser, { logs: LOGS, saved: [], names: [{ month: 'Sep 2026', names: ['Ana', 'Budi'] }], noTable: false });
   const empty = await c.page.evaluate(() => ({
-    cols: [...document.querySelectorAll('#payroll-table thead tr:nth-child(2) th')].map(th => th.textContent.trim()),
-    rows: document.querySelectorAll('#payroll-table tbody tr').length,
+    cols: [...document.querySelectorAll('#payroll-table tbody tr.sp-head')][0]
+            ? [...document.querySelectorAll('#payroll-table tbody tr.sp-head')[0].children].map(th => th.textContent.trim()) : [],
+    rows: [...document.querySelectorAll('#payroll-table tbody tr')].filter(tr =>
+            !tr.classList.contains('sp-job-row') && !tr.classList.contains('sp-head')
+         && !tr.classList.contains('sp-sub-row')).length,
     offer: [...document.querySelectorAll('#payroll-names button')].map(b => b.textContent.trim()).find(x => /last month/i.test(x)) || ''
   }));
+  /* Four rows, not two: the same two batches under each of the two jobs. */
   check('no names yet: the batches still show, with no worker columns', [empty.rows, empty.cols],
-    [2, ['Planted date', 'Batch', 'Qty planted', 'Keyed by workers', 'Checked']]);
+    [4, ['Planted date', 'Batch', 'Qty planted', 'Keyed by workers', 'Checked']]);
   check('…and last month is offered, counted', empty.offer, 'Use last month’s names (2)');
   await c.page.evaluate(() => useLastMonthSeedPlantingNames());
   await c.page.waitForTimeout(200);

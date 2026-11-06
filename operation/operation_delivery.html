@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Every line of this page's code is inline, so the PAGE is the deploy —
+         without these three a browser keeps yesterday's copy and a fix here
+         reaches nobody (see "A page that caches cannot deliver a fix" in
+         CLAUDE.md). Added the day the signed-DO print fix had to arrive. -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache"/>
+    <meta http-equiv="Expires" content="0"/>
     <title>Delivery Orders - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1092,7 +1099,64 @@
             // exists.
             const sigSrc = extra.manual_signed_url || extra.signature_url || null;
             const sig = sigSrc ? await mjmImageAsDataUrl(sigSrc) : null;
+            // No signature on the row at all -- a DO issued and signed on a
+            // phone before the apps wrote signature_url (everything before
+            // 20 Oct 2026, 519 rows the day this was written). The customer
+            // DID sign: the signed PDF built at issue time is sitting in the
+            // order-attachments bucket at a deterministic path, so hand over
+            // THAT file rather than rebuilding an unsigned one -- a download
+            // with an empty signature box over a delivery the customer
+            // signed is the office's own word against its own record. An
+            // AMENDED old DO is the one case this could mislead (the stored
+            // PDF shows the figures as issued); the manually-signed-copy
+            // upload is the existing answer there and takes precedence the
+            // moment it exists, and the toast names what this file is.
+            if (!sig) {
+                const issued = await mjmFetchIssuedSignedPdf(doRec);
+                if (issued) {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(issued);
+                    a.download = mjmDoPdfFileName(doRec);
+                    document.body.appendChild(a); a.click(); a.remove();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+                    mjmPrintToast('Downloaded the SIGNED copy made when this DO was issued. If the DO was amended since, upload the re-signed paper under "Manually signed copy".');
+                    return;
+                }
+            }
             mjmBuildDOPdf(doRec, parentAL, currentStaffEmail || 'MJM Staff', sig, photo).save(mjmDoPdfFileName(doRec));
+        }
+
+        // The signed DO PDF built the moment the phone issued it -- uploaded
+        // by attachDOToOrder (FC Portal / Admin Portal / this page's own
+        // mjmAttachDOToOrder) to the public order-attachments bucket under
+        // do-pdfs/<AL>/<DO>.pdf. The path is deterministic, so no table read
+        // is needed and a bucket miss simply answers null. A MANUAL- AL
+        // never had one attached.
+        async function mjmFetchIssuedSignedPdf(doRec) {
+            try {
+                if (!doRec || !doRec.al_number || !doRec.do_number) return null;
+                if (/^MANUAL-/i.test(doRec.al_number)) return null;
+                const path = `do-pdfs/${doRec.al_number}/${String(doRec.do_number).replace(/[/\\]/g, '_')}.pdf`;
+                const { data } = _supabase.storage.from('order-attachments').getPublicUrl(path);
+                if (!data || !data.publicUrl) return null;
+                const resp = await fetch(data.publicUrl);
+                if (!resp.ok) return null;
+                const blob = await resp.blob();
+                // Storage answers a miss with a small JSON error body --
+                // never hand that over as a PDF.
+                if (!/pdf/i.test(blob.type) && blob.size < 2048) return null;
+                return blob;
+            } catch (e) { return null; }
+        }
+
+        // This page has no toast of its own; a corner note that names which
+        // copy was downloaded, gone by itself. Never blocks like alert().
+        function mjmPrintToast(msg) {
+            const el = document.createElement('div');
+            el.className = 'fixed bottom-6 right-6 z-[9999] max-w-sm bg-slate-900 text-white text-xs font-bold rounded-xl shadow-2xl px-4 py-3';
+            el.textContent = msg;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 9000);
         }
 
         function openMissingDOModal(missingNum) {

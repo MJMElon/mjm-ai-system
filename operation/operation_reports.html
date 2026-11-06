@@ -354,7 +354,8 @@
         <div class="f-nursery-sub-wrap hidden w-full">
           <label class="label-style !mb-1">Report</label>
           <select id="f-nursery-sub" class="input-style">
-            <option value="summary">Summary Report</option>
+            <option value="summary">MPOB Submission Report</option>
+            <option value="summary_cull2">Summary Report</option>
             <option value="transplanting">Transplanting Report</option>
             <option value="seed_in">Seed In Report</option>
             <option value="culling">Culling Report</option>
@@ -3137,13 +3138,21 @@ const REPORTS = [
      they had is a column here. */
   { value: 'life_of_seedlings',     label: 'Life of Seedling',   hint: 'Life of Seedlings — one row per batch: seeds in, planted, transplanted, culled, sold, and what is still standing' },
   { value: 'life_of_plot',          label: 'Life of Plot',       hint: 'Life of Plot — one row per plot: every batch that passed through it, in, out, culled, sold, and what is standing; click a plot for its full history' },
-  { value: 'movement_report',       label: 'Nursery Report',     hint: 'Nursery Report — Summary (Movement), Transplanting, Seed In or Culling; pick which under Report below' },
+  { value: 'movement_report',       label: 'Nursery Report',     hint: 'Nursery Report — MPOB Submission, Summary, Transplanting, Seed In or Culling; pick which under Report below' },
   { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
 ];
 
-// The four reports living inside the Nursery Report tab's own selector.
+// The five reports living inside the Nursery Report tab's own selector.
+// 'summary' is the report the office has always submitted to MPOB — only
+// its LABEL changed to say so (MPOB Submission Report); the value stays
+// 'summary' so the remembered last-open sub (LAST_NURSERY_SUB_KEY) and
+// anything else keyed on it keep working. 'summary_cull2' is the same
+// report with the 2nd Culled shown and deducted on its own — see
+// MOVE_COLS.main2 / netOfRow() for why its Balance reads lower only
+// while a plot is 2nd culled and not yet 3rd culled.
 const NURSERY_SUB_REPORTS = [
-  { value: 'summary',       label: 'Summary Report',       hint: 'Summary Report — the Movement Report: pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
+  { value: 'summary',       label: 'MPOB Submission Report', hint: 'MPOB Submission Report — the Movement Report as submitted: 2nd culling is not a separate deduction here. Pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
+  { value: 'summary_cull2', label: 'Summary Report',       hint: 'Summary Report — the same Movement Report with the 2nd Culled separated out and deducted, so the Balance reads lower than the MPOB Submission Report wherever a plot is 2nd culled and not yet 3rd culled' },
   { value: 'transplanting', label: 'Transplanting Report', hint: 'Transplanting Report — date, maturity date, location' },
   { value: 'seed_in',       label: 'Seed In Report',       hint: 'Seed In Report — what came in, per batch: supplier, quantity, damage, planted, variance' },
   { value: 'culling',       label: 'Culling Report',       hint: 'Culling Report — pick 1st, 2nd or 3rd Culling under Culling Stage below' },
@@ -3251,7 +3260,8 @@ async function runReport() {
   if (which === 'life_of_plot') return runLifeOfPlot();
   if (which === 'movement_report') {
     const sub = (document.getElementById('f-nursery-sub') || {}).value || 'summary';
-    if (sub === 'summary')       return runMovementReportCombined();
+    if (sub === 'summary')       return runMovementReportCombined(false);
+    if (sub === 'summary_cull2') return runMovementReportCombined(true);
     if (sub === 'transplanting') return runTransplantingReport();
     if (sub === 'seed_in')       return runSeedInReport();
     if (sub === 'culling')       return runCullingReport();
@@ -3266,7 +3276,9 @@ function syncFilterVisibility() {
   // Which of the four reports inside Nursery Report — see
   // NURSERY_SUB_REPORTS. Only meaningful (and only shown) on that tab.
   const sub = isNurseryTab ? ((document.getElementById('f-nursery-sub') || {}).value || 'summary') : '';
-  const isMovement = sub === 'summary';
+  // Both movement views — MPOB Submission ('summary') and the 2nd-culling
+  // Summary ('summary_cull2') — share the same filter set.
+  const isMovement = sub === 'summary' || sub === 'summary_cull2';
   const isTrans    = sub === 'transplanting';
   // isLife is the standalone Life of Seedling tab — its own six-filter set
   // (.f-los + breed). isSeedIn (Nursery Report's Seed In sub-report) reads
@@ -3922,20 +3934,39 @@ const MOVE_COLS = {
     { key: 'adjust',  label: 'Stock Adjustment',      sign: +1, cls: 'text-[#7a4a10]' },
   ],
 };
+// The Summary Report's main section ('summary_cull2' in NURSERY_SUB_REPORTS)
+// — the MPOB columns with 2nd Culled separated out on its own, in front of
+// the 3rd it eventually becomes part of. Derived from MOVE_COLS.main rather
+// than typed out again, so a column added to the MPOB report cannot quietly
+// miss this one. Its deduction is conditional — see netOfRow().
+MOVE_COLS.main2 = MOVE_COLS.main.flatMap(c => c.key === 'cull3'
+  ? [{ key: 'cull2', label: '2nd Culled', sign: -1, cls: 'text-[#a83020]' }, c]
+  : [c]);
 
 const emptyRow = (scope) => MOVE_COLS[scope].reduce((a, c) => { a[c.key] = 0; return a; }, {});
 
 /**
  * What a row's movements come to.
  *
- * 2nd Culled never deducts here, B/F included — 2nd Culling is Tab 6's own
- * live snapshot as a batch works through 3rd Culling, not a separate loss
- * on top of it, and it doesn't get its own column here either (see
- * MOVE_COLS.main). 3rd Culled — once evidenced (see the MapQty: check
+ * 2nd Culled never deducts on the MPOB Submission Report, B/F included —
+ * 2nd Culling is Tab 6's own live snapshot as a batch works through 3rd
+ * Culling, not a separate loss on top of it, and it has no column there
+ * (see MOVE_COLS.main). 3rd Culled — once evidenced (see the MapQty: check
  * below) — is the actual, standing deduction.
+ *
+ * The Summary Report (scope 'main2') is the office's asked-for exception:
+ * the 2nd Culled has its own column AND deducts — but only while the same
+ * bucket carries no evidenced 3rd Culling, because a 3rd culling already
+ * includes the seedlings 2nd culled on the way to it (the Batch Report's
+ * own rule: cull2 "is inside cull3"). Deducting both would take one loss
+ * off twice. So that report's Balance reads LOWER than the MPOB one
+ * exactly while a plot·batch is 2nd culled and not yet 3rd culled, and
+ * the two read the same again once the 3rd is keyed and evidenced.
  */
 function netOfRow(scope, b) {
-  return MOVE_COLS[scope].reduce((s, c) => s + c.sign * (b[c.key] || 0), 0);
+  const superseded = (b.cull3 || 0) > 0;
+  return MOVE_COLS[scope].reduce((s, c) =>
+    (c.key === 'cull2' && superseded) ? s : s + c.sign * (b[c.key] || 0), 0);
 }
 
 /* "2 months". Age is measured from the batch's own planting date, so it reads
@@ -4006,7 +4037,11 @@ function mvHideDetailTip() {
   document.getElementById('mv-sales-tip').classList.add('hidden');
 }
 
-async function runMovementReportCombined() {
+// withCull2 — false is the MPOB Submission Report (value 'summary', the
+// report exactly as it has always been), true is the Summary Report
+// ('summary_cull2'), which separates the 2nd Culled into its own deducting
+// column. One builder, one fetch, one pass over the ledger for both.
+async function runMovementReportCombined(withCull2) {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
@@ -4164,10 +4199,18 @@ async function runMovementReportCombined() {
 
     if (t === 'Planted')     { push('pre', d, l.plot_name, b, 'planted', q); return; }
     if (t === '1st_Culling') { push('pre', d, l.plot_name, b, 'cull1', q); return; }
-    // 2nd_Culling isn't tracked in Main Nursery Movement at all — it's
-    // Tab 6's own running snapshot toward 3rd Culling, not a separate,
-    // standing deduction (see netOfRow above).
-    if (t === '2nd_Culling') return;
+    // 2nd_Culling isn't tracked on the MPOB Submission Report at all —
+    // it's Tab 6's own running snapshot toward 3rd Culling, not a
+    // separate, standing deduction. The Summary Report (withCull2) shows
+    // and deducts it in its own column, superseded once a 3rd culling is
+    // evidenced on the same plot·batch — see netOfRow above.
+    if (t === '2nd_Culling') {
+      if (withCull2 && passMain(l.plot_name)) {
+        push('main', d, l.plot_name, b, 'cull2', q);
+        pushDetail(l.plot_name, b, 'cull2', d, q, '');
+      }
+      return;
+    }
     if (t === '3rd_Culling') {
       // Only counted once a drone map qty has actually been keyed — Tab 6
       // computes and saves a 3rd_Culling figure the moment Alive reaches
@@ -4311,7 +4354,10 @@ async function runMovementReportCombined() {
   const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, saleDetails, colDetails };
   const sections = [];
   if (wantPre)  sections.push(buildMovementSection('pre',  ev.filter(e => e.sc === 'pre'),  { ...ctx, unmatchedSales: [] }));
-  if (wantMain) sections.push(buildMovementSection('main', ev.filter(e => e.sc === 'main'), { ...ctx, unmatchedSales }));
+  // The Summary Report's main section draws with the cull2 column ('main2');
+  // the pre-nursery section is identical on both reports — a 2nd culling
+  // only ever happens out in a plot.
+  if (wantMain) sections.push(buildMovementSection(withCull2 ? 'main2' : 'main', ev.filter(e => e.sc === 'main'), { ...ctx, unmatchedSales }));
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -4398,7 +4444,7 @@ function buildMovementSection(scope, ev, ctx) {
     const sales = saleDetails ? inPeriod(saleDetails[meta[k].place + '::' + meta[k].batch]) : [];
     const details = {};
     if (colDetails) {
-      ['trIn', 'transIn', 'cull3', 'trOut', 'adjust'].forEach(col => {
+      ['trIn', 'transIn', 'cull2', 'cull3', 'trOut', 'adjust'].forEach(col => {
         const dk = meta[k].place + '::' + meta[k].batch + '::' + col;
         details[col] = inPeriod(colDetails[dk]);
       });
@@ -4441,7 +4487,7 @@ function buildMovementSection(scope, ev, ctx) {
   // markup. Sold reads r.sales (Date/DO Number/Customer/Qty); the other
   // wired columns read r.details[col] (Date/label/Qty) — see the
   // pushDetail() calls above and DETAIL_TITLES below.
-  const DETAIL_TITLES = { trIn: 'Transfer In', transIn: 'Transplanted from PN', cull3: '3rd Culled', trOut: 'Transfer Out', adjust: 'Stock Adjustment' };
+  const DETAIL_TITLES = { trIn: 'Transfer In', transIn: 'Transplanted from PN', cull2: '2nd Culled', cull3: '3rd Culled', trOut: 'Transfer Out', adjust: 'Stock Adjustment' };
   const fmtDetailCell = (r, c) => {
     const n = r[c.key];
     const rowsForTip = c.key === 'sold' ? r.sales : (r.details && r.details[c.key]);
@@ -4534,6 +4580,14 @@ function buildMovementSection(scope, ev, ctx) {
   const rangeLabel = fromStr && toStr
     ? `${fmtDate(fromStr)} – ${fmtDate(toStr)} · Balance as at ${fmtDate(toStr)}`
     : (toStr ? `Balance as at ${fmtDate(toStr)}` : 'Balance as at today');
+  // Only the Summary Report carries this — a Balance that can read lower
+  // than the MPOB Submission Report's has to say why, on the page itself.
+  const cull2Note = scope === 'main2' ? `
+      <div class="mt-4 text-[10px] font-bold text-[#8a7a68]">
+        2nd Culled is deducted from the Balance only while the plot has no evidenced 3rd Culling —
+        a 3rd culling already includes the seedlings 2nd culled before it, so once it is keyed the
+        2nd stops deducting and this report reads the same as the MPOB Submission Report.
+      </div>` : '';
   const unmatchedHtml = unmatchedSales.length ? `
       <div class="mt-4 rounded-2xl border border-[#f0b429] bg-[#fffbeb] p-4">
         <div class="text-[11px] font-black text-[#7a4a10] uppercase tracking-widest mb-2">
@@ -4584,6 +4638,7 @@ function buildMovementSection(scope, ev, ctx) {
         </table>
       </div>
 
+      ${cull2Note}
       ${unmatchedHtml}
     </div>
   `;

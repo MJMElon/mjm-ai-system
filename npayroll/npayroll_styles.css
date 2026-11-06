@@ -194,6 +194,31 @@ tbody tr:hover td { background: #fafaff; }
 tfoot td { padding: 11px 12px; background: var(--ink-light); font-size: 13px; font-weight: 900;
            color: var(--ink-deep); text-align: center; border-top: 2px solid var(--ink-mid); }
 tfoot td.l { text-align: left; }
+
+/* ── THE PRE NURSERY CLAIM IS TWO JOBS ON ONE SHEET ──────────────────────
+   Sowing the seed and filling the hyplug trays, one under the other with a
+   grand total at the foot, which is what the office chose: one sheet of
+   paper and one signature.
+
+   So the head belongs to the SECTION and cannot be a <thead> -- there are
+   two of them. These carry the look `thead th` gives the ordinary tables,
+   because a head that reads as a body row is a column nobody can place. */
+tbody tr.pn-job-row td.pn-job { background: var(--ink-light); color: var(--ink-deep);
+           font-size: 12px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+           padding: 12px 12px 6px; text-align: left; border-bottom: none; }
+tbody tr.pn-job-row:hover td { background: var(--ink-light); }
+tbody tr.pn-head th { background: var(--ink-light); color: var(--ink-dark); font-size: 10px;
+           font-weight: 900; letter-spacing: .12em; text-transform: uppercase; padding: 8px 12px 11px;
+           text-align: center; border-bottom: 2px solid var(--ink-mid); white-space: nowrap;
+           vertical-align: middle; }
+/* A JOB TOTAL IS NOT THE CLAIM TOTAL, so it does not wear the foot's weight
+   -- two figures of the same colour, one above the other, is how somebody
+   signs for the wrong one. */
+tbody tr.pn-sub-row td { background: #f6f7fd; font-weight: 800; color: var(--ink-deep);
+           border-bottom: 2px solid var(--ink-mid); }
+tbody tr.pn-sub-row:hover td { background: #f6f7fd; }
+tbody tr.pn-sub-row td:first-child { text-align: left; }
+
 .empty { text-align: center; color: var(--text-faint); padding: 42px 14px; font-size: 13px; }
 .money { font-weight: 800; color: var(--ink-deep); white-space: nowrap; }
 
@@ -521,3 +546,11 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
   font-variant-numeric:tabular-nums;}
 .pt-wd{font-size:11px;font-weight:700;color:var(--ink-deep);margin-top:5px;
   font-variant-numeric:tabular-nums;}
+/* The job split inside a Pre Nursery card. The two jobs are priced at
+   different rates, so a card reading 5,000 biji and RM 117.08 cannot be
+   checked against itself without saying how the 5,000 divides — and it is
+   MUTED and SMALL because the composition is for the reader who stops,
+   where the total is for the one going across. Drawn only where both jobs
+   have something on that batch; see renderPreNurseryGlance(). */
+.pt-sub{font-size:10px;font-weight:600;color:var(--text-muted);margin-top:4px;
+  line-height:1.45;font-variant-numeric:tabular-nums;}
