@@ -4533,6 +4533,82 @@ card view was looked at as well, a check being unable to read a layout.
 first, so it now expands the spans into a grid and reads that. **Nothing to
 run in the database.**
 
+#### AND IT COMES DOWN AS A SPREADSHEET, which is a different document
+
+*"and it also able to download in excel"*, said in the next breath. The
+sheet this page PRINTS is read by somebody adding up and signing; a
+spreadsheet is read by somebody who wants to SORT, FILTER and PIVOT. They
+are two documents, and nearly every decision below falls out of that one
+sentence rather than out of a file format.
+
+**IT IS A REAL .xlsx, WRITTEN IN THE PAGE — no library and no fetch.** Two
+reasons, and the first rules CSV out on its own:
+
+- **A CASE ID IS THIRTEEN DIGITS.** Excel reads a bare `1791248487117` in a
+  CSV as a number and shows it as **1.79125E+12**, so the one column the
+  office asked for twice would arrive destroyed. An xlsx cell declares its
+  own type, so the case goes in as TEXT and reads back digit for digit.
+- **Nothing to 404 at the moment somebody presses the button** — the same
+  argument the papan tanda logo is inlined for. A spreadsheet that needs a
+  CDN is a button that fails on the day the office is behind a captive
+  portal. The zip is STORED rather than deflated for the same reason: the
+  alternative is a library or `CompressionStream`, a second thing that can
+  be absent, and a month of audits is a megabyte.
+
+**THE SHAPE IS NOT THE PAGE'S, and that is the point:**
+
+- **ONE SHEET PER MODULE, with a NURSERY COLUMN**, where the page draws a
+  Pre Nursery section and a Main Nursery one. A filter on that column is
+  the two sections back, and a file split across sheets by something that
+  could have been a column is one somebody has to glue together before they
+  can total it.
+- **EVERY LINE CARRIES ITS OWN PLOT, DAY AND TASK.** The table merges them
+  down the side of a record because that is how a visit reads on paper —
+  and **a merged cell breaks sorting and filtering, which is what the file
+  is FOR**. The **Record number** is what keeps the grouping: the same
+  number down three lines is one visit, and it sorts and it pivots.
+- **A FIGURE IS A NUMBER, AN ID IS NOT, AND A DATE IS A DATE.** All three
+  come off the column's own flags — `num`, which `MOD_COLS` already carries
+  to decide alignment, and `xlDate`, added beside it. A second list saying
+  which column is which is a second thing to get wrong.
+- **THE TABLE'S EM DASH IS AN EMPTY CELL.** On paper `—` says "nothing
+  here" in a column that has to stay aligned. In a spreadsheet it is a
+  VALUE: it sorts after every number, it turns up in the filter list as
+  something to tick, and it stops a column of figures being one.
+- **THE FIRST SHEET IS THE CONTEXT** — the range, the nurseries, the plot
+  search, the per-module counts. A spreadsheet that has left the screen
+  with no idea which dates it covers is a column of figures nobody can
+  check. It is the one sheet with no filter and no frozen row, being a list
+  rather than a table.
+
+**THE SHEETS ARE THE ROWS THAT WERE DRAWN.** `_lastReport` is written at
+the end of `generateReport` carrying rows already narrowed by plot, by Done
+By and by nursery exactly as the tables above them are — so a figure in the
+spreadsheet cannot disagree with the card it was read off. A second read
+scoped its own way is how the two come to differ.
+
+**ONE CELL BUILDER (`_xlCell`), because there are two tables to turn into
+sheets** — the four module ones and Height by Batch, which is not a
+`MOD_COLS` table. Two copies would be two answers to "is this column a
+date", and the second copy is exactly how Height by Batch shipped its
+`Seeds In` and `Audited` as text for an afternoon.
+
+**AND A WORKBOOK EXCEL REFUSES OPENS TO NOTHING AND SAYS NOTHING**, which
+on this screen is the office pressing a button that does not work. So the
+checks do not read the file with the code that wrote it:
+`tests/the_report_downloads_an_excel.cjs` pulls the real download out of a
+real browser and reads it back with **python's own `zipfile`** — whose
+`testzip()` recomputes every CRC and length — and `ElementTree`, with a
+further section through **openpyxl** where it is installed, which resolves
+numFmt 14 itself and so says a date cell is a date without having been told.
+**6 of its 57 checks fail on the previous page**, and the rest are not asked
+because they are about the contents of a file that does not exist; the test
+says that in one line rather than printing fifty of them.
+
+**Nothing to run in the database**, and no `?v=` to move: every line of this
+is inside `audit_report.html`, which already carries the three no-cache
+metas and which `audit_sw.js` serves network-first and does not precache.
+
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
 The Worker System board opens with a yellow queue — Waiting to be allocated
