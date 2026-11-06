@@ -4608,6 +4608,100 @@ says that in one line rather than printing fifty of them.
 **Nothing to run in the database**, and no `?v=` to move: every line of this
 is inside `audit_report.html`, which already carries the three no-cache
 metas and which `audit_sw.js` serves network-first and does not precache.
+#### And a HEIGHT is read in cm or in m, whichever the office picks
+
+Asked over the one column they had on screen: *plot avg 我要可以选择cm or
+换算m*.
+
+**IT IS EVERY HEIGHT ON THE SHEET, which is the only version of it that is
+not worse than no choice at all.** A row reading 141.7 · 161.1 · 120 ·
+**1.417** is four centimetres and one metre side by side; and this report
+has **TWO columns headed Plot Avg** — the Seedling Height table and Height
+by Batch — so moving the one in the screenshot would have been two answers
+on one page. The three samples, both averages, the batch average and the
+four age cards move together.
+
+**THE HEADING IS WHAT CARRIES THE CHOICE ONTO PAPER.** The control is in
+the toolbar and `.toolbar` is `display:none` in print, so the heading is
+the only thing a printed sheet can say the unit with — which is why every
+figure that moves sits under one reading `(cm)` or `(m)`, the block head
+over the age cards included (those four carry no unit of their own).
+`hgtHead()` is the one spelling of it.
+
+**PRECISION DOES NOT MOVE, and that is the whole of the rounding rule.** A
+reading is keyed to a tenth of a centimetre, which is a millimetre, and
+**three** decimals of a metre is the same millimetre: 141.7 cm is 1.417 m.
+Two decimals reads 1.42 and has thrown a measurement away, and the test
+asserts that cell is NOT 1.42.
+
+**cm MOVES NOTHING.** `hgtKeyed` prints a stored reading exactly as stored
+while cm is chosen, rather than re-rounding it, so the sheet the office
+already reconciles against is the sheet it was until somebody presses m.
+`hgtMean` is its twin for a figure this page WORKED OUT — a mean has as
+many decimals as the division left it, so that one is rounded to the
+unit's own precision. `fmt1` is gone: every one of its callers was a
+height.
+
+**IT IS NOT A FILTER, so it reads nothing.** The batch half of this report
+pages the whole inventory ledger, and pressing m must not go near it. So
+`generateReport` was split: it fetches, then calls **`drawReport(rep)`**,
+and `_lastReport` is what a unit change redraws from. Three things in that:
+
+- **`mods` is PASSED and never read off the panel.** The sheet can be
+  redrawn after it was generated and the ticks may have been moved in
+  between, so a section built off the live panel would draw a module the
+  report was never generated for. `buildNurserySection` takes the list.
+- **`at` rides in the payload**, because *Generated:* is when the report
+  was generated — reading it in another unit a minute later has not
+  generated anything.
+- **`_maintNarrowed` is restored from the payload** rather than left
+  standing, so a redraw says exactly what the generate said.
+
+**A HEADING MAY NOW BE A FUNCTION** (`colHead` / `colLabel` in
+`buildTable`), asked at draw time, so the heading and the figures under it
+come out of one choice in one pass and cannot disagree. The phone card's
+`data-label` is that same heading, so it carries the unit too.
+
+**The control is offered only where the report HAS a height on it** — the
+rule the Done By row already follows — and it is **two chips rather than
+one toggling button**: a segmented pair says both answers exist and which
+is on, where *Show in m* makes somebody read the label to work out where
+they are.
+
+**It is NOT remembered between page loads**, deliberately. This sheet gets
+printed and passed round, and a unit that is whatever somebody last picked
+on one machine is how two copies of one report come to disagree. The
+heading names it either way, so the predictable default is worth more; one
+line of localStorage the day the office asks.
+
+**AND THE SPREADSHEET COMES DOWN IN THE UNIT ON SCREEN**, which is where
+this met the Excel export above — the two were written in parallel
+sessions on the same page and merged rather than one replacing the other.
+It falls out rather than being a second rule: `_xlSheetOf` asks the same
+columns for the same `colHead` and the same `v()` the draw just used, so
+one object serves both. Two things had to move for that:
+
+- **`_lastReport` IS ONE OBJECT, not two.** Both halves had reached for
+  that name, and two would have been the same report answering in two
+  units. It is built at the END of `drawReport` — where the figures it
+  quotes are — so a unit change re-makes it identically, and the sheet
+  keeps `sheetData` (nursery-filtered, what the Excel is of) apart from
+  `data` (what each section filters for itself).
+- **The Excel walks `R.mods`**, not the live panel, for the reason the
+  sections do.
+
+A spreadsheet headed `(cm)` over a column of metres is the worst of the
+three places this could go wrong, because the file outlives the screen.
+The figure still goes in as a NUMBER — `_xlCell` reads it back off the
+text and `c.num` — so a column of 1.417 sorts and sums.
+
+`tests/a_height_is_read_in_cm_or_m.cjs` drives the real page with the
+office's own 141.7 / 161.1 / 120 / 48.9. **20 of its 32 checks fail on the
+previous page** — and the twelve that pass are exactly the *cm moves
+nothing* ones, which is the point. `SHOT=/path.png` draws **both** units,
+a check being unable to read a layout. **Nothing to run in the database**,
+and nothing to bump: `audit_report.html` is not in `audit_sw.js`'s
+precache list and that worker is network-first for HTML.
 
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
