@@ -48,6 +48,20 @@ MJMModuleAccess.init({
         { key:'add_record',   label:'Add & edit work records', desc:'Key in a maintenance job, or change one already keyed' },
         { key:'tick_schedule',label:'Tick and save the schedule', desc:'Set which plots are treated in each week of the month' },
         { key:'worker_record',label:'Tick the Worker Record', desc:'Mark which worker did which job, feeding the salary claim' },
+        /* THE STANDARD APPROVE TICK. A phone record the Field Conductor
+           rejected can be overridden by the office and accepted anyway —
+           approveSubmission() in plot_maintenance_script.js — and that had
+           NO gate at all: anybody who could open this page could already
+           press it. `fallbackTo:'view'` is what keeps that true for
+           everybody already configured here: a row saved before this key
+           existed has no opinion on 'approve', and reading an absent key
+           as OFF would take the button away from people who have always
+           had it. Once somebody explicitly saves this tick either way,
+           their own answer is what is read — mayMaintAct('approve','view')
+           in plot_maintenance_script.js is the same fallback, by name. */
+        { key:'approve',      label:'Approve a submitted work record',
+          desc:'Accept a Worker Portal submission the Field Conductor sent back, overriding the rejection',
+          fallbackTo:'view' },
         /* VERIFY AND UNLOCK ARE TWO TICKS, the same split the payroll
            module's own strip has: being trusted to say a sheet is right is
            not the same as being trusted to unsay it.

@@ -9047,6 +9047,11 @@ async function _reloadSubmissions() {
 async function approveSubmission(id) {
   const f = _submissionById(id);
   if (!f) return;
+  if (!mayMaintAct('approve', 'view')) {
+    alert('You are not allowed to approve a submitted record.\n\n'
+        + 'Ask an admin to tick "Approve a submitted work record" on Module Assess Control.');
+    return;
+  }
   if (!_supabase) { alert('Not connected to the database.'); return; }
   const where = `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · ${_tarikhDisplay(f.work_date)}`;
   if (!confirm(`Approve this record?\n\n${where}\n\n`
