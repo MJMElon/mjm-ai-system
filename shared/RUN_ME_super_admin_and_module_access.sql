@@ -1,6 +1,6 @@
 -- ================================================================
 -- Super admin, for real -- and a module Admin can now save their
--- own module's Module Assess Control.
+-- own Module Assess Control.
 --
 -- super_admin has been a UI convention only: a greyed-out Save
 -- button. Nothing in the database has ever asked who holds it, so
@@ -8,8 +8,8 @@
 -- row, their own included, with one API call that never touched
 -- the screen. This file closes that, in both directions, and gives
 -- a second account the power the first already has in the UI: to
--- save a module's own page/action ticks for somebody else without
--- holding manage_users.
+-- save their own module page and action ticks for somebody else
+-- without holding manage_users.
 --
 -- Safe to run twice. Nothing here is destructive.
 -- ================================================================
@@ -47,7 +47,7 @@ UPDATE public.shared_profiles
 --    and is a no-op for every one of them except the two things it
 --    exists to stop:
 --      a) nursery.mjsb@gmail.com losing super_admin or manage_users,
---         by anyone, through any door;
+--         by anyone, through any door, and
 --      b) super_admin being granted or taken away from ANY row by
 --         somebody who is not already a super admin -- which is the
 --         gap this file closes, because nothing asked this before.
@@ -88,8 +88,8 @@ CREATE TRIGGER shared_profiles_guard_super_admin
 --    goes through a plain update, and the trigger above refuses it the
 --    moment it touches this one key without the caller holding it.
 --    Promoting somebody also grants manage_users, because a super
---    admin who cannot open or save User Access is not actually one;
---    demoting leaves manage_users exactly as it was; and a super admin
+--    admin who cannot open or save User Access is not actually one.
+--    Demoting leaves manage_users exactly as it was, and a super admin
 --    has to flip that separately, same as it is today.
 CREATE OR REPLACE FUNCTION public.mjm_set_super_admin(target_id uuid, make_super boolean)
 RETURNS void
@@ -113,13 +113,14 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.mjm_set_super_admin(uuid, boolean) TO authenticated;
 
--- 5. A module Admin may now save THEIR OWN module's page/action ticks
---    for somebody else, without holding manage_users -- the half of
---    "Admin = able to do the Feature Permission Control" that the
---    database never allowed before. Touches ONLY <module>_pages and
---    <module>_actions on the target row; everything else on their
---    profile -- their module levels, manage_users, super_admin, every
---    OTHER module's pages/actions -- is passed through unchanged.
+-- 5. A module Admin may now save THEIR OWN module page and action
+--    ticks for somebody else, without holding manage_users -- the
+--    half of "Admin = able to do the Feature Permission Control"
+--    that the database never allowed before. Touches ONLY
+--    <module>_pages and <module>_actions on the target row.
+--    Everything else on their profile -- their module levels,
+--    manage_users, super_admin, every OTHER module page and action
+--    -- is passed through unchanged.
 CREATE OR REPLACE FUNCTION public.mjm_set_module_access(
   target_id uuid,
   p_module text,
@@ -167,14 +168,15 @@ $$;
 GRANT EXECUTE ON FUNCTION public.mjm_set_module_access(uuid, text, jsonb, jsonb) TO authenticated;
 
 -- 6. can_verify_operation is a LEGACY top-level flag, not an
---    operation_actions entry, and the app's own JS mostly stopped
+--    operation_actions entry, and the app JS mostly stopped
 --    needing it the day a saved operation_actions.batch.view existed
 --    (canDoOperation prefers that). It is NOT legacy to the database,
---    though: shared/migration_batch_verifications.sql's own RLS policy
---    on operation_batch_verifications reads this exact column, directly,
---    with no knowledge of operation_actions at all. So the one caller
---    this exists for is operation_user_access.html's module-Admin save
---    path -- it cannot reach this column through mjm_set_module_access
+--    though: the RLS policy on operation_batch_verifications, in
+--    shared/migration_batch_verifications.sql, reads this exact
+--    column directly, with no knowledge of operation_actions at all.
+--    So the one caller this exists for is the module-Admin save path
+--    in operation_user_access.html -- it cannot reach this column
+--    through mjm_set_module_access
 --    (which only ever touches <module>_pages/<module>_actions), and
 --    without a way to update it the Verify tick would look set in the
 --    UI while the database went on refusing the insert underneath it.
