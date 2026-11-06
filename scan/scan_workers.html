@@ -1076,7 +1076,7 @@ async function boardDrop(ev, section, roleKey) {
   const w = workers.find(x => x.id === id);
   if (!w) return;
   if (!mayDo('workers', 'manage',
-      'You do not have permission to move a worker. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to move a worker. Ask an admin to grant it in Module Assess Control.')) return;
 
   // Other is not a role anybody holds. Dropped there, a worker changes
   // section and keeps whatever role they arrived with.
@@ -1130,7 +1130,7 @@ async function rejectWorker(id) {
   const w = workers.find(x => x.id === id);
   if (!w) return;
   if (!mayDo('workers', 'manage',
-      'You do not have permission to reject a registration. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to reject a registration. Ask an admin to grant it in Module Assess Control.')) return;
 
   const untagged = _rejectCols ? ''
     : '\n\nNote: the rejection columns are not switched on yet, so the register will '
@@ -1216,7 +1216,7 @@ async function savePin(id, el) {
   const back = () => { el.value = prev; };
 
   if (!mayDo('workers', 'manage',
-      'You do not have permission to set a worker PIN. Ask an admin to grant it in User Access.')) return back();
+      'You do not have permission to set a worker PIN. Ask an admin to grant it in Module Assess Control.')) return back();
   if (problem) { alert(problem); back(); el.focus(); return; }
   if (pin === prev) { el.value = pin; return; }
 
@@ -1260,7 +1260,7 @@ let editWorkerId = null;
    behind "Move…" rather than a field to answer every time. */
 function openWorker(id, section, role) {
   if (!mayDo('workers', 'manage',
-      'You do not have permission to add or edit workers. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to add or edit workers. Ask an admin to grant it in Module Assess Control.')) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
   const w = id ? workers.find(x => x.id === id) : null;
   editWorkerId = w ? w.id : null;

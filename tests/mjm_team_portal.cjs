@@ -1,4 +1,5 @@
-/* "555 Worker Portal" renamed to "555 MJM Team"; Admin Portal and Audit
+/* "555 Worker Portal" renamed to "555 MJM Team", since renamed again to
+   "Nursery 555 Team"; Admin Portal and Audit
    Portal moved off the hub's own tile grid and onto scan_admin.html's own
    grid instead, alongside FC Portal, Worker Portal, Worker System and the
    new combined Settings hub.
@@ -69,7 +70,7 @@ function mockSupabase(page, permissions) {
     await page.goto('http://localhost:8779/index.html', { waitUntil: 'load' }).catch(() => {});
     await page.waitForTimeout(800);
 
-    checkTrue('a "555 MJM Team" card exists', await page.locator('.module-card[data-module="scan"]').locator('text=555 MJM').count());
+    checkTrue('a "Nursery 555 Team" card exists', await page.locator('.module-card[data-module="scan"]').locator('text=Nursery 555').count());
     check('no standalone "555 Admin Portal" card remains', await page.locator('.module-card[data-module="mobile"]').count(), 0);
     check('no standalone "555 Audit Portal" card remains', await page.locator('.module-card[data-card="audit"]').count(), 0);
     await page.close();

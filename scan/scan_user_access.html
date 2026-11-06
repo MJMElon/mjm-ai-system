@@ -13,7 +13,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
-<title>User Access — 555 MJM Team</title>
+<title>Module Assess Control — Nursery 555 Team</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -125,11 +125,13 @@
          else entirely — out of the FC Portal to the module selection. Two bare
          arrows would have been a coin toss.
          It pointed at scan_setting.html, which was a page holding this one
-         tile and nothing else. The 555 MJM Team page offers User Access
-         directly, so that page was a press in the way and is gone; this
-         goes where it is now opened from. -->
-    <a class="back-btn" href="scan_admin.html">&#8592; Back to 555 MJM Team</a>
-    <h1 class="page-title">User Access</h1>
+         tile and nothing else. The Nursery 555 Team page offers Module
+         Assess Control directly, so that page was a press in the way and
+         is gone; this goes where it is now opened from. Renamed from "User
+         Access" to "Module Assess Control" — same page, same keys, only
+         the words changed. -->
+    <a class="back-btn" href="scan_admin.html">&#8592; Back to Nursery 555 Team</a>
+    <h1 class="page-title">Module Assess Control</h1>
     <span aria-hidden="true"></span>
   </div>
 
@@ -308,7 +310,7 @@ const AUDIT_PAGES = [
  * So Worker System and Setting are no longer siblings of the back office they
  * live in; they are nested under it, which is where somebody looking for them
  * goes. And the Admin Portal and Auditor Portal, whose doors have been on the
- * 555 MJM Team page all along, are on the screen that is supposed to grant
+ * Nursery 555 Team page all along, are on the screen that is supposed to grant
  * them — `admin_portal` and `audit_portal` were already real keys read by
  * canScanArea(), set by nothing.
  *
@@ -328,7 +330,7 @@ const AREAS = [
     children: [
       { key:'workers', label:'Worker System',
         desc:'The register of workers — who is on the books, their section and their PIN' },
-      { key:'setting', label:'User Access Setting',
+      { key:'setting', label:'Module Assess Control',
         desc:'This screen. Who may open what, for everybody' },
     ] },
   { key:'fc',      label:'555 FC Portal',
