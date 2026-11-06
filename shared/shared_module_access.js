@@ -249,9 +249,23 @@
     }
 
     // ── Drawer ───────────────────────────────────────────────────
+    /* A page with many ticks — Nursery Maintenance has seven once Approve
+       joined it — read as a wall of checkboxes to scroll past to reach the
+       next page's card. So past COLLAPSE_AFTER the rest are folded under
+       a "Show N more" toggle. Folded is by POSITION alone, whatever the
+       action currently reads: a fold that only hid the ones already off
+       would barely shorten the common, unconfigured row at all (most
+       actions default to allowed, so there is nothing to hide), and the
+       one thing a reader can always rely on is that the same three rows
+       are the ones showing. A card at or under the limit is never
+       collapsible at all — the toggle only earns its place on a list
+       long enough to need it. */
+    const COLLAPSE_AFTER = 3;
     function pageCardHtml(d, eff) {
-      const acts = (d.actions || []).map(a => `
-          <label class="act-row" for="d-act-${d.key}-${a.key}">
+      const list = d.actions || [];
+      const folded = list.map((a, i) => i >= COLLAPSE_AFTER);
+      const acts = list.map((a, i) => `
+          <label class="act-row${folded[i] ? ' act-more' : ''}" for="d-act-${d.key}-${a.key}">
             <input type="checkbox" class="act-chk" id="d-act-${d.key}-${a.key}"
                    data-page="${d.key}" data-action="${a.key}" ${eff[a.key] ? 'checked' : ''}>
             <span>
@@ -259,6 +273,10 @@
               <span class="block text-[11px] text-slate-500">${esc(a.desc)}</span>
             </span>
           </label>`).join('');
+      const hiddenCount = folded.filter(Boolean).length;
+      const toggle = hiddenCount
+        ? `<button type="button" class="acts-toggle" data-toggle-acts="${d.key}">Show ${hiddenCount} more…</button>`
+        : '';
       return `
         <div class="page-card ${eff.view ? '' : 'page-off'}" id="d-card-${d.key}">
           <div class="page-card-head">
@@ -274,7 +292,7 @@
               </span>
             </label>
           </div>
-          ${acts ? `<div class="page-card-acts">${acts}</div>`
+          ${acts ? `<div class="page-card-acts" id="d-acts-${d.key}">${acts}</div>${toggle}`
                  : `<div class="page-card-acts text-[11px] text-slate-400 py-2">View-only page — no extra functions.</div>`}
         </div>`;
     }
@@ -485,6 +503,19 @@
       if (editBtn) { openDrawer(editBtn.dataset.uid); return; }
       const preset = e.target.closest('[data-preset]');
       if (preset) { applyPreset(preset.dataset.preset); return; }
+      const toggle = e.target.closest('[data-toggle-acts]');
+      if (toggle) {
+        /* ONE-WAY. A tick made after expanding is real the moment it is
+           made — re-folding by the class baked in at render time would
+           hide a row somebody had just ticked, which reads as the tick
+           being lost even though Save would still pick it up. Simplest
+           answer that cannot confuse anyone: once shown, it stays shown
+           for the rest of this card's time in the drawer. */
+        const box = $('d-acts-' + toggle.dataset.toggleActs);
+        if (box) box.classList.add('acts-expanded');
+        toggle.remove();
+        return;
+      }
     });
     document.addEventListener('change', (e) => {
       if (e.target.matches('input[data-view-page]')) syncPageCard(e.target.dataset.viewPage);
@@ -603,6 +634,12 @@
   .page-card.page-off .page-card-acts { opacity:.45; pointer-events:none; }
   .act-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px dashed #f1f5f9; cursor:pointer; }
   .act-row:last-child { border-bottom:none; }
+  .act-row.act-more { display:none; }
+  .page-card-acts.acts-expanded .act-row.act-more { display:flex; }
+  .acts-toggle { display:block; width:100%; text-align:center; padding:7px 0; margin:-2px 0 2px;
+    font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+    color:#64748b; background:none; border:none; border-top:1px dashed #f1f5f9; cursor:pointer; }
+  .acts-toggle:hover { color:#1e293b; }
   .act-chk { width:19px; height:19px; margin-top:1px; accent-color:${A.chk}; cursor:pointer; flex-shrink:0; }
   .tog { position:relative; display:inline-block; width:48px; height:26px; flex-shrink:0; }
   .tog input { opacity:0; width:0; height:0; }
