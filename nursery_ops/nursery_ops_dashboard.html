@@ -312,7 +312,7 @@
       <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-4.2 3.1-6.8 7-6.8s7 2.6 7 6.8"/>
       </svg></div>
-      <span class="tl">User Access</span>
+      <span class="tl">Module Assess Control</span>
     </a>
   </div>
 
@@ -448,7 +448,7 @@ function applySavedToolOrder() {
   // page but NOT in the saved list — a tool added since the order was
   // stored — goes to the end: appending the saved ones moves each past it,
   // so left alone it would drift to the FRONT, which is the opposite of
-  // "new things go last" and put User Access first for everybody holding an
+  // "new things go last" and put Module Assess Control first for everybody holding an
   // order from before it could be dragged. Collected before the reordering,
   // while the markup order is still intact.
   const inSaved = {};
@@ -542,7 +542,7 @@ $('next-month').addEventListener('click', () => { boardMonth = shiftMonth(boardM
     }
     const u = MJMAccess.user();
     // The ribbon greets the user by name, so nothing to fill here now.
-    // Per-page access, set on this module's own User Access. A page the user
+    // Per-page access, set on this module's own Module Assess Control. A page the user
     // may not open should not be offered to them.
     // Fails OPEN if shared_access.js is an older cached copy without these
     // helpers: a stale script must not hide the module from people entitled
@@ -559,7 +559,9 @@ $('next-month').addEventListener('click', () => { boardMonth = shiftMonth(boardM
       document.querySelectorAll('.tool-btn[data-module]').forEach(a => {
         if (MJMAccess.canAccess(a.dataset.module)) a.classList.remove('hidden');
       });
-      if (MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
+      // Admin of nursery_ops may now open this module's own Module Assess
+      // Control too, not only Manage Users -- see shared_module_access.js.
+      if (MJMAccess.isAdminOf('nursery_ops') || MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
     } catch (_) { /* keep the dashboard usable */ }
 
     // Pending Nelos cases for this module. Only for people who hold Nelos;

@@ -18,7 +18,7 @@
      who knew the URL, could open every nursery's audit figures. Decided in
      the head, before any of it renders and without waiting on
      audit_supabase.js, so load order cannot leave a gap. -->
-<script src="audit_login_guard.js?v=20261027a"></script>
+<script src="audit_login_guard.js?v=20261027b"></script>
 <script>MJMAuditLogin.requireAdmin();</script>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -51,6 +51,18 @@
    so an eight-column plot-condition row is read down instead of
    dragged sideways. Those rules are scoped to `screen` — print keeps
    real tables at every width.
+
+   TWO THINGS ABOUT WHAT IT COVERS AND WHAT IT COUNTS, both the
+   office's own asks and both written up where they live:
+
+   - THE PERIOD IS A FROM DATE AND A TO DATE, not a month and a year.
+     Both ends inclusive. See the filter markup.
+   - A RECORD IS A VISIT, NOT A ROW, on Plot Condition and on
+     Maintenance — the same plot on the same day whatever the batch,
+     the same plot and task on the same day whatever the case. The
+     batches and the cases are still each on their own line. See
+     MOD_RECORD_KEY, and recordCount, which every figure on the page
+     goes through.
    ══════════════════════════════════════════════════════════════════ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -86,13 +98,15 @@ html,body{min-height:100%;font-family:'Outfit',system-ui,sans-serif;font-size:16
 .filter-card{background:var(--card);border:1px solid var(--line);border-left:10px solid var(--green);
              border-radius:1.75rem;padding:20px 22px 18px;box-shadow:0 1px 3px rgba(16,40,60,.05);
              margin-bottom:24px}
-/* Month/Year narrow and fixed — a month name and a four-digit year never
-   need a 210px-wide column — Nursery sized to exactly fit its four chips
-   on one line (max-content, not 1fr, so it doesn't stretch or wrap), and
-   Plot takes whatever's left over. All four in the one row on a desk;
-   the 900px query below falls back to the old auto-fit wrap for anything
-   narrower. */
-.filter-grid{display:grid;grid-template-columns:130px 100px max-content minmax(200px,260px);gap:16px;align-items:end}
+/* From/To narrow and fixed — a date box never needs a 210px-wide column —
+   Nursery sized to exactly fit its four chips on one line (max-content,
+   not 1fr, so it doesn't stretch or wrap), and Plot takes whatever's left
+   over. All four in the one row on a desk; the 900px query below falls
+   back to the old auto-fit wrap for anything narrower. */
+.filter-grid{display:grid;grid-template-columns:150px 150px max-content minmax(180px,240px);gap:16px;align-items:end}
+/* A date input draws its own picker glyph and will otherwise sit a
+   hair taller than the text box beside it. */
+.filter-grid input[type=date]{min-width:0}
 @media (max-width:900px){
   .filter-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
 }
@@ -187,6 +201,19 @@ input.input:focus{border-color:var(--green);background:var(--card);
 .tbtn-primary{background:var(--pn);border-color:var(--pn);color:#fff}
 .tbtn-primary:hover{background:#144a14;border-color:#144a14;color:#fff}
 
+/* The height unit pair. Narrower than a .tbtn because the label is one or
+   two characters, and the two sit tight together so they read as one
+   control with two settings rather than as two more toolbar buttons. The
+   ON one is filled -- a pair where neither is filled is a pair that does
+   not say which unit the sheet is in. */
+.tbtn-unit-bar{display:inline-flex;align-items:center;gap:6px}
+.tbtn-unit-label{font-size:10.5px;font-weight:800;letter-spacing:.08em;
+                 text-transform:uppercase;color:var(--ink3)}
+.tbtn-unit{padding:0 14px;min-width:52px;justify-content:center;text-transform:none;
+           letter-spacing:0;font-size:13px}
+.tbtn-unit.is-on{background:var(--batch);border-color:var(--batch);color:#fff}
+.tbtn-unit.is-on:hover{background:var(--batch);border-color:var(--batch);color:#fff}
+
 /* ── REPORT HEADER (the letterhead) ──
    Just the title/period/generated line now — no MJM Nursery wordmark or
    company address. This report only ever opens inside the admin portal
@@ -276,6 +303,13 @@ input.input:focus{border-color:var(--green);background:var(--card);
             background:#f1f5f9;color:#475569;font-size:10px;font-weight:700;
             text-transform:uppercase;letter-spacing:.4px;vertical-align:middle}
 .mod-block-note{font-size:11px;font-weight:600;color:#b45309}
+/* The case id is an IDENTIFIER and never a quantity, so it is set in the
+   figures of a mono face and muted: somebody running down the column is
+   asking whether two rows differ, not reading a number. It does not wrap --
+   an id broken over two lines reads as two ids. */
+.case-id{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+         font-size:11px;color:#64748b;white-space:nowrap;letter-spacing:-.2px}
+.case-none{font-size:11px;color:#b45309;font-weight:600}
 .badge-batch{background:#ede7fb;color:var(--batch)}
 /* The four age figures, inside the section rather than up with the page's
    own summary: they are about these batches, not about the report. */
@@ -354,6 +388,20 @@ body.is-full #btn-full{display:none}
   /* A card row is a label on the left and its answer on the right; the
      centring the table wants would put this one in neither place. */
   .rec-table td.grp{text-align:right;border-left:none;font-size:inherit}
+  /* A CARD THAT CONTINUES THE ONE ABOVE IT SAYS SO.
+     A record is drawn as one block with its plot and its day merged down
+     the side -- which a table does with a rowspan and a stack of cards
+     cannot do at all, so these cards would otherwise open on a batch with
+     nothing saying which plot it is in. Indented, and headed with what it
+     is a continuation of. */
+  .rec-table tbody tr.rec-cont{margin-left:14px;border-left:3px solid var(--green)}
+  .rec-table tbody tr.rec-cont::before{content:attr(data-cont);display:block;
+                      padding:6px 13px;font-size:9.5px;font-weight:800;letter-spacing:.7px;
+                      text-transform:uppercase;color:var(--ink3);background:#f8fafc;
+                      border-bottom:1px solid #f1f5f9}
+  /* and its first cell is a batch, not a record number, so it must not
+     take the card-header treatment the rule below gives one. */
+  .rec-table tbody tr.rec-cont td:first-child{background:transparent;font-weight:inherit}
   /* The first cell becomes the card's header rather than just another
      row: without it a card of eight identical grey-label rows gives no
      answer to "where does one record stop and the next begin". */
@@ -372,6 +420,10 @@ body.is-full #btn-full{display:none}
   .mod-head{padding:14px 15px}
   .filter-card{padding:15px}
   .tbtn{flex:1;justify-content:center;padding:0 12px}
+  /* The pair takes a row of its own rather than being squeezed in beside
+     three buttons that have each just been told to take an equal share. */
+  .tbtn-unit-bar{flex:1 0 100%;justify-content:center}
+  .tbtn-unit{flex:0 0 auto}
 }
 
 /* ── PRINT ──
@@ -448,24 +500,23 @@ body.is-full #btn-full{display:none}
 
       <div class="filter-card" id="filter-card">
         <div class="filter-grid">
+          <!-- THE REPORT IS THE DATES SOMEBODY PICKED, not a calendar
+               month. It was a Month select and a Year select, so a
+               fortnight, a single day or a run that crosses the 1st could
+               not be asked for at all. Both ends are INCLUSIVE — the read
+               below is date >= from and date <= to — which is what "from
+               the 5th to the 9th" means to anybody reading it.
+
+               It still OPENS on the current month, first to last, so
+               somebody who ticks a module and presses Generate gets
+               exactly the report this page has always given them. -->
           <div>
-            <div class="filter-label">Month</div>
-            <div class="select-wrap">
-              <select class="input" id="f-month" aria-label="Month">
-                <option value="1">January</option><option value="2">February</option>
-                <option value="3">March</option><option value="4">April</option>
-                <option value="5">May</option><option value="6">June</option>
-                <option value="7">July</option><option value="8">August</option>
-                <option value="9">September</option><option value="10">October</option>
-                <option value="11">November</option><option value="12">December</option>
-              </select>
-            </div>
+            <div class="filter-label">From date</div>
+            <input class="input" id="f-from" type="date" aria-label="From date">
           </div>
           <div>
-            <div class="filter-label">Year</div>
-            <div class="select-wrap">
-              <select class="input" id="f-year" aria-label="Year"></select>
-            </div>
+            <div class="filter-label">To date</div>
+            <input class="input" id="f-to" type="date" aria-label="To date">
           </div>
           <div>
             <div class="filter-label">Nursery</div>
@@ -544,6 +595,15 @@ body.is-full #btn-full{display:none}
         <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
         <span>Print / Save PDF</span>
       </button>
+      <!-- A SPREADSHEET IS NOT A SECOND PRINT. The sheet above is read by
+           somebody adding up and signing; this is for somebody sorting,
+           filtering and pivoting the same rows, which is why every line
+           carries its own plot, day and task rather than the merged cells
+           the table draws. See downloadExcel(). -->
+      <button class="tbtn" onclick="downloadExcel()" id="btn-excel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Download Excel</span>
+      </button>
       <button class="tbtn" onclick="toggleFullScreen()" id="btn-full">
         <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         <span>Full Screen</span>
@@ -552,13 +612,26 @@ body.is-full #btn-full{display:none}
         <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
         <span>Refresh</span>
       </button>
+      <!-- THE UNIT HEIGHTS ARE READ IN. Two chips rather than one button
+           that toggles its own label: a segmented pair says both answers
+           exist and which one is on, where "Show in m" makes somebody read
+           the label to work out where they are. Refresh is beside it and
+           reads the database again; this one does not. Hidden until a
+           report with a height in it has been drawn -- syncHeightUnitBar. -->
+      <div class="tbtn-unit-bar" id="unit-bar" style="display:none">
+        <span class="tbtn-unit-label">Height in</span>
+        <button class="tbtn tbtn-unit is-on" data-unit="cm" aria-pressed="true"
+                onclick="setHeightUnit('cm')">cm</button>
+        <button class="tbtn tbtn-unit" data-unit="m" aria-pressed="false"
+                onclick="setHeightUnit('m')">m</button>
+      </div>
     </div>
 
     <!-- OUTPUT -->
     <div id="report-output">
       <div class="empty-report">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <p>Choose a month and press <strong>Generate Report</strong>.</p>
+        <p>Choose a date range and press <strong>Generate Report</strong>.</p>
       </div>
     </div>
   </div>
@@ -574,15 +647,14 @@ body.is-full #btn-full{display:none}
   </div>
 
 </div>
-<script src="audit_lang.js?v=20261022e"></script>
-<script src="audit_supabase.js?v=20261027a"></script>
-<script src="audit_dexie_offline.js?v=20261008b"></script>
+<script src="audit_lang.js?v=20261022f"></script>
+<script src="audit_supabase.js?v=20261105c"></script>
+<script src="audit_dexie_offline.js?v=20261105b"></script>
 <!-- Welcome-name fill for the shared FC ribbon. -->
 <script src="audit_ribbon.js?v=20261028a"></script>
 <script>
 'use strict';
 
-const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const PN_NURSERIES=['PN'];
 const MN_NURSERIES=['BNN','UNN1','UNN2'];
 
@@ -695,12 +767,26 @@ document.addEventListener('keydown',e=>{
     toggleFullScreen();
 });
 
+/* LOCAL time, never toISOString(). toISOString() is the day before in
+   Malaysia for the whole of the early morning, which on the 1st of a month
+   opens the report on the wrong month -- the same trap `_localISO()` on the
+   audit board already names. */
+function _localISO(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')
+                        +'-'+String(d.getDate()).padStart(2,'0');
+}
+
 function initFilters(){
+  /* The current month, first to last, so pressing Generate with nothing
+     else touched draws the report this page has always drawn. The last day
+     is used rather than today, because a month still running has no audits
+     dated after today anyway and an auditor saving one this afternoon is
+     then already inside the range. */
   const now=new Date();
-  document.getElementById('f-month').value=now.getMonth()+1;
-  const ySel=document.getElementById('f-year');
-  const cy=now.getFullYear();
-  for(let y=cy;y>=cy-3;y--){const o=document.createElement('option');o.value=y;o.textContent=y;if(y===cy)o.selected=true;ySel.appendChild(o);}
+  const first=new Date(now.getFullYear(),now.getMonth(),1);
+  const last=new Date(now.getFullYear(),now.getMonth()+1,0);
+  document.getElementById('f-from').value=_localISO(first);
+  document.getElementById('f-to').value=_localISO(last);
 }
 
 function esc(v){
@@ -713,15 +799,14 @@ function fmtDate(iso){
   return s[2]+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+s[1]-1]+' '+s[0];
 }
 
-function monthRange(month,year){
-  const start=`${year}-${String(month).padStart(2,'0')}-01`;
-  const end=`${year}-${String(month).padStart(2,'0')}-${new Date(year,month,0).getDate()}`;
-  return{start,end};
+/* What the heading says the report covers. One day reads as one date --
+   "05 Nov 2026 – 05 Nov 2026" is the same answer twice. */
+function periodLabel(from,to){
+  return from===to ? fmtDate(from) : fmtDate(from)+' – '+fmtDate(to);
 }
 
-async function fetchData(month,year){
-  const{start,end}=monthRange(month,year);
-  const df=`date=gte.${start}&date=lte.${end}`;
+async function fetchData(from,to){
+  const df=`date=gte.${from}&date=lte.${to}`;
   const out={};
   const tasks=[];
   if(selectedMods.has('plot'))   tasks.push(sb.select('audit_plot_audits',   `select=audit_id,nursery,plot,batch,pest,tikus,disease,warna_daun,auditor_name,date&${df}`).then(r=>out.plot=r).catch(()=>out.plot=[]));
@@ -731,7 +816,7 @@ async function fetchData(month,year){
   if(selectedMods.has('height')||selectedMods.has('bheight'))
                                  tasks.push(sb.select('audit_height_records', `select=record_id,nursery,plot,batch,sample_1,sample_2,sample_3,avg_height,auditor_name,date&${df}`).then(r=>out.height=r).catch(()=>out.height=[]));
   if(selectedMods.has('papan'))  tasks.push(sb.select('audit_papan_audits',   `select=audit_id,nursery,plot,batch_no,presence,info_correct,condition,auditor_name,date&${df}`).then(r=>out.papan=r).catch(()=>out.papan=[]));
-  if(selectedMods.has('maint'))  tasks.push(sb.select('audit_maintenance_audits',`select=audit_id,nursery,plot,task_type,result,auditor_name,date&${df}`).then(r=>out.maint=r).catch(()=>out.maint=[]));
+  if(selectedMods.has('maint'))  tasks.push(sb.select('audit_maintenance_audits',`select=audit_id,task_id,nursery,plot,task_type,result,auditor_name,date&${df}`).then(r=>out.maint=r).catch(()=>out.maint=[]));
   await Promise.all(tasks);
   return out;
 }
@@ -752,6 +837,172 @@ function filterByPlot(rows,query){
   return(rows||[]).filter(r=>String(r.plot||'').toLowerCase().includes(q));
 }
 
+/* ── ONE RECORD IS ONE VISIT, NOT ONE ROW ─────────────────────────────
+
+   A table row is what the DATABASE holds, and on two of these modules that
+   is finer than the thing the office counts:
+
+   - **Plot Condition** in the main nursery is one row per plot per BATCH
+     (audit_script.js says why: a plot holds several batches, each with its
+     own age and its own audit). So one walk round B01 with seven batches
+     standing in it is SEVEN rows, numbered 1 to 7, and the report said
+     seven audits where somebody did one.
+   - **Maintenance** is one row per CASE, and a case is one work record —
+     so a plot sprayed by three workers on one morning is three cases and
+     three audits. The office met exactly that and asked twice whether the
+     report was counting one thing three times (it was not; they really are
+     three cases, which is why the Case column exists).
+
+   So a RECORD is the visit: the same plot on the same day, whatever the
+   batch; the same plot and the same task on the same day, whatever the
+   case. It is numbered once, counted once in every figure on the page, and
+   drawn as ONE BLOCK with its identity merged down the side.
+
+   **AND THE BATCHES AND CASES ARE STILL THERE, each on its own line** --
+   that was the other half of what was asked, and it is also the only safe
+   way to do this. A plot's readings are PER BATCH: a rat found on batch 253
+   and nothing on 268 is the whole reason the alert board is per batch, so
+   folding four readings into one cell could hide the one that matters. Each
+   batch keeps its line and its own four readings; only the plot, the day
+   and the record number are merged over them.
+
+   The other two modules are untouched. Papan Tanda is one sign per plot and
+   Seedling Height is measured plot by plot, so neither has a row the office
+   reads as a repeat. */
+function _recKey(v){
+  return String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+function _recDay(r){
+  return String((r&&r.date)||'').slice(0,10);
+}
+/* THE NURSERY IS IN THE KEY because a plot is a plot IN a nursery. The
+   plot codes are disjoint in practice (P01-P52, B01-B14, U01-U18,
+   N01-N20), so this moves nothing today -- but the Main Nursery section
+   already draws BNN, UNN 1 and UNN 2 in ONE table, and the spreadsheet
+   below puts every nursery in one sheet, so "the same plot" has to mean
+   the same plot rather than the same spelling. */
+const MOD_RECORD_KEY={
+  plot:  r=>_recKey(r.nursery)+'|'+_recDay(r)+'|'+_recKey(r.plot),
+  maint: r=>_recKey(r.nursery)+'|'+_recDay(r)+'|'+_recKey(r.plot)+'|'+_recKey(r.task_type)
+};
+/* What a continuation line is told to say on a PHONE, where the table folds
+   into one card per row and a rowspan means nothing -- so the cards after
+   the first would otherwise carry a batch and four readings with no plot
+   and no date on them. */
+const MOD_CONT_NOTE={
+  plot:  'same plot · same day',
+  maint: 'same plot · same task · same day'
+};
+/* The unit each module's figures are counted in, for the line under the
+   table. A record is a visit; the lines under it are its batches or its
+   cases. BOTH SPELLINGS, because `noun+'s'` reads "6 batchs" -- the kind
+   of thing nobody notices in code and everybody notices on a printed
+   sheet. */
+const MOD_LINE_NOUN={ plot:['batch','batches'], maint:['case','cases'] };
+
+/* HOW MANY RECORDS these rows are. Every figure on the page goes through
+   this -- the summary card, the section total, the records badge and the
+   table's own total -- for the reason the Done By filter already states in
+   its own comment: one of them counted differently is one of them
+   disagreeing with the rest. A module with no record key counts rows, which
+   is what it always did. */
+function recordCount(mod,rows){
+  const keyOf=MOD_RECORD_KEY[mod];
+  if(!keyOf) return (rows||[]).length;
+  return new Set((rows||[]).map(keyOf)).size;
+}
+
+/* The ordinal of the RECORD a row belongs to, so the # column numbers
+   visits and not lines.
+
+   It reads off CONSECUTIVE runs, which the caller's sort is what makes --
+   the same assumption `spans` in buildTable already makes, stated once and
+   relied on by both. Memoised per array, because a column is asked once per
+   row and walking the whole array each time would be quadratic on the
+   eighteen hundred maintenance rows a month now carries. */
+const _recNoCache=new WeakMap();
+function _recNo(rows,i,keyOf){
+  let m=_recNoCache.get(rows);
+  if(!m||m.keyOf!==keyOf){
+    const no=[]; let n=0, prev=null;
+    rows.forEach((r,ix)=>{
+      const k=keyOf(r);
+      if(ix===0||k!==prev){ n++; prev=k; }
+      no[ix]=n;
+    });
+    m={keyOf,no};
+    _recNoCache.set(rows,m);
+  }
+  return m.no[i];
+}
+
+/* ── THE UNIT HEIGHTS ARE READ IN ─────────────────────────────────────
+   The office asked for it over the Plot Avg column: *plot avg 我要可以
+   选择cm or换算m*.
+
+   IT IS EVERY HEIGHT ON THE SHEET, not the one column they were looking
+   at. A row reading 141.7 · 161.1 · 120 · 1.417 is four centimetres and
+   one metre side by side, which is a worse sheet than one with no choice
+   on it at all; and there are TWO Plot Avg columns here — the Seedling
+   Height table and the Height by Batch table — so moving one would be two
+   answers on one page. The samples, both averages, the batch average and
+   the four age cards all move together.
+
+   A HEADING NAMES THE UNIT, which is what carries the choice onto PAPER:
+   the control is in the toolbar and the toolbar does not print, so the
+   heading is the only thing a printed sheet can say it with. That is why
+   every figure that moves sits under a heading carrying `(cm)` or `(m)`.
+
+   PRECISION DOES NOT MOVE. A reading is keyed to a tenth of a centimetre,
+   which is a millimetre, and three decimals of a metre is the same
+   millimetre — so 141.7 cm is 1.417 m and nothing is rounded away.
+   Two decimals would have read 1.42 and thrown a measurement out.
+
+   It is NOT remembered between page loads. This sheet gets printed and
+   passed round, and a unit that is whatever somebody last picked on one
+   machine is how two copies of one report come to disagree; the heading
+   names it either way, so the predictable default is worth more. One line
+   of localStorage the day the office asks. */
+let _heightUnit='cm';
+const HEIGHT_UNITS={ cm:{label:'cm',dp:1,per:1}, m:{label:'m',dp:3,per:100} };
+const heightUnitLabel=()=>HEIGHT_UNITS[_heightUnit].label;
+/* Appended to a heading, so there is one spelling of "(cm)" and the
+   headings cannot come to disagree with the figures under them. */
+const hgtHead=(name)=>name+' ('+heightUnitLabel()+')';
+
+/* WHAT THE AUDITOR KEYED. In cm it is printed EXACTLY as it is stored —
+   not re-rounded — so nothing whatever on this sheet moves until somebody
+   picks metres. A value that is not a number is passed through as it is,
+   because it is text somebody keyed and not a height to convert. */
+function hgtKeyed(v){
+  if(v===null||v===undefined||String(v).trim()==='') return '—';
+  if(_heightUnit==='cm') return String(v);
+  const n=Number(v);
+  return Number.isFinite(n)?_hgtNum(n):String(v);
+}
+/* A figure this page WORKED OUT — a mean, which has as many decimals as
+   the division left it, so it is rounded to the unit's own precision. */
+function hgtMean(n){
+  return (n==null||!Number.isFinite(Number(n)))?'—':_hgtNum(Number(n));
+}
+/* en-MY, pinned, for the reason the whole system pins it: unpinned, a
+   handset set to a language that writes decimals with a comma prints a
+   plot of 6,515 as 6.515. These are the lines this change touched. */
+function _hgtNum(cm){
+  const u=HEIGHT_UNITS[_heightUnit];
+  return (cm/u.per).toLocaleString('en-MY',{maximumFractionDigits:u.dp});
+}
+
+/* A HEADING MAY BE A FUNCTION, because a height column does not know its
+   own unit until somebody picks one -- see hgtHead. Asked at DRAW time by
+   everything that draws, so the heading, the figures under it and the
+   spreadsheet column come out of one choice in one pass and cannot
+   disagree. `label` is the same heading one line down: what the cell
+   announces itself as on a phone, where it is a card row and not a
+   column. */
+const colHead =c=>typeof c.h==='function'?c.h():c.h;
+const colLabel=c=>typeof c.label==='function'?c.label():(c.label||colHead(c));
+
 /* ── COLUMNS ──
    The four table shapes as data rather than as four hand-written blocks
    of HTML. Each column knows its own heading, and that heading is what
@@ -759,10 +1010,15 @@ function filterByPlot(rows,query){
    folds into a readable card on a phone. Written out once, they cannot
    drift apart from the headings above them. */
 const MOD_COLS={
+  /* #, Date and Plot are the RECORD -- one walk round a plot on a day --
+     and are drawn once over its batches. Everything from Batch rightwards
+     is per batch, because that is what was audited. */
   plot:[
-    {h:'#',       v:(r,i)=>i+1, label:'Record', num:true},
-    {h:'Date',    v:r=>fmtDate(r.date)},
-    {h:'Plot',    v:r=>`<b>${esc(r.plot)}</b>`,    raw:true},
+    {h:'#',       group:MOD_RECORD_KEY.plot,
+                  v:(r,i,rows)=>_recNo(rows,i,MOD_RECORD_KEY.plot), label:'Record', num:true},
+    {h:'Date',    group:MOD_RECORD_KEY.plot, v:r=>fmtDate(r.date), xlDate:r=>r.date},
+    {h:'Plot',    group:MOD_RECORD_KEY.plot,
+                  v:r=>`<b>${esc(r.plot)}</b>`,    raw:true},
     {h:'Batch',   v:r=>r.batch||'—'},
     {h:'Pest',    v:r=>r.pest||'—'},
     {h:'Animal',  v:r=>r.tikus||'—'},
@@ -771,22 +1027,24 @@ const MOD_COLS={
   ],
   height:[
     {h:'#',        v:(r,i)=>i+1, label:'Record', num:true},
-    {h:'Date',     v:r=>fmtDate(r.date)},
+    {h:'Date',     v:r=>fmtDate(r.date), xlDate:r=>r.date},
     {h:'Plot',     v:r=>`<b>${esc(r.plot)}</b>`,   raw:true},
     {h:'Batch',    v:r=>r.batch||'—'},
-    {h:'S1 (cm)',  v:r=>r.sample_1||'—',           num:true},
-    {h:'S2 (cm)',  v:r=>r.sample_2||'—',           num:true},
-    {h:'S3 (cm)',  v:r=>r.sample_3||'—',           num:true},
-    {h:'Avg (cm)', v:r=>`<b>${esc(r.avg_height||'—')}</b>`, raw:true, num:true},
+    /* THE HEADING IS A FUNCTION because the unit is chosen after the page
+       loads -- see hgtHead. buildTable asks for it at draw time. */
+    {h:()=>hgtHead('S1'),  v:r=>hgtKeyed(r.sample_1),  num:true},
+    {h:()=>hgtHead('S2'),  v:r=>hgtKeyed(r.sample_2),  num:true},
+    {h:()=>hgtHead('S3'),  v:r=>hgtKeyed(r.sample_3),  num:true},
+    {h:()=>hgtHead('Avg'), v:r=>`<b>${esc(hgtKeyed(r.avg_height))}</b>`, raw:true, num:true},
     /* One cell for the whole group, not the same figure on every line --
        see `group` in buildModTable. */
-    {h:'Plot Avg (cm)', label:'Plot average that day',
+    {h:()=>hgtHead('Plot Avg'), label:()=>'Plot average that day ('+heightUnitLabel()+')',
      group:r=>String(r.date||'')+'|'+String(r.plot||'').trim().toUpperCase(),
      v:(r,i,rows)=>`<b>${_heightPlotAvg(r,rows)}</b>`, raw:true, num:true}
   ],
   papan:[
     {h:'#',        v:(r,i)=>i+1, label:'Record', num:true},
-    {h:'Date',     v:r=>fmtDate(r.date)},
+    {h:'Date',     v:r=>fmtDate(r.date), xlDate:r=>r.date},
     {h:'Plot',     v:r=>`<b>${esc(r.plot)}</b>`,   raw:true},
     {h:'Batch',    v:r=>r.batch_no||'—'},
     {h:'Presence', v:r=>r.presence||'—'},
@@ -800,10 +1058,33 @@ const MOD_COLS={
      ADMIN on a closure, because the closure writes whoever pressed the
      button. */
   maint:[
-    {h:'#',       v:(r,i)=>i+1, label:'Record', num:true},
-    {h:'Date',    v:r=>fmtDate(r.date)},
-    {h:'Plot',    v:r=>`<b>${esc(r.plot)}</b>`,     raw:true},
-    {h:'Task',    v:r=>r.task_type||'—'},
+    /* #, Date, Plot and Task are the RECORD -- one task on one plot on one
+       day -- drawn once over the cases it took. Case, Result and Done By
+       stay per line: a closure and a real audit on the same plot, task and
+       day are two cases that say different things, and that is exactly the
+       pair the duplicate repair had to arbitrate 188 of. */
+    {h:'#',       group:MOD_RECORD_KEY.maint,
+                  v:(r,i,rows)=>_recNo(rows,i,MOD_RECORD_KEY.maint), label:'Record', num:true},
+    {h:'Date',    group:MOD_RECORD_KEY.maint, v:r=>fmtDate(r.date), xlDate:r=>r.date},
+    {h:'Plot',    group:MOD_RECORD_KEY.maint,
+                  v:r=>`<b>${esc(r.plot)}</b>`,     raw:true},
+    {h:'Task',    group:MOD_RECORD_KEY.maint, v:r=>r.task_type||'—'},
+    /* THE CASE, because without it three rows reading B01 / Weeding /
+       Unsatisfactory on one day are indistinguishable on screen -- and the
+       office has now asked twice whether the report is counting one case
+       three times. It is not: a maintenance task comes from ONE work
+       record, so a plot weeded by three workers, or over three batches, is
+       three tasks and three audits, and all three belong here. There is
+       also a UNIQUE index on task_id (RUN_ME_remove_duplicate_audits.sql),
+       so two rows CANNOT share a case any more -- which makes this column
+       a proof rather than a label: three different numbers are three
+       different cases, by construction.
+
+       A sentence under the table saying all that would be the screen
+       arguing for a figure. The column simply shows it. */
+    {h:'Case',    v:r=>r.task_id==null ? '<span class="case-none">no case</span>'
+                                       : `<span class="case-id">${esc(String(r.task_id))}</span>`,
+                  raw:true},
     {h:'Result',  v:r=>r.result||'—'},
     {h:'Done By', v:r=>esc(r.auditor_name||'—')
                        + (maintDoneBy(r)==='admin'
@@ -820,16 +1101,30 @@ const MOD_COLS={
 // falls through to plot-only ordering for that one.
 function _auditPlotBatchSort(rows){
   const natCmp=(a,b)=>String(a??'').localeCompare(String(b??''),undefined,{numeric:true,sensitivity:'base'});
-  /* Plot, then the DAY, then batch.
+  /* Plot, then the DAY, then the TASK, then batch.
      The day was not in here, so a plot audited twice in a month came out
      interleaved by batch -- the 5th and the 19th alternating down the page,
      which is two visits read as one. It also made the plot average
      unmergeable: a figure about a day can only be drawn once over the rows it
      covers if those rows are together.
+     THE TASK IS IN HERE FOR THAT SECOND REASON, one module along. A
+     maintenance record is a plot AND a task on a day, so B01 weeded and
+     manured on the 21st is two records -- and sorted on plot and day alone
+     their cases interleave, which would leave each record drawn as two or
+     three broken runs instead of one block. It is undefined on every other
+     module, where natCmp reads it as '' and the chain falls straight
+     through to the batch.
      Dates are ISO in this table, so comparing them as text is comparing them
      as dates. */
-  return rows.slice().sort((a,b)=>natCmp(a.plot,b.plot)
+  /* NURSERY FIRST, for the same reason it is in the record key: one table
+     can hold several (the Main Nursery section does, and the spreadsheet
+     puts them all in one sheet), and a run that interleaves two nurseries
+     is a record drawn as two broken blocks. The plot codes are disjoint
+     by prefix, so on screen this orders nothing differently. */
+  return rows.slice().sort((a,b)=>natCmp(a.nursery,b.nursery)
+                               ||natCmp(a.plot,b.plot)
                                ||natCmp(a.date,b.date)
+                               ||natCmp(a.task_type,b.task_type)
                                ||natCmp(a.batch??a.batch_no,b.batch??b.batch_no));
 }
 
@@ -861,8 +1156,7 @@ function _heightPlotAvg(r, rows){
                        .map(Number)
                        .filter(v=>Number.isFinite(v));
   if(!vals.length) return '—';
-  const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
-  return (Math.round(mean*10)/10).toLocaleString();
+  return hgtMean(vals.reduce((a,b)=>a+b,0)/vals.length);
 }
 
 /* ── HEIGHT BY BATCH ──────────────────────────────────────────────────
@@ -906,10 +1200,10 @@ function _logDay(r){
   const v=r&&(r.transaction_date||r.created_at);
   return v?String(v).slice(0,10):'';
 }
-function fmt1(n){
-  return n==null||!Number.isFinite(Number(n))?'—'
-    :(Math.round(Number(n)*10)/10).toLocaleString();
-}
+/* `fmt1` stood here and every one of its callers was a HEIGHT, so it is
+   `hgtMean` now -- one figure that knows the unit it is being read in,
+   rather than a rounder beside a unit written into a heading by hand.
+   Do not put a second plain formatter back here for a height. */
 
 /* Supabase answers with AT MOST 1000 rows and says nothing about it, so one
    read of the inventory ledger drops the oldest batches in silence. The
@@ -925,11 +1219,14 @@ async function sbAllRows(table,query){
   }
 }
 
-async function fetchBatchLedger(month,year){
-  const{end}=monthRange(month,year);
-  const today=new Date().toISOString().slice(0,10);
-  // A month still running is as at today; a month gone by, as at its end.
-  const asOf=end<today?end:today;
+async function fetchBatchLedger(to){
+  const today=_localISO(new Date());
+  /* AS AT THE END OF THE RANGE, never as at today -- so a range that has
+     gone by reads the same in December as it did when it was current. A
+     range running past today is as at today, there being nothing standing
+     in a plot tomorrow. (It was the end of the month; it is the TO date
+     now, which is the same sentence about a range somebody chose.) */
+  const asOf=to<today?to:today;
   const LOG='shared_inventory_logs';
   const[seeds,planted,gone]=await Promise.all([
     sbAllRows(LOG,'select=batch_name,transaction_date,created_at&transaction_type=eq.Seeds_Received'),
@@ -940,12 +1237,12 @@ async function fetchBatchLedger(month,year){
   return{asOf,seeds,planted,gone};
 }
 
-/* The plot's figure is its LAST audit day in the month, not the month
+/* The plot's figure is its LAST audit day in the RANGE, not the range
    averaged: a plot walked on the 5th and again on the 19th grew in between,
    and the 19th is how tall it is now. Blank readings are dropped before
    anything is converted — Number(null) is 0, and a blank is not a seedling
    of no height. A real 0 still counts. */
-function _plotHeightInMonth(plot,heightRows){
+function _plotHeightInRange(plot,heightRows){
   const mine=(heightRows||[]).filter(r=>_canonPlot(r.plot)===plot);
   if(!mine.length) return null;
   const day=mine.map(r=>String(r.date||'').slice(0,10)).filter(Boolean).sort().pop();
@@ -1000,7 +1297,7 @@ function buildBatchHeight(led,heightRows){
     const plots=[...(plotsOf[batch]||[])].sort(natCmp);
     const mine=(plots.length?plots:['—']).map(plot=>({
       batch,grp,months,seed:seedDay[batch],plot,
-      h:plot==='—'?null:_plotHeightInMonth(plot,heightRows)
+      h:plot==='—'?null:_plotHeightInRange(plot,heightRows)
     }));
     const avg=_mean(mine.filter(r=>r.h).map(r=>r.h.value));
     mine.forEach(r=>{r.batchAvg=avg;});
@@ -1027,17 +1324,19 @@ const BATCH_HEIGHT_COLS=[
   /* Everything that is about the BATCH is drawn once over its plots —
      same merge the Plot Avg column uses. */
   {h:'Batch',    group:r=>r.batch, v:r=>`<b>${esc(r.batch)}</b>`, raw:true},
-  {h:'Seeds In', group:r=>r.batch, v:r=>fmtDate(r.seed)},
+  {h:'Seeds In', group:r=>r.batch, v:r=>fmtDate(r.seed), xlDate:r=>r.seed},
   /* TRUNCATED, never rounded: the group is the whole months the batch has
      behind it, so an age shown as "2 mth" beside a group of "1 Month" reads
      as a mistake. 1.97 months is 1.9, and that is the same answer twice. */
   {h:'Age',      group:r=>r.batch, v:r=>(Math.floor(r.months*10)/10).toFixed(1)+' mth', num:true},
   {h:'Age Group',group:r=>r.batch, v:r=>r.grp+' Month'+(r.grp>1?'s':'')},
   {h:'Plot',     v:r=>`<b>${esc(r.plot)}</b>`, raw:true},
-  {h:'Audited',  label:'Last audited', v:r=>r.h?fmtDate(r.h.date):'—'},
-  {h:'Plot Avg (cm)', label:'Plot height', v:r=>r.h?fmt1(r.h.value):'—', num:true},
-  {h:'Batch Avg (cm)',label:'Batch average', group:r=>r.batch,
-   v:r=>`<b>${fmt1(r.batchAvg)}</b>`, raw:true, num:true}
+  {h:'Audited',  label:'Last audited', v:r=>r.h?fmtDate(r.h.date):'—',
+                 xlDate:r=>r.h?r.h.date:null},
+  {h:()=>hgtHead('Plot Avg'), label:()=>'Plot height ('+heightUnitLabel()+')',
+   v:r=>r.h?hgtMean(r.h.value):'—', num:true},
+  {h:()=>hgtHead('Batch Avg'),label:()=>'Batch average ('+heightUnitLabel()+')', group:r=>r.batch,
+   v:r=>`<b>${hgtMean(r.batchAvg)}</b>`, raw:true, num:true}
 ];
 
 function buildBatchHeightSection(bh){
@@ -1056,7 +1355,7 @@ function buildBatchHeightSection(bh){
   const cards=BATCH_AGE_GROUPS.map(g=>{
     const s=bh.groups[g];
     return`<div class="sum-card">
-      <div class="sum-val" style="color:var(--batch)">${fmt1(s.avg)}</div>
+      <div class="sum-val" style="color:var(--batch)">${hgtMean(s.avg)}</div>
       <div class="sum-label">${g} Month${g>1?'s':''} Old</div>
       <div class="sum-foot">${fmtNum(s.batches)} batch${s.batches===1?'':'es'}${
         s.unmeasured?' · '+fmtNum(s.unmeasured)+' unmeasured':''}</div>
@@ -1076,7 +1375,9 @@ function buildBatchHeightSection(bh){
     </div>
     <div class="mod-block">
       <div class="mod-block-head">
-        <span class="mod-block-name">Average Height by Age (cm)</span>
+        <!-- The four cards under this carry no unit of their own, so this
+             line is what says which they are in. -->
+        <span class="mod-block-name">${hgtHead('Average Height by Age')}</span>
         ${unmeasured?`<span class="badge badge-batch">${fmtNum(unmeasured)} with no reading</span>`:''}
       </div>
       <div class="mod-block-body">
@@ -1091,18 +1392,33 @@ function buildModTable(mod, rows){
   if(!rows||!rows.length) return '<div class="no-data">No records found.</div>';
   const cols=MOD_COLS[mod];
   if(!cols) return '<div class="no-data">No records found.</div>';
-  return buildTable(cols,_auditPlotBatchSort(rows),'record');
+  const sorted=_auditPlotBatchSort(rows);
+  const keyOf=MOD_RECORD_KEY[mod];
+  if(!keyOf) return buildTable(cols,sorted,'record');
+  /* THE FOOT SAYS BOTH FIGURES wherever they differ -- "18 records · 47
+     batches". The records figure is the one every other figure on the page
+     now carries, and somebody who knew the table as 47 rows has to be able
+     to see where the 47 went; saying only the smaller number is how a count
+     that dropped reads as work that vanished. */
+  const recs=recordCount(mod,sorted);
+  const noun=MOD_LINE_NOUN[mod]||['line','lines'];
+  const total='Total: '+fmtNum(recs)+' record'+(recs!==1?'s':'')
+            + (sorted.length!==recs
+                ? ' · '+fmtNum(sorted.length)+' '+noun[sorted.length===1?0:1]
+                : '');
+  return buildTable(cols,sorted,'record',{contKey:keyOf,contNote:MOD_CONT_NOTE[mod],total});
 }
 
 /* The table itself, given its columns and its rows ALREADY in the order they
    are to be drawn in. The row merging below reads off that order, so a
    caller that sorts after this has broken it. */
-function buildTable(cols, rows, noun){
+function buildTable(cols, rows, noun, opts){
   if(!rows||!rows.length) return '<div class="no-data">No records found.</div>';
+  opts=opts||{};
 
   /* A merged column's heading is centred over it, or the heading and the
      figure it names sit at opposite ends of the same column. */
-  const head='<tr>'+cols.map(c=>`<th${c.group?' class="grp"':''}>${esc(c.h)}</th>`).join('')+'</tr>';
+  const head='<tr>'+cols.map(c=>`<th${c.group?' class="grp"':''}>${esc(colHead(c))}</th>`).join('')+'</tr>';
 
   /* A COLUMN THAT IS ONE CELL FOR A WHOLE GROUP.
      The plot average is one figure about seven rows, and seven copies of it
@@ -1129,7 +1445,14 @@ function buildTable(cols, rows, noun){
 
   let body='';
   rows.forEach((r,i)=>{
-    body+='<tr>'+cols.map((c,ci)=>{
+    /* A line that CONTINUES the record above it. On a desk and on paper the
+       rowspan says so by itself and this mark paints nothing; on a phone the
+       table is one card per row and a rowspan means nothing at all, so
+       without it the cards after the first carry a batch and its readings
+       with no plot and no day on them. */
+    const cont=opts.contKey && i>0 && opts.contKey(rows[i-1])===opts.contKey(r);
+    body+=(cont?`<tr class="rec-cont" data-cont="${esc(opts.contNote||'continued')}">`:'<tr>')
+        +cols.map((c,ci)=>{
       // A row inside a group that is not its first draws no cell at all.
       if(spans[ci] && !spans[ci][i]) return '';
       /* rows as well as the row: a column can be a figure about the GROUP
@@ -1137,14 +1460,16 @@ function buildTable(cols, rows, noun){
       const val=c.v(r,i,rows);
       const span=spans[ci] && spans[ci][i]>1 ? ` rowspan="${spans[ci][i]}"` : '';
       const cls=[c.num?'num':'', spans[ci]?'grp':''].filter(Boolean).join(' ');
-      /* c.label is what the cell announces itself as on a phone, where
+      /* colLabel is what the cell announces itself as on a phone, where
          it is a card row rather than a column: "#" is a column heading
          and says nothing on its own once the heading row is gone. */
-      return `<td data-label="${esc(c.label||c.h)}"${cls?` class="${cls}"`:''}${span}>${c.raw?val:esc(val)}</td>`;
+      return `<td data-label="${esc(colLabel(c))}"${cls?` class="${cls}"`:''}${span}>${c.raw?val:esc(val)}</td>`;
     }).join('')+'</tr>';
   });
   const word=noun||'record';
-  body+=`<tr class="total-row"><td colspan="${cols.length}" data-label="">Total: ${fmtNum(rows.length)} ${esc(word)}${rows.length!==1?'s':''}</td></tr>`;
+  const total=opts.total
+    || `Total: ${fmtNum(rows.length)} ${esc(word)}${rows.length!==1?'s':''}`;
+  body+=`<tr class="total-row"><td colspan="${cols.length}" data-label="">${total}</td></tr>`;
 
   return`<div class="tbl-wrap"><table class="rec-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
@@ -1160,20 +1485,28 @@ const NURSERY_MODS=['plot','height','papan','maint'];
    function every module shares. Null means nothing was narrowed. */
 let _maintNarrowed = null;
 
-function buildNurserySection(label, sub, headClass, data, nurseries){
-  const mods=[...selectedMods].filter(m=>NURSERY_MODS.indexOf(m)>=0);
+/* `mods` is PASSED, never read off the panel. The sheet can be redrawn
+   after it was generated -- a unit change does exactly that -- and the
+   ticks may have been moved in between, so a section built off the live
+   panel would draw a module the report was never generated for. */
+function buildNurserySection(label, sub, headClass, data, nurseries, allMods){
+  const mods=allMods.filter(m=>NURSERY_MODS.indexOf(m)>=0);
   const modLabels={plot:'📋 Plot Condition',height:'📏 Seedling Height',papan:'🪧 Papan Tanda',maint:'🔧 Maintenance'};
   const modBadge={plot:'badge-plot',height:'badge-height',papan:'badge-papan',maint:'badge-maint'};
   let total=0;
   let modSections='';
   mods.forEach(mod=>{
     const rows=filterByNursery(data[mod],nurseries);
-    total+=rows.length;
+    /* RECORDS, not rows -- see MOD_RECORD_KEY. On the two modules with a
+       record key this is fewer than the rows in the table, and the table's
+       own foot says both figures. */
+    const recs=recordCount(mod,rows);
+    total+=recs;
     modSections+=`
       <div class="mod-block">
         <div class="mod-block-head">
           <span class="mod-block-name">${modLabels[mod]}</span>
-          <span class="badge ${modBadge[mod]}">${fmtNum(rows.length)} records</span>
+          <span class="badge ${modBadge[mod]}">${fmtNum(recs)} records</span>
           ${mod==='maint'&&_maintNarrowed?`<span class="mod-block-note">${esc(_maintNarrowed)}</span>`:''}
         </div>
         <div class="mod-block-body">${buildModTable(mod,rows)}</div>
@@ -1187,6 +1520,372 @@ function buildNurserySection(label, sub, headClass, data, nurseries){
     </div>
     ${modSections}
   </div>`;
+}
+
+/* ══ THE REPORT AS A SPREADSHEET ═══════════════════════════════════════
+
+   *"and it also able to download in excel"*. The sheet printed off this
+   page is read by somebody adding up; the spreadsheet is read by somebody
+   who wants to FILTER, SORT and PIVOT it, and that is the whole of what
+   decides the shape below.
+
+   A REAL .xlsx, WRITTEN HERE -- no library and no fetch. Two reasons, and
+   the first is the one that rules CSV out on its own:
+
+   - **A CASE ID IS THIRTEEN DIGITS.** Excel reads a bare 1791248487117 in
+     a CSV as a number and shows it as 1.79125E+12, so the one column the
+     office asked for twice would arrive destroyed. An xlsx cell declares
+     its own type, so the case goes in as TEXT and reads back exactly.
+   - **Nothing to 404 at the moment somebody presses the button**, which is
+     the same argument the papan tanda logo is inlined for. A spreadsheet
+     that needs a CDN is a button that fails on the day the office is
+     somewhere with a captive portal.
+
+   THE SHAPE IS NOT THE PAGE'S, and that is deliberate:
+
+   - **ONE SHEET PER MODULE, with a NURSERY COLUMN**, where the page draws
+     a Pre Nursery section and a Main Nursery one. A filter on that column
+     is the two sections back, and a spreadsheet split across sheets by
+     something that could be a column is one somebody has to glue together
+     before they can total it.
+   - **EVERY LINE CARRIES ITS OWN PLOT, DAY AND TASK.** The table merges
+     them down the side of a record because that is how a visit reads on
+     paper -- and a merged cell in Excel breaks sorting and filtering,
+     which is what the file is FOR. The RECORD NUMBER column is what keeps
+     the grouping readable: the same number down three lines is one visit,
+     and it sorts and pivots.
+   - **The figures are numbers and the ids are text**, off the column's own
+     `num` flag -- the one MOD_COLS already carries to decide alignment, so
+     there is no second list saying which column is a figure. The dates are
+     REAL DATES (`xlDate`), so a filter by month is a filter by month and
+     not a text match.
+
+   And the first sheet is the CONTEXT -- the range, the nurseries, the plot
+   search, what was counted. A spreadsheet that has left the screen with no
+   idea which dates it covers is a figure nobody can check. */
+
+/* ── the zip, store-only ── */
+let _crcTable=null;
+function _crc32(buf){
+  if(!_crcTable){
+    _crcTable=new Int32Array(256);
+    for(let n=0;n<256;n++){
+      let c=n;
+      for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);
+      _crcTable[n]=c;
+    }
+  }
+  let c=-1;
+  for(let i=0;i<buf.length;i++) c=(c>>>8)^_crcTable[(c^buf[i])&0xFF];
+  return (c^-1)>>>0;
+}
+/* STORED rather than deflated: a month of audits comes to a megabyte or
+   two, which is nothing to download, and the alternative is either a
+   library or CompressionStream -- a second thing that can be absent on a
+   phone. A stored zip is one every reader has opened since 1989. */
+function _zipBlob(files){
+  const enc=new TextEncoder();
+  const parts=[], central=[];
+  let offset=0;
+  files.forEach(f=>{
+    const name=enc.encode(f.name), data=f.data;
+    const crc=_crc32(data), len=data.length;
+    const loc=new Uint8Array(30+name.length), lv=new DataView(loc.buffer);
+    lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true);
+    lv.setUint16(6,0x0800,true);          // the name is UTF-8
+    lv.setUint16(8,0,true);               // stored
+    lv.setUint16(10,0,true); lv.setUint16(12,0x0021,true);  // 1980-01-01
+    lv.setUint32(14,crc,true); lv.setUint32(18,len,true); lv.setUint32(22,len,true);
+    lv.setUint16(26,name.length,true);
+    loc.set(name,30);
+    parts.push(loc,data);
+
+    const cen=new Uint8Array(46+name.length), cv=new DataView(cen.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true); cv.setUint16(10,0,true);
+    cv.setUint16(12,0,true); cv.setUint16(14,0x0021,true);
+    cv.setUint32(16,crc,true); cv.setUint32(20,len,true); cv.setUint32(24,len,true);
+    cv.setUint16(28,name.length,true);
+    cv.setUint32(42,offset,true);
+    cen.set(name,46);
+    central.push(cen);
+    offset+=loc.length+len;
+  });
+  const cenLen=central.reduce((s,c)=>s+c.length,0);
+  const end=new Uint8Array(22), ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true);
+  ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
+  ev.setUint32(12,cenLen,true); ev.setUint32(16,offset,true);
+  return new Blob(parts.concat(central,[end]),
+    {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+/* ── the sheet ── */
+function _xq(v){
+  return String(v==null?'':v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    /* A control character is not legal in XML and Excel refuses the whole
+       workbook over one, which reads to the office as a broken button. */
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
+}
+function _colName(i){
+  let s='';
+  for(i+=1;i>0;i=Math.floor((i-1)/26)) s=String.fromCharCode(65+((i-1)%26))+s;
+  return s;
+}
+/* The 1900 system Excel reads, counted off 1899-12-30. UTC on both sides,
+   so a timezone cannot move a day. */
+function _xlSerial(iso){
+  const p=String(iso||'').slice(0,10).split('-');
+  if(p.length!==3) return null;
+  const t=Date.UTC(+p[0],+p[1]-1,+p[2]);
+  if(!Number.isFinite(t)) return null;
+  return Math.round((t-Date.UTC(1899,11,30))/86400000);
+}
+/* The text a cell would READ on the page. The column functions return
+   markup on the ones marked raw, and the browser is what turns that back
+   into words -- so the sheet cannot say something the table does not. */
+function _xlText(v){
+  const s=String(v==null?'':v);
+  let t=s;
+  if(s.indexOf('<')>=0){
+    const d=document.createElement('div');
+    d.innerHTML=s;
+    t=(d.textContent||'').trim();
+  }
+  /* THE TABLE'S DASH IS A SPREADSHEET'S EMPTY CELL. On paper an em dash
+     says "nothing here" in a column that has to stay aligned; in a
+     spreadsheet it is a VALUE -- it sorts after every number, it turns up
+     in the filter list as something to tick, and it stops a column of
+     figures being a column of figures. */
+  return t==='—' ? '' : t;
+}
+function _sheetXml(head, rows, opts){
+  const nCols=head.length;
+  const plain=!!(opts&&opts.plain);
+  /* Sized off the content, so nothing arrives as ##### or as a column of
+     air. Capped, because one long remark must not push every other column
+     off the screen.
+
+     A DATE CELL HOLDS A SERIAL AND SHOWS A DATE, so its own value is five
+     characters wide and what the reader sees is ten -- measured off the
+     value alone, every date column arrives as #####, which is the one
+     failure that looks like broken data rather than a narrow column. */
+  const width=head.map((h,ci)=>{
+    let w=String(h).length, isDate=false;
+    rows.forEach(r=>{
+      const c=r[ci]; if(!c) return;
+      if(c.t==='d') isDate=true;
+      const t=c.v!=null?String(c.v):''; if(t.length>w) w=t.length;
+    });
+    if(isDate&&w<10) w=10;
+    return Math.min(Math.max(w+2,8),42);
+  });
+  let xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    /* The heading stays on screen however far down somebody scrolls, and
+       every column carries a filter -- which is the whole reason this is a
+       spreadsheet and not a picture of a table. Not on the context sheet:
+       it is a list of what the report was OF rather than a table, and a
+       filter button over "From date" is a control that answers nothing. */
+    + (plain?''
+       : '<sheetViews><sheetView workbookViewId="0">'
+         +'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+         +'</sheetView></sheetViews>')
+    + '<cols>'+width.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols>'
+    + '<sheetData>';
+  const cell=(ci,ri,c)=>{
+    const ref=_colName(ci)+(ri+1);
+    if(!c||c.v==null||c.v==='') return '';
+    if(c.t==='d') return `<c r="${ref}" s="2"><v>${c.v}</v></c>`;
+    if(c.t==='n') return `<c r="${ref}"><v>${c.v}</v></c>`;
+    const s=c.t==='h'?' s="1"':'';
+    return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${_xq(c.v)}</t></is></c>`;
+  };
+  xml+='<row r="1">'+head.map((h,ci)=>cell(ci,0,{v:h,t:'h'})).join('')+'</row>';
+  rows.forEach((r,ri)=>{
+    xml+=`<row r="${ri+2}">`+r.map((c,ci)=>cell(ci,ri+1,c)).join('')+'</row>';
+  });
+  xml+='</sheetData>';
+  if(rows.length&&!plain) xml+=`<autoFilter ref="A1:${_colName(nCols-1)}${rows.length+1}"/>`;
+  return xml+'</worksheet>';
+}
+/* Excel refuses a sheet name over 31 characters or carrying any of
+   []:*?/\ -- and refuses the WHOLE workbook, so it is trimmed here rather
+   than left to be discovered by the office. */
+function _sheetName(s, taken){
+  let n=String(s||'Sheet').replace(/[\[\]:*?/\\]/g,' ').trim().slice(0,31)||'Sheet';
+  let i=2, base=n;
+  while(taken.indexOf(n)>=0){ n=(base.slice(0,28)+' '+i).slice(0,31); i++; }
+  taken.push(n);
+  return n;
+}
+function _xlsxBlob(sheets){
+  const enc=new TextEncoder();
+  const taken=[];
+  const named=sheets.map(s=>({name:_sheetName(s.name,taken),head:s.head,rows:s.rows,plain:!!s.plain}));
+  const f=[];
+  const add=(name,text)=>f.push({name,data:enc.encode(text)});
+  add('[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    +'<Default Extension="xml" ContentType="application/xml"/>'
+    +'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+    +'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+    +named.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')
+    +'</Types>');
+  add('_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    +'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+    +'</Relationships>');
+  add('xl/workbook.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    +' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+    +named.map((s,i)=>`<sheet name="${_xq(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')
+    +'</sheets></workbook>');
+  add('xl/_rels/workbook.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    +named.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')
+    +`<Relationship Id="rId${named.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+    +'</Relationships>');
+  /* Three formats and no more: plain, bold for the heading row, and the
+     builtin short date (numFmtId 14), which Excel draws in whatever the
+     reader's own locale is. */
+  add('xl/styles.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    +'<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
+    +'<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+    +'<fills count="2"><fill><patternFill patternType="none"/></fill>'
+    +'<fill><patternFill patternType="gray125"/></fill></fills>'
+    +'<borders count="1"><border/></borders>'
+    +'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    +'<cellXfs count="3">'
+    +'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    +'<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+    +'<xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    +'</cellXfs>'
+    +'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+    +'</styleSheet>');
+  named.forEach((s,i)=>add(`xl/worksheets/sheet${i+1}.xml`,_sheetXml(s.head,s.rows,{plain:s.plain})));
+  return _zipBlob(f);
+}
+
+/* ── what goes in it ──
+   Built off MOD_COLS and the same sorted rows the tables are drawn from,
+   so a column added to the report is in the spreadsheet without anybody
+   listing it a second time. */
+/* ONE CELL BUILDER, because there are two tables to turn into sheets --
+   the module ones and Height by Batch -- and two copies of this would be
+   two answers to "is this column a date". */
+function _xlCell(c, r, i, rows){
+  if(c.xlDate){
+    const n=_xlSerial(c.xlDate(r));
+    if(n!=null) return {v:n,t:'d'};
+  }
+  const txt=_xlText(c.v(r,i,rows));
+  /* A FIGURE IS A NUMBER AND AN ID IS NOT, and the column already says
+     which it is: `num` is the flag the table aligns on. The Case column
+     does not carry it, which is what keeps a thirteen-digit case out of
+     scientific notation. */
+  if(c.num && txt!=='' && Number.isFinite(Number(txt.replace(/,/g,''))))
+    return {v:Number(txt.replace(/,/g,'')),t:'n'};
+  return {v:txt,t:'s'};
+}
+function _xlSheetOf(cols, rows, lead){
+  if(!cols||!rows||!rows.length) return null;
+  /* colHead, not `c.h`: a height column's heading is a function of the
+     unit on screen, and a spreadsheet headed (cm) over a column of metres
+     is the worst of the three places this could go wrong. */
+  const head=(lead?[lead.h]:[]).concat(cols.map(colHead));
+  const body=rows.map((r,i)=>
+    (lead?[{v:lead.v(r),t:'s'}]:[]).concat(cols.map(c=>_xlCell(c,r,i,rows))));
+  return {head,rows:body};
+}
+function _modSheet(mod, rows){
+  /* Sorted exactly as the table is, so the Record number means the same
+     thing in both -- `_recNo` numbers consecutive runs, and a different
+     order is a different numbering. */
+  return _xlSheetOf(MOD_COLS[mod], rows&&rows.length?_auditPlotBatchSort(rows):rows,
+                    {h:'Nursery', v:r=>r.nursery||''});
+}
+
+/* The last report DRAWN: what the Excel is of, and what a height-unit
+   change redraws from. One object rather than two, because the two would
+   be the same report answering in two units. Null until somebody has
+   generated one, which is what both readers check first. */
+let _lastReport=null;
+
+function downloadExcel(){
+  const R=_lastReport;
+  if(!R){ showToast('⚠ Generate the report first'); return; }
+  try{
+    const sheets=[];
+    /* THE CONTEXT SHEET FIRST. A spreadsheet is forwarded, saved and
+       opened months later, and one with no idea which dates it covers is
+       a column of figures nobody can check. */
+    const ctx=[
+      ['From date', R.from], ['To date', R.to],
+      ['Period', R.period||''],
+      ['Nurseries', R.nurseryLabel],
+      ['Plot search', R.plotQuery||'(all plots)'],
+      ['Generated', R.generated],
+      ['', ''],
+      ['Module', 'Records']
+    ].map(p=>[{v:p[0],t:'s'},{v:p[1],t:'s'}]);
+    (R.counts||[]).forEach(c=>ctx.push([{v:c[0],t:'s'},{v:c[1],t:'n'}]));
+    /* A RECORD IS A VISIT and the lines under it are its batches or its
+       cases -- said here too, because the sheets below carry one line per
+       batch and a reader counting rows would otherwise get the other
+       figure. */
+    ctx.push([{v:'',t:'s'},{v:'',t:'s'}]);
+    ctx.push([{v:'A record is one visit — the same plot on the same day, '
+               +'whatever the batch; the same plot and task on the same day, '
+               +'whatever the case. Its batches and cases are the lines under '
+               +'it, and each carries the Record number.',t:'s'},{v:'',t:'s'}]);
+    sheets.push({name:'Report',head:['Monthly Audit Report',''],rows:ctx,plain:true});
+
+    const labels={plot:'Plot Condition',height:'Seedling Height',
+                  papan:'Papan Tanda',maint:'Maintenance'};
+    /* R.mods and not the live panel, the same rule the sections follow:
+       the spreadsheet is of the report that was DRAWN, and the ticks may
+       have been moved since without anybody pressing Generate. */
+    (R.mods||[]).filter(m=>NURSERY_MODS.indexOf(m)>=0).forEach(mod=>{
+      const s=_modSheet(mod,R.sheetData[mod]);
+      if(s) sheets.push({name:labels[mod]||mod,head:s.head,rows:s.rows});
+    });
+    /* Height by Batch is about BATCHES rather than about a nursery's
+       audits, which is why it is a section of its own on the page -- and a
+       sheet of its own here, drawn off its own columns. */
+    if(R.batchHeight&&!R.batchHeight.error){
+      const bh=_xlSheetOf(BATCH_HEIGHT_COLS,R.batchHeight.rows||[],null);
+      if(bh) sheets.push({name:'Height by Batch',head:bh.head,rows:bh.rows});
+    }
+    if(sheets.length===1){ showToast('⚠ Nothing in the report to put in a sheet'); return; }
+
+    const blob=_xlsxBlob(sheets);
+    const name='MJM Audit Report '+R.from+' to '+R.to+'.xlsx';
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=name;
+    document.body.appendChild(a);
+    a.click();
+    /* Revoked on a timer rather than at once: Safari has not started the
+       download by the time the handler returns, and a revoked url there is
+       a button that does nothing. */
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },4000);
+    showToast('✓ Excel downloaded');
+  }catch(e){
+    /* A throw inside an onclick does nothing and says nothing -- the claim
+       form had to learn that once already. */
+    console.error('[excel]',e);
+    showToast('⚠ Could not build the Excel: '+e.message);
+  }
 }
 
 async function generateReport(){
@@ -1204,8 +1903,15 @@ async function generateReport(){
   const wantNurserySections=[...selectedMods].some(m=>NURSERY_MODS.indexOf(m)>=0);
   if(wantNurserySections&&tickedNurseries.length===0){showToast('⚠ Select at least one nursery');return;}
 
-  const month=parseInt(document.getElementById('f-month').value);
-  const year=parseInt(document.getElementById('f-year').value);
+  /* THE RANGE, both ends inclusive. ISO text compares as a date, which is
+     what lets the from/to test below be a string comparison -- the same
+     reasoning the row sort already relies on. An empty box is somebody not
+     having picked rather than "everything", because a report with one end
+     open is not a thing anybody means to ask for. */
+  const from=document.getElementById('f-from').value;
+  const to=document.getElementById('f-to').value;
+  if(!from||!to){showToast('⚠ Pick a from date and a to date');return;}
+  if(from>to){showToast('⚠ The from date is after the to date');return;}
   const plotQuery=document.getElementById('f-plot').value.trim();
   // Whichever of Pre-Nursery/BNN/UNN1/UNN2 are ticked (see the tick-chip
   // row) — Main Nursery is no longer all-or-nothing: BNN can be included
@@ -1213,10 +1919,10 @@ async function generateReport(){
   const showPN=wantNurserySections&&tickedNurseries.includes('PN');
   const mnNurseries=MN_NURSERIES.filter(n=>tickedNurseries.includes(n));
   const showMN=wantNurserySections&&mnNurseries.length>0;
-  const periodStr=`${MONTHS[month-1]} ${year}`;
+  const periodStr=periodLabel(from,to);
   setLoading(true);
   try{
-    const data=await fetchData(month,year);
+    const data=await fetchData(from,to);
     // Plot search narrows every module's rows before anything downstream
     // (summary counts, the nursery-section tables) ever sees them, so
     // there's exactly one place this filter has to be applied.
@@ -1235,30 +1941,65 @@ async function generateReport(){
          one kind is indistinguishable from a month that only had that
          kind in it. Said only where it NARROWED something -- a note on a
          report nothing was taken out of is a note nobody reads. */
+      /* CASES, not records: what this tick takes out is rows, and a row
+         here is one case. A record can lose one of its cases and still be
+         on the report, so calling them records would be a figure that does
+         not match the one in the badge above it. */
       const dropped=before-data.maint.length;
       _maintNarrowed = dropped>0
         ? (doneBy.length===0
             ? 'all '+fmtNum(before)+' hidden — nothing ticked under Done By'
             : 'showing '+(doneBy.indexOf('admin')!==-1?'admin closures':'auditor audits')
-              +' only — '+fmtNum(dropped)+' other '+(dropped===1?'record':'records')+' hidden')
+              +' only — '+fmtNum(dropped)+' other '+(dropped===1?'case':'cases')+' hidden')
         : null;
     } else {
       _maintNarrowed = null;
     }
-    const countAll=(d,n)=>[...selectedMods].filter(m=>NURSERY_MODS.indexOf(m)>=0)
-                                           .reduce((s,m)=>s+(filterByNursery(d[m],n).length),0);
     /* The ledger reads are the one part of this report that can fail on its
        own, and a section that quietly draws nothing is a section that says
        there are no batches. It says what went wrong instead. */
     let batchHeight=null;
     if(selectedMods.has('bheight')){
-      try{ batchHeight=buildBatchHeight(await fetchBatchLedger(month,year),data.height||[]); }
+      try{ batchHeight=buildBatchHeight(await fetchBatchLedger(to),data.height||[]); }
       catch(e){ console.error('[batch-height]',e); batchHeight={error:e.message}; }
     }
+    /* EVERYTHING THE DRAWING HALF NEEDS, and nothing it can read off the
+       panel. The reads above are the expensive part -- the batch half
+       pages the whole inventory ledger -- so changing the UNIT must not go
+       near them, and the only way to be sure of that is for the drawing to
+       take its inputs rather than fetch them.
+
+       `at` rides along for the same reason: the Generated line is when the
+       report was GENERATED, and reading it in another unit a minute later
+       has not generated anything. */
+    drawReport({ data, batchHeight, from, to, plotQuery,
+                 showPN, showMN, mnNurseries,
+                 mods:[...selectedMods], maintNarrowed:_maintNarrowed,
+                 at:new Date() });
+    document.getElementById('print-bar').classList.remove('hidden');
+    /* Only on a phone: on a desk the filters and the report both fit. */
+    if(window.matchMedia('(max-width:720px)').matches) setFilters(false);
+    showToast('✓ Report generated');
+  }catch(e){
+    console.error(e);
+    showToast('⚠ Failed: '+e.message);
+  }
+  setLoading(false);
+}
+
+function drawReport(rep){
+  const {data,batchHeight,from,to,plotQuery,showPN,showMN,mnNurseries,mods,at}=rep;
+  /* Read by buildNurserySection a moment later -- restored here rather
+     than left standing, because a redraw must say exactly what the
+     generate said. */
+  _maintNarrowed=rep.maintNarrowed;
+  const periodStr=periodLabel(from,to);
+  const has=(m)=>mods.indexOf(m)!==-1;
+  const countAll=(d,n)=>mods.filter(m=>NURSERY_MODS.indexOf(m)>=0)
+                            .reduce((s,m)=>s+recordCount(m,filterByNursery(d[m],n)),0);
     const pnTotal=showPN?countAll(data,PN_NURSERIES):0;
     const mnTotal=showMN?countAll(data,mnNurseries):0;
     const grandTotal=pnTotal+mnTotal;
-    const now=new Date();
     /* What the heading says is what was DRAWN. With only Height by Batch
        ticked there is no nursery section at all, so naming the nursery that
        happens to be ticked would name a section that is not on the page. */
@@ -1268,20 +2009,23 @@ async function generateReport(){
 
     // Count per module across selected nurseries
     const countedNurseries = [...(showPN?PN_NURSERIES:[]), ...drawnMN];
-    const plotTotal   = filterByNursery(data.plot||[],   countedNurseries).length;
-    const heightTotal = filterByNursery(data.height||[], countedNurseries).length;
-    const papanTotal  = filterByNursery(data.papan||[],  countedNurseries).length;
-    const maintTotal  = filterByNursery(data.maint||[],  countedNurseries).length;
+    /* Through recordCount, so the card agrees with the badge and the table
+       foot under it. Height and Papan have no record key and so still count
+       rows, which is what one sign and one plot measurement each are. */
+    const plotTotal   = recordCount('plot',  filterByNursery(data.plot||[],   countedNurseries));
+    const heightTotal = recordCount('height',filterByNursery(data.height||[], countedNurseries));
+    const papanTotal  = recordCount('papan', filterByNursery(data.papan||[],  countedNurseries));
+    const maintTotal  = recordCount('maint', filterByNursery(data.maint||[],  countedNurseries));
 
     let summaryCards=`<div class="sum-card"><div class="sum-val">${fmtNum(grandTotal)}</div><div class="sum-label">Total Audits</div></div>`;
-    if(selectedMods.has('plot'))   summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--pn)">${fmtNum(plotTotal)}</div><div class="sum-label">Plot Condition</div></div>`;
-    if(selectedMods.has('height')) summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--mn)">${fmtNum(heightTotal)}</div><div class="sum-label">Seedling Height</div></div>`;
-    if(selectedMods.has('papan'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--papan)">${fmtNum(papanTotal)}</div><div class="sum-label">Papan Tanda</div></div>`;
-    if(selectedMods.has('maint'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--maint)">${fmtNum(maintTotal)}</div><div class="sum-label">Maintenance</div></div>`;
+    if(has('plot'))   summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--pn)">${fmtNum(plotTotal)}</div><div class="sum-label">Plot Condition</div></div>`;
+    if(has('height')) summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--mn)">${fmtNum(heightTotal)}</div><div class="sum-label">Seedling Height</div></div>`;
+    if(has('papan'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--papan)">${fmtNum(papanTotal)}</div><div class="sum-label">Papan Tanda</div></div>`;
+    if(has('maint'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--maint)">${fmtNum(maintTotal)}</div><div class="sum-label">Maintenance</div></div>`;
     if(batchHeight&&!batchHeight.error) summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:var(--batch)">${fmtNum(batchHeight.batches)}</div><div class="sum-label">Batches 1–4 Mth</div></div>`;
 
     let sections='';
-    if(showPN) sections+=buildNurserySection('Pre Nursery (PN)','Plots P01 – P52','mod-head-pn',data,PN_NURSERIES);
+    if(showPN) sections+=buildNurserySection('Pre Nursery (PN)','Plots P01 – P52','mod-head-pn',data,PN_NURSERIES,mods);
     if(showMN){
       // Range shown under the heading follows whichever of BNN/UNN1/UNN2
       // actually made it in, not always all three.
@@ -1289,7 +2033,7 @@ async function generateReport(){
       sections+=buildNurserySection(
         `Main Nursery (${mnNurseries.join(' + ')})`,
         mnNurseries.map(n=>MN_RANGES[n]).join(' · '),
-        'mod-head-mn',data,mnNurseries);
+        'mod-head-mn',data,mnNurseries,mods);
     }
     /* Last, and outside both: these batches are in the Pre-Nursery by
        definition (they have not been transplanted), but the section answers
@@ -1301,19 +2045,69 @@ async function generateReport(){
       <div class="report-header">
         <div class="report-title">Monthly Audit Report</div>
         <div class="report-period">${periodStr} · ${nurseryLabel}${plotQuery?' · Plot: '+esc(plotQuery):''}</div>
-        <div class="report-generated">Generated: ${now.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="report-generated">Generated: ${at.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
       </div>
       <div class="summary-row">${summaryCards}</div>
       ${sections}`;
-    document.getElementById('print-bar').classList.remove('hidden');
-    /* Only on a phone: on a desk the filters and the report both fit. */
-    if(window.matchMedia('(max-width:720px)').matches) setFilters(false);
-    showToast('✓ Report generated');
-  }catch(e){
-    console.error(e);
-    showToast('⚠ Failed: '+e.message);
-  }
-  setLoading(false);
+  /* WHAT THE EXCEL IS OF, recorded here and nowhere else. The sheets are
+     the rows that were DRAWN -- narrowed by plot, by Done By and by
+     nursery exactly as the tables above are -- so a figure in the
+     spreadsheet cannot disagree with the card it was read off. A second
+     read scoped its own way is how the two come to differ.
+
+     IT RIDES ON THE DRAWING PAYLOAD rather than in a second variable: a
+     unit change REDRAWS (see setHeightUnit) and the spreadsheet has to
+     come down in the unit on screen -- which it does by construction,
+     because _xlSheetOf asks the same columns for the same headings and
+     the same values this draw just did. Worked out here, where the
+     figures it quotes are, and so re-made identically on every redraw. */
+  _lastReport=Object.assign({},rep,{
+    period:periodStr, nurseryLabel,
+    generated:at.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+    counts:[
+      ...(has('plot')   ?[['Plot Condition',  plotTotal]]  :[]),
+      ...(has('height') ?[['Seedling Height', heightTotal]]:[]),
+      ...(has('papan')  ?[['Papan Tanda',     papanTotal]] :[]),
+      ...(has('maint')  ?[['Maintenance',     maintTotal]] :[]),
+      ['Total Audits', grandTotal]
+    ],
+    sheetData:{
+      plot:  filterByNursery(data.plot||[],  countedNurseries),
+      height:filterByNursery(data.height||[],countedNurseries),
+      papan: filterByNursery(data.papan||[], countedNurseries),
+      maint: filterByNursery(data.maint||[], countedNurseries)
+    }
+  });
+  syncHeightUnitBar(has('height')||has('bheight'));
+}
+
+/* ── THE HEIGHT UNIT CONTROL ──────────────────────────────────────────
+   In the TOOLBAR and not the filter panel, because it is not a filter:
+   nothing is read, nothing is narrowed, and the same report is simply
+   read in another unit. Pressing it goes nowhere near the database --
+   see drawReport for why that matters.
+
+   It is OFFERED ONLY where the report has a height on it, the same rule
+   the Done By row follows: a control over a module that is not on the
+   page is a control that does nothing. */
+function syncHeightUnitBar(show){
+  const bar=document.getElementById('unit-bar');
+  if(!bar) return;
+  bar.style.display=show?'':'none';
+  bar.querySelectorAll('.tbtn-unit').forEach(b=>{
+    const on=b.dataset.unit===_heightUnit;
+    b.classList.toggle('is-on',on);
+    b.setAttribute('aria-pressed',on?'true':'false');
+  });
+}
+
+function setHeightUnit(u){
+  if(!HEIGHT_UNITS[u]||u===_heightUnit) return;
+  _heightUnit=u;
+  /* The redraw is what repaints the buttons as well (drawReport ends on
+     syncHeightUnitBar), so there is one place that says which is on. With
+     no report drawn the bar is not on screen to be pressed. */
+  if(_lastReport) drawReport(_lastReport);
 }
 
 document.addEventListener('DOMContentLoaded',initFilters);

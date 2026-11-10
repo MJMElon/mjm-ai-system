@@ -50,7 +50,7 @@ What that SQL should be:
   comment.**
 
   Three paste rules are still owed across the older files, each its own
-  sweep, and the test prints the count every run: **145 carry a semicolon in a
+  sweep, and the test prints the count every run: **147 carry a semicolon in a
   comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
@@ -1356,6 +1356,216 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+### A TIMEOUT IS NOT A REFUSAL, and one press wrote seven audits
+
+The office opened U03 on 04 Nov and found the same maintenance audit
+listed over and over — same plot, same day, same task, same result, the
+same remark — and handed over the seven photo files behind the copies:
+
+    audit_maintenance_audits_photo_url_1793750892246_…jpeg
+    audit_maintenance_audits_photo_url_1793750950196_…jpeg
+    … about a minute apart
+
+**A DIFFERENT FILE EACH TIME IS THE WHOLE DIAGNOSIS, and it is what ruled
+out the obvious suspect.** A record the sweep sends again carries the link
+it uploaded the first time — `_rememberPhotoUrl` writes it into the queue
+row before the photo leaves the phone, which is the rule one section up —
+so sweep retries share ONE file. Seven files means seven uploads, which
+means the picture was uploaded and then uploaded again.
+
+It was, and the fault is two lines long. `smartSave`'s online path copies
+the payload into `clean` and uploads each photo INTO THAT COPY. **`clean`
+was declared inside the `try`**, so when the insert failed the catch fell
+through to the offline branch carrying `payload` — the original, still
+holding the photo as a `data:` URL. The queued copy therefore uploaded the
+same picture a second time under a new name.
+
+**And the insert that "failed" had very often not failed at all.** It is
+wrapped in an eight-second cap, and a nursery signal takes longer than
+that while the row still lands. So one press wrote **two rows and two
+files**, and the auditor was told *"Saved offline — will sync later"* over
+a record that was already in the table.
+
+**NOTHING IN ANY OF THESE TABLES HAS EVER BEEN UNIQUE**, which is the half
+that let it run to seven. `syncNow` has retired a **23505** as *"already
+present"* since the day it was written — that path had simply never had
+anything to fire on. `audit_id` looks like the key and is not: it is the
+number of audits the phone can see plus one, so two auditors saving at the
+same moment both answer the same, and a unique index on it would refuse
+the second person their work. `audit_script.js` says so in its own
+comment.
+
+So **`client_uid`** is the stamp — one id per press of Save, carried on
+every retry of that press, with a partial unique index behind it
+(`shared/RUN_ME_one_audit_per_save.sql`, on all four tables `smartSave`
+writes). The repeat now comes back 23505 and the sweep retires it quietly.
+Four things in it:
+
+- **The column is ASKED ABOUT, once per table per session.** Naming a
+  column a table has not got is not an empty cell in PostgREST, it is the
+  whole insert refused — which on this screen is an auditor standing in a
+  plot being told the save failed.
+- **ONLY A REFUSAL THAT NAMES THE COLUMN IS AN ANSWER.** No signal, a
+  policy, a dropped connection: none of those is the column being absent,
+  and caching one as that would switch the guard off for the rest of the
+  session over a bad moment. Those are not remembered, so the next save
+  asks again.
+- **An UPDATE is not stamped.** It names the row it changes, so it cannot
+  land twice.
+- **The index is PARTIAL** (`WHERE client_uid IS NOT NULL`). Every row
+  already in these tables has no stamp, and a plain unique index would
+  read all of them as one value and refuse the lot. **Nothing is
+  backfilled**: a stamp invented by the SQL would be that file claiming
+  two old rows were one press, which it cannot know. So the check's
+  STAMPED line reads **0 of N on the first run and that is correct** — it
+  climbs as phones pick up the new build.
+
+**The index is the half that protects a phone still running the old
+build**, and there are always some: the fix in the file reaches a handset
+only when it next loads the page, and an outbox can hold a week.
+
+**A PARALLEL SESSION FIXED THE DATABASE HALF THE SAME MORNING**, and the
+two were merged rather than one replacing the other.
+`shared/RUN_ME_remove_duplicate_audits.sql` removed the copies and put a
+unique index on **`task_id`**. That is a STRONGER key than the stamp and
+fires first on maintenance, and it was chosen against the real table —
+188 disagreeing pairs, with a rule for which verdict survives, which is a
+judgement no file written from here could make.
+
+It is also a BLUNTER key: one audit per task **for ever**, so a second
+audit of the same task — the **Re-audit** button on the detail screen — is
+now refused by the database. That is worth knowing and is the office's
+call, not this file's. So: that file owns the maintenance table and this
+one does not de-duplicate it, because two repairs for one fault is how
+they come to disagree; the stamp still goes on all four tables, since the
+other three are written by the same function and were left unguarded, and
+so that there is something underneath task_id the day it is reconsidered.
+
+`shared/CHECK_duplicate_audits.sql` is what answers this from the data
+rather than from a reading of the code — it names the worst-copied audits,
+how far apart the copies landed, and **how many different photo files are
+behind them**, which is the line that says which of the two faults you are
+looking at: one file is the sweep sending a row again, a file each is this
+one. `RUN_ME_one_audit_per_save.sql` then takes the copies off the record,
+keeping the earliest of each set, comparing the WHOLE row through
+`to_jsonb` less the id, the insert time, the photo and the running number
+— so a column added later is compared too. **The photos stay in storage**:
+this takes a row off the record, and a blob costs nothing where it sits.
+Two audits of one plot on two different days differ on the date and are
+both kept.
+
+`tests/one_press_of_save_is_one_audit.cjs` drives the real `smartSave` and
+the real `syncNow` in a real browser; **9 of its 15 checks fail on the
+previous code**. One thing it had to learn, and it is the same shape as
+the fault: **the second upload does not happen inside the save.** The
+first version of the headline check counted uploads after `smartSave`
+returned and passed on the broken code — the duplicate only appears when
+the press is followed through the sweep as well, which is what the office
+counted. A check that stops where the function stops passes over the very
+thing being fixed.
+
+**What was NOT changed, having no evidence for it:** the Save button has
+no in-flight guard, but `#loading-overlay` is `position:fixed; inset:0` at
+z-index 9998 while a save runs, so a second tap cannot reach it. Four
+copies of that form exist and adding a guard to one of them is the
+thinner-copy fault this file is full of. The shared `smartSave` is where
+all four meet, and that is where this was fixed.
+
+`audit_dexie_offline.js` is loaded with a `?v=` on **seven** pages, all
+bumped together, and `audit_sw.js` precaches those pages so `VER` moved
+with them — to `mjm-26110501`.
+
+#### AND THE FILENAME WAS NEVER FIXED, so the stamp only did half the job
+
+The office read the result of the repair and said it in one line: *"it
+should queue the original and save the original only no matter how many
+tries to upload the data."* They are right, and the fix above stopped
+one press short of it in two places.
+
+**THE PHOTO PATH WAS STILL THE CLOCK, TWICE OVER.** Look again at the
+files they handed over —
+
+    audit_maintenance_audits_photo_url_1793750892246_1793750892318.jpeg
+
+— and read the two numbers rather than the gap between the files. That
+is `Date.now()` called **twice**: once in `uploadPhoto` here, and again
+inside `sb.uploadPhoto`, which appended its own. So the path of a photo
+**could not help being different on every attempt**, and nothing about
+sending the same picture twice could ever be recognised as sending the
+same picture twice. The stamp fixed the ROW; the bucket went on
+collecting a file per try, and the first fix only reduced the number of
+tries rather than making a retry cost nothing.
+
+**AND A SAVE WITH NO SIGNAL WAS NOT STAMPED AT ALL**, which is the
+office's own path. The stamp was gated on `navigator.onLine && await
+_tableTakesUid(table)` — a read of the database before the phone would
+write an id of its own — so an audit keyed in a plot with no bars went
+into the outbox carrying nothing, and when the sweep sent it hours later
+and the insert timed out while landing, the second arrival was a second
+row again. **The id needs no network.** It is made on the phone, and
+asking permission to make it was the mistake.
+
+So there is **ONE id per press of Save**, made locally every time, and it
+does both halves:
+
+- it is **`client_uid` on the row**, as before;
+- it **NAMES THE PHOTO** — `<table>_<field>_<press>` — uploaded with the
+  `x-upsert` that header was already sending, so a second upload of that
+  press **writes the same object** instead of a new file beside it.
+
+**THAT CLOSES RACES NOBODY HAS ENUMERATED, which is the argument for it
+over counting uploads more carefully.** The 15-second cap on the photo
+upload is a timeout too: an upload still in flight when it fires may well
+have landed, and `clean` may still be holding the raw picture when the
+catch queues it. The sweep then sends that picture again — and writes the
+same object. The press owning its filename is what makes a race that
+cannot be prevented cost nothing.
+
+Five things in it:
+
+- **`exact` on `sb.uploadPhoto` is what says the caller owns the path.**
+  Without it the clock is appended, which every caller before the stamp
+  relied on to avoid writing over somebody else. Removing the clock
+  outright would have been a trap for the next caller.
+- **THE WRITE IS WHAT SAYS WHETHER THE COLUMN IS THERE, not a read.** The
+  guard was a SELECT of `client_uid` before stamping, and that is the
+  wrong question: a read can be refused by a policy while the insert is
+  perfectly allowed, and in this module the grant, the policy and the
+  table itself have each failed on their own. A read that could not
+  answer then left the press unstamped — the one outcome worth avoiding.
+  Now the stamp goes on every insert and the ONE unambiguous answer takes
+  it off: a **42703 that NAMES the column**, remembered for the session,
+  with **the same row sent again at once** so the press is not lost over
+  it. A refusal for any other reason is not an answer and does not
+  disable anything.
+- **The PHOTO does not depend on the column at all**, so one press is one
+  file even on a database that has never had the SQL run.
+- **An UPDATE is still not stamped on the row** — it names the row it
+  changes and cannot land twice, and a fresh stamp written over an
+  existing row would claim it came from a press it did not. It is still
+  named after its press for the FILE, so one press of Edit is one file.
+  `__press` rides in the queue row to carry that, and is read for both
+  methods so there is one rule and not two.
+- **An OLD QUEUE ROW keeps the clock.** A record queued before any of
+  this has nothing to name itself after; one queued by the build that
+  stamped the row and not the file falls back to its `client_uid`.
+
+**Nothing to run in the database.** The column and its partial unique
+index are already on all four tables, and the whole of this change is on
+the phone.
+
+`tests/one_press_of_save_is_one_audit.cjs` is 31 checks and **10 fail on
+the previous code**, the first of them on the office's own path (*the
+queued record carries a stamp all the same*). Its last section drives the
+path expression **lifted out of the shipped `sb.uploadPhoto`** rather
+than restating it, so a clock put back into the exact branch fails here —
+and asks for the upsert header by name, because the same path without it
+is a refused upload rather than a replacement.
+
+Both files changed, so both `?v=` moved to **`20261105b`** across all
+seven pages (`audit_supabase.js` is on nine), and `VER` went to
+**`mjm-26110503`**.
+
 ## A to-do list that hides what is coming is a diary
 
 The audit home page opens with TODAY selected — `selDay = day` — so the day
@@ -1996,6 +2206,133 @@ scope on purpose so they fail by NAME rather than the file dying on an
 undefined one. Its untick check is asked as a PAIR — was on, now off —
 because on a page that refused the first press there is nothing to untick and
 "it is absent now" passes for the wrong reason.
+
+### AND THE SHEET ITSELF IS VERIFIED AND LOCKED, which is a different gate
+
+The office asked for it in four words, standing on the P & D sheet for
+UNN 2: *加一个verified and lock 按钮*.
+
+**CHECKED IS PER ROW AND ABOUT THE CAPACITY. THIS IS PER SHEET AND SHUTS THE
+LOT**, and the two must not be folded together — the section above is the
+whole argument for the first one refusing nothing, and this one arriving
+must not quietly make it look as though it does. A crew corrected on a
+settled row is still what the office asked for; what they can now also do is
+say *this sheet is finished* and have it stop moving.
+
+**WHAT IT SIGNS IS THE RECORD, WHICH IS NOT WHAT THE CLAIM SIGNS.** The
+payroll module has had a verify strip for months and it closes the CLAIM:
+`maint` in its `LOCK_SHEETS` freezes what the claim shows
+(`buildMaintSnapshot`) and says so in its own words — *"Worker Record stays
+exactly as editable as it always was; this is the claim choosing to stop
+listening to it."* So the money was protected and the record underneath it
+was not: anybody could go on moving ticks under a signature, and nothing on
+this screen said a word.
+
+**SO IT IS ITS OWN SIGNATURE, UNDER ITS OWN KEY, and the two stay apart on
+purpose.** They are two acts, usually in this order: the nursery agrees who
+did the work, then the office agrees the money. A button here that wrote the
+payroll's own `maint` row would write a THINNER one — that row carries a
+snapshot this page has no rates and no adjustments to build — and two
+buttons writing one row with different consequences is the fault this file
+has a heading about.
+
+`sheet = 'workrec:<job>'`, `scope = the NURSERY`, in the payroll module's own
+`mjmnpayroll_verifications` through the SHARED
+`shared/shared_npayroll_lock.js` rather than a second copy of the rules.
+Both columns used for what they mean, and **the key is per JOB rather than
+per nursery because the office signs the sheet in front of them**: a press on
+P & D that also shut Transplanting would shut work they have not finished
+keying.
+
+**NOTHING TO RUN IN THE DATABASE.** `mjmnpayroll_verifications.sheet` is
+plain TEXT with no CHECK constraint (`RUN_ME_npayroll_locks.sql`), so a new
+sheet name needs nothing — the same thing that was true when `seedplant` was
+added. Re-opening a month on Lock Controls still takes these rows with it,
+because that screen deletes every verification of the month.
+
+Six things in it, and four are rules this file already has:
+
+- **IT READS ITS OWN VERIFICATION AND NEVER `isSheetLocked`.** The payroll
+  MONTH lock auto-shuts on the **2nd of the following month**, so reading it
+  here would have turned every October Worker Record sheet read-only the
+  morning this shipped — a change nobody asked for, over a screen the office
+  goes on correcting. The month lock is about the money being settled.
+- **THE PAINT IS NOT THE GATE.** `.wr-shut` greys what can no longer be
+  pressed; `wrAllows()` inside each of the fourteen handlers is what
+  refuses, because a class stops neither the keyboard nor a call — the
+  lock-in-the-stylesheet fault, met here before it could bite.
+- **A MONTH IS A LABEL ON ONE SCREEN AND A KEY ON THE NEXT**, and this is
+  the seam. Everything on this page works in the LABEL (`getMonth()` answers
+  "Nov 2026", which is what `nops_maint_payroll.month` is keyed on) and the
+  lock works in `YYYY-MM` throughout. The first version handed the label to
+  the lock: it verified, said nothing, and the sheet stayed open, because
+  the row it wrote was one the payroll module can never find. `workRecYm()`
+  reads the hidden `#global-month`, which IS the key.
+- **`fallbackTo:'worker_record'` IS WHAT KEEPS THE BUTTON ON THE DAY IT
+  SHIPS.** `verify` and `unverify` are two new ticks, and `effectiveActions`
+  reads a key absent from a SAVED row as OFF — so every person the office
+  has already configured would have lost a button nobody took from them.
+  What they ANSWERED is the Worker Record tick: until this existed, whoever
+  could tick the sheet could change anything on it. Declared on the action
+  in `nursery_ops_user_access.html` AND in `mayMaintAct()`, and section 0 of
+  the test reads both out of the source.
+- **The permission is asked AGAIN at the write**, because a button drawn
+  before somebody's access changed is still sitting on the screen.
+- **IT FAILS OPEN.** The lock module swallows its own read errors and
+  answers "nothing verified", the strip then draws nothing at all
+  (`.verify-bar:empty`), and every sheet stays editable. A load error must
+  not take a nursery out of its own record.
+
+**The strip is on EVERY one of the eight sheets**, drawn at the top of
+`renderPayroll` before its four early returns, because a strip on one sheet
+is a strip that lies about the other seven.
+
+`tests/the_worker_record_is_verified_and_locked.cjs` drives the real page in
+a real browser — the real Verify, the real Unlock, and a tick called
+straight out of the console on a shut sheet, which is the only way to tell
+the gate from the paint. **22 of its 36 checks fail on the previous code**,
+each by name.
+
+#### A WORD STANDING WHERE A NAME GOES, and the signature was never stored
+
+It shipped saying *"was verified by somebody"* in three places, and the
+office took it off in two words: *不要放somebody*. **They are right, and the
+wording was the symptom.** The signature was going in as NULL on every
+single row, so the strip had nothing to print — `verifyWorkRec` passed a
+global `userEmail`, which **THIS PAGE HAS NEVER HAD**: it occurs three
+times in the file and all three are a defensive `typeof` read, so it was
+always undefined and the stand-in was reached every time.
+
+`_wrSigner()` is the page's OWN answer — `window.currentUserEmail` then
+`_signingAs()`, the two the Checked ticks already ask in that order, a few
+hundred lines down. Nothing resolving stores **nothing**, never 'office' or
+any other word: a second stand-in is the same fault spelled differently.
+
+**AND THE SENTENCE SAYS WHAT IS KNOWN AND STOPS.** A row verified before
+this carries no name and never will, so `_wrSignedBy(v)` answers *verified
+by X on <day>*, *verified on <day>* or just *verified*, and the strip
+**DROPS the cell** rather than filling it with a word or a dash. The NAME is
+the one thing a signature carries that nothing else on that strip does, and
+a word in its place reads as a person whose name nobody wrote down.
+
+**THE NAME ON THE STRIP CARRIES ITS OWN "by"**, which was the next two
+words out of the office once it had a name to read: *by Esther*. A name
+standing on its own between the month and the date is a cell somebody has
+to work out — the two other sentences had always said *verified by*, and
+the strip, which is the one of the three nobody has to press anything to
+see, said it the least. The word and the name sit in **ONE span**, or the
+strip's 10px flex gap opens between them, and only the name is set heavy:
+that is what the cell is being read for.
+
+**One helper, because the sentence is said three times** — the refusal, the
+strip and the Unlock confirm — and three wordings for one fact is how they
+drift.
+
+Section 7 of the test is the no-name row, and its source check **strips the
+comments first**: this block explains in prose why the word is not there,
+which a plain search reads as the word still being there. Same trap, fourth
+time. **7 of its 44 checks fail on the previous code**, the first of them on
+the cause rather than the wording — *the row carries WHO signed it*.
 
 ## A -R plot near culling: its rounds, and the balance it leaves behind
 
@@ -3467,6 +3804,904 @@ NOUGHT on every line; a row that reads `UNN 1` is the shape to look for.
 in a real browser, and asks for the filter as a CHECK rather than waiting
 on it: waited on, a page without it fails with a timeout, which says
 nothing about what is wrong.
+
+### And the check it was handed over with found the report had been CUT
+
+The linkage check came back *agrees record for record* on all four
+modules, which is what it was written to say. The line underneath it is
+what mattered: **October, 1,783 maintenance audits**, against a report
+the office had screenshotted reading **1,000**.
+
+**PostgREST answers at most `db-max-rows` rows and Supabase sets that to
+1,000.** There is no error and no flag on the body — the read simply
+ends. `sb.select` in `audit_supabase.js` sent no Range and no limit, so
+every audit screen in the module has been taking the first thousand rows
+of anything bigger and calling it the month. 783 October records were on
+no report, and every figure derived from them — the summary card, the
+section total, the records badge — was short by the same amount, with
+nothing anywhere saying so.
+
+**A ROUND NUMBER ON A SCREEN IS THE WHOLE TELL**, and it is worth knowing
+because nothing else is: a truncated read and a quiet month are the same
+list. 1,000 maintenance over 1,154 total audits is the shape to look at
+twice.
+
+`sbSelectAll` pages through the Range header. Three things in it:
+
+- **A SHORT page is the end and a FULL one is not.** A table holding
+  exactly 2,000 rows answers page two full, so the loop has to ask a
+  third time and get nothing — stopping on a full page loses a round
+  number of rows, which is the same fault one page along.
+- **Rows repeated across pages are DROPPED, on `id`.**
+  `order=created_at.desc` leaves rows written in the same millisecond in
+  no defined order, and a phone pushes a plot batch by batch in ONE
+  insert, so the same row really can answer on two pages while another is
+  skipped. The skip cannot be repaired from here; the double can, and it
+  is the one that would inflate the very figure this exists to correct.
+- **It stops at 50 pages and logs it.** A loop with no ceiling on a read
+  that keeps answering full is a page that hangs for ever.
+
+**The office pages are NOT swept and have their own clients** — this is
+`audit_supabase.js` only. Any office read of more than a thousand rows has
+the same silent cut, and that is its own sweep.
+
+`tests/a_read_over_a_thousand_rows_is_not_cut.cjs` drives the real `sb`
+against a fake PostgREST that caps at 1,000 the way Supabase does; **8 of
+its 9 checks fail on the previous reader**, the first in the office's own
+figures. It **blocks the service worker**, for the reason the board test
+already names: `page.route` does not reach a fetch the WORKER makes, so
+`audit_sw.js` answers its own synthetic 503 partway through and the whole
+thing reads as a broken pager.
+
+### Three rows the same is usually three TASKS, and the report showed neither id
+
+*"is there duplicated cases? it feels like same case duplicated in the
+report"* — over three rows reading 22 Oct, B05, Interrow Spray,
+Unsatisfactory, Main Nursery Auditor.
+
+Two quite different things produce that, and **the report cannot tell them
+apart because it shows neither `task_id` nor `audit_id`**:
+
+- **A TRUE DUPLICATE** — two rows against the SAME `task_id`. One task is
+  meant to have one audit, so every row past the first is a record of
+  nothing: a save that went in twice, a phone that retried after the row
+  was already there, the same task walked on two devices.
+- **SEPARATE TASKS THAT LOOK ALIKE** — different `task_id`, same plot,
+  same job, same day, and **all of them belong on the report**. A
+  maintenance task comes from one work record, so a plot sprayed by three
+  workers, or over three batches, is three tasks and three audits. The
+  audit is dated the day it was SAVED (`date: todayISO()`), so a backlog
+  walked in one sitting lands on one date and stacks up.
+
+`shared/CHECK_is_the_same_case_audited_twice.sql` counts both and names
+them, so the question is answered off the data rather than off the look of
+the screen. **Do not answer this one by reading the page.**
+
+#### It was 472 of them, and the READING CAP is what made every one
+
+The count settled it: **2,037 audit rows over 1,565 tasks, 472 rows past the
+first on 468 tasks**, and 1,748 look-alike rows beside them. So the office
+was right that something was duplicated and the rows they were looking at
+were not it — the three B05 rows are three tasks, and the real duplicates
+are elsewhere on the same report.
+
+**THE CAUSE IS THE 1,000-ROW READ, one section up.** `loadAll` reads the
+WHOLE audit table with no filter, so once it passed a thousand the OLDEST
+audits fell out of what the module could see — the read is newest first —
+and `getAuditForTask` answered *not yet audited* for a task whose audit had
+fallen out. The board offered the plot again, the auditor walked it again,
+and `saveAudit` took the **insert** branch rather than the edit one, because
+`isEdit` is false when nothing on screen knows an audit already exists. The
+dates say it in the data: a first walk on 12 Oct and a second on the 21st,
+22nd or 23rd, which is the day the table went past the cap.
+
+**THE FIRST ANSWER WAS TO WRITE NO REPAIR, and the office overruled it in
+one line** — *"remove all the duplicate cases. and never did this again."*
+The reasoning for holding back was that both rows record a real walk, so
+deleting either throws away something somebody did and which of a
+disagreeing pair stands is the office's call. That is still true of exactly
+two tasks. It was wrong about the other 466, and the drill-down is what
+showed why.
+
+#### 188 DISAGREEMENTS, AND ONLY TWO ARE TWO AUDITORS
+
+Read the second section of the drill-down before reaching for a rule. Of
+the 188 pairs whose results differ, all but **two** pair an **admin
+CLOSURE** with a **real audit** — *first Closed by admin on 2026-10-12 by
+Ruth Wong, then Unsatisfactory on 2026-10-22 by Main Nursery Auditor*, over
+and over. Only tasks **1443** and **1791441167950** are one auditor
+disagreeing with another, and both go Satisfactory then Unsatisfactory.
+
+So the pile that looked like 188 verdicts needing arbitration was 2, and
+the rest answer to a rule: **a closure says nobody is ever going to walk
+this plot, and an auditor walked it.** The audit is the better record.
+
+**AND THOSE PAIRS NAME A SECOND FAULT IN THE SAME CAP**, which is the part
+worth keeping. It runs in BOTH directions:
+
+- a closure written on 12 Oct did not stop the board offering the task on
+  the 18th to the 23rd, so auditors walked plots the office had already
+  written off;
+- and five Interrow Spray tasks read *first Unsatisfactory on 13 Oct by the
+  auditor, then Closed by admin on 23 Oct* — the × was offered over work
+  already done.
+
+**Both are one fault**: the board asks whether a task is audited by looking
+in a list that had been cut at a thousand rows, so it could see neither the
+closures nor the audits that had fallen out. The pager closes both.
+
+#### THE REPAIR, AND THE ORDER IS THE WHOLE DECISION
+
+`shared/RUN_ME_remove_duplicate_audits.sql`. One row survives per task:
+
+1. **A REAL AUDIT BEATS A CLOSURE**, in both date orders.
+2. **Among audits, the NEWEST**, by the audit date then the day it was
+   saved — the rule the whole board already follows, that the latest audit
+   is the state of the plot. On both genuine disagreements that keeps the
+   **Unsatisfactory**, which is the safe direction: a problem stays visible.
+3. **Among closures, the newest likewise**, so one decision is recorded
+   once.
+
+A task with ONE audit is untouched, a row with no task at all is untouched,
+and `nops_maint_field_records` is neither read nor written — the field did
+that work and said so, and no audit decision gets to unsay it.
+
+**WHAT IT COSTS is NAMED rather than buried.** Section 2 prints every task
+whose verdict moved, with what it read before and reads now and which of
+the three kinds of pair it was. An October figure also moves wherever the
+row that went was dated in October and the row that stays is not.
+
+#### THE INDEX IS THE "NEVER AGAIN", BECAUSE THE APP IS NOT THE ONLY WRITER
+
+A fixed reader stops the board re-offering a task. It does nothing about a
+phone holding an older build, a retry out of an outbox, or a hand edit in
+the dashboard. So the repair ends by putting a **UNIQUE index on
+`task_id`** (`audit_maint_one_per_task`, partial, so the rows with no task
+are unaffected), and a second insert on one task now cannot land at all.
+
+Three things in it:
+
+- **The index is only added once the table really holds one row per task.**
+  A run that could not finish the clearing leaves it off and SAYS so,
+  rather than failing the whole paste.
+- **It creates no TEMP table.** The first version did, and the SQL Editor
+  warns that a table was made without row level security — a warning
+  somebody has to click past is a bad thing to hand over. Everything the
+  report needs is collected in ONE pass before the delete, because
+  afterwards the rows are gone, and every `set_config` piece is
+  `COALESCE`d for the reason the save-probe file already learned.
+- **A SECOND RUN RAISES NO NOTICE.** `CREATE UNIQUE INDEX IF NOT EXISTS`
+  prints *relation already exists, skipping*, which is one more line
+  somebody has to read past, so the guard is `to_regclass` instead.
+
+#### WHAT IT ACTUALLY MOVED, which is the figure that settles it
+
+Run on 4 Nov 2026. **472 rows deleted, and the table went from 2,037 rows
+over 1,565 tasks to 1,565 over 1,565** -- one audit per task exactly, with
+the index INSTALLED and nought duplicates left. The 472 split:
+
+| | |
+|---|---|
+| 188 | a second audit SAYING THE SAME THING -- nothing was ever in doubt |
+| 187 | a CLOSURE that gave way to a real audit |
+| 95 | a second closure on one task |
+| 2 | two real audits that DISAGREED |
+
+**So the bulk of Ruth Wong 12 Oct closure is undone**, and that is correct
+rather than a casualty: those plots were walked. The register
+(`CHECK_audits_closed_by_admin.sql`) therefore reads far shorter for
+October than it did, and the Monthly Audit Report loses its 12 Oct closure
+rows while keeping the 18 to 23 Oct audits that replaced them. Three tasks
+whose only surviving row is dated 4 Nov leave October altogether.
+
+**The two genuine disagreements both now read Unsatisfactory** -- U11
+Manuring (task 1443) and U16 Manuring (task 1791441167950), each
+Satisfactory on the first walk and Unsatisfactory on the second. Those are
+the two plots to go and look at.
+
+**ONE THING THE INDEX CHANGED THAT NOBODY ASKED FOR, and it is worth
+knowing before somebody reports it as a fault.** The section × on the audit
+board writes its closures as ONE insert, deliberately, so a section is
+never half closed. PostgREST rejects the WHOLE insert on a single
+constraint violation, so a section where one plot already carries an audit
+now closes NONE of them and alerts with the constraint name. It should not
+arise -- the paged board no longer offers an audited task -- and it is loud
+rather than silent when it does. The fix, the day somebody meets it, is to
+send that insert as an upsert that ignores duplicates, so the section
+closes what needs closing and skips what is already audited.
+
+**AND TWO DIFFERENT THINGS NOW COME BACK 23505.** The outbox has always
+retired a duplicate key quietly, on the correct reasoning that the row
+reached the table and only the acknowledgement was lost. The index makes a
+second meaning reachable: the task already carries an audit somebody else
+keyed. *"Already saved (duplicate record)"* sends that auditor looking for
+their own record, which is not what is in the table, so `describeSbError`
+tells the two apart on the constraint name.
+
+`shared/CHECK_what_the_duplicate_audits_say.sql` is the drill-down that
+makes it decidable: the 468 split into same-result, **DISAGREE** and
+three-or-more, every disagreeing pair named with what each walk said, when
+and by whom, and a tally by month. **"Both walks found the same result" is
+the answer that needs nobody** — the only cost there is the report counting
+the task twice.
+
+The pager stops new pairs being made this way. **What it also moves is every
+figure on the report**: October reads 1,783 maintenance audits where it read
+1,000, so a count that had been quietly short for weeks jumps the first time
+somebody hard-reloads.
+
+#### AND THE OFFICE SAID IT STILL LOOKS DUPLICATE, which was the SCREEN
+
+They opened the report after the repair and sent a screenshot: B01, two
+Weeding rows on 14 Oct, then three more on the 21st, two Interrow Spray and
+two Manuring. *"still looks duplicate"*.
+
+**They were right about the screen and the data was right.** Those are the
+1,748 LOOK-ALIKES -- separate cases, same plot, same job, same day -- and
+the first answer given was the SENTENCE explaining that. Saying it again
+would have been the fourth wording of *"your 2,353"*: a true answer to the
+question asked, three turns from the thing to do. **The report shows neither
+`task_id` nor `audit_id`**, which this file had already written down as the
+fault, and then the fix went into the database and not onto the screen.
+
+So `MOD_COLS.maint` carries a **Case** column. Four things in it:
+
+- **IT IS A PROOF, NOT A LABEL.** The unique index means two rows cannot
+  share a case any more, so three different numbers ARE three different
+  cases, by construction. Nothing on the page has to argue it.
+- **No sentence underneath.** A note saying *these are separate cases* is
+  the screen arguing for a figure; the column simply shows it.
+- **MONO AND FULL LENGTH.** The ids differ only in their last digits
+  (…487117, …487131, …487134), so they are set in a monospace face: equal
+  length plus fixed advance means the differing digits line up in a column
+  and the eye lands on them. **Truncating to a readable tail is the one
+  thing not to do** -- two cases sharing a tail would read as a duplicate
+  again, which is the fault this column exists to end.
+- **THE SELECT HAD TO LEARN IT.** `task_id` was not in the maintenance
+  query, so the column would have printed *no case* on every row -- the
+  alert board lost a whole fix that way once. The test reads the SHIPPED
+  select and fails if it stops asking.
+
+**A case is one maintenance work record**, and there are two sources: a
+record saved on a phone (`nops_maint_field_records`, a small serial id) and
+a row of the office schedule (`nops_maint_records`, a `Date.now()` id near
+1.79e12). The office screenshot carries the second kind. Do not write a
+check that joins a case to one table only.
+
+`tests/the_report_says_who_did_the_maintenance.cjs` grew the office own
+three rows as a fixture and asks the thing they asked: three rows alike in
+every other cell, each naming a different case. **5 of its 32 checks fail
+on the previous page**, and `SHOT=/path.png` draws the block as they see it
+-- a column added to a table that PRINTS is a width question as much as a
+content one, and a check cannot read a layout.
+
+#### AND SEPTEMBER CAME BACK, because paging a non-unique order loses rows
+
+The office looked at the auditor board and asked *"why sep work
+maintenance come back again?"* over four **Maintenance SEP 2026 Overdue**
+cards — due 6 to 9 Sep, sixty days gone, Weeding and Manuring plot chips
+under each.
+
+**THE DUPLICATE REMOVAL DID NOT DO IT, and that is provable rather than
+reassuring.** The board retires a maintenance chip on one test —
+`audited.has(String(id))`, a Set of `task_id` read off
+`audit_maintenance_audits` — and the repair only ever deleted rows from a
+task that had two or more, keeping one. So every task that was answered
+before is answered now; its own run says so, 2,037 rows over 1,565 tasks
+becoming 1,565 over 1,565. **Set membership did not move, so no chip could
+come back by that route.** Answering a question like this by reading the
+repair is how an afternoon goes; the arithmetic settles it in a line.
+
+**WHAT DID IT IS THE PAGER, one section up, and the fault is in the ORDER
+and not in the paging.** `sb.select` reads `&order=created_at.desc` and
+asks for 1,000 rows at a time through the Range header. Those are TWO
+SEPARATE REQUESTS, and `created_at` is not unique — a phone pushes a plot
+batch by batch in ONE insert and the board's own section close writes a
+dozen rows in one go, so runs of rows sharing a timestamp to the
+microsecond are the ordinary case. **The database is free to answer such a
+run one way for page one and the other way for page two**, which is not a
+fault of its own: it is what an unstable sort IS. A row then comes back
+TWICE, which the de-dupe catches, and another row is **SKIPPED**, which
+nothing catches.
+
+A skipped audit row is not a cosmetic loss on this screen. The board asks
+that table one question — is this task audited — so **a task id that falls
+through the page boundary reads as NOT AUDITED**, and its plot is drawn
+onto the To Do list over work somebody walked in September or an admin
+closed on 12 October. It is intermittent by construction, which is exactly
+what *came back again* describes.
+
+So the order carries a UNIQUE tiebreaker, `created_at.desc,id.desc`.
+Newest-first is untouched; what changes is that the sequence is TOTAL,
+which is the only thing that makes a page boundary mean anything. Three
+things in it:
+
+- **A LADDER, not two ifs.** Some audit tables were made by hand and have
+  no `created_at`; a view may have no `id`. PostgREST rejects the WHOLE
+  read with a 400 on the order clause, which reaches the screen as an
+  empty list — indistinguishable from "no records" — so each absent column
+  is dropped, remembered in `localStorage` the way `_noCreatedAt` already
+  was, and asked for again. The third ask carries no order at all and so
+  cannot fail on one.
+- **The de-dupe STAYS**, as a belt. With a total order it cannot fire.
+- **ONE STALE CHIP MUST NOT COST THE SECTION.** `audit_maint_one_per_task`
+  is a UNIQUE index, and the section × sends its closures as ONE insert, so
+  a single task that already carries a row made PostgREST refuse the whole
+  insert: the section closed NONE of its plots and the alert read as a
+  constraint name. That is the consequence this file had already named and
+  left for whoever met it — and it composes with the skip exactly into the
+  office's sentence, because the stale chip is the one the office presses ×
+  on. On a 23505 the rows are now re-read against the table, the ones
+  already answered are dropped and NAMED, and the rest go up as one insert.
+
+`shared/CHECK_why_a_september_maintenance_row_is_back.sql` is what makes
+it decidable off the data rather than off the screen: every maintenance
+task from BOTH sources (a phone record, and a row of the office schedule
+with its `dd-mm-yyyy` tarikh), its deadline worked out from the windows
+keyed in `audit_settings`, and which of two things it is —
+
+| | |
+|---|---|
+| **owed** | the task carries NO row. Nobody audited it and nobody closed it. The board is right and the work is real. |
+| **ALREADY ANSWERED** | the task carries a row. **None of these belongs on the board**, so a plot on a September card that is in this list is the READ and not the record. |
+
+Three things about it: it answers for **every** deadline month and not the
+one on screen; it keeps `audit_settings` out of the query entirely, in a
+`DO` block into session settings, because that table is optional and a
+query naming it would fail to PARSE on the databases this most needs to
+answer on — the same trick the save probe uses for `storage.buckets`; and
+its first row says whether the unique index is installed and whether any
+task still carries two rows, because a task with two rows is a different
+fault and has to be cleared first.
+
+**And the version check could not see any of this.** `?v=` on the audit
+module carries a revision LETTER — `20261105a` — and
+`tests/asset_version_bumped.cjs` matched `?v=(\d+)`, so **every reference
+in that module matched nothing at all** and the whole module sat outside
+the one check that says a changed file got a new number, looking exactly as
+covered as the rest. This file already warned about a digits-only pattern
+against these numbers, one test along. It matches `[0-9a-z]+` now, which
+took the check from 43 references to 112.
+
+Sections 5 and 6 of `tests/a_read_over_a_thousand_rows_is_not_cut.cjs` are
+the proof, through a fake PostgREST that answers a tie REVERSED on every
+page after the first — the cheapest arrangement that makes one row answer
+twice and another never answer at all. **4 of its 16 checks fail on the
+previous reader**, and the headline one names the rows: *1,003 to 1,007
+went missing*.
+
+#### AND THE CHIPS WERE CLAIMS, not verified work
+
+Same board, next question, over a Maintenance card carrying **77 weeding
+chips** on one day with B06 three times and U02 seven: *"and where is all
+these link from? it should be shown here after FC verified the job"*.
+
+**WHERE THEY COME FROM IS TWO TABLES AND NOTHING ELSE**, and it is worth
+writing down because the chips look alike:
+
+| | |
+|---|---|
+| a **phone record** | `nops_maint_field_records`, one row per worker per plot per job, written by the FC Portal or the Worker Portal. A small serial id. |
+| an **office schedule row** | one element of the single `nops_maint_records.records` JSONB list, drawn by the Work Maintenance schedule. A `Date.now()` id near 1.79e12. |
+
+Each row becomes ONE task, its deadline is the work date plus that job own
+window out of `audit_settings`, and the one thing that retires it is a row
+in `audit_maintenance_audits` carrying its `task_id`. So **a plot worked by
+seven people is seven chips** -- the look-alike lesson again, one screen
+along.
+
+**AND THE OFFICE WAS RIGHT ABOUT THE GATE, WHICH WAS SIMPLY NOT THERE.** A
+phone record is a CLAIM until a Field Conductor presses Verify, and the
+conductor can also SEND IT BACK. `loadMaintTimeline` asked for neither
+column, so it raised a task for all three states at once:
+
+- a record nobody has looked at yet, which the conductor has still to
+  accept;
+- a record the conductor REJECTED -- and `add_maint_field_reject.sql` says
+  in its own words that such a record goes back on the week as still
+  outstanding, so **the auditor was being sent to audit a record the
+  conductor had explicitly refused**;
+- and then the record the worker keyed AGAIN to replace it, which is how
+  one morning on one plot comes to wear two chips.
+
+The office own Work Maintenance page has read the verified ones only since
+that column existed (`_verifiedOnly` in `plot_maintenance_script.js`).
+`_readMaintFieldRecords` is that rule asked one screen along, and it is
+applied ONCE to the row list so the strict walk, the fallback walk and the
+diagnostics all see the same records -- two filters is two answers.
+
+**IT FAILS OPEN.** A database that predates those columns refuses the WHOLE
+read over a column it has not got, which would take every maintenance row
+off the board rather than show one too many. The columns are asked for by
+name, a refusal that names them drops them, and that database behaves
+exactly as this page did before the gate. `diag.fGate` says which of the
+two it is, beside `fRaw`, `fUnverified` and `fRejected`, so `?debug=1`
+answers *what did the gate take off* without a query.
+
+**THE OFFICE SCHEDULE HALF IS DELIBERATELY UNTOUCHED, and that is the open
+question rather than an oversight.** It has no Verify of its own -- a row
+there carries a date because the office keyed one, or because
+`applyFieldRecords` filled an empty cell from a record a conductor HAD
+verified. Gating it on a column that does not exist would be inventing a
+decision, so the office was asked, with the size of it in front of them:
+in their own run, October own 145 unanswered deadlines are **every one of
+them an office schedule row**, so that half is most of what they are
+looking at.
+
+**THEY CHOSE TO LEAVE IT RAISING AUDITS**, and the reason is sound: the
+office keying a date IS the office saying the work was done, so the row
+stands on its own and the auditor still walks it. Two consequences to know
+before anybody "finishes" this:
+
+- **A plot can still wear two chips for one morning** -- once as the phone
+  record, once as the schedule row that record filled -- and that is now a
+  decision rather than a fault. The pair is derivable (`_fieldIds` on the
+  schedule row names the records it was filled from) the day somebody asks
+  for it.
+- **The gate only ever moves the PHONE half**, so a month whose work came
+  in off the schedule reads the same before and after. September is the
+  month that moves.
+
+`tests/a_phone_record_waits_for_the_conductor.cjs` drives the real board
+through all three states and the fail-open; **3 of its 6 checks fail on the
+previous board**, and `admin_can_close_a_dead_plot.cjs` grew a third
+fixture row that is unverified, so a gate applied backwards is caught
+there too. **Nothing to run in the database** -- both columns have existed
+since `add_maint_field_verify.sql` and `add_maint_field_reject.sql`.
+
+#### AND THE SEPTEMBER CASES CAME OFF, with the cross rather than a delete
+
+*"remove all the sep maintenance cases in the to do list"*, and the second
+half of the same message: *"check if auditor audited and saved the x plot,
+the x plot will no more shown in to do list right"*.
+
+**THE ANSWER TO THE SECOND IS YES, AND IT IS DRIVEN RATHER THAN ASSERTED.**
+There is exactly one thing that takes a maintenance row off that board -- a
+row in `audit_maintenance_audits` carrying its `task_id` -- and it does not
+care which kind: an ordinary audit an auditor walked and saved, and a
+closure an admin pressed the cross on, both retire the chip. Section 2 of
+`tests/a_phone_record_waits_for_the_conductor.cjs` drives both through the
+real board, **with the unanswered plot as the control**, because without it
+the two checks pass just as green on a board that drew nothing at all.
+
+**AND THE FIRST IS THAT SAME CROSS, IN BULK.**
+`shared/RUN_ME_close_september_maintenance.sql` writes the row the cross
+writes -- `MTA-CL<task_id>`, `Closed by admin`, the remark naming the
+deadline and how far past it had gone -- for every September 2026 deadline
+carrying nothing, from BOTH sources. Nothing is deleted: the work records
+are never written and the closures land in Audit History with a date on
+them, where `CHECK_audits_closed_by_admin.sql` is the register of them.
+
+Five things in it, and three are faults it had first:
+
+- **THE PROOF CANNOT BE A DATA-MODIFYING CTE.** Written as one
+  `WITH written AS (INSERT ...)` the final SELECT reads the snapshot from
+  BEFORE the statement, so the check at the foot counted every row it had
+  just closed as still on the board and reported **6 where it should read
+  nought**. The insert is a `DO` block now and the proof is read inside it,
+  after the write. A verification has to be its own statement to be a
+  verification at all -- and it is what caught this.
+- **`sum(x.n)`, never `count(*)`.** The subquery behind the by-nursery
+  lines is ONE ROW PER NURSERY, so a plain count printed *3 closed* above
+  a list adding to 6.
+- **THE RULE IS WRITTEN ONCE, as a VIEW that does not outlive the run.**
+  It has to be read twice -- once to insert, once to prove -- and a second
+  copy of the plot-to-nursery arithmetic is a second thing to get wrong.
+  It is DROPPED before the block ends, so the project is not left carrying
+  an object the Supabase linter warns about: the same reason this file
+  creates no temp table.
+- **THE NURSERY IS THE BOARD OWN ORDER** -- `nops_maint_custom_plots`
+  first, then the fixed ranges P01-P52, B01-B14, U01-U18, N01-N20, then
+  the record own `nursery_name`. That third step is not decoration: a plot
+  outside every range still places when the phone record names a nursery,
+  and a transfer plot like U12-R places only off the custom list.
+- **A PLOT THAT PLACES NOWHERE IS NAMED, never closed quietly.** It was on
+  no board to begin with, so closing it would be writing a decision about
+  something nobody could see.
+
+October, November and P & D (whose window is 0, so it raises no audit at
+all) are untouched, a task already carrying an audit or a closure is
+untouched, and a second run closes 0 and reads nought again. Tested on the
+scratch Postgres against the office own September shapes, against a
+database with no `audit_settings` table, and against a plot nothing can
+place.
+
+**WHAT IT COSTS, and it is worth saying before the next report is read:**
+the closures are dated TODAY, so they land in this month Monthly Audit
+Report as a run of maintenance records done by an admin. The Done By
+filter is what separates them from an auditor work, and the remark on each
+says what it was due and how overdue.
+
+**WHAT IT ACTUALLY MOVED.** Run on 5 Nov 2026: **214 September cases
+closed** -- 64 BNN, 125 UNN 1, 25 UNN 2 -- which is exactly the 214 the
+check had said carried nothing, and the proof read **nought left on the
+board**. No plot went unplaced, so the nursery arithmetic above answered
+for every one of them. The register
+(`CHECK_audits_closed_by_admin.sql`) therefore carries 214 rows under
+*Office bulk close* dated 5 Nov, and November Monthly Audit Report counts
+them as maintenance records done by an admin.
+
+#### AND AN AUDITED OCTOBER PLOT WAS STILL THERE: one morning, seven cases
+
+*"and why Oct cases that audited and saved still shown in to do list?"*
+
+**THE AUDIT HAD WORKED, AND THE FIRST ANSWER WAS THE SENTENCE EXPLAINING
+WHY.** A chip is retired by one thing only -- a row in
+`audit_maintenance_audits` carrying its `task_id` -- so a plot that is
+still there has a case nobody answered, and
+`CHECK_the_same_morning_on_two_cases.sql` was written to prove that off
+the data rather than off a reading of the code. What it found is that the
+chips left behind are **a DIFFERENT CASE FOR THE SAME MORNING**: 2,037
+rows over 1,565 tasks earlier in this file is the same shape one screen
+along, and the November card they had sent over said it in the open -- B06
+three times, U02 seven, U13 nine, on one day, under one job.
+
+**Explaining that a fourth time would have been "your 2,353" again.** The
+office ended it in one line: *"as long as is the same work, no matter
+submitted by how many workers, it should consider as 1 time only."*
+
+**A MAINTENANCE TASK HAS ALWAYS BEEN ONE WORK RECORD, and one morning is
+several of them** -- one phone record per worker (`nops_maint_field_records`),
+plus the office schedule row for the same morning
+(`nops_maint_records.records`). Seven people weeding U02 on the 18th is
+seven records and was seven cases. The auditor walks that plot ONCE,
+saves ONCE, answers ONE task id, and the other six go on asking for ever.
+
+So **the unit is the MORNING**: nursery, plot, the job, and the day the
+work was done. The key is the office own sentence and nothing else in it
+-- **not the batch** (two workers on one plot may well tick different
+ones, and that is still one morning), not the worker, not which of the two
+tables it came from.
+
+Seven things in it, and four are rules this file already has:
+
+- **THE GROUP IS A VIEW AND NEVER A ROW.** Every record is still its own
+  row in both tables, still carries its own deadline into `MAINT_DUE`
+  (which Audit History reads), and nothing is deleted or rewritten. What
+  is one is the QUESTION the board asks. Same rule as the Tab 3 card.
+- **ANY ANSWER ON ANY OF ITS RECORDS ANSWERS THE WHOLE CASE.** That is the
+  half that takes the audited October plot off the board, and it treats an
+  auditor own audit and an admin closure identically, because both have
+  always been a row in the same table.
+- **TWO SCREENS, ONE RULE.** The board groups the chips
+  (`audit_home.html`) and the module page groups the cards
+  (`audit_maintenance_script.js`), because the chip deep-links into that
+  page -- a chip that cleared over three cards still waiting is two
+  answers again. The spellings differ (one labels the work type, the other
+  canonicalises it) so what has to agree is the PARTITION, and
+  `tests/one_morning_is_one_case.cjs` drives both real pages over one
+  ledger and compares the cases they name.
+- **THE NARROWER DEDUPE ON THE MODULE PAGE HAD TO GO**, and it is the
+  instructive one. It dropped an office row matching a field record on
+  (nursery, plot, **batch**, work type, work date) -- narrower in one
+  direction, since two workers ticking different batches were two cards,
+  and worse, it dropped the office row **ID** before anything could ask
+  whether THAT id carried the answer. The board never dropped it, so a
+  morning the admin had closed under the office id read as answered there
+  and as still waiting here.
+- **THE CASE IS NAMED AFTER ITS LOWEST ID**, so it is the same chip and
+  the same card on every load whatever order the read came back in -- and
+  that is a phone record rather than an office schedule row, a BIGSERIAL
+  id being small where a `Date.now()` one is near 1.79e12. Every id rides
+  on `ids`.
+- **ONE DECISION, ONE ROW.** The admin cross writes ONE closure for the
+  case and not one per worker: three identical rows for one walk is the
+  *"still looks duplicate"* screenshot all over again, this time
+  deservedly. It is safe because the retire test is ANY -- and the 23505
+  second pass is still there for a chip whose answer was not visible when
+  the board was drawn.
+- **A CASE OF SEVERAL RECORDS SAYS SO**, on the card: *8 records, one
+  job*, with every worker named rather than one of the seven. A card that
+  quietly stood for eight records would be the screen deciding something
+  on its own.
+
+**WHAT IT DOES NOT MERGE**, and both are in the test: the same plot and
+job on **two mornings** is two cases, because that is two walks of work;
+and **two jobs on one morning** is a case each, because the chips sit
+under their own job and the windows differ.
+
+**WHAT IT COSTS on the DIAGNOSTICS, which is the only thing that moved
+besides the screens:** the audited test is applied to the group rather
+than to the record, so `skippedNoPlot` and `skippedOutOfScope` now count
+every record walked rather than only the unanswered ones, and
+`skippedAudited` is counted at the grouping. The unplaceable COUNT still
+asks per record, because that figure drives a sentence calling those
+records pending.
+
+`shared/CHECK_one_morning_is_one_case.sql` is the measure, and the figure
+the office is owed: every record carrying a past deadline, the cases they
+group into, how many the board draws now and **how many chips it drew
+before**, with the worst folds named -- a morning with one answer and
+seven records is seven chips becoming nought. Tested on the scratch
+Postgres against their own U02 and B06 shapes, against a database with no
+`audit_settings`, with no office blob, and with nothing past its deadline
+at all, which draws the *nothing to report* lines because an empty section
+reads as a query that did not run.
+
+**Nothing to run in the database.** The whole of this change is on the
+screens. **7 of the test own 19 checks fail on the previous code**, the
+first of them in the office own figures: *the plot seven people weeded
+wears ONE chip in a row -> got 8*.
+
+### The report is the DATES somebody picked, and one record is one VISIT
+
+Three asks in one message, and the last two are the same sentence about
+two different keys:
+
+> *"change the month and year to 'from date' to 'to date'. so the report
+> generated based on date selected."*
+>
+> *"for the plot condition, group same plot same audit date as 1 record
+> although different batch. but here still need to show the batches"*
+>
+> *"maintenance do the same. group same task same plot same audit date as
+> 1 record although diff case number"*
+
+**THE PERIOD WAS A MONTH SELECT AND A YEAR SELECT**, so a fortnight, a
+single day, or a run that crosses the 1st could not be asked for at all.
+It is a From date and a To date now, **both ends inclusive**, which is what
+"from the 5th to the 9th" means to anybody reading it. It still OPENS on
+the current month, first day to last, so somebody who ticks a module and
+presses Generate gets exactly the report this page has always given them —
+and `MONTHS` went with the change rather than being left behind as a list
+nothing reads.
+
+**A ROW IS WHAT THE DATABASE HOLDS, AND ON TWO OF THESE MODULES THAT IS
+FINER THAN THE THING THE OFFICE COUNTS.** Plot Condition in the main
+nursery is one row per plot per BATCH — `audit_script.js` says why, and the
+alert board already has a heading in this file about it — so one walk round
+B01 with three batches standing in it read as three audits. Maintenance is
+one row per CASE, and a case is one work record, so a plot sprayed by three
+workers on one morning read as three. **The office asked twice whether the
+report was counting one thing three times.** It was not, and the Case
+column was built to prove it; what the column could not do is say that the
+three are one morning's work.
+
+So a RECORD is the **visit**: the same plot on the same day whatever the
+batch, the same plot and the same task on the same day whatever the case.
+`MOD_RECORD_KEY` is the one place that says it, matched on letters and
+digits like every other plot comparison here, so a stray space cannot split
+a visit in two.
+
+**AND A PARALLEL SESSION REACHED THE SAME UNIT ON THE BOARD THE SAME
+MORNING**, from the office's other sentence — *"as long as is the same
+work, no matter submitted by how many workers, it should consider as 1
+time only"* — which is the section immediately above this one. That one
+groups the CHIPS on nursery, plot, job and the day the work was done; this
+one groups the REPORT ROWS on plot, task and the day of the audit. They are
+the same morning counted once, arrived at from two directions and two
+screens, which is why the two sections sit together. **They are not one
+rule in two files**, and must not be merged into one: the board asks which
+work is still owed and keys on the day the WORK was done, while the report
+asks what was audited and keys on the day the AUDIT was saved, and a
+backlog walked in one sitting lands those on different days on purpose.
+
+**AND THE BATCHES AND THE CASES ARE STILL THERE, each on its own line** —
+the other half of what was asked, and the only safe way to do it. **A
+plot's readings are PER BATCH**: the rat on 253 with nothing on 268 is the
+whole reason the alert board is per batch, so folding four readings into
+one cell could hide the one worth walking to. Only the record number, the
+day, the plot (and for maintenance the task) are merged over the lines;
+everything that can differ stays per line, Result included — a closure and
+a real audit on one plot, task and day are two cases saying different
+things, which is the pair the duplicate repair had to arbitrate 188 of.
+
+Six things in it, and four are rules this file already has:
+
+- **THE MERGE IS THE PAGE'S OWN MECHANISM, not a second one.** `group` on a
+  column has drawn one cell over a run of rows since the plot average was
+  added. It is asked of three more columns now, and of four on maintenance.
+- **A RUN HAS TO BE CONSECUTIVE, which the SORT is what makes.** The task
+  had to join the sort for that reason: B01 weeded and manured on the 21st
+  is two records, and sorted on plot and day alone their cases interleave —
+  which draws each record as two broken blocks with the other one's line in
+  the middle. The fixture puts the manuring case BETWEEN the interrow ones
+  on purpose, because a fixture in tidy order proves nothing about a sort.
+- **EVERY FIGURE ON THE PAGE GOES THROUGH `recordCount`** — the summary
+  card, the section total, the records badge and the table's own foot. The
+  Done By filter already states the reason in its own comment: one of them
+  counted differently is one of them disagreeing with the rest.
+- **THE FOOT SAYS BOTH FIGURES** — *"Total: 3 records · 6 batches"*.
+  Somebody who knew that table as six rows has to be able to see where the
+  six went; printing only the smaller number is how a count that was
+  deliberately changed reads as work that vanished. **`noun+'s'` gives "6
+  batchs"**, which nobody notices in code and everybody notices on a printed
+  sheet, so both spellings are written out.
+- **ON A PHONE A ROWSPAN MEANS NOTHING.** Below 720px each row folds into
+  its own card, so the cards after the first would open on a batch with no
+  plot and no day on them. A continuation line carries `.rec-cont` and the
+  sentence it is a continuation OF — *same plot · same day*, and for
+  maintenance *same plot · same task · same day*. The table is unchanged on
+  a desk and on paper, where the merge says it by itself.
+- **PAPAN TANDA AND SEEDLING HEIGHT ARE NOT GROUPED.** One sign per plot and
+  one measurement per plot: neither has a row the office reads as a repeat,
+  so neither has a record key and both go on counting rows.
+
+**WHAT IS DELIBERATELY NOT CHANGED is the NAME.** The heading still reads
+*Monthly Audit Report* over a range that need not be a month, because that
+is what the office calls this screen — the same reason System Setting's
+keys did not move with its labels. It is one line to change the day they
+ask.
+
+`tests/one_record_is_one_visit.cjs` holds all three asks — **32 of its 41
+checks fail on the previous page**, each by NAME, because every reader is
+guarded: a test that dies on the first throw leaves everything under it
+unasked. `SHOT=/path.png` draws it as the office sees it, and the phone
+card view was looked at as well, a check being unable to read a layout.
+`the_report_says_who_did_the_maintenance.cjs` had to learn the merged shape
+— it read cells by POSITION, which a rowspan breaks on every line but the
+first, so it now expands the spans into a grid and reads that. **Nothing to
+run in the database.**
+
+#### AND IT COMES DOWN AS A SPREADSHEET, which is a different document
+
+*"and it also able to download in excel"*, said in the next breath. The
+sheet this page PRINTS is read by somebody adding up and signing; a
+spreadsheet is read by somebody who wants to SORT, FILTER and PIVOT. They
+are two documents, and nearly every decision below falls out of that one
+sentence rather than out of a file format.
+
+**IT IS A REAL .xlsx, WRITTEN IN THE PAGE — no library and no fetch.** Two
+reasons, and the first rules CSV out on its own:
+
+- **A CASE ID IS THIRTEEN DIGITS.** Excel reads a bare `1791248487117` in a
+  CSV as a number and shows it as **1.79125E+12**, so the one column the
+  office asked for twice would arrive destroyed. An xlsx cell declares its
+  own type, so the case goes in as TEXT and reads back digit for digit.
+- **Nothing to 404 at the moment somebody presses the button** — the same
+  argument the papan tanda logo is inlined for. A spreadsheet that needs a
+  CDN is a button that fails on the day the office is behind a captive
+  portal. The zip is STORED rather than deflated for the same reason: the
+  alternative is a library or `CompressionStream`, a second thing that can
+  be absent, and a month of audits is a megabyte.
+
+**THE SHAPE IS NOT THE PAGE'S, and that is the point:**
+
+- **ONE SHEET PER MODULE, with a NURSERY COLUMN**, where the page draws a
+  Pre Nursery section and a Main Nursery one. A filter on that column is
+  the two sections back, and a file split across sheets by something that
+  could have been a column is one somebody has to glue together before they
+  can total it.
+- **EVERY LINE CARRIES ITS OWN PLOT, DAY AND TASK.** The table merges them
+  down the side of a record because that is how a visit reads on paper —
+  and **a merged cell breaks sorting and filtering, which is what the file
+  is FOR**. The **Record number** is what keeps the grouping: the same
+  number down three lines is one visit, and it sorts and it pivots.
+- **A FIGURE IS A NUMBER, AN ID IS NOT, AND A DATE IS A DATE.** All three
+  come off the column's own flags — `num`, which `MOD_COLS` already carries
+  to decide alignment, and `xlDate`, added beside it. A second list saying
+  which column is which is a second thing to get wrong.
+- **THE TABLE'S EM DASH IS AN EMPTY CELL.** On paper `—` says "nothing
+  here" in a column that has to stay aligned. In a spreadsheet it is a
+  VALUE: it sorts after every number, it turns up in the filter list as
+  something to tick, and it stops a column of figures being one.
+- **THE FIRST SHEET IS THE CONTEXT** — the range, the nurseries, the plot
+  search, the per-module counts. A spreadsheet that has left the screen
+  with no idea which dates it covers is a column of figures nobody can
+  check. It is the one sheet with no filter and no frozen row, being a list
+  rather than a table.
+
+**THE SHEETS ARE THE ROWS THAT WERE DRAWN.** `_lastReport` is written at
+the end of `generateReport` carrying rows already narrowed by plot, by Done
+By and by nursery exactly as the tables above them are — so a figure in the
+spreadsheet cannot disagree with the card it was read off. A second read
+scoped its own way is how the two come to differ.
+
+**ONE CELL BUILDER (`_xlCell`), because there are two tables to turn into
+sheets** — the four module ones and Height by Batch, which is not a
+`MOD_COLS` table. Two copies would be two answers to "is this column a
+date", and the second copy is exactly how Height by Batch shipped its
+`Seeds In` and `Audited` as text for an afternoon.
+
+**AND A WORKBOOK EXCEL REFUSES OPENS TO NOTHING AND SAYS NOTHING**, which
+on this screen is the office pressing a button that does not work. So the
+checks do not read the file with the code that wrote it:
+`tests/the_report_downloads_an_excel.cjs` pulls the real download out of a
+real browser and reads it back with **python's own `zipfile`** — whose
+`testzip()` recomputes every CRC and length — and `ElementTree`, with a
+further section through **openpyxl** where it is installed, which resolves
+numFmt 14 itself and so says a date cell is a date without having been told.
+**6 of its 57 checks fail on the previous page**, and the rest are not asked
+because they are about the contents of a file that does not exist; the test
+says that in one line rather than printing fifty of them.
+
+**Nothing to run in the database**, and no `?v=` to move: every line of this
+is inside `audit_report.html`, which already carries the three no-cache
+metas and which `audit_sw.js` serves network-first and does not precache.
+#### And a HEIGHT is read in cm or in m, whichever the office picks
+
+Asked over the one column they had on screen: *plot avg 我要可以选择cm or
+换算m*.
+
+**IT IS EVERY HEIGHT ON THE SHEET, which is the only version of it that is
+not worse than no choice at all.** A row reading 141.7 · 161.1 · 120 ·
+**1.417** is four centimetres and one metre side by side; and this report
+has **TWO columns headed Plot Avg** — the Seedling Height table and Height
+by Batch — so moving the one in the screenshot would have been two answers
+on one page. The three samples, both averages, the batch average and the
+four age cards move together.
+
+**THE HEADING IS WHAT CARRIES THE CHOICE ONTO PAPER.** The control is in
+the toolbar and `.toolbar` is `display:none` in print, so the heading is
+the only thing a printed sheet can say the unit with — which is why every
+figure that moves sits under one reading `(cm)` or `(m)`, the block head
+over the age cards included (those four carry no unit of their own).
+`hgtHead()` is the one spelling of it.
+
+**PRECISION DOES NOT MOVE, and that is the whole of the rounding rule.** A
+reading is keyed to a tenth of a centimetre, which is a millimetre, and
+**three** decimals of a metre is the same millimetre: 141.7 cm is 1.417 m.
+Two decimals reads 1.42 and has thrown a measurement away, and the test
+asserts that cell is NOT 1.42.
+
+**cm MOVES NOTHING.** `hgtKeyed` prints a stored reading exactly as stored
+while cm is chosen, rather than re-rounding it, so the sheet the office
+already reconciles against is the sheet it was until somebody presses m.
+`hgtMean` is its twin for a figure this page WORKED OUT — a mean has as
+many decimals as the division left it, so that one is rounded to the
+unit's own precision. `fmt1` is gone: every one of its callers was a
+height.
+
+**IT IS NOT A FILTER, so it reads nothing.** The batch half of this report
+pages the whole inventory ledger, and pressing m must not go near it. So
+`generateReport` was split: it fetches, then calls **`drawReport(rep)`**,
+and `_lastReport` is what a unit change redraws from. Three things in that:
+
+- **`mods` is PASSED and never read off the panel.** The sheet can be
+  redrawn after it was generated and the ticks may have been moved in
+  between, so a section built off the live panel would draw a module the
+  report was never generated for. `buildNurserySection` takes the list.
+- **`at` rides in the payload**, because *Generated:* is when the report
+  was generated — reading it in another unit a minute later has not
+  generated anything.
+- **`_maintNarrowed` is restored from the payload** rather than left
+  standing, so a redraw says exactly what the generate said.
+
+**A HEADING MAY NOW BE A FUNCTION** (`colHead` / `colLabel` in
+`buildTable`), asked at draw time, so the heading and the figures under it
+come out of one choice in one pass and cannot disagree. The phone card's
+`data-label` is that same heading, so it carries the unit too.
+
+**The control is offered only where the report HAS a height on it** — the
+rule the Done By row already follows — and it is **two chips rather than
+one toggling button**: a segmented pair says both answers exist and which
+is on, where *Show in m* makes somebody read the label to work out where
+they are.
+
+**It is NOT remembered between page loads**, deliberately. This sheet gets
+printed and passed round, and a unit that is whatever somebody last picked
+on one machine is how two copies of one report come to disagree. The
+heading names it either way, so the predictable default is worth more; one
+line of localStorage the day the office asks.
+
+**AND THE SPREADSHEET COMES DOWN IN THE UNIT ON SCREEN**, which is where
+this met the Excel export above — the two were written in parallel
+sessions on the same page and merged rather than one replacing the other.
+It falls out rather than being a second rule: `_xlSheetOf` asks the same
+columns for the same `colHead` and the same `v()` the draw just used, so
+one object serves both. Two things had to move for that:
+
+- **`_lastReport` IS ONE OBJECT, not two.** Both halves had reached for
+  that name, and two would have been the same report answering in two
+  units. It is built at the END of `drawReport` — where the figures it
+  quotes are — so a unit change re-makes it identically, and the sheet
+  keeps `sheetData` (nursery-filtered, what the Excel is of) apart from
+  `data` (what each section filters for itself).
+- **The Excel walks `R.mods`**, not the live panel, for the reason the
+  sections do.
+
+A spreadsheet headed `(cm)` over a column of metres is the worst of the
+three places this could go wrong, because the file outlives the screen.
+The figure still goes in as a NUMBER — `_xlCell` reads it back off the
+text and `c.num` — so a column of 1.417 sorts and sums.
+
+`tests/a_height_is_read_in_cm_or_m.cjs` drives the real page with the
+office's own 141.7 / 161.1 / 120 / 48.9. **20 of its 32 checks fail on the
+previous page** — and the twelve that pass are exactly the *cm moves
+nothing* ones, which is the point. `SHOT=/path.png` draws **both** units,
+a check being unable to read a layout. **Nothing to run in the database**,
+and nothing to bump: `audit_report.html` is not in `audit_sw.js`'s
+precache list and that worker is network-first for HTML.
 
 ## Turning a signup down is a RECORD, and the cross is a SIBLING
 
@@ -6499,11 +7734,111 @@ B4-R2 both go; a split area is judged by its plot.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
 
-## Worker Activity is two parts, and Seed Planting is the Pre Nursery one
+## Where each job is done is KEYED, and the circles are what say it
+
+The office asked for a Setting splitting the jobs between the **Pre Nursery**
+and the **Main Nursery (BNN, UNN1, UNN2)** as rows, dragged between them the
+way the Team Board moves a worker, with the side bar following it — and then
+narrowed it twice, and the narrowing is the whole shape of what was built:
+
+> *"main page 不会跟着pre 和 main 分了 所以如果两边都有 当我按那个工作的时候
+> 上面的圈圈就会show PN BNN UNN1 UNN2"*
+
+> *"上面nursery的圈圈就会跟着side tab show，例如我按pnd，而后面的setting pnd
+> 是drag去main nursery，上面的圈圈只会show BNN UNN1 UNN2"*
+
+**SO THE SIDE BAR STOPPED BEING THE THING THAT SAYS IT.** It was two groups
+under a Main Nursery and a Pre Nursery heading (the section below this one is
+how that came to be) and both headings are gone: it is ONE list of eight jobs,
+alphabetical, with every job in it whatever row it sits in. What says where a
+job is done is the **nursery circles**, which can say it about the job
+somebody actually has open — and a heading saying it again over a list is the
+same answer twice, in the place with the least room for it.
+
+**TWO ROWS WERE ASKED FOR AND THERE ARE THREE**, and the office's own next
+sentence is why: *如果两边都有*. A chip that lives in exactly one cell is
+right for a WORKER — a person works at one nursery — and wrong for a JOB,
+since one job really is done in both places; two rows could not hold a state
+the office had already described. So **Both** is a row of its own, which keeps
+the gesture to the one thing they asked for (a drag, nothing else) and makes
+every state reachable. It stands empty rather than hiding, for the same reason
+the Team Board keeps a company section's column standing empty: it is where
+something IS dragged.
+
+**THE SCOPE IS STORED, NEVER THE NURSERY LIST.** `main` means whatever the
+main nursery is, so a fifth nursery added next year is picked up by every job
+scoped to it without anybody re-keying eight rows. `scopeNurseries` derives
+the four from `MAINT_NURSERIES`, so there is no second copy of which of them
+is the pre nursery, and `MAINT_NURSERIES` is also what fixes the ORDER the
+circles are drawn in.
+
+**NOTHING TO RUN IN THE DATABASE.** It is one `nops_maint_config` row per job,
+`job_scope:<job>` in `key` and `pre` / `main` / `both` in `txt_value` — the
+table that was made, in its own file's words, *"in a shape that will hold the
+next such setting without another migration"*, and this is that setting. A
+database old enough to lack `txt_value` refuses the whole select, which the
+fallback turns into no rows, so every job reads its default; and the SAVE
+**refuses** rather than dropping the column and writing eight rows that say
+nothing, naming `shared/RUN_ME_nops_maint_config.sql`.
+
+Six things in it, four of which are rules this file already has:
+
+- **AN ABSENT ANSWER IS NOBODY HAVING BEEN ASKED.** `JOB_SCOPE_WAS` is
+  exactly where each job has always been — Seed Planting & Hyplug in the Pre
+  Nursery, the other seven in the Main Nursery — so an unkeyed database, an
+  unreadable one and one with no `txt_value` all behave identically to the
+  page before this existed. Section 1 and section 6 of the test are that.
+- **SAVE WRITES ALL EIGHT, defaults included**, which is not seeding a
+  default into an unasked row: pressing Save IS being asked. A board half
+  keyed and half falling through to the code is two rules for one screen.
+- **A DRAFT WRITES NOTHING.** Eight round trips, one per chip somebody tried,
+  is a board that fights back — and a move stored before Save cannot be
+  cancelled. Same Edit / Cancel / Save shape as the three blocks above it.
+- **A NURSERY SOMEBODY CHOSE IS NOT WALKED AWAY FROM THEM.** The scope moves
+  the picked nursery when the job open does not have it, so without
+  `_nurseryChosen` opening Seed Planting from UNN 1 and going back to P & D
+  would land on BNN. A nursery the scope FORCED is deliberately not recorded
+  as a choice.
+- **THE SIDE BAR IS ORDERED AT RUN TIME**, by `orderJobSubnav()`, because the
+  labels are translated: P & D sorts before Transplanting in English and
+  Pemindahan before Racun in Malay, so `applyLang` re-orders it. The order in
+  the markup is only what shows before the script runs.
+- **THE BOX IS FOUND THROUGH A JOB BUTTON, never by `.pn-sub`.** There are
+  TWO of those bars — Work Record's list/chart is the other — so
+  `querySelector('.pn-sub')` answers with the one that is not this, the
+  reorder finds none of its own buttons in it, and the side bar silently goes
+  on in the order it was written. That is exactly what the first version did,
+  and the test caught it. `_syncSubNav` names the same trap in its own
+  comment, which is why it takes the exact set of ids it owns.
+
+**WHAT IT COSTS, and it is the one honest gap: the Seed Planting sheet does
+not read the nursery at all.** Its rows are keyed on the batch and the job and
+on nothing else, so it reads the same whichever circle is on — which is true
+while the Pre Nursery is its only circle, and a lie the moment somebody drags
+it onto a row offering three more. The line over the sheet therefore names the
+nursery that is PICKED once the scope is wider than the pre nursery, rather
+than going on saying Pre Nursery over BNN circles. **What the nursery will
+then DECIDE is the name list**, which is the half the office asked for next:
+*"seed planting那边就会show workers (show by nursery first)"*.
+
+`shared/CHECK_which_nurseries_each_job_is_on.sql` prints every job, what is
+keyed against it, which circles that draws, and whether anything is stored
+under a job or a value the page does not read.
+`tests/where_each_job_is_done.cjs` drives the real page and the REAL drag —
+a `DragEvent` dispatched at the chip and the row, which fires the inline
+handlers exactly as a mouse does, because a drag simulated by setting the
+draft would prove nothing about the board. **22 of its 40 checks fail on the
+previous code**, each by name: every reader is guarded, since a test that dies
+on the previous code proves nothing about it.
+
+### Worker Activity was two parts, and Seed Planting is the Pre Nursery one
+
+**The two headings this section is about are GONE** — see above. Everything
+else in it stands, and it is why the Pre Nursery sheet is one entry.
 
 The office asked for Worker Activity to read as two parts: **Main Nursery**
 (the seven sheets that were there) and **Pre Nursery**, which has one,
-**Seed Planting**. The two headings are `.pn-subgroup` lines inside the
+**Seed Planting**. The two headings were `.pn-subgroup` lines inside the
 existing `.pn-sub` list, and they are headings, not buttons.
 
 **The rows are the batch report's, ONE PER BATCH.** Seed Planting on the
@@ -6835,3 +8170,68 @@ every interaction is guarded and the failure arrives as a NAMED check.
 **A test that dies on the previous code proves nothing about it** — the
 harness stops at the first throw and the twelve checks underneath are never
 asked.
+
+#### The summary at the top is a card per BATCH, because the columns are batches
+
+*"Payroll那里的seed planting我要像transplanting那样，上边有summary 有batch，
+amount， total workdone"*. **The words name the slots of a card this system
+already draws**: `.pt-card` is a label, a figure and `Total Workdone (RM) :`,
+which is batch, amount and total workdone exactly. So the ribbon is the
+Transplanting sheet's own `.pt-glance`, reused rather than copied — one
+office reads both claims, and a summary answering the same question in a
+different shape is a shape somebody has to learn twice.
+
+**WHAT DIFFERS IS THE UNIT, and it follows from the sheet.** Transplanting's
+four cards are its four JOBS, which are its columns. This sheet's columns
+are the BATCHES, so these are batches — which is also the unit the office
+named. A card per job here would have been two cards saying what the two
+band totals already say.
+
+Four things in it:
+
+- **IT IS COLLECTED, NEVER RECOMPUTED.** `preNurseryClaim` builds `byBatch`
+  off `j.claim.rows` — the very figures `seedPlantingClaim` already worked
+  out for the column feet. A card that disagreed with the column under it
+  would be the worse of the two faults, because the card is what somebody
+  reads first, and two walks of the same records is the fault this file has
+  a heading about. The test asserts the cards add up to exactly `c.qty` and
+  `c.amount`.
+- **A BATCH ON BOTH JOBS CARRIES THE SPLIT**, in `.pt-sub`, muted and small.
+  The two jobs are priced at different rates, so **7,760 biji and RM 183.20
+  cannot be checked against each other** by anybody who does not know how
+  the 7,760 divides. It is drawn ONLY where both jobs have something —
+  otherwise it would read "all of it" and "none of it", two lines of type
+  for no information, which is the rule the Life of Seedlings split already
+  follows.
+- **A HELD BATCH IS ON NO CARD.** 279 is keyed and not Checked, so it pays
+  nothing; a summary that counted it would be the one figure on the page
+  claiming money the claim underneath does not pay. The note still names it.
+- **The ribbon is CLEARED on both early returns.** Left standing over
+  *Loading…* it is last month's figures on this month, which is the one kind
+  of wrong a summary must not be.
+
+**AND IT IS ON THE PAPER**, because a figure on the screen belongs on the
+paper — the rule this module learned when Transplanting's own four cards
+were nowhere on its form. Same drawing, same figures, same rounding, and
+**said ONCE on page one**, exactly as Transplanting says it: these are the
+month's totals and not this page of them, so a second copy overleaf invites
+somebody to add the two pages together. **It WRAPS, which Transplanting's
+does not have to** — that sheet has exactly four cards and this one has a
+card per batch, so `CARD_MIN` decides how many fit a row and the row count
+follows the paper rather than a number typed here. A dozen batches at four
+to a row is three rows rather than twelve slivers with their money cut off.
+
+Section 5 of `tests/the_pre_nursery_pays_two_jobs.cjs` holds it — the
+arithmetic off the lifted `preNurseryClaim`, the cards off the REAL page,
+and the band off the real claim form. **10 of its 61 checks fail on the
+previous code**, each by NAME: `byBatch` is guarded with `|| []` and the
+screen read answers `'no #seedplant-glance on the page'` rather than
+throwing. `SHOT=/path.png` draws the tab as the office sees it, which is how
+the ribbon was judged — a check cannot read a layout.
+
+**One thing seen while doing it and NOT changed**: a job band with fewer
+batches than the widest ends short of the table's right edge, because
+`jobTable` draws that job's own columns and only the grand total spans the
+widest. It is how the stacked sheet has always drawn and the office has not
+mentioned it; padding each band to the widest would move the upper table's
+column widths as well, which is a change nobody asked for.

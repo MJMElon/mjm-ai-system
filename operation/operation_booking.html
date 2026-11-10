@@ -1021,7 +1021,7 @@
         }
 
         async function verifyAL() { 
-            // The Verify AL tick in Operation > User Access decides. There
+            // The Verify AL tick in Operation > Module Assess Control decides. There
             // was a Master PIN here too; it was written into this page, where
             // anybody could read it with Inspect, so it was no lock at all.
             if (typeof MJMAccess === 'undefined' || !MJMAccess.requireOperationAction('orders', 'al_verify')) return;
@@ -1410,7 +1410,7 @@
     </script>
 
 <!-- Page-access guard: Approval Letter is part of Customer Order
-     Documentation in the module's User Access
+     Documentation in the module's Module Assess Control
      (operation_user_access.html, key 'orders' — the one "Open Page"
      switch for DO/BA/AL together; 'al_manage' is this page's own write
      tick: Add New AL / edit details). Fails open on read errors, same as

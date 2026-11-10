@@ -645,13 +645,13 @@ const _supabase = (typeof supabase !== 'undefined' && typeof SHARED_SUPA_URL !==
   ? supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY)
   : null;
 let dbStateCache = {};   // `${nursery}_${month}` → saved schedule payload
-/* Admin of the "Nursery Operation Manage" module in User Access.
+/* Admin of the "Nursery Operation Manage" module in Module Assess Control.
    Only admins may edit a record once it has been marked Checked. */
 let isNopsAdmin = false;
 
 /* ── MAY THIS PERSON OPEN SETTING ──────────────────────────────────────
    The Setting tab was the module LEVEL and nothing else, so the tick the
-   office sets on User Access — "Open Setting (piece rates, plots,
+   office sets on Module Assess Control — "Open Setting (piece rates, plots,
    workers)" — was written, shown as set on the screen, and read by
    nothing. Somebody granted it saw no change at all, which is the fault
    this codebase has a heading about: a permission saved and not obeyed
@@ -866,7 +866,128 @@ function switchPayrollView(type) {
   _payrollView = type;
   _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
   _syncSubNav('pn-subtab-', PAYROLL_VIEW_KEYS, type);
+  /* The circles follow the side tab — 上面nursery的圈圈就会跟着side tab
+     show. Before the render, or the sheet draws against a nursery that is
+     about to be taken off the row above it. */
+  syncJobNurseries();
   renderPayroll();
+}
+
+/* ══ WHERE EACH JOB IS DONE ═══════════════════════════════════════════════
+   The office asked for a setting splitting the jobs between the PRE NURSERY
+   and the MAIN NURSERY, dragged between rows the way the Team Board moves a
+   worker, with the side bar and the nursery circles following it:
+
+     "P&D drag to main nursery only, so when click P&D, will only show BNN,
+      UNN1, UNN2, 不会有PN"
+
+   TWO ROWS WERE ASKED FOR AND THERE ARE THREE, because the office's own
+   next sentence describes a state two rows cannot hold: 如果两边都有 ——
+   if both sides have it, the circles show all four. A chip that lives in
+   exactly one cell is right for a WORKER (a person works at one nursery)
+   and wrong for a JOB, since one job really is done in both places. So
+   BOTH is a row of its own, which keeps the gesture the office named — one
+   drag, nothing else — and makes every state reachable. The row stands
+   empty rather than hiding, for the same reason the Team Board keeps a
+   company section's column standing empty: it is where something IS
+   dragged.
+
+   THE SCOPE IS STORED, NEVER THE NURSERY LIST. `main` means whatever the
+   main nursery is, so a fifth nursery added next year is picked up by every
+   job scoped to it without anybody re-keying eight rows.
+
+   AN ABSENT ANSWER IS NOBODY HAVING BEEN ASKED, so the default is exactly
+   what the page did before this existed: Seed Planting & Hyplug in the Pre
+   Nursery, the other seven in the Main Nursery. A database that cannot be
+   read, or one nobody has keyed, behaves identically. */
+const JOB_SCOPE_ROWS = ['pre', 'main', 'both'];
+/* Seed Planting is the only Pre Nursery job there has ever been; everything
+   else falls through to the main nursery, which is where it was. */
+const JOB_SCOPE_WAS = { seed_planting: 'pre' };
+let jobScopes = {};          // job key → 'pre' | 'main' | 'both', only what is KEYED
+const JOB_SCOPE_PREFIX = 'job_scope:';
+
+function jobScopeOf(key) {
+  const keyed = jobScopes[key];
+  return JOB_SCOPE_ROWS.includes(keyed) ? keyed : (JOB_SCOPE_WAS[key] || 'main');
+}
+/* ONE list of nurseries, derived, so there is no second copy of which of
+   them is the pre nursery. MAINT_NURSERIES decides the ORDER, which is the
+   order the circles are drawn in. */
+function scopeNurseries(scope) {
+  if (scope === 'both') return MAINT_NURSERIES.slice();
+  if (scope === 'pre')  return MAINT_NURSERIES.filter(n => n === 'PN');
+  return MAINT_NURSERIES.filter(n => n !== 'PN');
+}
+function jobNurseries(key) { return scopeNurseries(jobScopeOf(key)); }
+
+/* A JOB'S NAME COMES OFF THE SIDE BAR'S OWN BUTTON, never a second list
+   here — the same rule the section head follows, so one wording and one
+   language toggle. */
+function jobLabel(key) {
+  const btn = document.getElementById('pn-subtab-' + key);
+  const span = btn && btn.querySelector('[data-i18n]');
+  if (span) return t(span.getAttribute('data-i18n'));
+  return btn ? btn.textContent.trim() : key;
+}
+
+/* ── THE SIDE BAR IS ONE ALPHABETICAL LIST ────────────────────────────────
+   It was two groups under a Main Nursery and a Pre Nursery heading. The
+   office took both headings off in one line — main page 不会跟着pre 和 main
+   分了 — because the split is now said by the CIRCLES, which is the place
+   it can be said about the job somebody actually has open, and a heading
+   saying it again above a list is the same answer twice.
+
+   ORDERED AT RUN TIME AND NOT IN THE MARKUP, because the labels are
+   translated: P & D sorts before Transplanting in English and Pemindahan
+   before Racun in Malay. So applyLang re-orders it. */
+function orderJobSubnav() {
+  /* THE BOX IS FOUND THROUGH A JOB BUTTON, never by `.pn-sub`. There are
+     TWO of those bars — Work Record's list/chart is the other — and
+     `querySelector` answers with the first, which is not this one: the
+     reorder then found none of its own buttons in it and silently did
+     nothing. Same trap `_syncSubNav` names in its own comment, which is
+     why it takes the exact set of ids it owns. */
+  const first = document.getElementById('pn-subtab-' + PAYROLL_VIEW_KEYS[0]);
+  const box = first && first.parentNode;
+  if (!box) return;
+  const btns = PAYROLL_VIEW_KEYS
+    .map(k => document.getElementById('pn-subtab-' + k))
+    .filter(el => el && el.parentNode === box);
+  if (btns.length < 2) return;
+  btns
+    .slice()
+    .sort((a, b) => a.textContent.trim()
+      .localeCompare(b.textContent.trim(), currentLang === 'bm' ? 'ms' : 'en'))
+    .forEach(el => box.appendChild(el));
+}
+
+/* ── THE CIRCLES FOLLOW THE SIDE TAB ──────────────────────────────────────
+   "例如我按pnd，而后面的setting pnd是drag去main nursery，上面的圈圈只会show
+   BNN UNN1 UNN2".
+
+   A NURSERY SOMEBODY CHOSE IS NOT FORGOTTEN by a job that does not have it.
+   Without that, opening Seed Planting from UNN 1 forces PN, and going back
+   to P & D would land on BNN rather than the UNN 1 they were working in —
+   so the two jobs would walk the picked nursery away from them.
+
+   It sets the hidden select rather than calling pickNursery, because that
+   one re-renders and this is called from the renderers' own callers. */
+let _nurseryChosen = '';
+function syncJobNurseries() {
+  const box = document.getElementById('nursery-circles');
+  if (!box) return;
+  const onPayroll = !!document.querySelector('#tab-payroll.tab-panel.active');
+  const allowed = onPayroll ? jobNurseries(_payrollView) : MAINT_NURSERIES.slice();
+  box.querySelectorAll('.nursery-circle').forEach(b => {
+    b.style.display = allowed.includes(b.dataset.n) ? '' : 'none';
+  });
+  if (allowed.length && !allowed.includes(getNursery())) {
+    const want = allowed.includes(_nurseryChosen) ? _nurseryChosen : allowed[0];
+    const sel = document.getElementById('global-nursery');
+    if (sel) sel.value = want;
+  }
+  syncNurseryCircles();
 }
 
 function payrollRowsFor(type) {
@@ -987,6 +1108,19 @@ function renderPayroll() {
      empty. */
   const namesBar = document.getElementById('payroll-names');
   if (namesBar) namesBar.innerHTML = '';
+  /* The strip and the paint, BEFORE the four early returns below — every one
+     of the eight sheets carries them, and a strip on one sheet is a strip
+     that lies about the other seven.
+
+     THE PAINT IS NOT THE GATE. `.wr-shut` greys what can no longer be
+     pressed and takes the pointer off it; `wrAllows()` inside each handler
+     is what actually refuses, because a class cannot stop the keyboard and
+     cannot stop a call — which this codebase has a heading about. */
+  try {
+    renderWorkRecVerify();
+    const shut = workRecLocked(_payrollView);
+    [tbl, extra, namesBar].forEach(el => { if (el) el.classList.toggle('wr-shut', shut); });
+  } catch (e) { console.warn('[maint] worker record verify strip:', e); }
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
@@ -1133,8 +1267,255 @@ function renderPayroll() {
    syncTicks. A person pressing a cell is the thing that was asked for; a page
    load quietly re-writing an agreed row is not a person. */
 
+/* ══ VERIFY & LOCK, ON THE WORKER RECORD ITSELF ═══════════════════════════
+   The office asked for it in four words — 加一个verified and lock 按钮 —
+   standing on the P & D sheet for UNN 2.
+
+   WHAT IT SIGNS IS THE RECORD, WHICH IS NOT WHAT THE CLAIM SIGNS. The
+   payroll module has had a verify strip for months and it closes the CLAIM:
+   `maint` in its LOCK_SHEETS freezes what the claim shows (buildMaintSnapshot)
+   and says so in its own words — *"Worker Record stays exactly as editable as
+   it always was; this is the claim choosing to stop listening to it."* So the
+   money was protected and the record underneath it was not: anybody could go
+   on moving ticks on a month somebody had signed, and nothing on this screen
+   said a word.
+
+   SO IT IS ITS OWN SIGNATURE, under its own key, and the two stay apart on
+   purpose. They are two acts, usually in this order: the nursery agrees who
+   did the work, then the office agrees the money. A button here that wrote
+   the payroll's own `maint` row would write a THINNER one — that row carries
+   a snapshot this page has no rates or adjustments to build — and two buttons
+   writing one row with different consequences is the fault this codebase has
+   a heading about.
+
+   sheet = `workrec:<job>`, scope = the NURSERY. Both columns used for what
+   they mean, and the key is PER JOB rather than per nursery because the
+   office signs the sheet in front of them: a press on P & D that also shut
+   Transplanting would shut work they have not finished keying. One press per
+   sheet, and the strip names the sheet it is about.
+
+   IT IS ONLY EVER ITS OWN VERIFICATION — `verificationOf`, never
+   `isSheetLocked`. The payroll MONTH lock auto-shuts on the 2nd of the
+   following month, so reading that here would have turned every Worker
+   Record sheet for October read-only the morning this shipped, which is a
+   change nobody asked for. The month lock is about the money being settled;
+   correcting who did the work is a thing the office goes on doing, and the
+   Checked rule one block up is the whole argument for that.
+
+   NOTHING TO RUN IN THE DATABASE. `mjmnpayroll_verifications.sheet` is plain
+   TEXT with no CHECK constraint (RUN_ME_npayroll_locks.sql), so a new sheet
+   name needs nothing — the same thing that was true when `seedplant` was
+   added. Re-opening the month on Lock Controls still takes these rows with
+   it, because that screen deletes every verification of the month. */
+const WORKREC_PREFIX = 'workrec:';
+const workRecSheet = (job) => WORKREC_PREFIX + (job || _payrollView);
+/* The nursery the sheet is about. After the job-scope setting it is always
+   one the circles are offering, so there is no second rule here. */
+const workRecScope = () => getNursery();
+/* A MONTH IS A LABEL ON ONE SCREEN AND A KEY ON THE NEXT, and this is the
+   seam. Everything on this page works in the LABEL — `getMonth()` answers
+   "Nov 2026", which is what `nops_maint_payroll.month` is keyed on — and
+   the payroll lock works in "YYYY-MM" throughout, which is what
+   `mjmnpayroll_verifications.month` holds and what the payroll's own strip
+   writes. Handing the label to the lock stores a row the payroll module can
+   never find, which is exactly what the first version of this did: it
+   verified, said nothing, and the sheet stayed open. The hidden
+   `#global-month` input IS the key, and `_cullYm()` has read it that way
+   since Culling Monitoring was written. */
+const workRecYm = () => {
+  const el = document.getElementById('global-month');
+  return (el && el.value) || '';
+};
+
+function workRecLockRow(job) {
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) return null;
+  const ym = workRecYm();
+  if (!ym) return null;
+  return MJMPayrollLock.verificationOf(ym, workRecSheet(job), workRecScope());
+}
+function workRecLocked(job) { return !!workRecLockRow(job); }
+
+/* WHOEVER IS SIGNING, and it is the page's OWN answer. The first version
+   read a global `userEmail`, which THIS PAGE HAS NEVER HAD — it is only
+   ever read defensively here, so every signature went in as NULL and the
+   strip could not name anybody. `_signingAs()` is the house rule a few
+   hundred lines down and `window.currentUserEmail` is what the Checked
+   ticks prefer, so this asks the two in that order and nothing else.
+   Nothing resolving stores NOTHING, never a word standing in for a person:
+   see _wrSignedBy. */
+function _wrSigner() {
+  return (typeof window !== 'undefined' && window.currentUserEmail)
+      || (typeof _signingAs === 'function' && _signingAs())
+      || null;
+}
+
+/* WHO AND WHEN, AND NO STAND-IN FOR EITHER. Three sentences said "verified
+   by somebody" where the name would not resolve, and the office took it off
+   in two words: 不要放somebody. They are right — the NAME is the one thing
+   a signature carries that nothing else on the strip does, and a word
+   standing where it belongs reads as a person whose name nobody wrote down.
+   A row verified before the signer above was fixed carries no name at all
+   and never will, so what is honest is to say what IS known and stop.
+
+   ONE helper, because the sentence is said in three places — the refusal,
+   the strip and the Unlock confirm — and three wordings for one fact is how
+   they drift. */
+function _wrSignedBy(v) {
+  const who  = (v && _maintWho(v.verified_by)) || '';
+  const when = (v && _maintWhen(v.verified_at)) || '';
+  if (who && when) return `verified by ${who} on ${when}`;
+  if (who)  return `verified by ${who}`;
+  if (when) return `verified on ${when}`;
+  return 'verified';
+}
+
+/* Refuse a write and SAY WHAT SHUT IT. A message that only says "locked"
+   leaves somebody hunting for a switch; the Unlock button is on the strip
+   right above the table they are looking at. */
+function wrAllows(job) {
+  const v = workRecLockRow(job);
+  if (!v) return true;
+  alert(`${jobLabel(job || _payrollView)} for ${NURSERY_NAMES[workRecScope()] || workRecScope()}, `
+      + `${getMonth()} was ${_wrSignedBy(v)}, so this sheet is closed.\n\n`
+      + 'Press Unlock on the strip above the table to open it again.');
+  return false;
+}
+
+/* The two ticks this asks for, read the way the Module Assess Control screen writes
+   them — `effectiveActions` in shared_module_access.js, which is what
+   maySetting() above already obeys and says at length why.
+
+   `fallbackTo` is the half that matters on the day this ships: a row the
+   office saved before these keys existed carries neither, and reading an
+   absent key as OFF would take the button away from everybody who has one.
+   What they ANSWERED is the Worker Record tick — until now, whoever could
+   tick the sheet could change anything on it — so that is what is read
+   until somebody saves the row again. It is declared on the action in
+   nursery_ops_user_access.html as well, and the test holds the two
+   together. */
+function mayMaintAct(key, fallbackKey) {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    const acts = p && p.nursery_ops_actions && p.nursery_ops_actions.maintenance;
+    if (acts) {
+      const k = (fallbackKey && !(key in acts)) ? fallbackKey : key;
+      return !!acts.view && !!acts[k];
+    }
+  } catch (_) { /* fall through to the module level */ }
+  /* NO saved row is nobody having been asked, so the module level decides —
+     what governed this before the tick existed. Neither action is
+     `adminOnly`, so `effectiveActions` gives it to anybody the module is
+     open to at all, and this says the same thing rather than a second
+     version of it. */
+  return _nopsLevel() !== 'none';
+}
+function _nopsLevel() {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && MJMAccess.permissions
+               && MJMAccess.permissions()) || null;
+    return (p && p.modules && p.modules.nursery_ops) || 'none';
+  } catch (_) { return 'none'; }
+}
+
+/* ── The strip above the sheet ────────────────────────────────────────────
+   Drawn on every render of Worker Activity, because the job, the nursery
+   and the month all change what it is answering about. Three states, and
+   the shape is the payroll's own `renderVerifyBar` so one office reading
+   both screens does not have to learn it twice. */
+function renderWorkRecVerify() {
+  const el = document.getElementById('vb-workrec');
+  if (!el) return;
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    /* Not set up, or a read that failed. Nothing is drawn and nothing is
+       locked — the same fail-open the lock module promises in its header,
+       and the reason a load error cannot shut a nursery out of its own
+       record. */
+    el.className = 'verify-bar'; el.innerHTML = ''; return;
+  }
+  const job = _payrollView;
+  const v   = workRecLockRow(job);
+  const what = `${esc(jobLabel(job))} · ${esc(NURSERY_NAMES[workRecScope()] || workRecScope())}`
+             + ` · ${esc(getMonth())}`;
+  if (v) {
+    el.className = 'verify-bar verify-done';
+    /* A cell is DROPPED where there is nothing in it, rather than filled
+       with a word or a dash. The strip has already said what is verified;
+       an empty slot says nobody wrote the name down, which is the truth,
+       and "somebody" said it was a person this screen could name.
+
+       THE NAME CARRIES ITS OWN "by", because a name on its own is not a
+       sentence — the office read the bare one and said what it should say:
+       *by Esther*. The two sit in ONE span, or the strip's 10px gap opens
+       between the word and the person it belongs to, and only the NAME is
+       set heavy: that is what somebody is reading the cell for. */
+    const who = _maintWho(v.verified_by), when = _maintWhen(v.verified_at);
+    el.innerHTML = `<span>✔ Verified — ${what}</span>`
+      + `<span class="vb-spacer"></span>`
+      + (who  ? `<span>by <span class="vb-who">${esc(who)}</span></span>` : '')
+      + (when ? `<span>${esc(when)}</span>` : '')
+      + (mayMaintAct('unverify', 'worker_record')
+          ? `<button class="btn btn-sm" style="margin-left:10px;"
+               onclick="unverifyWorkRec()">↺ Unlock</button>` : '');
+    return;
+  }
+  el.className = 'verify-bar verify-open';
+  el.innerHTML = `<span>Open — ${what}</span>`
+    + `<span class="vb-spacer"></span>`
+    + (mayMaintAct('verify', 'worker_record')
+        ? `<button class="btn btn-primary btn-sm" onclick="verifyWorkRec()">✔ Verify &amp; lock</button>`
+        : `<span>Verifying needs the Verify tick on Nursery Maintenance in Module Assess Control.</span>`);
+}
+
+/* The permission is asked AGAIN here: a button drawn before somebody's
+   access changed is still sitting on the screen. */
+async function verifyWorkRec() {
+  const job = _payrollView;
+  if (!mayMaintAct('verify', 'worker_record')) {
+    alert('You do not have permission to verify this sheet.\n\n'
+        + 'Ask an admin to tick Verify on Nursery Maintenance in Module Assess Control.');
+    return;
+  }
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    alert('The payroll lock tables could not be read, so nothing can be verified.\n\n'
+        + 'Run shared/RUN_ME_npayroll_locks.sql in the Supabase SQL Editor if this is new.');
+    return;
+  }
+  const n = workRecScope();
+  if (!confirm(`Verify ${jobLabel(job)} for ${NURSERY_NAMES[n] || n}, ${getMonth()}?\n\n`
+             + 'It locks straight away: the ticks and the figures on this sheet cannot be '
+             + 'changed after that. Press Unlock on the strip to take it back.\n\n'
+             + 'This signs the RECORD. The salary claim is signed separately, on the payroll.')) return;
+  const error = await MJMPayrollLock.verify(_supabase, workRecYm(), workRecSheet(job), n,
+                                            _wrSigner(), null);
+  if (error) { alert('Could not verify — ' + (error.message || 'try again')); return; }
+  renderPayroll();
+}
+
+/* Taking one sheet's signature back. Its own tick, for the reason the
+   payroll's own Unlock has one: being trusted to say a sheet is right is
+   not the same as being trusted to unsay it. */
+async function unverifyWorkRec() {
+  const job = _payrollView;
+  if (!mayMaintAct('unverify', 'worker_record')) {
+    alert('You do not have permission to unlock this sheet.\n\n'
+        + 'Ask an admin to tick Unlock on Nursery Maintenance in Module Assess Control.');
+    return;
+  }
+  const v = workRecLockRow(job);
+  if (!v) { renderPayroll(); return; }
+  const n = workRecScope();
+  if (!confirm(`Unlock ${jobLabel(job)} for ${NURSERY_NAMES[n] || n}, ${getMonth()}?\n\n`
+             + `It was ${_wrSignedBy(v)}.\n\n`
+             + 'The sheet becomes editable again and will have to be verified a second time.')) return;
+  const error = await MJMPayrollLock.unverify(_supabase, workRecYm(), workRecSheet(job), v.scope || '');
+  if (error) { alert('Could not unlock — ' + (error.message || 'try again')); return; }
+  renderPayroll();
+}
+
 /* Tick / untick a worker on a payroll row. */
 function togglePayrollTick(recId, worker) {
+  if (!wrAllows(_payrollView)) return;
   const n = getNursery(), m = getMonth();
   const k = payrollKey(n, m, _payrollView);
   if (!payrollData[k]) payrollData[k] = {};
@@ -1314,6 +1695,7 @@ function _denyDoLocked() {
 }
 
 function toggleDoWorkerTick(doId, nKey, worker) {
+  if (!wrAllows('loading_seedlings')) return;
   const n = getNursery(), m = getMonth();
   const key = _doPayrollKey(n, m);
   const rows = _doRecordsCache[key] || [];
@@ -1343,6 +1725,7 @@ function persistDoWorkerTick(d) {
 }
 
 function lockDoWorkers(doId) {
+  if (!wrAllows('loading_seedlings')) return;
   const n = getNursery(), m = getMonth();
   const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
   const d = rows.find(x => x.id === doId);
@@ -1831,6 +2214,7 @@ function _tpCheckCell(r, key) {
    refused write puts it back and says so rather than leaving a tick on
    screen that is not in the database. */
 async function toggleTransplantChecked(id) {
+  if (!wrAllows('transplanting')) return;
   const n = getNursery(), m = getMonth(), key = _tpPayrollKey(n, m);
   const r = (_tpRecordsCache[key] || []).find(x => x.id === id);
   if (!r || !_supabase) return;
@@ -2163,6 +2547,7 @@ function renderCullIncentivePayroll() {
    the row read. Optimistic with a rollback, the same shape
    toggleTransplantChecked uses. */
 async function toggleCullChecked(plot) {
+  if (!wrAllows('cull_incentive')) return;
   const n = getNursery(), ym = _cullYm(), st = _cullCache[ym];
   if (!st || !_supabase) return;
   if (!st.checksReady) {
@@ -2201,7 +2586,8 @@ async function toggleCullChecked(plot) {
    It is still a RECORD and never a deletion — one `remove` row per plot per
    month, carrying who and when. That record IS the Put back. */
 async function cullRemovePlot(plot) {
-  if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  if (!wrAllows('cull_incentive')) return;
+  if (!_cullMayHand()) { alert('Removing a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in Module Assess Control.'); return; }
   const n = getNursery(), ym = _cullYm(), st = _cullCache[ym], CI = MJMCullIncentive;
   if (!st || !st.overridesReady) {
     alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
@@ -2243,7 +2629,8 @@ async function cullRemovePlot(plot) {
    every other plot. */
 let _cullAddEl = null;
 function openCullAdd() {
-  if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in User Access.'); return; }
+  if (!wrAllows('cull_incentive')) return;
+  if (!_cullMayHand()) { alert('Adding a plot needs Adjust Pay on Transplanting, or admin of this module. Ask an admin in Module Assess Control.'); return; }
   const ym = _cullYm(), st = _cullCache[ym];
   if (!st || !st.overridesReady) {
     alert('This database has not got the by-hand table yet.\n\nRun shared/RUN_ME_cull_incentive_checked.sql in the Supabase SQL Editor, then reload.');
@@ -2424,6 +2811,7 @@ async function saveCullAdd() {
 }
 
 async function cullDeleteOverride(id) {
+  if (!wrAllows('cull_incentive')) return;
   if (!_cullMayHand()) return;
   const ym = _cullYm(), st = _cullCache[ym];
   const o = st && st.overrides.find(x => Number(x.id) === Number(id));
@@ -2817,7 +3205,17 @@ function renderSeedPlantingPayroll() {
   if (!tbl) return;
   const m = getMonth();
   const line = document.getElementById('payroll-form-line');
-  if (line) line.textContent = `${t('tab.preNursery')} (${NURSERY_NAMES[SP_NURSERY]}) — ${t('pay.month')} ${m}`;
+  /* THE LINE NAMES WHAT THE CIRCLES NAME. The sheet's rows are keyed on
+     the batch and the job and on no nursery at all, so it reads the same
+     whichever circle is on — which is honest while the Pre Nursery is the
+     only circle, and a lie the moment somebody drags this job onto a row
+     that offers three more. So where the scope is wider than the pre
+     nursery the line names the nursery that is actually picked. What the
+     nursery will then DECIDE is the name list, which is PART 2. */
+  const spN = getNursery();
+  if (line) line.textContent = (spN === SP_NURSERY
+    ? `${t('tab.preNursery')} (${NURSERY_NAMES[SP_NURSERY]})`
+    : (NURSERY_NAMES[spN] || spN)) + ` — ${t('pay.month')} ${m}`;
   const off = document.getElementById('payroll-offreg');
   if (off) { off.style.display = 'none'; }
 
@@ -2866,7 +3264,11 @@ function renderSeedPlantingPayroll() {
       rows.forEach((r, ri) => {
         const s = saved[_spKey(r.key, j.job)];
         const cells = (s && s.workers) || {};
-        const locked = !!(s && s.checked_at);
+        /* Checked shuts the row; the sheet being VERIFIED shuts every row
+           on it. The paint and the gate have to agree — wrAllows() is
+           what actually refuses, and a box left live over it would be the
+           lock-in-the-stylesheet fault pointing the other way. */
+        const locked = !!(s && s.checked_at) || workRecLocked('seed_planting');
         qtyTotal += r.qty;
         const keyed = _spKeyed(s);
         wk.forEach(w => { totals[w] += Number(cells[w]) || 0; });
@@ -2938,6 +3340,7 @@ function _spCheckCell(job, ri, s, keyed, noTable) {
 }
 
 async function toggleSeedPlantingCheck(job, ri) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noTable || (st.noJob && job !== 'seed') || !_supabase) return;
   const r = st.rows[ri];
@@ -3077,6 +3480,7 @@ function _spReloadAll(m) {
 }
 
 async function addSeedPlantingBatch() {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   const el = document.getElementById('sp-new-batch');
   if (!st || st.noMoveTable || !el || !_supabase) return;
@@ -3096,6 +3500,7 @@ async function addSeedPlantingBatch() {
 }
 
 async function removeSeedPlantingBatch(b) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noMoveTable || !_supabase) return;
   const back = _spMonthOfDate(st.home[b]);
@@ -3120,6 +3525,7 @@ function _spSaveNames(m) {
 }
 
 function addSeedPlantingWorker() {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   const el = document.getElementById('sp-new-name');
   if (!st || st.noTable || !el) return;
@@ -3144,6 +3550,7 @@ function addSeedPlantingWorker() {
    off this list from the Seed Planting sheet, and its figures would reappear
    on the other one as a column marked unknown. */
 function removeSeedPlantingWorker(i) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth(), st = _spCache[m];
   if (!st || st.noTable) return;
   const w = st.names[i];
@@ -3172,6 +3579,7 @@ function useLastMonthSeedPlantingNames() {
    back where it went -- a redraw inside `change` would otherwise throw away
    the box the Tab key was moving to. */
 function setSeedPlantingQty(job, ri, wi, raw) {
+  if (!wrAllows('seed_planting')) return;
   const m = getMonth();
   const st = _spCache[m];
   if (!st || st.noTable || (st.noJob && job !== 'seed')) return;
@@ -3842,7 +4250,7 @@ function onRateInput(code, val) {
 /* Write all four rates for this nursery, then lock. */
 async function savePieceRates() {
   const n = getNursery();
-  if (!maySetting()) { alert('You are not allowed to change piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
+  if (!maySetting()) { alert('You are not allowed to change piece rates.\n\nAsk an admin to tick "Open Setting" on Module Assess Control.'); return; }
   if (rateLocked(n)) return;
   // Never write before the saved rates have arrived — otherwise a save made
   // during startup would push empty boxes over real values.
@@ -3896,7 +4304,7 @@ async function savePieceRates() {
 
 async function unlockPieceRates() {
   const n = getNursery();
-  if (!maySetting()) { alert('You are not allowed to unlock piece rates.\n\nAsk an admin to tick "Open Setting" on User Access.'); return; }
+  if (!maySetting()) { alert('You are not allowed to unlock piece rates.\n\nAsk an admin to tick "Open Setting" on Module Assess Control.'); return; }
   if (!confirm(`Unlock the piece rates for ${NURSERY_NAMES[n]} so they can be edited?`)) return;
   if (_supabase) {
     const { error } = await _supabase.from('nops_maint_rate_lock')
@@ -4744,6 +5152,10 @@ function applyLang(){
   // the language changes while it is open.
   const recTitle = document.getElementById('rec-modal-title');
   if (recTitle) recTitle.textContent = t(editRecId ? 'mod.editRec' : 'mod.addRec');
+  /* The side bar's job list is alphabetical by LABEL, so the language
+     toggle changes the order: P & D sorts before Transplanting in English
+     and Pemindahan before Racun in Malay. */
+  try { orderJobSubnav(); } catch (_) {}
   // Dynamic tables/records carry their own strings through t()
   if (typeof renderAll === 'function') renderAll();
 }
@@ -6786,7 +7198,7 @@ function switchTab(name, btn) {
   // button, a restored tab or a console call can't get in either.
   if (name === 'setting' && !maySetting()) {
     alert('Setting is not open to you.\n\nAsk an admin to tick "Open Setting" on '
-          + 'User Access, or to change the plot capacity, chemical or fertiliser '
+          + 'Module Assess Control, or to change the plot capacity, chemical or fertiliser '
           + 'for you.');
     return;
   }
@@ -6809,6 +7221,9 @@ function switchTab(name, btn) {
   const topCtrl = document.getElementById('top-nursery-ctrl');
   const noNursery = (name === 'setting' || name === 'schedule');
   if (topCtrl) topCtrl.style.display = noNursery ? 'none' : '';
+  /* Asked on the way OUT as well as in: the scope hides circles on Worker
+     Activity, and a panel that shows every nursery has to get them back. */
+  try { syncJobNurseries(); } catch (_) {}
   // Setting is the one panel that is not about a month.
   const monthCtrl = document.getElementById('sm-month-ctrl');
   if (monthCtrl) monthCtrl.style.display = name === 'setting' ? 'none' : '';
@@ -7012,6 +7427,10 @@ function switchSchedView(name) { jumpToSched(name); }
 function pickNursery(n) {
   const sel = document.getElementById('global-nursery');
   if (sel) sel.value = n;
+  /* A press is a CHOICE, which is what syncJobNurseries goes back to when a
+     job that does not have it has moved the nursery on in between. A nursery
+     the scope forced is not a choice and is deliberately not recorded. */
+  _nurseryChosen = n;
   syncNurseryCircles();
   onNurseryChange();
 }
@@ -8628,6 +9047,11 @@ async function _reloadSubmissions() {
 async function approveSubmission(id) {
   const f = _submissionById(id);
   if (!f) return;
+  if (!mayMaintAct('approve', 'view')) {
+    alert('You are not allowed to approve a submitted record.\n\n'
+        + 'Ask an admin to tick "Approve a submitted work record" on Module Assess Control.');
+    return;
+  }
   if (!_supabase) { alert('Not connected to the database.'); return; }
   const where = `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · ${_tarikhDisplay(f.work_date)}`;
   if (!confirm(`Approve this record?\n\n${where}\n\n`
@@ -10525,7 +10949,14 @@ async function initDb() {
       loadMaintAudits(),
       // The Setting tab's own four lists, and the plot names they hang off.
       loadSharedPlots(),
-      loadSettingLists()
+      loadSettingLists(),
+      /* The Verify & lock strip on Worker Activity. Read in the boot's own
+         wave so the first paint of a verified sheet already shows it shut —
+         a sheet that draws open for a beat and then greys is a sheet
+         somebody has already pressed. It FAILS OPEN by itself: the module
+         swallows its own read errors and answers "nothing verified". */
+      (typeof MJMPayrollLock !== 'undefined'
+        ? MJMPayrollLock.load(_supabase) : Promise.resolve())
     ]);
     (stRes.data || []).forEach(r => {
       dbStateCache[`${r.nursery}_${r.month}`] = r.payload;
@@ -10599,6 +11030,10 @@ async function initDb() {
     _mergeCapacityPlots();
   } catch (e) { console.warn('[maint] initial DB load failed:', e); }
   _dbReady = true;
+  /* The side bar's order and the circles both follow the keyed scopes,
+     which only exist once loadSettingLists has answered. Before switchTab,
+     so the landing panel already shows the right circles. */
+  try { orderJobSubnav(); } catch (e) { console.warn('[maint] job order:', e); }
   /* Land on the tab the markup marks active, through switchTab, so the side
      effects of being on it happen — Schedule hides the top bar's nursery
      picker, which it shows every nursery of. */
@@ -10735,11 +11170,27 @@ async function loadSettingLists() {
       .then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_fertilisers').select('*').order('sort_order').order('name')
       .then(r => r, () => ({ data: [] })),
-    _supabase.from('nops_maint_config').select('key, num_value').then(r => r, () => ({ data: [] }))
+    /* txt_value carries the job scopes, in the table that was made "in a
+       shape that will hold the next such setting without another
+       migration" — which this is, so there is nothing to run. A database
+       old enough to lack the column refuses the whole select, which the
+       fallback turns into no rows: every job then reads its default, which
+       is exactly what the page did before. */
+    _supabase.from('nops_maint_config').select('key, num_value, txt_value')
+      .then(r => r.error
+        ? _supabase.from('nops_maint_config').select('key, num_value')
+        : r, () => ({ data: [] }))
   ]);
   ((tsRes && tsRes.data) || []).forEach(r => { traySize[r.nursery] = +r.per_tray || 0; });
   const cfg = ((cfgRes && cfgRes.data) || []).find(r => r.key === 'pump_coverage');
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
+  jobScopes = {};
+  ((cfgRes && cfgRes.data) || []).forEach(r => {
+    if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
+    const key = String(r.key).slice(JOB_SCOPE_PREFIX.length);
+    const v = String(r.txt_value || '').trim().toLowerCase();
+    if (PAYROLL_VIEW_KEYS.includes(key) && JOB_SCOPE_ROWS.includes(v)) jobScopes[key] = v;
+  });
   chemicals   = (chRes && chRes.data) || [];
   fertilisers = (feRes && feRes.data) || [];
 }
@@ -10860,6 +11311,170 @@ function renderSetting() {
      bootstrap follows for its trailing steps. */
   try { renderCullMonitoringSetting(); }
   catch (e) { console.warn('[maint] Culling Monitoring settings card:', e); }
+  /* Its own try for the same reason, and it matters more here: this card
+     decides what the side bar shows, so a throw in it must not take the
+     capacities down with it. */
+  try { renderJobScopeSetting(); }
+  catch (e) { console.warn('[maint] job scope settings card:', e); }
+}
+
+/* ══ THE CARD THE SCOPES ARE KEYED ON ════════════════════════════════════
+   Three rows, a chip per job, dragged between them — "这些工作可以drag来
+   drag去，像worker namelist 一样". The gesture is the Team Board's, copied
+   rather than invented: `_jsDrag` is its `_dragId`, and the row wears
+   `.jb-cell-over` while something is held over it.
+
+   A DROP MOVES, which is what a board of rows means and what the office
+   described ("drag to main nursery only"). Every state is reachable because
+   BOTH is a row — see the note above `JOB_SCOPE_ROWS` for why two rows
+   could not hold what the office asked for.
+
+   IT IS A DRAFT AND ONE SAVE, the same shape as the three blocks above it:
+   the eight jobs are one decision about what the side bar is, and saving
+   half of it is not a thing anybody means to do. The draft is also what
+   makes the drag free — eight round trips, one per chip somebody tried,
+   is a board that fights back.
+
+   SAVE WRITES ALL EIGHT, defaults included. That is not seeding a default
+   into an unasked row: pressing Save IS being asked, and a board half
+   keyed and half falling through to the code is two rules for one screen. */
+let jobScopeDraft = null;        // null = not editing
+let _jsDrag = null;              // the job key being dragged
+let _jsSaving = false;
+
+const JOB_ROW_NAME = { pre: 'Pre Nursery', main: 'Main Nursery', both: 'Both' };
+
+function _jsScopes() {
+  const out = {};
+  PAYROLL_VIEW_KEYS.forEach(k => { out[k] = jobScopeOf(k); });
+  return out;
+}
+
+function _jsRowHtml(scope, scopes, editing) {
+  const jobs = PAYROLL_VIEW_KEYS.filter(k => scopes[k] === scope);
+  const circles = scopeNurseries(scope).map(nurseryShort).join(' · ');
+  const chips = jobs.length
+    ? jobs.map(k => `<span class="jb-chip"${editing ? ' draggable="true"' : ''}
+          ondragstart="jsDragStart(event,'${esc(k)}')" ondragend="jsDragEnd(event)"
+        >${esc(jobLabel(k))}</span>`).join('')
+    /* An empty row STANDS, because it is where a job is dragged. The Team
+       Board keeps a company section's column up for the same reason. */
+    : `<span class="jb-none">${editing ? 'Drag a job here' : 'No job'}</span>`;
+  return `<div class="jb-row">
+      <div class="jb-lab"><b>${esc(JOB_ROW_NAME[scope])}</b><span>${esc(circles)}</span></div>
+      <div class="jb-cell" ondragover="jsDragOver(event)" ondragleave="jsDragLeave(event)"
+           ondrop="jsDrop(event,'${esc(scope)}')">${chips}</div>
+    </div>`;
+}
+
+function renderJobScopeSetting() {
+  const box = document.getElementById('js-set-body');
+  if (!box) return;
+  const corner = document.getElementById('js-set-corner');
+  const editing = !!jobScopeDraft;
+  const scopes = editing ? jobScopeDraft : _jsScopes();
+  box.innerHTML = JOB_SCOPE_ROWS.map(s => _jsRowHtml(s, scopes, editing)).join('')
+    + (editing
+      ? `<div class="jb-note">The side bar lists every job whatever row it is
+           in; it is the nursery circles above a sheet that follow this. Saving
+           writes all three rows.</div>
+         <div class="lst-foot">
+           <button class="btn" onclick="jsCancel()">Cancel</button>
+           <button class="btn btn-primary" id="js-save-btn" onclick="jsSave()">Save</button>
+         </div>`
+      : '');
+  if (corner) {
+    corner.innerHTML = editing || !maySetting() ? ''
+      : `<button class="btn btn-sm cm-set-open" onclick="jsEdit()">&#9998; Edit</button>`;
+  }
+}
+
+function jsEdit() {
+  if (!maySetting()) return;
+  jobScopeDraft = _jsScopes();
+  renderJobScopeSetting();
+}
+function jsCancel() { jobScopeDraft = null; renderJobScopeSetting(); }
+
+function jsDragStart(ev, key) {
+  if (!jobScopeDraft) { ev.preventDefault(); return; }
+  _jsDrag = key;
+  ev.dataTransfer.effectAllowed = 'move';
+  // Firefox will not start a drag at all unless something is carried.
+  try { ev.dataTransfer.setData('text/plain', key); } catch (_) {}
+  ev.currentTarget.classList.add('jb-chip-drag');
+}
+function jsDragEnd(ev) {
+  if (ev && ev.currentTarget) ev.currentTarget.classList.remove('jb-chip-drag');
+  _jsDrag = null;
+  document.querySelectorAll('.jb-cell-over').forEach(el => el.classList.remove('jb-cell-over'));
+}
+function jsDragOver(ev) {
+  if (!_jsDrag) return;                     // something dragged in from outside
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('jb-cell-over');
+}
+function jsDragLeave(ev) { ev.currentTarget.classList.remove('jb-cell-over'); }
+function jsDrop(ev, scope) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('jb-cell-over');
+  const key = _jsDrag;
+  _jsDrag = null;
+  if (!key || !jobScopeDraft) return;
+  if (!JOB_SCOPE_ROWS.includes(scope)) return;
+  if (jobScopeDraft[key] === scope) return;        // nothing moved
+  jobScopeDraft[key] = scope;
+  renderJobScopeSetting();
+}
+
+/* ONE ROW PER JOB in nops_maint_config, which is the table that was made
+   "in a shape that will hold the next such setting without another
+   migration". So there is nothing to run in the database for this.
+
+   The permission is asked AGAIN here: a button drawn before somebody's
+   access changed is still sitting on the screen. */
+async function jsSave() {
+  if (!jobScopeDraft || _jsSaving) return;
+  if (!maySetting()) { alert('Setting is not open to you.'); return; }
+  if (!_supabase) { alert('Not signed in — nothing was saved.'); return; }
+  const draft = jobScopeDraft;
+  const btn = document.getElementById('js-save-btn');
+  _jsSaving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const now = new Date().toISOString();
+    const { error } = await _supabase.from('nops_maint_config').upsert(
+      PAYROLL_VIEW_KEYS.map(k => ({
+        key: JOB_SCOPE_PREFIX + k,
+        txt_value: draft[k],
+        note: 'Which nurseries this job is done in: pre, main or both. Keyed on '
+            + 'Work Maintenance, Settings, Where Each Job Is Done.',
+        updated_by: (typeof userEmail !== 'undefined' && userEmail) || null,
+        updated_at: now,
+      })), { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+    if (error) {
+      /* A database old enough to have no txt_value refuses the whole write.
+         Dropping the column and writing anyway would store eight rows
+         saying nothing, so it REFUSES and names the file. */
+      alert('Could not save — ' + (error.message || 'try again')
+        + (/txt_value/i.test(error.message || '')
+          ? '\n\nThis database has no txt_value on nops_maint_config yet. '
+            + 'Run shared/RUN_ME_nops_maint_config.sql in the Supabase SQL '
+            + 'Editor once, then save again.' : ''));
+      return;
+    }
+    jobScopes = Object.assign({}, draft);
+    jobScopeDraft = null;
+    renderJobScopeSetting();
+    /* The side bar does not re-order — every job is in it whatever row it
+       is in — but the circles over Worker Activity do move, so a sheet
+       left open behind this card is put right before anybody goes back. */
+    syncJobNurseries();
+  } finally {
+    _jsSaving = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
 }
 
 /* ══ WHAT MOVES CULLING MONITORING ══════════════════════════════════════

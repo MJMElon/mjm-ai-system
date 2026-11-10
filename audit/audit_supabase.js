@@ -106,7 +106,7 @@ function canOpenAuditPage(page) {
     const p = u.permissions || {};
     // audit_actions is authoritative; audit_pages mirrors it.
     const acts = p.audit_actions && p.audit_actions[page];
-    /* `view` MISSING is not `view` false. User Access lists Record a new
+    /* `view` MISSING is not `view` false. Module Assess Control lists Record a new
        audit and Edit and delete past audits for each page, so a saved row
        can easily read { record:true, edit:false } with no `view` key in
        it at all — and `!!acts.view` then denied the page to somebody the
@@ -130,14 +130,14 @@ function canOpenAuditPage(page) {
 /* ================================================================
    WHAT THEY MAY DO INSIDE A PAGE
 
-   User Access has listed "Record a new audit" and "Edit & delete past
+   Module Assess Control has listed "Record a new audit" and "Edit & delete past
    audits" against each of the four modules since that screen was
    written, and NOTHING HAS EVER READ THEM. Unticking Edit for an
    auditor saved cleanly, showed as set on both screens that offer it,
    and that auditor went on editing and deleting — which is the exact
    fault the `view` half of this file was written to correct, one level
-   down. Putting the same two ticks on a second screen (555 MJM Team ->
-   User Access -> Auditor Portal) is what made it worth closing.
+   down. Putting the same two ticks on a second screen (Nursery 555 Team ->
+   Module Assess Control -> Auditor Portal) is what made it worth closing.
 
    Three things about the shape, and the first is the whole reason this
    is not simply a check at the save:
@@ -243,7 +243,7 @@ function showNoAccessNotice() {
     'background:#b45309;color:#fff;font-size:12.5px;font-weight:600;text-align:center;' +
     "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer";
   b.textContent = '🔒 You no longer have access to that page. Ask an admin to switch it ' +
-                  'back on in User Access.';
+                  'back on in Module Assess Control.';
   b.onclick = () => b.remove();
   document.body.appendChild(b);
   setTimeout(() => b.remove(), 9000);
@@ -284,7 +284,7 @@ async function applyAuditAccess() {
 
   /* Anything drawn from the cached permissions — the admin-only Back End
      link, say — was decided before this refresh landed, so a role changed
-     in User Access would not show until the load after next. Tell the page
+     in Module Assess Control would not show until the load after next. Tell the page
      the fresh answer is in. */
   document.dispatchEvent(new Event('mjm-audit-access-ready'));
 }
@@ -357,6 +357,7 @@ async function sbFetch(path, options = {}) {
       'Authorization': `Bearer ${token || SUPA_KEY}`,
       'Content-Type': 'application/json',
       'Prefer': options.prefer || 'return=representation',
+      ...(options.range ? { 'Range-Unit': 'items', 'Range': options.range } : {}),
       ...(options.headers || {})
     }
   });
@@ -397,24 +398,140 @@ function _rememberNoCreatedAt(table) {
   catch (e) {}
 }
 
+/* ── AND THE SAME MEMORY FOR `id`, WHICH IS THE TIEBREAKER ──
+   A read is paged (see below), and PAGING A NON-UNIQUE ORDER IS UNSTABLE
+   BY CONSTRUCTION. `created_at.desc` alone leaves rows written in the same
+   millisecond in no defined order, and the two pages are two separate
+   requests: the database is free to answer the tie one way for page one
+   and the other way for page two. A row can then come back TWICE, which
+   the de-dupe catches, and -- the half that cannot be caught -- another
+   row is SKIPPED, silently, for ever.
+
+   That is not rare here. A phone pushes a plot batch by batch in ONE
+   insert and the audit board's section close writes a dozen rows in one
+   go, so a run of rows sharing `created_at` to the microsecond sitting
+   across the 1,000-row boundary is the ordinary case rather than the
+   unlucky one.
+
+   And a SKIPPED audit row is not a cosmetic loss. The auditor board asks
+   one question of that table -- `select=task_id`, is this task audited --
+   so a task id that falls through the boundary reads as NOT AUDITED, and
+   its plot comes back onto the To Do list over work somebody has already
+   done or an admin has already closed.
+
+   So the order carries a UNIQUE tiebreaker. `created_at.desc,id.desc`
+   leaves "newest first" exactly as it was and makes the sequence total,
+   which is the only thing that makes a page boundary mean anything. A
+   table with no `id` is remembered the same way one with no `created_at`
+   is, and pays for the failed attempt once. */
+const _NO_ID_KEY = 'mjm_sb_no_id';
+const _noId = (function () {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(_NO_ID_KEY) || '[]'));
+  } catch (e) { return new Set(); }
+})();
+function _rememberNoId(table) {
+  _noId.add(table);
+  try { localStorage.setItem(_NO_ID_KEY, JSON.stringify([..._noId])); }
+  catch (e) {}
+}
+/* The order clause this table can actually be read with. Empty where the
+   table has neither column, which is where this reader was. */
+function _orderFor(table) {
+  const parts = [];
+  if (!_noCreatedAt.has(table)) parts.push('created_at.desc');
+  if (!_noId.has(table))        parts.push('id.desc');
+  return parts.length ? '&order=' + parts.join(',') : '';
+}
+
+/* ── A READ OVER 1,000 ROWS CAME BACK CUT, AND SAID NOTHING ──
+   PostgREST answers at most `db-max-rows` rows and Supabase sets that to
+   1,000. There is no error and no flag on the body: the read simply ends,
+   and the caller gets a short list that looks exactly like a short month.
+
+   The Monthly Audit Report is where it showed. October held 1,783
+   maintenance audits and the report drew **1,000** of them — a figure the
+   office read as the month's work. 783 records, on no report, with
+   nothing anywhere saying so.
+
+   So every select PAGES. It asks for `PAGE` rows at a time through the
+   Range header and stops when a page comes back short, which is the only
+   signal there is that the end has been reached.
+
+   Three things in it:
+
+   - **A FULL LAST PAGE IS NOT THE END.** A table holding exactly 2,000
+     rows answers the second page full, so the loop has to ask a third
+     time and get nothing. Stopping on a full page would lose a round
+     number of rows, which is the same fault one page along.
+   - **THE ROWS ARE DE-DUPED ON `id`.** `order=created_at.desc` leaves
+     rows written in the same millisecond in no defined order — a phone
+     pushes a plot batch by batch in ONE insert — so the same row can
+     answer on two pages while another is skipped. The skip cannot be
+     repaired from here, but a row counted twice can, and it is the one
+     that would double a figure. A table with no `id` is left as it comes.
+   - **IT STOPS AT `MAX_PAGES` AND SAYS SO.** A loop with no ceiling on a
+     read that keeps answering full is a page that hangs for ever. 50
+     pages is 50,000 rows, far past anything this module asks for, and
+     reaching it is logged as the fault it would be. */
+const SB_PAGE = 1000;
+const SB_MAX_PAGES = 50;
+
+async function sbSelectAll(path) {
+  const out = [];
+  const seen = new Set();
+  let dropped = 0;
+  for (let page = 0; page < SB_MAX_PAGES; page++) {
+    const from = page * SB_PAGE;
+    const rows = await sbFetch(path, { range: from + '-' + (from + SB_PAGE - 1) });
+    if (!Array.isArray(rows)) return rows;
+    for (const r of rows) {
+      const id = r && r.id;
+      if (id === undefined || id === null) { out.push(r); continue; }
+      if (seen.has(id)) { dropped++; continue; }
+      seen.add(id);
+      out.push(r);
+    }
+    /* Short page is the end. A FULL one never is, even if it is the last
+       row in the table -- the next ask is what says so. */
+    if (rows.length < SB_PAGE) {
+      if (dropped) console.warn('[sb] ' + dropped + ' repeated row(s) dropped while paging', path);
+      return out;
+    }
+  }
+  console.warn('[sb] stopped at ' + (SB_MAX_PAGES * SB_PAGE) + ' rows -- the read is still answering full pages', path);
+  return out;
+}
+
 const sb = {
   async select(table, query = '') {
-    if (_noCreatedAt.has(table)) return sbFetch(`${table}?${query}`);
-    try {
-      return await sbFetch(`${table}?${query}&order=created_at.desc`);
-    } catch (e) {
-      /* Some audit tables were made by hand and have no created_at. PostgREST
-         rejects the whole read with a 400 on the order clause, which reaches
-         the screen as an empty list — indistinguishable from "no records".
-         Read it unordered instead, and remember so this table never pays
-         for the failed attempt again. */
-      if (/created_at/.test(e.message) && /42703|does not exist/i.test(e.message)) {
-        console.warn('[sb] no created_at on', table, '— reading unordered');
-        _rememberNoCreatedAt(table);
-        return await sbFetch(`${table}?${query}`);
+    /* A LADDER, not two ifs. Some audit tables were made by hand and have
+       no created_at; a view may have no id. PostgREST rejects the WHOLE
+       read with a 400 on the order clause, which reaches the screen as an
+       empty list — indistinguishable from "no records" — so each column
+       that is not there is dropped, remembered, and asked for again. Two
+       columns is at most two retries, and the third ask is the unordered
+       one, which cannot fail on an order clause it does not carry. */
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await sbSelectAll(`${table}?${query}${_orderFor(table)}`);
+      } catch (e) {
+        const msg = String((e && e.message) || '');
+        if (!/42703|does not exist/i.test(msg)) throw e;
+        if (/created_at/.test(msg) && !_noCreatedAt.has(table)) {
+          console.warn('[sb] no created_at on', table, '— dropping it from the order');
+          _rememberNoCreatedAt(table);
+          continue;
+        }
+        if (/\bid\b/.test(msg) && !_noId.has(table)) {
+          console.warn('[sb] no id on', table, '— dropping it from the order');
+          _rememberNoId(table);
+          continue;
+        }
+        throw e;
       }
-      throw e;
     }
+    return await sbSelectAll(`${table}?${query}`);
   },
   /* Can this login save at all? Asked at sign in, before an auditor
      spends a day filling in forms the database is going to refuse.
@@ -448,7 +565,9 @@ const sb = {
   async delete(table, id) {
     return sbFetch(`${table}?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
   },
-  async uploadPhoto(bucket, filename, base64dataUrl) {
+  /* `exact` means the CALLER owns the path and this function adds nothing
+     to it. See the note on the path below for why that matters. */
+  async uploadPhoto(bucket, filename, base64dataUrl, exact) {
     if (!base64dataUrl || !base64dataUrl.startsWith('data:')) return base64dataUrl;
     const [meta, data] = base64dataUrl.split(',');
     const mime = meta.match(/:(.*?);/)[1];
@@ -457,7 +576,23 @@ const sb = {
     for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
     const blob = new Blob([arr], { type: mime });
     const ext  = mime.split('/')[1] || 'jpg';
-    const path = `${filename}_${Date.now()}.${ext}`;
+    /* THE CLOCK IS THE FALLBACK AND NEVER THE RULE.
+
+       A path ending in Date.now() is a NEW FILE on every attempt, and
+       that is the whole of how one press of Save left the office seven
+       pictures of one plot -- the name could not help being different,
+       so nothing about sending the same photo twice could ever be
+       recognised as sending the same photo twice.
+
+       A caller that knows which PRESS the picture belongs to passes
+       `exact` and owns the path outright. The x-upsert below then makes
+       a second upload of that press write the SAME object, so no retry
+       anywhere -- the sweep, a timeout that actually landed, a race
+       nobody has thought of yet -- can make a second file.
+
+       A caller with no press id keeps the clock, which is what it has
+       always relied on to avoid writing over somebody else. */
+    const path = exact ? `${filename}.${ext}` : `${filename}_${Date.now()}.${ext}`;
     const token = await accessToken();   // storage policies are per-role too
     const res = await fetch(`${SUPA_URL}/storage/v1/object/${bucket}/${path}`, {
       method: 'POST',

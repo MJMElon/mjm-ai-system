@@ -3,7 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>User Access — Nursery Seedling Stock Management</title>
+<!-- The page itself must not go stale. Every line of its own code is
+     inline, so the PAGE is the deploy, and this page has had three
+     changes in one sitting (the narrow-RPC save path, the Module Assess
+     Control rename, the Approve fold) with no lever to make any of them
+     arrive. index.html has carried these three since it was written;
+     every page that is being changed needs them. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Module Assess Control — Nursery Seedling Stock Management</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -41,6 +50,12 @@
 
   .act-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px dashed #f1f5f9; cursor:pointer; }
   .act-row:last-child { border-bottom:none; }
+  .act-row.act-more { display:none; }
+  .page-card-acts.acts-expanded .act-row.act-more { display:flex; }
+  .acts-toggle { display:block; width:100%; text-align:center; padding:7px 0; margin:-2px 0 2px;
+    font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+    color:#64748b; background:none; border:none; border-top:1px dashed #f1f5f9; cursor:pointer; }
+  .acts-toggle:hover { color:#1e293b; }
   .act-chk { width:19px; height:19px; margin-top:1px; accent-color:#10b981; cursor:pointer; flex-shrink:0; }
 
   .tog { position:relative; display:inline-block; width:48px; height:26px; flex-shrink:0; }
@@ -62,7 +77,7 @@
 
 <div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
   <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
-  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Module User Access</span>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Module Assess Control</span>
   <div class="justify-self-end flex items-center gap-2">
     <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
   </div>
@@ -74,7 +89,7 @@
   <div class="card p-10 text-center">
     <div class="text-4xl mb-3">🔒</div>
     <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
-    <p class="text-xs text-slate-500 mt-2">Only users with <strong>Manage Users</strong> permission can open this page.</p>
+    <p class="text-xs text-slate-500 mt-2">Only an <strong>Admin</strong> of this module, or someone with <strong>Manage Users</strong> permission, can open this page.</p>
     <a href="operation_dashboard.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Main Page</a>
   </div>
 </div>
@@ -84,7 +99,7 @@
   <div class="card p-6 space-y-4">
     <div class="flex items-center gap-3">
       <span class="text-2xl">🌱</span>
-      <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">Nursery Seedling Stock Management — User Access</h1>
+      <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">Nursery Seedling Stock Management — Module Assess Control</h1>
     </div>
     <p class="text-[13px] text-slate-600 leading-relaxed">
       This page manages users who were <strong>opened for this module</strong> on the main portal's User Access.
@@ -153,7 +168,7 @@
         <div>
           <div class="font-black text-slate-800 text-sm">Able to change user roles</div>
           <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            Lets this user open the <strong>User Access</strong> pages and set every other user's
+            Lets this user open the <strong>Module Assess Control</strong> pages and set every other user's
             access — pages, functions, and roles. Give this only to admins you trust to manage access for you.
           </p>
         </div>
@@ -257,6 +272,13 @@ let allUsers   = [];   // system users opened for this module
 let totalSystem = 0;   // ALL system users (incl. ones not opened here)
 let editingUid = null;
 let editingPerms = null; // FULL permissions object of the row being edited
+/* Set once at bootstrap, off the VIEWER's own permissions. true = Manage
+   Users: the fuller save, every field on this drawer, as before. false =
+   Admin of operation only: the narrower RPC save -- operation_pages/
+   operation_actions and (because the database's own RLS on
+   operation_batch_verifications reads it directly) can_verify_operation,
+   nothing else. See shared/RUN_ME_super_admin_and_module_access.sql. */
+let canFullSave = false;
 
 function showToast(msg, kind) {
   const t = document.getElementById('toast');
@@ -378,9 +400,22 @@ function render() {
 }
 
 // ── Drawer ─────────────────────────────────────────────────────
+/* A page with many ticks reads as a wall of checkboxes to scroll past to
+   reach the next card, so past COLLAPSE_AFTER the rest fold under a
+   "Show N more" toggle -- the same treatment shared_module_access.js
+   gives every other module's own screen, kept in step here because this
+   page is hand-written rather than built on that engine. Folded is by
+   POSITION alone, whatever the action currently reads: a fold that only
+   hid the ones already off would barely shorten the common, unconfigured
+   row at all (most actions default to allowed), and the one thing a
+   reader can always rely on is that the same three rows are the ones
+   showing. */
+const COLLAPSE_AFTER = 3;
 function pageCardHtml(d, eff) {
-  const acts = d.actions.map(a => `
-      <label class="act-row" for="d-act-${d.key}-${a.key}">
+  const list = d.actions;
+  const folded = list.map((a, i) => i >= COLLAPSE_AFTER);
+  const acts = list.map((a, i) => `
+      <label class="act-row${folded[i] ? ' act-more' : ''}" for="d-act-${d.key}-${a.key}">
         <input type="checkbox" class="act-chk" id="d-act-${d.key}-${a.key}"
                data-page="${d.key}" data-action="${a.key}" ${eff[a.key] ? 'checked' : ''}>
         <span>
@@ -388,6 +423,10 @@ function pageCardHtml(d, eff) {
           <span class="block text-[11px] text-slate-500">${a.desc}</span>
         </span>
       </label>`).join('');
+  const hiddenCount = folded.filter(Boolean).length;
+  const toggle = hiddenCount
+    ? `<button type="button" class="acts-toggle" data-toggle-acts="${d.key}">Show ${hiddenCount} more…</button>`
+    : '';
   return `
     <div class="page-card ${eff.view ? '' : 'page-off'}" id="d-card-${d.key}">
       <div class="page-card-head">
@@ -403,7 +442,7 @@ function pageCardHtml(d, eff) {
           </span>
         </label>
       </div>
-      ${acts ? `<div class="page-card-acts">${acts}</div>`
+      ${acts ? `<div class="page-card-acts" id="d-acts-${d.key}">${acts}</div>${toggle}`
              : `<div class="page-card-acts text-[11px] text-slate-400 py-2">View-only page — no extra functions.</div>`}
     </div>`;
 }
@@ -473,29 +512,69 @@ async function saveDrawer() {
   const p = allUsers.find(x => x.id === editingUid);
   if (!p) return;
 
-  // Mutate ONLY this module's fields on the full permissions object so
-  // nothing managed elsewhere (module levels…) is touched.
-  const next = JSON.parse(JSON.stringify(editingPerms));
-  next.modules = next.modules || {};
-  next.operation_pages = next.operation_pages || {};
-  next.operation_actions = next.operation_actions || {};
+  // This module's own page/action ticks, built either way.
+  const actsPatch  = JSON.parse(JSON.stringify(editingPerms.operation_actions || {}));
+  const pagesPatch = JSON.parse(JSON.stringify(editingPerms.operation_pages   || {}));
   PAGE_DEFS.forEach(d => {
     const view = document.getElementById('d-view-' + d.key).checked;
     const acts = { view };
     d.actions.forEach(a => {
       acts[a.key] = view && document.getElementById(`d-act-${d.key}-${a.key}`).checked;
     });
-    next.operation_actions[d.key] = acts;
-    // Mirror the legacy fields so older cached pages and the other
-    // portals (which only check open/closed) keep agreeing with this.
-    if (d.store === 'modules') {
-      next.modules[d.key] = !view ? 'none'
-        : (d.key === 'audit_trail' && acts.clear_logs) ? 'admin' : 'normal';
-    } else {
-      next.operation_pages[d.key] = view ? 'normal' : 'none';
-    }
+    actsPatch[d.key] = acts;
+    if (d.store !== 'modules') pagesPatch[d.key] = view ? 'normal' : 'none';
   });
-  next.can_verify_operation = !!(next.operation_actions.batch && next.operation_actions.batch.verify);
+  const canVerify = !!(actsPatch.batch && actsPatch.batch.verify);
+
+  if (!canFullSave) {
+    /* Admin of operation, not Manage Users. operation_pages/
+       operation_actions go through the narrow RPC; can_verify_operation
+       through its own, because the database's own RLS on
+       operation_batch_verifications reads that column directly (see
+       shared/RUN_ME_super_admin_and_module_access.sql). The legacy
+       modules.reports/modules.audit_trail mirror is deliberately NOT
+       written here: nothing reads it once operation_actions exists
+       (canOpenOperationPage in shared_access.js prefers that, and
+       operation_dashboard.html / operation_reports.html /
+       operation_audit_trail.html were fixed to ask it the same way), and
+       this RPC has no business touching an arbitrary top-level
+       modules.* key regardless. manage_users and super_admin cannot be
+       reached from this drawer by this viewer at all (the toggle below
+       stays disabled for them), so there is nothing else to send. */
+    const saveBtn = document.getElementById('d-save');
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+    let error = (await _supabase.rpc('mjm_set_module_access', {
+      target_id: editingUid, p_module: 'operation', p_pages: pagesPatch, p_actions: actsPatch
+    })).error;
+    if (!error) {
+      error = (await _supabase.rpc('mjm_set_operation_verify', {
+        target_id: editingUid, can_verify: canVerify
+      })).error;
+    }
+    saveBtn.disabled = false; saveBtn.textContent = 'Save Changes';
+    if (error) { console.error(error); showToast('Save failed: ' + error.message, 'err'); return; }
+    p.permissions = { ...p.permissions, operation_pages: pagesPatch, operation_actions: actsPatch, can_verify_operation: canVerify };
+    showToast('Saved. Changes apply on the user’s next refresh.');
+    render();
+    closeDrawer();
+    return;
+  }
+
+  // Manage Users: the fuller save, unchanged from before a module Admin
+  // could reach this page.
+  const next = JSON.parse(JSON.stringify(editingPerms));
+  next.modules = next.modules || {};
+  next.operation_pages = pagesPatch;
+  next.operation_actions = actsPatch;
+  // Mirror the legacy fields so older cached pages and the other
+  // portals (which only check open/closed) keep agreeing with this.
+  PAGE_DEFS.forEach(d => {
+    if (d.store !== 'modules') return;
+    const acts = actsPatch[d.key];
+    next.modules[d.key] = !acts.view ? 'none'
+      : (d.key === 'audit_trail' && acts.clear_logs) ? 'admin' : 'normal';
+  });
+  next.can_verify_operation = canVerify;
 
   const manageEl = document.getElementById('d-manage-users');
   if (editingUid === (MJMAccess.user() && MJMAccess.user().id)
@@ -537,6 +616,17 @@ document.addEventListener('click', (e) => {
   if (editBtn) { openDrawer(editBtn.dataset.uid); return; }
   const preset = e.target.closest('[data-preset]');
   if (preset) { applyPreset(preset.dataset.preset); return; }
+  const toggle = e.target.closest('[data-toggle-acts]');
+  if (toggle) {
+    /* ONE-WAY, same reason the shared engine's version is: re-folding by
+       the class baked in at render time would hide a row somebody had
+       just ticked, which reads as the tick being lost even though Save
+       would still pick it up. */
+    const box = document.getElementById('d-acts-' + toggle.dataset.toggleActs);
+    if (box) box.classList.add('acts-expanded');
+    toggle.remove();
+    return;
+  }
 });
 document.addEventListener('change', (e) => {
   if (e.target.matches('input[data-view-page]')) syncPageCard(e.target.dataset.viewPage);
@@ -557,9 +647,11 @@ async function bootstrap() {
 
   await MJMAccess.load(_supabase);
   if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
-  // Saving other users' permissions requires the Manage Users flag (enforced
-  // by the database RLS policy), so the page is gated on the same flag.
-  if (!MJMAccess.canManageUsers()) {
+  // Admin of operation may open this module's own Module Assess Control
+  // too, not only Manage Users. canFullSave decides WHICH save path
+  // saveDrawer() takes -- see the note on that variable above.
+  canFullSave = MJMAccess.canManageUsers();
+  if (!MJMAccess.isAdminOf('operation') && !canFullSave) {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('forbidden').classList.remove('hidden');
     return;

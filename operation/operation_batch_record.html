@@ -220,13 +220,13 @@
                     window.location.href = 'operation_dashboard.html';
                     return false;
                 }
-                // Page-level lock, set in the module's User Access.
+                // Page-level lock, set in the module's Module Assess Control.
                 if (!MJMAccess.canOpenOperationPage('batch')) {
                     alert('You do not have access to Batch Records.');
                     window.location.href = 'operation_dashboard.html';
                     return false;
                 }
-                // Function-level ticks from the module's User Access page.
+                // Function-level ticks from the module's Module Assess Control page.
                 // `isAdmin` gates the per-row delete button below.
                 isAdmin = MJMAccess.canDoOperation('batch', 'delete');
                 /* THE TO CHECK LIST IS THE CHECKER'S LIST.

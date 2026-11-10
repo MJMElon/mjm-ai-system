@@ -461,7 +461,7 @@ function maintMonthLabel(m) { return monthLabel(m); }
 
 /* ════════════ TABS ════════════ */
 /* Can this user open a tab or use a function on it? Set on this module's
-   own User Access page; unset means the module level decides, as before. */
+   own Module Assess Control page; unset means the module level decides, as before. */
 function may(page, action) {
   // Fail OPEN if the helper is an older cached copy without canDo: this
   // module has always been governed by the module level, and a stale script
@@ -721,7 +721,42 @@ function preNurseryClaim(recs, rateOf) {
      that is entirely HELD still is, because a claim short of work reads
      exactly like a quiet month. */
   const shown = jobs.filter(j => j.claim.people.length || j.claim.held.length);
-  return { jobs, shown, people: list,
+  /* ── THE SUMMARY AT THE TOP IS PER BATCH ─────────────────────────────
+     *"Payroll那里的seed planting我要像transplanting那样，上边有summary 有
+     batch, amount, total workdone"*. Transplanting opens with one card per
+     JOB -- its label, its capacity, and `Total Workdone (RM)`. This sheet's
+     COLUMNS are the batches, so the same ribbon asked of this sheet is one
+     card per BATCH, which is the unit the office named.
+
+     IT IS COLLECTED, NEVER RECOMPUTED. Every figure here comes off
+     `j.claim.rows`, which seedPlantingClaim already worked out for the
+     column feet -- so a card cannot disagree with the column under it. Two
+     walks of the same records is the fault this file has a heading about.
+
+     AND IT CARRIES THE JOB SPLIT, because the two jobs are priced at
+     different rates: 5,000 biji and RM 117.08 cannot be checked against
+     each other by anybody who does not know how the 5,000 divides. `byJob`
+     is what the card's muted line prints, and it is drawn only where both
+     jobs have something on that batch. */
+  const bat = {};
+  const byBatch = [];
+  jobs.forEach(j => j.claim.rows.forEach(r => {
+    const b = bat[r.batch] || (bat[r.batch] = { batch: r.batch, date: r.date || '',
+      qty: 0, amount: 0, byJob: {} });
+    if (!bat[r.batch]._in) { bat[r.batch]._in = true; byBatch.push(b); }
+    b.byJob[j.job] = { label: j.label, qty: r.qty, amount: r.amount, rate: j.rate };
+    b.qty += r.qty;
+    b.amount = Math.round((b.amount + r.amount) * 100) / 100;
+    // The planted day is the batch's own and both jobs report it; the
+    // earliest stands, so a blank on one of them cannot wipe it.
+    if (!b.date || (r.date && String(r.date) < String(b.date))) b.date = r.date || b.date;
+  }));
+  byBatch.forEach(b => { delete b._in; });
+  /* The column order of the sheet itself -- planted day, then the batch --
+     so a reader going from a card to its column travels in a straight line. */
+  byBatch.sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))
+    || String(a.batch).localeCompare(String(b.batch), undefined, { numeric: true }));
+  return { jobs, shown, people: list, byBatch,
            held: jobs.reduce((a, j) => a.concat(j.claim.held.map(h =>
              Object.assign({ _job: j.job, _label: j.label }, h))), []),
            qty: jobs.reduce((a, j) => a + j.claim.qty, 0),
@@ -739,6 +774,52 @@ async function loadSeedPlanting(month) {
   if (activeSub() === 'seedplant') renderSeedPlanting(true);
 }
 
+/* THE SUMMARY RIBBON, the same cards Transplanting opens with.
+
+   `.pt-glance` / `.pt-card` are that sheet's own classes, reused rather than
+   copied: one office reads both claims, and a summary that answers the same
+   question in a different shape is a shape somebody has to learn twice.
+   What differs is the UNIT -- Transplanting's cards are its four jobs, and
+   this sheet's columns are batches, so these are batches.
+
+   Three things in it:
+
+     · THE FIGURES ARE `preNurseryClaim`'s, handed in rather than
+       re-derived. A card that disagreed with the column foot under it would
+       be the worse of the two faults, because the card is what somebody
+       reads first.
+     · A BATCH WORKED ON BOTH JOBS SAYS SO, with each job's biji and its
+       money. The rates differ, so the card's own total cannot be checked
+       without it.
+     · NOTHING CHECKED DRAWS NOTHING, rather than a row of empty cards.
+       The table underneath already says why the month is empty, and a
+       ribbon of dashes over it is the same sentence in a worse place. */
+function renderPreNurseryGlance(c) {
+  const box = document.getElementById('seedplant-glance');
+  if (!box) return;
+  const list = (c && c.byBatch) || [];
+  if (!list.length) { box.innerHTML = ''; return; }
+  const fig = v => Number(v || 0).toLocaleString('en-MY');
+  const dayTxt = (d) => {
+    if (!d) return '';
+    const t = new Date(d);
+    return isNaN(t) ? String(d) : t.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+  };
+  box.innerHTML = list.map(b => {
+    const jobs = Object.keys(b.byJob);
+    const split = jobs.length > 1
+      ? `<div class="pt-sub">${jobs.map(k => `${esc(b.byJob[k].label)}: ${fig(b.byJob[k].qty)} · ${money(b.byJob[k].amount)}`).join('<br>')}</div>`
+      : '';
+    const d = dayTxt(b.date);
+    return `<div class="pt-card">
+        <div class="pt-label">Batch ${esc(b.batch)}${d ? ` · ${esc(d)}` : ''}</div>
+        <div class="pt-val">${fig(b.qty)}</div>
+        <div class="pt-wd">Total Workdone (RM) : ${money(b.amount)}</div>
+        ${split}
+      </div>`;
+  }).join('');
+}
+
 function renderSeedPlanting(fromLoad) {
   const tbl = $('seedplant-table'), note = $('seedplant-note'), sub = $('seedplant-sub');
   if (!tbl) return;
@@ -751,15 +832,21 @@ function renderSeedPlanting(fromLoad) {
   if (_seedPlant.month !== month || _seedPlant.rows === null) {
     tbl.innerHTML = '<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-light);">Loading…</td></tr></tbody>';
     if (note) note.textContent = '';
+    /* THE RIBBON GOES WITH IT. Left standing it is last month's figures
+       over this month's Loading, which is the one kind of wrong a summary
+       must not be. */
+    renderPreNurseryGlance(null);
     return;
   }
   if (_seedPlant.err) {
     tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:#b91c1c;">Could not read the Seed Planting records: ${esc(_seedPlant.err)}</td></tr></tbody>`;
     if (note) note.textContent = 'If this says the table does not exist, run shared/RUN_ME_seed_planting_workers.sql in Supabase.';
+    renderPreNurseryGlance(null);
     return;
   }
   const c = preNurseryClaim(_seedPlant.rows);
   const fig = v => v ? Number(v).toLocaleString('en-MY') : '\u2014';
+  renderPreNurseryGlance(c);
   /* A WORKER A ROW, A BATCH A COLUMN \u2014 the office asked for it back.
      The planted day rides UNDER the batch in its own HEADING, which is the
      one thing the turn is worth keeping: the columns are in date order, so a
@@ -956,7 +1043,7 @@ let rateGroup   = 'MN';
    settled before the form opens — same as a worker's section. */
 function openRate(id, group) {
   if (!mayDo('rates', 'manage',
-      'You do not have permission to set piece rates. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to set piece rates. Ask an admin to grant it in Module Assess Control.')) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
   const r = id ? rates.find(x => x.id === id) : null;
   editRateId = r ? r.id : null;
@@ -1026,7 +1113,7 @@ async function removeRate(id) {
   const r = rates.find(x => x.id === id);
   if (!r) return;
   if (!mayDo('rates', 'remove',
-      'You do not have permission to remove a job. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to remove a job. Ask an admin to grant it in Module Assess Control.')) return;
   // Entries keep their own copy of the rate, so removing the job here cannot
   // change a month that has already been keyed.
   if (!confirm(`Remove "${r.job_desc}"?\n\nWork already keyed against it keeps its own rate and stays correct.`)) return;
@@ -1052,7 +1139,7 @@ async function removeRate(id) {
    shared/RUN_ME_earn_adjustments.sql in this repository. */
 let earnAdj = [];            // this month's overrides, both sheets
 
-/* Its own tick on User Access, per sheet — 'maint' or 'transpl'. Reading what
+/* Its own tick on Module Assess Control, per sheet — 'maint' or 'transpl'. Reading what
    a month pays and changing it are different jobs, so holding the sheet is
    not holding this.
 
@@ -1167,7 +1254,7 @@ function calibrateStep(sheet, page, section, name, code, worked, dir) {
      again at the press — the two must not be able to disagree. */
   if (!mayAdjust(page)) {
     alert('You do not have permission to change what a job earned.\n\n'
-        + 'Ask an admin to grant Adjust Pay in User Access.');
+        + 'Ask an admin to grant Adjust Pay in Module Assess Control.');
     return;
   }
   if (!lockAllows(page)) return;
@@ -1345,7 +1432,7 @@ function openAdjust(sheet, page, section, name, code, jobLabel, worked) {
      the click — the two must not be able to disagree. */
   if (!mayAdjust(page)) {
     alert('You do not have permission to change what a job earned.\n\n'
-        + 'Ask an admin to grant Adjust Pay in User Access.');
+        + 'Ask an admin to grant Adjust Pay in Module Assess Control.');
     return;
   }
   /* An adjustment is money on a sheet, so a closed month refuses it the same
@@ -3011,13 +3098,13 @@ const fmtDay = d => {
 
 let editEntryId = null, entryCategory = null;
 function openEntry(category, id) {
-  /* Which User Access page decides whether this may be keyed. One per sheet;
+  /* Which Module Assess Control page decides whether this may be keyed. One per sheet;
      a sheet answering to another sheet's tick would grant access nobody
      granted. */
   const page = { transplanting: 'transpl', seedlings: 'seedling', other: 'other' }[category]
             || 'seedling';
   if (!mayDo(page, 'manage',
-      'You do not have permission to key in this work. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to key in this work. Ask an admin to grant it in Module Assess Control.')) return;
   /* A closed month refuses here as well as hiding its buttons: the buttons are
      what somebody sees, this is what actually stops the write. */
   if (!lockAllows(page)) return;
@@ -3156,6 +3243,22 @@ const MAINT_TYPES = [
    pass as the other four; this is a second screen onto it, not a second
    source for it. */
 function loadingJob() { return MAINT_TYPES.find(t => t.code === 'loading_seedlings'); }
+
+/* The jobs the Work Maintenance SHEET draws — its glance cards, its table,
+   its notes and its PDF. Loading Seedlings came off that screen at the
+   office's own ask ("Remove the loading seedlings column in work
+   maintenance but make it to the tab named Loading Seedlings") and shows on
+   its own tab alone — renderLoading() / downloadLoadingPDF(), which were
+   already a complete second screen onto the same sheet. NOTHING ABOUT THE
+   MONEY MOVED: maintTotals() still prices loading_seedlings, the Monthly
+   Payroll still pays it inside its Maintenance figure (its earnedAfterAdj
+   deliberately iterates MAINT_TYPES), and buildMaintSnapshot() still
+   freezes all five under the ONE 'maint' verification — verifying Work
+   Maintenance closes Loading Seedlings with it, exactly as before. This
+   list is about what the Work Maintenance screen SHOWS, never about what
+   the sheet pays, so its Subtotal column adds up the four columns beside
+   it rather than quoting a five-job figure its own rows cannot explain. */
+const MAINT_SHEET_TYPES = MAINT_TYPES.filter(t => t.code !== 'loading_seedlings');
 
 /* ── A Work Maintenance row on the Piece Rate screen, actually linked ──────
    mjmnpayroll_piece_rates (this screen) carries no field naming which of
@@ -3517,7 +3620,7 @@ function maintWhyEmpty(code) {
 function renderMaintGlance(view) {
   const box = document.getElementById('maint-glance');
   if (!box) return;
-  box.innerHTML = MAINT_TYPES.map(t => {
+  box.innerHTML = MAINT_SHEET_TYPES.map(t => {
     const capAll = view.capAll(t.code);
     const rate = view.rateOf(t.code);
     const wd = rate == null ? null
@@ -3725,12 +3828,12 @@ function renderMaint() {
       <tr>
         <th rowspan="4" style="width:44px;">No.</th>
         <th rowspan="4" class="l" style="width:165px;">Worker</th>
-        ${MAINT_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
+        ${MAINT_SHEET_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
         <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
-      <tr>${MAINT_TYPES.map(t =>
+      <tr>${MAINT_SHEET_TYPES.map(t =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
-      <tr>${MAINT_TYPES.map(t =>
+      <tr>${MAINT_SHEET_TYPES.map(t =>
         workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code), { compact: true })).join('')}</tr>
       <!-- Worker is now bounded (above) so the job columns sit beside it
            instead of at the far end of whatever space Worker didn't use, and
@@ -3739,33 +3842,42 @@ function renderMaint() {
            on both sides, which is what reads as a gap before the NEXT group
            starts. The first group needs none: there is nothing to its left
            but Worker, already bounded. -->
-      <tr>${MAINT_TYPES.map((t, i) =>
+      <tr>${MAINT_SHEET_TYPES.map((t, i) =>
         `<th style="width:${i ? 112 : 90}px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
+
+  /* The row's Subtotal is the sum of the four columns BESIDE it, not the
+     view's own earned(), which still carries Loading Seedlings — a subtotal
+     the row's own cells cannot add up to reads as a mistake, and the
+     loading money has its own Grand Total on its own tab. Computed from
+     payOf so it works identically off a live view and a frozen snapshot
+     (an old snapshot's earned is the five-job figure and is left alone). */
+  const subOf = w => MAINT_SHEET_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
+  const sheetGrand = wk.reduce((s, w) => s + subOf(w), 0);
 
   const body = wk.map((w, i) => `
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
-        calibrationLine(capCalibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+        calibrationLine(capCalibrationOf('maint', n, w, MAINT_SHEET_TYPES.map(t => t.code),
                                          (c) => capWorked(w, c)), 'cap')}${
-        calibrationLine(calibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+        calibrationLine(calibrationOf('maint', n, w, MAINT_SHEET_TYPES.map(t => t.code),
                                       (c) => rmOf(w, c)))}</td>
-      ${MAINT_TYPES.map(t => {
+      ${MAINT_SHEET_TYPES.map(t => {
         const c = capOf(w, t.code);
         return capCell('maint', 'maint', n, w, t.code, capWorked(w, t.code))
              + earnedCell('maint', 'maint', n, w, t.code, t.label,
                           c ? rmOf(w, t.code) : 0);
       }).join('')}
-      <td class="money">${money(earned(w))}</td>
+      <td class="money">${money(subOf(w))}</td>
     </tr>`).join('');
 
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
-      ${MAINT_TYPES.map(t =>
+      ${MAINT_SHEET_TYPES.map(t =>
         `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
-      <td>${money(grand)}</td>
+      <td>${money(sheetGrand)}</td>
     </tr></tfoot>`;
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
@@ -3791,7 +3903,7 @@ function renderMaint() {
      has the same thing wrong with all four columns, and saying it four times
      over reads as four separate problems. */
   const whyGroups = new Map();
-  MAINT_TYPES.forEach(t => {
+  MAINT_SHEET_TYPES.forEach(t => {
     const w = maintWhyEmpty(t.code);
     if (!w) return;
     if (!whyGroups.has(w)) whyGroups.set(w, []);
@@ -3804,7 +3916,7 @@ function renderMaint() {
      this file exists to avoid. Named per job with what it comes to, so the
      office can see how much is waiting on a tick rather than discovering it
      at the end of the month. */
-  const held = MAINT_TYPES
+  const held = MAINT_SHEET_TYPES
     .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
     .filter(x => x.d.unchecked);
   if (held.length) {
@@ -3820,7 +3932,7 @@ function renderMaint() {
      and the cure is to open Work Maintenance for its nursery -- stampRecordMonths
      runs before the first draw and gives it a month. Rows of ANOTHER month are
      not mentioned: they are on their own claim and nothing is wrong with them. */
-  const unstamped = MAINT_TYPES
+  const unstamped = MAINT_SHEET_TYPES
     .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
     .filter(x => x.d.noMonth);
   if (unstamped.length) {
@@ -3841,7 +3953,7 @@ function renderMaint() {
   /* A name ticked on the Worker Record with no row here loses that worker's
      share of the plot, and the row still looks complete on both screens. */
   const stray = [...new Set(
-    MAINT_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])])
+    MAINT_SHEET_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])])
       .concat(maint.fieldUnmatched || []))];
   if (stray.length) {
     notes.push(`Credited for work but with no row here, so their share is not priced: `
@@ -3851,7 +3963,7 @@ function renderMaint() {
     notes.push('The batch report has not loaded, so any work record with no quantity keyed on it '
              + 'reads as nothing. Reload the page.');
   }
-  const missing = MAINT_TYPES.filter(t => rateOf(t.code) == null).map(t => t.label);
+  const missing = MAINT_SHEET_TYPES.filter(t => rateOf(t.code) == null).map(t => t.label);
   if (missing.length) {
     notes.push(`No piece rate set for ${missing.join(', ')} — set it under `
              + 'Nursery Operation → Work Maintenance → Setting → Piece Rate.');
@@ -3986,6 +4098,16 @@ function renderLoading() {
   const why = maintWhyEmpty(t.code);
   if (why) notes.push(why);
   const d = (maint.why || {})[t.code] || {};
+  /* A DO with no delivery date answers to no month, so it is on no claim at
+     all — the one shape of missing work this file always names. It used to
+     be named under the Work Maintenance table (with a cure that was wrong
+     for a DO); this tab is where the column lives now, so the note lives
+     here, with the right cure. */
+  if (d.noMonth) {
+    notes.push(`${d.noMonth} delivery order${d.noMonth === 1 ? '' : 's'} carr${d.noMonth === 1 ? 'ies' : 'y'} `
+      + 'no delivery date, so the loading on '
+      + `${d.noMonth === 1 ? 'it' : 'them'} is on no claim at all. Key the date on the DO and it prices here.`);
+  }
   if (d.stray && d.stray.size) {
     notes.push(`Credited for work but with no row here, so their share is not priced: `
       + `${[...d.stray].join(', ')}. File them under this nursery in Worker System as a general worker.`);
@@ -4158,14 +4280,14 @@ function renderVerifyBar(sheet, targetId) {
                + `<span class="vb-spacer"></span>`
                + (mayVerify
                    ? `<button class="btn btn-primary btn-sm" onclick="verifySheet('${sheet}')">✔ Verify &amp; lock</button>`
-                   : `<span>Verifying needs the Verify tick on this sheet in User Access.</span>`);
+                   : `<span>Verifying needs the Verify tick on this sheet in Module Assess Control.</span>`);
 }
 
 /* Verifying is the act that closes a sheet, so it asks plainly first: it
    cannot be taken back from this screen, only by re-opening the month. */
 async function verifySheet(sheet) {
   if (!mayDo(sheet, 'verify',
-      'You do not have permission to verify this sheet. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to verify this sheet. Ask an admin to grant it in Module Assess Control.')) return;
   if (!MJMPayrollLock.ready()) {
     alert('Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.');
     return;
@@ -4199,7 +4321,7 @@ async function verifySheet(sheet) {
    to say a sheet is right is not the same as being trusted to unsay it. */
 async function unverifySheet(sheet) {
   if (!mayDo(sheet, 'unverify',
-      'You do not have permission to unlock this sheet. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to unlock this sheet. Ask an admin to grant it in Module Assess Control.')) return;
   if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
     alert('Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.');
     return;
@@ -4282,7 +4404,7 @@ function renderLockCalendar() {
     : mayLock
       ? 'Re-opening a month also takes back every verification on it, so the sheets go back to '
       + 'being editable and whoever checked them has to check them again.'
-      : 'You can see this calendar, but changing it needs Lock Controls in User Access.';
+      : 'You can see this calendar, but changing it needs Lock Controls in Module Assess Control.';
 }
 
 /* Forcing one month either way. Re-opening takes its verifications with it:
@@ -4290,7 +4412,7 @@ function renderLockCalendar() {
    showing somebody's name against it as checked, which is the worst of both. */
 async function toggleLockMonth(month) {
   if (!mayDo('locks', 'manage',
-      'You do not have permission to change the lock calendar. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to change the lock calendar. Ask an admin to grant it in Module Assess Control.')) return;
   const locked = MJMPayrollLock.isMonthLocked(_lockYear, month);
   const ym = `${_lockYear}-${String(month).padStart(2, '0')}`;
   const vers = MJMPayrollLock.verificationsFor(ym);
@@ -4321,7 +4443,7 @@ async function toggleLockMonth(month) {
    Same reasoning as the Delivery Order calendar's own button. */
 async function toggleLockYear() {
   if (!mayDo('locks', 'manage',
-      'You do not have permission to change the lock calendar. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to change the lock calendar. Ask an admin to grant it in Module Assess Control.')) return;
   const allOpen = LOCK_MONTHS.every((_, i) => !MJMPayrollLock.isMonthLocked(_lockYear, i + 1));
   if (!confirm(allOpen
       ? `Lock ${_lockYear} back to the calendar?\n\nEvery month whose lock day has passed closes; the rest stay open.`
@@ -4336,7 +4458,7 @@ async function toggleLockYear() {
 
 async function saveLockDay() {
   if (!mayDo('locks', 'manage',
-      'You do not have permission to change the lock day. Ask an admin to grant it in User Access.')) return;
+      'You do not have permission to change the lock day. Ask an admin to grant it in Module Assess Control.')) return;
   const day = parseInt($('lk-day').value, 10);
   if (!(day >= 1 && day <= 28)) { alert('Pick a day between 1 and 28.'); return; }
   const error = await MJMPayrollLock.setLockDay(_supabase, day, userEmail || null);
@@ -4817,6 +4939,81 @@ function _seedPlantingPDF(how) {
                          `Month ${monthTxt}`],
                    { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
 
+  /* THE SUMMARY RIBBON, ON THE PAPER TOO.
+
+     A figure on the screen belongs on the paper — the rule this module
+     already learned the hard way, when the four cards the Transplanting
+     sheet opens with were nowhere on its form. So the cards the office
+     asked for go on this one, the same drawing as `drawCapRibbon` there,
+     off the same `c.byBatch` the screen reads.
+
+     IT WRAPS, which is the one thing Transplanting's does not have to do.
+     That sheet has exactly four cards; this one has a card per BATCH and a
+     month can carry a dozen, which at four to a row is three rows rather
+     than twelve slivers 14mm wide with their money cut off. `CARD_MIN` is
+     what decides how many fit, so the row count follows the paper rather
+     than a number typed here.
+
+     SAID ONCE, on page one, exactly as Transplanting says it: these are the
+     month's totals and not this page of them, so repeating them overleaf
+     states the same figures twice and invites somebody to add the two pages
+     together. The column HEADS do repeat, because those label the rows
+     under them. */
+  const fitLine = (str, maxW, size, minSize) => {
+    for (;;) { doc.setFontSize(size); if (doc.getTextWidth(str) <= maxW || size <= minSize) break; size -= 0.25; }
+    return size;
+  };
+  const drawBatchRibbon = (top) => {
+    const cards = c.byBatch || [];
+    if (!cards.length) return top;
+    const GAP = 3, CARD_MIN = 38;
+    const perRow = Math.max(1, Math.min(cards.length,
+      Math.floor((INNER + GAP) / (CARD_MIN + GAP))));
+    const cardW = (INNER - GAP * (perRow - 1)) / perRow, padX = 3;
+    const maxW = cardW - padX * 2;
+    /* ONE HEIGHT for every card in the band, so the rows line up: a card
+       carrying the job split is taller, and sizing each to its own content
+       would draw a ragged band. */
+    const split = cards.some(b => Object.keys(b.byJob).length > 1);
+    const cardH = split ? 20 : 14;
+    /* `fig` reads a nought as a dash, which is right in a table cell and
+       wrong on a card the screen prints as 0 -- the two have to agree. */
+    const num = v => Number(v || 0).toLocaleString('en-MY');
+    let yy = top;
+    cards.forEach((b, i) => {
+      const col = i % perRow;
+      if (col === 0 && i) yy += cardH + GAP;
+      if (col === 0 && yy + cardH > FLOOR) { doc.addPage(); yy = 25; }
+      const x = MARGIN + col * (cardW + GAP);
+      doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
+      doc.setFillColor(255, 255, 255); doc.rect(x, yy, cardW, cardH, 'FD');
+      const d = dayTxt(b.date);
+      const head = ('BATCH ' + b.batch + (d ? '  ·  ' + d : '')).toUpperCase();
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 110, 130);
+      fitLine(head, maxW, 6.5, 4.5);
+      doc.text(head, x + padX, yy + 5);
+      doc.setTextColor(67, 56, 202);
+      const qtyTxt = num(b.qty);
+      fitLine(qtyTxt, maxW, 9.5, 7);
+      doc.text(qtyTxt, x + padX, yy + 10.2);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
+      const wdTxt = 'Total Workdone (RM) : ' + money(b.amount);
+      fitLine(wdTxt, maxW, 6.5, 4);
+      doc.text(wdTxt, x + padX, yy + 13);
+      const jobs = Object.keys(b.byJob);
+      if (jobs.length > 1) {
+        doc.setTextColor(120, 120, 140);
+        jobs.forEach((k, n) => {
+          const t = b.byJob[k].label + ': ' + num(b.byJob[k].qty) + ' · ' + money(b.byJob[k].amount);
+          fitLine(t, maxW, 5.5, 3.5);
+          doc.text(t, x + padX, yy + 16 + n * 3);
+        });
+      }
+    });
+    return yy + cardH + 2;
+  };
+  y = drawBatchRibbon(y);
+
   /* ONE JOB, DRAWN. Its own batch columns inside the shared width, its own
      rate, its own subtotal. Walked rather than written out twice, so a third
      Pre Nursery job is a row in PN_JOBS and nothing here. */
@@ -4961,12 +5158,17 @@ function _downloadMaintPDF() {
 
      So the fixed columns keep their widths and the jobs divide what is
      left, in the 17:23 the pair has always been drawn in -- which gives the
-     old eleven numbers back exactly when there are four of them. */
+     old eleven numbers back exactly when there are four of them.
+
+     MAINT_SHEET_TYPES, not MAINT_TYPES: this form prints what the Work
+     Maintenance sheet shows, and Loading Seedlings left that sheet for its
+     own tab (see MAINT_SHEET_TYPES). Its claim prints from its own form,
+     downloadLoadingPDF, below. */
   const W_NO = 11, W_WORKER = 47, W_SUB = 29;
-  const PAIR_W = (PAGE_W - MARGIN * 2 - W_NO - W_WORKER - W_SUB) / MAINT_TYPES.length;
+  const PAIR_W = (PAGE_W - MARGIN * 2 - W_NO - W_WORKER - W_SUB) / MAINT_SHEET_TYPES.length;
   const W_CAP = PAIR_W * 0.425, W_TOT = PAIR_W - W_CAP;
   const COL = [W_NO, W_WORKER].concat(
-    ...MAINT_TYPES.map(() => [W_CAP, W_TOT])).concat([W_SUB]);
+    ...MAINT_SHEET_TYPES.map(() => [W_CAP, W_TOT])).concat([W_SUB]);
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
@@ -4995,9 +5197,9 @@ function _downloadMaintPDF() {
   };
   const drawCapRibbon = (y) => {
     const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
-    const N = MAINT_TYPES.length;
+    const N = MAINT_SHEET_TYPES.length;
     const cardW = (W - GAP * (N - 1)) / N, cardH = 18, padX = 3, maxW = cardW - padX * 2;
-    MAINT_TYPES.forEach((t, i) => {
+    MAINT_SHEET_TYPES.forEach((t, i) => {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
       doc.setFillColor(255, 255, 255); doc.rect(x, y, cardW, cardH, 'FD');
@@ -5037,7 +5239,7 @@ function _downloadMaintPDF() {
     y = drawCapRibbon(y);
     pdfCell(doc, X[0], y, COL[0], HEAD_HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HEAD_HT, 'Worker', { bold: true, size: 8.5, fill: HF });
-    MAINT_TYPES.forEach((t, i) => {
+    MAINT_SHEET_TYPES.forEach((t, i) => {
       const c = PAIR(i);
       pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7, fill: HF });
       pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
@@ -5050,7 +5252,12 @@ function _downloadMaintPDF() {
   };
 
   let y = drawHead();
-  const CODES = MAINT_TYPES.map(t => t.code);
+  const CODES = MAINT_SHEET_TYPES.map(t => t.code);
+  /* Same rule and same reason as the screen's subOf — the printed Subtotal
+     has to be what the printed row adds up to, and the loading money has
+     its own form with its own Grand Total. */
+  const subOf = w => MAINT_SHEET_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
+  const sheetGrand = wk.reduce((s, w) => s + subOf(w), 0);
   const calTxtOf = (w) => calibrationText(
     capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
     calibrationOf('maint', n, w, CODES, (c) => rmOf(w, c)));
@@ -5070,23 +5277,23 @@ function _downloadMaintPDF() {
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], rh, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], rh, w, calTxtOf(w), { size: 8, fill: z });
-    MAINT_TYPES.forEach((t, k) => {
+    MAINT_SHEET_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
       pdfCell(doc, X[c],   y, COL[c],   rh, capFmt(cap), { size: 7.5, nowrap: true, fill: z });
       pdfCell(doc, X[c+1], y, COL[c+1], rh, (cap || adjOf('maint', n, w, t.code))
               ? money(payOf(w, t.code)) : '—', { size: 7, nowrap: true, fill: z });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], rh, money(earned(w)), { bold: true, size: 8, nowrap: true, fill: z });
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], rh, money(subOf(w)), { bold: true, size: 8, nowrap: true, fill: z });
     y += rh;
   });
 
   pdfCell(doc, X[0], y, COL[0] + COL[1], FOOT_H, 'Grand Total', { bold: true, size: 8.5, fill: TF });
-  MAINT_TYPES.forEach((t, k) => {
+  MAINT_SHEET_TYPES.forEach((t, k) => {
     const c = PAIR(k);
     pdfCell(doc, X[c],   y, COL[c],   FOOT_H, capFmt(capSum(t.code)), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], FOOT_H, money(rmSum(t.code)), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
-  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], FOOT_H, money(grand),
+  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], FOOT_H, money(sheetGrand),
           { bold: true, size: 9, nowrap: true, fill: TF });
   y += FOOT_H;
   y = pdfVerifiedNote(doc, y, 'maint', n, CONTENT_R);
@@ -5926,7 +6133,9 @@ document.addEventListener('keydown', (e) => {
     userEmail = u.email || '';
     isAdmin   = MJMAccess.isAdminOf('npayroll');
     // One missing helper must not take the whole module down with it.
-    try { if (MJMAccess.canManageUsers()) $('user-access-tab').classList.remove('hidden'); } catch (_) {}
+    // Admin of npayroll may now open this module's own Module Assess
+    // Control too, not only Manage Users -- see shared_module_access.js.
+    try { if (isAdmin || MJMAccess.canManageUsers()) $('user-access-tab').classList.remove('hidden'); } catch (_) {}
 
     let savedMonth = null;
     try { savedMonth = localStorage.getItem('npayroll_month'); } catch (_) {}

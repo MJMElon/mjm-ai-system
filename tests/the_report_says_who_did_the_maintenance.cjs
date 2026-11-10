@@ -63,21 +63,32 @@ const CLOSED = 'Closed by admin';
 /* Four auditor audits and three admin closures, on one nursery in one
    month -- the shape of the office screenshot, which read 1,000
    maintenance records with no way to tell the two apart. */
+/* Every row carries its CASE, because the report now draws one -- and the
+   three B05 rows at the end are the office own screenshot: one plot, one
+   job, one day, one verdict, THREE separate work records. They are what
+   made them ask twice whether the report counts a case three times, and
+   they are exactly what the Case column exists to tell apart. */
 const MAINT = [
-  { audit_id:'MTA-1', nursery:'BNN', plot:'B01', task_type:'Weeding',
+  { audit_id:'MTA-1', task_id:1789024370444, nursery:'BNN', plot:'B01', task_type:'Weeding',
     result:'Satisfied',   auditor_name:'Suhaedi',  date:'2026-10-05' },
-  { audit_id:'MTA-2', nursery:'BNN', plot:'B02', task_type:'Weeding',
+  { audit_id:'MTA-2', task_id:1789024370445, nursery:'BNN', plot:'B02', task_type:'Weeding',
     result:'Unsatisfied', auditor_name:'Suhaedi',  date:'2026-10-06' },
-  { audit_id:'MTA-3', nursery:'BNN', plot:'B03', task_type:'P & D Spraying',
+  { audit_id:'MTA-3', task_id:1789024370446, nursery:'BNN', plot:'B03', task_type:'P & D Spraying',
     result:'Satisfied',   auditor_name:'Ruth Wo',  date:'2026-10-07' },
-  { audit_id:'MTA-4', nursery:'BNN', plot:'B04', task_type:'Manuring',
+  { audit_id:'MTA-4', task_id:1789024370447, nursery:'BNN', plot:'B04', task_type:'Manuring',
     result:'Satisfied',   auditor_name:'Suhaedi',  date:'2026-10-08' },
-  { audit_id:'MTA-CL91', nursery:'BNN', plot:'B09', task_type:'Weeding',
+  { audit_id:'MTA-CL91', task_id:1789024370491, nursery:'BNN', plot:'B09', task_type:'Weeding',
     result:CLOSED,        auditor_name:'Elon Ting', date:'2026-10-20' },
-  { audit_id:'MTA-CL92', nursery:'BNN', plot:'B10', task_type:'Weeding',
+  { audit_id:'MTA-CL92', task_id:1789024370492, nursery:'BNN', plot:'B10', task_type:'Weeding',
     result:CLOSED,        auditor_name:'Elon Ting', date:'2026-10-20' },
-  { audit_id:'MTA-CL93', nursery:'BNN', plot:'B11', task_type:'Manuring',
-    result:CLOSED,        auditor_name:'Elon Ting', date:'2026-10-20' }
+  { audit_id:'MTA-CL93', task_id:1789024370493, nursery:'BNN', plot:'B11', task_type:'Manuring',
+    result:CLOSED,        auditor_name:'Elon Ting', date:'2026-10-20' },
+  { audit_id:'MTA-5', task_id:1791248487117, nursery:'BNN', plot:'B05', task_type:'Interrow Spray',
+    result:'Unsatisfied', auditor_name:'Main Nursery Auditor', date:'2026-10-22' },
+  { audit_id:'MTA-6', task_id:1791248487131, nursery:'BNN', plot:'B05', task_type:'Interrow Spray',
+    result:'Unsatisfied', auditor_name:'Main Nursery Auditor', date:'2026-10-22' },
+  { audit_id:'MTA-7', task_id:1791248487134, nursery:'BNN', plot:'B05', task_type:'Interrow Spray',
+    result:'Unsatisfied', auditor_name:'Main Nursery Auditor', date:'2026-10-22' }
 ];
 
 /* ── 0. THREE FILES SPELL THIS STRING ─────────────────────────────────
@@ -170,8 +181,10 @@ const MAINT = [
   const kinds = await page.evaluate(() => window.__MAINT.map((r) => maintDoneBy(r)));
   check('the four audits read as the auditor', kinds.slice(0, 4),
         ['auditor', 'auditor', 'auditor', 'auditor']);
-  check('and the three closures as the admin', kinds.slice(4),
+  check('and the three closures as the admin', kinds.slice(4, 7),
         ['admin', 'admin', 'admin']);
+  check('and the office own three look-alikes are all auditor work',
+        kinds.slice(7), ['auditor', 'auditor', 'auditor']);
   check('it is the exact string and nothing looser', await page.evaluate((c) => [
           maintDoneBy({ result: c }),
           maintDoneBy({ result: c + ' ' }),
@@ -201,9 +214,9 @@ const MAINT = [
     none:    filterByDoneBy(window.__MAINT, []).map((r) => r.plot)
   }));
   check('both ticked is every row, in the order it came',
-        f.both, ['B01','B02','B03','B04','B09','B10','B11']);
+        f.both, ['B01','B02','B03','B04','B09','B10','B11','B05','B05','B05']);
   check('AUDITOR ONLY is the office ask, and the closures are gone',
-        f.auditor, ['B01','B02','B03','B04']);
+        f.auditor, ['B01','B02','B03','B04','B05','B05','B05']);
   check('admin only is the three closures', f.admin, ['B09','B10','B11']);
   check('neither ticked hides every row rather than showing every row',
         f.none, []);
@@ -240,33 +253,123 @@ const MAINT = [
 
   /* ── 4. the column ────────────────────────────────────────────────── */
   console.log('\nThe Done By column');
+  /* A RECORD IS DRAWN AS ONE BLOCK NOW, with its #, Date, Plot and Task
+     merged down the side of its cases (see MOD_RECORD_KEY in the page). So
+     a continuation line emits FEWER cells than the heading has columns, and
+     reading `tr.children` by position answers about the wrong column on
+     every line but the first.
+
+     `grid` is the table as it READS: a rowspan carried down into the lines
+     it covers, so row two of the B05 record still says B05 / Interrow
+     Spray / 22 Oct, which is what somebody looking at it sees. `body` is
+     the raw cells, kept so the merge itself can be asserted. */
   const t = await page.evaluate(() => {
     const d = document.createElement('div');
     d.innerHTML = buildModTable('maint', window.__MAINT);
     document.body.appendChild(d);
     const head = [...d.querySelectorAll('thead th')].map((x) => x.textContent.trim());
-    const body = [...d.querySelectorAll('tbody tr')]
-      .filter((tr) => !tr.classList.contains('total-row'))
-      .map((tr) => [...tr.children].map((td) => td.textContent.trim()));
+    const trs = [...d.querySelectorAll('tbody tr')]
+      .filter((tr) => !tr.classList.contains('total-row'));
+    const body = trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()));
+    const grid = [];
+    const carry = {};
+    trs.forEach((tr) => {
+      const cells = [...tr.children];
+      const row = [];
+      let k = 0;
+      for (let ci = 0; ci < head.length; ci++) {
+        if (carry[ci] && carry[ci].left > 0) { row[ci] = carry[ci].text; carry[ci].left--; continue; }
+        const td = cells[k++];
+        if (!td) { row[ci] = null; continue; }
+        const txt = td.textContent.trim();
+        row[ci] = txt;
+        const rs = parseInt(td.getAttribute('rowspan') || '1', 10);
+        if (rs > 1) carry[ci] = { text: txt, left: rs - 1 };
+      }
+      grid.push(row);
+    });
     const tags = [...d.querySelectorAll('tbody .doneby-tag')].length;
+    const cont = trs.filter((tr) => tr.classList.contains('rec-cont')).length;
     d.remove();
-    return { head, body, tags };
+    return { head, body, grid, tags, cont };
   });
+  /* SHOT=/path.png draws the maintenance block as the office sees it. A
+     check cannot read a layout, and this table is printed -- a column
+     added to it is a width question as much as a content one. */
+  if (process.env.SHOT) {
+    await page.evaluate(() => {
+      const d = document.createElement('div');
+      d.className = 'sec';
+      d.style.cssText = 'padding:18px;background:#fff';
+      d.innerHTML = buildModTable('maint', window.__MAINT);
+      document.body.innerHTML = '';
+      document.body.style.cssText = 'background:#fff;margin:0';
+      document.body.appendChild(d);
+    });
+    await page.screenshot({ path: process.env.SHOT, fullPage: true });
+    console.log('  shot  ' + process.env.SHOT);
+  }
+
   check('it is a column now, and the last one', t.head[t.head.length - 1], 'Done By');
   check('after Result, which says WHAT and not who',
         t.head.slice(-2), ['Result', 'Done By']);
   const nameCol = t.head.indexOf('Done By');
-  check('an audit names the auditor', t.body[0][nameCol], 'Suhaedi');
+  const plotCol = t.head.indexOf('Plot');
+  const rowOn = (plot) => (t.grid.find((r) => r[plotCol] === plot) || []);
+  check('an audit names the auditor', rowOn('B01')[nameCol], 'Suhaedi');
   check('a closure names the ADMIN who pressed the button',
-        t.body[4][nameCol], 'Elon Ting admin');
+        rowOn('B09')[nameCol], 'Elon Ting admin');
   check('and only the closures wear the tag', t.tags, 3);
 
   /* ── 5. nothing else moved ────────────────────────────────────────── */
   console.log('\nAnd the rest of the row is untouched');
   check('the columns it always had are still there, in order',
-        t.head.slice(0, 5), ['#', 'Date', 'Plot', 'Task', 'Result']);
-  check('every row still carries all six cells',
-        [...new Set(t.body.map((r) => r.length))], [6]);
+        t.head.slice(0, 4), ['#', 'Date', 'Plot', 'Task']);
+  check('Result and Done By still close the row',
+        t.head.slice(-2), ['Result', 'Done By']);
+  check('every row still READS as all seven cells',
+        [...new Set(t.grid.map((r) => r.length))], [7]);
+  /* And the merge is real rather than the same four values written out
+     three times: a continuation line emits only Case, Result and Done By,
+     which is the whole of what differs between the cases of one record. */
+  check('a line that continues a record emits only what differs',
+        [...new Set(t.body.map((r) => r.length))].sort(), [3, 7]);
+
+  /* ── 6. the question the office asked twice ───────────────────────────
+     Three rows reading B05 / Interrow Spray / Unsatisfied on 22 Oct are
+     three separate work records, and the report had nothing on it that
+     said so. A column that merely EXISTS does not answer them -- it has to
+     carry a different value on each of those three rows. */
+  console.log('\nThree rows that look alike are told apart');
+  const caseCol = t.head.indexOf('Case');
+  check('the Case column is drawn, after the job it belongs to',
+        caseCol > t.head.indexOf('Task') && caseCol < t.head.indexOf('Result'), true);
+
+  const alike = t.grid.filter((r) => r[plotCol] === 'B05');
+  check('the office own three rows are all on the report', alike.length, 3);
+  check('and each one names a DIFFERENT case',
+        new Set(alike.map((r) => r[caseCol])).size, 3);
+  check('the case is the task id, not something invented',
+        alike.map((r) => r[caseCol]).sort(),
+        ['1791248487117', '1791248487131', '1791248487134']);
+  /* AND THE OFFICE ASKED FOR THE OTHER HALF OF THIS AFTERWARDS: those three
+     cases are one morning's work on one plot, so they are ONE record now --
+     numbered once, counted once, with the three cases still each on their
+     own line above. The column proves they are separate cases; the record
+     says they are one visit. Both answers at once, which is what was
+     asked. `one_record_is_one_visit.cjs` holds the rule itself. */
+  const recCol = t.head.indexOf('#');
+  check('…and the three are ONE record, not three',
+        new Set(alike.map((r) => r[recCol])).size, 1);
+  check('two of the three lines are continuations of it', t.cont, 2);
+
+  /* The quietest way this fix does nothing is the SELECT not asking for the
+     column -- the alert board lost a whole fix that way once. A fixture can
+     always supply a field; only the shipped query says it was asked for. */
+  const src = fs.readFileSync(path.join(ROOT, 'audit', 'audit_report.html'), 'utf8');
+  const sel = (src.match(/audit_maintenance_audits['"`],\s*`select=([^&]+)/) || [])[1] || '';
+  check('and the shipped select actually asks for task_id',
+        sel.split(',').includes('task_id'), true);
 
   await browser.close();
   server.close();

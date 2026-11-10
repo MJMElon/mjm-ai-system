@@ -394,6 +394,101 @@ const RECS = [
     dl && [dl.lines.includes('Seeds planted'), dl.lines.includes('Biji filled')], [true, true]);
   check('…and it is the Pre Nursery claim it saves',
     dl && /^Salary_Claim_Pre_Nursery_/.test(dl.saved || ''), true);
+
+  console.log('\n5. The summary at the top, which is a card per BATCH');
+  /* *"Payroll那里的seed planting我要像transplanting那样，上边有summary 有
+     batch, amount, total workdone"*. Transplanting opens with one card per
+     JOB; this sheet's COLUMNS are batches, so the same ribbon asked of this
+     sheet is one card per batch -- the unit the office named. */
+  check('the arithmetic answers one entry per batch, in the column order',
+    () => (c().byBatch || []).map(b => [b.batch, b.qty, b.amount]),
+    [['277', 7760, 183.2], ['278', 3000, 60], ['280', 100, 2]]);
+  /* 277 is 3,760 seeds at 0.02 and 4,000 biji at 0.027 -- RM 75.20 and
+     RM 108.00. The two rates are the whole reason the split has to be on
+     the card: 7,760 and RM 183.20 cannot be checked against each other
+     without it. */
+  check('…and the arithmetic is the office’s own, by hand',
+    () => Math.round((3760 * 0.02 + 4000 * 0.027) * 100) / 100, 183.2);
+  check('…a batch worked on BOTH jobs carries each one’s own figures',
+    () => { const b = (c().byBatch || []).find(x => x.batch === '277') || { byJob: {} };
+            return Object.keys(b.byJob).map(k => [k, b.byJob[k].qty, b.byJob[k].amount]); },
+    [['seed', 3760, 75.2], ['hyplug', 4000, 108]]);
+  check('…and a batch on one job carries only that one',
+    () => { const b = (c().byBatch || []).find(x => x.batch === '278') || { byJob: {} };
+            return Object.keys(b.byJob); }, ['seed']);
+  /* THE CARDS CANNOT DISAGREE WITH THE FOOT, which is the whole reason the
+     ribbon is collected off `claim.rows` rather than walked again. */
+  check('the cards add up to exactly what the month pays',
+    () => { const g = c(); const b = g.byBatch || [];
+            return [b.reduce((a, x) => a + x.qty, 0),
+                    Math.round(b.reduce((a, x) => a + x.amount, 0) * 100) / 100,
+                    g.qty, g.amount]; },
+    [10860, 245.2, 10860, 245.2]);
+  /* A BATCH KEYED AND NOT CHECKED IS ON NO CARD. 279 is held, and a summary
+     that counted it would be the one figure on the page claiming money the
+     claim underneath does not pay. */
+  check('a held batch is on no card', () => (c().byBatch || []).map(b => b.batch).includes('279'), false);
+  check('nothing checked is no cards at all, rather than a row of dashes',
+    () => (api().preNurseryClaim([RECS[3]]).byBatch || []).length, 0);
+
+  const cards = await pay.evaluate(() => {
+    const box = document.getElementById('seedplant-glance');
+    if (!box) return 'no #seedplant-glance on the page';
+    return [...box.querySelectorAll('.pt-card')].map(el => ({
+      label: (el.querySelector('.pt-label') || {}).textContent || '',
+      val:   (el.querySelector('.pt-val')   || {}).textContent || '',
+      wd:    (el.querySelector('.pt-wd')    || {}).textContent || '',
+      /* The two lines are joined by a <br>, which textContent gives back as
+         nothing at all -- so they are read off the markup and joined with a
+         bar, or the check would be asserting a run-on string. */
+      sub:   ((el.querySelector('.pt-sub')  || {}).innerHTML || '')
+               .replace(/<br\s*\/?>/gi, ' | ').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+    }));
+  });
+  check('the ribbon is on the screen, a card per batch, in the column order',
+    Array.isArray(cards) ? cards.map(x => x.label.replace(/\s+/g, ' ').trim().split(' \u00b7 ')[0])
+                         : cards,
+    ['Batch 277', 'Batch 278', 'Batch 280']);
+  check('…each carrying the batch amount and its Total Workdone',
+    Array.isArray(cards) ? cards.map(x => [x.val.trim(), x.wd.trim()]) : cards,
+    [['7,760', 'Total Workdone (RM) : RM 183.20'],
+     ['3,000', 'Total Workdone (RM) : RM 60.00'],
+     ['100',   'Total Workdone (RM) : RM 2.00']]);
+  /* THE PLANTED DAY RIDES IN THE LABEL, the same fact the batch's own column
+     heading carries, so a reader going from a card to its column travels in
+     a straight line. */
+  check('…and the planted day is on the card as well as the column',
+    Array.isArray(cards) ? cards.map(x => / \u00b7 \S/.test(x.label.replace(/\s+/g, ' '))) : cards,
+    [true, true, true]);
+  /* THE SPLIT IS ONLY WHERE IT SAYS SOMETHING. On a batch worked on one job
+     it would read "all of it" and "none of it" -- two lines of type for no
+     information, which is the rule the Life of Seedlings split already
+     follows. */
+  check('…the job split is drawn on the batch that has two, and nowhere else',
+    Array.isArray(cards) ? cards.map(x => x.sub) : cards,
+    ['Seed Planting: 3,760 \u00b7 RM 75.20 | Mengisi Tanah ke Hyplug: 4,000 \u00b7 RM 108.00', '', '']);
+
+  /* AND ON THE PAPER, because a figure on the screen belongs on the paper --
+     the rule this module learned when Transplanting's own four cards were
+     nowhere on its form. */
+  check('the claim form carries the same cards',
+    dl && [dl.lines.includes('BATCH 277  \u00b7  28 SEP'),
+           dl.lines.includes('7,760'),
+           dl.lines.includes('Total Workdone (RM) : RM 183.20'),
+           dl.lines.includes('Seed Planting: 3,760 \u00b7 RM 75.20')],
+    [true, true, true, true]);
+  /* SAID ONCE. These are the month's totals and not this page of them, so a
+     second copy overleaf invites somebody to add the two pages together --
+     exactly what Transplanting's own band does. */
+  check('…once, not on every page',
+    dl && dl.lines.filter(t => t === 'Total Workdone (RM) : RM 183.20').length, 1);
+
+  /* SHOT=/path/to.png draws the tab as the office sees it. The ribbon is a
+     layout and a check cannot read a layout; this is how it was judged. */
+  if (process.env.SHOT) {
+    const el = await pay.$('#sub-seedplant');
+    if (el) await el.screenshot({ path: process.env.SHOT });
+  }
   check('no page errors on the claim', payErrs, []);
   await pay.close();
 

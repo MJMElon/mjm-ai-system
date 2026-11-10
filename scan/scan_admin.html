@@ -12,7 +12,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
-<title>555 MJM Team — Manage</title>
+<title>Nursery 555 Team — Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -179,7 +179,7 @@
     <!-- STRAIGHT TO THE PAGE, not to a list of one.
          This used to open scan_settings_hub.html, a page of five sections
          that were doors to doors: FC Portal Setting led to a page whose
-         only tile was User Access, which is already a tile RIGHT HERE;
+         only tile was Module Assess Control, which is already a tile RIGHT HERE;
          Admin Portal Setting led to the Admin Portal, which is a door
          right here too; Worker Portal Setting led into the phone app; and
          Auditor Portal Setting led to the Audit back office, which is its
@@ -205,7 +205,7 @@
           <path d="M24 25.3v3.2M22.4 28h3.2"/>
         </svg>
       </span>
-      <span class="door-name">User Access</span>
+      <span class="door-name">Module Assess Control</span>
       <span class="door-sub">Who may open each portal, and what inside it</span>
     </a>
   </div>
@@ -306,7 +306,7 @@ $('worker-portal-link').addEventListener('click', (e) => {
     const u = MJMAccess.user();
     if (u) $('welcome-heading').textContent = 'Welcome, ' + (u.full_name || u.email || '') + '!';
 
-    // User Access writes other people's permissions, which the database policy
+    // Module Assess Control writes other people's permissions, which the database policy
     // only lets a user-manager do — so it is not offered to anyone else.
     /* Each door on this page, by its own tick on Setting. Every one of them
        falls back to the rule that governed it before that screen existed, so

@@ -46,10 +46,17 @@ function htmlFiles(dir, out) {
   return out;
 }
 
-/* src="x.js?v=12" and href="x.css?v=3", in either quote. The version has to
-   be a number; a `?v=` with nothing after it is pages_do_not_go_stale's
-   business, not this one. */
-const REF = /(?:src|href)\s*=\s*["']([^"'?]+\.(?:js|css))\?v=(\d+)["']/g;
+/* src="x.js?v=12" and href="x.css?v=3", in either quote. A `?v=` with
+   nothing after it is pages_do_not_go_stale's business, not this one.
+
+   THE NUMBER IS NOT ALWAYS DIGITS. The audit module versions on a date
+   plus a revision LETTER -- 20261012e, 20261105a -- and a digits-only
+   pattern does not match those references AT ALL, so every asset in that
+   module was outside this check while looking exactly as covered as the
+   rest. The one place in this repository that already knew this says so
+   in its own words: a digits-only pattern reads 20261012e as 20261012,
+   and two different versions compare equal. */
+const REF = /(?:src|href)\s*=\s*["']([^"'?]+\.(?:js|css))\?v=([0-9a-z]+)["']/g;
 
 const refs = [];      // { page, asset (repo-relative), version }
 for (const page of htmlFiles(ROOT)) {

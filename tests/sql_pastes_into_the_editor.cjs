@@ -53,8 +53,15 @@ const SWEPT = [
   'CHECK_which_batch_still_owes_the_round.sql',
   'CHECK_has_a_plot_ever_read_anything_but_clean.sql',
   'CHECK_the_alert_board_every_month.sql',
+  'CHECK_is_the_same_case_audited_twice.sql',
+  'CHECK_what_the_duplicate_audits_say.sql',
+  'RUN_ME_remove_duplicate_audits.sql',
   'CHECK_the_report_reads_the_auditors_records.sql',
   'CHECK_why_no_plot_condition_alert.sql',
+  'CHECK_why_a_september_maintenance_row_is_back.sql',
+  'RUN_ME_close_september_maintenance.sql',
+  'CHECK_the_same_morning_on_two_cases.sql',
+  'CHECK_one_morning_is_one_case.sql',
 ];
 
 const DQ = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;

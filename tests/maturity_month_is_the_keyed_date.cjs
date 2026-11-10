@@ -175,7 +175,10 @@ const check = (ok, m) => { console.log((ok ? '  ok  ' : ' FAIL ') + m); if (!ok)
     [...document.querySelectorAll('#maturity-rows tr')].forEach(tr => {
       if (!tr.dataset.plotName) return;
       const tds = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
-      out[tr.dataset.batchName + '/' + tr.dataset.plotName] = tds[4] || '';
+      // Breed is cell 3: Maturity Date, Plot, Batch, Breed — the Location
+      // column that stood second came off for the ALL / UNN1 / UNN2 / BNN
+      // buttons, and every cell after it moved one place left.
+      out[tr.dataset.batchName + '/' + tr.dataset.plotName] = tds[3] || '';
     });
     return out;
   });
