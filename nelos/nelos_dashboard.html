@@ -580,6 +580,15 @@
       <span class="door-name">Automation Cases</span>
       <span class="door-note">Work that repeats, raised on schedule</span>
     </a>
+    <!-- Which of the two doors above a person may open. Shown to the same
+         people who may open the module's Module Assess Control itself —
+         a Nelos admin, or anybody holding Manage Users — not to whoever
+         merely holds one of the two ticks it sets. -->
+    <a class="door hidden" id="user-access-btn" href="nelos_user_access.html">
+      <span class="door-ico">&#x1F512;</span>
+      <span class="door-name">Module Assess Control</span>
+      <span class="door-note">Who may open User Setting and Automate Cases</span>
+    </a>
   </div>
 
 </div>
@@ -2686,6 +2695,33 @@ $('fmenu').addEventListener('click', e => {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && openFBtn) closeFMenu(); });
 
+/* The two Module Assess Control ticks, read the same way as every
+   adminOnly action on that screen — effectiveActions() in
+   shared_module_access.js is the display side, these are the runtime
+   ones. A saved row wins outright; with none, the module level decides,
+   which is exactly the gate each door had before the tick existed: a
+   Nelos admin, or anybody holding Manage Users. nelos_automation.html
+   and nelos_user_setting.html carry their own copies, read at the door
+   they actually guard. */
+function mayOpenAutomation() {
+  if (MJMAccess.canManageUsers()) return true;
+  try {
+    const p = MJMAccess.permissions();
+    const acts = p && p.nelos_actions && p.nelos_actions.automation;
+    if (acts) return !!acts.view && !!acts.manage;
+  } catch (_) { /* fall through to the module level */ }
+  return MJMAccess.isAdminOf('nelos');
+}
+function maySettings() {
+  if (MJMAccess.canManageUsers()) return true;
+  try {
+    const p = MJMAccess.permissions();
+    const acts = p && p.nelos_actions && p.nelos_actions.settings;
+    if (acts) return !!acts.view && !!acts.manage;
+  } catch (_) { /* fall through to the module level */ }
+  return MJMAccess.isAdminOf('nelos');
+}
+
 (async () => {
   try {
     await MJMAccess.load(_supabase);
@@ -2699,11 +2735,16 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && openFBtn) 
     me = { id: u.id, name: u.full_name || u.email || '' };
     MJMNelos.init(_supabase, { root: '../' });
 
-    // User Setting decides who sees which module's cases. Only a Nelos
-    // admin (or a portal admin who manages users) may open it.
+    // User Setting decides who sees which module's cases, and Automate
+    // Cases raises work for other people — each door now obeys its own
+    // Module Assess Control tick rather than one gate for both.
+    if (maySettings())       $('user-setting-btn').classList.remove('hidden');
+    if (mayOpenAutomation()) $('automation-btn').classList.remove('hidden');
+    // Module Assess Control itself opens only to the people who could
+    // already open it — a Nelos admin, or anybody holding Manage Users —
+    // never to somebody merely ticked for one of the two doors above.
     if (MJMAccess.isAdminOf('nelos') || MJMAccess.canManageUsers()) {
-      $('user-setting-btn').classList.remove('hidden');
-      $('automation-btn').classList.remove('hidden');
+      $('user-access-btn').classList.remove('hidden');
     }
 
     // What this person may press, before the first render draws buttons.
