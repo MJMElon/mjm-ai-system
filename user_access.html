@@ -3,6 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- This page is the deploy: the Super Admins drag-and-drop, the module
+     ticks and every refusal rule live in its own inline script, with no
+     separate ?v= file to bump. A cached copy goes on running yesterday's
+     code for ever -- a drag that LIFTS (draggable="true" alone does that,
+     with or without a single working handler behind it) but whose DROP
+     does nothing is exactly what an old cached copy looks like. One hard
+     reload per machine to pick these up in the first place. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>User Access — MJM AI System</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -238,8 +248,8 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">Nursery Payroll System</div>
-            <div class="text-[11px] text-slate-500">Worker register, pay periods, payslips</div>
+            <div class="font-black text-slate-800 text-sm">Nursery Reporting System</div>
+            <div class="text-[11px] text-slate-500">Nursery Payroll System and the other modules inside it — worker register, pay periods, payslips</div>
           </div>
           <select id="d-mod-npayroll" class="lvl-select"></select>
         </div>
@@ -401,7 +411,7 @@ function setupSuperAdminDnD() {
     const row = e.target.closest('.user-row[data-uid]');
     if (row) row.classList.remove('sa-row-dragging');
   });
-  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; zone.classList.add('drag-over'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
   zone.addEventListener('drop', (e) => {
     e.preventDefault();

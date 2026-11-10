@@ -6132,10 +6132,10 @@ document.addEventListener('keydown', (e) => {
     const u = MJMAccess.user();
     userEmail = u.email || '';
     isAdmin   = MJMAccess.isAdminOf('npayroll');
-    // One missing helper must not take the whole module down with it.
-    // Admin of npayroll may now open this module's own Module Assess
-    // Control too, not only Manage Users -- see shared_module_access.js.
-    try { if (isAdmin || MJMAccess.canManageUsers()) $('user-access-tab').classList.remove('hidden'); } catch (_) {}
+    // Module Assess Control moved out from under this topbar's own icons
+    // the day Nursery Payroll System became a module inside Nursery
+    // Reporting System -- it is reached from that system's own landing
+    // page now (reporting/reporting_admin.html), not from a door here.
 
     let savedMonth = null;
     try { savedMonth = localStorage.getItem('npayroll_month'); } catch (_) {}
