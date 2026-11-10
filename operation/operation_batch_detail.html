@@ -901,14 +901,9 @@
                                         <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Bag-by-Bag Audit Entry</h4>
                                         <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Key-in each bag's supplier count and the audited count.</p>
                                     </div>
-                                    <div class="flex items-center gap-2 self-start sm:self-auto">
-                                        <button type="button" id="t8-sort-btn" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="toggleSeedAuditSort()" title="Sort the bags by Bag No / Seal No, small to large. Press again to go back to the order they were added.">
-                                            <span aria-hidden="true">↑</span> <span id="t8-sort-label">Sort small → large</span>
-                                        </button>
-                                        <button type="button" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="addSeedAuditRow()">
-                                            <span class="text-lg leading-none">+</span> Add Bag
-                                        </button>
-                                    </div>
+                                    <button type="button" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2 self-start sm:self-auto" onclick="addSeedAuditRow()">
+                                        <span class="text-lg leading-none">+</span> Add Bag
+                                    </button>
                                 </div>
 
                                 <!-- AI Scan dropzone -->
@@ -935,6 +930,13 @@
                                     <span></span>
                                 </div>
 
+                                <!-- Sort control sits directly above the rows it sorts, so it is seen where the bags are. -->
+                                <div class="px-6 pt-2 pb-2 flex items-center justify-between gap-3">
+                                    <span></span>
+                                    <button type="button" id="t8-sort-btn" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="toggleSeedAuditSort()" title="Sort the bags by Bag No / Seal No, small to large. Press again to go back to the order they were added.">
+                                        <span aria-hidden="true">↑</span> <span id="t8-sort-label">Sort small → large</span>
+                                    </button>
+                                </div>
                                 <div id="t8-bag-rows-container" class="px-6 pb-4 space-y-3"></div>
 
                                 <!-- Totals footer -->
