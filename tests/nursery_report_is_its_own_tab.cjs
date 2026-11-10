@@ -54,6 +54,15 @@ const LOGS = [
         plot_name: 'U3', quantity_change: 300, remark: 'Transplanted from tray [DOUBLE-TONE] to Main Plot [U3]' }),
   log({ batch_name: '281', transaction_type: 'Transplanted_DoubleTone', transaction_date: '2026-10-05',
         plot_name: 'DOUBLE-TONE', quantity_change: 200, remark: 'Transplanted from tray [P1] to [DOUBLE-TONE]' }),
+  /* Batch 272's own shape: out of the DOUBLE-TONE tray on the LAST day of
+     October, which an As At of 31/10/2026 must include. */
+  log({ batch_name: '281', transaction_type: 'Transplanted', transaction_date: '2026-10-31',
+        plot_name: 'U3', quantity_change: 150, remark: 'Transplanted from tray [DOUBLE-TONE] to Main Plot [U3]. Date: 2026-10-31' }),
+  /* Batch 269 / 270's own shape: a 1st culling on a pre-nursery TRAY (P22,
+     which Seedling Stock does not list) with no transaction_date — the day
+     is in the remark only. */
+  log({ batch_name: '281', transaction_type: '1st_Culling', transaction_date: null, created_at: '2026-10-30T09:00:00Z',
+        plot_name: 'P22', quantity_change: 100, remark: '1st Culling on tray [P22]. Cull rate: 3.91%. Date: 2026-10-30' }),
   log({ batch_name: '281', transaction_type: 'DTone_Nursery_Qty', transaction_date: '2026-10-02',
         created_at: '2026-10-02T00:00:00Z', quantity_change: 140, remark: 'Double tone qty in nursery' }),
   log({ batch_name: '281', transaction_type: 'DTone_Nursery_Qty', transaction_date: '2026-10-03',
@@ -148,13 +157,13 @@ is(sr.options, ['summary=Summary Report', 'transplanting=Transplanting Report', 
 is(sr.opensOn, 'summary', 'it opens on Summary');
 is(sr.hasNote, false, 'the as-submitted Summary carries NO 2nd-culling deduction note');
 
-console.log('\n── 4. The Double-Tone Report: the quantity put in, BY DATE ──');
-/* The office replaced the first per-batch tray-arithmetic version with
-   this in their own words: "double tone report is double tone quantity in
-   nursery, generate the report by date. I want to see in the month we
-   have how many double tone. Get the data from batch report -
-   Transplanting reports". One line per Transplanting-tab record into the
-   DOUBLE-TONE tray, cut by the month window, totalled. */
+console.log('\n── 4. The Double-Tone Report: the Transplanting records out of the DOUBLE-TONE tray, BY DATE ──');
+/* The rows are the batch report's Transplanting records out of the
+   DOUBLE-TONE tray (Main Plot (D-Tone)). The first build read
+   Transplanted_DoubleTone — the step INTO the tray — and the office found
+   batches 271 and 272 missing: neither has such a row; both have ordinary
+   Transplanted rows out of the DOUBLE-TONE tray. The fixture carries the
+   into-tray rows as well, so a report reading them is caught. */
 const runDT = (from, to) => page.evaluate(async ([f, t]) => {
   if (typeof runDoubleToneReport !== 'function') return { missing: 'no runDoubleToneReport on the page' };
   document.getElementById('f-nursery-sub').value = 'dtone';
@@ -176,18 +185,43 @@ const dtAll = await runDT('', '');
 if (dtAll.missing) { console.log('  FAIL', dtAll.missing); bad += 7; }
 else {
   yes(dtAll.heading, 'the report draws under its own heading');
-  is(dtAll.rows.length, 2, 'two records — one line per Transplanting-tab record, never a per-batch fold');
-  is(dtAll.rows.map(r => r[4]), ['200', '500'], 'each line is its own quantity, newest day first');
-  is((dtAll.rows[1] || []).slice(0, 4), ['01 Sep 2026', '281', 'UPB PREMIER', 'P1'],
-    'a line carries the date, the batch, the breed and the tray it came out of');
-  yes(/Grand Total/.test(dtAll.foot) && /700/.test(dtAll.foot),
-    'the Grand Total answers "how many double tone" — 700 over all dates, got "' + dtAll.foot + '"');
-  const dtSep = await runDT('2026-09-01', '2026-09-30');
-  is(dtSep.rows.map(r => r[4]), ['500'], 'September holds the 500 alone');
+  is(dtAll.rows.map(r => r[4]), ['150', '300'],
+    'one line per Transplanting record OUT of the DOUBLE-TONE tray — never the into-tray 500 / 200');
+  is((dtAll.rows[1] || []).slice(0, 3), ['01 Oct 2026', '281', 'UPB PREMIER'],
+    'a line carries the date, the batch and the breed');
+  yes(/U3/.test((dtAll.rows[1] || [])[3] || ''), 'and the main plot it went into');
+  yes(/Grand Total/.test(dtAll.foot) && /450/.test(dtAll.foot),
+    'the Grand Total answers "how many double tone" — 450, got "' + dtAll.foot + '"');
   const dtOct = await runDT('2026-10-01', '2026-10-31');
-  yes(dtOct.rows.length === 1 && /200/.test(dtOct.foot),
-    'and October holds the 200 — the month window is the report');
+  is(dtOct.rows.map(r => r[0]), ['31 Oct 2026', '01 Oct 2026'],
+    'As At 31/10/2026 includes the record ON the 31st — batch 272\'s case');
+  const dtSep = await runDT('2026-09-01', '2026-09-30');
+  is(dtSep.rows.length, 0, 'September has no double-tone transplant (the into-tray 500 is not one)');
 }
+
+console.log('\n── 4b. The Culling Report: a 1st culling on a TRAY is Pre-Nursery ──');
+/* Batches 269 and 270: every 1st culling sits on a tray name (P22) that
+   Seedling Stock does not list, so it read 'Unassigned' and vanished the
+   moment PN was ticked — 234 of the ledger's 276 1st-culling rows. */
+const cl = await page.evaluate(async () => {
+  if (typeof runCullingReport !== 'function') return { missing: true };
+  document.getElementById('f-nursery-sub').value = 'culling';
+  document.getElementById('f-culling-stage').value = '1st_Culling';
+  document.getElementById('f-from').value = '2026-10-01';
+  document.getElementById('f-to').value = '2026-10-31';
+  document.getElementById('f-breed').value = '';
+  window.nurseryFilter = () => ['PN'];
+  await runCullingReport();
+  const out = document.getElementById('report-output');
+  return [...out.querySelectorAll('tbody tr')]
+    .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim()))
+    .filter(c => c.length > 1);
+});
+const p22 = Array.isArray(cl) ? cl.find(r => r[2] === 'P22') : null;
+yes(!!p22, 'with PN ticked, the 1st culling on tray P22 is on the report — got ' + JSON.stringify(cl));
+is(p22 && [p22[0], p22[1], p22[5]], ['30 Oct 2026', 'PN', '100'],
+  'dated by the Date: in its remark (no transaction_date), placed in PN, 100 culled');
+await page.evaluate(() => { delete window.nurseryFilter; });
 
 console.log('\n── 5. The Seed In Report: licence subtotals and Seed Accounted ──');
 const si = await page.evaluate(async () => {
@@ -229,9 +263,10 @@ is(si282[4], '1,800', '282 (nothing damaged) reads a plain 1,800 with no planted
 
 console.log('\n── 6. The menu moves the report aside, and the pin holds it ──');
 const pinBtn = await page.evaluate(() => !!document.getElementById('mv-pin'));
-if (!pinBtn) { console.log('  FAIL no #mv-pin on the page'); bad += 7; }
+if (!pinBtn) { console.log('  FAIL no #mv-pin on the page'); bad += 9; }
 else {
   const padAt = () => page.evaluate(() => getComputedStyle(document.body).paddingLeft);
+  const sideX = () => page.evaluate(() => Math.round(document.getElementById('mv-report-sidebar').getBoundingClientRect().left));
   await page.mouse.move(900, 400);
   await page.waitForTimeout(350);
   is(await padAt(), '0px', 'mouse away: the report has the whole screen');
@@ -241,42 +276,50 @@ else {
   await page.mouse.move(900, 400);
   await page.waitForTimeout(400);
   is(await padAt(), '0px', 'the menu hides and the report expands back');
-  // Pin it: open the panel, press the pin, walk away — it must stand.
+
+  // The pin is an ICON: no words on it, a small round button in the corner.
+  const icon = await page.evaluate(() => {
+    const b = document.getElementById('mv-pin'), r = b.getBoundingClientRect();
+    return { text: b.textContent.trim(), w: Math.round(r.width), h: Math.round(r.height) };
+  });
+  yes(icon.text === '📌' && icon.w <= 32 && icon.h <= 32,
+    'the pin is an icon — just 📌, no label — got ' + JSON.stringify(icon));
+
+  // Pin it with a REAL click: open the panel, press the icon, walk away.
   await page.mouse.move(5, 400);
   await page.waitForTimeout(400);
-  await page.evaluate(() => document.getElementById('mv-pin').click());
+  await page.click('#mv-pin');
   await page.mouse.move(900, 400);
   await page.waitForTimeout(400);
   const pinned = await page.evaluate(() => ({
     cls: document.body.classList.contains('mv-pinned'),
     pad: getComputedStyle(document.body).paddingLeft,
-    x: Math.round(document.getElementById('mv-report-sidebar').getBoundingClientRect().left),
   }));
-  yes(pinned.cls && pinned.pad === '240px' && pinned.x === 0,
+  yes(pinned.cls && pinned.pad === '240px' && (await sideX()) === 0,
     'pinned: the menu stands with the mouse gone and the report stays aside — ' + JSON.stringify(pinned));
-  // Run Report must NOT close a pinned menu.
   await page.evaluate(() => document.getElementById('f-run').click());
   await page.waitForTimeout(600);
-  const afterRun = await page.evaluate(() =>
-    Math.round(document.getElementById('mv-report-sidebar').getBoundingClientRect().left));
-  is(afterRun, 0, 'Run Report does not hide a pinned menu');
-  // The pin survives closing the page.
+  is(await sideX(), 0, 'Run Report does not hide a pinned menu');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2000);
-  const back = await page.evaluate(() => ({
-    cls: document.body.classList.contains('mv-pinned'),
-    x: Math.round(document.getElementById('mv-report-sidebar').getBoundingClientRect().left),
-  }));
-  yes(back.cls && back.x === 0, 'come back to the page: still pinned — ' + JSON.stringify(back));
-  // Unpin: back to the auto-hide exactly as before.
-  await page.evaluate(() => document.getElementById('mv-pin').click());
+  yes(await page.evaluate(() => document.body.classList.contains('mv-pinned')) && (await sideX()) === 0,
+    'come back to the page: still pinned');
+
+  // UNPIN COLLAPSES AT ONCE — with the mouse still ON the icon, which is
+  // exactly where it is when somebody presses it. No mouse move after.
+  await page.click('#mv-pin');
+  await page.waitForTimeout(400);
+  const unpinned = { pad: await padAt(), x: await sideX() };
+  yes(unpinned.pad === '0px' && unpinned.x < 0,
+    'unpinned: the menu collapses straight away, mouse still over it — ' + JSON.stringify(unpinned));
+  // And it is back to auto-hide: leave and come back to the edge, it opens.
+  await page.mouse.move(900, 400);
+  await page.waitForTimeout(300);
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  is(await sideX(), 0, 'and the hover opens it again the next time, as before the pin');
   await page.mouse.move(900, 400);
   await page.waitForTimeout(400);
-  const unpinned = await page.evaluate(() => ({
-    pad: getComputedStyle(document.body).paddingLeft,
-    x: Math.round(document.getElementById('mv-report-sidebar').getBoundingClientRect().left),
-  }));
-  yes(unpinned.pad === '0px' && unpinned.x < 0, 'unpinned: it hides itself again — ' + JSON.stringify(unpinned));
 }
 
 console.log('\n── 7. No page errors through all of it ──');

@@ -64,7 +64,7 @@
      outside this scroller as its own flex row below, so it's pinned to the
      sidebar's bottom edge and always reachable without scrolling however
      long the filter list above it gets. */
-  #mv-sidebar-scroll { flex:1 1 auto; overflow-y:auto; padding:28px 16px; }
+  #mv-sidebar-scroll { flex:1 1 auto; overflow-y:auto; padding:44px 16px 28px; }
   #mv-sidebar-trigger:hover + #mv-report-sidebar, #mv-report-sidebar:hover { transform:translateX(0); }
   /* The As At date's native picker renders as a browser overlay outside
      the DOM — the mouse moving onto it isn't hovering #mv-report-sidebar
@@ -140,14 +140,20 @@
      because a pinned menu must not hide). */
   body.mv-pinned #mv-report-sidebar { transform:translateX(0) !important; }
   body.mv-pinned #mv-sidebar-handle { opacity:0; }
+  /* The pin is an ICON in the panel's top corner — the office: "The Pin
+     make it as an icon will do." Tilted and muted while unpinned, upright
+     and green while pinned, so its state reads without a word. */
   #mv-pin {
-    flex-shrink:0; display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
-    padding:9px 16px; border:none; border-top:1px solid #e8dcc8; background:#f8f4ec;
-    font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.15em;
-    color:#8a7a68; cursor:pointer; font-family:inherit;
+    position:absolute; top:8px; right:8px; z-index:2;
+    width:28px; height:28px; border-radius:999px; padding:0;
+    display:flex; align-items:center; justify-content:center;
+    border:1.5px solid #e8dcc8; background:#fff; color:#8a7a68; cursor:pointer;
+    font-size:13px; line-height:1; transition:background .15s, border-color .15s, transform .15s;
   }
-  #mv-pin:hover { color:#3d2610; }
-  #mv-pin.mv-pin-on { background:#4a7a2e; color:#fff; }
+  #mv-pin span { display:inline-block; transform:rotate(45deg); filter:grayscale(1); opacity:.6; transition:transform .15s; }
+  #mv-pin:hover { border-color:#4a7a2e; }
+  #mv-pin.mv-pin-on { background:#4a7a2e; border-color:#4a7a2e; }
+  #mv-pin.mv-pin-on span { transform:none; filter:none; opacity:1; }
   /* A phone has no width to give away — the panel overlays there, as it
      always has, instead of squeezing the report into a ribbon. */
   @media (max-width:900px) { body.mv-open, body.mv-pinned { padding-left:0; } }
@@ -364,6 +370,10 @@
      panel stays open while the mouse is over it. -->
 <div id="mv-sidebar-trigger" class="no-print" aria-hidden="true"></div>
 <div id="mv-report-sidebar" class="no-print">
+  <!-- The pin, as an icon in the corner. Pinned, the menu stands and the
+       report moves aside for it; remembered across visits (MV_PIN_KEY).
+       Unpinning collapses the menu at once — see _mvApplyPin(). -->
+  <button type="button" id="mv-pin" aria-label="Pin this menu open" title="Pin this menu open"><span>📌</span></button>
   <div id="mv-sidebar-scroll">
     <div class="report-tab-bar" id="f-report-tabs"></div>
 
@@ -572,7 +582,6 @@
        remembered across visits (see MV_PIN_KEY), unpinned it hides itself
        on hover exactly as before. Sits above Run Report, outside the
        scroller, so it is always reachable. -->
-  <button type="button" id="mv-pin" title="Pin the menu open — it stops hiding itself and the report moves aside for it. Remembered on this machine until you unpin it.">📌 <span id="mv-pin-label">Pin this menu open</span></button>
   <!-- Pinned to the sidebar's bottom edge, outside #mv-sidebar-scroll, so
        Run Report is always reachable without scrolling however long the
        filter list above it gets. -->
@@ -2157,26 +2166,30 @@ async function runSeedInReport() {
   _losWireSticky();
 }
 
-/* THE DOUBLE-TONE REPORT — the double-tone quantity put into the nursery,
-   BY DATE. The office asked for it in their own words: "double tone report
-   is double tone quantity in nursery, generate the report by date. I want
-   to see in the month we have how many double tone. Get the data from
-   batch report - Transplanting reports".
+/* THE DOUBLE-TONE REPORT — the double-tone quantity in the nursery, BY
+   DATE, off the batch report's Transplanting records. The office: "double
+   tone report is double tone quantity in nursery, generate the report by
+   date. I want to see in the month we have how many double tone. Get the
+   data from batch report - Transplanting reports (Transplanting records
+   there)".
 
-   So the rows are the batch report's Transplanting-tab records that moved
-   seedlings INTO the DOUBLE-TONE tray (Transplanted_DoubleTone — the
-   treatment happening), one line per record with its own date, cut to the
-   As At date's calendar month the way every movement view here is
-   (monthStartOf() in runReport()), and the Grand Total is the month's
-   answer: how many double tone. A first version of this report was a
-   per-batch tray arithmetic (in / culled / out / standing); the office
-   replaced it with this the day after, so do not rebuild that without
-   being asked — the tray arithmetic still lives on the batch report's own
-   cards.
+   THE ROWS ARE THE TRANSPLANTING RECORDS OUT OF THE DOUBLE-TONE TRAY — the
+   batch report's Main Plot (D-Tone) card: `Transplanted from tray
+   [DOUBLE-TONE] to Main Plot [N15]`. Read off the source tray in the
+   remark, with the same _losTrayKey every other D-Tone split here uses.
+
+   The first build of this read Transplanted_DoubleTone (the step INTO the
+   tray) instead, and the office found it empty: "Batch 271 & 272 got
+   double tone but it does not appear". The ledger has no such row for
+   either — 271 went 377 to N15 on 17 Oct and 272 went 252 to N7 on 31 Oct,
+   both as ordinary Transplanted rows out of the DOUBLE-TONE tray. NOT the
+   keyed DTone_Nursery_Qty box either: that is a standing COUNT, newest
+   wins, and 271's 377 there is the same 377 seedlings as its transplant —
+   summing the two would count them twice.
 
    _losBuildAllRows reads the ledger as keyed (no verifiedOnly — a stock
-   question, not the reconciliation Life of Seedlings does); r.rec.dtoneTray
-   is where the builder files exactly these records. */
+   question, not the reconciliation Life of Seedlings does). The As At date
+   gives the month (monthStartOf() in runReport()), which is the period. */
 async function runDoubleToneReport() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
@@ -2191,16 +2204,18 @@ async function runDoubleToneReport() {
   const allRows = await _losBuildAllRows(asAt);
   if (!allRows) return; // error already shown by _losBuildAllRows()
 
-  // One line per RECORD, each carrying its batch's breed — the rec entries
-  // do not, and the breed filter and column both need it.
+  // One line per TRANSPLANTING RECORD out of the DOUBLE-TONE tray, each
+  // carrying its batch's breed — the rec entries do not, and the breed
+  // filter and column both need it.
   const recs = [];
   allRows.forEach(r => {
     if (breed && r.breed !== breed) return;
-    (r.rec.dtoneTray || []).forEach(x => {
+    (r.rec.trans || []).forEach(x => {
+      if (_losTrayKey(x.from) !== 'DOUBLETONE') return;
       const d = x.date ? String(x.date).slice(0, 10) : '';
       if (from && d && d < from) return;
       if (to && d && d > to) return;
-      recs.push({ date: d, batch: x.batch, breed: r.breed, from: x.from, qty: x.qty });
+      recs.push({ date: d, batch: x.batch, breed: r.breed, plot: x.place, nursery: x.nursery, qty: x.qty });
     });
   });
   recs.sort((a, b) => String(b.date).localeCompare(String(a.date))
@@ -2215,7 +2230,7 @@ async function runDoubleToneReport() {
       <td>${fmtDate(x.date)}</td>
       <td class="font-black text-[#3d2610]">${_losEsc(x.batch)}</td>
       <td>${_losEsc(x.breed)}</td>
-      <td class="text-[#8a7a68]">${_losEsc(x.from || '—')}</td>
+      <td>${_losEsc(x.plot || '—')}<span class="text-[9px] font-bold text-[#8a7a68]">${x.nursery && x.nursery !== '—' ? ' · ' + _losEsc(x.nursery) : ''}</span></td>
       <td class="text-[#7c3aed] font-black">${fmtNum(x.qty)}</td>
     </tr>`).join('');
 
@@ -2227,7 +2242,6 @@ async function runDoubleToneReport() {
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Double-Tone Report</h3>
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${rangeLabel} · ${fmtNum(recs.length)} record${recs.length === 1 ? '' : 's'} · ${fmtNum(batches)} batch${batches === 1 ? '' : 'es'}</div>
       </div>
-      <div class="text-[10px] font-bold text-[#8a7a68] mb-3">Every Transplanting-tab record that moved seedlings into the DOUBLE-TONE tray in this period — the quantity double-toned, by date. The Grand Total is how many double tone the period holds.</div>
       <div class="los-wrap">
         <table class="report-table los-table">
           <thead>
@@ -2235,12 +2249,12 @@ async function runDoubleToneReport() {
               <th>Date</th>
               <th>Batch</th>
               <th>Breed</th>
-              <th title="The batch's own pre-nursery tray the seedlings came out of, on their way into the DOUBLE-TONE tray.">From Tray</th>
-              <th title="Seedlings moved into the DOUBLE-TONE tray on this record — the double-tone quantity.">Double-Tone Qty</th>
+              <th title="The main plot the double-tone seedlings were transplanted into, and its nursery.">Main Plot</th>
+              <th title="Seedlings transplanted out of the DOUBLE-TONE tray on this record — the batch report's Main Plot (D-Tone) card.">Double-Tone Qty</th>
             </tr>
           </thead>
           <tbody>
-            ${recs.length ? body : `<tr><td colspan="5" class="py-10 text-[#8a7a68]">No double-tone record falls in this period under the selected filters.</td></tr>`}
+            ${recs.length ? body : `<tr><td colspan="5" class="py-10 text-[#8a7a68]">No double-tone transplanting record falls in this period under the selected filters.</td></tr>`}
           </tbody>
           ${recs.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="4" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Grand Total — double tone in this period</td>
@@ -3312,7 +3326,7 @@ const NURSERY_SUB_REPORTS = [
   { value: 'transplanting', label: 'Transplanting Report', hint: 'Transplanting Report — date, maturity date, location' },
   { value: 'seed_in',       label: 'Seed In Report',       hint: 'Seed In Report — what came in, per batch: supplier, quantity, damage, planted, variance' },
   { value: 'culling',       label: 'Culling Report',       hint: 'Culling Report — pick 1st, 2nd or 3rd Culling under Culling Stage below' },
-  { value: 'dtone',         label: 'Double-Tone Report',   hint: 'Double-Tone Report — the double-tone quantity put into the nursery, by date: every Transplanting-tab record that moved seedlings into the D-Tone tray in the As At month, with the month\'s total' },
+  { value: 'dtone',         label: 'Double-Tone Report',   hint: 'Double-Tone Report — the double-tone quantity in the nursery, by date: every Transplanting record out of the DOUBLE-TONE tray in the As At month, with the month\'s total' },
 ];
 
 // ── Report tabs ───────────────────────────────────────────────────────────
@@ -3700,13 +3714,23 @@ function _mvApplyPin(pinned) {
   const btn = document.getElementById('mv-pin');
   if (btn) {
     btn.classList.toggle('mv-pin-on', pinned);
-    const lbl = document.getElementById('mv-pin-label');
-    if (lbl) lbl.textContent = pinned ? 'Pinned — click to unpin' : 'Pin this menu open';
     btn.title = pinned
-      ? 'Unpin — the menu goes back to hiding itself and the report takes the whole screen.'
-      : 'Pin the menu open — it stops hiding itself and the report moves aside for it. Remembered on this machine until you unpin it.';
+      ? 'Unpin — the menu hides itself again and the report takes the whole screen'
+      : 'Pin this menu open — remembered on this machine until you unpin it';
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
   }
   if (pinned) document.getElementById('mv-report-sidebar').classList.remove('mv-force-closed');
+  _mvSyncOpen();
+}
+/* UNPINNING COLLAPSES AT ONCE. The mouse is ON the panel at the moment
+   the icon is pressed, so :hover alone would hold it open until the mouse
+   wandered off — the office: "If I unpin it, it direct collapse without any
+   click". The same force-close Run Report uses, which the existing
+   mouseleave listener clears, so the next hover opens it normally. */
+function _mvCollapseNow() {
+  document.getElementById('mv-report-sidebar').classList.add('mv-force-closed');
+  document.activeElement?.blur();
   _mvSyncOpen();
 }
 let _mvPinned = false;
@@ -3716,6 +3740,7 @@ document.getElementById('mv-pin').addEventListener('click', () => {
   _mvPinned = !_mvPinned;
   try { localStorage.setItem(MV_PIN_KEY, _mvPinned ? '1' : '0'); } catch (e) { /* not persisted, still applies now */ }
   _mvApplyPin(_mvPinned);
+  if (!_mvPinned) _mvCollapseNow();
 });
 
 /* Life of Seedlings' filters re-run on pick rather than waiting for Run
@@ -5604,7 +5629,16 @@ async function runCullingReport() {
 
   let rows = (logsRes.data || []).map(l => {
     const date = _logDate(l);
-    const nursery = PRE_NURSERY_PLOTS.includes(l.plot_name) ? 'PN' : (plotToLoc[l.plot_name] || 'Unassigned');
+    /* A 1ST CULLING IS ALWAYS PRE-NURSERY. It happens in a TRAY, and the
+       row is keyed against the tray it happened in — P22, P31 — which is in
+       operation_trays and never in Seedling Stock. Read off plotToLoc it was
+       'Unassigned', so the moment PN was ticked under Locations (the only
+       chip a 1st culling offers) every one of them dropped out: 234 of the
+       ledger's 276 1st-culling rows, 42,147 seedlings, batches 269 and 270
+       among them. Life of Seedlings already says it the same way
+       (nursery: 'Pre-Nursery' for every 1st_Culling). */
+    const nursery = (l.transaction_type === '1st_Culling' || PRE_NURSERY_PLOTS.includes(l.plot_name))
+      ? 'PN' : (plotToLoc[l.plot_name] || 'Unassigned');
     return {
       date, nursery,
       plot: l.plot_name || '—', batch: l.batch_name || '—',
