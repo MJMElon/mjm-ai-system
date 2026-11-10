@@ -755,37 +755,50 @@
         // ── The ROW's balance arithmetic, in ONE place ──────────────────
         // buildRow() prints it and releaseOverReserved() decides by it —
         // two copies of this sum is a chip bouncing off a balance the
-        // screen never printed. See buildRow for what each term means;
-        // the short of it: a culling or a transfer deducts like a DO
-        // does, and a fully culled row is clamped to 0.
+        // screen never printed.
+        //
+        // THE OFFICE'S FORMULA, on a month row, word for word: "Plot balance
+        // calculation = After 10% culling qty - DO deducted = Plot balance.
+        // If plot balance become negative, the status auto become sold out
+        // but customer (drag here) still available, unless the transplanted
+        // qty - DO deducted = 0 or the plot status become culled."
+        //
+        // So on a MONTH row neither a 3rd culling nor a 3rd-culling transfer
+        // comes off the Plot Balance any more. Both used to — which is why
+        // N12 read -1 (3,337 - 2,898 - the 440 moved to N12-R) where the
+        // office's own sum reads 439. They still decide CULLED, which is the
+        // other lock in that sentence: a plot whose counted 3rd culling covers
+        // what was left standing is done, and that test still asks the full
+        // arithmetic (fullBalance). The hover on DO Deducted still names the
+        // culling and the transfer, so the figures can be found.
+        //
+        // PLOT-R IS UNCHANGED. It has no 10% column — After Culling IS the
+        // quantity transferred in — and a Plot-R row's whole balance is what
+        // has moved on or been culled off it, so the full arithmetic stays.
         function rowFigures(r) {
             const collected = r.doDeducted || 0;
             const culledQty = r.culledQty || 0;
             const xferOut   = r.transferredOut || 0;
             const xferIn    = r.transferredIn  || 0;
             const otherDed  = culledQty + xferOut;
-            const rawBalance = r.afterCulling + xferIn - collected - otherDed;
-            const culled = culledQty > 0 && rawBalance <= 0;
+            const fullBalance = r.afterCulling + xferIn - collected - otherDed;
+            const culled = culledQty > 0 && fullBalance <= 0;
+            const rawBalance = isPR ? fullBalance : r.afterCulling - collected;
             const plotBalance = culled ? 0 : rawBalance;
             const soldOut = !culled && plotBalance <= 0;
-            // SOLD OUT IS NOT CLOSED. The office: "Sold out still drag-able,
-            // just should in grey form Sold out. But if Qty transplanted - DO
-            // deducted = 0 ... sold out - closed". Sold Out is the 10%-culling
-            // ESTIMATE used up — After 10% Culling is a guess, and seedlings
-            // really can still be standing in that 10%. So a sold-out row
-            // keeps taking customers against what is REALLY left — the
-            // transplanted quantity less the DOs (and less any real culling
-            // or transfer off it, which are seedlings genuinely gone) — and
-            // only locks once that reaches nought. On Plot-R there is no
-            // estimate (After Culling IS the quantity), so the two coincide.
-            const left = r.qty + xferIn - collected - otherDed;
+            // SOLD OUT IS NOT CLOSED. Sold Out is the 10%-culling ESTIMATE
+            // used up, and seedlings really can still be standing in that
+            // 10%, so a sold-out row keeps taking customers against
+            // Qty Transplanted - DO Deducted — the office's exact sum — and
+            // only closes once that reaches nought (or the plot is Culled).
+            const left = isPR ? fullBalance : r.qty - collected;
             const closedOut = soldOut && left <= 0;
             // What a customer may be reserved against: the plot balance, or
-            // on a sold-out row the real seedlings left. ONE figure, read by
+            // on a sold-out row the seedlings left. ONE figure, read by
             // buildRow (After Deduct Reserve, the drop gate) and by
             // releaseOverReserved (the flow-back budget) alike.
             const room = soldOut ? Math.max(0, left) : plotBalance;
-            return { collected, culledQty, xferOut, xferIn, otherDed, rawBalance, culled, plotBalance, soldOut, left, closedOut, room };
+            return { collected, culledQty, xferOut, xferIn, otherDed, rawBalance, fullBalance, culled, plotBalance, soldOut, left, closedOut, room };
         }
 
         // ── A customer the plot can no longer cover FLOWS BACK to the
@@ -940,7 +953,7 @@
             // what is reserved — the plot balance has gone under the 10%
             // estimate, so it is not what a reservation is checked against.
             const adrTitle = soldOut && !closedOut
-                ? ` title="Sold out on the 10% culling estimate, but ${left.toLocaleString()} seedlings are still standing (Qty Transplanted − DO Deducted${otherDed ? ' − culled/transferred' : ''}) — customers can still be reserved against them"`
+                ? ` title="Sold out on the 10% culling estimate, but ${left.toLocaleString()} seedlings are still standing (${isPR ? 'quantity less what has moved on, been culled or collected' : 'Qty Transplanted − DO Deducted'}) — customers can still be reserved against them"`
                 : '';
 
             // Sold Out overrides whatever was picked — it's never written
@@ -959,9 +972,18 @@
             const culledPending = r.culledPending || 0;
             const balNotes = [];
             if (culled) balNotes.push(`3rd culling recorded on this plot (${culledQty.toLocaleString()} culled${xferOut > 0 ? `, ${xferOut.toLocaleString()} ${isPR ? 'moved on to another plot' : 'transferred to Plot-R'}` : ''}) — fully culled, balance reads 0`);
-            else if (culledQty > 0) balNotes.push(`3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance`);
-            if (!culled && xferOut > 0) balNotes.push(`${xferOut.toLocaleString()} ${isPR ? 'moved on to another plot by a 3rd-culling transfer — deducted here, standing on that plot’s own row' : 'transferred off this plot by a 3rd-culling transfer — deducted here, standing on the Plot-R tab'}`);
-            if (xferIn > 0) balNotes.push(`${xferIn.toLocaleString()} transferred ONTO this plot by a 3rd-culling transfer — added to the balance`);
+            // A month row's balance is After 10% Culling − DO Deducted and
+            // nothing else (the office's formula — see rowFigures), so these
+            // say the figure is NOT in it; a Plot-R row still takes them off.
+            else if (culledQty > 0) balNotes.push(isPR
+                ? `3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance`
+                : `3rd culling of ${culledQty.toLocaleString()} is recorded on this plot — not taken off the Plot Balance, which is After 10% Culling − DO Deducted`);
+            if (!culled && xferOut > 0) balNotes.push(isPR
+                ? `${xferOut.toLocaleString()} moved on to another plot by a 3rd-culling transfer — deducted here, standing on that plot’s own row`
+                : `${xferOut.toLocaleString()} transferred off this plot to Plot-R by a 3rd-culling transfer — not taken off the Plot Balance here; they also stand on the Plot-R tab`);
+            if (xferIn > 0) balNotes.push(isPR
+                ? `${xferIn.toLocaleString()} transferred ONTO this plot by a 3rd-culling transfer — added to the balance`
+                : `${xferIn.toLocaleString()} transferred ONTO this plot by a 3rd-culling transfer — not added to the Plot Balance, which is After 10% Culling − DO Deducted`);
             if (culledPending > 0 && !culled) balNotes.push(`A 3rd culling of ${culledPending.toLocaleString()} is keyed but NOT counted yet — it needs the drone qty on the batch report row and the line verified`);
             const balTitle = balNotes.length ? ` title="${balNotes.join('. ')}"` : '';
 

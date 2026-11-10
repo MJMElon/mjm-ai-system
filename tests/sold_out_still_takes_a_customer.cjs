@@ -57,11 +57,13 @@ const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
   shared_inventory_logs:[
    {id:1,transaction_type:'Transplanted',batch_name:'270',plot_name:'S1',breed_name:'DxP',quantity_change:1000,transaction_date:'2026-01-15',created_at:'2026-01-15T02:00:00',remark:''},
    {id:2,transaction_type:'Transplanted',batch_name:'271',plot_name:'S2',breed_name:'DxP',quantity_change:500,transaction_date:'2026-01-16',created_at:'2026-01-16T02:00:00',remark:''},
-   {id:3,transaction_type:'Transplanted',batch_name:'272',plot_name:'L1',breed_name:'DxP',quantity_change:1000,transaction_date:'2026-01-17',created_at:'2026-01-17T02:00:00',remark:''}
+   {id:3,transaction_type:'Transplanted',batch_name:'272',plot_name:'L1',breed_name:'DxP',quantity_change:1000,transaction_date:'2026-01-17',created_at:'2026-01-17T02:00:00',remark:''},
+   {id:4,transaction_type:'Transplanted',batch_name:'273',plot_name:'T1',breed_name:'DxP',quantity_change:1000,transaction_date:'2026-01-18',created_at:'2026-01-18T02:00:00',remark:''},
+   {id:5,transaction_type:'Cull3_Transfer',batch_name:'273',plot_name:'T1-R',quantity_change:150,transaction_date:'2026-10-06',created_at:'2026-10-06T02:00:00',remark:'3rd Culling transfer. From: [T1|main] To: [T1-R] Qty: 150. Date: 2026-10-06.'}
   ],
   operation_batch_verifications:[],
   shared_plots:[
-   {plot_name:'S1',nursery_name:'UNN 1'},{plot_name:'S2',nursery_name:'UNN 1'},{plot_name:'L1',nursery_name:'BNN'}
+   {plot_name:'S1',nursery_name:'UNN 1'},{plot_name:'S2',nursery_name:'UNN 1'},{plot_name:'L1',nursery_name:'BNN'},{plot_name:'T1',nursery_name:'UNN 2'}
   ],
   shared_plot_allocations:[],
   shared_batch_customer_allocations:[
@@ -69,7 +71,8 @@ const SUPA = `window.SHARED_SUPA_URL='x';window.SHARED_SUPA_KEY='y';
   ],
   shared_do_records:[
    {do_number:'D1',al_number:'',total_qty:950,status:'Issued',remark:'',plot_1:'S1',qty_1:950,batch_1:'270'},
-   {do_number:'D2',al_number:'',total_qty:500,status:'Issued',remark:'',plot_1:'S2',qty_1:500,batch_1:'271'}
+   {do_number:'D2',al_number:'',total_qty:500,status:'Issued',remark:'',plot_1:'S2',qty_1:500,batch_1:'271'},
+   {do_number:'D3',al_number:'',total_qty:800,status:'Issued',remark:'',plot_1:'T1',qty_1:800,batch_1:'273'}
   ],
   operation_nurseries:[], audit_height_records:[]
  };
@@ -133,7 +136,7 @@ const rowOf = plot => `[...document.querySelectorAll('#maturity-rows tr[data-bat
     };
   });
   await page.goto(`http://127.0.0.1:${port}/operation/operation_stock_sales.html`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction('document.querySelectorAll("#maturity-rows tr[data-batch-key]").length >= 3', null, { timeout: 15000 });
+  await page.waitForFunction('document.querySelectorAll("#maturity-rows tr[data-batch-key]").length >= 4', null, { timeout: 15000 });
   // Let the raced loads (orders, allocations) land and the re-render run
   // its flow-back pass.
   await page.waitForTimeout(900);
@@ -200,6 +203,17 @@ const rowOf = plot => `[...document.querySelectorAll('#maturity-rows tr[data-bat
   check(/Sold out — closed/.test(await cellOf('S2', 9)), `reading "Sold out — closed" — got "${await cellOf('S2', 9)}"`);
   check(await page.evaluate(`(${rowOf('S2')})?.dataset.matClosed`) === '1', 'and the row says it is closed');
   check(await page.evaluate("typeof matRowLocked === 'function'") , 'the drop gate asks the row whether it is closed');
+
+  // ── 6. The office's own N12: a transfer does not come off the balance ───
+  console.log('\n6. T1 — the office\'s N12 shape: Plot Balance = After 10% Culling − DO Deducted, and nothing else');
+  /* "Plot balance calculation = After 10% culling qty - DO deducted = Plot
+     balance." N12 read -1 because the 440 moved to N12-R came off it too:
+     3,337 - 2,898 - 440. T1 is the same shape: 900 - 800 = 100, with 150
+     moved to T1-R. It must read 100 and must NOT be Sold Out. */
+  check(await cellOf('T1', 8) === '100', `T1's Plot Balance is 900 − 800 = 100, the 150 transferred not taken off — got "${await cellOf('T1', 8)}"`);
+  check(!(await cellOf('T1', 6)).includes('Sold Out'), `and T1 is not Sold Out — got "${await cellOf('T1', 6)}"`);
+  check(/150 transferred off this plot/.test(await page.evaluate(`(${rowOf('T1')})?.children[8]?.getAttribute('title')||''`)),
+    'the transfer is still named in the balance hover');
 
   console.log('\n' + (fails ? fails + ' FAILED' : 'all checks passed'));
   await browser.close(); server.close();

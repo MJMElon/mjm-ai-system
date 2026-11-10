@@ -197,11 +197,16 @@ async function openPage(browser, port, failRowVer) {
   // ── 1. Drone qty + signed line counts: a partial culling reduces ────────
   const u1 = await page.evaluate(snap('U1'));
   check(!!u1, 'U1 (culling with MapQty, row signed) is on the month tab');
-  check(u1 && u1.balance === '1,100', `its balance is REDUCED by the counted culling — 1,800 less 700 (got "${u1 && u1.balance}")`);
-  check(u1 && /3rd culling of 700/i.test(u1.balTitle) && /deducted/i.test(u1.balTitle), `and the cell says the 700 came off (got "${u1 && u1.balTitle}")`);
+  /* THE OFFICE'S FORMULA: a month row's Plot Balance is After 10% Culling
+     − DO Deducted ("Plot balance calculation = After 10% culling qty - DO
+     deducted"). A PARTIAL 3rd culling no longer comes off it — it is named
+     in the hover — while a culling that covers what is left still makes
+     the row CULLED and reads 0 (sections below). */
+  check(u1 && u1.balance === '1,800', `its balance is After 10% Culling − DO: 1,800, the partial culling not taken off (got "${u1 && u1.balance}")`);
+  check(u1 && /3rd culling of 700/i.test(u1.balTitle) && /not taken off/i.test(u1.balTitle), `and the hover names the 700 and says it is not taken off (got "${u1 && u1.balTitle}")`);
   check(u1 && u1.dropdown && u1.status === 'open', `partially culled stays LIVE with the person's own pick (got ${u1 && u1.status})`);
-  check(u1 && u1.chip && u1.chipQty === '600' && u1.after === '500' && u1.dropBalance === '500',
-    `the chip stays and After Deduct Reserve works off the reduced figure: 1,100 − 600 (got "${u1 && u1.after}")`);
+  check(u1 && u1.chip && u1.chipQty === '600' && u1.after === '1,200' && u1.dropBalance === '1200',
+    `the chip stays and After Deduct Reserve works off the shown balance: 1,800 − 600 (got "${u1 && u1.after}")`);
 
   // ── 2. No drone qty → NOT counted, even signed ───────────────────────────
   const u3 = await page.evaluate(snap('U3'));
@@ -250,8 +255,8 @@ async function openPage(browser, port, failRowVer) {
 
   // ── 7. The foot sums the SHOWN balances ──────────────────────────────────
   const foot = await page.evaluate(() => [...document.querySelectorAll('.mat-table tfoot td, #maturity-table tfoot td')].map(td => td.textContent.trim()));
-  check(foot.includes('2,810'), `the Plot Balance total is the column's own sum — 1,100 + 900 + 450 + 0 + 360 (foot: ${foot.join(' | ')})`);
-  check(foot.includes('2,210'), 'and After Deduct Reserve totals 2,810 − 600 off the same shown figures');
+  check(foot.includes('3,510'), `the Plot Balance total is the column's own sum — 3,510 under the office's formula (foot: ${foot.join(' | ')})`);
+  check(foot.includes('2,910'), 'and After Deduct Reserve totals 3,510 − 600 off the same shown figures');
 
   // ── 8. Plot-R goes through the SAME gate as the month rows ───────────────
   const pr = await page.evaluate(`(async () => {
@@ -283,7 +288,7 @@ async function openPage(browser, port, failRowVer) {
     `with Row_Verification unreadable the verification half is WAIVED — U5's MapQty culling counts, a check that cannot run must not move the report (got ${open1 && open1.status} / ${open1 && open1.balance})`);
   check(open2 && open2.balance === '450' && open2.status !== 'culled',
     `but the MapQty half still holds — it has no read to fail (got ${open2 && open2.status} / ${open2 && open2.balance})`);
-  check(open3 && open3.balance === '1,100', 'and the counted rows read exactly as they did');
+  check(open3 && open3.balance === '1,800', 'and the counted rows read exactly as they did');
   await page2.close();
 
   await browser.close(); server.close();

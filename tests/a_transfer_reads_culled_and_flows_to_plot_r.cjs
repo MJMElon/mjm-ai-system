@@ -180,8 +180,12 @@ const snap = plot => `(() => {
 
   // ── 2. The transfer deducts UNGATED; the culling still waits its gate ────
   const u2 = await page.evaluate(snap('U2'));
-  check(u2 && u2.balance === '700' && u2.status !== 'culled' && u2.dropdown,
-    `U2 reads 900 − 200 transferred = 700, still live — its culling has no drone qty yet (got ${u2 && u2.status} / "${u2 && u2.balance}")`);
+  /* THE OFFICE'S FORMULA: a month row's Plot Balance is After 10% Culling
+     − DO Deducted and nothing else ("Plot balance calculation = After 10%
+     culling qty - DO deducted"). The transfer no longer comes off it; it
+     is still NAMED in the hover, and still lands on the Plot-R tab. */
+  check(u2 && u2.balance === '900' && u2.status !== 'culled' && u2.dropdown,
+    `U2 reads 900 − 0 DO = 900 — the 200 transferred is not taken off a month row, still live (got ${u2 && u2.status} / "${u2 && u2.balance}")`);
   check(u2 && /200 transferred off this plot/.test(u2.balTitle) && /keyed but NOT counted/.test(u2.balTitle),
     `the hover says the 200 left for Plot-R and the 100 culling still waits (got "${u2 && u2.balTitle}")`);
 
@@ -215,14 +219,14 @@ const snap = plot => `(() => {
     return { n1: ${snap('N1')}, n2: ${snap('N2')},
              foot: [...document.querySelectorAll('.mat-table tfoot td, #maturity-table tfoot td')].map(td => td.textContent.trim()) };
   })()`);
-  check(back.n1 && back.n1.balance === '1,000' && /100 transferred ONTO this plot/.test(back.n1.balTitle),
-    `N1's month row carries the 100 in — 900 + 100, hover saying so (got "${back.n1 && back.n1.balance}" / "${back.n1 && back.n1.balTitle}")`);
-  check(back.n2 && back.n2.balance === '350' && /100 transferred off/.test(back.n2.balTitle),
-    `and N2 gave the same 100 up — 450 − 100 (got "${back.n2 && back.n2.balance}")`);
+  check(back.n1 && back.n1.balance === '900' && /100 transferred ONTO this plot/.test(back.n1.balTitle),
+    `N1's month row reads After 10% Culling − DO = 900, the 100 in named in the hover (got "${back.n1 && back.n1.balance}" / "${back.n1 && back.n1.balTitle}")`);
+  check(back.n2 && back.n2.balance === '450' && /100 transferred off/.test(back.n2.balTitle),
+    `and N2 reads 450, the 100 it gave up named in the hover (got "${back.n2 && back.n2.balance}")`);
 
   // ── 6. The foot sums the SHOWN balances ──────────────────────────────────
-  check(back.foot.includes('2,800'),
-    `the month tab's Plot Balance total is the column's own sum — 0 + 700 + 750 + 1,000 + 350 (foot: ${back.foot.join(' | ')})`);
+  check(back.foot.includes('3,150'),
+    `the month tab's Plot Balance total is the column's own sum — 3,150 under the office's formula (foot: ${back.foot.join(' | ')})`);
 
   // ── 7. Nothing is written back ───────────────────────────────────────────
   const writes = await page.evaluate(() => ({ inserts: window.__inserts.length, writes: window.__writes.length }));
