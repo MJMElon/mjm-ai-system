@@ -229,7 +229,10 @@ const rowOf = plot => `[...document.querySelectorAll('#maturity-rows tr[data-bat
   // read would take the harness down with every check underneath never
   // asked — the trap the house notes name.
   const srcHasLock = await page.evaluate("typeof MAT_DROP_LOCKED !== 'undefined' ? MAT_DROP_LOCKED.join() : 'no gate'");
-  check(srcHasLock === 'finished,culled,sold_out', `the status gate names all three locks — got "${srcHasLock}"`);
+  // Sold Out left this list: a sold-out row still takes customers against
+  // the seedlings really left, and only a row with NOTHING left closes —
+  // that is data-mat-closed, held by sold_out_still_takes_a_customer.cjs.
+  check(srcHasLock === 'finished,culled', `the status gate names the two status locks — got "${srcHasLock}"`);
 
   // ── 3. The Location column became the ALL / UNN1 / UNN2 / BNN buttons ──
   console.log('\n3. Location is buttons at the top, ALL by default — the column is gone');

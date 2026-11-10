@@ -145,17 +145,19 @@ const check = (ok, m) => { console.log((ok ? '  ok  ' : ' FAIL ') + m); if (!ok)
 const rowOf = plot => `[...document.querySelectorAll('#maturity-rows tr[data-batch-key]')].find(tr => tr.dataset.plotName === '${plot}')`;
 const snap = plot => `(() => {
   const tr = ${rowOf(plot)}; if (!tr) return null;
+  // Cells after the Location column (removed for the ALL / UNN1 / UNN2 /
+  // BNN buttons) each sit one place left: Status 6, Balance 8, After 11.
   const tds = tr.querySelectorAll('td');
   return {
     status: tr.dataset.matStatus,
-    balance: tds[9].textContent.trim(),
-    balTitle: tds[9].getAttribute('title') || '',
+    balance: tds[8].textContent.trim(),
+    balTitle: tds[8].getAttribute('title') || '',
     dropdown: !!tr.querySelector('.mat-status-wrap'),
     pill: (tr.querySelector('td.col-plot span') || {}).textContent || '',
-    pillTitle: tds[7].querySelector('span[title]') ? tds[7].querySelector('span[title]').getAttribute('title') : '',
+    pillTitle: tds[6].querySelector('span[title]') ? tds[6].querySelector('span[title]').getAttribute('title') : '',
     chip: !!tr.querySelector('.reserv-chip'),
     chipQty: (tr.querySelector('.reserv-chip-qty') || {}).textContent || '',
-    after: tds[12].textContent.trim(),
+    after: tds[11].textContent.trim(),
     dropBalance: tr.dataset.batchBalance,
   };
 })()`;
@@ -219,8 +221,8 @@ async function openPage(browser, port, failRowVer) {
   const u2 = await page.evaluate(`(() => {
     const tr = ${rowOf('U2')}; if (!tr) return null;
     const menu = tr.querySelector('.mat-status-menu');
-    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[9].textContent.trim(),
-             balTitle: tr.querySelectorAll('td')[9].getAttribute('title') || '',
+    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[8].textContent.trim(),
+             balTitle: tr.querySelectorAll('td')[8].getAttribute('title') || '',
              menuHasCulled: menu ? /culled/i.test(menu.textContent) : null,
              menuHasOpen: menu ? /open/i.test(menu.textContent) : null };
   })()`);
@@ -257,8 +259,8 @@ async function openPage(browser, port, failRowVer) {
     if (!btn) return null;
     btn.click(); await new Promise(r => setTimeout(r, 50));
     const tr = ${rowOf('B6-R')}; if (!tr) return { noRow: true };
-    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[9].textContent.trim(),
-             balTitle: tr.querySelectorAll('td')[9].getAttribute('title') || '',
+    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[8].textContent.trim(),
+             balTitle: tr.querySelectorAll('td')[8].getAttribute('title') || '',
              dropdown: !!tr.querySelector('.mat-status-wrap') };
   })()`);
   check(pr && !pr.noRow && pr.status !== 'culled' && pr.dropdown && pr.balance === '800',

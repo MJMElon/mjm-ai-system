@@ -33,57 +33,6 @@
         .gear-slider{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:linear-gradient(90deg,#10b981 0%,#f59e0b 50%,#ef4444 100%);outline:none;cursor:pointer;}
         .gear-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1e293b;box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:grab;}
 
-        /* To-do tabs (compact) */
-        .todo-tab{padding:8px 14px;font-weight:900;font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-radius:10px;transition:all .15s;color:#64748b;background:transparent;border:1.5px solid transparent;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;}
-        .todo-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
-        .todo-tab.active.unpaid{background:#fef2f2;color:#b91c1c;border-color:#fca5a5;}
-        .todo-tab.active.credit{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd;}
-        .todo-tab .tab-count{background:white;border:1px solid currentColor;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:900;}
-
-        /* Notebook-style to-do list */
-        .notebook{background:repeating-linear-gradient(180deg,#fffbeb 0 28px,#fef3c7 28px 29px);border:1px solid #fde68a;border-radius:10px;box-shadow:inset 3px 0 0 #f59e0b,0 1px 4px rgba(0,0,0,.04);}
-        .notebook-row{display:flex;flex-direction:column;gap:2px;padding:6px 10px 6px 14px;border-bottom:1px dashed #fde68a;font-size:11px;}
-        .notebook-row:last-child{border-bottom:none;}
-        .notebook-row:hover{background:rgba(255,255,255,.5);}
-        .notebook-row .nb-line1{display:flex;justify-content:space-between;align-items:center;gap:6px;}
-        .notebook-row .nb-line2{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10px;color:#a16207;}
-        .notebook-row .note-id{font-family:'Courier New',monospace;font-weight:900;color:#92400e;}
-        .notebook-row .note-name{font-weight:900;color:#451a03;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        .notebook-row .note-amt{font-weight:900;color:#b91c1c;font-variant-numeric:tabular-nums;white-space:nowrap;}
-        .notebook-row.credit .note-amt{color:#1d4ed8;}
-
-        /* Credit-invoice row buttons */
-        .ci-btn{font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:3px 8px;border:1px solid;cursor:pointer;white-space:nowrap;transition:all .15s;}
-        .ci-btn-upload{background:#dbeafe;color:#1d4ed8;border-color:#93c5fd;}
-        .ci-btn-upload:hover{background:#1d4ed8;color:#fff;}
-        .ci-btn-paid{background:#dcfce7;color:#166534;border-color:#86efac;}
-        .ci-btn-paid:hover{background:#166534;color:#fff;}
-        .ci-link{text-decoration:none;font-size:13px;line-height:1;padding:1px 4px;border-radius:5px;}
-        .ci-link:hover{background:#f1f5f9;}
-
-        /* Credit-invoice modal */
-        .ci-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
-        .ci-modal.open{display:flex;}
-        .ci-modal-card{background:#fff;border-radius:16px;width:100%;max-width:520px;box-shadow:0 30px 80px -10px rgba(0,0,0,.4);overflow:hidden;display:flex;flex-direction:column;max-height:92vh;}
-        .ci-modal-head{padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(180deg,#f8fafc,#fff);}
-        .ci-modal-title{font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;}
-        .ci-modal-close{background:transparent;border:none;font-size:20px;color:#64748b;cursor:pointer;line-height:1;}
-        .ci-modal-close:hover{color:#0f172a;}
-        .ci-modal-body{padding:18px 20px;overflow-y:auto;flex:1;}
-        .ci-field{margin-bottom:.85rem;}
-        .ci-field-label{font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;display:block;}
-        .ci-input,.ci-textarea{width:100%;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:#0f172a;background:#fff;}
-        .ci-input:focus,.ci-textarea:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.18);}
-        .ci-textarea{resize:vertical;min-height:60px;}
-        .ci-readonly-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:12px;color:#334155;margin-bottom:.4rem;}
-        .ci-readonly-row strong{color:#0f172a;font-weight:900;}
-        .ci-modal-error{color:#b91c1c;font-size:11px;font-weight:700;min-height:16px;margin-top:.4rem;}
-        .ci-modal-foot{padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:.5rem;background:#f8fafc;}
-        .ci-btn-primary{background:#1d4ed8;color:#fff;border:1px solid #1d4ed8;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
-        .ci-btn-primary:hover{background:#1e40af;}
-        .ci-btn-primary:disabled{opacity:.6;cursor:wait;}
-        .ci-btn-ghost{background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
-        .ci-btn-ghost:hover{background:#f1f5f9;color:#0f172a;}
 
         /* Maturity month tabs */
         .month-tab{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
@@ -160,9 +109,9 @@
         /* The column line sticks BELOW the group line; the offset is the
            group row's measured height, set by updateMaturityHeaders(). */
         .mat-table thead tr:not(.mat-group-row) th{top:var(--mat-group-h,26px);z-index:2;}
-        .mat-loc-btn{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
-        .mat-loc-btn:hover{background:#eff6ff;color:#1d4ed8;}
-        .mat-loc-btn.active{background:#eff6ff;color:#1e40af;border-color:#3b82f6;}
+        .mat-loc-btn{padding:5px 14px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:1.5px solid #cbd5e1;background:#fff;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .mat-loc-btn:hover{border-color:#3b82f6;color:#1d4ed8;}
+        .mat-loc-btn.active{background:#1e40af;color:#fff;border-color:#1e40af;}
         /* A Culled / Sold Out plot's allocation cell is a gray zone, not a
            drop target. */
         .reserv-empty-locked{background:repeating-linear-gradient(135deg,#f1f5f9,#f1f5f9 6px,#e8edf3 6px,#e8edf3 12px);border:1.5px dashed #cbd5e1;border-radius:10px;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:8px 10px;text-align:center;cursor:not-allowed;}
@@ -469,23 +418,23 @@
 
         <div class="dash-card overflow-hidden">
             <div class="mat-card-head">
-                <div class="mat-card-title">
+                <div class="mat-card-title flex-wrap">
                     <div class="mat-card-title-icon">🌱</div>
-                    <div>
-                        <div class="mat-card-title-text">Monthly Maturity Allocation</div>
-                        <div class="mat-card-title-sub">Drag customer cards onto a row · drag a chip to move it to another row</div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 relative flex-wrap">
+                    <div class="mat-card-title-text">Monthly Maturity Allocation</div>
                     <!-- ALL / UNN1 / UNN2 / BNN — the Location column,
-                         turned into a filter. ALWAYS opens on ALL (not
-                         remembered): the office named the default. -->
-                    <div id="mat-loc-tabs" class="flex gap-1 bg-slate-50 rounded-xl border border-slate-200 p-1 shadow-sm">
+                         turned into a filter, on the SAME ROW as the title
+                         and in round buttons, as the office asked. ALWAYS
+                         opens on ALL (not remembered): the office named
+                         the default. The subtitle under the title went
+                         with the notes below — "too many notes". -->
+                    <div id="mat-loc-tabs" class="flex gap-1.5 ml-1">
                         <button class="mat-loc-btn active" data-loc="ALL"  onclick="setMatLocFilter('ALL')">ALL</button>
                         <button class="mat-loc-btn" data-loc="UNN1" onclick="setMatLocFilter('UNN1')">UNN1</button>
                         <button class="mat-loc-btn" data-loc="UNN2" onclick="setMatLocFilter('UNN2')">UNN2</button>
                         <button class="mat-loc-btn" data-loc="BNN"  onclick="setMatLocFilter('BNN')">BNN</button>
                     </div>
+                </div>
+                <div class="flex items-center gap-2 relative flex-wrap">
                     <div id="month-tabs" class="flex gap-1 bg-slate-50 rounded-xl border border-slate-200 p-1 shadow-sm scroll-x-fade flex-wrap"></div>
                     <div class="relative">
                         <button id="history-btn" onclick="toggleHistoryMenu()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest" title="Show past maturity months">
@@ -542,15 +491,9 @@
             <div id="maturity-released" class="hidden text-[9px] font-bold text-blue-700 bg-blue-50 border-t border-blue-200 px-3 py-1.5"></div>
         </div>
 
-        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-            <span class="font-black uppercase tracking-wider text-slate-700">Notes</span> —
-            <strong>Maturity Date</strong> = transplant date keyed in the Batch Record + 9 months.
-            <strong>DO Deducted</strong> = seedlings issued via Delivery Orders keyed to this plot + batch (cancelled DOs excluded) — the same Sold figure the Main Nursery Movement report shows.
-            <strong>Plot Balance</strong> = After 10% Culling − DO Deducted (what's still in the plot; negative means over-issued).
-            <strong>After Deduct Reserve</strong> = Plot Balance − Reserved Qty (what's still free to allocate).
-            <strong>Plot Status</strong> defaults to <em>No Status</em>; an admin opens it for collection.
-            On <strong>Plot-R</strong>: <strong>Qty Transferred</strong> replaces Qty Transplanted (the sum transferred in from 3rd Culling, same figure the Movement report calls Transfer In), there is no 10%-culling estimate, and Plot Balance also nets off what was culled or moved on to another plot — hover DO Deducted on a Plot-R row for the breakdown.
-        </div>
+        <!-- The Notes paragraph that stood here is gone — the office:
+             "Monthly Maturity allocation too many notes, remove it". What
+             each column means is in its heading's hover. -->
     </div>
 
     </div>
@@ -587,36 +530,6 @@
                     </div>
                     <div id="mon-dash-month-bars" class="grid grid-cols-12 gap-1 h-28 items-end"></div>
                     <div class="text-[9px] font-bold text-slate-400 mt-2 text-center">Click a bar to see the rows behind that month.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── To-Do List (full-width) ── -->
-        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
-                    <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                        </div>
-                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
-                        <span id="todo-section-meta" class="text-[9px] font-bold text-slate-400 ml-1"></span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
-                            <span>💰</span><span>Unpaid</span>
-                            <span class="tab-count" id="todo-count-unpaid">0</span>
-                        </button>
-                        <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
-                            <span>🧾</span><span>Credit</span>
-                            <span class="tab-count" id="todo-count-credit">0</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="px-3 pt-3 pb-3 flex-1 min-h-0">
-                <div class="notebook max-h-[360px] overflow-y-auto" id="todo-body">
-                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
                 </div>
             </div>
         </div>
@@ -907,67 +820,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=19"></script>
-<!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
-<div class="ci-modal" id="ci-upload-modal">
-    <div class="ci-modal-card">
-        <div class="ci-modal-head">
-            <div class="ci-modal-title">📤 Upload Invoice</div>
-            <button class="ci-modal-close" onclick="closeInvoiceUploadModal()">×</button>
-        </div>
-        <div class="ci-modal-body">
-            <input type="hidden" id="ci-up-key">
-            <div class="ci-readonly-row">Customer: <strong id="ci-up-customer">—</strong></div>
-            <div class="ci-readonly-row">Billing period: <strong id="ci-up-period">—</strong></div>
-            <div class="ci-readonly-row" id="ci-up-summary" style="margin-bottom:1rem;">—</div>
-
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-invoice-no">Invoice Number *</label>
-                <input type="text" id="ci-up-invoice-no" class="ci-input" placeholder="e.g. INV-2026-05-014" autocomplete="off">
-            </div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-file">Invoice PDF / Image *</label>
-                <input type="file" id="ci-up-file" class="ci-input" accept="application/pdf,image/*">
-            </div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-due">Due Date (optional)</label>
-                <input type="date" id="ci-up-due" class="ci-input">
-            </div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-notes">Notes (optional)</label>
-                <textarea id="ci-up-notes" class="ci-textarea" placeholder="Internal notes for this invoice"></textarea>
-            </div>
-            <div class="ci-modal-error" id="ci-up-error"></div>
-        </div>
-        <div class="ci-modal-foot">
-            <button class="ci-btn-ghost" onclick="closeInvoiceUploadModal()">Cancel</button>
-            <button class="ci-btn-primary" id="ci-up-submit" onclick="submitInvoiceUpload()">Upload &amp; Issue Invoice</button>
-        </div>
-    </div>
-</div>
-
-<div class="ci-modal" id="ci-paid-modal">
-    <div class="ci-modal-card">
-        <div class="ci-modal-head">
-            <div class="ci-modal-title">✓ Mark Invoice Paid</div>
-            <button class="ci-modal-close" onclick="closeMarkPaidModal()">×</button>
-        </div>
-        <div class="ci-modal-body">
-            <input type="hidden" id="ci-paid-id">
-            <div class="ci-readonly-row" id="ci-paid-summary" style="margin-bottom:1rem;">—</div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-paid-file">Payment Proof (optional)</label>
-                <input type="file" id="ci-paid-file" class="ci-input" accept="application/pdf,image/*">
-            </div>
-            <div class="ci-modal-error" id="ci-paid-error"></div>
-        </div>
-        <div class="ci-modal-foot">
-            <button class="ci-btn-ghost" onclick="closeMarkPaidModal()">Cancel</button>
-            <button class="ci-btn-primary" id="ci-paid-submit" onclick="submitMarkPaid()">Mark as Paid</button>
-        </div>
-    </div>
-</div>
-
+<script src="operation_stock_sales.js?v=20"></script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>
