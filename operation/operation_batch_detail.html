@@ -10827,6 +10827,10 @@ Thank you.`;
             doc.text((expectedVariance >= 0 ? '+' : '') + expectedVariance.toLocaleString(), cx(3), y + 38);
             y += 64;
 
+            /* The remark is measured here, before it is drawn under the analysis. */
+            const remarkText  = (document.getElementById('t8-batch-remark').value || '').trim();
+            const remarkLines = remarkText ? doc.splitTextToSize(remarkText, pageW - margin * 2) : [];
+
             // ── ANALYSIS
             const baseline = totalSupplier > 0 ? totalSupplier : expectedRaw;
             const shortage = Math.max(0, baseline - totalAudited);
@@ -10844,6 +10848,19 @@ Thank you.`;
             doc.setFont('times', 'bold'); setText(shortage > 0 ? RED : GREEN);
             doc.text(shortage.toLocaleString() + ' (' + shortagePct.toFixed(2) + '%)', margin + 350, y);
             y += 18;
+
+            /* ── REMARK, straight under the analysis it explains.
+                  It used to be drawn at the very end of the sheet, after the
+                  damage photos, so on a full page it was pushed onto a sheet
+                  of its own. The office asked for it to sit under the
+                  analysis; the photos are then laid out in what is left. */
+            if (remarkText) {
+                _need(14 + remarkLines.length * 12 + 6);
+                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+                doc.text('REMARK', margin, y); y += 14;
+                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
+                doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
+            }
 
             /* ── THE PHOTOS ARE MEASURED BEFORE THE DAMAGE BLOCK IS DRAWN,
                   because the two go on the page TOGETHER.
@@ -10869,13 +10886,10 @@ Thank you.`;
             }
             const shown = dmgPhotos.filter(Boolean);
             const missing = dmgPhotos.length - shown.length;
-            /* The remark has to be measured BEFORE the pictures are, or
-               filling the page with them pushes two lines of text onto a
-               sheet of their own. */
-            const remarkText  = (document.getElementById('t8-batch-remark').value || '').trim();
-            const remarkLines = remarkText ? doc.splitTextToSize(remarkText, pageW - margin * 2) : [];
-            const tailH = (missing > 0 ? 12 : 0)
-                        + (remarkText ? 14 + remarkLines.length * 12 + 6 : 0);
+            /* The remark is drawn under the analysis now, ABOVE the damage
+               block, so it is no longer something the photos must leave room
+               for at the foot: only the missing-photo line is. */
+            const tailH = (missing > 0 ? 12 : 0);
 
             /* THE PICTURES FILL THE ROOM THEY ARE GIVEN.
 
@@ -11062,17 +11076,6 @@ Thank you.`;
                              margin, y); y += 12;
                 }
                 y += 4;
-            }
-
-            // ── REMARK, measured above so the pictures leave room for it.
-            //    The ask is a no-op when they did; it is what carries the
-            //    remark on a sheet that had no photos to reserve it.
-            if (remarkText) {
-                _need(14 + remarkLines.length * 12 + 6);
-                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-                doc.text('REMARK', margin, y); y += 14;
-                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
-                doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
             }
 
             /* ── FOOTER, on EVERY page.

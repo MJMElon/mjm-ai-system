@@ -430,6 +430,9 @@ const BAGS = [
   await page.evaluate((n) => {
     document.querySelectorAll('.t8-bag-row').forEach(r => r.remove());
     for (let i = 1; i <= n; i++) window.addSeedAuditRow('MJ' + (100 + i), 250, 250, 250);
+    /* A remark, so the sheet has one to place. It belongs UNDER the analysis,
+       not at the foot after the damage photos. */
+    document.getElementById('t8-batch-remark').value = 'REMARK-PROBE 1 extra seedling is replacement';
     window.__PDFS = [];
     return window.downloadSeedAuditPdf();
   }, MANY);
@@ -477,6 +480,13 @@ const BAGS = [
             at(/^TOTAL AUDITED QTY$/).y > 0 && at(/^TOTAL AUDITED QTY$/).y < FLOOR);
   checkTrue('the analysis heading too', at(/AUDIT ANALYSIS/).y < FLOOR);
   checkTrue('and DAMAGE CONTROL', at(/^DAMAGE CONTROL$/).y < FLOOR);
+  /* THE REMARK SITS UNDER THE ANALYSIS, on the same page as it, and above the
+     damage block — not after the pictures. */
+  const remarkLine = big.lines.find(l => /^REMARK$/.test(l.t)) || {};
+  const analysisLine = at(/AUDIT ANALYSIS/);
+  checkTrue('the remark is drawn under the analysis',
+            remarkLine.y > analysisLine.y && remarkLine.y < at(/^DAMAGE CONTROL$/).y);
+  check('…and on the same page as the analysis', remarkLine.page, analysisLine.page);
   /* AND THE PAIR STAYS A PAIR ON A LONG SHEET TOO. This is the one that
      put it on the office's desk: with the bag table running over, the panel
      fitted where the first picture did not, so DAMAGE CONTROL printed alone
