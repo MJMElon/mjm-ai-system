@@ -901,9 +901,14 @@
                                         <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Bag-by-Bag Audit Entry</h4>
                                         <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Key-in each bag's supplier count and the audited count.</p>
                                     </div>
-                                    <button type="button" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2 self-start sm:self-auto" onclick="addSeedAuditRow()">
-                                        <span class="text-lg leading-none">+</span> Add Bag
-                                    </button>
+                                    <div class="flex items-center gap-2 self-start sm:self-auto">
+                                        <button type="button" id="t8-sort-btn" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="toggleSeedAuditSort()" title="Sort the bags by Bag No / Seal No, small to large. Press again to go back to the order they were added.">
+                                            <span aria-hidden="true">↑</span> <span id="t8-sort-label">Sort small → large</span>
+                                        </button>
+                                        <button type="button" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="addSeedAuditRow()">
+                                            <span class="text-lg leading-none">+</span> Add Bag
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <!-- AI Scan dropzone -->
@@ -9377,7 +9382,7 @@
             const recVal  = (receivedQty != null && receivedQty !== '') ? Number(receivedQty).toLocaleString() : '';
 
             const html = `
-                <div id="${rowId}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_1.4fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
+                <div id="${rowId}" data-seq="${seedAuditRowCount}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_1.4fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
                     <div>
                         <label class="label-style lg:hidden">Bag No / Seal No</label>
                         <input type="text" class="input-style t8-bag-no" placeholder="e.g. MJ24" value="${safeBag}" oninput="updateSeedAuditCompletion()">
@@ -9420,6 +9425,35 @@
         function removeSeedAuditRow(rowId) {
             const row = document.getElementById(rowId);
             if (row) { row.remove(); calcSeedAudit(); }
+        }
+
+        // ── Sort bags by Bag No / Seal No ────────────────────────────────
+        // Reorders the rows only. Nothing is re-keyed and every handler is
+        // addressed by row id, so the order is all that moves. Blank bag
+        // numbers go last. Numeric-aware, so 322064 < 322065 < 322069 and
+        // 9 < 10 — a plain text sort would put 10 before 9.
+        let _seedAuditSorted = false;
+        function toggleSeedAuditSort() {
+            const container = document.getElementById('t8-bag-rows-container');
+            if (!container) return;
+            const rows = Array.from(container.querySelectorAll('.t8-bag-row'));
+            _seedAuditSorted = !_seedAuditSorted;
+            if (_seedAuditSorted) {
+                const bagOf = r => (r.querySelector('.t8-bag-no')?.value || '').trim();
+                rows.sort((a, b) => {
+                    const ka = bagOf(a), kb = bagOf(b);
+                    if (!ka !== !kb) return ka ? -1 : 1;
+                    return ka.localeCompare(kb, undefined, { numeric: true, sensitivity: 'base' });
+                });
+            } else {
+                // Back to the order the bags were added in.
+                rows.sort((a, b) => Number(a.dataset.seq) - Number(b.dataset.seq));
+            }
+            rows.forEach(r => container.appendChild(r));
+            const label = document.getElementById('t8-sort-label');
+            const btn = document.getElementById('t8-sort-btn');
+            if (label) label.innerText = _seedAuditSorted ? 'Sorted small → large (undo)' : 'Sort small → large';
+            if (btn) btn.classList.toggle('!bg-[#e8f5da]', _seedAuditSorted);
         }
 
         // ── AI Scan of supplier packing list ──────────────────────────────
@@ -10816,8 +10850,10 @@ Thank you.`;
             doc.setFont('times', 'bold'); doc.setFontSize(8); setText(INK_SOFT);
             doc.text('TOTAL SUPPLIER QTY', cx(0), y + 16);
             doc.text('TOTAL AUDITED QTY',  cx(1), y + 16);
-            doc.text('VARIANCE (AUDIT − SUPPLIER)', cx(2), y + 16);
-            doc.text('VARIANCE VS EXPECTED', cx(3), y + 16);
+            /* Two lines each: on one line the longer label ran into the
+               next cell's label and the two printed over each other. */
+            doc.text(['VARIANCE', '(AUDIT − SUPPLIER)'], cx(2), y + 16);
+            doc.text(['VARIANCE', 'VS EXPECTED'], cx(3), y + 16);
             doc.setFontSize(13); setText(INK);
             doc.text(totalSupplier.toLocaleString(), cx(0), y + 38);
             setText(GREEN); doc.text(totalAudited.toLocaleString(), cx(1), y + 38);

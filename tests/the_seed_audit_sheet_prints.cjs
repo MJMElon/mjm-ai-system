@@ -277,8 +277,10 @@ const BAGS = [
   /* The Variance COLUMN adds up to audited − supplier, and that figure was
      worked out and then not printed, so adding the column down gave a number
      that appeared nowhere. */
-  checkTrue('the variance the column above adds up to', has(/VARIANCE \(AUDIT/i));
-  checkTrue('…and the variance against what was expected', has(/VARIANCE VS EXPECTED/i));
+  /* The two variance labels are drawn on two lines each (VARIANCE over the
+     qualifier), so the qualifier is what is asked for, not the whole string. */
+  checkTrue('the variance the column above adds up to', has(/\(AUDIT . SUPPLIER\)/i));
+  checkTrue('…and the variance against what was expected', has(/VS EXPECTED/i));
   check('the supplier total is 1,250', printed.text.includes('1,250'), true);
   check('the audited total is 1,300', printed.text.includes('1,300'), true);
   check('…so the variance is +50', printed.text.includes('+50'), true);
