@@ -150,6 +150,22 @@
         .premium-toggle:checked::before{left:18px;}
 
         .scroll-x-fade{overflow-x:auto;scrollbar-width:thin;}
+        /* The maturity table's own wrapper also scrolls vertically, so the
+           two sticky header lines (the Production / Plot Status / Customer
+           Allocation group line, and the column titles under it) stay on
+           screen while the rows scroll — "Freeze the ... that line, so if
+           I scroll down see the below data, I still know their title". */
+        .mat-scroll{max-height:72vh;overflow:auto;}
+        .mat-table thead tr.mat-group-row th{top:0;z-index:3;}
+        /* The column line sticks BELOW the group line; the offset is the
+           group row's measured height, set by updateMaturityHeaders(). */
+        .mat-table thead tr:not(.mat-group-row) th{top:var(--mat-group-h,26px);z-index:2;}
+        .mat-loc-btn{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .mat-loc-btn:hover{background:#eff6ff;color:#1d4ed8;}
+        .mat-loc-btn.active{background:#eff6ff;color:#1e40af;border-color:#3b82f6;}
+        /* A Culled / Sold Out plot's allocation cell is a gray zone, not a
+           drop target. */
+        .reserv-empty-locked{background:repeating-linear-gradient(135deg,#f1f5f9,#f1f5f9 6px,#e8edf3 6px,#e8edf3 12px);border:1.5px dashed #cbd5e1;border-radius:10px;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:8px 10px;text-align:center;cursor:not-allowed;}
         .scroll-x-fade::-webkit-scrollbar{height:6px;}
         .scroll-x-fade::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
 
@@ -415,114 +431,11 @@
     <!-- ══════════════ STOCK PANE (hidden by default) ══════════════ -->
     <div id="ssm-pane-stock" class="hidden space-y-5">
 
-    <!-- ── NSD + Available for Sales (2 columns) ── -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        <!-- Nursery Status Dashboard -->
-        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden" id="nsd-card">
-            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-                        </div>
-                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Nursery Status Dashboard</span>
-                    </div>
-                    <div class="flex items-baseline gap-1">
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">As of</span>
-                        <span class="text-base font-black text-emerald-600 leading-none" id="current-month-label">—</span>
-                    </div>
-                </div>
-                <div class="combo-switch">
-                    <button class="combo-switch-btn active" id="combo-tab-basic" onclick="switchComboTab('basic')">
-                        <span class="csw-title">Stock To-Date</span>
-                        <span class="csw-sub">9-month only</span>
-                    </button>
-                    <button class="combo-switch-btn verified" id="combo-tab-verified" onclick="switchComboTab('verified')">
-                        <span class="csw-title">Verified Stock</span>
-                        <span class="csw-sub">+ Audit ≥ 1.5m</span>
-                    </button>
-                </div>
-            </div>
-            <div class="px-4 pt-3 pb-4 relative z-10 flex flex-col gap-3">
-                <div class="rounded-xl bg-emerald-50/60 border border-emerald-100 p-3">
-                    <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-0.5" id="matured-tile-label">Total Matured (To-Date)</div>
-                    <div class="text-3xl font-black text-emerald-700 leading-none mb-1" id="stat-matured">—</div>
-                    <div class="text-[9px] font-bold text-slate-500 leading-tight" id="matured-tile-sub">9 months in main nursery</div>
-                </div>
-                <div class="rounded-xl bg-blue-50/60 border border-blue-100 p-3">
-                    <div class="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-0.5">Pending Collection</div>
-                    <div class="text-3xl font-black text-blue-700 leading-none mb-1" id="stat-orders-current">—</div>
-                    <div class="text-[9px] font-bold text-slate-500 leading-tight">Cumulative paid not yet collected</div>
-                </div>
-                <div class="space-y-1 text-[9px] text-slate-500 leading-snug bg-slate-50 border border-slate-100 rounded-lg p-2.5" id="nsd-remark-block">
-                    <div class="flex gap-1.5"><span class="font-black text-emerald-600 shrink-0">①</span><span><span class="font-black text-emerald-700 uppercase tracking-wider">9-Month</span> — Transplant + 9 months → matured.</span></div>
-                    <div class="flex gap-1.5" id="nsd-remark-audit"><span class="font-black text-amber-600 shrink-0">②</span><span><span class="font-black text-amber-700 uppercase tracking-wider">Audit</span> — Sample ≥ 150 cm → matured.</span></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Available for Sales -->
-        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden flex flex-col">
-            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
-
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
-                <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        </div>
-                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Available for Sales</span>
-                    </div>
-                    <span id="avail-status-badge" class="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-widest">OK</span>
-                </div>
-                <div class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1" id="avail-tab-label">From <span class="text-emerald-700 font-black">Stock To-Date</span></div>
-            </div>
-
-            <div class="px-4 pt-3 pb-3 relative z-10">
-                <div class="flex items-baseline gap-3 mb-3">
-                    <div class="text-4xl font-black text-emerald-600 leading-none" id="stat-available">—</div>
-                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-tight">Seedlings<br>safe to sell</div>
-                </div>
-
-                <!-- Compact formula -->
-                <div class="bg-slate-50 border border-slate-100 rounded-lg p-2.5 text-[10px] space-y-1 mb-3">
-                    <div class="flex justify-between"><span class="text-slate-500 font-bold">Matured (after culling)</span><span class="font-black text-slate-700" id="calc-matured">—</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500 font-bold">− Pending collection</span><span class="font-black text-slate-700" id="calc-orders">—</span></div>
-                    <div class="flex justify-between border-t border-slate-200 pt-1"><span class="text-emerald-700 font-black uppercase tracking-wider">= Available</span><span class="font-black text-emerald-700" id="calc-available">—</span></div>
-                </div>
-
-                <!-- Gearing tool -->
-                <div class="bg-emerald-50/60 border border-emerald-100 rounded-lg p-2.5 mb-2">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-[9px] font-black text-slate-700 uppercase tracking-widest">⚙ Gearing Power</span>
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-sm font-black text-emerald-700" id="gearing-display">1.0×</span>
-                            <span id="gearing-badge" class="text-[8px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider">Conservative</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[8px] font-black text-emerald-600 uppercase tracking-widest">1.0×</span>
-                        <input type="range" id="gearing-slider" class="gear-slider flex-1" min="10" max="30" step="1" value="10">
-                        <span class="text-[8px] font-black text-red-500 uppercase tracking-widest">3.0×</span>
-                    </div>
-                </div>
-
-                <div class="hidden bg-red-50 border-l-2 border-red-500 rounded-lg p-2.5 text-[10px] text-red-700 space-y-0.5" id="oversold-warning">
-                    <div class="font-black uppercase tracking-widest text-red-600">⚠ Oversold</div>
-                    <div>Orders exceed by <span id="oversold-qty" class="font-black">—</span> (<span id="oversold-factor" class="font-black">—×</span>).</div>
-                    <div>Need <span id="oversold-needed-gearing" class="font-black">—×</span> gearing to cover.</div>
-                </div>
-
-                <div class="text-[9px] text-slate-500 leading-snug bg-emerald-50/60 border border-emerald-100 rounded-lg p-2 mt-2">
-                    <span class="font-black text-emerald-700 uppercase tracking-wider">Note</span> — "Matured" is this month's freshly matured seedlings, already with 10% culling deducted. Available = matured × gearing − pending collection.
-                </div>
-            </div>
-        </div>
-
-    </div>
-    <!-- /NSD + Available 2-col grid -->
+    <!-- The Nursery Status Dashboard and Available for Sales cards stood
+         here and are GONE at the office's ask ("Remove Nursery status
+         dashboard & available for sales"). Their JS (loadNsd, the combo
+         tabs, the gearing slider) went with them — see the note at the
+         top of operation_stock_sales.js. -->
 
     <!-- ── Capacity Heatmap (matured vs reserved by nursery × month) ── -->
     <!-- Sits ABOVE the maturity allocation so admins watch live utilisation while dragging cards. -->
@@ -564,6 +477,15 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2 relative flex-wrap">
+                    <!-- ALL / UNN1 / UNN2 / BNN — the Location column,
+                         turned into a filter. ALWAYS opens on ALL (not
+                         remembered): the office named the default. -->
+                    <div id="mat-loc-tabs" class="flex gap-1 bg-slate-50 rounded-xl border border-slate-200 p-1 shadow-sm">
+                        <button class="mat-loc-btn active" data-loc="ALL"  onclick="setMatLocFilter('ALL')">ALL</button>
+                        <button class="mat-loc-btn" data-loc="UNN1" onclick="setMatLocFilter('UNN1')">UNN1</button>
+                        <button class="mat-loc-btn" data-loc="UNN2" onclick="setMatLocFilter('UNN2')">UNN2</button>
+                        <button class="mat-loc-btn" data-loc="BNN"  onclick="setMatLocFilter('BNN')">BNN</button>
+                    </div>
                     <div id="month-tabs" class="flex gap-1 bg-slate-50 rounded-xl border border-slate-200 p-1 shadow-sm scroll-x-fade flex-wrap"></div>
                     <div class="relative">
                         <button id="history-btn" onclick="toggleHistoryMenu()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest" title="Show past maturity months">
@@ -575,18 +497,26 @@
                     </div>
                 </div>
             </div>
-            <div class="scroll-x-fade">
+            <!-- mat-scroll gives the wrapper a height and vertical scroll:
+                 position:sticky only freezes the two header lines inside a
+                 container that actually scrolls, and the plain
+                 overflow-x:auto wrapper never did — the thead had carried
+                 sticky for months and stuck to nothing. -->
+            <div class="scroll-x-fade mat-scroll">
                 <table class="mat-table min-w-[1400px]">
                     <thead>
                         <tr class="mat-group-row">
-                            <th id="mat-th-prod-group" colspan="7" class="mat-group mat-group-prod">📦 Production</th>
+                            <th id="mat-th-prod-group" colspan="6" class="mat-group mat-group-prod">📦 Production</th>
                             <th colspan="3" class="mat-group mat-group-plot">🪴 Plot Status</th>
                             <th colspan="3" class="mat-group mat-group-alloc">🛒 Customer Allocation</th>
                         </tr>
                         <tr>
                             <!-- Production -->
                             <th>Maturity Date</th>
-                            <th>Location</th>
+                            <!-- The Location column is gone — the ALL /
+                                 UNN1 / UNN2 / BNN buttons above the table
+                                 answer it now, and a column repeating the
+                                 pressed button on every row said nothing. -->
                             <th>Plot</th>
                             <th>Batch</th>
                             <th>Breed</th>
@@ -603,12 +533,13 @@
                         </tr>
                     </thead>
                     <tbody id="maturity-rows">
-                        <tr><td colspan="13" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
+                        <tr><td colspan="12" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
                     </tbody>
                     <tfoot id="maturity-foot"></tfoot>
                 </table>
             </div>
             <div id="maturity-unmatched" class="hidden text-[9px] font-bold text-amber-700 bg-amber-50 border-t border-amber-200 px-3 py-1.5"></div>
+            <div id="maturity-released" class="hidden text-[9px] font-bold text-blue-700 bg-blue-50 border-t border-blue-200 px-3 py-1.5"></div>
         </div>
 
         <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
@@ -976,7 +907,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=18"></script>
+<script src="operation_stock_sales.js?v=19"></script>
 <!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
 <div class="ci-modal" id="ci-upload-modal">
     <div class="ci-modal-card">

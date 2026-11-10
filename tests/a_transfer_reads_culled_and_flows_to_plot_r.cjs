@@ -126,14 +126,18 @@ const rowOf = plot => `[...document.querySelectorAll('#maturity-rows tr[data-bat
 const snap = plot => `(() => {
   const tr = ${rowOf(plot)}; if (!tr) return null;
   const tds = tr.querySelectorAll('td');
+  // One cell fewer than the first version of this file read: the office
+  // took the Location column off ("Remove the Location under Production,
+  // create a button at the top there: ALL, UNN1, UNN2, BNN"), so every
+  // index after the date moved down one.
   return {
     status: tr.dataset.matStatus,
     date: tds[0].textContent.trim(),
-    qty: tds[5].textContent.trim(),
-    doDed: tds[8].textContent.trim(),
-    doTitle: tds[8].getAttribute('title') || '',
-    balance: tds[9].textContent.trim(),
-    balTitle: tds[9].getAttribute('title') || '',
+    qty: tds[4].textContent.trim(),
+    doDed: tds[7].textContent.trim(),
+    doTitle: tds[7].getAttribute('title') || '',
+    balance: tds[8].textContent.trim(),
+    balTitle: tds[8].getAttribute('title') || '',
     dropdown: !!tr.querySelector('.mat-status-wrap'),
     pill: (tr.querySelector('td.col-plot span') || {}).textContent || ''
   };
