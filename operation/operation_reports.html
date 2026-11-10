@@ -354,11 +354,11 @@
         <div class="f-nursery-sub-wrap hidden w-full">
           <label class="label-style !mb-1">Report</label>
           <select id="f-nursery-sub" class="input-style">
-            <option value="summary">MPOB Submission Report</option>
-            <option value="summary_cull2">Summary Report</option>
+            <option value="summary">Summary Report</option>
             <option value="transplanting">Transplanting Report</option>
             <option value="seed_in">Seed In Report</option>
             <option value="culling">Culling Report</option>
+            <option value="dtone">Double-Tone Report</option>
           </select>
         </div>
         <!-- Only Culling Report needs this — which of the three stages to
@@ -2124,6 +2124,117 @@ async function runSeedInReport() {
   _losWireSticky();
 }
 
+/* THE DOUBLE-TONE REPORT — one row per batch that has touched the D-Tone
+   tray, each figure one of the three numbers that wear the name (see
+   CLAUDE.md, "Three numbers wear the name Double Tone"):
+
+   - INTO the tray — Transplanted_DoubleTone, the batch pushing its own
+     seedlings in for the treatment (r.dtoneTray);
+   - 1st CULLED IN the tray — a 1st culling happens in a tray and the
+     D-Tone tray is one of them (r.cull1Dtone);
+   - OUT to the main plots — ordinary Transplanted rows whose source tray
+     is the D-Tone one, the batch report's Main Plot (D-Tone) card
+     (r.transDtone);
+   - STANDING in the tray — the first less the two that take seedlings out
+     of it, worked out here and nowhere stored;
+   - and the KEYED Double Tone Quantity in Nursery (r.dtone), the box an
+     admin counts and keys on the Transplanting tab — shown for the office
+     to compare, never summed with the rest, because it is a different
+     rule (what is standing in the NURSERY as counted, not the tray's own
+     arithmetic).
+
+   Same bones as the Seed In Report beside it: _losBuildAllRows(asAt) reads
+   the ledger as keyed (no verifiedOnly — this is a stock question, not the
+   reconciliation Life of Seedlings does), the figures open their records,
+   and the As At date cuts the events. */
+async function runDoubleToneReport() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const breed = document.getElementById('f-breed').value;
+  const asAt = document.getElementById('f-to').value || null;
+
+  const allRows = await _losBuildAllRows(asAt);
+  if (!allRows) return; // error already shown by _losBuildAllRows()
+
+  const rows = allRows.filter(r => {
+    if (breed && r.breed !== breed) return false;
+    // A batch is on this report because the D-Tone tray touched it —
+    // any of the four figures, or a keyed quantity, and it has a row.
+    return !!(r.dtoneTray || r.cull1Dtone || r.transDtone || r.dtone || r.dtRows);
+  });
+  rows.sort((a, b) => String(b.batch).localeCompare(String(a.batch), undefined, { numeric: true }));
+
+  // Same drilldown-read convention _losBuildData() uses — published only
+  // after filtering, so a window can never show a batch the report is not.
+  window._losData = { rows, asAt };
+
+  const tot = { into: 0, cull: 0, outQ: 0, standing: 0, keyed: 0 };
+  const body = rows.map(r => {
+    const standing = (r.dtoneTray || 0) - (r.cull1Dtone || 0) - (r.transDtone || 0);
+    tot.into += r.dtoneTray || 0; tot.cull += r.cull1Dtone || 0;
+    tot.outQ += r.transDtone || 0; tot.standing += standing; tot.keyed += r.dtone || 0;
+    const standingCell = standing < 0
+      ? `<span class="text-[#a83020] font-black" title="More seedlings are recorded leaving the D-Tone tray than ever went in — a transplant into it was not keyed, or an out-row names the wrong source tray.">−${fmtNum(Math.abs(standing))}</span>`
+      : `<span class="font-black">${fmtNum(standing)}</span>`;
+    const keyedMark = r.dtRows > 1
+      ? `<div class="text-[9px] font-bold text-[#8a7a68]">${r.dtRows} keyings · newest shown</div>` : '';
+    return `
+    <tr>
+      <td>
+        <div class="font-black text-[#3d2610]">${_losEsc(r.batch)}</div>
+        <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.breed)}</div>
+      </td>
+      ${_losCell('dtoneTray', r.batch, r.dtoneTray, 'text-[#7c3aed] font-black')}
+      ${_losCell('cull1Dtone', r.batch, r.cull1Dtone, 'text-[#0891b2] font-black')}
+      ${_losCell('dtone', r.batch, r.transDtone, 'text-[#3a7ab4] font-black')}
+      <td>${standingCell}</td>
+      <td title="The Double Tone Quantity in Nursery box on the Transplanting tab — an admin counts the double-tone seedlings standing in the nursery and keys the figure. Newest keying wins, same as the form. It is the office's own count, so it is shown beside the tray arithmetic rather than derived from it.">
+        ${r.dtRows ? `<span class="font-black">${fmtNum(r.dtone)}</span>` : '<span class="text-[#8a7a68]">—</span>'}${keyedMark}
+      </td>
+    </tr>`;
+  }).join('');
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Double-Tone Report</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${asAt ? ' · as at ' + fmtDate(asAt) : ''}</div>
+      </div>
+      <div class="text-[10px] font-bold text-[#8a7a68] mb-3 no-print">Point at any figure to see the records behind it — click to open them in full.</div>
+      <div class="los-wrap">
+        <table class="report-table los-table">
+          <thead>
+            <tr>
+              <th>Batch / Breed</th>
+              <th title="Transplanted into the D-Tone tray out of the batch's own pre-nursery tray — the seedlings put in for the treatment. They leave again later as ordinary transplants, which is why this figure takes no part in any Balance.">Into D-Tone Tray</th>
+              <th title="The D-Tone tray's own share of the 1st culling — a 1st culling happens in a tray, and the D-Tone tray is one of them.">1st Culled (D-Tone)</th>
+              <th title="Main-plot transplants whose source tray was the D-Tone one — the batch report's Main Plot (D-Tone) card.">Out to Main Plots</th>
+              <th title="Into the tray, less the 1st culling in it, less what has gone out to the main plots — what the ledger says is still standing in the D-Tone tray.">Standing in Tray</th>
+              <th title="The Double Tone Quantity in Nursery box, as keyed on the Transplanting tab. Newest keying wins.">D-Tone Qty Keyed</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length ? body : `<tr><td colspan="6" class="py-10 text-[#8a7a68]">No batch has touched the D-Tone tray under the selected filters.</td></tr>`}
+          </tbody>
+          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td>${_losFig('dtoneTray', '*', fmtNum(tot.into), 'text-[#7c3aed] font-black')}</td>
+            <td>${_losFig('cull1Dtone', '*', fmtNum(tot.cull), 'text-[#0891b2] font-black')}</td>
+            <td>${_losFig('dtone', '*', fmtNum(tot.outQ), 'text-[#3a7ab4] font-black')}</td>
+            <td class="${tot.standing < 0 ? 'text-[#a83020]' : ''}">${tot.standing < 0 ? '−' + fmtNum(Math.abs(tot.standing)) : fmtNum(tot.standing)}</td>
+            <td>${fmtNum(tot.keyed)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>`;
+  _losWireSticky();
+}
+
 /* THE BOARD BUTTON ON A BATCH, and only where there is a board to draw.
 
    A batch whose seeds have been received and not yet sown into a tray has
@@ -3138,24 +3249,35 @@ const REPORTS = [
      they had is a column here. */
   { value: 'life_of_seedlings',     label: 'Life of Seedling',   hint: 'Life of Seedlings — one row per batch: seeds in, planted, transplanted, culled, sold, and what is still standing' },
   { value: 'life_of_plot',          label: 'Life of Plot',       hint: 'Life of Plot — one row per plot: every batch that passed through it, in, out, culled, sold, and what is standing; click a plot for its full history' },
-  { value: 'movement_report',       label: 'Nursery Report',     hint: 'Nursery Report — MPOB Submission, Summary, Transplanting, Seed In or Culling; pick which under Report below' },
+  /* The office asked for the Summary Report (the movement view with the
+     2nd Culled separated and deducted) OUT of the sub-selector and onto a
+     tab of its own named Nursery Report — so this tab IS that report,
+     directly, no Report dropdown under it. A new value ('nursery_report')
+     rather than reusing 'movement_report': that key stays on the
+     sub-selector tab below, where the remembered last-open sub and every
+     other thing keyed on it keep working — a label may move, a key must
+     not. */
+  { value: 'nursery_report',        label: 'Nursery Report',     hint: 'Nursery Report — the Movement Report with the 2nd Culled separated out and deducted, so the Balance reads lower than the Summary Report wherever a plot is 2nd culled and not yet 3rd culled' },
+  { value: 'movement_report',       label: 'Submission Report',  hint: 'Submission Report — Summary (as submitted to MPOB), Transplanting, Seed In, Culling or Double-Tone; pick which under Report below' },
   { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
 ];
 
-// The five reports living inside the Nursery Report tab's own selector.
-// 'summary' is the report the office has always submitted to MPOB — only
-// its LABEL changed to say so (MPOB Submission Report); the value stays
-// 'summary' so the remembered last-open sub (LAST_NURSERY_SUB_KEY) and
-// anything else keyed on it keep working. 'summary_cull2' is the same
-// report with the 2nd Culled shown and deducted on its own — see
-// MOVE_COLS.main2 / netOfRow() for why its Balance reads lower only
-// while a plot is 2nd culled and not yet 3rd culled.
+// The five reports living inside the Submission Report tab's own selector.
+// 'summary' is the report the office has always submitted to MPOB — its
+// LABEL has moved twice (Summary Report → MPOB Submission Report → Summary
+// Report again, the office's own words: "Summary Report (which is current
+// MPOB Submission Report details)") and the value stays 'summary' so the
+// remembered last-open sub (LAST_NURSERY_SUB_KEY) and anything else keyed
+// on it keep working. The 2nd-culling view ('summary_cull2') left this
+// list for the Nursery Report tab above — runMovementReportCombined(true)
+// is unchanged, only the door to it moved. 'dtone' is the Double-Tone
+// Report — see runDoubleToneReport().
 const NURSERY_SUB_REPORTS = [
-  { value: 'summary',       label: 'MPOB Submission Report', hint: 'MPOB Submission Report — the Movement Report as submitted: 2nd culling is not a separate deduction here. Pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
-  { value: 'summary_cull2', label: 'Summary Report',       hint: 'Summary Report — the same Movement Report with the 2nd Culled separated out and deducted, so the Balance reads lower than the MPOB Submission Report wherever a plot is 2nd culled and not yet 3rd culled' },
+  { value: 'summary',       label: 'Summary Report',       hint: 'Summary Report — the Movement Report as submitted to MPOB: 2nd culling is not a separate deduction here. Pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
   { value: 'transplanting', label: 'Transplanting Report', hint: 'Transplanting Report — date, maturity date, location' },
   { value: 'seed_in',       label: 'Seed In Report',       hint: 'Seed In Report — what came in, per batch: supplier, quantity, damage, planted, variance' },
   { value: 'culling',       label: 'Culling Report',       hint: 'Culling Report — pick 1st, 2nd or 3rd Culling under Culling Stage below' },
+  { value: 'dtone',         label: 'Double-Tone Report',   hint: 'Double-Tone Report — one row per batch that has used the D-Tone tray: into the tray, 1st culled in it, out to the main plots, and what is left standing in it' },
 ];
 
 // ── Report tabs ───────────────────────────────────────────────────────────
@@ -3220,9 +3342,9 @@ function _rememberLocations(locs) {
 function selectReport(report) {
   document.getElementById('f-report').value = report;
   _rememberReport(report);
-  // Movement Report starts with every Location unticked — picked fresh
+  // Both movement tabs start with every Location unticked — picked fresh
   // each time, not left however they were from a previous report/visit.
-  if (report === 'movement_report') document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = false);
+  if (report === 'movement_report' || report === 'nursery_report') document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = false);
   renderReportTabs();
   syncReportDefaults();
   syncFilterVisibility();
@@ -3258,13 +3380,17 @@ async function runReport() {
   const which = document.getElementById('f-report').value;
   if (which === 'life_of_seedlings') return runLifeOfSeedlings();
   if (which === 'life_of_plot') return runLifeOfPlot();
+  // The Nursery Report tab IS the 2nd-culling movement view, directly —
+  // the same runMovementReportCombined(true) that used to sit behind the
+  // sub-selector as 'summary_cull2'.
+  if (which === 'nursery_report') return runMovementReportCombined(true);
   if (which === 'movement_report') {
     const sub = (document.getElementById('f-nursery-sub') || {}).value || 'summary';
     if (sub === 'summary')       return runMovementReportCombined(false);
-    if (sub === 'summary_cull2') return runMovementReportCombined(true);
     if (sub === 'transplanting') return runTransplantingReport();
     if (sub === 'seed_in')       return runSeedInReport();
     if (sub === 'culling')       return runCullingReport();
+    if (sub === 'dtone')         return runDoubleToneReport();
   }
   if (which === 'sales_listing') return runSalesListing();
 }
@@ -3273,13 +3399,18 @@ async function runReport() {
 function syncFilterVisibility() {
   const which        = document.getElementById('f-report').value;
   const isNurseryTab = (which === 'movement_report');
-  // Which of the four reports inside Nursery Report — see
+  // Which of the five reports inside the Submission Report tab — see
   // NURSERY_SUB_REPORTS. Only meaningful (and only shown) on that tab.
   const sub = isNurseryTab ? ((document.getElementById('f-nursery-sub') || {}).value || 'summary') : '';
-  // Both movement views — MPOB Submission ('summary') and the 2nd-culling
-  // Summary ('summary_cull2') — share the same filter set.
-  const isMovement = sub === 'summary' || sub === 'summary_cull2';
+  // Both movement views — the Nursery Report tab (the 2nd-culling view,
+  // its own tab now) and the Submission tab's Summary ('summary') — share
+  // the same filter set.
+  const isMovement = sub === 'summary' || which === 'nursery_report';
   const isTrans    = sub === 'transplanting';
+  // Double-Tone Report: As At + breed, no Locations — the D-Tone tray is a
+  // pre-nursery tray wherever its seedlings later go, so a location chip
+  // would answer no question the rows can be cut by.
+  const isDtone    = sub === 'dtone';
   // isLife is the standalone Life of Seedling tab — its own six-filter set
   // (.f-los + breed). isSeedIn (Nursery Report's Seed In sub-report) reads
   // the SAME underlying figures (_losBuildAllRows()) but filters the
@@ -3299,7 +3430,7 @@ function syncFilterVisibility() {
   const isSalesChart = isSales && _salesViewMode === 'chart';
   document.querySelectorAll('.f-nursery-sub-wrap').forEach(el   => el.classList.toggle('hidden', !isNurseryTab));
   document.querySelectorAll('.f-culling-stage-wrap').forEach(el => el.classList.toggle('hidden', !isCulling));
-  const hasRange  = isMovement || isTrans || isSeedIn || isCulling || isSalesTable || isLifePlot;
+  const hasRange  = isMovement || isTrans || isSeedIn || isCulling || isDtone || isSalesTable || isLifePlot;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
   // No visible From anywhere — every report is one "As At" date. Movement
   // Report still shows the Culled/Transplanted/Damaged/etc columns as that
@@ -3321,7 +3452,7 @@ function syncFilterVisibility() {
   // same question every other sub-report does). Life of Seedling uses its
   // own Nursery Type filter instead (.f-los, below).
   document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isSalesTable || isLifePlot)));
-  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling || isLifePlot)));
+  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling || isDtone || isLifePlot)));
   // 2nd/3rd Culling never happens in a Pre-Nursery tray — see
   // runCullingReport()'s own PRE_NURSERY_PLOTS comment: 1st Culling is the
   // only stage that is. The Pre-Nursery chip has nothing to filter for
@@ -3444,7 +3575,7 @@ function _cullingSyncPreNurseryChip(isCulling) {
 /* Defaults that change with which report is now selected — run once per
    switch, not on every "Run Report" click, so re-running the same report
    never clobbers a date someone deliberately picked. */
-const DATE_KEYED_REPORTS = new Set(['sales_listing', 'movement_report', 'life_of_plot']);
+const DATE_KEYED_REPORTS = new Set(['sales_listing', 'movement_report', 'nursery_report', 'life_of_plot']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
   if (DATE_KEYED_REPORTS.has(which)) {
@@ -3455,11 +3586,10 @@ function syncReportDefaults() {
   }
   // Plot is the more commonly checked default for both sections (see
   // buildMovementSection).
-  if (_fSort && which === 'movement_report') _fSort.value = 'plot';
-  // Nursery Report always opens on Summary (the old Movement Report) — a
-  // fresh visit to the tab shouldn't land on whichever sub-report someone
-  // was last looking at, same "fresh tab starts clean" rule as the date
-  // reset above.
+  if (_fSort && (which === 'movement_report' || which === 'nursery_report')) _fSort.value = 'plot';
+  // Submission Report always opens on Summary — a fresh visit to the tab
+  // shouldn't land on whichever sub-report someone was last looking at,
+  // same "fresh tab starts clean" rule as the date reset above.
   if (which === 'movement_report') {
     const subEl = document.getElementById('f-nursery-sub');
     if (subEl) subEl.value = 'summary';
@@ -3934,10 +4064,11 @@ const MOVE_COLS = {
     { key: 'adjust',  label: 'Stock Adjustment',      sign: +1, cls: 'text-[#7a4a10]' },
   ],
 };
-// The Summary Report's main section ('summary_cull2' in NURSERY_SUB_REPORTS)
-// — the MPOB columns with 2nd Culled separated out on its own, in front of
-// the 3rd it eventually becomes part of. Derived from MOVE_COLS.main rather
-// than typed out again, so a column added to the MPOB report cannot quietly
+// The Nursery Report tab's main section (it was 'summary_cull2' in the
+// sub-selector before it got a tab of its own) — the Summary columns with
+// 2nd Culled separated out on its own, in front of the 3rd it eventually
+// becomes part of. Derived from MOVE_COLS.main rather
+// than typed out again, so a column added to the Summary Report cannot quietly
 // miss this one. Its deduction is conditional — see netOfRow().
 MOVE_COLS.main2 = MOVE_COLS.main.flatMap(c => c.key === 'cull3'
   ? [{ key: 'cull2', label: '2nd Culled', sign: -1, cls: 'text-[#a83020]' }, c]
@@ -3948,13 +4079,13 @@ const emptyRow = (scope) => MOVE_COLS[scope].reduce((a, c) => { a[c.key] = 0; re
 /**
  * What a row's movements come to.
  *
- * 2nd Culled never deducts on the MPOB Submission Report, B/F included —
+ * 2nd Culled never deducts on the Summary Report (as submitted to MPOB), B/F included —
  * 2nd Culling is Tab 6's own live snapshot as a batch works through 3rd
  * Culling, not a separate loss on top of it, and it has no column there
  * (see MOVE_COLS.main). 3rd Culled — once evidenced (see the MapQty: check
  * below) — is the actual, standing deduction.
  *
- * The Summary Report (scope 'main2') is the office's asked-for exception:
+ * The Nursery Report (scope 'main2') is the office's asked-for exception:
  * the 2nd Culled has its own column AND deducts — but only while the same
  * bucket carries no evidenced 3rd Culling, because a 3rd culling already
  * includes the seedlings 2nd culled on the way to it (the Batch Report's
@@ -4037,9 +4168,10 @@ function mvHideDetailTip() {
   document.getElementById('mv-sales-tip').classList.add('hidden');
 }
 
-// withCull2 — false is the MPOB Submission Report (value 'summary', the
-// report exactly as it has always been), true is the Summary Report
-// ('summary_cull2'), which separates the 2nd Culled into its own deducting
+// withCull2 — false is the Summary Report (value 'summary' on the
+// Submission Report tab, the report as submitted to MPOB, exactly as it
+// has always been), true is the Nursery Report tab, which separates the
+// 2nd Culled into its own deducting
 // column. One builder, one fetch, one pass over the ledger for both.
 async function runMovementReportCombined(withCull2) {
   const out = document.getElementById('report-output');
@@ -4199,9 +4331,9 @@ async function runMovementReportCombined(withCull2) {
 
     if (t === 'Planted')     { push('pre', d, l.plot_name, b, 'planted', q); return; }
     if (t === '1st_Culling') { push('pre', d, l.plot_name, b, 'cull1', q); return; }
-    // 2nd_Culling isn't tracked on the MPOB Submission Report at all —
+    // 2nd_Culling isn't tracked on the Summary Report at all —
     // it's Tab 6's own running snapshot toward 3rd Culling, not a
-    // separate, standing deduction. The Summary Report (withCull2) shows
+    // separate, standing deduction. The Nursery Report (withCull2) shows
     // and deducts it in its own column, superseded once a 3rd culling is
     // evidenced on the same plot·batch — see netOfRow above.
     if (t === '2nd_Culling') {
@@ -4580,13 +4712,14 @@ function buildMovementSection(scope, ev, ctx) {
   const rangeLabel = fromStr && toStr
     ? `${fmtDate(fromStr)} – ${fmtDate(toStr)} · Balance as at ${fmtDate(toStr)}`
     : (toStr ? `Balance as at ${fmtDate(toStr)}` : 'Balance as at today');
-  // Only the Summary Report carries this — a Balance that can read lower
-  // than the MPOB Submission Report's has to say why, on the page itself.
+  // Only the Nursery Report carries this — a Balance that can read lower
+  // than the Summary Report's (the Submission Report tab) has to say why,
+  // on the page itself.
   const cull2Note = scope === 'main2' ? `
       <div class="mt-4 text-[10px] font-bold text-[#8a7a68]">
         2nd Culled is deducted from the Balance only while the plot has no evidenced 3rd Culling —
         a 3rd culling already includes the seedlings 2nd culled before it, so once it is keyed the
-        2nd stops deducting and this report reads the same as the MPOB Submission Report.
+        2nd stops deducting and this report reads the same as the Summary Report on the Submission Report tab.
       </div>` : '';
   const unmatchedHtml = unmatchedSales.length ? `
       <div class="mt-4 rounded-2xl border border-[#f0b429] bg-[#fffbeb] p-4">
@@ -5729,7 +5862,7 @@ async function bootstrap() {
   // with Locations unticked. A REFRESH is different: it restores whichever
   // Locations were last ticked, same as the sub-report/date/breed above,
   // rather than clearing them out from under an unchanged page.
-  if (DEFAULT_REPORT === 'movement_report') {
+  if (DEFAULT_REPORT === 'movement_report' || DEFAULT_REPORT === 'nursery_report') {
     let restoredLocs = null;
     try {
       const raw = localStorage.getItem(LAST_LOCATIONS_KEY);
@@ -5821,6 +5954,14 @@ const LOS_DRILL = {
     cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
       { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
     roll: x => x.nursery },
+  /* The step that FILLS the D-Tone tray out of the batch's own tray
+     (Transplanted_DoubleTone rows) — the Double-Tone Report's first column.
+     Not the 'dtone' kind below, which is the OTHER end: the seedlings
+     leaving that tray again for a main plot. */
+  dtoneTray: { title: 'Into the D-Tone Tray', list: 'dtoneTray',
+    tipLabel: x => x.batch + ' · from ' + x.from,
+    cols: [_losCol.date, _losCol.batch, _losCol.fromTray,
+      { ..._losQty('Qty', 'text-[#7c3aed] font-black'), sum: x => x.qty }] },
   dtone: { title: 'Double Tone (Main Plot, out of the D-Tone tray)', list: 'transDtone',
     tipLabel: x => x.batch + ' · ' + x.place + ' (' + x.nursery + ')',
     cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
