@@ -3089,11 +3089,54 @@ carrying no ledger row for that stage at all, which is what you get when
 the only keying there ever was never landed. **Nothing to run in the
 database**: the whole of this change is in the page.
 
+#### AND THE GUARD THEN FOUND THE TAB THAT COULD NEVER BE CLEAN
+
+The office pressed Verify on 257 and sent back **nine stacked red toasts**,
+every one of them *"Nothing verified — Seed Planting has changes on screen
+that are not in the database"* — with the banner still reading PENDING
+VERIFICATION. They had typed nothing. **`verify 不到`.**
+
+The toast above them is the whole answer, and it is the page's own: *"**Planting
+report saved** — but the figures do not tally and nobody has said why."*
+257 is **7 seeds short** and the discrepancy box is empty, so every save of
+that tab raises it — **as an `'error'`**.
+
+**AND `error` MEANS ONE THING**, which the heading two above this says: what
+you keyed is not in the database. So `_trackTabSave` never cleared
+`_tabDirty[2]`, and **the tab could not stop being dirty by any route** —
+its own success was what kept it dirty.
+
+**IT HAD BEEN WRONG SINCE THE DAY IT WAS WRITTEN and only ever mis-worded
+the X**, which is the part worth keeping: for months the cost was a close
+dialog saying *"Seed Planting did not save. Nothing has been lost"* over a
+report that was in the database, and an X that refused to close. **The
+moment a sign-off started refusing a dirty tab, the same flag meant the
+report could not be VERIFIED at all.** A gate does not create these; it
+finds them.
+
+The save's own comment says it in as many words — *"The save is not
+blocked"* — so it is a **`'warn'`**: amber, ⚠️, not a failure. Nothing else
+moved, and the report still does not read as complete until the reason is
+written.
+
+**THE SHAPE CHECK MISSED IT BECAUSE THE TYPE IS A TERNARY.**
+`a_warning_is_not_a_failed_save.cjs` looked for the literal `'error')`, and
+this call ends `needsFollowUp && !_gap.note ? 'error' : 'success')` — so the
+pattern never matched, in the one file it was written to sweep. It matches
+`showToast(… 'error' …)` anywhere in the call now, which takes the sweep
+from the three known saves to this one as well, **and it strips the comments
+first**, because this page explains at length why a warning is not an error.
+Same trap, fifth time.
+
 `tests/a_verify_does_not_sign_off_unsaved_keying.cjs` drives the real page
-through the office's own path; **23 of its 39 checks fail on the previous
-code**, the headline one being that the verify is refused. Two of those
-failures are a CASCADE — the stubbed save is refused because the verify
-locked the tab underneath it — which is the fault reproducing itself, and
+through the office's own path; **23 of its 39 checks fail on the code before
+the guard, and 16 of its 42 on the code with the guard and not this** — the
+second run being the office's dead end exactly: the save warns as an error,
+the tab never clears, and the verify can never go through. Section 2 calls
+the REAL `savePlantingTab` with the discrepancy box empty, because a stub
+would have proved nothing about the one thing they were stuck on. Several of
+those failures are a CASCADE — the save is refused because the verify locked
+the tab underneath it — which is the fault reproducing itself, and
 *Leave closes the batch rather than refusing for ever* fails there too,
 which is the trap nobody had noticed. `unsaved_close_guard.cjs` asserted
 that trap in as many words (*"and the dialog is still there"*) and was
