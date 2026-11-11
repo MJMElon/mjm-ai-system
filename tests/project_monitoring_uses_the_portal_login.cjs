@@ -160,10 +160,13 @@ async function drawn(page) {
   try { await page.waitForFunction(() => !document.body.hasAttribute('data-boot') && document.querySelector('#who') && document.querySelector('#who').textContent, null, { timeout: 4000 }); }
   catch (e) { return null; }
   await page.waitForTimeout(250);
-  return page.evaluate(() => ({
+  // In the order the access rules name them, not the order the bar draws them: the request button sits above the list.
+  const d = await page.evaluate(() => ({
     who: document.querySelector('#who').textContent,
     tabs: [...document.querySelectorAll('nav.tabs button[data-view]')].filter((b) => !b.hidden).map((b) => b.dataset.view),
   }));
+  d.tabs = TABS.filter((t) => d.tabs.includes(t));
+  return d;
 }
 const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs button[data-view="' + v + '"]').click(), view);
 
@@ -319,20 +322,22 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
         selBg: getComputedStyle(sel).backgroundColor !== getComputedStyle(other).backgroundColor,
         midScrolls: getComputedStyle(mid).overflowY, footAtBottom: Math.round(r(foot).bottom) === window.innerHeight, topAtTop: Math.round(r(top).top) === 0 };
     });
-    is(sb.groups, [['Overview', ['Dashboard', 'Board', 'Timeline']], ['Task', ['Task list', 'Task requests', 'Value analysis']]], 'two groups, each under its own title, every entry kept');
+    is(sb.groups, [['Overview', ['Dashboard', 'Board', 'Timeline']], ['Task', ['Task list', 'Value analysis']]], 'two groups, each under its own title; Task requests is the button above them');
     is([sb.foot, sb.portal], [['Settings'], true], 'Settings is at the foot, and the way back to the portal is in the top part, which never scrolls');
     is([sb.column, sb.topAtTop, sb.footAtBottom, sb.midScrolls], [true, true, true, 'auto'], 'a column the height of the window: top and foot stay put, the middle scrolls');
     is(sb.groupGap >= sb.rowGap * 4 && sb.groupGap >= 16, true, 'the gap between groups is far wider than the gap between entries (' + sb.groupGap + ' against ' + sb.rowGap + ')');
     is(sb.selBg, true, 'the open entry wears a block the others do not');
     await go(page, 'value'); await page.waitForTimeout(150);
     is(await page.evaluate(() => [document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view, document.querySelector('#v-value').hidden]), ['value', false], 'pressing an entry opens its view');
-    // The request button: on the bar's top part, one press from any tab, and it is not a tab.
+    // + Request a task IS the Task requests entry: one bright button on the top part of the bar.
     await go(page, 'board'); await page.waitForTimeout(150);
     const cta = await page.evaluate(() => { const b = document.querySelector('.side-top #reqBtn'); if (!b) return 'no request button';
-      const was = document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view; b.click();
-      return { text: b.textContent.replace(/\s+/g, ' ').trim(), shown: !b.hidden, tab: b.hasAttribute('data-view'),
-        sheet: !!document.querySelector('#sheetRoot .sheet #r-name'), stayed: document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view === was && !document.querySelector('#v-board').hidden }; });
-    is(cta, { text: '+ Request a task', shown: true, tab: false, sheet: true, stayed: true }, 'Request a task is on the bar, opens the request sheet, and leaves the tab where it was');
+      b.click();
+      return { text: b.firstChild.nextSibling.textContent.trim(), shown: !b.hidden, view: b.dataset.view, open: b.getAttribute('aria-selected'),
+        list: !document.querySelector('#v-requests').hidden, sheet: !!document.querySelector('#sheetRoot .sheet #r-name'),
+        badgeInside: !!b.querySelector('#reqCount'), entries: document.querySelectorAll('nav.tabs button[data-view="requests"]').length }; });
+    is(cta, { text: 'Request a task', shown: true, view: 'requests', open: 'true', list: true, sheet: true, badgeInside: true, entries: 1 },
+      'it opens the Task requests view with the request form on top, carries the pending count, and is the only entry for it');
     await page.keyboard.press('Escape');
     if (process.env.SHOT) { await page.setViewportSize({ width: 1400, height: 900 }); await go(page, 'overview'); await page.waitForTimeout(200); await page.screenshot({ path: process.env.SHOT.replace('.png', '_side.png') }); }
     await page.close();

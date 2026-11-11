@@ -69,7 +69,10 @@ nav.tabs button .badge{margin-left:auto}
 nav.tabs button.side-cta{justify-content:center;gap:8px;margin-top:14px;padding:11px 12px;border-radius:10px;
   background:var(--cta);color:var(--on-cta);font-weight:600;font-size:14.5px}
 nav.tabs button.side-cta:hover{background:var(--cta-hover);color:var(--on-cta)}
-nav.tabs button.side-cta span{font-size:18px;line-height:1;font-weight:500}
+nav.tabs button.side-cta > span:first-child{font-size:18px;line-height:1;font-weight:500}
+/* Open, it keeps its own colour and takes a ring: the solid dark block stays the mark of the entries in the list. */
+nav.tabs button.side-cta[aria-selected="true"]{background:var(--cta);color:var(--on-cta);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
+nav.tabs button.side-cta .badge{margin-left:2px;background:var(--on-cta);color:var(--cta)}
 .side .back{display:inline-block;margin-bottom:12px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;text-align:center;
   font:500 11.5px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-decoration:none}
 .side .back:hover{color:var(--fg);border-color:var(--muted)}
