@@ -8428,8 +8428,9 @@ So there are two layers, and they are the house pattern:
   under User access like any other tab.
 - **THE TABS ARE A SIDE BAR**, grouped by what somebody came to do:
   Overview (Dashboard, Board, Timeline), Task (Task list, Task requests,
-  Value analysis), and Settings pinned at the foot with the way back to
-  the portal. The top and the foot stay put and the middle scrolls. The
+  Value analysis), and Settings pinned at the foot. **← Portal is in the
+  TOP part**, above the name, so it is always on screen: it was at the
+  foot for a day and the office asked for it up. The top and the foot stay put and the middle scrolls. The
   nav is still `nav.tabs` and every entry still a `button[data-view]`,
   because that is how `pms_app.js` finds them; the stored keys
   (`overview`, `list`) did not move with the labels. A group whose

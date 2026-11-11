@@ -63,7 +63,7 @@ nav.tabs button[hidden]{display:none}
 nav.tabs button:hover{background:var(--sunk);color:var(--fg)}
 nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--on-accent);font-weight:600}
 nav.tabs button .badge{margin-left:auto}
-.side .back{display:block;margin-top:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;text-align:center;
+.side .back{display:inline-block;margin-bottom:12px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;text-align:center;
   font:500 11.5px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-decoration:none}
 .side .back:hover{color:var(--fg);border-color:var(--muted)}
 .side .whoami{padding:8px 10px 0;flex-wrap:wrap;gap:2px 6px}
@@ -74,7 +74,7 @@ nav.tabs button .badge{margin-left:auto}
   body{padding-left:0}
   nav.side{position:sticky;top:0;bottom:auto;width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;
     border-right:0;border-bottom:1px solid var(--side-line);padding:8px 10px;gap:6px}
-  .side-top{flex:1 0 100%;padding:2px 4px 4px;border-bottom:0}
+  .side-top{flex:1 0 100%;padding:2px 4px 4px;border-bottom:0;display:flex;align-items:center;gap:10px}
   .brand{flex-direction:row;align-items:baseline;gap:8px}
   .brand h1{font-size:17px}
   .side-mid{flex:1 1 0;min-width:0;flex-direction:row;gap:2px;padding:0;overflow-x:auto;overflow-y:hidden}
@@ -82,7 +82,7 @@ nav.tabs button .badge{margin-left:auto}
   .side-title{display:none}
   .side-foot{flex:none;flex-direction:row;align-items:center;padding:0;border-top:0;gap:4px}
   nav.tabs button{width:auto;padding:6px 11px}
-  .side .back{margin:0;padding:5px 8px}
+  .side .back{margin:0;padding:4px 8px;flex:none}
   .side .whoami{display:none}
 }
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:14px 4px}

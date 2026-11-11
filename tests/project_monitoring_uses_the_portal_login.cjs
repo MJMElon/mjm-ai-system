@@ -313,14 +313,14 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
       const r = (e) => e.getBoundingClientRect();
       const gs = [...mid.querySelectorAll('.side-group')], bs = [...gs[0].querySelectorAll('button')];
       const sel = nav.querySelector('button[aria-selected="true"]'), other = nav.querySelector('button[aria-selected="false"]');
-      return { groups, foot: [...foot.querySelectorAll('button')].map(txt), portal: !!foot.querySelector('a.back'),
+      return { groups, foot: [...foot.querySelectorAll('button')].map(txt), portal: !!top.querySelector('a.back') && !foot.querySelector('a.back'),
         column: r(nav).width < 300 && r(nav).height >= window.innerHeight - 1,
         groupGap: Math.round(r(gs[1]).top - r(gs[0]).bottom), rowGap: Math.round(r(bs[1]).top - r(bs[0]).bottom),
         selBg: getComputedStyle(sel).backgroundColor !== getComputedStyle(other).backgroundColor,
         midScrolls: getComputedStyle(mid).overflowY, footAtBottom: Math.round(r(foot).bottom) === window.innerHeight, topAtTop: Math.round(r(top).top) === 0 };
     });
     is(sb.groups, [['Overview', ['Dashboard', 'Board', 'Timeline']], ['Task', ['Task list', 'Task requests', 'Value analysis']]], 'two groups, each under its own title, every entry kept');
-    is([sb.foot, sb.portal], [['Settings'], true], 'Settings is at the foot, with the way back to the portal');
+    is([sb.foot, sb.portal], [['Settings'], true], 'Settings is at the foot, and the way back to the portal is in the top part, which never scrolls');
     is([sb.column, sb.topAtTop, sb.footAtBottom, sb.midScrolls], [true, true, true, 'auto'], 'a column the height of the window: top and foot stay put, the middle scrolls');
     is(sb.groupGap >= sb.rowGap * 4 && sb.groupGap >= 16, true, 'the gap between groups is far wider than the gap between entries (' + sb.groupGap + ' against ' + sb.rowGap + ')');
     is(sb.selBg, true, 'the open entry wears a block the others do not');
