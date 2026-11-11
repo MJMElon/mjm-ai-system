@@ -9083,12 +9083,31 @@
 
                 await savePhotosToStorage(batchId);
                 setEditMetaUI(2, new Date().toISOString(), window.currentUserEmail);
+                /* A WARNING, NEVER AN ERROR -- the report IS in the database,
+                   which the comment above says in as many words: the save is
+                   not blocked. Sent as an error it did three things, and the
+                   third was only found when the office could not verify the
+                   tab at all:
+
+                     · the close guard left the tab dirty, so its own success
+                       told somebody their work had not saved;
+                     · the X then refused to close over a stored report;
+                     · and a tab that cannot stop being dirty cannot be
+                       SIGNED OFF either, once a sign-off started refusing
+                       keying that is not in the database. Batch 257 has a
+                       shortfall of 7 seeds, so every save of it raised this,
+                       and Verify answered nine times over that there were
+                       changes on screen. There were none.
+
+                   The shape check below missed it because the TYPE is worked
+                   out in a ternary, so the literal `'error')` it was looking
+                   for never appears -- the pin-the-spelling trap. */
                 showToast(
                     needsFollowUp && !_gap.note
                         ? 'Planting report saved — but the figures do not tally and nobody has said why. ' +
                           'Write the reason in "Explain the discrepancy" and save again.'
                         : `Planting report saved.${needsFollowUp ? ' Discrepancy explained.' : ''}`,
-                    needsFollowUp && !_gap.note ? 'error' : 'success');
+                    needsFollowUp && !_gap.note ? 'warn' : 'success');
                 btn.innerText = originalText;
                 btn.disabled = false;
 

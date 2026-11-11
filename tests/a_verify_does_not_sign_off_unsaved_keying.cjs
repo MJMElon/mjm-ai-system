@@ -196,7 +196,10 @@ const server = http.createServer((req, res) => {
   check('nothing has been verified to begin with',
         await page.evaluate(() => !!MJMReview.isVerified('planting')), false);
 
-  checkTrue('there is a Seed Planting box to key into', await type('#t2-gap-note', 'short by a few'));
+  /* Keyed into the DAMAGED box rather than the discrepancy one, so the
+     figures do not tally and nobody has said why -- which is the state
+     batch 257 is actually in, and what section 2 below turns on. */
+  checkTrue('there is a Seed Planting box to key into', await type('#t2-damaged', '5'));
   check('keying makes Seed Planting unsaved', await dirty(), ['Seed Planting']);
 
   await page.evaluate(() => { window.__TOASTS = []; });
@@ -210,7 +213,7 @@ const server = http.createServer((req, res) => {
   check('…and NOT locked, so the Save at the bottom of it still works',
         await locked(2), false);
   check('…and the keying is still on screen',
-        await page.inputValue('#t2-gap-note'), 'short by a few');
+        await page.inputValue('#t2-damaged'), '5');
   check('…and the keying is still unsaved', await dirty(), ['Seed Planting']);
 
   const t1 = await toasts();
@@ -222,12 +225,28 @@ const server = http.createServer((req, res) => {
 
   /* ── 2. Save, then verify ───────────────────────────────────────────── */
   console.log('\n2. Save it first, and the verify goes through');
-  await page.evaluate(() => {
-    window.savePlantingTab = function () { window.showToast('Saved.', 'success'); };
-    window._trackTabSave('savePlantingTab', 2);
-  });
-  await page.evaluate(() => window.savePlantingTab());
-  await page.waitForTimeout(250);
+  /* THE REAL SAVE, because this is where the office was actually stuck and
+     a stub would have proved nothing about it.
+
+     257 is 7 seeds short and nobody has written why, so the planting save
+     stores the report and then says so. That sentence went out as an
+     'error' -- and an error is the one thing the close guard reads as "what
+     you keyed is not in the database", so the tab could NEVER stop being
+     dirty. For months that only mis-worded the X; the moment a sign-off
+     started refusing a dirty tab it meant the report could not be VERIFIED
+     at all, which is the nine refusals the office sent back.
+
+     The discrepancy box is deliberately left empty, which is the whole
+     condition. */
+  await page.evaluate(() => { window.__TOASTS = []; });
+  await page.evaluate(async () => { await window.savePlantingTab(); });
+  await page.waitForTimeout(700);
+  const t2 = await toasts();
+  checkTrue('the save says the report is saved', /saved/i.test((t2[0] || {}).m || ''));
+  checkTrue('…and that nobody has said why the figures do not tally',
+            /do not tally/i.test((t2[0] || {}).m || ''));
+  check('…as a WARNING, because the report IS in the database',
+        (t2[0] || {}).t, 'warn');
   check('the save clears the tab', await dirty(), []);
 
   await page.evaluate(() => { window.__TOASTS = []; });
