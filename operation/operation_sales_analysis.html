@@ -70,9 +70,6 @@ window.MJM_PAGE_GATE = (async () => {
                 <select id="msa-year" onchange="loadMonthlySalesAnalysis()" class="text-[11px] font-black text-slate-700 bg-white border border-slate-300 rounded-xl px-3 py-2 shadow-sm uppercase tracking-widest"></select>
                 <button onclick="loadMonthlySalesAnalysis()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm uppercase tracking-widest">🔄 Refresh</button>
             </div>
-            <div class="text-[10px] text-slate-500 leading-snug max-w-[600px]">
-                <strong>Δ comparisons</strong> — <span class="text-emerald-700 font-extrabold">positive = spare</span>, <span class="text-red-700 font-extrabold">negative = oversold</span>. The Sales Web Publish popup uses these same numbers; the third option ("maturity + suitable − estimate") is the recommended publish qty.
-            </div>
         </div>
 
         <!-- Analysis table -->
@@ -103,14 +100,6 @@ window.MJM_PAGE_GATE = (async () => {
                         <tr><td colspan="10" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading sales analysis…</td></tr>
                     </tbody>
                 </table>
-            </div>
-            <div class="text-[9px] text-slate-500 px-4 py-3 border-t border-slate-200 leading-snug">
-                <span class="font-black uppercase tracking-wider text-slate-700">Notes</span> —
-                <strong>Maturity</strong> = transplanted − 10% culling for batches whose maturity (transplant + 9 mo) falls in this month.
-                <strong>Suitable for Sales</strong> = remaining stock for plots whose latest height audit has any sample &gt;1.5m, from current and previous months (excludes this month's own raw maturity).
-                <strong>Customer Allocation</strong> = sum of <code>shared_plot_allocations.reserved_qty</code> for batches maturing this month.
-                <strong>Estimate Collection</strong> = admin-keyed (click value to edit, blur or Tab to save).
-                <strong>Actual Order</strong> = sum of <code>salesweb_customer_orders</code> items (status ≠ Cancelled) for this sell month.
             </div>
         </div>
     </div>
