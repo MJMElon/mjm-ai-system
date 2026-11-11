@@ -930,6 +930,13 @@
                                     <span></span>
                                 </div>
 
+                                <!-- Sort control sits directly above the rows it sorts, so it is seen where the bags are. -->
+                                <div class="px-6 pt-2 pb-2 flex items-center justify-between gap-3">
+                                    <span></span>
+                                    <button type="button" id="t8-sort-btn" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="toggleSeedAuditSort()" title="Sort the bags by Bag No / Seal No, small to large. Press again to go back to the order they were added.">
+                                        <span aria-hidden="true">↑</span> <span id="t8-sort-label">Sort small → large</span>
+                                    </button>
+                                </div>
                                 <div id="t8-bag-rows-container" class="px-6 pb-4 space-y-3"></div>
 
                                 <!-- Totals footer -->
@@ -9377,7 +9384,7 @@
             const recVal  = (receivedQty != null && receivedQty !== '') ? Number(receivedQty).toLocaleString() : '';
 
             const html = `
-                <div id="${rowId}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_1.4fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
+                <div id="${rowId}" data-seq="${seedAuditRowCount}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_1.4fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
                     <div>
                         <label class="label-style lg:hidden">Bag No / Seal No</label>
                         <input type="text" class="input-style t8-bag-no" placeholder="e.g. MJ24" value="${safeBag}" oninput="updateSeedAuditCompletion()">
@@ -9420,6 +9427,35 @@
         function removeSeedAuditRow(rowId) {
             const row = document.getElementById(rowId);
             if (row) { row.remove(); calcSeedAudit(); }
+        }
+
+        // ── Sort bags by Bag No / Seal No ────────────────────────────────
+        // Reorders the rows only. Nothing is re-keyed and every handler is
+        // addressed by row id, so the order is all that moves. Blank bag
+        // numbers go last. Numeric-aware, so 322064 < 322065 < 322069 and
+        // 9 < 10 — a plain text sort would put 10 before 9.
+        let _seedAuditSorted = false;
+        function toggleSeedAuditSort() {
+            const container = document.getElementById('t8-bag-rows-container');
+            if (!container) return;
+            const rows = Array.from(container.querySelectorAll('.t8-bag-row'));
+            _seedAuditSorted = !_seedAuditSorted;
+            if (_seedAuditSorted) {
+                const bagOf = r => (r.querySelector('.t8-bag-no')?.value || '').trim();
+                rows.sort((a, b) => {
+                    const ka = bagOf(a), kb = bagOf(b);
+                    if (!ka !== !kb) return ka ? -1 : 1;
+                    return ka.localeCompare(kb, undefined, { numeric: true, sensitivity: 'base' });
+                });
+            } else {
+                // Back to the order the bags were added in.
+                rows.sort((a, b) => Number(a.dataset.seq) - Number(b.dataset.seq));
+            }
+            rows.forEach(r => container.appendChild(r));
+            const label = document.getElementById('t8-sort-label');
+            const btn = document.getElementById('t8-sort-btn');
+            if (label) label.innerText = _seedAuditSorted ? 'Sorted small → large (undo)' : 'Sort small → large';
+            if (btn) btn.classList.toggle('!bg-[#e8f5da]', _seedAuditSorted);
         }
 
         // ── AI Scan of supplier packing list ──────────────────────────────
@@ -10816,8 +10852,10 @@ Thank you.`;
             doc.setFont('times', 'bold'); doc.setFontSize(8); setText(INK_SOFT);
             doc.text('TOTAL SUPPLIER QTY', cx(0), y + 16);
             doc.text('TOTAL AUDITED QTY',  cx(1), y + 16);
-            doc.text('VARIANCE (AUDIT − SUPPLIER)', cx(2), y + 16);
-            doc.text('VARIANCE VS EXPECTED', cx(3), y + 16);
+            /* Two lines each: on one line the longer label ran into the
+               next cell's label and the two printed over each other. */
+            doc.text(['VARIANCE', '(AUDIT − SUPPLIER)'], cx(2), y + 16);
+            doc.text(['VARIANCE', 'VS EXPECTED'], cx(3), y + 16);
             doc.setFontSize(13); setText(INK);
             doc.text(totalSupplier.toLocaleString(), cx(0), y + 38);
             setText(GREEN); doc.text(totalAudited.toLocaleString(), cx(1), y + 38);
@@ -10826,6 +10864,10 @@ Thank you.`;
             setText(expectedVariance < 0 ? RED : GREEN);
             doc.text((expectedVariance >= 0 ? '+' : '') + expectedVariance.toLocaleString(), cx(3), y + 38);
             y += 64;
+
+            /* The remark is measured here, before it is drawn under the analysis. */
+            const remarkText  = (document.getElementById('t8-batch-remark').value || '').trim();
+            const remarkLines = remarkText ? doc.splitTextToSize(remarkText, pageW - margin * 2) : [];
 
             // ── ANALYSIS
             const baseline = totalSupplier > 0 ? totalSupplier : expectedRaw;
@@ -10844,6 +10886,19 @@ Thank you.`;
             doc.setFont('times', 'bold'); setText(shortage > 0 ? RED : GREEN);
             doc.text(shortage.toLocaleString() + ' (' + shortagePct.toFixed(2) + '%)', margin + 350, y);
             y += 18;
+
+            /* ── REMARK, straight under the analysis it explains.
+                  It used to be drawn at the very end of the sheet, after the
+                  damage photos, so on a full page it was pushed onto a sheet
+                  of its own. The office asked for it to sit under the
+                  analysis; the photos are then laid out in what is left. */
+            if (remarkText) {
+                _need(14 + remarkLines.length * 12 + 6);
+                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+                doc.text('REMARK', margin, y); y += 14;
+                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
+                doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
+            }
 
             /* ── THE PHOTOS ARE MEASURED BEFORE THE DAMAGE BLOCK IS DRAWN,
                   because the two go on the page TOGETHER.
@@ -10869,13 +10924,10 @@ Thank you.`;
             }
             const shown = dmgPhotos.filter(Boolean);
             const missing = dmgPhotos.length - shown.length;
-            /* The remark has to be measured BEFORE the pictures are, or
-               filling the page with them pushes two lines of text onto a
-               sheet of their own. */
-            const remarkText  = (document.getElementById('t8-batch-remark').value || '').trim();
-            const remarkLines = remarkText ? doc.splitTextToSize(remarkText, pageW - margin * 2) : [];
-            const tailH = (missing > 0 ? 12 : 0)
-                        + (remarkText ? 14 + remarkLines.length * 12 + 6 : 0);
+            /* The remark is drawn under the analysis now, ABOVE the damage
+               block, so it is no longer something the photos must leave room
+               for at the foot: only the missing-photo line is. */
+            const tailH = (missing > 0 ? 12 : 0);
 
             /* THE PICTURES FILL THE ROOM THEY ARE GIVEN.
 
@@ -11062,17 +11114,6 @@ Thank you.`;
                              margin, y); y += 12;
                 }
                 y += 4;
-            }
-
-            // ── REMARK, measured above so the pictures leave room for it.
-            //    The ask is a no-op when they did; it is what carries the
-            //    remark on a sheet that had no photos to reserve it.
-            if (remarkText) {
-                _need(14 + remarkLines.length * 12 + 6);
-                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-                doc.text('REMARK', margin, y); y += 14;
-                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
-                doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
             }
 
             /* ── FOOTER, on EVERY page.

@@ -41,24 +41,29 @@ function lift(startMark, endMark) {
   return src.slice(a, b + endMark.length);
 }
 
-/* ── 1. The wiring: two reports, one value that never moved ─────────────── */
+/* ── 1. The wiring: two doors, one value that never moved ────────────────
+   The 2nd-culling view has moved AGAIN since this test was written: it is
+   the Nursery Report tab now, directly, and the MPOB view went back to
+   wearing Summary Report inside the Submission Report tab. What never
+   moves is the KEY — 'summary' is still the as-submitted report, and
+   runMovementReportCombined(true) is still the cull2 one. */
 console.log('\nThe selector, the registry and the dispatch');
-check('the option value summary now reads MPOB Submission Report',
-      src.includes('<option value="summary">MPOB Submission Report</option>'), true);
-check('and a new option summary_cull2 wears the old name',
-      src.includes('<option value="summary_cull2">Summary Report</option>'), true);
-check('the old option markup is gone',
-      src.includes('<option value="summary">Summary Report</option>'), false);
-check('NURSERY_SUB_REPORTS keeps value summary under the new label',
-      /value:\s*'summary',\s*label:\s*'MPOB Submission Report'/.test(src), true);
-check('and carries summary_cull2 labelled Summary Report',
-      /value:\s*'summary_cull2',\s*label:\s*'Summary Report'/.test(src), true);
-check('the dispatch sends summary to the builder as the MPOB report',
+check('the option value summary reads Summary Report (the as-submitted view)',
+      src.includes('<option value="summary">Summary Report</option>'), true);
+check('summary_cull2 is no longer a sub-report option (it is the Nursery Report tab)',
+      src.includes('value="summary_cull2"'), false);
+check('NURSERY_SUB_REPORTS keeps value summary under the Summary Report label',
+      /value:\s*'summary',\s*label:\s*'Summary Report'/.test(src), true);
+check('REPORTS carries the Nursery Report tab as its own value',
+      /value:\s*'nursery_report',\s*label:\s*'Nursery Report'/.test(src), true);
+check('and the sub-selector tab keeps its key under the Submission Report label',
+      /value:\s*'movement_report',\s*label:\s*'Submission Report'/.test(src), true);
+check('the dispatch sends summary to the builder as the as-submitted report',
       src.includes("if (sub === 'summary')       return runMovementReportCombined(false);"), true);
-check('and summary_cull2 as the cull2 one',
-      src.includes("if (sub === 'summary_cull2') return runMovementReportCombined(true);"), true);
+check('and the Nursery Report tab straight to the cull2 one, no sub-selector',
+      src.includes("if (which === 'nursery_report') return runMovementReportCombined(true);"), true);
 check('both share the movement filter set',
-      src.includes("const isMovement = sub === 'summary' || sub === 'summary_cull2';"), true);
+      src.includes("const isMovement = sub === 'summary' || which === 'nursery_report';"), true);
 check('the main section call picks the scope off withCull2',
       src.includes("buildMovementSection(withCull2 ? 'main2' : 'main'"), true);
 check('the cull2 tooltip is wired like its five siblings',

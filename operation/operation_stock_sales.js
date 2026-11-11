@@ -2,588 +2,20 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // ── Nursery Status state ──────────────────────────────────────────────────
-    let comboTab = 'basic';
-    let nsdAggregates = null;
-    let baseStock = 0;
-    let currentOrdersQty = 0;
-
-    async function loadNsd() {
-        const now = new Date();
-        const cm = now.getMonth();
-        const cy = now.getFullYear();
-        const startOfNextMonthISO = new Date(cy, cm + 1, 1).toISOString();
-        const endOfMonth          = new Date(cy, cm + 1, 0, 23, 59, 59);
-        const endOfMonthISO       = endOfMonth.toISOString();
-        const endOfMonthDateOnly  = endOfMonthISO.slice(0, 10);
-
-        const monthLabel = now.toLocaleString('en-MY', { month: 'short', year: 'numeric' });
-        document.getElementById('current-month-label').innerText = monthLabel;
-
-        try {
-            const [transRes, auditRes, collRes, ordCollFallbackRes] = await Promise.all([
-                _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,quantity_change,created_at')
-                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone'])
-                    .lte('created_at', endOfMonthISO),
-                _supabase.from('audit_height_records')
-                    .select('plot,batch,sample_1,sample_2,sample_3,avg_height,date')
-                    .lte('date', endOfMonthDateOnly),
-                // Multi-pickup table — falls back gracefully if it doesn't exist yet.
-                _supabase.from('salesweb_order_collections')
-                    .select('collected_qty,collected_at')
-                    .lte('collected_at', endOfMonthISO)
-                    .then(r => r, e => ({ data: null })),
-                // Single-collection fallback on the order itself.
-                _supabase.from('salesweb_customer_orders')
-                    .select('collected_qty,collected_at')
-                    .not('collected_qty', 'is', null)
-                    .lte('collected_at', endOfMonthISO)
-                    .then(r => r, e => ({ data: null }))
-            ]);
-            const transLogs = transRes.data || [];
-            const audits    = auditRes.data || [];
-
-            const groupKey = (b, p) => `${b||''}||${p||''}`;
-            const groups = {};
-            transLogs.forEach(l => {
-                const k = groupKey(l.batch_name, l.plot_name);
-                if (!groups[k]) groups[k] = { qty: 0, firstDate: l.created_at };
-                groups[k].qty += (l.quantity_change || 0);
-                if (l.created_at < groups[k].firstDate) groups[k].firstDate = l.created_at;
-            });
-
-            // Earliest ≥150cm audit per group → its "verified matured" date.
-            const TALL_CM = 150;
-            const auditFirstByGroup = {};
-            audits.forEach(a => {
-                const max = Math.max(a.sample_1 || 0, a.sample_2 || 0, a.sample_3 || 0, a.avg_height || 0);
-                if (max < TALL_CM) return;
-                const k = groupKey(a.batch, a.plot);
-                if (!auditFirstByGroup[k] || a.date < auditFirstByGroup[k]) auditFirstByGroup[k] = a.date;
-            });
-
-            // Cumulative matured TO-DATE (after 10% culling).
-            // - Stock To-Date  → groups whose 9-month maturity has passed
-            // - Verified Stock → groups whose earliest of (9-month, audit ≥150cm) has passed
-            const today = new Date();
-
-            let rawByAge = 0, rawByAgeOrAudit = 0;
-            Object.entries(groups).forEach(([k, g]) => {
-                const transplantDate = new Date(g.firstDate);
-                const ageMatureDate  = new Date(transplantDate); ageMatureDate.setMonth(ageMatureDate.getMonth() + 9);
-                const auditMatureDate = auditFirstByGroup[k] ? new Date(auditFirstByGroup[k]) : null;
-
-                if (ageMatureDate <= today) rawByAge += g.qty;
-
-                let earliest = ageMatureDate;
-                if (auditMatureDate && auditMatureDate < earliest) earliest = auditMatureDate;
-                if (earliest <= today) rawByAgeOrAudit += g.qty;
-            });
-
-            // After 10% culling
-            let qtyByAge        = Math.round(rawByAge        * 0.9);
-            let qtyByAgeOrAudit = Math.round(rawByAgeOrAudit * 0.9);
-
-            // Subtract all collections to-date so "matured" reflects seedlings still on hand.
-            let collectedQty = 0;
-            if (collRes?.data && collRes.data.length) {
-                collectedQty = collRes.data.reduce((s, c) => s + (c.collected_qty || 0), 0);
-            } else if (ordCollFallbackRes?.data) {
-                collectedQty = ordCollFallbackRes.data.reduce((s, o) => s + (o.collected_qty || 0), 0);
-            }
-            qtyByAge        = Math.max(0, qtyByAge        - collectedQty);
-            qtyByAgeOrAudit = Math.max(0, qtyByAgeOrAudit - collectedQty);
-
-            const { data: pendingOrders } = await _supabase
-                .from('salesweb_customer_orders')
-                .select('id,status,created_at')
-                .not('status', 'in', '("Pending Payment","Cancelled","Order Completed","Completed")')
-                .lt('created_at', startOfNextMonthISO);
-
-            const pendingIds = (pendingOrders || []).map(o => o.id);
-            let pendingOrdersQty = 0;
-            if (pendingIds.length) {
-                const { data: items } = await _supabase
-                    .from('salesweb_order_items')
-                    .select('order_id,quantity')
-                    .in('order_id', pendingIds);
-                pendingOrdersQty = (items || []).reduce((s, it) => s + (it.quantity || 0), 0);
-            }
-
-            nsdAggregates = { qtyByAge, qtyByAgeOrAudit, pendingOrdersQty, collectedQty };
-            renderNsdTab();
-        } catch(e) {
-            console.warn('NSD load error:', e);
-            ['stat-matured','stat-orders-current'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.innerText = '—';
-            });
-        }
-    }
-
-    function switchComboTab(tab) {
-        comboTab = tab;
-        document.getElementById('combo-tab-basic').classList.toggle('active',    tab === 'basic');
-        document.getElementById('combo-tab-verified').classList.toggle('active', tab === 'verified');
-        renderNsdTab();
-    }
-
-    function renderNsdTab() {
-        const verified = comboTab === 'verified';
-
-        document.getElementById('matured-tile-label').innerText = verified
-            ? 'Verified Matured (To-Date)'
-            : 'Total Matured (To-Date)';
-        document.getElementById('matured-tile-sub').innerText = verified
-            ? '9-month + audit ≥ 1.5m, after 10% culling, less collections to-date'
-            : '9-month rule, after 10% culling, less collections to-date';
-        document.getElementById('nsd-remark-audit').style.display = verified ? '' : 'none';
-
-        const availLabel = document.getElementById('avail-tab-label');
-        if (availLabel) {
-            availLabel.innerHTML = verified
-                ? 'From <span class="text-emerald-700 font-black">Verified Stock</span>'
-                : 'From <span class="text-emerald-700 font-black">Stock To-Date</span>';
-        }
-
-        if (!nsdAggregates) return;
-        const matured = verified ? nsdAggregates.qtyByAgeOrAudit : nsdAggregates.qtyByAge;
-        document.getElementById('stat-matured').innerText        = matured.toLocaleString();
-        document.getElementById('stat-orders-current').innerText = nsdAggregates.pendingOrdersQty.toLocaleString();
-
-        baseStock = matured;
-        currentOrdersQty = nsdAggregates.pendingOrdersQty;
-        updateGearing();
-    }
-
-    function updateGearing() {
-        const matured = baseStock;
-        const orders  = currentOrdersQty;
-        const g = parseInt(document.getElementById('gearing-slider').value) / 10;
-
-        const gearedMatured = Math.round(matured * g);
-        const available     = Math.max(0, gearedMatured - orders);
-
-        const isOversold     = orders > matured;
-        const oversoldQty    = Math.max(0, orders - matured);
-        const oversoldFactor = matured > 0 ? (orders / matured) : 0;
-        const neededGearing  = matured > 0 ? Math.min(3.0, orders / matured) : 1.0;
-
-        document.getElementById('stat-available').innerText  = available.toLocaleString();
-        document.getElementById('calc-matured').innerText    = matured.toLocaleString();
-        document.getElementById('calc-orders').innerText     = orders.toLocaleString();
-        document.getElementById('calc-available').innerText  = available.toLocaleString();
-        document.getElementById('gearing-display').innerText = g.toFixed(1) + '×';
-
-        const statusBadge = document.getElementById('avail-status-badge');
-        const oversoldBox = document.getElementById('oversold-warning');
-        if (isOversold) {
-            statusBadge.innerText = 'Oversold';
-            statusBadge.className = 'text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-widest';
-            oversoldBox.classList.remove('hidden');
-            document.getElementById('oversold-qty').innerText            = oversoldQty.toLocaleString();
-            document.getElementById('oversold-factor').innerText         = oversoldFactor.toFixed(2) + '×';
-            document.getElementById('oversold-needed-gearing').innerText = neededGearing.toFixed(2) + '×';
-        } else {
-            statusBadge.innerText = 'OK';
-            statusBadge.className = 'text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-widest';
-            oversoldBox.classList.add('hidden');
-        }
-
-        const badge = document.getElementById('gearing-badge');
-        if (g <= 1.5)      { badge.innerText = 'Conservative'; badge.className = 'text-[8px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider'; }
-        else if (g <= 2.2) { badge.innerText = 'Moderate';     badge.className = 'text-[8px] font-black text-amber-600 bg-white border border-amber-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider'; }
-        else               { badge.innerText = 'Aggressive';   badge.className = 'text-[8px] font-black text-red-600 bg-white border border-red-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider'; }
-    }
-
-    // ── To-Do list ────────────────────────────────────────────────────────────
-    let todoTab = 'unpaid';
-    let todoData = { unpaid: [], credit: [] };
-
-    async function loadTodoList() {
-        await Promise.all([loadUnpaidScenario(), loadCreditScenario()]);
-        document.getElementById('todo-count-unpaid').innerText = todoData.unpaid.length;
-        document.getElementById('todo-count-credit').innerText = todoData.credit.length;
-        renderTodoTab();
-        renderPaymentStatusSummary();
-    }
-
-    function renderPaymentStatusSummary() {
-        const fmtRM = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-        const unpaidCount  = todoData.unpaid.length;
-        const unpaidAmt    = todoData.unpaid.reduce((s, r) => s + (r.totalAmount || 0), 0);
-        const creditCount  = todoData.credit.length;
-        const creditAmt    = todoData.credit.reduce((s, r) => s + (r.totalAmount || 0), 0);
-
-        const paidPending  = (allCustomerOrders || []).filter(r => r.derivedStatus === 'Paid · Pending Pickup');
-        const paidCount    = paidPending.length;
-        const paidQty      = paidPending.reduce((s, r) => s + (r.balance || 0), 0);
-
-        const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
-        setText('pay-unpaid-count', unpaidCount.toLocaleString());
-        setText('pay-unpaid-amt',   unpaidCount ? fmtRM(unpaidAmt) : '—');
-        setText('pay-credit-count', creditCount.toLocaleString());
-        setText('pay-credit-amt',   creditCount ? fmtRM(creditAmt) : '—');
-        setText('pay-paid-count',   paidCount.toLocaleString());
-        setText('pay-paid-amt',     paidCount ? `${paidQty.toLocaleString()} qty awaiting` : '—');
-
-        const meta = document.getElementById('pay-status-meta');
-        if (meta) meta.innerText = `${unpaidCount + creditCount + paidCount} action items`;
-    }
-
-    async function loadUnpaidScenario() {
-        // "Unpaid" now means: credit invoices we've already ISSUED but the
-        // customer hasn't paid yet. (Previously this tab tracked cash orders
-        // in status='Pending Payment'; that semantic was replaced by the
-        // monthly-invoice workflow per spec.)
-        try {
-            const { data: invoices, error } = await _supabase
-                .from('salesweb_credit_invoices')
-                .select('id,customer_id,invoice_number,billing_period,total_qty,total_amount,issued_at,due_date,status,paid_at,invoice_file_url')
-                .eq('status', 'issued')
-                .is('paid_at', null)
-                .order('issued_at', { ascending: false });
-            if (error) throw error;
-
-            const customerIds = [...new Set((invoices || []).map(i => i.customer_id).filter(Boolean))];
-            const customerNameById = {};
-            if (customerIds.length) {
-                const { data: profs } = await _supabase
-                    .from('shared_profiles')
-                    .select('id,full_name,email')
-                    .in('id', customerIds);
-                (profs || []).forEach(p => { customerNameById[p.id] = p.full_name || p.email || '—'; });
-            }
-
-            todoData.unpaid = (invoices || []).map(inv => ({
-                id: inv.id,
-                invoiceNumber: inv.invoice_number,
-                customerName: customerNameById[inv.customer_id] || '—',
-                billingPeriod: inv.billing_period,
-                totalQty: inv.total_qty || 0,
-                totalAmount: inv.total_amount || 0,
-                issuedAt: inv.issued_at,
-                dueDate: inv.due_date,
-                invoiceFileUrl: inv.invoice_file_url
-            }));
-        } catch(e) {
-            console.warn('[Unpaid Invoices] load failed:', e);
-            todoData.unpaid = [];
-        }
-    }
-
-    async function loadCreditScenario() {
-        // "Credit" tab shows credit-term orders that have been COLLECTED but
-        // are not yet attached to an invoice. Grouped by (customer, collection
-        // month) so the 1st-of-month invoicing flow lists one row per
-        // customer-per-month with a single Upload Invoice button.
-        try {
-            const { data: creditOrders, error } = await _supabase
-                .from('salesweb_customer_orders')
-                .select('id,order_number,customer_id,customer_name,billing_name,total,created_at,status,payment_terms,credit_billed_at,credit_invoice_id,collected_qty,collected_at')
-                .eq('payment_terms', 'credit')
-                .is('credit_invoice_id', null)
-                .not('collected_at', 'is', null)
-                .order('collected_at', { ascending: false });
-            if (error) throw error;
-
-            const creditIds = (creditOrders || []).map(o => o.id);
-            const itemsByOrder = {};
-            if (creditIds.length) {
-                const { data: items } = await _supabase
-                    .from('salesweb_order_items')
-                    .select('order_id,product_name,quantity,unit_price,subtotal')
-                    .in('order_id', creditIds);
-                (items || []).forEach(it => {
-                    if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
-                    itemsByOrder[it.order_id].push(it);
-                });
-            }
-
-            // Group by customer_id + billing period (YYYY-MM derived from collected_at)
-            const groups = {};
-            (creditOrders || []).forEach(o => {
-                const period = (o.collected_at || '').slice(0, 7); // 'YYYY-MM'
-                if (!period || !o.customer_id) return;
-                const key = o.customer_id + '__' + period;
-                const items = itemsByOrder[o.id] || [];
-                const orderedTotalQty = items.reduce((s, it) => s + (it.quantity || 0), 0);
-                const orderedTotalAmt = items.reduce((s, it) => s + (it.subtotal || 0), 0);
-                const unitPrice = orderedTotalQty > 0 ? (orderedTotalAmt / orderedTotalQty) : (items[0]?.unit_price || 0);
-                const collectedQty = o.collected_qty != null ? o.collected_qty : orderedTotalQty;
-                const billAmount = unitPrice * collectedQty;
-
-                if (!groups[key]) {
-                    const [y, m] = period.split('-').map(Number);
-                    groups[key] = {
-                        key,
-                        customerId: o.customer_id,
-                        customerName: o.billing_name || o.customer_name || '—',
-                        billingPeriod: period,
-                        billingLabel: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }),
-                        orderIds: [],
-                        orderNumbers: [],
-                        orderCount: 0,
-                        totalQty: 0,
-                        totalAmount: 0
-                    };
-                }
-                groups[key].orderIds.push(o.id);
-                groups[key].orderNumbers.push(o.order_number);
-                groups[key].orderCount += 1;
-                groups[key].totalQty += collectedQty;
-                groups[key].totalAmount += billAmount;
-            });
-
-            todoData.credit = Object.values(groups)
-                .sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod) || a.customerName.localeCompare(b.customerName));
-        } catch(e) {
-            console.warn('[Credit] unavailable:', e?.message || e);
-            todoData.credit = [];
-        }
-    }
-
-    function switchTodoTab(tab) {
-        todoTab = tab;
-        document.getElementById('todo-tab-unpaid').classList.toggle('active', tab === 'unpaid');
-        document.getElementById('todo-tab-credit').classList.toggle('active', tab === 'credit');
-        renderTodoTab();
-    }
-
-    function renderTodoTab() {
-        const body = document.getElementById('todo-body');
-        const meta = document.getElementById('todo-section-meta');
-        const fmtRM = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-        if (todoTab === 'unpaid') {
-            const total = todoData.unpaid.reduce((s, r) => s + (r.totalAmount || 0), 0);
-            meta.innerHTML = todoData.unpaid.length
-                ? `<span class="text-red-600 font-black">${todoData.unpaid.length}</span> invoices · Total <span class="text-red-600 font-black">${fmtRM(total)}</span>`
-                : '';
-
-            if (!todoData.unpaid.length) {
-                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No unpaid invoices</div></div>';
-                return;
-            }
-
-            body.innerHTML = todoData.unpaid.map(r => {
-                const daysOverdue = r.dueDate ? Math.floor((Date.now() - new Date(r.dueDate).getTime()) / 86400000) : null;
-                const overdueBadge = daysOverdue !== null && daysOverdue > 0
-                    ? `<span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-red-200 text-red-800 border border-red-400 uppercase tracking-widest ml-1">${daysOverdue}d overdue</span>` : '';
-                const viewLink = r.invoiceFileUrl
-                    ? `<a href="${escapeHtml(r.invoiceFileUrl)}" target="_blank" rel="noopener" class="ci-link" title="View invoice PDF">📄</a>` : '';
-                return `
-                <div class="notebook-row" data-invoice-id="${escapeHtml(r.id)}">
-                    <div class="nb-line1">
-                        <span class="note-name" title="${escapeHtml(r.customerName || '')}">${escapeHtml(r.customerName || '—')}</span>
-                        <span class="note-amt">${fmtRM(r.totalAmount)}</span>
-                    </div>
-                    <div class="nb-line2">
-                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 uppercase tracking-widest mr-1">${escapeHtml(r.billingPeriod || '')}</span><span class="note-id">${escapeHtml(r.invoiceNumber || '—')}</span>${overdueBadge}</span>
-                        <span class="flex items-center gap-1.5">${viewLink}<button class="ci-btn ci-btn-paid" onclick="openMarkPaidModal('${escapeHtml(r.id)}')">Mark Paid</button></span>
-                    </div>
-                </div>`;
-            }).join('');
-        } else {
-            const total = todoData.credit.reduce((s, r) => s + (r.totalAmount || 0), 0);
-            meta.innerHTML = todoData.credit.length
-                ? `<span class="text-blue-600 font-black">${todoData.credit.length}</span> customers · Total <span class="text-blue-600 font-black">${fmtRM(total)}</span> to invoice`
-                : '';
-
-            if (!todoData.credit.length) {
-                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No credit invoices pending</div><div class="text-[9px] mt-1">Credit orders appear here once collected. Use the order modal to set <span class="font-mono">collected_at</span>.</div></div>';
-                return;
-            }
-
-            body.innerHTML = todoData.credit.map(r => `
-                <div class="notebook-row credit" data-group-key="${escapeHtml(r.key)}">
-                    <div class="nb-line1">
-                        <span class="note-name" title="${escapeHtml(r.customerName || '')}">${escapeHtml(r.customerName || '—')}</span>
-                        <span class="note-amt">${fmtRM(r.totalAmount)}</span>
-                    </div>
-                    <div class="nb-line2">
-                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-300 uppercase tracking-widest mr-1">${escapeHtml(r.billingLabel)}</span><span class="note-id">${r.orderCount} order${r.orderCount===1?'':'s'} · ${r.totalQty.toLocaleString()} qty</span></span>
-                        <button class="ci-btn ci-btn-upload" onclick="openInvoiceUploadModal('${escapeHtml(r.key)}')">📤 Upload Invoice</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-    }
-
-    // ── Credit invoice modal helpers ──────────────────────────────────────────
-    function findCreditGroup(key) { return todoData.credit.find(g => g.key === key); }
-    function findUnpaidInvoice(id) { return todoData.unpaid.find(i => i.id === id); }
-
-    function openInvoiceUploadModal(groupKey) {
-        const g = findCreditGroup(groupKey);
-        if (!g) { console.warn('Credit group not found:', groupKey); return; }
-        const modal = document.getElementById('ci-upload-modal');
-        document.getElementById('ci-up-customer').innerText = g.customerName;
-        document.getElementById('ci-up-period').innerText = g.billingLabel + ' (' + g.billingPeriod + ')';
-        document.getElementById('ci-up-summary').innerText = g.orderCount + ' order' + (g.orderCount === 1 ? '' : 's') + ' · ' + g.totalQty.toLocaleString() + ' qty · RM ' + Number(g.totalAmount).toFixed(2);
-        document.getElementById('ci-up-key').value = groupKey;
-        document.getElementById('ci-up-invoice-no').value = '';
-        document.getElementById('ci-up-file').value = '';
-        document.getElementById('ci-up-due').value = '';
-        document.getElementById('ci-up-notes').value = '';
-        document.getElementById('ci-up-error').innerText = '';
-        modal.classList.add('open');
-    }
-
-    function closeInvoiceUploadModal() { document.getElementById('ci-upload-modal').classList.remove('open'); }
-
-    async function submitInvoiceUpload() {
-        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
-        const groupKey = document.getElementById('ci-up-key').value;
-        const g = findCreditGroup(groupKey);
-        const errEl = document.getElementById('ci-up-error');
-        errEl.innerText = '';
-        if (!g) { errEl.innerText = 'Group not found — refresh the page.'; return; }
-
-        const invNo = document.getElementById('ci-up-invoice-no').value.trim();
-        const fileInput = document.getElementById('ci-up-file');
-        const dueDate = document.getElementById('ci-up-due').value || null;
-        const notes = document.getElementById('ci-up-notes').value.trim() || null;
-
-        if (!invNo) { errEl.innerText = 'Invoice number is required.'; return; }
-        if (!fileInput.files || !fileInput.files[0]) { errEl.innerText = 'Pick a PDF/image to upload.'; return; }
-        const file = fileInput.files[0];
-
-        const btn = document.getElementById('ci-up-submit');
-        btn.disabled = true; btn.innerText = 'Uploading…';
-
-        try {
-            // 1. Upload file to storage
-            const safeInv = invNo.replace(/[^A-Za-z0-9_-]/g, '_');
-            const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
-            const path = 'invoices/' + g.customerId.substring(0, 8) + '_' + g.billingPeriod + '_' + safeInv + '_' + Date.now() + '.' + ext;
-            const { error: upErr } = await _supabase.storage.from('order-attachments').upload(path, file, { contentType: file.type, upsert: true });
-            if (upErr) throw upErr;
-            const { data: urlData } = _supabase.storage.from('order-attachments').getPublicUrl(path);
-            const fileUrl = urlData?.publicUrl || '';
-
-            // 2. Current user (for issued_by + audit)
-            const { data: { session } } = await _supabase.auth.getSession();
-            const uid = session?.user?.id || null;
-            const uemail = session?.user?.email || 'operation';
-
-            // 3. Insert invoice row
-            const { data: inv, error: invErr } = await _supabase
-                .from('salesweb_credit_invoices')
-                .insert([{
-                    customer_id: g.customerId,
-                    billing_period: g.billingPeriod,
-                    invoice_number: invNo,
-                    total_qty: g.totalQty,
-                    total_amount: Number(g.totalAmount.toFixed(2)),
-                    status: 'issued',
-                    invoice_file_url: fileUrl,
-                    due_date: dueDate,
-                    issued_by: uid,
-                    notes: notes
-                }])
-                .select()
-                .single();
-            if (invErr) throw invErr;
-
-            // 4. Attach the invoice to every order in this group
-            const nowIso = new Date().toISOString();
-            const { error: updErr } = await _supabase
-                .from('salesweb_customer_orders')
-                .update({
-                    credit_invoice_id: inv.id,
-                    credit_billed_at: nowIso,
-                    credit_billing_period: g.billingPeriod,
-                    updated_at: nowIso
-                })
-                .in('id', g.orderIds);
-            if (updErr) throw updErr;
-
-            // 5. Fan-out: insert one attachment row per order so the customer
-            //    portal renders the invoice file under each affected order.
-            const attRows = g.orderIds.map(oid => ({
-                order_id: oid,
-                file_name: 'Invoice ' + invNo + '.' + ext,
-                file_url: fileUrl,
-                file_type: file.type || 'application/pdf',
-                uploaded_by: uemail
-            }));
-            await _supabase.from('salesweb_order_attachments').insert(attRows);
-
-            // 6. Timeline entry per order
-            const tlRows = g.orderIds.map(oid => ({
-                order_id: oid,
-                status: 'Invoiced',
-                note: 'Invoice ' + invNo + ' issued for ' + g.billingLabel,
-                changed_by: uemail
-            }));
-            await _supabase.from('salesweb_order_timeline').insert(tlRows);
-
-            closeInvoiceUploadModal();
-            await loadTodoList();
-            switchTodoTab('unpaid');
-        } catch (e) {
-            console.error('[Invoice upload] failed:', e);
-            errEl.innerText = (e?.message || 'Upload failed') + '';
-        } finally {
-            btn.disabled = false; btn.innerText = 'Upload & Issue Invoice';
-        }
-    }
-
-    function openMarkPaidModal(invoiceId) {
-        const inv = findUnpaidInvoice(invoiceId);
-        if (!inv) return;
-        document.getElementById('ci-paid-id').value = invoiceId;
-        document.getElementById('ci-paid-summary').innerText =
-            inv.invoiceNumber + ' · ' + inv.customerName + ' · RM ' + Number(inv.totalAmount).toFixed(2);
-        document.getElementById('ci-paid-file').value = '';
-        document.getElementById('ci-paid-error').innerText = '';
-        document.getElementById('ci-paid-modal').classList.add('open');
-    }
-    function closeMarkPaidModal() { document.getElementById('ci-paid-modal').classList.remove('open'); }
-
-    async function submitMarkPaid() {
-        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
-        const id = document.getElementById('ci-paid-id').value;
-        const errEl = document.getElementById('ci-paid-error');
-        errEl.innerText = '';
-        const btn = document.getElementById('ci-paid-submit');
-        btn.disabled = true; btn.innerText = 'Saving…';
-        try {
-            let proofUrl = null;
-            const fInput = document.getElementById('ci-paid-file');
-            if (fInput.files && fInput.files[0]) {
-                const f = fInput.files[0];
-                const ext = (f.name.split('.').pop() || 'pdf').toLowerCase();
-                const path = 'invoice-proofs/' + id.substring(0, 8) + '_' + Date.now() + '.' + ext;
-                const { error: upErr } = await _supabase.storage.from('order-attachments').upload(path, f, { contentType: f.type, upsert: true });
-                if (upErr) throw upErr;
-                const { data: urlData } = _supabase.storage.from('order-attachments').getPublicUrl(path);
-                proofUrl = urlData?.publicUrl || null;
-            }
-            const update = { status: 'paid', paid_at: new Date().toISOString() };
-            if (proofUrl) update.payment_proof_url = proofUrl;
-            const { error } = await _supabase.from('salesweb_credit_invoices').update(update).eq('id', id);
-            if (error) throw error;
-            closeMarkPaidModal();
-            await loadTodoList();
-        } catch (e) {
-            console.error('[Mark Paid] failed:', e);
-            errEl.innerText = (e?.message || 'Failed to mark paid') + '';
-        } finally {
-            btn.disabled = false; btn.innerText = 'Mark as Paid';
-        }
-    }
-
-    // Expose to inline onclicks
-    window.openInvoiceUploadModal = openInvoiceUploadModal;
-    window.closeInvoiceUploadModal = closeInvoiceUploadModal;
-    window.submitInvoiceUpload = submitInvoiceUpload;
-    window.openMarkPaidModal = openMarkPaidModal;
-    window.closeMarkPaidModal = closeMarkPaidModal;
-    window.submitMarkPaid = submitMarkPaid;
+    // ── The Nursery Status Dashboard and Available for Sales cards are
+    //    GONE, at the office's ask ("Remove Nursery status dashboard &
+    //    available for sales") — loadNsd/renderNsdTab/updateGearing and
+    //    the gearing slider went with the markup, because a function
+    //    nothing calls is the half-removal this codebase has a rule
+    //    about. The Capacity Heatmap and the Monthly Maturity Allocation
+    //    below them are untouched.
+
+    // ── The To-Do List (Unpaid / Credit) is GONE, at the office's ask
+    //    ("Customer order monitoring - to do list, remove it"). Its Upload
+    //    Invoice and Mark Paid actions went with it — their only door was a
+    //    row of that list — and are not stranded: the Sales Web admin
+    //    (MJMNursery-Sales-Web/public/admin-orders.js) issues credit invoices
+    //    and marks them paid against the same salesweb_credit_invoices table.
 
     // ── Monthly Maturity Allocation ──────────────────────────────────────────
     let allMatGroups = [];
@@ -987,7 +419,7 @@
             renderMaturityTable();
         } catch(e) {
             console.warn('Maturity load error:', e);
-            document.getElementById('maturity-rows').innerHTML = `<tr><td colspan="13" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load maturity data</td></tr>`;
+            document.getElementById('maturity-rows').innerHTML = `<tr><td colspan="12" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load maturity data</td></tr>`;
         }
     }
 
@@ -1187,9 +619,9 @@
         if (locked) {
             const title = status === 'culled'
                 ? 'A 3rd culling is recorded on this plot — balance reads 0 and the status is set by the system'
-                : 'Balance is sold out — status is automatic, not editable';
+                : 'Sold out on the 10% culling estimate — status is automatic. Customers can still be reserved until Qty Transplanted − DO Deducted reaches 0';
             return `
-                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white bg-red-600 border border-red-600 rounded-lg px-2 py-1 uppercase tracking-widest" title="${title}">
+                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white ${status === 'sold_out' ? 'bg-slate-400 border-slate-400' : 'bg-red-600 border-red-600'} border rounded-lg px-2 py-1 uppercase tracking-widest" title="${title}">
                     <span class="w-2 h-2 rounded-full ${m.dot} shrink-0"></span>
                     <span>${m.label}</span>
                 </span>`;
@@ -1249,11 +681,58 @@
         const isPR = activeMonthKey === PR_TAB_KEY;
         const table = document.querySelector('.mat-table');
         if (table) table.classList.toggle('pr-view', isPR);
+        // 6 production columns since the Location column came off (the
+        // ALL / UNN1 / UNN2 / BNN buttons above the table answer it now),
+        // one fewer again on Plot-R where After 10% Culling hides.
         const prodGroupTh = document.getElementById('mat-th-prod-group');
-        if (prodGroupTh) prodGroupTh.colSpan = isPR ? 6 : 7;
+        if (prodGroupTh) prodGroupTh.colSpan = isPR ? 5 : 6;
         const qtyTh = document.getElementById('mat-th-qty');
         if (qtyTh) qtyTh.textContent = isPR ? 'Qty Transferred' : 'Qty Transplanted';
+        // Both header lines are sticky and the second sticks BELOW the
+        // first ("Freeze the ... production / plot status / customer
+        // allocation that line, so if I scroll down see the below data, I
+        // still know their title"). The offset is MEASURED off the real
+        // group row rather than typed, so a font or padding change cannot
+        // open a gap between the two frozen lines.
+        const groupRow = table ? table.querySelector('thead tr.mat-group-row') : null;
+        if (table && groupRow && groupRow.offsetHeight) {
+            table.style.setProperty('--mat-group-h', groupRow.offsetHeight + 'px');
+        }
     }
+
+    // What the flow-back pass released this session — shown in a strip
+    // under the table, because an allocation leaving a row with nothing
+    // on screen saying so reads as data lost rather than a customer
+    // waiting on the floating icon. Keyed by allocation id so a render
+    // cannot say the same release twice.
+    const _matReleasedNotes = new Map();
+    let _matReleaseRetried = false;
+    function renderMatReleased() {
+        const el = document.getElementById('maturity-released');
+        if (!el) return;
+        const notes = [...new Set(_matReleasedNotes.values())];
+        el.classList.toggle('hidden', !notes.length);
+        el.innerHTML = notes.length
+            ? '\u21a9 Flowed back to Allocate Orders — the plot balance no longer covers the reservation: ' + notes.map(escapeHtml).join(' \u00b7 ')
+            : '';
+    }
+
+    // ── Production location filter — ALL / UNN1 / UNN2 / BNN ────────────────
+    // The office took the Location COLUMN off and asked for buttons at the
+    // top instead: "Remove the Location under Production, create a button
+    // at the top there : ALL, UNN1, UNN2, BNN. Always showed ALL as
+    // default." ALWAYS opens on ALL — deliberately not remembered across
+    // loads. Matched on letters and digits (the house nurseryKey rule), so
+    // the "UNN 1" Seedling Stock stores answers the UNN1 button.
+    let _matLocFilter = 'ALL';
+    const _matLocKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    function setMatLocFilter(loc) {
+        _matLocFilter = loc;
+        document.querySelectorAll('#mat-loc-tabs .mat-loc-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.loc === loc));
+        renderMaturityTable();
+    }
+    window.setMatLocFilter = setMatLocFilter;
 
     function renderMaturityTable() {
         updateMaturityHeaders();
@@ -1261,7 +740,7 @@
         const tfoot = document.getElementById('maturity-foot');
         const isPR  = activeMonthKey === PR_TAB_KEY;
 
-        const rows = allMatGroups
+        let rows = allMatGroups
             .filter(g => isPR ? g.isPR : (!g.isPR && monthKey(g.matureDate) === activeMonthKey))
             .sort((a, b) => {
                 const dateDiff = a.matureDate - b.matureDate;
@@ -1273,15 +752,158 @@
                 return (parseInt(a.batch, 10) || 0) - (parseInt(b.batch, 10) || 0);
             });
 
+        // ── The ROW's balance arithmetic, in ONE place ──────────────────
+        // buildRow() prints it and releaseOverReserved() decides by it —
+        // two copies of this sum is a chip bouncing off a balance the
+        // screen never printed.
+        //
+        // THE OFFICE'S FORMULA, on a month row, word for word: "Plot balance
+        // calculation = After 10% culling qty - DO deducted = Plot balance.
+        // If plot balance become negative, the status auto become sold out
+        // but customer (drag here) still available, unless the transplanted
+        // qty - DO deducted = 0 or the plot status become culled."
+        //
+        // So on a MONTH row neither a 3rd culling nor a 3rd-culling transfer
+        // comes off the Plot Balance any more. Both used to — which is why
+        // N12 read -1 (3,337 - 2,898 - the 440 moved to N12-R) where the
+        // office's own sum reads 439. They still decide CULLED, which is the
+        // other lock in that sentence: a plot whose counted 3rd culling covers
+        // what was left standing is done, and that test still asks the full
+        // arithmetic (fullBalance). The hover on DO Deducted still names the
+        // culling and the transfer, so the figures can be found.
+        //
+        // PLOT-R IS UNCHANGED. It has no 10% column — After Culling IS the
+        // quantity transferred in — and a Plot-R row's whole balance is what
+        // has moved on or been culled off it, so the full arithmetic stays.
+        function rowFigures(r) {
+            const collected = r.doDeducted || 0;
+            const culledQty = r.culledQty || 0;
+            const xferOut   = r.transferredOut || 0;
+            const xferIn    = r.transferredIn  || 0;
+            const otherDed  = culledQty + xferOut;
+            const fullBalance = r.afterCulling + xferIn - collected - otherDed;
+            const culled = culledQty > 0 && fullBalance <= 0;
+            const rawBalance = isPR ? fullBalance : r.afterCulling - collected;
+            const plotBalance = culled ? 0 : rawBalance;
+            const soldOut = !culled && plotBalance <= 0;
+            // SOLD OUT IS NOT CLOSED. Sold Out is the 10%-culling ESTIMATE
+            // used up, and seedlings really can still be standing in that
+            // 10%, so a sold-out row keeps taking customers against
+            // Qty Transplanted - DO Deducted — the office's exact sum — and
+            // only closes once that reaches nought (or the plot is Culled).
+            const left = isPR ? fullBalance : r.qty - collected;
+            const closedOut = soldOut && left <= 0;
+            // What a customer may be reserved against: the plot balance, or
+            // on a sold-out row the seedlings left. ONE figure, read by
+            // buildRow (After Deduct Reserve, the drop gate) and by
+            // releaseOverReserved (the flow-back budget) alike.
+            const room = soldOut ? Math.max(0, left) : plotBalance;
+            return { collected, culledQty, xferOut, xferIn, otherDed, rawBalance, fullBalance, culled, plotBalance, soldOut, left, closedOut, room };
+        }
+
+        // ── A customer the plot can no longer cover FLOWS BACK to the
+        //    Allocate Orders pool ──────────────────────────────────────
+        // The office: "If plot balance has not enough for customer (drag
+        // here) reservation qty. Pls let the customer flow back to
+        // allocate orders button. So that we able to redo the allocation
+        // from the floating icon." A culling, a transfer or another
+        // customer's DO can take the balance below what was promised
+        // AFTER the drop, and the chip then sat red and stuck. Releasing
+        // the allocation is ALL "flow back" needs: the drawer lists an
+        // order while orderUnallocatedQty() > 0, so the card reappears on
+        // the floating icon by itself, and the strip under the table says
+        // who flowed back and why.
+        // Three guards:
+        // - The OLDEST chip keeps its promise first; later drops are the
+        //   ones that bounce, and a chip that still fits what is left
+        //   stays where it was put.
+        // - A chip with a COLLECTION against it never bounces — that
+        //   customer is already taking from this plot, and moving them is
+        //   the office's decision, not a page load's.
+        // - Only a login that may manage allocations releases (the same
+        //   'stock'/'manage' every allocation write asks, checked without
+        //   the alert); for anybody else the row simply reads red.
+        function releaseOverReserved(list) {
+            if (typeof MJMAccess !== 'undefined' && MJMAccess.canDoOperation
+                && !MJMAccess.canDoOperation('stock', 'manage')) {
+                // "May not" off an answer that is merely NOT IN YET is how
+                // the pass quietly never ran: the boot renders race the
+                // access load, so the admin who opened the page saw no
+                // flow-back until something else touched the table. Ask
+                // ONCE more when the load lands; a login genuinely without
+                // 'manage' answers the same no again and that is the end
+                // of it.
+                if (!_matReleaseRetried && MJMAccess.load) {
+                    _matReleaseRetried = true;
+                    // load(_supabase) — called bare it refuses outright,
+                    // which is how the first version of this retry silently
+                    // never re-rendered. A repeat load inside the profile
+                    // cache TTL costs no network.
+                    Promise.resolve(MJMAccess.load(_supabase)).then(() => renderMaturityTable(), () => {});
+                }
+                return;
+            }
+            const bounced = [];
+            list.forEach(r => {
+                const allocs = allocsForBatch(r.key);
+                if (!allocs.length) return;
+                let budget = rowFigures(r).room;
+                allocs.slice()
+                    .sort((a, b) => String(a.updated_at || '').localeCompare(String(b.updated_at || '')))
+                    .forEach(a => {
+                        const live = allocLiveQty(a);
+                        // No order to flow back TO — the pool lists ORDERS,
+                        // so releasing this chip would lose it, and with no
+                        // order its collections cannot be judged either
+                        // (the same can happen transiently while the
+                        // orders read is still in flight). It stays, with
+                        // its × beside it.
+                        if (!orderForAlloc(a)) { budget -= live; return; }
+                        const hasCollection = (Number(a.allocated_qty) || 0) > live;
+                        if (hasCollection || live <= budget) { budget -= live; return; }
+                        bounced.push(a);
+                    });
+            });
+            if (!bounced.length) return;
+            bounced.forEach(a => {
+                _matReleasedNotes.set(String(a.id),
+                    `${a.customer_name || '—'} (${allocLiveQty(a).toLocaleString('en-MY')} pcs) off ${a.plot_name || '—'} · batch ${a.batch_name || '—'}`);
+                const i = batchAllocations.indexOf(a);
+                if (i !== -1) batchAllocations.splice(i, 1);
+                if (_allocBcaTableExists && !String(a.id).startsWith('local-')) {
+                    _supabase.from('shared_batch_customer_allocations').delete().eq('id', a.id)
+                        .then(({ error }) => {
+                            if (error) {
+                                console.warn('[BCA] flow-back delete failed — restoring:', error.message || error);
+                                _matReleasedNotes.delete(String(a.id));
+                                batchAllocations.push(a);
+                                renderMaturityTable();
+                                renderAllocDrawer();
+                            }
+                        }, () => {});
+                }
+            });
+            // The pool and its badge pick the released orders up again.
+            renderAllocDrawer();
+        }
+        releaseOverReserved(rows);
+
+        // The ALL / UNN1 / UNN2 / BNN buttons cut the LIST — applied after
+        // the release pass, so which chips flow back never depends on
+        // which button happens to be pressed.
+        if (_matLocFilter !== 'ALL') rows = rows.filter(r => _matLocKey(r.location) === _matLocFilter);
+
         if (!rows.length) {
-            const emptyMsg = isPR ? 'No transfer (Plot-R) plots' : 'No maturity allocations for this month';
-            tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
+            const inLoc = _matLocFilter !== 'ALL' ? ` in ${_matLocFilter}` : '';
+            const emptyMsg = isPR ? `No transfer (Plot-R) plots${inLoc}` : `No maturity allocations for this month${inLoc}`;
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
             tfoot.innerHTML = '';
             renderDoUnmatched();
+            renderMatReleased();
             return;
         }
 
-        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0, totOther = 0, totBalance = 0, totRowCount = 0;
+        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0, totOther = 0, totBalance = 0, totAfter = 0, totRowCount = 0;
 
         // One row's <tr> — identical machinery on every tab, Plot-R
         // included (the office: "Plot-R history data must be same with the
@@ -1307,35 +929,38 @@
             // does: only a culling that takes the balance to nought reads
             // Culled ("partially culled plot keep the reduced balance
             // instead").
-            const culledQty = r.culledQty || 0;
-            // A plot's 3rd-culling transfer deducts beside the culling:
-            // those seedlings are standing in their own Plot-R row now,
-            // and a balance still carrying them counts the same stock
-            // twice. transferredIn is the rare reverse (a transfer landing
-            // on a plot the same batch already stands in) and adds.
-            const xferOut   = r.transferredOut || 0;
-            const xferIn    = r.transferredIn  || 0;
-            const otherDed  = culledQty + xferOut;
-            const rawBalance = r.afterCulling + xferIn - collected - otherDed;
+            // The arithmetic itself lives in rowFigures() above — shared
+            // with the flow-back pass, which has to decide by EXACTLY the
+            // figure this row prints.
             // Fully culled: the culling (with whatever sold) took the row to
             // or past nought. Clamped at 0 — the estimate is 90% and a full
             // culling counts the real 100%, so the raw figure can go a few
             // seedlings negative, and a culled plot reading −244 reads as a
             // fault. Status is system-set, shown, and never written back to
             // plotAllocations (same as Sold Out below) — the person's last
-            // pick survives if the culling rows are ever corrected. Chips
-            // still on the row stay visible (customers the office has to
-            // move), so After Deduct Reserve can read red negative here.
-            const culled = culledQty > 0 && rawBalance <= 0;
-            const plotBalance        = culled ? 0 : rawBalance;
-            const afterDeductReserve = plotBalance - allocSum;
+            // pick survives if the culling rows are ever corrected. A chip
+            // with a collection against it stays visible on a short row (a
+            // customer the office has to move), so After Deduct Reserve can
+            // still read red negative here; an uncollected chip the balance
+            // cannot cover has already flowed back to the pool.
+            // transferredOut deducts beside the culling: those seedlings
+            // are standing in their own Plot-R row now, and a balance still
+            // carrying them counts the same stock twice. transferredIn is
+            // the rare reverse and adds.
+            const { culledQty, xferOut, xferIn, otherDed, culled, plotBalance, soldOut, left, closedOut, room } = rowFigures(r);
+            const afterDeductReserve = room - allocSum;
+            // On a sold-out row the figure is the REAL seedlings left less
+            // what is reserved — the plot balance has gone under the 10%
+            // estimate, so it is not what a reservation is checked against.
+            const adrTitle = soldOut && !closedOut
+                ? ` title="Sold out on the 10% culling estimate, but ${left.toLocaleString()} seedlings are still standing (${isPR ? 'quantity less what has moved on, been culled or collected' : 'Qty Transplanted − DO Deducted'}) — customers can still be reserved against them"`
+                : '';
 
             // Sold Out overrides whatever was picked — it's never written
             // back to plotAllocations (that stays the person's last real
             // choice, in case the plot's balance later recovers), only
             // shown while plotBalance stays at/under zero. Culled wins over
             // it: both are automatic, and the culling is the reason.
-            const soldOut = !culled && plotBalance <= 0;
             const status  = culled ? 'culled' : (soldOut ? 'sold_out' : (alloc.plot_status || 'no_status'));
             const doTitle = otherDed > 0
                 ? ` title="Sold ${collected.toLocaleString()} · Culled ${culledQty.toLocaleString()}${xferOut > 0 ? ` · ${isPR ? 'Moved on' : 'Transferred out'} ${xferOut.toLocaleString()}` : ''}"`
@@ -1347,9 +972,18 @@
             const culledPending = r.culledPending || 0;
             const balNotes = [];
             if (culled) balNotes.push(`3rd culling recorded on this plot (${culledQty.toLocaleString()} culled${xferOut > 0 ? `, ${xferOut.toLocaleString()} ${isPR ? 'moved on to another plot' : 'transferred to Plot-R'}` : ''}) — fully culled, balance reads 0`);
-            else if (culledQty > 0) balNotes.push(`3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance`);
-            if (!culled && xferOut > 0) balNotes.push(`${xferOut.toLocaleString()} ${isPR ? 'moved on to another plot by a 3rd-culling transfer — deducted here, standing on that plot’s own row' : 'transferred off this plot by a 3rd-culling transfer — deducted here, standing on the Plot-R tab'}`);
-            if (xferIn > 0) balNotes.push(`${xferIn.toLocaleString()} transferred ONTO this plot by a 3rd-culling transfer — added to the balance`);
+            // A month row's balance is After 10% Culling − DO Deducted and
+            // nothing else (the office's formula — see rowFigures), so these
+            // say the figure is NOT in it; a Plot-R row still takes them off.
+            else if (culledQty > 0) balNotes.push(isPR
+                ? `3rd culling of ${culledQty.toLocaleString()} on this plot is deducted from the balance`
+                : `3rd culling of ${culledQty.toLocaleString()} is recorded on this plot — not taken off the Plot Balance, which is After 10% Culling − DO Deducted`);
+            if (!culled && xferOut > 0) balNotes.push(isPR
+                ? `${xferOut.toLocaleString()} moved on to another plot by a 3rd-culling transfer — deducted here, standing on that plot’s own row`
+                : `${xferOut.toLocaleString()} transferred off this plot to Plot-R by a 3rd-culling transfer — not taken off the Plot Balance here; they also stand on the Plot-R tab`);
+            if (xferIn > 0) balNotes.push(isPR
+                ? `${xferIn.toLocaleString()} transferred ONTO this plot by a 3rd-culling transfer — added to the balance`
+                : `${xferIn.toLocaleString()} transferred ONTO this plot by a 3rd-culling transfer — not added to the Plot Balance, which is After 10% Culling − DO Deducted`);
             if (culledPending > 0 && !culled) balNotes.push(`A 3rd culling of ${culledPending.toLocaleString()} is keyed but NOT counted yet — it needs the drone qty on the batch report row and the line verified`);
             const balTitle = balNotes.length ? ` title="${balNotes.join('. ')}"` : '';
 
@@ -1374,14 +1008,24 @@
                         <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
                     </div>`;
                 }).join('')}</div>`
+                // A Culled or Sold Out plot cannot take a customer, so the
+                // 🎯 "Drop card here" target would be an invitation to a
+                // refused drop — the office: "Culled plot the 'Drop card
+                // here' will become gray zone and we unable to drag the
+                // customer to the column." A gray zone naming the lock, in
+                // place of a target.
+                // Sold Out alone is NOT here — it still takes customers
+                // against the seedlings really left; only Sold Out with
+                // nothing left (closedOut) locks.
+                : (status === 'culled' || closedOut)
+                    ? `<div class="reserv-empty reserv-empty-locked" title="This plot is ${status === 'culled' ? 'culled' : 'sold out with nothing left (Qty Transplanted − DO Deducted = 0)'} — it cannot take a customer allocation">${status === 'culled' ? 'Culled' : 'Sold out'} — closed</div>`
                 : matFinished
                     ? `<div class="reserv-empty reserv-empty-finished"></div>`
                     : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
 
             const html = `
-                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}">
+                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}" data-mat-closed="${(culled || closedOut) ? '1' : '0'}">
                     <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
-                    <td class="col-prod">${escapeHtml(r.location)}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
                     <td class="col-prod font-mono">${escapeHtml(r.batch || '—')}</td>
                     <td class="col-prod">${escapeHtml(r.breed || '—')}</td>
@@ -1394,10 +1038,10 @@
                     <td class="col-plot num font-black mat-sep-r ${(soldOut || culled) ? 'text-red-600' : 'text-slate-800'}"${balTitle}>${plotBalance.toLocaleString()}</td>
                     <td class="col-alloc">${reservHtml}</td>
                     <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
-                    <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
+                    <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}"${adrTitle}>${afterDeductReserve.toLocaleString()}</td>
                 </tr>
             `;
-            return { html, allocSum, collected, otherDed, plotBalance, status };
+            return { html, allocSum, collected, otherDed, plotBalance, status, afterDeductReserve };
         }
 
         // Every row goes through the ONE buildRow — same gate, same
@@ -1421,18 +1065,18 @@
                 .sort((a, b) => b.r.matureDate - a.r.matureDate);
 
             if (!liveRows.length) {
-                bodyHtml += `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No transfer (Plot-R) plots with balance — everything is in History below</div></td></tr>`;
+                bodyHtml += `<tr><td colspan="12" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No transfer (Plot-R) plots with balance — everything is in History below</div></td></tr>`;
             } else {
                 liveRows.forEach(x => {
                     bodyHtml += x.b.html;
                     totQty += x.r.qty; totCull += x.r.afterCulling; totReserved += x.b.allocSum;
-                    totCollected += x.b.collected; totOther += x.b.otherDed; totBalance += x.b.plotBalance; totRowCount++;
+                    totCollected += x.b.collected; totOther += x.b.otherDed; totBalance += x.b.plotBalance; totAfter += x.b.afterDeductReserve; totRowCount++;
                 });
             }
             if (historyRows.length) {
                 bodyHtml += `
                     <tr class="mat-history-toggle" onclick="toggleMatHistory()">
-                        <td colspan="13">🕘 History — ${historyRows.length} transfer plot${historyRows.length === 1 ? '' : 's'} already Sold Out or Culled <span id="mat-history-caret">▸ show</span></td>
+                        <td colspan="12">🕘 History — ${historyRows.length} transfer plot${historyRows.length === 1 ? '' : 's'} already Sold Out or Culled <span id="mat-history-caret">▸ show</span></td>
                     </tr>`;
                 // Rebuilt WITH the history class — the figures and statuses
                 // are identical, only the row hides until the toggle opens.
@@ -1443,7 +1087,7 @@
                 const b = buildRow(r, false);
                 bodyHtml += b.html;
                 totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
-                totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totRowCount++;
+                totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totAfter += b.afterDeductReserve; totRowCount++;
             });
         }
 
@@ -1466,10 +1110,13 @@
         // from the other columns — a Culled row's balance is forced to 0,
         // and a foot that disagreed with the column above it would be the
         // one shape of wrong nobody can spot.
-        const totAfterDeduct = totBalance - totReserved;
+        // The SHOWN per-row After Deduct Reserve, summed — on a sold-out row
+        // it reads off the seedlings really left, not the plot balance, so
+        // Plot Balance − Reserved would disagree with the column above it.
+        const totAfterDeduct = totAfter;
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
-                <td colspan="5" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${totRowCount} rows)</td>
+                <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${totRowCount} rows)</td>
                 <td class="num text-slate-900">${totQty.toLocaleString()}</td>
                 <td class="num text-emerald-700 mat-sep-r col-afterc">${totCull.toLocaleString()}</td>
                 <td></td>
@@ -1481,6 +1128,7 @@
             </tr>`;
 
         renderDoUnmatched();
+        renderMatReleased();
     }
 
     // Expand/collapse Plot-R's History section. Toggles the rows directly
@@ -3697,6 +3345,18 @@
 
     let _draggingAlloc = null;
 
+    // Statuses that refuse a drop. Closed (finished) is the office's own
+    // judgment; Culled and Sold Out are the automatic locks — the office:
+    // "Culled plot the 'Drop card here' will become gray zone and we
+    // unable to drag the customer to the column." The balance alone
+    // already refuses most of these; the status is the explicit gate, so
+    // the rule does not hang off an arithmetic coincidence.
+    const MAT_DROP_LOCKED = ['finished', 'culled'];
+    // Sold Out is NOT a lock by itself any more — see rowFigures(). The
+    // row says whether it is closed (culled, or sold out with nothing
+    // really left) in data-mat-closed, and that is asked beside the status.
+    const matRowLocked = tr => MAT_DROP_LOCKED.includes(tr.dataset.matStatus) || tr.dataset.matClosed === '1';
+
     function onCardDragStart(e) {
         const orderId = e.currentTarget.dataset.orderId;
         const order = allCustomerOrders.find(o => o.id === orderId);
@@ -3713,7 +3373,7 @@
 
         document.querySelectorAll('#maturity-rows tr[data-batch-key]').forEach(tr => {
             const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-            if (balance > 0 && tr.dataset.matStatus !== 'finished') tr.classList.add('drop-target');
+            if (balance > 0 && !matRowLocked(tr)) tr.classList.add('drop-target');
             else             tr.classList.add('drop-disabled');
         });
     }
@@ -3752,7 +3412,7 @@
                           && tr.dataset.plotName  === _draggingAlloc.sourcePlot;
             if (isSource) return;
             const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-            if (balance > 0 && tr.dataset.matStatus !== 'finished') tr.classList.add('drop-target');
+            if (balance > 0 && !matRowLocked(tr)) tr.classList.add('drop-target');
             else             tr.classList.add('drop-disabled');
         });
     }
@@ -3774,7 +3434,7 @@
             if (isSource) return;
         }
         const balance = parseInt(tr.dataset.batchBalance || '0', 10);
-        if (balance <= 0 || tr.dataset.matStatus === 'finished') return;
+        if (balance <= 0 || matRowLocked(tr)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = _draggingAlloc ? 'move' : 'copy';
         tr.classList.add('drop-hover');
@@ -3792,7 +3452,7 @@
         // Finished is a person's judgment, separate from the balance check
         // above it — a plot can be marked done with stock still sitting on
         // it, and that stock is not open to a new drop.
-        if (balance <= 0 || tr.dataset.matStatus === 'finished') return;
+        if (balance <= 0 || matRowLocked(tr)) return;
 
         if (_draggingAlloc) {
             const isSource = batchName === _draggingAlloc.sourceBatch && plotName === _draggingAlloc.sourcePlot;
@@ -4709,11 +4369,8 @@
     window.onInvmapBatchSearch = onInvmapBatchSearch;
     window.clearInvmapBatchSearch = clearInvmapBatchSearch;
 
-    document.getElementById('gearing-slider').addEventListener('input', updateGearing);
     _supabase.auth.getSession().then(({ data: { session } }) => {
         if (!session) { window.location.href = 'operation_dashboard.html'; return; }
-        loadNsd();
-        loadTodoList();
         loadMaturity();
         // The maturity table hides SPENT allocations (allocIsSpent reads the
         // order balances), and the three loads race — redraw it once the

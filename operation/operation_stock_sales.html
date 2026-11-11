@@ -33,57 +33,6 @@
         .gear-slider{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:linear-gradient(90deg,#10b981 0%,#f59e0b 50%,#ef4444 100%);outline:none;cursor:pointer;}
         .gear-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1e293b;box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:grab;}
 
-        /* To-do tabs (compact) */
-        .todo-tab{padding:8px 14px;font-weight:900;font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-radius:10px;transition:all .15s;color:#64748b;background:transparent;border:1.5px solid transparent;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;}
-        .todo-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
-        .todo-tab.active.unpaid{background:#fef2f2;color:#b91c1c;border-color:#fca5a5;}
-        .todo-tab.active.credit{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd;}
-        .todo-tab .tab-count{background:white;border:1px solid currentColor;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:900;}
-
-        /* Notebook-style to-do list */
-        .notebook{background:repeating-linear-gradient(180deg,#fffbeb 0 28px,#fef3c7 28px 29px);border:1px solid #fde68a;border-radius:10px;box-shadow:inset 3px 0 0 #f59e0b,0 1px 4px rgba(0,0,0,.04);}
-        .notebook-row{display:flex;flex-direction:column;gap:2px;padding:6px 10px 6px 14px;border-bottom:1px dashed #fde68a;font-size:11px;}
-        .notebook-row:last-child{border-bottom:none;}
-        .notebook-row:hover{background:rgba(255,255,255,.5);}
-        .notebook-row .nb-line1{display:flex;justify-content:space-between;align-items:center;gap:6px;}
-        .notebook-row .nb-line2{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10px;color:#a16207;}
-        .notebook-row .note-id{font-family:'Courier New',monospace;font-weight:900;color:#92400e;}
-        .notebook-row .note-name{font-weight:900;color:#451a03;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        .notebook-row .note-amt{font-weight:900;color:#b91c1c;font-variant-numeric:tabular-nums;white-space:nowrap;}
-        .notebook-row.credit .note-amt{color:#1d4ed8;}
-
-        /* Credit-invoice row buttons */
-        .ci-btn{font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:3px 8px;border:1px solid;cursor:pointer;white-space:nowrap;transition:all .15s;}
-        .ci-btn-upload{background:#dbeafe;color:#1d4ed8;border-color:#93c5fd;}
-        .ci-btn-upload:hover{background:#1d4ed8;color:#fff;}
-        .ci-btn-paid{background:#dcfce7;color:#166534;border-color:#86efac;}
-        .ci-btn-paid:hover{background:#166534;color:#fff;}
-        .ci-link{text-decoration:none;font-size:13px;line-height:1;padding:1px 4px;border-radius:5px;}
-        .ci-link:hover{background:#f1f5f9;}
-
-        /* Credit-invoice modal */
-        .ci-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
-        .ci-modal.open{display:flex;}
-        .ci-modal-card{background:#fff;border-radius:16px;width:100%;max-width:520px;box-shadow:0 30px 80px -10px rgba(0,0,0,.4);overflow:hidden;display:flex;flex-direction:column;max-height:92vh;}
-        .ci-modal-head{padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(180deg,#f8fafc,#fff);}
-        .ci-modal-title{font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;}
-        .ci-modal-close{background:transparent;border:none;font-size:20px;color:#64748b;cursor:pointer;line-height:1;}
-        .ci-modal-close:hover{color:#0f172a;}
-        .ci-modal-body{padding:18px 20px;overflow-y:auto;flex:1;}
-        .ci-field{margin-bottom:.85rem;}
-        .ci-field-label{font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;display:block;}
-        .ci-input,.ci-textarea{width:100%;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:#0f172a;background:#fff;}
-        .ci-input:focus,.ci-textarea:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.18);}
-        .ci-textarea{resize:vertical;min-height:60px;}
-        .ci-readonly-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:12px;color:#334155;margin-bottom:.4rem;}
-        .ci-readonly-row strong{color:#0f172a;font-weight:900;}
-        .ci-modal-error{color:#b91c1c;font-size:11px;font-weight:700;min-height:16px;margin-top:.4rem;}
-        .ci-modal-foot{padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:.5rem;background:#f8fafc;}
-        .ci-btn-primary{background:#1d4ed8;color:#fff;border:1px solid #1d4ed8;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
-        .ci-btn-primary:hover{background:#1e40af;}
-        .ci-btn-primary:disabled{opacity:.6;cursor:wait;}
-        .ci-btn-ghost{background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
-        .ci-btn-ghost:hover{background:#f1f5f9;color:#0f172a;}
 
         /* Maturity month tabs */
         .month-tab{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
@@ -150,6 +99,22 @@
         .premium-toggle:checked::before{left:18px;}
 
         .scroll-x-fade{overflow-x:auto;scrollbar-width:thin;}
+        /* The maturity table's own wrapper also scrolls vertically, so the
+           two sticky header lines (the Production / Plot Status / Customer
+           Allocation group line, and the column titles under it) stay on
+           screen while the rows scroll — "Freeze the ... that line, so if
+           I scroll down see the below data, I still know their title". */
+        .mat-scroll{max-height:72vh;overflow:auto;}
+        .mat-table thead tr.mat-group-row th{top:0;z-index:3;}
+        /* The column line sticks BELOW the group line; the offset is the
+           group row's measured height, set by updateMaturityHeaders(). */
+        .mat-table thead tr:not(.mat-group-row) th{top:var(--mat-group-h,26px);z-index:2;}
+        .mat-loc-btn{padding:5px 14px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:1.5px solid #cbd5e1;background:#fff;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .mat-loc-btn:hover{border-color:#3b82f6;color:#1d4ed8;}
+        .mat-loc-btn.active{background:#1e40af;color:#fff;border-color:#1e40af;}
+        /* A Culled / Sold Out plot's allocation cell is a gray zone, not a
+           drop target. */
+        .reserv-empty-locked{background:repeating-linear-gradient(135deg,#f1f5f9,#f1f5f9 6px,#e8edf3 6px,#e8edf3 12px);border:1.5px dashed #cbd5e1;border-radius:10px;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:8px 10px;text-align:center;cursor:not-allowed;}
         .scroll-x-fade::-webkit-scrollbar{height:6px;}
         .scroll-x-fade::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
 
@@ -415,114 +380,11 @@
     <!-- ══════════════ STOCK PANE (hidden by default) ══════════════ -->
     <div id="ssm-pane-stock" class="hidden space-y-5">
 
-    <!-- ── NSD + Available for Sales (2 columns) ── -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        <!-- Nursery Status Dashboard -->
-        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden" id="nsd-card">
-            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-                        </div>
-                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Nursery Status Dashboard</span>
-                    </div>
-                    <div class="flex items-baseline gap-1">
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">As of</span>
-                        <span class="text-base font-black text-emerald-600 leading-none" id="current-month-label">—</span>
-                    </div>
-                </div>
-                <div class="combo-switch">
-                    <button class="combo-switch-btn active" id="combo-tab-basic" onclick="switchComboTab('basic')">
-                        <span class="csw-title">Stock To-Date</span>
-                        <span class="csw-sub">9-month only</span>
-                    </button>
-                    <button class="combo-switch-btn verified" id="combo-tab-verified" onclick="switchComboTab('verified')">
-                        <span class="csw-title">Verified Stock</span>
-                        <span class="csw-sub">+ Audit ≥ 1.5m</span>
-                    </button>
-                </div>
-            </div>
-            <div class="px-4 pt-3 pb-4 relative z-10 flex flex-col gap-3">
-                <div class="rounded-xl bg-emerald-50/60 border border-emerald-100 p-3">
-                    <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-0.5" id="matured-tile-label">Total Matured (To-Date)</div>
-                    <div class="text-3xl font-black text-emerald-700 leading-none mb-1" id="stat-matured">—</div>
-                    <div class="text-[9px] font-bold text-slate-500 leading-tight" id="matured-tile-sub">9 months in main nursery</div>
-                </div>
-                <div class="rounded-xl bg-blue-50/60 border border-blue-100 p-3">
-                    <div class="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-0.5">Pending Collection</div>
-                    <div class="text-3xl font-black text-blue-700 leading-none mb-1" id="stat-orders-current">—</div>
-                    <div class="text-[9px] font-bold text-slate-500 leading-tight">Cumulative paid not yet collected</div>
-                </div>
-                <div class="space-y-1 text-[9px] text-slate-500 leading-snug bg-slate-50 border border-slate-100 rounded-lg p-2.5" id="nsd-remark-block">
-                    <div class="flex gap-1.5"><span class="font-black text-emerald-600 shrink-0">①</span><span><span class="font-black text-emerald-700 uppercase tracking-wider">9-Month</span> — Transplant + 9 months → matured.</span></div>
-                    <div class="flex gap-1.5" id="nsd-remark-audit"><span class="font-black text-amber-600 shrink-0">②</span><span><span class="font-black text-amber-700 uppercase tracking-wider">Audit</span> — Sample ≥ 150 cm → matured.</span></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Available for Sales -->
-        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden flex flex-col">
-            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
-
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
-                <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        </div>
-                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Available for Sales</span>
-                    </div>
-                    <span id="avail-status-badge" class="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-widest">OK</span>
-                </div>
-                <div class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1" id="avail-tab-label">From <span class="text-emerald-700 font-black">Stock To-Date</span></div>
-            </div>
-
-            <div class="px-4 pt-3 pb-3 relative z-10">
-                <div class="flex items-baseline gap-3 mb-3">
-                    <div class="text-4xl font-black text-emerald-600 leading-none" id="stat-available">—</div>
-                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-tight">Seedlings<br>safe to sell</div>
-                </div>
-
-                <!-- Compact formula -->
-                <div class="bg-slate-50 border border-slate-100 rounded-lg p-2.5 text-[10px] space-y-1 mb-3">
-                    <div class="flex justify-between"><span class="text-slate-500 font-bold">Matured (after culling)</span><span class="font-black text-slate-700" id="calc-matured">—</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500 font-bold">− Pending collection</span><span class="font-black text-slate-700" id="calc-orders">—</span></div>
-                    <div class="flex justify-between border-t border-slate-200 pt-1"><span class="text-emerald-700 font-black uppercase tracking-wider">= Available</span><span class="font-black text-emerald-700" id="calc-available">—</span></div>
-                </div>
-
-                <!-- Gearing tool -->
-                <div class="bg-emerald-50/60 border border-emerald-100 rounded-lg p-2.5 mb-2">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-[9px] font-black text-slate-700 uppercase tracking-widest">⚙ Gearing Power</span>
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-sm font-black text-emerald-700" id="gearing-display">1.0×</span>
-                            <span id="gearing-badge" class="text-[8px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider">Conservative</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[8px] font-black text-emerald-600 uppercase tracking-widest">1.0×</span>
-                        <input type="range" id="gearing-slider" class="gear-slider flex-1" min="10" max="30" step="1" value="10">
-                        <span class="text-[8px] font-black text-red-500 uppercase tracking-widest">3.0×</span>
-                    </div>
-                </div>
-
-                <div class="hidden bg-red-50 border-l-2 border-red-500 rounded-lg p-2.5 text-[10px] text-red-700 space-y-0.5" id="oversold-warning">
-                    <div class="font-black uppercase tracking-widest text-red-600">⚠ Oversold</div>
-                    <div>Orders exceed by <span id="oversold-qty" class="font-black">—</span> (<span id="oversold-factor" class="font-black">—×</span>).</div>
-                    <div>Need <span id="oversold-needed-gearing" class="font-black">—×</span> gearing to cover.</div>
-                </div>
-
-                <div class="text-[9px] text-slate-500 leading-snug bg-emerald-50/60 border border-emerald-100 rounded-lg p-2 mt-2">
-                    <span class="font-black text-emerald-700 uppercase tracking-wider">Note</span> — "Matured" is this month's freshly matured seedlings, already with 10% culling deducted. Available = matured × gearing − pending collection.
-                </div>
-            </div>
-        </div>
-
-    </div>
-    <!-- /NSD + Available 2-col grid -->
+    <!-- The Nursery Status Dashboard and Available for Sales cards stood
+         here and are GONE at the office's ask ("Remove Nursery status
+         dashboard & available for sales"). Their JS (loadNsd, the combo
+         tabs, the gearing slider) went with them — see the note at the
+         top of operation_stock_sales.js. -->
 
     <!-- ── Capacity Heatmap (matured vs reserved by nursery × month) ── -->
     <!-- Sits ABOVE the maturity allocation so admins watch live utilisation while dragging cards. -->
@@ -556,11 +418,20 @@
 
         <div class="dash-card overflow-hidden">
             <div class="mat-card-head">
-                <div class="mat-card-title">
+                <div class="mat-card-title flex-wrap">
                     <div class="mat-card-title-icon">🌱</div>
-                    <div>
-                        <div class="mat-card-title-text">Monthly Maturity Allocation</div>
-                        <div class="mat-card-title-sub">Drag customer cards onto a row · drag a chip to move it to another row</div>
+                    <div class="mat-card-title-text">Monthly Maturity Allocation</div>
+                    <!-- ALL / UNN1 / UNN2 / BNN — the Location column,
+                         turned into a filter, on the SAME ROW as the title
+                         and in round buttons, as the office asked. ALWAYS
+                         opens on ALL (not remembered): the office named
+                         the default. The subtitle under the title went
+                         with the notes below — "too many notes". -->
+                    <div id="mat-loc-tabs" class="flex gap-1.5 ml-1">
+                        <button class="mat-loc-btn active" data-loc="ALL"  onclick="setMatLocFilter('ALL')">ALL</button>
+                        <button class="mat-loc-btn" data-loc="UNN1" onclick="setMatLocFilter('UNN1')">UNN1</button>
+                        <button class="mat-loc-btn" data-loc="UNN2" onclick="setMatLocFilter('UNN2')">UNN2</button>
+                        <button class="mat-loc-btn" data-loc="BNN"  onclick="setMatLocFilter('BNN')">BNN</button>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 relative flex-wrap">
@@ -575,18 +446,26 @@
                     </div>
                 </div>
             </div>
-            <div class="scroll-x-fade">
+            <!-- mat-scroll gives the wrapper a height and vertical scroll:
+                 position:sticky only freezes the two header lines inside a
+                 container that actually scrolls, and the plain
+                 overflow-x:auto wrapper never did — the thead had carried
+                 sticky for months and stuck to nothing. -->
+            <div class="scroll-x-fade mat-scroll">
                 <table class="mat-table min-w-[1400px]">
                     <thead>
                         <tr class="mat-group-row">
-                            <th id="mat-th-prod-group" colspan="7" class="mat-group mat-group-prod">📦 Production</th>
+                            <th id="mat-th-prod-group" colspan="6" class="mat-group mat-group-prod">📦 Production</th>
                             <th colspan="3" class="mat-group mat-group-plot">🪴 Plot Status</th>
                             <th colspan="3" class="mat-group mat-group-alloc">🛒 Customer Allocation</th>
                         </tr>
                         <tr>
                             <!-- Production -->
                             <th>Maturity Date</th>
-                            <th>Location</th>
+                            <!-- The Location column is gone — the ALL /
+                                 UNN1 / UNN2 / BNN buttons above the table
+                                 answer it now, and a column repeating the
+                                 pressed button on every row said nothing. -->
                             <th>Plot</th>
                             <th>Batch</th>
                             <th>Breed</th>
@@ -603,23 +482,18 @@
                         </tr>
                     </thead>
                     <tbody id="maturity-rows">
-                        <tr><td colspan="13" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
+                        <tr><td colspan="12" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
                     </tbody>
                     <tfoot id="maturity-foot"></tfoot>
                 </table>
             </div>
             <div id="maturity-unmatched" class="hidden text-[9px] font-bold text-amber-700 bg-amber-50 border-t border-amber-200 px-3 py-1.5"></div>
+            <div id="maturity-released" class="hidden text-[9px] font-bold text-blue-700 bg-blue-50 border-t border-blue-200 px-3 py-1.5"></div>
         </div>
 
-        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-            <span class="font-black uppercase tracking-wider text-slate-700">Notes</span> —
-            <strong>Maturity Date</strong> = transplant date keyed in the Batch Record + 9 months.
-            <strong>DO Deducted</strong> = seedlings issued via Delivery Orders keyed to this plot + batch (cancelled DOs excluded) — the same Sold figure the Main Nursery Movement report shows.
-            <strong>Plot Balance</strong> = After 10% Culling − DO Deducted (what's still in the plot; negative means over-issued).
-            <strong>After Deduct Reserve</strong> = Plot Balance − Reserved Qty (what's still free to allocate).
-            <strong>Plot Status</strong> defaults to <em>No Status</em>; an admin opens it for collection.
-            On <strong>Plot-R</strong>: <strong>Qty Transferred</strong> replaces Qty Transplanted (the sum transferred in from 3rd Culling, same figure the Movement report calls Transfer In), there is no 10%-culling estimate, and Plot Balance also nets off what was culled or moved on to another plot — hover DO Deducted on a Plot-R row for the breakdown.
-        </div>
+        <!-- The Notes paragraph that stood here is gone — the office:
+             "Monthly Maturity allocation too many notes, remove it". What
+             each column means is in its heading's hover. -->
     </div>
 
     </div>
@@ -656,36 +530,6 @@
                     </div>
                     <div id="mon-dash-month-bars" class="grid grid-cols-12 gap-1 h-28 items-end"></div>
                     <div class="text-[9px] font-bold text-slate-400 mt-2 text-center">Click a bar to see the rows behind that month.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ── To-Do List (full-width) ── -->
-        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
-                    <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                        </div>
-                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
-                        <span id="todo-section-meta" class="text-[9px] font-bold text-slate-400 ml-1"></span>
-                    </div>
-                    <div class="flex gap-1.5">
-                        <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
-                            <span>💰</span><span>Unpaid</span>
-                            <span class="tab-count" id="todo-count-unpaid">0</span>
-                        </button>
-                        <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
-                            <span>🧾</span><span>Credit</span>
-                            <span class="tab-count" id="todo-count-credit">0</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="px-3 pt-3 pb-3 flex-1 min-h-0">
-                <div class="notebook max-h-[360px] overflow-y-auto" id="todo-body">
-                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
                 </div>
             </div>
         </div>
@@ -976,67 +820,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=18"></script>
-<!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
-<div class="ci-modal" id="ci-upload-modal">
-    <div class="ci-modal-card">
-        <div class="ci-modal-head">
-            <div class="ci-modal-title">📤 Upload Invoice</div>
-            <button class="ci-modal-close" onclick="closeInvoiceUploadModal()">×</button>
-        </div>
-        <div class="ci-modal-body">
-            <input type="hidden" id="ci-up-key">
-            <div class="ci-readonly-row">Customer: <strong id="ci-up-customer">—</strong></div>
-            <div class="ci-readonly-row">Billing period: <strong id="ci-up-period">—</strong></div>
-            <div class="ci-readonly-row" id="ci-up-summary" style="margin-bottom:1rem;">—</div>
-
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-invoice-no">Invoice Number *</label>
-                <input type="text" id="ci-up-invoice-no" class="ci-input" placeholder="e.g. INV-2026-05-014" autocomplete="off">
-            </div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-file">Invoice PDF / Image *</label>
-                <input type="file" id="ci-up-file" class="ci-input" accept="application/pdf,image/*">
-            </div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-due">Due Date (optional)</label>
-                <input type="date" id="ci-up-due" class="ci-input">
-            </div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-up-notes">Notes (optional)</label>
-                <textarea id="ci-up-notes" class="ci-textarea" placeholder="Internal notes for this invoice"></textarea>
-            </div>
-            <div class="ci-modal-error" id="ci-up-error"></div>
-        </div>
-        <div class="ci-modal-foot">
-            <button class="ci-btn-ghost" onclick="closeInvoiceUploadModal()">Cancel</button>
-            <button class="ci-btn-primary" id="ci-up-submit" onclick="submitInvoiceUpload()">Upload &amp; Issue Invoice</button>
-        </div>
-    </div>
-</div>
-
-<div class="ci-modal" id="ci-paid-modal">
-    <div class="ci-modal-card">
-        <div class="ci-modal-head">
-            <div class="ci-modal-title">✓ Mark Invoice Paid</div>
-            <button class="ci-modal-close" onclick="closeMarkPaidModal()">×</button>
-        </div>
-        <div class="ci-modal-body">
-            <input type="hidden" id="ci-paid-id">
-            <div class="ci-readonly-row" id="ci-paid-summary" style="margin-bottom:1rem;">—</div>
-            <div class="ci-field">
-                <label class="ci-field-label" for="ci-paid-file">Payment Proof (optional)</label>
-                <input type="file" id="ci-paid-file" class="ci-input" accept="application/pdf,image/*">
-            </div>
-            <div class="ci-modal-error" id="ci-paid-error"></div>
-        </div>
-        <div class="ci-modal-foot">
-            <button class="ci-btn-ghost" onclick="closeMarkPaidModal()">Cancel</button>
-            <button class="ci-btn-primary" id="ci-paid-submit" onclick="submitMarkPaid()">Mark as Paid</button>
-        </div>
-    </div>
-</div>
-
+<script src="operation_stock_sales.js?v=21"></script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>

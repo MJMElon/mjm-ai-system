@@ -145,17 +145,19 @@ const check = (ok, m) => { console.log((ok ? '  ok  ' : ' FAIL ') + m); if (!ok)
 const rowOf = plot => `[...document.querySelectorAll('#maturity-rows tr[data-batch-key]')].find(tr => tr.dataset.plotName === '${plot}')`;
 const snap = plot => `(() => {
   const tr = ${rowOf(plot)}; if (!tr) return null;
+  // Cells after the Location column (removed for the ALL / UNN1 / UNN2 /
+  // BNN buttons) each sit one place left: Status 6, Balance 8, After 11.
   const tds = tr.querySelectorAll('td');
   return {
     status: tr.dataset.matStatus,
-    balance: tds[9].textContent.trim(),
-    balTitle: tds[9].getAttribute('title') || '',
+    balance: tds[8].textContent.trim(),
+    balTitle: tds[8].getAttribute('title') || '',
     dropdown: !!tr.querySelector('.mat-status-wrap'),
     pill: (tr.querySelector('td.col-plot span') || {}).textContent || '',
-    pillTitle: tds[7].querySelector('span[title]') ? tds[7].querySelector('span[title]').getAttribute('title') : '',
+    pillTitle: tds[6].querySelector('span[title]') ? tds[6].querySelector('span[title]').getAttribute('title') : '',
     chip: !!tr.querySelector('.reserv-chip'),
     chipQty: (tr.querySelector('.reserv-chip-qty') || {}).textContent || '',
-    after: tds[12].textContent.trim(),
+    after: tds[11].textContent.trim(),
     dropBalance: tr.dataset.batchBalance,
   };
 })()`;
@@ -195,11 +197,16 @@ async function openPage(browser, port, failRowVer) {
   // ── 1. Drone qty + signed line counts: a partial culling reduces ────────
   const u1 = await page.evaluate(snap('U1'));
   check(!!u1, 'U1 (culling with MapQty, row signed) is on the month tab');
-  check(u1 && u1.balance === '1,100', `its balance is REDUCED by the counted culling — 1,800 less 700 (got "${u1 && u1.balance}")`);
-  check(u1 && /3rd culling of 700/i.test(u1.balTitle) && /deducted/i.test(u1.balTitle), `and the cell says the 700 came off (got "${u1 && u1.balTitle}")`);
+  /* THE OFFICE'S FORMULA: a month row's Plot Balance is After 10% Culling
+     − DO Deducted ("Plot balance calculation = After 10% culling qty - DO
+     deducted"). A PARTIAL 3rd culling no longer comes off it — it is named
+     in the hover — while a culling that covers what is left still makes
+     the row CULLED and reads 0 (sections below). */
+  check(u1 && u1.balance === '1,800', `its balance is After 10% Culling − DO: 1,800, the partial culling not taken off (got "${u1 && u1.balance}")`);
+  check(u1 && /3rd culling of 700/i.test(u1.balTitle) && /not taken off/i.test(u1.balTitle), `and the hover names the 700 and says it is not taken off (got "${u1 && u1.balTitle}")`);
   check(u1 && u1.dropdown && u1.status === 'open', `partially culled stays LIVE with the person's own pick (got ${u1 && u1.status})`);
-  check(u1 && u1.chip && u1.chipQty === '600' && u1.after === '500' && u1.dropBalance === '500',
-    `the chip stays and After Deduct Reserve works off the reduced figure: 1,100 − 600 (got "${u1 && u1.after}")`);
+  check(u1 && u1.chip && u1.chipQty === '600' && u1.after === '1,200' && u1.dropBalance === '1200',
+    `the chip stays and After Deduct Reserve works off the shown balance: 1,800 − 600 (got "${u1 && u1.after}")`);
 
   // ── 2. No drone qty → NOT counted, even signed ───────────────────────────
   const u3 = await page.evaluate(snap('U3'));
@@ -219,8 +226,8 @@ async function openPage(browser, port, failRowVer) {
   const u2 = await page.evaluate(`(() => {
     const tr = ${rowOf('U2')}; if (!tr) return null;
     const menu = tr.querySelector('.mat-status-menu');
-    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[9].textContent.trim(),
-             balTitle: tr.querySelectorAll('td')[9].getAttribute('title') || '',
+    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[8].textContent.trim(),
+             balTitle: tr.querySelectorAll('td')[8].getAttribute('title') || '',
              menuHasCulled: menu ? /culled/i.test(menu.textContent) : null,
              menuHasOpen: menu ? /open/i.test(menu.textContent) : null };
   })()`);
@@ -248,8 +255,8 @@ async function openPage(browser, port, failRowVer) {
 
   // ── 7. The foot sums the SHOWN balances ──────────────────────────────────
   const foot = await page.evaluate(() => [...document.querySelectorAll('.mat-table tfoot td, #maturity-table tfoot td')].map(td => td.textContent.trim()));
-  check(foot.includes('2,810'), `the Plot Balance total is the column's own sum — 1,100 + 900 + 450 + 0 + 360 (foot: ${foot.join(' | ')})`);
-  check(foot.includes('2,210'), 'and After Deduct Reserve totals 2,810 − 600 off the same shown figures');
+  check(foot.includes('3,510'), `the Plot Balance total is the column's own sum — 3,510 under the office's formula (foot: ${foot.join(' | ')})`);
+  check(foot.includes('2,910'), 'and After Deduct Reserve totals 3,510 − 600 off the same shown figures');
 
   // ── 8. Plot-R goes through the SAME gate as the month rows ───────────────
   const pr = await page.evaluate(`(async () => {
@@ -257,8 +264,8 @@ async function openPage(browser, port, failRowVer) {
     if (!btn) return null;
     btn.click(); await new Promise(r => setTimeout(r, 50));
     const tr = ${rowOf('B6-R')}; if (!tr) return { noRow: true };
-    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[9].textContent.trim(),
-             balTitle: tr.querySelectorAll('td')[9].getAttribute('title') || '',
+    return { status: tr.dataset.matStatus, balance: tr.querySelectorAll('td')[8].textContent.trim(),
+             balTitle: tr.querySelectorAll('td')[8].getAttribute('title') || '',
              dropdown: !!tr.querySelector('.mat-status-wrap') };
   })()`);
   check(pr && !pr.noRow && pr.status !== 'culled' && pr.dropdown && pr.balance === '800',
@@ -281,7 +288,7 @@ async function openPage(browser, port, failRowVer) {
     `with Row_Verification unreadable the verification half is WAIVED — U5's MapQty culling counts, a check that cannot run must not move the report (got ${open1 && open1.status} / ${open1 && open1.balance})`);
   check(open2 && open2.balance === '450' && open2.status !== 'culled',
     `but the MapQty half still holds — it has no read to fail (got ${open2 && open2.status} / ${open2 && open2.balance})`);
-  check(open3 && open3.balance === '1,100', 'and the counted rows read exactly as they did');
+  check(open3 && open3.balance === '1,800', 'and the counted rows read exactly as they did');
   await page2.close();
 
   await browser.close(); server.close();
