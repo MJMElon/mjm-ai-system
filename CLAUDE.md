@@ -3023,6 +3023,83 @@ never going to be what stopped it.
 tab: the save never runs, the tab stays unsaved, X and Leave does not
 rewrite it, and both read-only buttons are still live.
 
+### AND THE GATE THEN REFUSED THE ONE SAVE THAT HAD TO HAPPEN
+
+The office amended a report, verified it themselves, pressed the X, and
+sent the screen back: *"如果我自己amend 自己按verify 然后close 就会出现这个
+按了save也save不到"*. Batch 257, the LEAVE NOW? dialog listing **Seed
+Planting** with SAVE / DON'T SAVE and, in red, **DID NOT SAVE — NOTHING
+LOST**.
+
+**EVERY LINK OF THAT CHAIN WAS WORKING AS WRITTEN, which is why it took a
+screenshot to find.** `verify()` writes the verification row and nothing
+else — it runs no save and clears no dirty flag — then `renderBanner`
+locks the tab. So the close guard saw a dirty tab, offered Save, and the
+gate above refused it, exactly as that gate exists to do.
+
+Three things were wrong at once and the sentence on screen was the
+smallest of them:
+
+- **THE REPORT WAS SIGNED OFF WITHOUT THE AMENDMENT.** The signature says
+  somebody checked figures the report does not hold, and nothing anywhere
+  says otherwise — which is the half that would still have been wrong if
+  only the dialog had been fixed.
+- **"Nothing lost" was FALSE.** The keying was on screen and nowhere else.
+- **AND LEAVE COULD NOT CLOSE EITHER.** An untouched row defaults to being
+  KEPT, so Leave ran the save, the save was refused, `stillDirty` held it
+  and the page stayed. **Stay and Leave both did nothing** — the only way
+  out was a Don't save nobody had a reason to press. The office did not
+  mention that, because they never got past the Save.
+
+**THE REFUSAL BELONGS AT THE SIGNATURE, which is the earlier act.** A
+sign-off is about what is IN THE DATABASE, so `_denySignOffUnsaved` asks
+`_unsavedOnTab` first and refuses, naming the tab and saying to save it.
+**ONE RULE, THREE DOORS** — the tab's own Verify, a per-row Verify on tabs
+3 to 6, and Mark as Reviewed; a rule living in one of them is a rule the
+other two do not obey. A row tab stays UNLOCKED, so its save is never
+refused, and the signature there is just as wrong.
+
+**It does NOT save for them.** One press doing two things with different
+consequences is the fault this file has a heading about — `saveTab6` can
+answer with a warning and a To Do row, `saveSeedAudit` has refusals of its
+own — and somebody may have keyed something they do not mean to commit.
+Two presses, in the order the person already had in mind.
+
+**And the dialog no longer offers a Save that cannot run.** The test is
+`_tabSaveBlocked`, which is the SAVE's own test, so the row cannot say one
+thing while the save does another: the row says it cannot be saved, says
+WHY and how to get back in (`MJMReview.lockReason`, answered where the
+three lock states live), and is decided as DROPPED, so Leave closes. The
+refusal is in `saveOneUnsaved` as well, because a button that is absent is
+a paint and not a gate.
+
+**The state is still reachable** — a tab locked by HQ's review, or by a
+login with no Fill in report tick, which the keyboard still reaches — so
+that row is not dead code. A fourth case, the class on the tab with no
+reason behind it, **names the banner rather than guessing**: that is the
+one place on a tab that always says what state the report is in.
+
+**NOTHING IN THE DATA RECORDS THE FAULT**, and that is worth knowing
+before anybody goes looking: the verification row is ordinary and the
+report simply holds the older figures, so a signature over a lost
+amendment cannot be told from one over figures that were right.
+`shared/CHECK_a_signature_over_an_empty_report.sql` answers the worst
+outcome of it, which IS decidable — a stage signed off on a batch
+carrying no ledger row for that stage at all, which is what you get when
+the only keying there ever was never landed. **Nothing to run in the
+database**: the whole of this change is in the page.
+
+`tests/a_verify_does_not_sign_off_unsaved_keying.cjs` drives the real page
+through the office's own path; **23 of its 39 checks fail on the previous
+code**, the headline one being that the verify is refused. Two of those
+failures are a CASCADE — the stubbed save is refused because the verify
+locked the tab underneath it — which is the fault reproducing itself, and
+*Leave closes the batch rather than refusing for ever* fails there too,
+which is the trap nobody had noticed. `unsaved_close_guard.cjs` asserted
+that trap in as many words (*"and the dialog is still there"*) and was
+corrected: what it was really protecting is that Leave does not REWRITE a
+signed-off report, and it still holds that.
+
 ## A tray empties every way the seedlings leave, not two of them
 
 Tray Status read **P3 · 230 (81)** over a batch with nothing standing in P3,
