@@ -67,6 +67,18 @@ const LOGS = [
         created_at: '2026-10-02T00:00:00Z', quantity_change: 140, remark: 'Double tone qty in nursery' }),
   log({ batch_name: '281', transaction_type: 'DTone_Nursery_Qty', transaction_date: '2026-10-03',
         created_at: '2026-10-03T00:00:00Z', quantity_change: 160, remark: 'Double tone qty in nursery' }),
+  /* Stock Calibrations for the Calibration Report: two + and one − in
+     October (approved), one − in September, and one waiting for approval. */
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-10',
+        plot_name: 'U3', quantity_change: 6, remark: 'Report: Transplanting. Found 6 more [APPROVED by Ruth on 2026-10-11]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-20',
+        plot_name: 'P1', quantity_change: 4, remark: 'Report: Planting. Recount [APPROVED by Ruth on 2026-10-21]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-25',
+        plot_name: 'U3', quantity_change: -13, remark: 'Report: 3rd Culling. Missing 13 [APPROVED by Ruth on 2026-10-26]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-09-15',
+        plot_name: 'U3', quantity_change: -2, remark: 'Report: Transplanting. Miscount [APPROVED by Ruth on 2026-09-16]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-28',
+        plot_name: 'U3', quantity_change: -500, remark: 'Report: Transplanting. Not approved yet' }),
   log({ batch_name: '282', breed_name: 'IOI DxP', transaction_type: 'Seeds_Received',
         transaction_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z', quantity_change: 2000,
         remark: 'Seeds received. Supplier: IOI. MPOB: 789-012. DO_Qty: 2000.' }),
@@ -152,8 +164,8 @@ const sr = await page.evaluate(() => ({
 is(sr.err, '', 'selectReport(movement_report) runs');
 is(sr.subShown, true, 'the Report sub-selector is back on this tab');
 is(sr.options, ['summary=Summary Report', 'transplanting=Transplanting Report', 'seed_in=Seed In Report',
-                'culling=Culling Report', 'dtone=Double-Tone Report'],
-  'five sub-reports, Summary wearing the name the office gave it, Double-Tone new');
+                'culling=Culling Report', 'dtone=Double-Tone Report', 'calibration=Calibration Report'],
+  'six sub-reports, Summary wearing the name the office gave it, Double-Tone and Calibration new');
 is(sr.opensOn, 'summary', 'it opens on Summary');
 is(sr.hasNote, false, 'the as-submitted Summary carries NO 2nd-culling deduction note');
 
@@ -219,6 +231,53 @@ else {
   const dtPN = await runDT('', '', ['PN']);
   is([!!dtPN.pre, !!dtPN.main], [true, false], 'PN alone draws the Pre Nursery section only');
   await page.evaluate(() => document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = true; }));
+}
+
+console.log('\n── 4c. The Calibration Report: the month, a + section and a − section ──');
+const runCal = (from, to, locs) => page.evaluate(async ([f, t, l]) => {
+  if (typeof runCalibrationReport !== 'function') return { missing: 'no runCalibrationReport on the page' };
+  document.getElementById('f-nursery-sub').value = 'calibration';
+  if (typeof syncFilterVisibility === 'function') syncFilterVisibility();
+  document.getElementById('f-from').value = f;
+  document.getElementById('f-to').value = t;
+  document.getElementById('f-breed').value = '';
+  document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = !l || l.includes(cb.value); });
+  await runCalibrationReport();
+  const out = document.getElementById('report-output');
+  const read = (sec) => {
+    const el = out.querySelector('.cal-section[data-section="' + sec + '"]');
+    if (!el) return null;
+    return {
+      rows: [...el.querySelectorAll('tbody tr')]
+        .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim()))
+        .filter(c => c.length > 1),
+      foot: (el.querySelector('tfoot') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+    };
+  };
+  return { plus: read('plus'), minus: read('minus'),
+           net: (out.querySelector('.cal-net') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+           waiting: (out.querySelector('.cal-waiting') || { textContent: '' }).textContent.trim(),
+           option: !!document.querySelector('#f-nursery-sub option[value="calibration"]') };
+}, [from, to, locs || null]);
+{
+  const c = await runCal('2026-10-01', '2026-10-31');
+  if (c.missing) { console.log('  FAIL', c.missing); bad += 7; }
+  else {
+    const P = c.plus || { rows: [], foot: '' }, N = c.minus || { rows: [], foot: '' };
+    yes(c.option, 'Calibration Report is a Submission Report option');
+    is(P.rows.map(r => [r[0], r[3].split(' ')[0], r[6]]), [['20 Oct 2026', 'P1', '+4'], ['10 Oct 2026', 'U3', '+6']],
+      'the + section: October\'s approved + calibrations, newest first');
+    yes(/\+10/.test(P.foot), 'the + total is +10, got "' + P.foot + '"');
+    is(N.rows.map(r => [r[0], r[6]]), [['25 Oct 2026', '−13']],
+      'the − section: October only — September\'s −2 and the unapproved −500 are not in it');
+    yes(/−13/.test(N.foot), 'the − total is −13, got "' + N.foot + '"');
+    yes(/−3/.test(c.net), 'the net is −3, got "' + c.net + '"');
+    yes(/1 waiting/.test(c.waiting), 'the unapproved one is counted as waiting, got "' + c.waiting + '"');
+    const pn = await runCal('2026-10-01', '2026-10-31', ['PN']);
+    is([((pn.plus || {}).rows || []).length, ((pn.minus || {}).rows || []).length], [1, 0],
+      'PN alone keeps only the tray calibration (P1)');
+    await page.evaluate(() => document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = true; }));
+  }
 }
 
 console.log('\n── 4b. The Culling Report: a 1st culling on a TRAY is Pre-Nursery ──');

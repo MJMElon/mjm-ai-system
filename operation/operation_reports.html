@@ -397,6 +397,7 @@
             <option value="seed_in">Seed In Report</option>
             <option value="culling">Culling Report</option>
             <option value="dtone">Double-Tone Report</option>
+            <option value="calibration">Calibration Report</option>
           </select>
         </div>
         <!-- Only Culling Report needs this — which of the three stages to
@@ -1604,7 +1605,7 @@ async function _losBuildAllRows(asAt, opts) {
          turn would take it off twice. */
       if (ok && !seedSide && nurseryOf(l.plot_name) !== 'Pre-Nursery') r.calibrationField += signed;
       r.rec.calibration.push({ date: d, batch: name, place: l.plot_name || '—',
-        report: rep ? rep[1].trim() : '—', side: side ? side[1].toLowerCase() : 'seed',
+        nursery: nurseryOf(l.plot_name), report: rep ? rep[1].trim() : '—', side: side ? side[1].toLowerCase() : 'seed',
         approved: ok, qty: signed, note: body.replace(_RE_LOS_CAL_REPORT, '').replace(_RE_LOS_CAL_SIDE, '').trim() });
       return;
     }
@@ -2298,6 +2299,101 @@ async function runDoubleToneReport() {
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${rangeLabel}</div>
       </div>
       ${sections.join('')}
+    </div>`;
+  _losWireSticky();
+}
+
+/* THE CALIBRATION REPORT — every approved Stock Calibration in the period,
+   by the calibration's OWN date (the amendment happened when it happened,
+   whatever month the seedlings moved in — the Transplanting Report's rule),
+   split into the + side (found more) and the − side (fewer).
+
+   APPROVED ONLY: a figure moves when somebody approves it, here as on every
+   other reader. The ones still waiting are counted under the heading, not
+   listed — CHECK_adjustments_waiting_for_approval.sql names them. The two
+   sections each carry a total, and the net under them is what the month
+   moved. */
+async function runCalibrationReport() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const breed = document.getElementById('f-breed').value;
+  const from  = document.getElementById('f-from').value;
+  const to    = document.getElementById('f-to').value;
+  const asAt  = to || null;
+  const pickedLocs = nurseryFilter();
+  const locKey = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const keys = new Set(pickedLocs.map(l => l === 'PN' ? 'PRENURSERY' : locKey(l)));
+
+  const allRows = await _losBuildAllRows(asAt);
+  if (!allRows) return; // error already shown by _losBuildAllRows()
+
+  const plus = [], minus = [];
+  let waiting = 0;
+  allRows.forEach(r => {
+    if (breed && r.breed !== breed) return;
+    (r.rec.calibration || []).forEach(x => {
+      const d = x.date ? String(x.date).slice(0, 10) : '';
+      if ((from && d && d < from) || (to && d && d > to)) return;
+      if (keys.size && !keys.has(locKey(x.nursery))) return;
+      if (!x.approved) { waiting++; return; }
+      if (!x.qty) return;
+      (x.qty > 0 ? plus : minus).push({ date: d, batch: x.batch, breed: r.breed, plot: x.place,
+        nursery: x.nursery, report: x.report, note: x.note, qty: x.qty });
+    });
+  });
+  const byDate = (a, b) => String(b.date).localeCompare(String(a.date))
+                        || String(b.batch).localeCompare(String(a.batch), undefined, { numeric: true });
+  plus.sort(byDate); minus.sort(byDate);
+  const sum = (a) => a.reduce((s, x) => s + x.qty, 0);
+  const sign = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + fmtNum(Math.abs(n));
+
+  const section = (key, title, recs, tone) => `
+    <div class="cal-section mb-6" data-section="${key}">
+      <div class="flex items-center justify-between mb-2 gap-4 flex-wrap">
+        <h4 class="text-sm font-black uppercase tracking-widest" style="color:${tone}">${title}</h4>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(recs.length)} record${recs.length === 1 ? '' : 's'}</div>
+      </div>
+      <div class="los-wrap">
+        <table class="report-table los-table">
+          <thead><tr><th>Date</th><th>Batch</th><th>Breed</th><th>Plot</th><th>Report</th><th>Remark</th><th>Qty</th></tr></thead>
+          <tbody>
+            ${recs.length ? recs.map(x => `
+            <tr>
+              <td>${fmtDate(x.date)}</td>
+              <td class="font-black text-[#3d2610]">${_losEsc(x.batch)}</td>
+              <td>${_losEsc(x.breed)}</td>
+              <td>${_losEsc(x.plot || '—')}<span class="text-[9px] font-bold text-[#8a7a68]">${x.nursery && x.nursery !== 'Unassigned' ? ' · ' + _losEsc(x.nursery) : ''}</span></td>
+              <td>${_losEsc(x.report || '—')}</td>
+              <td class="text-left text-[11px]">${_losEsc(x.note || '')}</td>
+              <td class="font-black" style="color:${tone}">${sign(x.qty)}</td>
+            </tr>`).join('') : `<tr><td colspan="7" class="py-8 text-[#8a7a68]">No approved ${key === 'plus' ? '+' : '−'} calibration in this period under the selected filters.</td></tr>`}
+          </tbody>
+          ${recs.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="6" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total — ${title}</td>
+            <td style="color:${tone}">${sign(sum(recs))}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>`;
+
+  const rangeLabel = from && to ? `${fmtDate(from)} – ${fmtDate(to)}` : (to ? `as at ${fmtDate(to)}` : 'all dates');
+  const net = sum(plus) + sum(minus);
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Calibration Report</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${rangeLabel}${waiting ? ` · <span class="cal-waiting text-[#b45309]">${fmtNum(waiting)} waiting for approval, not counted</span>` : ''}</div>
+      </div>
+      ${section('plus', '+ Calibration', plus, '#15803d')}
+      ${section('minus', '− Calibration', minus, '#b91c1c')}
+      <div class="cal-net flex justify-end gap-6 font-black text-[#3d2610] uppercase tracking-widest text-[11px] border-t border-[#e8dcc8] pt-3">
+        <span>Net calibration</span><span>${sign(net)}</span>
+      </div>
     </div>`;
   _losWireSticky();
 }
@@ -3362,6 +3458,7 @@ const NURSERY_SUB_REPORTS = [
   { value: 'seed_in',       label: 'Seed In Report',       hint: 'Seed In Report — what came in, per batch: supplier, quantity, damage, planted, variance' },
   { value: 'culling',       label: 'Culling Report',       hint: 'Culling Report — pick 1st, 2nd or 3rd Culling under Culling Stage below' },
   { value: 'dtone',         label: 'Double-Tone Report',   hint: 'Double-Tone Report — by date, in two sections: Pre Nursery is the Double Tone Quantity in Nursery records keyed on the Transplanting tab, Main Nursery is every Transplanting record out of the DOUBLE-TONE tray. Each has its own total' },
+  { value: 'calibration',   label: 'Calibration Report',   hint: 'Calibration Report — every approved Stock Calibration in the month, by its own date, in two sections: + (found more) and − (fewer), each with its own total and the net under both' },
 ];
 
 // ── Report tabs ───────────────────────────────────────────────────────────
@@ -3475,6 +3572,7 @@ async function runReport() {
     if (sub === 'seed_in')       return runSeedInReport();
     if (sub === 'culling')       return runCullingReport();
     if (sub === 'dtone')         return runDoubleToneReport();
+    if (sub === 'calibration')   return runCalibrationReport();
   }
   if (which === 'sales_listing') return runSalesListing();
 }
@@ -3494,7 +3592,7 @@ function syncFilterVisibility() {
   // Double-Tone Report: As At + breed, no Locations — the D-Tone tray is a
   // pre-nursery tray wherever its seedlings later go, so a location chip
   // would answer no question the rows can be cut by.
-  const isDtone    = sub === 'dtone';
+  const isDtone    = sub === 'dtone' || sub === 'calibration';
   // isLife is the standalone Life of Seedling tab — its own six-filter set
   // (.f-los + breed). isSeedIn (Nursery Report's Seed In sub-report) reads
   // the SAME underlying figures (_losBuildAllRows()) but filters the
