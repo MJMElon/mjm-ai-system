@@ -17,10 +17,10 @@ const MVAR = {"Upcoming":"--s-ns","In Progress":"--s-ip","Complete":"--s-ok"};
 // (On Task requests, Normal can also submit and withdraw their own requests; Admin approves or rejects.)
 const LEVELS = ["None","Normal","Admin"];
 const ACCESS_TABS = [
-  ["overview","Overview","Summary charts, value delivered and overdue tasks"],
+  ["overview","Dashboard","Summary charts, value delivered and overdue tasks"],
   ["board","Board","Task cards by status; drag to change status"],
   ["timeline","Timeline","Master project and task timeline"],
-  ["list","Tasks","Full task list; add, edit and delete tasks"],
+  ["list","Task list","Full task list; add, edit and delete tasks"],
   ["requests","Task requests","Normal can submit requests; Admin approves or rejects"],
   ["value","Value analysis","Savings figures, rates and expenses"],
   ["settings","Settings","Projects, lists and user access"]];
@@ -31,7 +31,9 @@ function normOverride(a){
   a = a && typeof a === "object" ? a : {};
   return Object.fromEntries(ACCESS_TABS.filter(([k]) => LEVELS.includes(a[k])).map(([k]) => [k, a[k]]));
 }
-const defAccess = lv => allAccess(lv === "admin" ? "Admin" : "Normal");
+// Normal is view only on the six working tabs and does NOT see Settings: that tab is the projects and who may open
+// what, which is the Admin's. It can still be opened for one person under User access.
+const defAccess = lv => lv === "admin" ? allAccess("Admin") : {...allAccess("Normal"), settings:"None"};
 // The levels one person has. A module Admin is ALWAYS Admin on Settings: that is the one tab that hands out the rest,
 // so closing it on the last Admin would leave nobody able to open anything again.
 function accessFor(p, team){
@@ -160,6 +162,8 @@ function syncPerms(){
   canApprove = tabAdmin("requests");
   canRequest = canWrite && access.requests !== "None";
   document.querySelectorAll("nav.tabs button").forEach(b => b.hidden = access[b.dataset.view] === "None");
+  // A group with every entry closed keeps no title: a heading over nothing is a section somebody has to ask about.
+  document.querySelectorAll("nav.tabs .side-group").forEach(g => g.hidden = ![...g.querySelectorAll("button")].some(b => !b.hidden));
 }
 function applyAccess(){
   me = HOST.name || HOST.email || "";
@@ -994,7 +998,7 @@ function renderSettings(){
       return el("button",{class:"pa-row", type:"button", onclick:() => openAccessSheet(m, ro, () => { paint(); touch(); })},
         el("span",{class:"avatar", text:initials(m.name)}), el("span",{class:"pa-name"}, m.name, el("br"), tag), sum, el("span",{class:"chev", "aria-hidden":"true", text:"›"}));
     })) : el("p",{class:"note", text:"Nobody holds this module yet."}),
-    el("p",{class:"note", text:"The people here are everyone given Project Monitoring System on the portal's User Access page, and they are who a task can be assigned to. What they hold there (Admin or Normal) is their level on every tab; open a person to open or close one tab for them. Admin: add, edit and delete anything on that tab. Normal: view only. None: the tab is hidden. To add or remove a person, change their module level on User Access."}));
+    el("p",{class:"note", text:"The people here are everyone given Project Monitoring System on the portal's User Access page, and they are who a task can be assigned to. What they hold there is their level here: Admin is Admin on every tab, and Normal can view every tab except Settings, which is hidden from them. Open a person to open or close one tab for them. Admin: add, edit and delete anything on that tab. Normal: view only. None: the tab is hidden. To add or remove a person, change their module level on User Access."}));
 
   // Master project → projects → sub-projects, each with a status
   const statusSel = (o, label) => { const sel = el("select",{class:"si mstat", "data-s":o.status, "aria-label":`${label} status`, disabled: ro||null},

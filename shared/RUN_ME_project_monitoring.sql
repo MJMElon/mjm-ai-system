@@ -17,7 +17,8 @@
 --   accounts holding it on the portal User Access page, and what a
 --   person holds there is their level on every tab:
 --     Admin   may add, edit and delete on every tab
---     Normal  may look at every tab, and request a task
+--     Normal  may look at every tab but Settings, and request a task.
+--             Settings is hidden from them
 --     none    sees nothing at all, and neither does a customer
 --   Settings, User access can then open or close ONE tab for ONE
 --   person. Only those differences are stored, by e-mail, in the team
@@ -115,6 +116,7 @@ BEGIN
 
   -- nothing said about this tab: what they hold on User Access
   IF lvl = 'admin' THEN RETURN 'Admin'; END IF;
+  IF p_tab = 'settings' THEN RETURN 'None'; END IF;
   RETURN 'Normal';
 END
 $fn$;

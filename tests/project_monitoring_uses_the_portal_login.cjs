@@ -103,7 +103,8 @@ const TABS = ['overview', 'board', 'timeline', 'list', 'requests', 'value', 'set
 const lv = (base, over) => Object.assign(Object.fromEntries(TABS.map((k) => [k, base])), over || {});
 // What Settings keeps: only the tabs that differ from a person's module level, by e-mail.
 const TEAM = [
-  { email: 'ruth@mjm.test', access: { list: 'Admin', settings: 'None' } },
+  // Tasks opened to Admin for her, and Settings opened to view: a Normal login does not see Settings by itself
+  { email: 'ruth@mjm.test', access: { list: 'Admin', settings: 'Normal' } },
   { email: 'closed@mjm.test', access: { board: 'None', settings: 'None' } },
   // a row from when this was a list of names: no login, so it ties to nobody
   { id: 'm9', name: 'Old Name', email: '', access: lv('Admin') },
@@ -236,7 +237,7 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
   {
     const page = await open(browser, port, { email: 'Ruth@MJM.test', name: 'Ruth Wong', pms: 'normal' });
     const d = await drawn(page);
-    is(d && d.tabs, TABS.filter((t) => t !== 'settings'), 'Settings is closed for her, whatever case her e-mail was keyed in');
+    is(d && d.tabs, TABS, 'Settings is opened for her, whatever case her e-mail was keyed in');
     await go(page, 'list'); await page.waitForTimeout(200);
     is(await page.locator('#addBtn').isVisible(), true, 'and Tasks is opened to Admin for her');
     await page.close();
@@ -247,13 +248,12 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     const page = await open(browser, port, { email: 'new@mjm.test', name: 'New Starter', pms: 'normal' });
     const d = await drawn(page);
     is(d && d.who, 'New Starter', 'is named from the portal profile');
-    is(d && d.tabs, TABS, 'is Normal on every tab, which is what User Access says');
+    is(d && d.tabs, TABS.filter((t) => t !== 'settings'), 'views every tab but Settings, which is hidden from a Normal login');
     await go(page, 'list'); await page.waitForTimeout(200);
-    is(await page.locator('#addBtn').isVisible(), false, 'so cannot add a task');
-    await go(page, 'settings'); await page.waitForTimeout(250);
-    const live = await page.evaluate(() => [...document.querySelectorAll('#v-settings input, #v-settings select')].filter((x) => !x.disabled).length);
-    is(live, 0, 'and Settings is view only: nothing in it can be keyed');
-    is((await paNames(page)).includes('New Starter'), true, 'this login is on the list even where the list did not name it');
+    is(await page.locator('#addBtn').isVisible(), false, 'and cannot add a task');
+    const typed = await page.evaluate(() => { location.hash = '#settings'; return true; });
+    await page.reload({ waitUntil: 'domcontentloaded' }); await drawn(page);
+    is(await page.evaluate(() => document.querySelector('#v-settings').hidden), true, 'typing the Settings address does not open it either');
     await page.close();
   }
 
@@ -262,7 +262,7 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     // Ruth Wong has Tasks opened to Admin. This login is CALLED Ruth Wong and is somebody else.
     const page = await open(browser, port, { email: 'someone.else@mjm.test', name: 'Ruth Wong', pms: 'normal' });
     const d = await drawn(page);
-    is(d && d.tabs.includes('settings'), true, 'a login named like her does not get her closed Settings');
+    is(d && d.tabs.includes('settings'), false, 'a login named like her does not get the Settings opened for her');
     await go(page, 'list'); await page.waitForTimeout(200);
     is(await page.locator('#addBtn').isVisible(), false, 'nor her right to add a task');
     await page.close();
@@ -288,7 +288,7 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     await press(page, '.access-sheet footer button', '^save'); await page.waitForTimeout(400);
     is(await teamWrites(page), [{ op: 'upsert', id: 'config', team: [
       { email: 'closed@mjm.test', access: { board: 'None', settings: 'None' } },
-      { email: 'ruth@mjm.test', access: { list: 'Admin', value: 'None', settings: 'None' } }] }],
+      { email: 'ruth@mjm.test', access: { list: 'Admin', value: 'None', settings: 'Normal' } }] }],
       'one save of pms_settings/config: her three changed tabs, somebody not on the list left as saved, the nameless row gone');
 
     await page.evaluate(() => { window.__WRITES.length = 0; });
@@ -298,6 +298,42 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     is(await teamWrites(page), [{ op: 'upsert', id: 'config', team: [{ email: 'closed@mjm.test', access: { board: 'None', settings: 'None' } }] }],
       'puts her back on her module level, and nothing is kept for her at all');
     await page.close();
+  }
+
+  console.log('\n6b. The side bar');
+  {
+    const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' });
+    await page.setViewportSize({ width: 1400, height: 520 });
+    await drawn(page);
+    const sb = await page.evaluate(() => {
+      const nav = document.querySelector('nav.tabs.side'); if (!nav) return 'no side bar';
+      const txt = (b) => b.firstChild.textContent.trim();
+      const groups = [...nav.querySelectorAll('.side-mid .side-group')].map((g) => [g.querySelector('.side-title').textContent, [...g.querySelectorAll('button')].map(txt)]);
+      const foot = nav.querySelector('.side-foot'), mid = nav.querySelector('.side-mid'), top = nav.querySelector('.side-top');
+      const r = (e) => e.getBoundingClientRect();
+      const gs = [...mid.querySelectorAll('.side-group')], bs = [...gs[0].querySelectorAll('button')];
+      const sel = nav.querySelector('button[aria-selected="true"]'), other = nav.querySelector('button[aria-selected="false"]');
+      return { groups, foot: [...foot.querySelectorAll('button')].map(txt), portal: !!foot.querySelector('a.back'),
+        column: r(nav).width < 300 && r(nav).height >= window.innerHeight - 1,
+        groupGap: Math.round(r(gs[1]).top - r(gs[0]).bottom), rowGap: Math.round(r(bs[1]).top - r(bs[0]).bottom),
+        selBg: getComputedStyle(sel).backgroundColor !== getComputedStyle(other).backgroundColor,
+        midScrolls: getComputedStyle(mid).overflowY, footAtBottom: Math.round(r(foot).bottom) === window.innerHeight, topAtTop: Math.round(r(top).top) === 0 };
+    });
+    is(sb.groups, [['Overview', ['Dashboard', 'Board', 'Timeline']], ['Task', ['Task list', 'Task requests', 'Value analysis']]], 'two groups, each under its own title, every entry kept');
+    is([sb.foot, sb.portal], [['Settings'], true], 'Settings is at the foot, with the way back to the portal');
+    is([sb.column, sb.topAtTop, sb.footAtBottom, sb.midScrolls], [true, true, true, 'auto'], 'a column the height of the window: top and foot stay put, the middle scrolls');
+    is(sb.groupGap >= sb.rowGap * 4 && sb.groupGap >= 16, true, 'the gap between groups is far wider than the gap between entries (' + sb.groupGap + ' against ' + sb.rowGap + ')');
+    is(sb.selBg, true, 'the open entry wears a block the others do not');
+    await go(page, 'value'); await page.waitForTimeout(150);
+    is(await page.evaluate(() => [document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view, document.querySelector('#v-value').hidden]), ['value', false], 'pressing an entry opens its view');
+    if (process.env.SHOT) { await page.setViewportSize({ width: 1400, height: 900 }); await go(page, 'overview'); await page.waitForTimeout(200); await page.screenshot({ path: process.env.SHOT.replace('.png', '_side.png') }); }
+    await page.close();
+    // A login with every entry of a group closed sees no title over nothing.
+    const rows = ROWS(); rows.pms_settings[0].team.push({ email: 'few@mjm.test', access: { list: 'None', requests: 'None', value: 'None' } });
+    const p2 = await open(browser, port, { email: 'few@mjm.test', name: 'Few Tabs', pms: 'normal' }, null, rows);
+    await drawn(p2);
+    is(await p2.evaluate(() => [...document.querySelectorAll('nav.tabs .side-group')].filter((g) => !g.hidden).map((g) => g.querySelector('.side-title').textContent)), ['Overview'], 'a group with nothing left in it is not drawn');
+    await p2.close();
   }
 
   console.log('\n7. The source');

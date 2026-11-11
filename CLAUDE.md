@@ -8397,7 +8397,7 @@ So there are two layers, and they are the house pattern:
 
 | Where | Question |
 |---|---|
-| hub → User Access → Project Monitoring System (`modules.pms`) | may this person open it at all, and their level on **every** tab: Admin, or Normal (view only) |
+| hub → User Access → Project Monitoring System (`modules.pms`) | may this person open it at all, and their level: Admin on every tab, or Normal — view only on the six working tabs, **Settings hidden** |
 | the module → Settings → User access | one tab opened or closed differently for one person |
 
 - **THERE IS NO TEAM LIST, and there was one for a day.** It was a list of
@@ -8421,6 +8421,22 @@ So there are two layers, and they are the house pattern:
   `full_name` is the one thing its owner can edit, so matching on it would
   let anybody take a colleague's access by renaming themselves. The
   database compares the e-mail **on the session** (`auth.jwt()`).
+- **A NORMAL LOGIN DOES NOT SEE SETTINGS**, which it did for a day as a
+  greyed-out tab. The office asked for it gone: *"can make it normal user
+  cannot view settings?"*. It is the DEFAULT (`defAccess`, and the last
+  lines of `pms_tab_level`), so it can still be opened for one person
+  under User access like any other tab.
+- **THE TABS ARE A SIDE BAR**, grouped by what somebody came to do:
+  Overview (Dashboard, Board, Timeline), Task (Task list, Task requests,
+  Value analysis), and Settings pinned at the foot with the way back to
+  the portal. The top and the foot stay put and the middle scrolls. The
+  nav is still `nav.tabs` and every entry still a `button[data-view]`,
+  because that is how `pms_app.js` finds them; the stored keys
+  (`overview`, `list`) did not move with the labels. A group whose
+  entries are all closed for a login is not drawn. Under 860px it lies
+  along the top as one row that scrolls sideways. **There is no upgrade
+  entry**: the request named one and the module has none, so none was
+  invented.
 - **A MODULE ADMIN ALWAYS KEEPS SETTINGS.** Any other tab can be closed on
   one; Settings is the tab that hands out the rest, so closing it on the
   last Admin would leave nobody able to open anything again. Asked in both
