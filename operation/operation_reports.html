@@ -2179,30 +2179,62 @@ async function runSeedInReport() {
   _losWireSticky();
 }
 
-/* THE DOUBLE-TONE REPORT — the double-tone quantity in the nursery, BY
-   DATE, off the batch report's Transplanting records. The office: "double
-   tone report is double tone quantity in nursery, generate the report by
-   date. I want to see in the month we have how many double tone. Get the
-   data from batch report - Transplanting reports (Transplanting records
-   there)".
+/* THE DOUBLE-TONE REPORT — two sections, one per nursery, by date.
 
-   THE ROWS ARE THE TRANSPLANTING RECORDS OUT OF THE DOUBLE-TONE TRAY — the
-   batch report's Main Plot (D-Tone) card: `Transplanted from tray
-   [DOUBLE-TONE] to Main Plot [N15]`. Read off the source tray in the
-   remark, with the same _losTrayKey every other D-Tone split here uses.
+   MAIN NURSERY: the Transplanting records OUT OF the DOUBLE-TONE tray —
+   the batch report's Main Plot (D-Tone) card, read off the source tray in
+   the remark with _losTrayKey. Batch 271 went 377 to N15 on 17 Oct and
+   272 went 252 to N7 on 31 Oct, both as ordinary Transplanted rows; the
+   step INTO the tray (Transplanted_DoubleTone) is not what the office
+   counts here.
 
-   The first build of this read Transplanted_DoubleTone (the step INTO the
-   tray) instead, and the office found it empty: "Batch 271 & 272 got
-   double tone but it does not appear". The ledger has no such row for
-   either — 271 went 377 to N15 on 17 Oct and 272 went 252 to N7 on 31 Oct,
-   both as ordinary Transplanted rows out of the DOUBLE-TONE tray. NOT the
-   keyed DTone_Nursery_Qty box either: that is a standing COUNT, newest
-   wins, and 271's 377 there is the same 377 seedlings as its transplant —
-   summing the two would count them twice.
+   PRE NURSERY: the keyed "Double Tone Quantity in Nursery" records on the
+   Transplanting tab (DTone_Nursery_Qty) — what an admin counted STANDING
+   in the nursery on the day. The office: "for Pre Nursery get the data
+   from Transplanting Record - Double Tone Quantity in Nursery Record".
 
-   _losBuildAllRows reads the ledger as keyed (no verifiedOnly — a stock
-   question, not the reconciliation Life of Seedlings does). The As At date
-   gives the month (monthStartOf() in runReport()), which is the period. */
+   THE TWO ARE NEVER ADDED TOGETHER. 271's 377 counted standing is the same
+   377 seedlings it then transplanted, so a combined figure would count
+   them twice — each section has its own total and there is no grand total
+   across them. The Locations chips pick the sections the way the Movement
+   Report's do: PN is the Pre Nursery one, any other is the Main one, and
+   nothing ticked is both. */
+function _dtoneSectionHtml(title, recs, cols, emptyText) {
+  const total = recs.reduce((s, x) => s + (x.qty || 0), 0);
+  const batches = new Set(recs.map(x => x.batch)).size;
+  const body = recs.map(x => `
+    <tr>
+      <td>${fmtDate(x.date)}</td>
+      <td class="font-black text-[#3d2610]">${_losEsc(x.batch)}</td>
+      <td>${_losEsc(x.breed)}</td>
+      <td>${_losEsc(x.plot || '—')}<span class="text-[9px] font-bold text-[#8a7a68]">${x.nursery && x.nursery !== '—' ? ' · ' + _losEsc(x.nursery) : ''}</span></td>
+      <td class="text-[#7c3aed] font-black">${fmtNum(x.qty)}</td>
+    </tr>`).join('');
+  return `
+    <div class="dtone-section mb-6" data-section="${title === 'Pre Nursery' ? 'pre' : 'main'}">
+      <div class="flex items-center justify-between mb-2 gap-4 flex-wrap">
+        <h4 class="text-sm font-black uppercase tracking-widest text-[#3d2610]">${title}</h4>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(recs.length)} record${recs.length === 1 ? '' : 's'} · ${fmtNum(batches)} batch${batches === 1 ? '' : 'es'}</div>
+      </div>
+      <div class="los-wrap">
+        <table class="report-table los-table">
+          <thead><tr>
+            <th>Date</th><th>Batch</th><th>Breed</th>
+            <th title="${cols.placeTitle}">${cols.place}</th>
+            <th title="${cols.qtyTitle}">Double-Tone Qty</th>
+          </tr></thead>
+          <tbody>
+            ${recs.length ? body : `<tr><td colspan="5" class="py-10 text-[#8a7a68]">${emptyText}</td></tr>`}
+          </tbody>
+          ${recs.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="4" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total — ${title}</td>
+            <td class="text-[#7c3aed]">${fmtNum(total)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>`;
+}
+
 async function runDoubleToneReport() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
@@ -2214,38 +2246,48 @@ async function runDoubleToneReport() {
   const to    = document.getElementById('f-to').value;
   const asAt  = to || null;
 
+  const pickedLocs = nurseryFilter();
+  const wantPre  = pickedLocs.length === 0 || pickedLocs.includes('PN');
+  const mainLocs = pickedLocs.filter(l => l !== 'PN');
+  const wantMain = pickedLocs.length === 0 || mainLocs.length > 0;
+  const locKey   = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const mainKeys = new Set(mainLocs.map(locKey));
+
   const allRows = await _losBuildAllRows(asAt);
   if (!allRows) return; // error already shown by _losBuildAllRows()
 
-  // One line per TRANSPLANTING RECORD out of the DOUBLE-TONE tray, each
-  // carrying its batch's breed — the rec entries do not, and the breed
-  // filter and column both need it.
-  const recs = [];
+  const inRange = (d) => !((from && d && d < from) || (to && d && d > to));
+  const pre = [], main = [];
   allRows.forEach(r => {
     if (breed && r.breed !== breed) return;
     (r.rec.trans || []).forEach(x => {
       if (_losTrayKey(x.from) !== 'DOUBLETONE') return;
       const d = x.date ? String(x.date).slice(0, 10) : '';
-      if (from && d && d < from) return;
-      if (to && d && d > to) return;
-      recs.push({ date: d, batch: x.batch, breed: r.breed, plot: x.place, nursery: x.nursery, qty: x.qty });
+      if (!inRange(d)) return;
+      // A partial pick of main nurseries narrows the rows as well.
+      if (mainKeys.size && !mainKeys.has(locKey(x.nursery))) return;
+      main.push({ date: d, batch: x.batch, breed: r.breed, plot: x.place, nursery: x.nursery, qty: x.qty });
+    });
+    (r.rec.dtone || []).forEach(x => {
+      const d = x.date ? String(x.date).slice(0, 10) : '';
+      if (!inRange(d)) return;
+      pre.push({ date: d, batch: x.batch, breed: r.breed, plot: x.place, nursery: '', qty: x.qty });
     });
   });
-  recs.sort((a, b) => String(b.date).localeCompare(String(a.date))
-                   || String(b.batch).localeCompare(String(a.batch), undefined, { numeric: true }));
+  const byDate = (a, b) => String(b.date).localeCompare(String(a.date))
+                        || String(b.batch).localeCompare(String(a.batch), undefined, { numeric: true });
+  pre.sort(byDate); main.sort(byDate);
 
-  const total = recs.reduce((s, x) => s + (x.qty || 0), 0);
-  const batches = new Set(recs.map(x => x.batch)).size;
   const rangeLabel = from && to ? `${fmtDate(from)} – ${fmtDate(to)}` : (to ? `as at ${fmtDate(to)}` : 'all dates');
-
-  const body = recs.map(x => `
-    <tr>
-      <td>${fmtDate(x.date)}</td>
-      <td class="font-black text-[#3d2610]">${_losEsc(x.batch)}</td>
-      <td>${_losEsc(x.breed)}</td>
-      <td>${_losEsc(x.plot || '—')}<span class="text-[9px] font-bold text-[#8a7a68]">${x.nursery && x.nursery !== '—' ? ' · ' + _losEsc(x.nursery) : ''}</span></td>
-      <td class="text-[#7c3aed] font-black">${fmtNum(x.qty)}</td>
-    </tr>`).join('');
+  const sections = [];
+  if (wantPre) sections.push(_dtoneSectionHtml('Pre Nursery', pre, {
+    place: 'Tray', placeTitle: 'Where the count was keyed — the D-Tone tray on the Transplanting tab.',
+    qtyTitle: 'Double Tone Quantity in Nursery — the count an admin keyed on the batch report\'s Transplanting tab.'
+  }, 'No Double Tone Quantity in Nursery record falls in this period under the selected filters.'));
+  if (wantMain) sections.push(_dtoneSectionHtml('Main Nursery', main, {
+    place: 'Main Plot', placeTitle: 'The main plot the double-tone seedlings were transplanted into, and its nursery.',
+    qtyTitle: 'Seedlings transplanted out of the DOUBLE-TONE tray on this record — the batch report\'s Main Plot (D-Tone) card.'
+  }, 'No double-tone transplanting record falls in this period under the selected filters.'));
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -2253,28 +2295,9 @@ async function runDoubleToneReport() {
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Double-Tone Report</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${rangeLabel} · ${fmtNum(recs.length)} record${recs.length === 1 ? '' : 's'} · ${fmtNum(batches)} batch${batches === 1 ? '' : 'es'}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${rangeLabel}</div>
       </div>
-      <div class="los-wrap">
-        <table class="report-table los-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Batch</th>
-              <th>Breed</th>
-              <th title="The main plot the double-tone seedlings were transplanted into, and its nursery.">Main Plot</th>
-              <th title="Seedlings transplanted out of the DOUBLE-TONE tray on this record — the batch report's Main Plot (D-Tone) card.">Double-Tone Qty</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${recs.length ? body : `<tr><td colspan="5" class="py-10 text-[#8a7a68]">No double-tone transplanting record falls in this period under the selected filters.</td></tr>`}
-          </tbody>
-          ${recs.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="4" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Grand Total — double tone in this period</td>
-            <td class="text-[#7c3aed]">${fmtNum(total)}</td>
-          </tr></tfoot>` : ''}
-        </table>
-      </div>
+      ${sections.join('')}
     </div>`;
   _losWireSticky();
 }
@@ -3338,7 +3361,7 @@ const NURSERY_SUB_REPORTS = [
   { value: 'transplanting', label: 'Transplanting Report', hint: 'Transplanting Report — date, maturity date, location' },
   { value: 'seed_in',       label: 'Seed In Report',       hint: 'Seed In Report — what came in, per batch: supplier, quantity, damage, planted, variance' },
   { value: 'culling',       label: 'Culling Report',       hint: 'Culling Report — pick 1st, 2nd or 3rd Culling under Culling Stage below' },
-  { value: 'dtone',         label: 'Double-Tone Report',   hint: 'Double-Tone Report — the double-tone quantity in the nursery, by date: every Transplanting record out of the DOUBLE-TONE tray in the As At month, with the month\'s total' },
+  { value: 'dtone',         label: 'Double-Tone Report',   hint: 'Double-Tone Report — by date, in two sections: Pre Nursery is the Double Tone Quantity in Nursery records keyed on the Transplanting tab, Main Nursery is every Transplanting record out of the DOUBLE-TONE tray. Each has its own total' },
 ];
 
 // ── Report tabs ───────────────────────────────────────────────────────────
@@ -3512,7 +3535,7 @@ function syncFilterVisibility() {
   // in practice — see runSeedInReport() — but the same chip set asks the
   // same question every other sub-report does). Life of Seedling uses its
   // own Nursery Type filter instead (.f-los, below).
-  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isSalesTable || isLifePlot)));
+  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isDtone || isSalesTable || isLifePlot)));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling || isDtone || isLifePlot)));
   // 2nd/3rd Culling never happens in a Pre-Nursery tray — see
   // runCullingReport()'s own PRE_NURSERY_PLOTS comment: 1st Culling is the

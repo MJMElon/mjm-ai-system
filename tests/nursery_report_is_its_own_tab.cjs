@@ -157,46 +157,68 @@ is(sr.options, ['summary=Summary Report', 'transplanting=Transplanting Report', 
 is(sr.opensOn, 'summary', 'it opens on Summary');
 is(sr.hasNote, false, 'the as-submitted Summary carries NO 2nd-culling deduction note');
 
-console.log('\n── 4. The Double-Tone Report: the Transplanting records out of the DOUBLE-TONE tray, BY DATE ──');
-/* The rows are the batch report's Transplanting records out of the
-   DOUBLE-TONE tray (Main Plot (D-Tone)). The first build read
-   Transplanted_DoubleTone — the step INTO the tray — and the office found
-   batches 271 and 272 missing: neither has such a row; both have ordinary
-   Transplanted rows out of the DOUBLE-TONE tray. The fixture carries the
-   into-tray rows as well, so a report reading them is caught. */
-const runDT = (from, to) => page.evaluate(async ([f, t]) => {
+console.log('\n── 4. The Double-Tone Report: a Pre Nursery and a Main Nursery section, BY DATE ──');
+/* MAIN NURSERY is the batch report's Transplanting records OUT of the
+   DOUBLE-TONE tray (the first build read Transplanted_DoubleTone, the step
+   INTO the tray, and missed 271 / 272 — the fixture carries the into-tray
+   rows so a report reading them is caught). PRE NURSERY is the keyed
+   "Double Tone Quantity in Nursery" records (DTone_Nursery_Qty). The two
+   are never added together. */
+const runDT = (from, to, locs) => page.evaluate(async ([f, t, l]) => {
   if (typeof runDoubleToneReport !== 'function') return { missing: 'no runDoubleToneReport on the page' };
   document.getElementById('f-nursery-sub').value = 'dtone';
+  if (typeof syncFilterVisibility === 'function') syncFilterVisibility();
   document.getElementById('f-from').value = f;
   document.getElementById('f-to').value = t;
   document.getElementById('f-breed').value = '';
+  document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = !l || l.includes(cb.value); });
   await runDoubleToneReport();
   const out = document.getElementById('report-output');
+  const read = (sec) => {
+    const el = out.querySelector('.dtone-section[data-section="' + sec + '"]');
+    if (!el) return null;
+    return {
+      rows: [...el.querySelectorAll('tbody tr')]
+        .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim()))
+        .filter(c => c.length > 1),
+      foot: (el.querySelector('tfoot') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+      head: (el.querySelector('h4') || { textContent: '' }).textContent.trim(),
+    };
+  };
   return {
     heading: /Double-Tone Report/.test(out.textContent),
-    rows: [...out.querySelectorAll('tbody tr')]
-      .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim()))
-      .filter(c => c.length > 1),
-    foot: (out.querySelector('tfoot') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+    pre: read('pre'), main: read('main'),
+    grand: /Grand Total/.test(out.textContent),
+    chipsShown: !document.querySelector('.f-nursery-inline').classList.contains('hidden'),
   };
-}, [from, to]);
+}, [from, to, locs || null]);
 
 const dtAll = await runDT('', '');
-if (dtAll.missing) { console.log('  FAIL', dtAll.missing); bad += 7; }
+if (dtAll.missing) { console.log('  FAIL', dtAll.missing); bad += 12; }
 else {
+  const M = dtAll.main || { rows: [], foot: '' }, P = dtAll.pre || { rows: [], foot: '' };
   yes(dtAll.heading, 'the report draws under its own heading');
-  is(dtAll.rows.map(r => r[4]), ['150', '300'],
-    'one line per Transplanting record OUT of the DOUBLE-TONE tray — never the into-tray 500 / 200');
-  is((dtAll.rows[1] || []).slice(0, 3), ['01 Oct 2026', '281', 'UPB PREMIER'],
+  yes(!!dtAll.pre && !!dtAll.main, 'it has a Pre Nursery section AND a Main Nursery section');
+  is(M.rows.map(r => r[4]), ['150', '300'],
+    'Main Nursery: one line per Transplanting record OUT of the DOUBLE-TONE tray — never the into-tray 500 / 200');
+  is((M.rows[1] || []).slice(0, 3), ['01 Oct 2026', '281', 'UPB PREMIER'],
     'a line carries the date, the batch and the breed');
-  yes(/U3/.test((dtAll.rows[1] || [])[3] || ''), 'and the main plot it went into');
-  yes(/Grand Total/.test(dtAll.foot) && /450/.test(dtAll.foot),
-    'the Grand Total answers "how many double tone" — 450, got "' + dtAll.foot + '"');
+  yes(/U3/.test((M.rows[1] || [])[3] || ''), 'and the main plot it went into');
+  yes(/450/.test(M.foot), 'the Main Nursery total is 450, got "' + M.foot + '"');
+  is(P.rows.map(r => [r[0], r[4]]), [['03 Oct 2026', '160'], ['02 Oct 2026', '140']],
+    'Pre Nursery: the Double Tone Quantity in Nursery records, by date');
+  yes(/300/.test(P.foot), 'the Pre Nursery total is 300, got "' + P.foot + '"');
+  is(dtAll.grand, false, 'the two sections are never added into one grand total');
+  is(dtAll.chipsShown, true, 'the Locations chips are offered on this report');
   const dtOct = await runDT('2026-10-01', '2026-10-31');
-  is(dtOct.rows.map(r => r[0]), ['31 Oct 2026', '01 Oct 2026'],
+  is(((dtOct.main || {}).rows || []).map(r => r[0]), ['31 Oct 2026', '01 Oct 2026'],
     'As At 31/10/2026 includes the record ON the 31st — batch 272\'s case');
   const dtSep = await runDT('2026-09-01', '2026-09-30');
-  is(dtSep.rows.length, 0, 'September has no double-tone transplant (the into-tray 500 is not one)');
+  is([((dtSep.main || {}).rows || []).length, ((dtSep.pre || {}).rows || []).length], [0, 0],
+    'September has no double-tone in either section (the into-tray 500 is not one)');
+  const dtPN = await runDT('', '', ['PN']);
+  is([!!dtPN.pre, !!dtPN.main], [true, false], 'PN alone draws the Pre Nursery section only');
+  await page.evaluate(() => document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = true; }));
 }
 
 console.log('\n── 4b. The Culling Report: a 1st culling on a TRAY is Pre-Nursery ──');
