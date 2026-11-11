@@ -67,6 +67,18 @@ const LOGS = [
         created_at: '2026-10-02T00:00:00Z', quantity_change: 140, remark: 'Double tone qty in nursery' }),
   log({ batch_name: '281', transaction_type: 'DTone_Nursery_Qty', transaction_date: '2026-10-03',
         created_at: '2026-10-03T00:00:00Z', quantity_change: 160, remark: 'Double tone qty in nursery' }),
+  /* Stock Calibrations for the Calibration Report: two + and one − in
+     October (approved), one − in September, and one waiting for approval. */
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-10',
+        plot_name: 'U3', quantity_change: 6, remark: 'Report: Transplanting. Found 6 more [APPROVED by Ruth on 2026-10-11]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-20',
+        plot_name: 'P1', quantity_change: 4, remark: 'Report: Planting. Recount [APPROVED by Ruth on 2026-10-21]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-25',
+        plot_name: 'U3', quantity_change: -13, remark: 'Report: 3rd Culling. Missing 13 [APPROVED by Ruth on 2026-10-26]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-09-15',
+        plot_name: 'U3', quantity_change: -2, remark: 'Report: Transplanting. Miscount [APPROVED by Ruth on 2026-09-16]' }),
+  log({ batch_name: '281', transaction_type: 'Stock_Calibration', transaction_date: '2026-10-28',
+        plot_name: 'U3', quantity_change: -500, remark: 'Report: Transplanting. Not approved yet' }),
   log({ batch_name: '282', breed_name: 'IOI DxP', transaction_type: 'Seeds_Received',
         transaction_date: '2026-08-01', created_at: '2026-08-01T00:00:00Z', quantity_change: 2000,
         remark: 'Seeds received. Supplier: IOI. MPOB: 789-012. DO_Qty: 2000.' }),
@@ -152,51 +164,120 @@ const sr = await page.evaluate(() => ({
 is(sr.err, '', 'selectReport(movement_report) runs');
 is(sr.subShown, true, 'the Report sub-selector is back on this tab');
 is(sr.options, ['summary=Summary Report', 'transplanting=Transplanting Report', 'seed_in=Seed In Report',
-                'culling=Culling Report', 'dtone=Double-Tone Report'],
-  'five sub-reports, Summary wearing the name the office gave it, Double-Tone new');
+                'culling=Culling Report', 'dtone=Double-Tone Report', 'calibration=Calibration Report'],
+  'six sub-reports, Summary wearing the name the office gave it, Double-Tone and Calibration new');
 is(sr.opensOn, 'summary', 'it opens on Summary');
 is(sr.hasNote, false, 'the as-submitted Summary carries NO 2nd-culling deduction note');
 
-console.log('\n── 4. The Double-Tone Report: the Transplanting records out of the DOUBLE-TONE tray, BY DATE ──');
-/* The rows are the batch report's Transplanting records out of the
-   DOUBLE-TONE tray (Main Plot (D-Tone)). The first build read
-   Transplanted_DoubleTone — the step INTO the tray — and the office found
-   batches 271 and 272 missing: neither has such a row; both have ordinary
-   Transplanted rows out of the DOUBLE-TONE tray. The fixture carries the
-   into-tray rows as well, so a report reading them is caught. */
-const runDT = (from, to) => page.evaluate(async ([f, t]) => {
+console.log('\n── 4. The Double-Tone Report: a Pre Nursery and a Main Nursery section, BY DATE ──');
+/* MAIN NURSERY is the batch report's Transplanting records OUT of the
+   DOUBLE-TONE tray (the first build read Transplanted_DoubleTone, the step
+   INTO the tray, and missed 271 / 272 — the fixture carries the into-tray
+   rows so a report reading them is caught). PRE NURSERY is the keyed
+   "Double Tone Quantity in Nursery" records (DTone_Nursery_Qty). The two
+   are never added together. */
+const runDT = (from, to, locs) => page.evaluate(async ([f, t, l]) => {
   if (typeof runDoubleToneReport !== 'function') return { missing: 'no runDoubleToneReport on the page' };
   document.getElementById('f-nursery-sub').value = 'dtone';
+  if (typeof syncFilterVisibility === 'function') syncFilterVisibility();
   document.getElementById('f-from').value = f;
   document.getElementById('f-to').value = t;
   document.getElementById('f-breed').value = '';
+  document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = !l || l.includes(cb.value); });
   await runDoubleToneReport();
   const out = document.getElementById('report-output');
+  const read = (sec) => {
+    const el = out.querySelector('.dtone-section[data-section="' + sec + '"]');
+    if (!el) return null;
+    return {
+      rows: [...el.querySelectorAll('tbody tr')]
+        .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim()))
+        .filter(c => c.length > 1),
+      foot: (el.querySelector('tfoot') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+      head: (el.querySelector('h4') || { textContent: '' }).textContent.trim(),
+    };
+  };
   return {
     heading: /Double-Tone Report/.test(out.textContent),
-    rows: [...out.querySelectorAll('tbody tr')]
-      .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim()))
-      .filter(c => c.length > 1),
-    foot: (out.querySelector('tfoot') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+    pre: read('pre'), main: read('main'),
+    grand: /Grand Total/.test(out.textContent),
+    chipsShown: !document.querySelector('.f-nursery-inline').classList.contains('hidden'),
   };
-}, [from, to]);
+}, [from, to, locs || null]);
 
 const dtAll = await runDT('', '');
-if (dtAll.missing) { console.log('  FAIL', dtAll.missing); bad += 7; }
+if (dtAll.missing) { console.log('  FAIL', dtAll.missing); bad += 12; }
 else {
+  const M = dtAll.main || { rows: [], foot: '' }, P = dtAll.pre || { rows: [], foot: '' };
   yes(dtAll.heading, 'the report draws under its own heading');
-  is(dtAll.rows.map(r => r[4]), ['150', '300'],
-    'one line per Transplanting record OUT of the DOUBLE-TONE tray — never the into-tray 500 / 200');
-  is((dtAll.rows[1] || []).slice(0, 3), ['01 Oct 2026', '281', 'UPB PREMIER'],
+  yes(!!dtAll.pre && !!dtAll.main, 'it has a Pre Nursery section AND a Main Nursery section');
+  is(M.rows.map(r => r[4]), ['150', '300'],
+    'Main Nursery: one line per Transplanting record OUT of the DOUBLE-TONE tray — never the into-tray 500 / 200');
+  is((M.rows[1] || []).slice(0, 3), ['01 Oct 2026', '281', 'UPB PREMIER'],
     'a line carries the date, the batch and the breed');
-  yes(/U3/.test((dtAll.rows[1] || [])[3] || ''), 'and the main plot it went into');
-  yes(/Grand Total/.test(dtAll.foot) && /450/.test(dtAll.foot),
-    'the Grand Total answers "how many double tone" — 450, got "' + dtAll.foot + '"');
+  yes(/U3/.test((M.rows[1] || [])[3] || ''), 'and the main plot it went into');
+  yes(/450/.test(M.foot), 'the Main Nursery total is 450, got "' + M.foot + '"');
+  is(P.rows.map(r => [r[0], r[4]]), [['03 Oct 2026', '160'], ['02 Oct 2026', '140']],
+    'Pre Nursery: the Double Tone Quantity in Nursery records, by date');
+  yes(/300/.test(P.foot), 'the Pre Nursery total is 300, got "' + P.foot + '"');
+  is(dtAll.grand, false, 'the two sections are never added into one grand total');
+  is(dtAll.chipsShown, true, 'the Locations chips are offered on this report');
   const dtOct = await runDT('2026-10-01', '2026-10-31');
-  is(dtOct.rows.map(r => r[0]), ['31 Oct 2026', '01 Oct 2026'],
+  is(((dtOct.main || {}).rows || []).map(r => r[0]), ['31 Oct 2026', '01 Oct 2026'],
     'As At 31/10/2026 includes the record ON the 31st — batch 272\'s case');
   const dtSep = await runDT('2026-09-01', '2026-09-30');
-  is(dtSep.rows.length, 0, 'September has no double-tone transplant (the into-tray 500 is not one)');
+  is([((dtSep.main || {}).rows || []).length, ((dtSep.pre || {}).rows || []).length], [0, 0],
+    'September has no double-tone in either section (the into-tray 500 is not one)');
+  const dtPN = await runDT('', '', ['PN']);
+  is([!!dtPN.pre, !!dtPN.main], [true, false], 'PN alone draws the Pre Nursery section only');
+  await page.evaluate(() => document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = true; }));
+}
+
+console.log('\n── 4c. The Calibration Report: the month, a + section and a − section ──');
+const runCal = (from, to, locs) => page.evaluate(async ([f, t, l]) => {
+  if (typeof runCalibrationReport !== 'function') return { missing: 'no runCalibrationReport on the page' };
+  document.getElementById('f-nursery-sub').value = 'calibration';
+  if (typeof syncFilterVisibility === 'function') syncFilterVisibility();
+  document.getElementById('f-from').value = f;
+  document.getElementById('f-to').value = t;
+  document.getElementById('f-breed').value = '';
+  document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = !l || l.includes(cb.value); });
+  await runCalibrationReport();
+  const out = document.getElementById('report-output');
+  const read = (sec) => {
+    const el = out.querySelector('.cal-section[data-section="' + sec + '"]');
+    if (!el) return null;
+    return {
+      rows: [...el.querySelectorAll('tbody tr')]
+        .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, ' ').trim()))
+        .filter(c => c.length > 1),
+      foot: (el.querySelector('tfoot') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+    };
+  };
+  return { plus: read('plus'), minus: read('minus'),
+           net: (out.querySelector('.cal-net') || { textContent: '' }).textContent.replace(/\s+/g, ' ').trim(),
+           waiting: (out.querySelector('.cal-waiting') || { textContent: '' }).textContent.trim(),
+           option: !!document.querySelector('#f-nursery-sub option[value="calibration"]') };
+}, [from, to, locs || null]);
+{
+  const c = await runCal('2026-10-01', '2026-10-31');
+  if (c.missing) { console.log('  FAIL', c.missing); bad += 7; }
+  else {
+    const P = c.plus || { rows: [], foot: '' }, N = c.minus || { rows: [], foot: '' };
+    yes(c.option, 'Calibration Report is a Submission Report option');
+    is(P.rows.map(r => [r[0], r[3].split(' ')[0], r[6]]), [['20 Oct 2026', 'P1', '+4'], ['10 Oct 2026', 'U3', '+6']],
+      'the + section: October\'s approved + calibrations, newest first');
+    yes(/\+10/.test(P.foot), 'the + total is +10, got "' + P.foot + '"');
+    is(N.rows.map(r => [r[0], r[6]]), [['25 Oct 2026', '−13']],
+      'the − section: October only — September\'s −2 and the unapproved −500 are not in it');
+    yes(/−13/.test(N.foot), 'the − total is −13, got "' + N.foot + '"');
+    yes(/−3/.test(c.net), 'the net is −3, got "' + c.net + '"');
+    yes(/1 waiting/.test(c.waiting), 'the unapproved one is counted as waiting, got "' + c.waiting + '"');
+    const pn = await runCal('2026-10-01', '2026-10-31', ['PN']);
+    is([((pn.plus || {}).rows || []).length, ((pn.minus || {}).rows || []).length], [1, 0],
+      'PN alone keeps only the tray calibration (P1)');
+    await page.evaluate(() => document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = true; }));
+  }
 }
 
 console.log('\n── 4b. The Culling Report: a 1st culling on a TRAY is Pre-Nursery ──');
