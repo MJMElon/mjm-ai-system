@@ -5763,6 +5763,34 @@ things it had to learn, each of which makes a browser test lie:
   stop; and the single Del writes `.eq('id', …)`, so a stub reading only
   `.in` reads a working button as a dead one.
 
+## A card on the Stock & Sales page is ONE shape, and the next one too
+
+The office, over the Customer pane: *"Make my Customer order management
+outer box same with Order Monitoring Dashboard or This Week's Scheduled
+Collection. It has a colour outer line ... Future new card added,
+standardise the UI as current."*
+
+So a card on `operation/operation_stock_sales.html` is:
+
+- **`metric-card border-l-4 border-<colour>-500 relative`** — the colour
+  line is the card's identity, so **each card has its own colour**:
+  Order Monitoring Dashboard is emerald, This Week's Scheduled Collection
+  blue, Customer Order Management violet. Pick an unused one for the next.
+- **The icon-tile header**: `px-4 pt-4 pb-3 border-b border-slate-100`,
+  a `w-7 h-7 bg-<colour>-100 text-<colour>-600` tile with an icon, and the
+  title as `text-[11px] font-black uppercase tracking-widest`. Controls
+  for the card (a filter, a week stepper) sit on the right of that row.
+- **Tables inside it sit in a plain bordered frame**
+  (`rounded-xl border border-slate-200`), never a second `.dash-card` —
+  a shadowed card inside a card reads as two things.
+- **`overflow-hidden` only if nothing hangs out of the card.** Customer
+  Order Management does without it because its All Orders dropdown hangs
+  below its button and would be clipped.
+
+`tests/every_customer_card_has_its_colour_line.cjs` holds every top-level
+card on the Customer pane to all of it, so a card added without the line,
+the header or its own colour fails by name.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened four times in this codebase now. A screen writes a setting, the

@@ -558,10 +558,24 @@
             </div>
         </div>
 
-        <!-- Customer Order Management -->
-        <div>
-            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
+        <!-- Customer Order Management — a CARD like its two neighbours, as
+             the office asked: "Make my Customer order management outer box
+             same with Order Monitoring Dashboard or This Week's Scheduled
+             Collection. It has a colour outer line." metric-card +
+             border-l-4 + its own colour + the icon-tile header. Every card
+             on this page is that shape — see "A card on the Stock & Sales
+             page" in CLAUDE.md.
+             NOT overflow-hidden, unlike its neighbours: the All Orders
+             filter's dropdown hangs below its button, and an
+             overflow-hidden card would clip it. -->
+        <div class="metric-card border-l-4 border-violet-500 relative">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center text-violet-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                    </div>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Customer Order Management</span>
+                </div>
                 <div class="cf-wrap" id="cust-filter-wrap">
                     <button type="button" id="cust-filter-btn" class="cf-btn" onclick="toggleCustFilterMenu(event)">
                         <span id="cust-filter-label">All Orders</span>
@@ -583,6 +597,7 @@
                  answer both (which is what "scroll right" used to be).
                  Same row as the search bar — one row for "which report",
                  one for "which orders", rather than three stacked rows. -->
+            <div class="p-3">
             <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <div class="ph-tabs" id="cust-main-tabs">
                     <button type="button" class="ph-tab active" data-main-tab="booking" onclick="selectCustMainTab('booking')">📦 Booking</button>
@@ -594,7 +609,7 @@
             </div>
 
             <div id="cust-view-booking">
-                <div class="dash-card scroll-x-fade">
+                <div class="rounded-xl border border-slate-200 scroll-x-fade">
                     <table class="cust-table min-w-[1400px]">
                         <thead id="cust-thead"></thead>
                         <tbody id="cust-tbody">
@@ -619,7 +634,7 @@
                     <button type="button" id="coll-months-toggle" onclick="toggleCollMonths()"
                         class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors hidden"></button>
                 </div>
-                <div class="dash-card scroll-x-fade">
+                <div class="rounded-xl border border-slate-200 scroll-x-fade">
                     <table class="cust-table min-w-[1400px]">
                         <thead id="coll-thead"></thead>
                         <tbody id="coll-tbody">
@@ -631,6 +646,7 @@
                 <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
                     <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Every month with an actual collection, built from <span class="font-mono">shared_do_records</span> (cancelled and CAL- calibration DOs excluded). Click a month's qty for its Delivery Date / DO Number breakdown.
                 </div>
+            </div>
             </div>
         </div>
 
