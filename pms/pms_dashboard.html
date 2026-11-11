@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- The ?v= on every script below lives in THIS page, so the page is the one
+     thing that must never be served from cache: a stale copy goes on asking
+     for the old script for ever. GitHub Pages gives nowhere to set a real
+     header, so these three are the only lever. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Project Monitoring System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="pms_styles.css?v=20261111a">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
+<script src="../shared/shared_access.js"></script>
+</head>
+<!-- data-boot hides the page until the portal has said who this is. pms_app.js
+     takes it off; a login that is refused never has it taken off, and is on
+     its way back to the hub. -->
+<body data-boot>
+<header class="top">
+  <div class="wrap">
+    <a class="back" href="../index.html" aria-label="Back to the MJM AI portal">&larr; Portal</a>
+    <div class="brand"><h1>Project Monitoring System</h1><small id="asof"></small></div>
+    <span class="whoami"><span>Signed in as</span> <b id="who"></b></span>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" data-view="overview" aria-selected="true">Overview</button>
+      <button role="tab" data-view="board" aria-selected="false">Board</button>
+      <button role="tab" data-view="timeline" aria-selected="false">Timeline</button>
+      <button role="tab" data-view="list" aria-selected="false">Tasks</button>
+      <button role="tab" data-view="requests" aria-selected="false">Task requests <span class="badge" id="reqCount" hidden></span></button>
+      <button role="tab" data-view="value" aria-selected="false">Value analysis</button>
+      <button role="tab" data-view="settings" aria-selected="false">Settings</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="filters" id="filters">
+    <select id="fProject" aria-label="Project"><option value="">All projects</option></select>
+    <select id="fPerson" aria-label="Person"><option value="">Everyone</option></select>
+    <select id="fStatus" aria-label="Status"><option value="">Any status</option></select>
+    <select id="fPri" aria-label="Priority"><option value="">Any priority</option></select>
+    <select id="fMonth" aria-label="Month" hidden><option value="">All months</option></select>
+    <select id="fYear" aria-label="Year" hidden><option value="">All years</option></select>
+    <input type="search" id="fSearch" placeholder="Search tasks" aria-label="Search tasks">
+    <label class="chk"><input type="checkbox" id="fOpen"> Open tasks only</label>
+    <span class="spacer"></span>
+    <select id="fSort" aria-label="Sort tasks" hidden>
+      <option value="" hidden>Custom sort</option>
+      <option value="latest">Latest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="priority">Priority: high to low</option>
+      <option value="due">Due date: soonest</option>
+      <option value="status">Status</option>
+    </select>
+    <button class="btn primary" id="addBtn" hidden>+ New task</button>
+  </div>
+  <div id="banner"></div>
+
+  <section class="view" id="v-overview"></section>
+  <section class="view" id="v-board" hidden></section>
+  <section class="view" id="v-timeline" hidden></section>
+  <section class="view" id="v-list" hidden></section>
+  <section class="view" id="v-requests" hidden></section>
+  <section class="view" id="v-value" hidden></section>
+  <section class="view" id="v-settings" hidden></section>
+</main>
+
+<div id="sheetRoot"></div>
+
+<script>
+/* THE LOGIN IS THE PORTAL'S. Nobody signs in here: this page reads the
+   session the MJM AI hub already holds and the same shared_profiles row
+   every other module reads, through the same MJMAccess the others use.
+
+   PMS_READY resolves ONLY for a member of staff holding the `pms` module
+   (User Access on the hub). For anybody else it never resolves, so
+   pms_app.js draws nothing while the redirect is on its way. A customer is
+   refused by shared_staff_gate.js inside MJMAccess.load before this is
+   reached at all. */
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+window.PMS_READY = (async () => {
+  const never = new Promise(() => {});
+  try { await MJMAccess.load(_supabase); }
+  catch (e) { return never; }                       // gated or redirecting
+  const u = MJMAccess.user();
+  if (!u || !MJMAccess.canAccess('pms')) { window.location.replace('../index.html'); return never; }
+
+  /* The accounts a Team row can be linked to. Only a login that may read
+     everybody's profile gets a list. Anybody else gets none, and Settings
+     falls back to a typed e-mail, so a failed read costs a dropdown and
+     nothing else. Customers are not staff and are never offered. */
+  let profiles = [];
+  try {
+    const r = await _supabase.from('shared_profiles').select('email, full_name, user_type');
+    if (!r.error) profiles = (r.data || [])
+      .filter(p => p.email && String(p.user_type || 'system') !== 'customer')
+      .map(p => ({ email: String(p.email).trim().toLowerCase(), full_name: p.full_name || '' }));
+  } catch (e) { /* no list */ }
+
+  return {
+    sb: _supabase,
+    email: String(u.email || '').trim().toLowerCase(),
+    name: u.full_name || u.email || '',
+    level: MJMAccess.isAdminOf('pms') ? 'admin' : 'normal',
+    profiles
+  };
+})();
+</script>
+<script src="pms_data.js?v=20261111a"></script>
+<script src="pms_app.js?v=20261111a"></script>
+</body>
+</html>

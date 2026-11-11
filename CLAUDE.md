@@ -8235,3 +8235,53 @@ batches than the widest ends short of the table's right edge, because
 widest. It is how the stacked sheet has always drawn and the office has not
 mentioned it; padding each band to the widest would move the upper table's
 column widths as well, which is a change nobody asked for.
+
+## Project Monitoring System signs nobody in: it reads the portal's login
+
+`pms/` is the company's project tracker (tasks, board, timeline, task
+requests, value analysis), brought in from a stand-alone page that had its
+own Supabase project and **no login at all**: a "Signed in as" dropdown
+where anybody picked any name, and until somebody was made Admin everybody
+was one. The office asked for it as a module with *"the login user same
+with the ai mjm system. the shared profiles in supabase"*.
+
+So there are two layers, and they are the house pattern:
+
+| Where | Question |
+|---|---|
+| hub → User Access → Project Monitoring System (`modules.pms`) | may this person open it at all. **Admin** is Admin on every tab |
+| the module → Settings → Team / User access | what a **Normal** person may do on each tab |
+
+- **A LOGIN IS TIED TO A TEAM ROW BY E-MAIL, NEVER BY NAME.** Tasks name
+  their assignees as text ("Ruth Wong"), so the Team list stays; each row
+  carries the `email` of an MJM AI account. A profile's `full_name` is the
+  one thing its owner can edit, so matching on it would let anybody take a
+  colleague's access by renaming themselves. For the same reason the
+  database compares the e-mail **on the session** (`auth.jwt()`), not the
+  one on the profile row.
+- **Let in and linked to nobody** is view-only plus requesting a task, with
+  Settings closed. The old "everyone is Admin until somebody is" is gone:
+  the module Admin is the bootstrap now.
+- **THE DATABASE DECIDES IT TOO.** `pms_tab_level(tab)` in
+  `shared/RUN_ME_project_monitoring.sql` is `applyAccess()` in
+  `pms/pms_app.js`, asked by the policies. Change one, change the other.
+  The settings row is saved WHOLE by two tabs (Settings and Value
+  analysis), so a trigger (`pms_guard_team`) refuses a save that moves a
+  login or a level unless the saver is Admin on Settings — and it compares
+  only e-mail and access, so the seed is written in exactly the shape the
+  page saves.
+- **`PMS_READY` is the seam.** The page resolves it only for staff holding
+  the module; `pms_app.js` awaits it and draws nothing before, and
+  `body[data-boot]` keeps the shell hidden meanwhile.
+- **The tables are `pms_tasks`, `pms_settings`, `pms_task_requests`** in
+  the portal's own project. The app still speaks of `tasks` / `settings` /
+  `task_requests`; `TBL` is the one map.
+- **The seed is the 54 tasks of the file handed over**, inserted once, on
+  the run that finds no settings row. The old tracker's own Supabase
+  project could not be reached from here, so anything keyed there after
+  that file was exported is not in it.
+
+`tests/project_monitoring_uses_the_portal_login.cjs` drives the real page.
+Its stub **fires `onAuthStateChange`**, because the hub gates its tiles
+inside that callback and fails open without it — the trap this file already
+names.

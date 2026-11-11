@@ -271,6 +271,13 @@
           </div>
           <select id="d-mod-seal" class="lvl-select"></select>
         </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Project Monitoring System</div>
+            <div class="text-[11px] text-slate-500">Project tasks, board, timeline, task requests &amp; value analysis. Admin is Admin on every tab; Normal follows the module's own Settings</div>
+          </div>
+          <select id="d-mod-pms" class="lvl-select"></select>
+        </div>
       </div>
 
       <!-- Quick set-all presets — same words as the dropdown -->
@@ -327,7 +334,7 @@ const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 // `mobile`, `training`, `demo555`) are untouched on every profile; this
 // page simply no longer reads or writes them, so nothing here can carry
 // them back to 'none' by omission.
-const MODULES = ['operation', 'nursery_ops', 'salesweb', 'nelos', 'audit', 'npayroll', 'scan', 'seal'];
+const MODULES = ['operation', 'nursery_ops', 'salesweb', 'nelos', 'audit', 'npayroll', 'scan', 'seal', 'pms'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
