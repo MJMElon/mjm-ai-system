@@ -162,7 +162,7 @@ async function drawn(page) {
   await page.waitForTimeout(250);
   return page.evaluate(() => ({
     who: document.querySelector('#who').textContent,
-    tabs: [...document.querySelectorAll('nav.tabs button')].filter((b) => !b.hidden).map((b) => b.dataset.view),
+    tabs: [...document.querySelectorAll('nav.tabs button[data-view]')].filter((b) => !b.hidden).map((b) => b.dataset.view),
   }));
 }
 const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs button[data-view="' + v + '"]').click(), view);
@@ -326,12 +326,21 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     is(sb.selBg, true, 'the open entry wears a block the others do not');
     await go(page, 'value'); await page.waitForTimeout(150);
     is(await page.evaluate(() => [document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view, document.querySelector('#v-value').hidden]), ['value', false], 'pressing an entry opens its view');
+    // The request button: on the bar's top part, one press from any tab, and it is not a tab.
+    await go(page, 'board'); await page.waitForTimeout(150);
+    const cta = await page.evaluate(() => { const b = document.querySelector('.side-top #reqBtn'); if (!b) return 'no request button';
+      const was = document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view; b.click();
+      return { text: b.textContent.replace(/\s+/g, ' ').trim(), shown: !b.hidden, tab: b.hasAttribute('data-view'),
+        sheet: !!document.querySelector('#sheetRoot .sheet #r-name'), stayed: document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view === was && !document.querySelector('#v-board').hidden }; });
+    is(cta, { text: '+ Request a task', shown: true, tab: false, sheet: true, stayed: true }, 'Request a task is on the bar, opens the request sheet, and leaves the tab where it was');
+    await page.keyboard.press('Escape');
     if (process.env.SHOT) { await page.setViewportSize({ width: 1400, height: 900 }); await go(page, 'overview'); await page.waitForTimeout(200); await page.screenshot({ path: process.env.SHOT.replace('.png', '_side.png') }); }
     await page.close();
     // A login with every entry of a group closed sees no title over nothing.
     const rows = ROWS(); rows.pms_settings[0].team.push({ email: 'few@mjm.test', access: { list: 'None', requests: 'None', value: 'None' } });
     const p2 = await open(browser, port, { email: 'few@mjm.test', name: 'Few Tabs', pms: 'normal' }, null, rows);
     await drawn(p2);
+    is(await p2.evaluate(() => { const b = document.querySelector('#reqBtn'); return b ? b.hidden : 'no button'; }), true, 'a login with Task requests closed is offered no request button');
     is(await p2.evaluate(() => [...document.querySelectorAll('nav.tabs .side-group')].filter((g) => !g.hidden).map((g) => g.querySelector('.side-title').textContent)), ['Overview'], 'a group with nothing left in it is not drawn');
     await p2.close();
   }

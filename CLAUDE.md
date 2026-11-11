@@ -8438,6 +8438,14 @@ So there are two layers, and they are the house pattern:
   along the top as one row that scrolls sideways. **There is no upgrade
   entry**: the request named one and the module has none, so none was
   invented.
+- **+ REQUEST A TASK IS ON THE BAR, AND IT IS NOT A TAB.** The office
+  showed a side bar with one bright button above its list and asked for
+  the task request to be that. It opens the same sheet the Task requests
+  tab opens, from any tab, and is offered on that tab's own test
+  (`canRequest`). It carries no `data-view`, which is why every tab
+  selector in `pms_app.js` is `nav.tabs button[data-view]`: matched as a
+  tab it would call `setView(undefined)`. The Task requests entry stays,
+  being the LIST of requests.
 - **A MODULE ADMIN ALWAYS KEEPS SETTINGS.** Any other tab can be closed on
   one; Settings is the tab that hands out the rest, so closing it on the
   last Admin would leave nobody able to open anything again. Asked in both

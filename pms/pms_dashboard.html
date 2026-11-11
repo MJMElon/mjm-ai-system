@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="pms_styles.css?v=20261111e">
+<link rel="stylesheet" href="pms_styles.css?v=20261111f">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
@@ -33,6 +33,8 @@
   <div class="side-top">
     <a class="back" href="../index.html" aria-label="Back to the MJM AI portal">&larr; Portal</a>
     <div class="brand"><h1>Project Monitoring System</h1><small id="asof"></small></div>
+    <!-- No data-view: it opens the request sheet and is not a tab. -->
+    <button type="button" class="side-cta" id="reqBtn" hidden><span aria-hidden="true">+</span> Request a task</button>
   </div>
   <div class="side-mid">
     <div class="side-group">
@@ -138,6 +140,6 @@ window.PMS_READY = (async () => {
   };
 })();
 </script>
-<script src="pms_app.js?v=20261111e"></script>
+<script src="pms_app.js?v=20261111f"></script>
 </body>
 </html>

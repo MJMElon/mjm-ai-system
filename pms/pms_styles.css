@@ -63,6 +63,13 @@ nav.tabs button[hidden]{display:none}
 nav.tabs button:hover{background:var(--sunk);color:var(--fg)}
 nav.tabs button[aria-selected="true"]{background:var(--accent);color:var(--on-accent);font-weight:600}
 nav.tabs button .badge{margin-left:auto}
+/* The one thing on the bar that is an ACTION and not a place: ask for a task. It wears its own colour, lighter than
+   the block on the open entry, so the two are never read as the same kind of thing. */
+:root{--cta:#A3CB5C; --cta-hover:#B4D873; --on-cta:#16301F}
+nav.tabs button.side-cta{justify-content:center;gap:8px;margin-top:14px;padding:11px 12px;border-radius:10px;
+  background:var(--cta);color:var(--on-cta);font-weight:600;font-size:14.5px}
+nav.tabs button.side-cta:hover{background:var(--cta-hover);color:var(--on-cta)}
+nav.tabs button.side-cta span{font-size:18px;line-height:1;font-weight:500}
 .side .back{display:inline-block;margin-bottom:12px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;text-align:center;
   font:500 11.5px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-decoration:none}
 .side .back:hover{color:var(--fg);border-color:var(--muted)}
@@ -83,6 +90,8 @@ nav.tabs button .badge{margin-left:auto}
   .side-foot{flex:none;flex-direction:row;align-items:center;padding:0;border-top:0;gap:4px}
   nav.tabs button{width:auto;padding:6px 11px}
   .side .back{margin:0;padding:4px 8px;flex:none}
+  nav.tabs button.side-cta{margin:0 0 0 auto;padding:6px 10px;font-size:13px;flex:none}
+  .brand small{display:none}
   .side .whoami{display:none}
 }
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:14px 4px}

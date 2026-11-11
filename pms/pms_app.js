@@ -161,7 +161,10 @@ function syncPerms(){
   canAdmin = tabAdmin("settings");
   canApprove = tabAdmin("requests");
   canRequest = canWrite && access.requests !== "None";
-  document.querySelectorAll("nav.tabs button").forEach(b => b.hidden = access[b.dataset.view] === "None");
+  // The side bar's own way in: the same sheet the Task requests tab opens, one press from anywhere. Offered on the
+  // test the tab's own button is offered on, so it is never a button that would be refused.
+  const cta = $("#reqBtn"); if (cta) cta.hidden = !canRequest;
+  document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.hidden = access[b.dataset.view] === "None");
   // A group with every entry closed keeps no title: a heading over nothing is a section somebody has to ask about.
   document.querySelectorAll("nav.tabs .side-group").forEach(g => g.hidden = ![...g.querySelectorAll("button")].some(b => !b.hidden));
 }
@@ -234,10 +237,11 @@ function paintSort(){
   $("#fSort").value = k || "";
 }
 
-document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+{ const cta = $("#reqBtn"); if (cta) cta.addEventListener("click", () => { if (canRequest) openRequestSheet(); }); }
 function setView(v){
   view = v; store.set("pm.view", v); syncPerms();
-  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v));
+  document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v));
   VIEWS.forEach(x => $("#v-"+x).hidden = x !== v);
   $("#filters").hidden = v === "settings" || v === "requests";
   document.body.dataset.view = v;
