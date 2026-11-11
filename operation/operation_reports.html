@@ -2130,14 +2130,27 @@ async function runSeedInReport() {
   /* NO verifiedOnly here, deliberately. The Seed In Report answers what
      arrived from the supplier, off the delivery order and the MPOB licence,
      and that is a different question from the one Life of Seedlings asks —
-     it reads the ledger as keyed, exactly as it always has. */
-  const allRows = await _losBuildAllRows(asAt);
+     it reads the ledger as keyed, exactly as it always has.
+
+     AND NO AS AT CUT ON THE LEDGER. The period decides WHICH batches are
+     listed (by the day their seeds arrived, below) and nothing else. Cutting
+     the planting and the damage at the To date as well listed batch 268,
+     received 22 Jun and planted after the period ended, with 0 planted,
+     0 damaged and a Variance of minus its whole delivery -- while the batch
+     page, which cuts nothing, read 10,709 accounted. Seed Accounted is a
+     question about the batch, not about the calendar. */
+  const allRows = await _losBuildAllRows(null);
   if (!allRows) return; // error already shown by _losBuildAllRows()
 
   let rows = allRows.filter(r => {
     if (breed && r.breed !== breed) return false;
     const d = r.seedsDate ? String(r.seedsDate).slice(0, 10) : '';
-    if (asAt && d && d > asAt) return false;
+    /* A row on a SEED IN report needs a seed-in day. With the ledger no
+       longer cut at the To date, a batch with no reception row (a bulk
+       import, a batch carrying only a Review_Rejection) would otherwise
+       pass both date tests below and sit in every period there is. */
+    if (!d) return false;
+    if (asAt && d > asAt) return false;
     if (from && d && d < from) return false;
     // Every Seed In event is inherently Pre-Nursery — shared_inventory_logs
     // hardcodes plot_name:'Pre-Nursery' on every Seeds_Received row (see
@@ -3850,16 +3863,50 @@ function _renderSalesChart(grid, years) {
   return `<div class="flex flex-wrap gap-2 mb-4">${legend}</div>${svg}`;
 }
 
+/* ONE answer to "how many did this DO sell, line by line", read by BOTH views
+   of Sales Listing. The Chart used to add up total_qty while the Table added
+   up the five line quantities, so one report showed a month two ways: a
+   three-line DO whose lines came to 2,800 under a total_qty of 3,000 read
+   3,000 on one view and 2,800 on the other.
+
+   The rule is the Table own, which is the batch report own Sales rule: the
+   line quantity, and a single-line DO whose line qty was never keyed reads
+   its total instead. A DO with NO plot on any line still sold its total --
+   it is returned as one line with no plot, so it is SHOWN (Unassigned) on
+   the Table rather than quietly existing on the Chart alone. */
+function _doSaleLines(d) {
+  let filled = 0;
+  for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
+  if (!filled) {
+    const t = Number(d.total_qty || 0);
+    return t ? [{ i: 0, plot: '', qty: t, batch: '' }] : [];
+  }
+  const out = [];
+  for (let i = 1; i <= 5; i++) {
+    const plot = d[`plot_${i}`];
+    if (!String(plot || '').trim()) continue;
+    let qty = Number(d[`qty_${i}`] || 0);
+    if (!qty && filled === 1) qty = Number(d.total_qty || 0);
+    if (!qty) continue;
+    out.push({ i, plot, qty, batch: d[`batch_${i}`] || '' });
+  }
+  return out;
+}
+
 async function runSeedlingSales() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
-  const { data: dos, error } = await _supabase
+  /* PAGED. This was one request, oldest first, and the database answers at
+     most 1,000 rows and says nothing about the rest -- so the DOs it lost
+     were the NEWEST, and the latest year read low against the one before
+     it, which the Year-on-Year row then reported as a fall in sales. */
+  const { data: dos, error } = await fetchAllRows(() => _supabase
     .from('shared_do_records')
-    .select('delivery_date, total_qty, status, remark, do_number')
-    .order('delivery_date', { ascending: true });
+    .select('id, delivery_date, total_qty, status, remark, do_number, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5')
+    .order('id', { ascending: true }));
 
   if (error) {
     loading.classList.add('hidden');
@@ -3883,7 +3930,7 @@ async function runSeedlingSales() {
     const y = dt.getFullYear();
     const m = dt.getMonth();
     if (!grid[y]) grid[y] = new Array(12).fill(0);
-    grid[y][m] += Number(d.total_qty || 0);
+    grid[y][m] += _doSaleLines(d).reduce((s, l) => s + l.qty, 0);
   });
 
   const allYears = Object.keys(grid).map(Number).sort();
@@ -4680,7 +4727,10 @@ function buildMovementSection(scope, ev, ctx) {
     // of, not this batch/plot's whole history on that column.
     const inPeriod = (arr) => (arr || []).filter(r => {
       const ts = r.date ? new Date(r.date).getTime() : NaN;
-      return isFinite(ts) && ts >= fromMs && ts <= toMs;
+      // toMs is midnight of the day AFTER As At, exclusive — the same bound
+      // the column itself uses. `<=` listed a row dated exactly that midnight
+      // in the hover while leaving it out of the figure beside it.
+      return isFinite(ts) && ts >= fromMs && ts < toMs;
     });
     const sales = saleDetails ? inPeriod(saleDetails[meta[k].place + '::' + meta[k].batch]) : [];
     const details = {};
@@ -5609,8 +5659,9 @@ async function runCullingReport() {
     return;
   }
 
+  const _cuPlotKey = (p) => String(p == null ? '' : p).toUpperCase().split('').filter(c => (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')).join('');
   const plotToLoc = {};
-  (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
+  (plotsRes.data || []).forEach(p => { plotToLoc[_cuPlotKey(p.plot_name)] = p.nursery_name || 'Unassigned'; });
   const batchBreed = {};
   /* THE BATCH'S PLANTED DATE, for the papan tanda. A batch is meant to have
      exactly ONE Seeds_Received row and some have many — see the note on
@@ -5637,7 +5688,7 @@ async function runCullingReport() {
        among them. Life of Seedlings already says it the same way
        (nursery: 'Pre-Nursery' for every 1st_Culling). */
     const nursery = (l.transaction_type === '1st_Culling' || PRE_NURSERY_PLOTS.includes(l.plot_name))
-      ? 'PN' : (plotToLoc[l.plot_name] || 'Unassigned');
+      ? 'PN' : (plotToLoc[_cuPlotKey(l.plot_name)] || 'Unassigned');
     return {
       date, nursery,
       plot: l.plot_name || '—', batch: l.batch_name || '—',
@@ -5782,12 +5833,13 @@ async function runSalesListing() {
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
   const selectedLocs = new Set(nurseryFilter());
 
-  const [dosRes, alsRes, plotsRes] = await Promise.all([
+  const [dosRes, alsRes, plotsRes, traysRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_do_records')
       .select('id, do_number, al_number, delivery_date, total_qty, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
       .order('id', { ascending: true })),
     fetchAllRows(() => _supabase.from('shared_al_orders').select('al_number, customer_name, price_per_unit')),
-    _supabase.from('shared_plots').select('plot_name, nursery_name')
+    _supabase.from('shared_plots').select('plot_name, nursery_name'),
+    _supabase.from('operation_trays').select('tray_name').then(r => r, () => ({ data: [] }))
   ]);
   if (dosRes.error) {
     loading.classList.add('hidden'); out.classList.remove('hidden');
@@ -5797,8 +5849,22 @@ async function runSalesListing() {
 
   const alByNumber = {};
   (alsRes.data || []).forEach(a => { if (a.al_number) alByNumber[a.al_number] = a; });
+  /* WHERE A LINE WAS SOLD FROM, matched the way the batch report matches a DO
+     plot (_mvPlotKey) and not letter for letter -- "B 4" and "b4" are B4.
+     And a TRAY is the Pre-Nursery: trays are never in Seedling Stock, so a
+     sale straight out of P30 read Unassigned and fell off the report the
+     moment any nursery chip was ticked, PN included, while Life of Seedlings
+     counts the same sale as the batch tray sale. The chip says PN. */
   const plotToLoc = {};
-  (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
+  (plotsRes.data || []).forEach(p => { plotToLoc[_mvPlotKey(p.plot_name)] = p.nursery_name || 'Unassigned'; });
+  const trayKeys = new Set(PRE_NURSERY_PLOTS.map(_mvPlotKey));
+  ((traysRes && traysRes.data) || []).forEach(t => { if (t.tray_name) trayKeys.add(_mvPlotKey(t.tray_name)); });
+  const locOf = (plot) => {
+    const k = _mvPlotKey(plot);
+    if (!k) return 'Unassigned';
+    if (trayKeys.has(k)) return 'PN';
+    return plotToLoc[k] || 'Unassigned';
+  };
 
   // ── Flatten every DO into its individual collection lines ──
   const lines = [];
@@ -5810,30 +5876,20 @@ async function runSalesListing() {
     // fix/comment in buildMovementSection/runTransplantingReport above).
     if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return; }
 
-    let filled = 0;
-    for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
-
     const al = d.al_number ? alByNumber[d.al_number] : null;
     const customer   = (al && al.customer_name) || d.remark || 'Unknown';
     const unitPrice  = al ? Number(al.price_per_unit || 0) : null;
 
-    for (let i = 1; i <= 5; i++) {
-      const plot = d[`plot_${i}`];
-      if (!String(plot || '').trim()) continue;
-      let qty = Number(d[`qty_${i}`] || 0);
-      // Same fallback the batch report's own Sales figure uses: a single-
-      // line DO whose per-line qty was never keyed reads its total instead.
-      const fallback = (!qty && filled === 1);
-      if (fallback) qty = Number(d.total_qty || 0);
-      if (!qty) continue;
-      const loc = plotToLoc[plot] || 'Unassigned';
-      if (selectedLocs.size && !selectedLocs.has(loc)) continue;
+    // The same lines the Chart adds up — see _doSaleLines().
+    _doSaleLines(d).forEach(ln => {
+      const loc = locOf(ln.plot);
+      if (selectedLocs.size && !selectedLocs.has(loc)) return;
       lines.push({
         date: d.delivery_date, customer, doNumber: d.do_number,
-        qty, nursery: loc, plot, batch: d[`batch_${i}`] || '—',
+        qty: ln.qty, nursery: loc, plot: ln.plot || '—', batch: ln.batch || '—',
         unitPrice
       });
-    }
+    });
   });
 
   loading.classList.add('hidden');

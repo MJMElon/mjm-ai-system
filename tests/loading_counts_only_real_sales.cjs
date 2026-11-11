@@ -113,7 +113,12 @@ check(/PlotMovement\.fetchAll\(\(\)\s*=>\s*_supabase\.from\('shared_do_records'\
 
 // ── 4. The Sales Listing side still holds the same three exclusions ────────
 const sl = rpSrc.slice(rpSrc.indexOf('async function runSalesListing'), rpSrc.indexOf('async function bootstrap'));
-check(/\^CAL-/.test(sl) && /\[CANCELLED\]/.test(sl) && /filled === 1.*total_qty|total_qty.*filled === 1/s.test(sl),
+// The single-line fallback moved into _doSaleLines(), the ONE reader both
+// Sales Listing views share (the Chart used to add up total_qty on its own).
+// So ask for the rule where it lives, and that Sales Listing goes through it.
+const dsl = rpSrc.slice(rpSrc.indexOf('function _doSaleLines'), rpSrc.indexOf('async function runSeedlingSales'));
+check(/\^CAL-/.test(sl) && /\[CANCELLED\]/.test(sl)
+      && /filled === 1.*total_qty|total_qty.*filled === 1/s.test(dsl) && /_doSaleLines\(d\)/.test(sl),
   'runSalesListing still excludes CAL- and cancelled DOs and keeps the single-line fallback — the rule the other two now share');
 
 console.log(fails ? `\n${fails} FAILED` : '\nall checks passed');
