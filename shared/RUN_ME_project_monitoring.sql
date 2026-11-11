@@ -21,10 +21,11 @@
 --   The e-mail compared is the one on the signed-in session, never the
 --   one on the profile row, because a person can edit their own row.
 --
--- THE SEED
---   The 54 tasks and the settings of the old tracker go in ONCE, on the
---   run that finds no settings row. A second run seeds nothing, so a
---   task somebody deleted does not come back.
+-- NO DATA IS IN THIS FILE
+--   It makes the tables and the rules and nothing else. No task, no
+--   project and no person is written by it: those are keyed in the
+--   module, and a run of this file over a tracker already in use
+--   touches none of what is there.
 -- ================================================================
 
 CREATE TABLE IF NOT EXISTS public.pms_tasks (
@@ -251,82 +252,6 @@ BEGIN
 END
 $do$;
 
--- ----------------------------------------------------------------
--- The seed, once: only on the run that finds no settings row
--- ----------------------------------------------------------------
-DO $do$
-BEGIN
-  IF EXISTS (SELECT 1 FROM public.pms_settings WHERE id = 'config') THEN RETURN; END IF;
-
-  INSERT INTO public.pms_settings (id, projects, priorities, types, team, updated_by)
-  VALUES ('config',
-    '[{"id": "p1", "name": "Nursery", "code": "N", "start": "2026-03-22", "duration": 365, "actualEnd": "", "modules": [{"name": "Customer Order Management", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Batch Records", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Seed Management", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Monthly Maintenance Work Schedule", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Monthly Maintenance Work Record", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Sales Web - Admin Portal", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Sales Web", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Payroll System", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Worker Portal - FC Portal", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Worker Portal - Worker Portal", "status": "Upcoming", "value": {}, "subs": []}, {"name": "Audit System", "status": "Upcoming", "value": {}, "subs": []}], "baForm": true, "expenses": []}, {"id": "p2", "name": "Machinery", "code": "M", "start": "2026-05-18", "duration": 180, "actualEnd": "", "modules": [], "baForm": false, "expenses": []}, {"id": "p3", "name": "NASA", "code": "NA", "start": "", "duration": 180, "actualEnd": "", "modules": [], "baForm": false, "expenses": []}, {"id": "p4", "name": "DIA", "code": "D", "start": "2026-05-18", "duration": 180, "actualEnd": "", "modules": [], "baForm": false, "expenses": []}, {"id": "p5", "name": "Others", "code": "Z", "start": "", "duration": 180, "actualEnd": "", "modules": [], "baForm": false, "expenses": []}]'::jsonb,
-    '["High", "Medium", "Low"]'::jsonb,
-    '["Mobile", "Web", "Mobile & Web"]'::jsonb,
-    '[{"id": "m1", "name": "Coco Lau", "email": "", "access": {"overview": "Normal", "board": "Normal", "timeline": "Normal", "list": "Normal", "requests": "Normal", "value": "Normal", "settings": "Normal"}}, {"id": "m2", "name": "Joyce Yii", "email": "", "access": {"overview": "Normal", "board": "Normal", "timeline": "Normal", "list": "Normal", "requests": "Normal", "value": "Normal", "settings": "Normal"}}, {"id": "m3", "name": "Esther Wong", "email": "", "access": {"overview": "Normal", "board": "Normal", "timeline": "Normal", "list": "Normal", "requests": "Normal", "value": "Normal", "settings": "Normal"}}, {"id": "m4", "name": "Ruth Wong", "email": "", "access": {"overview": "Normal", "board": "Normal", "timeline": "Normal", "list": "Normal", "requests": "Normal", "value": "Normal", "settings": "Normal"}}, {"id": "m5", "name": "Ken Tan", "email": "", "access": {"overview": "Normal", "board": "Normal", "timeline": "Normal", "list": "Normal", "requests": "Normal", "value": "Normal", "settings": "Normal"}}, {"id": "m6", "name": "Ms Chai", "email": "", "access": {"overview": "Normal", "board": "Normal", "timeline": "Normal", "list": "Normal", "requests": "Normal", "value": "Normal", "settings": "Normal"}}]'::jsonb,
-    'Seed');
-
-  INSERT INTO public.pms_tasks
-    (id, project, type, name, priority, status, assignees, start_date, due_date, end_date, link, notes, sort_order)
-  VALUES
-    ('t001', 'Nursery', 'Web', 'Modify - Batch Report ver 2.0', 'High', 'Complete', '["Esther Wong"]'::jsonb, DATE '2026-09-10', DATE '2026-09-15', DATE '2026-09-19', '', '', 1),
-    ('t002', 'Nursery', 'Web', 'Batch Report Checklist', 'Low', 'Complete', '["Esther Wong"]'::jsonb, DATE '2026-09-19', DATE '2026-09-24', DATE '2026-09-19', '', '', 2),
-    ('t003', 'Nursery', 'Mobile', 'Modify - Nursery FC view ver 3.0 (PALMS)', 'High', 'Complete', '["Esther Wong"]'::jsonb, DATE '2026-09-10', DATE '2026-09-15', DATE '2026-09-15', '', '', 3),
-    ('t004', 'Nursery', 'Mobile', 'FC Portal - Scanner', 'High', 'In Progress', '["Joyce Yii"]'::jsonb, DATE '2026-09-11', DATE '2026-09-16', NULL, '', '', 4),
-    ('t005', 'Nursery', 'Web', 'Nursery Payroll System ver 2.0 (Maintenance & Transplanting)', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-09-28', DATE '2026-10-03', DATE '2026-09-30', '', '', 5),
-    ('t006', 'Nursery', 'Web', 'Customer Order Management', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-03-22', DATE '2026-03-27', DATE '2026-03-26', 'https://mjmelon.github.io/MJMNurseryAI/', '', 6),
-    ('t007', 'Nursery', 'Web', 'Batch Record', 'Low', 'Complete', '["Coco Lau", "Ruth Wong"]'::jsonb, DATE '2026-03-30', DATE '2026-04-04', DATE '2026-04-08', 'https://ai.mjmnursery.com/index.html', '', 7),
-    ('t008', 'Nursery', 'Web', 'Customer Collection DO generate & Signature', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-09', DATE '2026-04-14', DATE '2026-04-10', 'https://mobile.mjmnursery.com/', '', 8),
-    ('t009', 'Nursery', 'Web', 'Customer Consent Signature', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-10', DATE '2026-04-15', DATE '2026-04-11', 'https://mobile.mjmnursery.com/', '', 9),
-    ('t010', 'Nursery', 'Mobile & Web', 'Collection Time Slot Booking (For Internal and External)', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-11', DATE '2026-04-16', DATE '2026-04-11', 'For External : https://collect.mjmnursery.com/' || chr(10) || 'For Internal : https://mobile.mjmnursery.com/', '', 10),
-    ('t011', 'Nursery', 'Web', 'MJM Nursery Sales Website (Full stack)', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-11', DATE '2026-04-16', DATE '2026-04-15', 'https://www.mjmnursery.com/', '', 11),
-    ('t012', 'Nursery', 'Web', 'MJM Nursery Sales Website (User Interface)', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-17', DATE '2026-04-22', DATE '2026-04-18', 'https://www.mjmnursery.com/', '', 12),
-    ('t013', 'Nursery', 'Web', 'Customer Portal', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-14', DATE '2026-04-19', DATE '2026-04-15', 'https://www.mjmnursery.com/', '', 13),
-    ('t014', 'Nursery', 'Web', 'Admin Portal', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-14', DATE '2026-04-19', DATE '2026-04-15', 'https://www.mjmnursery.com/admin.html', '', 14),
-    ('t015', 'Nursery', 'Web', 'Points System', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-15', DATE '2026-04-20', DATE '2026-04-15', 'https://www.mjmnursery.com/', '', 15),
-    ('t016', 'Nursery', 'Web', 'Payment Gateway', 'Low', 'Complete', '["Coco Lau", "Joyce Yii"]'::jsonb, DATE '2026-04-14', DATE '2026-04-19', DATE '2026-04-15', 'https://www.mjmnursery.com/', '', 16),
-    ('t017', 'Nursery', 'Mobile & Web', 'Audit System (Seedling condition & height)', 'Low', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-04-14', DATE '2026-04-19', DATE '2026-04-16', 'https://ai.mjmnursery.com/audit/audit_home.html', '', 17),
-    ('t018', 'Nursery', 'Mobile & Web', 'Siram Go! (watering)', 'Low', 'Complete', '["Ken Tan"]'::jsonb, DATE '2026-04-14', DATE '2026-04-19', DATE '2026-04-20', 'https://mjmelon.github.io/watering-log/', '', 18),
-    ('t019', 'Nursery', 'Mobile & Web', 'Stock Inventory', 'Low', 'On Hold', '["Esther Wong", "Ruth Wong"]'::jsonb, NULL, NULL, NULL, '', '', 19),
-    ('t020', 'Nursery', 'Web', 'Nursery Plot Manitenance System', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-07-27', DATE '2026-08-01', DATE '2026-07-30', 'https://ai.mjmnursery.com/nursery_ops/nursery_ops_maintenance.html', '', 20),
-    ('t021', 'Nursery', 'Web', 'Nursery Payroll System (Structure of system)', 'Low', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-08-05', DATE '2026-08-10', DATE '2026-08-08', '', '', 21),
-    ('t022', 'Nursery', 'Mobile', 'Nursery Plot Manitenance - Worker Portal', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-08-24', DATE '2026-08-29', DATE '2026-08-28', 'https://ai.mjmnursery.com/scan/scan_admin.html', '', 22),
-    ('t023', 'Nursery', 'Mobile', 'Nursery FC view (Barcode Scanner (Seal System)/DO)', 'High', 'Complete', '["Coco Lau"]'::jsonb, DATE '2026-07-13', DATE '2026-07-18', DATE '2026-07-17', 'https://scan.mjmnursery.com/?cb=1788487942212#/dashboard', '', 23),
-    ('t024', 'Nursery', 'Mobile', 'Nursery FC view (PALMS/culling calculator)', 'High', 'Complete', '["Esther Wong"]'::jsonb, DATE '2026-08-17', DATE '2026-08-22', DATE '2026-08-21', 'https://scan.mjmnursery.com/?cb=1788487942212#/dashboard', '', 24),
-    ('t025', 'Nursery', 'Mobile', 'Nursery FC view (Stock Taken)', 'Low', 'Not Started', '["Esther Wong"]'::jsonb, NULL, NULL, NULL, '', '', 25),
-    ('t026', 'Nursery', 'Mobile', 'Nursery FC view (Plot Maintenance)', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-08-17', DATE '2026-08-22', DATE '2026-08-20', 'https://scan.mjmnursery.com/?cb=1788487942212#/dashboard', '', 26),
-    ('t027', 'Nursery', 'Web', 'Nursery Seedlings Counting', 'Medium', 'Not Started', '["Esther Wong", "Coco Lau"]'::jsonb, NULL, NULL, NULL, '', '', 27),
-    ('t028', 'Nursery', 'Web', 'R&D', 'Low', 'Not Started', '["Esther Wong", "Coco Lau"]'::jsonb, NULL, NULL, NULL, '', '', 28),
-    ('t029', 'Nursery', 'Web', 'Nursery Bible', 'Low', 'On Hold', '["Coco Lau", "Ruth Wong"]'::jsonb, DATE '2026-06-07', DATE '2026-06-12', DATE '2026-06-08', '', '', 29),
-    ('t030', 'Nursery', 'Mobile', 'Use phone number as signup', 'Low', 'In Progress', '["Coco Lau"]'::jsonb, DATE '2026-08-10', DATE '2026-08-15', NULL, '', '', 30),
-    ('t031', 'Nursery', 'Web', 'Nursery Seedlings Stock Summary (Batch record & DO record complete & correct)', 'High', 'Complete', '["Joyce Yii", "Ruth Wong"]'::jsonb, DATE '2026-08-17', DATE '2026-08-22', DATE '2026-09-19', '', '', 31),
-    ('t032', 'NASA', 'Mobile & Web', 'Night watchman', 'Low', 'In Progress', '["Ms Chai", "Ruth Wong"]'::jsonb, DATE '2026-08-21', DATE '2026-08-26', NULL, '', '', 32),
-    ('t033', 'Nursery', 'Mobile & Web', 'Modify - Audit System', 'High', 'Complete', '["Joyce Yii"]'::jsonb, DATE '2026-08-17', DATE '2026-08-22', DATE '2026-08-22', 'https://ai.mjmnursery.com/audit/audit_home.html', '', 33),
-    ('t034', 'NASA', 'Web', 'NASA system', 'Low', 'Not Started', '[]'::jsonb, NULL, NULL, NULL, '', '', 34),
-    ('t035', 'NASA', 'Web', 'Piece rate monitoring', 'Low', 'Not Started', '[]'::jsonb, NULL, NULL, NULL, '', '', 35),
-    ('t036', 'DIA', 'Web', 'Vibe Tracker', 'Low', 'Complete', '["Ken Tan"]'::jsonb, DATE '2026-04-15', DATE '2026-04-20', DATE '2026-04-18', '', '', 36),
-    ('t037', 'DIA', 'Web', 'DIA system', 'Low', 'Not Started', '[]'::jsonb, NULL, NULL, NULL, '', '', 37),
-    ('t038', 'DIA', 'Mobile & Web', 'Dronedeploy - Palm Counting', 'Low', 'Not Started', '["Coco Lau"]'::jsonb, NULL, NULL, NULL, '', '', 38),
-    ('t039', 'Machinery', 'Web', 'Work Maintenance Record + Payroll Form', 'Low', 'Complete', '["Ken Tan"]'::jsonb, NULL, NULL, NULL, '', '', 39),
-    ('t040', 'Machinery', 'Mobile & Web', 'Service request system', 'High', 'In Progress', '["Ken Tan"]'::jsonb, NULL, NULL, NULL, '', '', 40),
-    ('t041', 'Machinery', 'Mobile & Web', 'Diesel record', 'Low', 'Not Started', '[]'::jsonb, NULL, NULL, NULL, '', '', 41),
-    ('t042', 'Machinery', 'Mobile & Web', 'Machinery CMMS - machinery registration', 'High', 'In Progress', '["Ken Tan"]'::jsonb, DATE '2026-08-24', DATE '2026-08-29', NULL, '', '', 42),
-    ('t043', 'Others', 'Web', 'Leadership Training', 'Low', 'In Progress', '["Coco Lau"]'::jsonb, NULL, NULL, NULL, '', '', 43),
-    ('t044', 'Machinery', 'Mobile', 'GAIA system for maintenance record', 'Medium', 'Complete', '["Ken Tan"]'::jsonb, DATE '2026-08-12', DATE '2026-08-17', DATE '2026-08-14', 'https://mjmelon.github.io/MachTrek/#/login', '', 44),
-    ('t045', 'Machinery', 'Mobile & Web', 'Machinery CMMS - monthly SMU record', 'Low', 'In Progress', '["Ken Tan"]'::jsonb, DATE '2026-08-24', DATE '2026-08-28', NULL, '', '', 45),
-    ('t046', 'Nursery', 'Mobile & Web', 'Nursery Carlos System (Neslo)', 'High', 'Complete', '["Coco Lau"]'::jsonb, DATE '2026-08-24', DATE '2026-08-28', DATE '2026-08-27', 'https://ai.mjmnursery.com/nelos/nelos_dashboard.html', '', 46),
-    ('t047', 'Nursery', 'Web', 'Nursery Audit - User Setting / System Setting', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-08-24', DATE '2026-08-28', DATE '2026-08-25', 'https://ai.mjmnursery.com/audit/audit_home.html', '', 47),
-    ('t048', 'Nursery', 'Mobile', 'Modify - Nursery FC view (Plot Maintenance)', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-08-24', DATE '2026-08-28', DATE '2026-08-27', 'https://scan.mjmnursery.com/?cb=1788487942212#/dashboard', '', 48),
-    ('t049', 'Nursery', 'Mobile', 'Modify - Nursery FC view (PALMS/culling calculator)', 'High', 'Complete', '["Esther Wong"]'::jsonb, DATE '2026-08-24', DATE '2026-08-28', DATE '2026-08-28', 'https://scan.mjmnursery.com/?cb=1788487942212#/dashboard', '', 49),
-    ('t050', 'Nursery', 'Mobile & Web', 'Modify - Audit System ver 2.0', 'High', 'Complete', '["Joyce Yii"]'::jsonb, DATE '2026-08-24', DATE '2026-08-28', DATE '2026-08-28', 'https://ai.mjmnursery.com/audit/audit_home.html', '', 50),
-    ('t051', 'Nursery', 'Mobile', 'Modify - Nursery Plot Manitenance (Worker Portal) ver. 2.0', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-08-28', DATE '2026-09-01', DATE '2026-08-30', 'https://scan.mjmnursery.com/?cb=1788487963839#/worker', '', 51),
-    ('t052', 'Nursery', 'Mobile & Web', 'Audit System Offline function', 'High', 'Complete', '["Joyce Yii"]'::jsonb, DATE '2026-08-28', DATE '2026-09-01', DATE '2026-08-31', 'https://ai.mjmnursery.com/audit/audit_home.html', '', 52),
-    ('t053', 'Nursery', 'Mobile', 'Modify - Nursery FC view (Plot Maintenance) ver 2.0', 'High', 'Complete', '["Ruth Wong"]'::jsonb, DATE '2026-08-28', DATE '2026-09-01', DATE '2026-08-29', 'https://scan.mjmnursery.com/?cb=1788487942212#/dashboard', '', 53),
-    ('t054', 'Nursery', 'Mobile', 'Modify - Nursery FC view ver 2.0 (PALMS/culling calculator)', 'High', 'Complete', '["Esther Wong", "Coco Lau"]'::jsonb, DATE '2026-08-28', DATE '2026-09-01', DATE '2026-08-31', 'https://scan.mjmnursery.com/?cb=1788487942212#/dashboard', '', 54)
-  ON CONFLICT (id) DO NOTHING;
-END
-$do$;
-
 NOTIFY pgrst, 'reload schema';
 
 -- ----------------------------------------------------------------
@@ -335,15 +260,13 @@ NOTIFY pgrst, 'reload schema';
 --   2  row level security     3 of 3
 --   3  policies               11
 --   4  team guard trigger     installed
---   5  tasks                  54 on the first run, then whatever is there
---   6  settings row           present, with 5 projects and 6 people on
---                             the first run
---   7  who holds the module   0 Admin and 0 Normal until somebody is
---                             given it on the portal User Access page.
---                             That is correct on the first run, and it
---                             is the next thing to do
---   8  team linked to a login 0 of 6 on the first run. Link each person
---                             in the module, Settings, Team
+--   5  tasks                  whatever is there. This file adds none
+--   6  settings row           present once Settings has been saved in
+--                             the module, and "not saved yet" before
+--   7  who holds the module   who was given it on the portal User
+--                             Access page
+--   8  team linked to a login how many people in Settings, Team have
+--                             their login picked
 -- ----------------------------------------------------------------
 SELECT n AS "#", item, result FROM (
   SELECT 1 AS n, 'tables' AS item,
@@ -369,7 +292,7 @@ SELECT n AS "#", item, result FROM (
   SELECT 6, 'settings row',
          COALESCE((SELECT 'present, ' || jsonb_array_length(s.projects)::text || ' projects, '
                           || jsonb_array_length(s.team)::text || ' people'
-                     FROM public.pms_settings s WHERE s.id = 'config'), 'MISSING')
+                     FROM public.pms_settings s WHERE s.id = 'config'), 'not saved yet')
   UNION ALL
   SELECT 7, 'who holds the module',
          (SELECT count(*) FILTER (WHERE lower(sp.permissions -> 'modules' ->> 'pms') = 'admin')::text || ' Admin, '

@@ -279,6 +279,36 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     is(/'pms'/.test(mods) && /id="d-mod-pms"/.test(ua), true, 'and User Access can grant it');
   }
 
+  console.log('\n7b. Nothing is preset in code');
+  {
+    // A database nobody has keyed anything into: no settings row, no task.
+    const page = await browser.newPage();
+    await page.route('**/*', (r) => r.request().url().startsWith('http://localhost:' + port) ? r.continue() : r.fulfill({ status: 200, body: '' }));
+    await page.route('**cdn.jsdelivr.net/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_SUPABASE }));
+    await page.addInitScript(() => {
+      window.__FAKE_SESSION = { access_token: 'x', user: { id: 'u1', email: 'boss@mjm.test', user_metadata: {} } };
+      window.__FAKE_PROFILE = { id: 'u1', email: 'boss@mjm.test', full_name: 'The Boss', user_type: 'system', permissions: { modules: { pms: 'admin' } } };
+      window.__ROWS = { pms_settings: [], pms_tasks: [], pms_task_requests: [], shared_profiles: [] };
+    });
+    await page.goto('http://localhost:' + port + '/pms/pms_dashboard.html#settings', { waitUntil: 'domcontentloaded' });
+    const d = await drawn(page);
+    is(!!d, true, 'an empty database still draws');
+    const got = await page.evaluate(() => ({
+      projects: [...document.querySelectorAll('#fProject option')].map((o) => o.value).filter(Boolean),
+      people: [...document.querySelectorAll('#fPerson option')].map((o) => o.value).filter(Boolean),
+      seed: typeof window.SEED_SETTINGS + '/' + typeof window.SEED_TASKS,
+    }));
+    is(got, { projects: [], people: [], seed: 'undefined/undefined' }, 'with no project, no person and no seed of either');
+    await page.close();
+
+    is(fs.existsSync(path.join(ROOT, 'pms/pms_data.js')), false, 'there is no data file beside the app');
+    const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    const app = strip(fs.readFileSync(path.join(ROOT, 'pms/pms_app.js'), 'utf8'));
+    is(/SEED_|Coco Lau|Ruth Wong|"Nursery"|'Nursery'/.test(app), false, 'the app names no person and no project');
+    const sql = fs.readFileSync(path.join(ROOT, 'shared/RUN_ME_project_monitoring.sql'), 'utf8');
+    is(/INSERT\s+INTO\s+public\.pms_/i.test(sql), false, 'and the SQL writes no row into any of the three tables');
+  }
+
   console.log('\n8. The hub shows the tile only to a login holding the module');
   for (const [pms, want] of [[undefined, 'none'], ['normal', 'shown']]) {
     const page = await open(browser, port, { email: 'x@mjm.test', name: 'X', pms }, 'index.html');

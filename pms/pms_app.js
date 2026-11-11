@@ -2,7 +2,8 @@
 const STATUSES = ["Not Started","In Progress","On Hold","Complete","Cancelled"];
 const SCLS = {"Urgent":"st-ug","Not Started":"st-ns","In Progress":"st-ip","On Hold":"st-oh","Complete":"st-ok","Cancelled":"st-cx"};
 const SVAR = {"Urgent":"--s-ug","Not Started":"--s-ns","In Progress":"--s-ip","On Hold":"--s-oh","Complete":"--s-ok","Cancelled":"--s-cx"};
-// Projects, team, types and priorities come from the Settings tab (pms_data.js is only what a database with no settings row starts from).
+// Projects, team, types and priorities come from the Settings tab, which is the one pms_settings row. NOTHING is preset
+// here: no project, no person, no list. A database with no settings row is an empty tracker, and the Settings tab fills it.
 let SETTINGS, PROJECTS = [], TEAM = [], TYPES = [], PRIS = [];
 // Project modules are milestones: {name, status} with status Upcoming / In Progress / Complete.
 const MSTAT = ["Upcoming","In Progress","Complete"];
@@ -58,7 +59,7 @@ function applySettings(s){
   TYPES = SETTINGS.types.filter(Boolean);
   PRIS = SETTINGS.priorities.filter(Boolean);
 }
-applySettings(window.SEED_SETTINGS);
+applySettings(null);
 
 const $ = s => document.querySelector(s);
 const el = (tag, attrs={}, ...kids) => {
@@ -1486,7 +1487,7 @@ function renderRequests(){
 function watchSettings(db){
   db.collection("settings").onSnapshot(snap => {
     const doc = snap.docs.find(d => d.id === "config");
-    applySettings(doc ? doc.data() : window.SEED_SETTINGS);
+    applySettings(doc ? doc.data() : null);
     applyAccess(); refreshPickers(); render();
   }, () => {});
 }

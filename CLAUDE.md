@@ -8424,10 +8424,17 @@ So there are two layers, and they are the house pattern:
 - **The tables are `pms_tasks`, `pms_settings`, `pms_task_requests`** in
   the portal's own project. The app still speaks of `tasks` / `settings` /
   `task_requests`; `TBL` is the one map.
-- **The seed is the 54 tasks of the file handed over**, inserted once, on
-  the run that finds no settings row. The old tracker's own Supabase
-  project could not be reached from here, so anything keyed there after
-  that file was exported is not in it.
+- **NOTHING IS PRESET IN CODE.** The first version carried the old
+  tracker's projects, team and lists in a `pms_data.js` and its 54 tasks in
+  the SQL, and the office asked for both out: *"the details in settings and
+  tasks should not be preset in code"*. So there is no data file, the app
+  starts from `applySettings(null)`, and the SQL makes tables and rules and
+  writes no row. **What was already seeded stayed where it is** — the 54
+  tasks and the settings row were in the database by then, and taking a
+  preset out of the code deletes nothing. A database with no settings row
+  is an empty tracker that the Settings tab fills. Statuses are the one
+  list still in code, because the board columns and the overdue rules are
+  written against them.
 
 `tests/project_monitoring_uses_the_portal_login.cjs` drives the real page.
 Its stub **fires `onAuthStateChange`**, because the hub gates its tiles
