@@ -7,17 +7,23 @@
 --
 -- WHAT IT MAKES
 --   pms_tasks           one row per task
---   pms_settings        one row, id config: projects, team, lists, rates
+--   pms_settings        one row, id config: projects, lists, rates and
+--                       the tabs opened or closed for one person
 --   pms_task_requests   one row per request for a task
 --
 -- WHO MAY DO WHAT, and the database decides it, not only the screen
---   The login is the MJM AI system own login (shared_profiles). The
---   module is opened to a person on the portal User Access page:
---     Admin   is Admin on every tab
---     Normal  gets the level set against their row in Settings, Team,
---             where the row is tied to the login by e-mail. A person
---             nobody has linked there can look, and request a task
+--   The login is the MJM AI system own login (shared_profiles), and
+--   THERE IS NO TEAM LIST. The people of the module are the staff
+--   accounts holding it on the portal User Access page, and what a
+--   person holds there is their level on every tab:
+--     Admin   may add, edit and delete on every tab
+--     Normal  may look at every tab, and request a task
 --     none    sees nothing at all, and neither does a customer
+--   Settings, User access can then open or close ONE tab for ONE
+--   person. Only those differences are stored, by e-mail, in the team
+--   column of the settings row. A tab that is not named there follows
+--   User Access. A module Admin always keeps Settings, because that is
+--   the tab that hands out the rest.
 --   The e-mail compared is the one on the signed-in session, never the
 --   one on the profile row, because a person can edit their own row.
 --
@@ -72,7 +78,7 @@ CREATE TABLE IF NOT EXISTS public.pms_task_requests (
 
 -- ----------------------------------------------------------------
 -- The level this login has on one tab: Admin, Normal or None.
--- The same answer pms_app.js works out for the screen (applyAccess).
+-- The same answer pms_app.js works out for the screen (accessFor).
 -- Change one, change the other.
 -- ----------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.pms_tab_level(p_tab text)
@@ -83,7 +89,6 @@ AS $fn$
 DECLARE
   lvl  text;
   mail text;
-  acc  jsonb;
   v    text;
 BEGIN
   SELECT lower(COALESCE(sp.permissions -> 'modules' ->> 'pms', 'none'))
@@ -92,28 +97,50 @@ BEGIN
    WHERE sp.id = auth.uid()
      AND COALESCE(sp.user_type, 'system') <> 'customer';
   IF NOT FOUND OR lvl NOT IN ('admin', 'normal') THEN RETURN 'None'; END IF;
-  IF lvl = 'admin' THEN RETURN 'Admin'; END IF;
+  IF lvl = 'admin' AND p_tab = 'settings' THEN RETURN 'Admin'; END IF;
 
+  -- one tab opened or closed for this person in Settings, User access
   mail := lower(btrim(COALESCE(auth.jwt() ->> 'email', '')));
   IF mail <> '' THEN
-    SELECT m.val -> 'access'
-      INTO acc
+    SELECT m.val -> 'access' ->> p_tab
+      INTO v
       FROM public.pms_settings s
       CROSS JOIN LATERAL jsonb_array_elements(
              CASE WHEN jsonb_typeof(s.team) = 'array' THEN s.team ELSE '[]'::jsonb END) AS m(val)
      WHERE s.id = 'config'
        AND lower(btrim(COALESCE(m.val ->> 'email', ''))) = mail
      LIMIT 1;
-    IF FOUND THEN
-      v := acc ->> p_tab;
-      IF v IN ('Admin', 'Normal', 'None') THEN RETURN v; END IF;
-      RETURN 'Normal';
-    END IF;
+    IF v IN ('Admin', 'Normal', 'None') THEN RETURN v; END IF;
   END IF;
 
-  -- let into the module, linked to no row in Team: may look and may request
-  IF p_tab = 'settings' THEN RETURN 'None'; END IF;
+  -- nothing said about this tab: what they hold on User Access
+  IF lvl = 'admin' THEN RETURN 'Admin'; END IF;
   RETURN 'Normal';
+END
+$fn$;
+
+-- ----------------------------------------------------------------
+-- Who is in the module: every staff account holding it on User
+-- Access. They are who a task can be assigned to, and the list on
+-- Settings, User access. Answered only to a login that may open the
+-- module, because not every login may read every profile.
+-- ----------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.pms_people()
+RETURNS TABLE (email text, full_name text, level text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $fn$
+BEGIN
+  IF NOT public.pms_can_open() THEN RETURN; END IF;
+  RETURN QUERY
+    SELECT lower(btrim(sp.email))::text,
+           COALESCE(sp.full_name, '')::text,
+           lower(sp.permissions -> 'modules' ->> 'pms')::text
+      FROM public.shared_profiles sp
+     WHERE COALESCE(sp.user_type, 'system') <> 'customer'
+       AND btrim(COALESCE(sp.email, '')) <> ''
+       AND lower(COALESCE(sp.permissions -> 'modules' ->> 'pms', 'none')) IN ('admin', 'normal')
+     ORDER BY 2, 1;
 END
 $fn$;
 
@@ -147,15 +174,21 @@ $fn$;
 REVOKE ALL ON FUNCTION public.pms_tab_level(text)   FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.pms_can_open()        FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.pms_can_edit_tasks()  FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.pms_people()          FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.pms_tab_level(text)  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.pms_can_open()       TO authenticated;
 GRANT EXECUTE ON FUNCTION public.pms_can_edit_tasks() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.pms_people()         TO authenticated;
 
 -- ----------------------------------------------------------------
 -- The settings row is saved whole, by the Settings tab and by the
--- Value analysis tab alike. Who is in the team and what each of them
--- may do is the Settings tab alone, so a save that moves a login or a
--- level is refused unless the saver is Admin on Settings.
+-- Value analysis tab alike. Which tabs are opened or closed for a
+-- person is the Settings tab alone, so a save that moves one of them
+-- is refused unless the saver is Admin on Settings.
+-- A row with no e-mail is from when this column was a list of names.
+-- It ties to no login and the page drops it on its next save, so it
+-- is left out of the comparison, or that save would be refused to
+-- somebody who changed nothing about anybody.
 -- A run from the SQL Editor has no login and is let through.
 -- ----------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.pms_team_access_of(p_team jsonb)
@@ -168,6 +201,7 @@ AS $fn$
                   '[]'::jsonb)
     FROM jsonb_array_elements(
            CASE WHEN jsonb_typeof(p_team) = 'array' THEN p_team ELSE '[]'::jsonb END) AS m(val)
+   WHERE btrim(COALESCE(m.val ->> 'email', '')) <> ''
 $fn$;
 
 CREATE OR REPLACE FUNCTION public.pms_guard_team()
@@ -182,7 +216,7 @@ BEGIN
     RETURN NEW;
   END IF;
   IF public.pms_tab_level('settings') <> 'Admin' THEN
-    RAISE EXCEPTION 'Only an Admin on Settings may change who is in the team or their access'
+    RAISE EXCEPTION 'Only an Admin on Settings may change what a person can open'
       USING ERRCODE = '42501';
   END IF;
   RETURN NEW;
@@ -255,7 +289,7 @@ $do$;
 NOTIFY pgrst, 'reload schema';
 
 -- ----------------------------------------------------------------
--- THE CHECK. One result, eight lines, and what each should read:
+-- THE CHECK. One result, nine lines, and what each should read:
 --   1  tables                 3 of 3
 --   2  row level security     3 of 3
 --   3  policies               11
@@ -264,9 +298,13 @@ NOTIFY pgrst, 'reload schema';
 --   6  settings row           present once Settings has been saved in
 --                             the module, and "not saved yet" before
 --   7  who holds the module   who was given it on the portal User
---                             Access page
---   8  team linked to a login how many people in Settings, Team have
---                             their login picked
+--                             Access page. These are the people of
+--                             the module and who a task is assigned to
+--   8  tabs changed in        how many people have a tab opened or
+--      Settings               closed differently from User Access.
+--                             0 is a good answer: everybody follows
+--                             what they hold there
+--   9  people function        installed
 -- ----------------------------------------------------------------
 SELECT n AS "#", item, result FROM (
   SELECT 1 AS n, 'tables' AS item,
@@ -291,7 +329,8 @@ SELECT n AS "#", item, result FROM (
   UNION ALL
   SELECT 6, 'settings row',
          COALESCE((SELECT 'present, ' || jsonb_array_length(s.projects)::text || ' projects, '
-                          || jsonb_array_length(s.team)::text || ' people'
+                          || jsonb_array_length(s.priorities)::text || ' priorities, '
+                          || jsonb_array_length(s.types)::text || ' types'
                      FROM public.pms_settings s WHERE s.id = 'config'), 'not saved yet')
   UNION ALL
   SELECT 7, 'who holds the module',
@@ -299,11 +338,14 @@ SELECT n AS "#", item, result FROM (
               || count(*) FILTER (WHERE lower(sp.permissions -> 'modules' ->> 'pms') = 'normal')::text || ' Normal'
             FROM public.shared_profiles sp WHERE COALESCE(sp.user_type, 'system') <> 'customer')
   UNION ALL
-  SELECT 8, 'team linked to a login',
-         COALESCE((SELECT count(*) FILTER (WHERE btrim(COALESCE(m.val ->> 'email', '')) <> '')::text
-                          || ' of ' || count(*)::text
+  SELECT 8, 'tabs changed in Settings',
+         COALESCE((SELECT count(*) FILTER (WHERE btrim(COALESCE(m.val ->> 'email', '')) <> '')::text || ' people'
                      FROM public.pms_settings s
-                     CROSS JOIN LATERAL jsonb_array_elements(s.team) AS m(val)
-                    WHERE s.id = 'config'), '0 of 0')
+                     CROSS JOIN LATERAL jsonb_array_elements(
+                            CASE WHEN jsonb_typeof(s.team) = 'array' THEN s.team ELSE '[]'::jsonb END) AS m(val)
+                    WHERE s.id = 'config'), '0 people')
+  UNION ALL
+  SELECT 9, 'people function',
+         CASE WHEN to_regprocedure('public.pms_people()') IS NOT NULL THEN 'installed' ELSE 'MISSING' END
 ) x
 ORDER BY n;

@@ -8397,27 +8397,45 @@ So there are two layers, and they are the house pattern:
 
 | Where | Question |
 |---|---|
-| hub → User Access → Project Monitoring System (`modules.pms`) | may this person open it at all. **Admin** is Admin on every tab |
-| the module → Settings → Team / User access | what a **Normal** person may do on each tab |
+| hub → User Access → Project Monitoring System (`modules.pms`) | may this person open it at all, and their level on **every** tab: Admin, or Normal (view only) |
+| the module → Settings → User access | one tab opened or closed differently for one person |
 
-- **A LOGIN IS TIED TO A TEAM ROW BY E-MAIL, NEVER BY NAME.** Tasks name
-  their assignees as text ("Ruth Wong"), so the Team list stays; each row
-  carries the `email` of an MJM AI account. A profile's `full_name` is the
-  one thing its owner can edit, so matching on it would let anybody take a
-  colleague's access by renaming themselves. For the same reason the
-  database compares the e-mail **on the session** (`auth.jwt()`), not the
-  one on the profile row.
-- **Let in and linked to nobody** is view-only plus requesting a task, with
-  Settings closed. The old "everyone is Admin until somebody is" is gone:
-  the module Admin is the bootstrap now.
+- **THERE IS NO TEAM LIST, and there was one for a day.** It was a list of
+  names each linked to a login by hand, and the office asked for it out:
+  *"remove the team as the assignee will be the user who get accessed for
+  this module"*. The people ARE the staff accounts holding the module
+  (`pms_people()`, a SECURITY DEFINER function because not every login may
+  read every profile; the page falls back to reading `shared_profiles`
+  where it is not installed, and always adds the login itself). They are
+  the assignee tick list and the rows of Settings → User access. To add or
+  remove a person, change their module level on User Access.
+- **ONLY THE DIFFERENCE IS STORED.** `pms_settings.team` kept its name and
+  now holds `[{email, access:{tab: level}}]` for the tabs that differ from
+  a person's module level, and nothing for anybody who follows it — so a
+  person raised or lowered on User Access moves here without anybody
+  re-keying seven tabs. A row with no e-mail is from the old list, ties to
+  no login, and is dropped on the next save; `pms_team_access_of` leaves
+  such rows out of its comparison, or that save would be refused to a
+  Value analysis Admin who changed nothing about anybody.
+- **AN OVERRIDE IS FOUND BY E-MAIL, NEVER BY NAME.** A profile's
+  `full_name` is the one thing its owner can edit, so matching on it would
+  let anybody take a colleague's access by renaming themselves. The
+  database compares the e-mail **on the session** (`auth.jwt()`).
+- **A MODULE ADMIN ALWAYS KEEPS SETTINGS.** Any other tab can be closed on
+  one; Settings is the tab that hands out the rest, so closing it on the
+  last Admin would leave nobody able to open anything again. Asked in both
+  copies of the rule and the select is disabled in the sheet.
+- **A TASK NAMES ITS ASSIGNEES AS TEXT**, the profile's full name. A person
+  renamed on their profile keeps their old name on their old tasks —
+  nothing carries a rename over any more, because nothing here knows one
+  happened. An assignee who no longer holds the module stays visible on
+  the task.
 - **THE DATABASE DECIDES IT TOO.** `pms_tab_level(tab)` in
-  `shared/RUN_ME_project_monitoring.sql` is `applyAccess()` in
+  `shared/RUN_ME_project_monitoring.sql` is `accessFor()` in
   `pms/pms_app.js`, asked by the policies. Change one, change the other.
   The settings row is saved WHOLE by two tabs (Settings and Value
-  analysis), so a trigger (`pms_guard_team`) refuses a save that moves a
-  login or a level unless the saver is Admin on Settings — and it compares
-  only e-mail and access, so the seed is written in exactly the shape the
-  page saves.
+  analysis), so a trigger (`pms_guard_team`) refuses a save that moves an
+  override unless the saver is Admin on Settings.
 - **`PMS_READY` is the seam.** The page resolves it only for staff holding
   the module; `pms_app.js` awaits it and draws nothing before, and
   `body[data-boot]` keeps the shell hidden meanwhile.

@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="pms_styles.css?v=20261111b">
+<link rel="stylesheet" href="pms_styles.css?v=20261111c">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
@@ -93,27 +93,38 @@ window.PMS_READY = (async () => {
   const u = MJMAccess.user();
   if (!u || !MJMAccess.canAccess('pms')) { window.location.replace('../index.html'); return never; }
 
-  /* The accounts a Team row can be linked to. Only a login that may read
-     everybody's profile gets a list. Anybody else gets none, and Settings
-     falls back to a typed e-mail, so a failed read costs a dropdown and
-     nothing else. Customers are not staff and are never offered. */
-  let profiles = [];
+  /* WHO IS IN THE MODULE. There is no team list kept here: the people are
+     the staff accounts holding `pms` on the hub User Access page, and they
+     are who a task can be assigned to. pms_people() answers for any login
+     that may open the module (shared/RUN_ME_project_monitoring.sql). On a
+     database that has not had it run, the profiles are read directly,
+     which answers only for a login allowed to read everybody's row. No
+     list costs the pickers and nothing else: this login is always added
+     by pms_app.js, and a customer is never staff and never listed. */
+  const lvOf = v => { v = String(v || '').toLowerCase(); return v === 'admin' || v === 'normal' ? v : ''; };
+  const person = (email, name, level) => ({ email: String(email || '').trim().toLowerCase(), name: String(name || '').trim(), level: lvOf(level) });
+  let people = [];
   try {
-    const r = await _supabase.from('shared_profiles').select('email, full_name, user_type');
-    if (!r.error) profiles = (r.data || [])
-      .filter(p => p.email && String(p.user_type || 'system') !== 'customer')
-      .map(p => ({ email: String(p.email).trim().toLowerCase(), full_name: p.full_name || '' }));
+    const r = await _supabase.rpc('pms_people');
+    if (!r.error && Array.isArray(r.data)) people = r.data.map(p => person(p.email, p.full_name, p.level));
+    else {
+      const q = await _supabase.from('shared_profiles').select('email, full_name, user_type, permissions');
+      if (!q.error) people = (q.data || [])
+        .filter(p => String(p.user_type || 'system') !== 'customer')
+        .map(p => person(p.email, p.full_name, p.permissions && p.permissions.modules && p.permissions.modules.pms));
+    }
   } catch (e) { /* no list */ }
+  people = people.filter(p => p.email && p.level);
 
   return {
     sb: _supabase,
     email: String(u.email || '').trim().toLowerCase(),
     name: u.full_name || u.email || '',
     level: MJMAccess.isAdminOf('pms') ? 'admin' : 'normal',
-    profiles
+    people
   };
 })();
 </script>
-<script src="pms_app.js?v=20261111b"></script>
+<script src="pms_app.js?v=20261111c"></script>
 </body>
 </html>

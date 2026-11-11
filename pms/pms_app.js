@@ -2,15 +2,17 @@
 const STATUSES = ["Not Started","In Progress","On Hold","Complete","Cancelled"];
 const SCLS = {"Urgent":"st-ug","Not Started":"st-ns","In Progress":"st-ip","On Hold":"st-oh","Complete":"st-ok","Cancelled":"st-cx"};
 const SVAR = {"Urgent":"--s-ug","Not Started":"--s-ns","In Progress":"--s-ip","On Hold":"--s-oh","Complete":"--s-ok","Cancelled":"--s-cx"};
-// Projects, team, types and priorities come from the Settings tab, which is the one pms_settings row. NOTHING is preset
-// here: no project, no person, no list. A database with no settings row is an empty tracker, and the Settings tab fills it.
+// Projects, types and priorities come from the Settings tab, which is the one pms_settings row. NOTHING is preset
+// here: no project, no person, no list. THE PEOPLE are not kept here at all: they are the staff accounts holding this
+// module on the hub's User Access page (PEOPLE, below), and they are who a task can be assigned to. A database with no settings row is an empty tracker, and the Settings tab fills it.
 let SETTINGS, PROJECTS = [], TEAM = [], TYPES = [], PRIS = [];
 // Project modules are milestones: {name, status} with status Upcoming / In Progress / Complete.
 const MSTAT = ["Upcoming","In Progress","Complete"];
 const MVAR = {"Upcoming":"--s-ns","In Progress":"--s-ip","Complete":"--s-ok"};
-// User access (Settings → User access). The LOGIN is the MJM AI system's own (shared_profiles): the hub's User Access
-// page opens this module to a person, and a module Admin there is Admin on every tab here. Everybody else gets the
-// levels set against their name in Settings → Team, which is tied to their login by e-mail.
+// User access (Settings → User access). The LOGIN is the MJM AI system's own (shared_profiles), and so is the DEFAULT:
+// the level a person holds for this module on the hub's User Access page is their level on every tab here. Settings →
+// User access only records where one tab is opened or closed differently for one person, keyed by their e-mail.
+// The database asks the same question (pms_tab_level in shared/RUN_ME_project_monitoring.sql). Change one, change the other.
 // Each person gets a level per tab: Admin = add, edit and delete anything there; Normal = view only; None = tab hidden.
 // (On Task requests, Normal can also submit and withdraw their own requests; Admin approves or rejects.)
 const LEVELS = ["None","Normal","Admin"];
@@ -21,14 +23,22 @@ const ACCESS_TABS = [
   ["list","Tasks","Full task list; add, edit and delete tasks"],
   ["requests","Task requests","Normal can submit requests; Admin approves or rejects"],
   ["value","Value analysis","Savings figures, rates and expenses"],
-  ["settings","Settings","Projects, team and user access"]];
+  ["settings","Settings","Projects, lists and user access"]];
 const allAccess = lv => Object.fromEntries(ACCESS_TABS.map(([k]) => [k, lv]));
-// Older roles carry over: Admin → Admin everywhere; Approver → Admin except Settings; Member / Viewer → Normal.
-function normAccess(m){
-  const a = m.access && typeof m.access === "object" ? m.access : null;
-  const base = m.role === "Admin" || m.role === "Approver" ? allAccess("Admin") : allAccess("Normal");
-  if (!a && m.role === "Approver") base.settings = "Normal";
-  return Object.fromEntries(ACCESS_TABS.map(([k]) => [k, a && LEVELS.includes(a[k]) ? a[k] : base[k]]));
+// What Settings keeps for one person: only the tabs that differ from their module level. A tab that is not named
+// follows User Access, so somebody raised or lowered there moves here without anybody re-keying seven tabs.
+function normOverride(a){
+  a = a && typeof a === "object" ? a : {};
+  return Object.fromEntries(ACCESS_TABS.filter(([k]) => LEVELS.includes(a[k])).map(([k]) => [k, a[k]]));
+}
+const defAccess = lv => allAccess(lv === "admin" ? "Admin" : "Normal");
+// The levels one person has. A module Admin is ALWAYS Admin on Settings: that is the one tab that hands out the rest,
+// so closing it on the last Admin would leave nobody able to open anything again.
+function accessFor(p, team){
+  const o = (team || []).find(x => x.email && x.email === p.email);
+  const a = {...defAccess(p.level), ...(o ? o.access : {})};
+  if (p.level === "admin") a.settings = "Admin";
+  return a;
 }
 // Hierarchy: master project (Nursery, Machinery…) → project (stored as a "module") → sub-projects. Each has a status.
 const normSub = x => typeof x === "string" ? {name:x, status:"Upcoming"} : {name:(x&&x.name)||"", status: MSTAT.includes(x&&x.status) ? x.status : "Upcoming"};
@@ -49,13 +59,28 @@ function normSettings(s){
     valueRate: s.valueRate === "" || s.valueRate == null ? "" : Number(s.valueRate),
     valueRates: {print: s.valueRates && s.valueRates.print != null && s.valueRates.print !== "" ? Number(s.valueRates.print) : "",
                  ba: s.valueRates && s.valueRates.ba != null && s.valueRates.ba !== "" ? Number(s.valueRates.ba) : ""},
-    team: (s.team||[]).map((m,i) => ({id:m.id||"m"+i, name:m.name||"", email: String(m.email||"").trim().toLowerCase(), access: normAccess(m||{})}))
+    // The column is still called team: it holds the per-person tab overrides and nothing else. A row with no e-mail
+    // is from when this was a list of names, ties to no login, and is dropped.
+    team: (s.team||[]).map(m => ({email: String((m&&m.email)||"").trim().toLowerCase(), access: normOverride(m&&m.access)}))
+      .filter(m => m.email && Object.keys(m.access).length)
   };
+}
+// Who is using it: the MJM AI login. HOST is what pms_dashboard.html resolved from shared_profiles before this
+// script was allowed to boot: {sb, email, name, level:"admin"|"normal", people:[{email, name, level}]}.
+let HOST = {email:"", name:"", level:"normal", people:[]};
+// Everybody holding the module, this login included even where the list could not be read. A task names its
+// assignees as text, so TEAM is their names: the full name on the profile, or the e-mail where there is none.
+let PEOPLE = [];
+function syncPeople(){
+  const list = (HOST.people||[]).map(p => ({...p, name: p.name || p.email}));
+  if (HOST.email && !list.some(p => p.email === HOST.email)) list.push({email:HOST.email, name:HOST.name || HOST.email, level:HOST.level});
+  PEOPLE = list.sort((a,b) => a.name.localeCompare(b.name));
+  TEAM = [...new Set(PEOPLE.map(p => p.name))];
 }
 function applySettings(s){
   SETTINGS = normSettings(s);
   PROJECTS = SETTINGS.projects.filter(p=>p.name).map(p => ({...p, key:p.name, code:p.code || p.name.slice(0,2).toUpperCase()}));
-  TEAM = SETTINGS.team.map(m=>m.name).filter(Boolean);
+  syncPeople();
   TYPES = SETTINGS.types.filter(Boolean);
   PRIS = SETTINGS.priorities.filter(Boolean);
 }
@@ -101,9 +126,6 @@ const TASK_VIEWS = ["overview","board","timeline","list"];
 const VIEWS = [...TASK_VIEWS, "requests", "value", "settings"];
 if (VIEWS.includes(location.hash.slice(1))) view = location.hash.slice(1);
 else { const v = store.get("pm.view"); if (VIEWS.includes(v)) view = v; }
-// Who is using it: the MJM AI login. HOST is what pms_dashboard.html resolved from shared_profiles before this
-// script was allowed to boot: {sb, email, name, level:"admin"|"normal", profiles:[{email, full_name}]}.
-let HOST = {email:"", name:"", level:"normal", profiles:[]};
 let me = "", editor = "";
 // Sort for the Tasks table. Task numbers run in the order tasks were added, so "latest" = highest number.
 const SORTS = {latest:["order",-1], oldest:["order",1], priority:["priority",1], due:["due",1], status:["status",1]};
@@ -129,11 +151,6 @@ function estEnd(p){
 }
 function mine(t){ return me && (t.assignees||[]).includes(me); }
 function canEditStatus(t){ return canWrite && canManage; }
-// A login is tied to a Team row by E-MAIL and by nothing else. Never by name: a profile's full name is the one thing
-// its owner can edit, so matching on it would let anybody take the access of a colleague by renaming themselves.
-const myRow = () => HOST.email ? SETTINGS.team.find(x => x.email && x.email === HOST.email) : null;
-// Somebody the hub let in whom nobody has put in Team yet: they can look, and ask for a task, and nothing else.
-const guestAccess = () => ({...allAccess("Normal"), settings:"None"});
 const tabAdmin = v => hostManage && access[v] === "Admin";
 // Task editing follows the tab it's opened from; from elsewhere (e.g. a request) it follows the Tasks tab.
 const taskTab = () => TASK_VIEWS.includes(view) ? view : "list";
@@ -145,10 +162,11 @@ function syncPerms(){
   document.querySelectorAll("nav.tabs button").forEach(b => b.hidden = access[b.dataset.view] === "None");
 }
 function applyAccess(){
-  const m = myRow();
-  me = m ? m.name : (HOST.name || HOST.email || "");
+  me = HOST.name || HOST.email || "";
   editor = me;
-  access = HOST.level === "admin" ? allAccess("Admin") : m ? {...m.access} : guestAccess();
+  // The override is found by E-MAIL and by nothing else. Never by name: a profile's full name is the one thing its
+  // owner can edit, so matching on it would let anybody take a colleague's access by renaming themselves.
+  access = accessFor({email:HOST.email, level:HOST.level}, SETTINGS.team);
   syncPerms();
   // If this tab is now off-limits, move to the first one that isn't.
   if (access[view] === "None"){ const v = VIEWS.find(x => access[x] !== "None"); if (v && typeof setView === "function") { view = v; setView(v); } }
@@ -959,39 +977,24 @@ function renderSettings(){
       el("td",{class:"x"}, rm(v, () => { arr.splice(i,1); redraw(); })))))),
     add("Add", () => { arr.push(""); redraw(); }));
 
-  // Team. The login is picked from the MJM AI accounts (shared_profiles); where that list could not be read
-  // (only some logins may read everybody's profile) the e-mail is typed instead, so the row can still be tied.
-  const loginPick = m => {
-    const list = (HOST.profiles||[]).slice().sort((a,b) => (a.full_name||a.email).localeCompare(b.full_name||b.email));
-    if (!list.length){
-      const i = el("input",{class:"si", type:"email", placeholder:"login e-mail", "aria-label":`${m.name} MJM AI login e-mail`, disabled: ro||null});
-      i.value = m.email || ""; i.addEventListener("input", () => { m.email = i.value.trim().toLowerCase(); touch(); }); return i;
-    }
-    const sel = el("select",{class:"si", "aria-label":`${m.name} MJM AI login`, disabled: ro||null},
-      el("option",{value:"", text:"Not linked"}),
-      // A login saved earlier that the list no longer has is still shown, never silently dropped.
-      ...(m.email && !list.some(p => p.email === m.email) ? [el("option",{value:m.email, text:m.email})] : []),
-      ...list.map(p => el("option",{value:p.email, text: p.full_name ? `${p.full_name} · ${p.email}` : p.email})));
-    sel.value = m.email || ""; sel.addEventListener("change", () => { m.email = sel.value; touch(); }); return sel;
-  };
-  const teamPanel = el("div",{class:"panel"}, el("h2",{text:"Team"}),
-    el("table",{class:"stable"}, thead("#","Assignee","MJM AI login",""), el("tbody",{}, ...d.team.map((m,i) => el("tr",{},
-      el("td",{class:"idx",text:i+1}), el("td",{}, inp(m,"name",{label:"Assignee name", ph:"Name"})),
-      el("td",{}, loginPick(m)),
-      el("td",{class:"x"}, rm(m.name, () => { d.team.splice(i,1); redraw(); })))))),
-    add("Add person", () => { d.team.push({id:uid("m"), name:"", email:""}); redraw(); }),
-    el("p",{class:"note", text:"The login is the person's MJM AI account. It is what ties their sign-in to this row, so their tasks and their access follow them. Renaming someone also updates the tasks assigned to them."}));
-
-  // User access: a level per tab for each person in Team; click a person to change it
+  // User access. The people are whoever holds the module on the hub's User Access page, and what they hold there is
+  // their level on every tab. Click a person to open or close one tab for them. d.acc is the working copy of every
+  // person's levels for this draft; the save keeps only the tabs that differ from the default.
+  if (!d.acc) d.acc = PEOPLE.map(p => ({...p, access: accessFor(p, d.team)}));
   const summary = m => { const n = lv => ACCESS_TABS.filter(([k]) => m.access[k] === lv).length;
     return LEVELS.slice().reverse().filter(lv => n(lv)).map(lv => el("span",{class:"lv", "data-lv":lv, text:`${n(lv)} ${lv}`})); };
+  const changed = m => ACCESS_TABS.some(([k]) => m.access[k] !== defAccess(m.level)[k]);
   const accessPanel = el("div",{class:"panel"}, el("h2",{text:"User access"}),
-    el("div",{class:"people-access"}, ...d.team.filter(m => m.name).map(m => {
+    d.acc.length ? el("div",{class:"people-access"}, ...d.acc.map(m => {
       const sum = el("span",{class:"lvs"}, ...summary(m));
-      return el("button",{class:"pa-row", type:"button", onclick:() => openAccessSheet(m, ro, () => { sum.replaceChildren(...summary(m)); touch(); })},
-        el("span",{class:"avatar", text:initials(m.name)}), el("span",{class:"pa-name", text:m.name}), sum, el("span",{class:"chev", "aria-hidden":"true", text:"›"}));
-    })),
-    el("p",{class:"note", text:"Admin: add, edit and delete anything on that tab. Normal: view only. None: the tab is hidden. These levels reach a person once their row in Team is linked to their MJM AI login. A module Admin (set on the portal's User Access page) is Admin on every tab; someone let into the module who is not linked here can view, and request a task."}));
+      const tag = el("span",{class:"note pa-def"});
+      const paint = () => { sum.replaceChildren(...summary(m));
+        tag.textContent = (m.level === "admin" ? "Admin" : "Normal") + " on User Access" + (changed(m) ? " · changed here" : ""); };
+      paint();
+      return el("button",{class:"pa-row", type:"button", onclick:() => openAccessSheet(m, ro, () => { paint(); touch(); })},
+        el("span",{class:"avatar", text:initials(m.name)}), el("span",{class:"pa-name"}, m.name, el("br"), tag), sum, el("span",{class:"chev", "aria-hidden":"true", text:"›"}));
+    })) : el("p",{class:"note", text:"Nobody holds this module yet."}),
+    el("p",{class:"note", text:"The people here are everyone given Project Monitoring System on the portal's User Access page, and they are who a task can be assigned to. What they hold there (Admin or Normal) is their level on every tab; open a person to open or close one tab for them. Admin: add, edit and delete anything on that tab. Normal: view only. None: the tab is hidden. To add or remove a person, change their module level on User Access."}));
 
   // Master project → projects → sub-projects, each with a status
   const statusSel = (o, label) => { const sel = el("select",{class:"si mstat", "data-s":o.status, "aria-label":`${label} status`, disabled: ro||null},
@@ -1019,7 +1022,7 @@ function renderSettings(){
   paintBar();
   root.replaceChildren(el("div",{class:"settings"},
     projPanel,
-    el("div",{class:"sgrid lookups"}, statusPanel, listPanel("Priority", d.priorities, "Priority"), listPanel("Type", d.types, "Type"), teamPanel),
+    el("div",{class:"sgrid lookups"}, statusPanel, listPanel("Priority", d.priorities, "Priority"), listPanel("Type", d.types, "Type")),
     accessPanel,
     el("h2",{class:"shead", text:"Projects & sub-projects"}),
     el("div",{class:"sgrid wide"}, ...modPanels),
@@ -1032,12 +1035,15 @@ function openAccessSheet(m, ro, onChange){
   openId = "access";
   const sheet = el("aside",{class:"sheet access-sheet", role:"dialog", "aria-modal":"true", "aria-label":`${m.name} access`},
     el("header",{class:"pa-head"}, el("span",{class:"avatar lg", text:initials(m.name)}),
-      el("div",{}, el("h2",{text:m.name}), el("div",{class:"note", text: ro ? "View only" : "Pick a level for each tab, then Save"})),
+      el("div",{}, el("h2",{text:m.name}), el("div",{class:"note", text: (m.level === "admin" ? "Admin" : "Normal") + " on User Access · " + (ro ? "view only" : "pick a level for each tab, then Save")})),
       el("button",{class:"x", "aria-label":"Close", onclick:closeSheet}, "×")),
     el("div",{class:"body"},
       el("div",{class:"eyebrow", text:"Tab access"}),
       el("div",{class:"tab-access"}, ...ACCESS_TABS.map(([k, label, desc]) => {
-        const sel = el("select",{class:"lvsel", "data-lv":m.access[k], "aria-label":`${label} access`, disabled: ro||null},
+        // A module Admin keeps Settings: see accessFor.
+        const fixed = k === "settings" && m.level === "admin";
+        const sel = el("select",{class:"lvsel", "data-lv":m.access[k], "aria-label":`${label} access`, disabled: ro||fixed||null,
+            title: fixed ? "A module Admin always has Settings. Change their level on User Access instead." : null},
           ...LEVELS.slice().reverse().map(lv => el("option",{value:lv, text:lv.toUpperCase()})));
         sel.value = m.access[k];
         sel.addEventListener("change", () => { m.access[k] = sel.value; sel.dataset.lv = sel.value; onChange(); });
@@ -1045,7 +1051,9 @@ function openAccessSheet(m, ro, onChange){
       })),
       ro ? null : el("div",{class:"acts"},
         ...LEVELS.slice().reverse().map(lv => el("button",{class:"btn", type:"button", onclick:() => {
-          ACCESS_TABS.forEach(([k]) => m.access[k] = lv); onChange(); openAccessSheet(m, ro, onChange); }}, `All ${lv}`)))),
+          ACCESS_TABS.forEach(([k]) => m.access[k] = k === "settings" && m.level === "admin" ? "Admin" : lv); onChange(); openAccessSheet(m, ro, onChange); }}, `All ${lv}`)),
+        el("button",{class:"btn", type:"button", title:"Back to what they hold on User Access", onclick:() => {
+          m.access = defAccess(m.level); onChange(); openAccessSheet(m, ro, onChange); }}, "Follow User Access"))),
     ro ? null : el("footer",{},
       el("button",{class:"btn primary", onclick: async () => { await saveSettings(); if (!sDirty) closeSheet(); }}, "Save"),
       el("button",{class:"btn", onclick:closeSheet}, "Close"),
@@ -1056,35 +1064,35 @@ function openAccessSheet(m, ro, onChange){
 
 async function saveSettings(){
   const s = normSettings(sDraft);
+  // Only the tabs that differ from a person's module level are kept. An override for somebody who is not on the list
+  // just now (their module was taken away, or the list could not be read) is left as it was, never dropped.
+  if (sDraft.acc) s.team = [
+    ...s.team.filter(o => !sDraft.acc.some(m => m.email === o.email)),
+    ...sDraft.acc.map(m => ({email:m.email, access:Object.fromEntries(ACCESS_TABS
+        .filter(([k]) => m.access[k] !== defAccess(m.level)[k] && !(k === "settings" && m.level === "admin")).map(([k]) => [k, m.access[k]]))}))
+      .filter(o => Object.keys(o.access).length)];
   s.projects = s.projects.map(p => ({...p, name:p.name.trim(), code:p.code.trim(), modules:p.modules.map(m=>({...m, name:m.name.trim(), subs:m.subs.map(x=>({...x, name:x.name.trim()})).filter(x=>x.name)})).filter(m=>m.name)})).filter(p => p.name);
   // Module savings are edited on the Value analysis page, so keep the latest saved figures (matched by project + module name).
   s.projects.forEach(p => { const live = SETTINGS.projects.find(x => x.id === p.id);
     p.modules.forEach(m => { const lm = live && live.modules.find(x => x.name === m.name); if (lm) m.value = {...lm.value}; });
     if (live) p.expenses = live.expenses.map(e => ({...e})); });   // expenses are edited on the Value analysis page too
-  s.team = s.team.map(m => ({...m, name:m.name.trim(), email:(m.email||"").trim().toLowerCase()})).filter(m => m.name);
   s.priorities = s.priorities.map(x=>x.trim()).filter(Boolean);
   s.types = s.types.map(x=>x.trim()).filter(Boolean);
   const dup = arr => arr.find((x,i) => arr.indexOf(x) !== i);
-  const dp = dup(s.projects.map(p=>p.name)), dm = dup(s.team.map(m=>m.name));
+  const dp = dup(s.projects.map(p=>p.name));
   if (dp) return toast(`Two projects are called “${dp}”`);
-  if (dm) return toast(`“${dm}” is listed twice in Team`);
-  // One login, one row: two rows on one login is two answers to what that person may do.
-  const de = dup(s.team.map(m=>m.email).filter(Boolean));
-  if (de) return toast(`The login ${de} is linked to two people in Team`);
   if (!s.projects.length) return toast("Add at least one project");
-  // A module Admin cannot lock themselves out here; anybody else is about to, if their own row loses Settings.
-  const mineAfter = s.team.find(m => m.email && m.email === HOST.email);
-  if (HOST.level !== "admin" && !(mineAfter && mineAfter.access.settings === "Admin")
+  // A module Admin cannot lock themselves out here; anybody else is about to, if they close Settings on themselves.
+  if (accessFor({email:HOST.email, level:HOST.level}, s.team).settings !== "Admin"
       && !confirm("You won't have Admin on Settings after saving, so you won't be able to change Settings. Save anyway?")) return;
 
   // Carry renames over to the tasks that use the old names.
-  const pRen = {}, mRen = {};
+  const pRen = {};
   SETTINGS.projects.forEach(p => { const n = s.projects.find(x=>x.id===p.id); if (n && p.name && n.name !== p.name) pRen[p.name] = n.name; });
-  SETTINGS.team.forEach(m => { const n = s.team.find(x=>x.id===m.id); if (n && m.name && n.name !== m.name) mRen[m.name] = n.name; });
-  const moved = tasks.filter(t => pRen[t.project] || (t.assignees||[]).some(a => mRen[a]));
+  const moved = tasks.filter(t => pRen[t.project]);
   try {
     await dbRef.collection("settings").doc("config").set({...s, updatedAt:new Date().toISOString(), updatedBy: editor || "Manager"});
-    for (const t of moved) await dbRef.doc("tasks/"+t.id).update({project: pRen[t.project] || t.project, assignees:(t.assignees||[]).map(a => mRen[a] || a)});
+    for (const t of moved) await dbRef.doc("tasks/"+t.id).update({project: pRen[t.project] || t.project});
     sDirty = false; applySettings(s); applyAccess(); refreshPickers(); renderSettings(); render();
     toast(moved.length ? `Settings saved · ${moved.length} task${moved.length===1?"":"s"} updated` : "Settings saved");
   } catch(e){ toast("Could not save settings: " + (e && (e.message||e.code))); }
@@ -1161,13 +1169,13 @@ function openSheet(id, prefill){
     }
     let input;
     if (key==="assignees"){
-      // Tick boxes from Settings > Team; anyone already assigned but no longer in Team stays visible.
+      // Tick boxes of everybody holding the module; anyone already assigned who no longer holds it stays visible.
       const names = [...TEAM, ...draft.assignees.filter(a => !TEAM.includes(a))];
       wrap.append(names.length ? el("div",{class:"picks", id:"f-assignees", role:"group"}, ...names.map(n => {
         const cb = el("input",{type:"checkbox", value:n, checked: draft.assignees.includes(n) || null});
         cb.addEventListener("change", () => { draft.assignees = names.filter(x => x===n ? cb.checked : draft.assignees.includes(x)); });
         return el("label",{class:"pick"}, cb, n);
-      })) : el("div",{class:"ro note", text:"Add people under Settings → Team first."}));
+      })) : el("div",{class:"ro note", text:"Nobody holds this module yet. Give people Project Monitoring System on the portal's User Access page."}));
       return wrap;
     }
     if (kind==="select"){
@@ -1588,6 +1596,7 @@ function fromDoc(d){
 // member of staff holding this module, and sends everybody else back to the hub without resolving it.
 (async () => {
   HOST = await window.PMS_READY;
+  syncPeople();
   const db = makeSupabaseDb(HOST.sb);
   dbRef = db;
   hostManage = canWrite = true;

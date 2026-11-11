@@ -7,15 +7,16 @@
  * stubbed database to hold it to that:
  *
  *   - a login with no `pms` level is sent back to the portal and draws nothing
- *   - a module Admin is Admin on every tab
- *   - a Normal login gets the levels of the Team row LINKED TO ITS E-MAIL,
- *     whatever case the e-mail was keyed in
- *   - a Normal login nobody has linked can look and request, and cannot
- *     open Settings or add a task
+ *   - THERE IS NO TEAM LIST. The people are the staff accounts holding the
+ *     module on User Access, and they are who a task is assigned to
+ *   - what a person holds there is their level on EVERY tab: Admin is
+ *     Admin, Normal is view only
+ *   - Settings -> User access opens or closes one tab for one person, by
+ *     E-MAIL, whatever case it was keyed in, and saves only the difference
  *   - A NAME IS NEVER A LOGIN. A profile's full name is the one thing its
- *     owner can edit, so somebody named like an admin is still themselves
+ *     owner can edit, so somebody named like another is still themselves
+ *   - a module Admin can have a tab closed, and never Settings
  *   - the data is the portal's own tables, pms_*, and nothing else
- *   - Settings -> Team offers the staff accounts, never a customer's
  *   - the hub tile is hidden until granted, and User Access can grant it
  *
  * Run: NODE_PATH=/opt/node22/lib/node_modules node tests/project_monitoring_uses_the_portal_login.cjs
@@ -81,6 +82,9 @@ window.supabase = { createClient: function () {
   }
   return {
     from: builder,
+    // A function nobody installed answers the way PostgREST does: an error, never a throw.
+    rpc: function (name) { window.__READS.push('rpc:' + name); var f = (window.__RPC || {})[name];
+      return Promise.resolve(f ? { data: f, error: null } : { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }); },
     channel: function () { var c = { on: function(){return c;}, subscribe: function(){return c;} }; return c; },
     removeChannel: function () {},
     auth: {
@@ -97,10 +101,12 @@ window.supabase = { createClient: function () {
 
 const TABS = ['overview', 'board', 'timeline', 'list', 'requests', 'value', 'settings'];
 const lv = (base, over) => Object.assign(Object.fromEntries(TABS.map((k) => [k, base])), over || {});
+// What Settings keeps: only the tabs that differ from a person's module level, by e-mail.
 const TEAM = [
-  { id: 'm1', name: 'Coco Lau', email: 'coco@mjm.test', access: lv('Admin') },
-  // list Admin, Settings closed: the row a Normal login is meant to inherit
-  { id: 'm4', name: 'Ruth Wong', email: 'ruth@mjm.test', access: lv('Normal', { list: 'Admin', settings: 'None' }) },
+  { email: 'ruth@mjm.test', access: { list: 'Admin', settings: 'None' } },
+  { email: 'closed@mjm.test', access: { board: 'None', settings: 'None' } },
+  // a row from when this was a list of names: no login, so it ties to nobody
+  { id: 'm9', name: 'Old Name', email: '', access: lv('Admin') },
 ];
 const ROWS = () => ({
   pms_settings: [{ id: 'config', projects: [{ id: 'p1', name: 'Nursery', code: 'N', start: '2026-03-22', duration: 365, modules: [] }],
@@ -110,11 +116,13 @@ const ROWS = () => ({
       assignees: ['Ruth Wong'], start_date: '2026-11-01', due_date: '2026-11-20', end_date: null, sort_order: 1 },
   ],
   pms_task_requests: [],
-  // what a read of everybody's profile hands back: two staff and a customer
+  // what a read of everybody's profile hands back: two holding the module, one member of
+  // staff who does not, and a customer whose row says she does
   shared_profiles: [
-    { email: 'Coco@MJM.test', full_name: 'Coco Lau', user_type: 'system' },
-    { email: 'ruth@mjm.test', full_name: 'Ruth Wong', user_type: 'system' },
-    { email: 'buyer@farm.test', full_name: 'A Customer', user_type: 'customer' },
+    { email: 'Coco@MJM.test', full_name: 'Coco Lau', user_type: 'system', permissions: { modules: { pms: 'admin' } } },
+    { email: 'ruth@mjm.test', full_name: 'Ruth Wong', user_type: 'system', permissions: { modules: { pms: 'normal' } } },
+    { email: 'ken@mjm.test', full_name: 'Ken Tan', user_type: 'system', permissions: { modules: { operation: 'admin', pms: 'none' } } },
+    { email: 'buyer@farm.test', full_name: 'A Customer', user_type: 'customer', permissions: { modules: { pms: 'admin' } } },
   ],
 });
 
@@ -125,7 +133,7 @@ function is(got, want, msg) {
   console.log((ok ? 'pass  ' : 'FAIL  ') + msg + (ok ? '' : '\n        got  ' + JSON.stringify(got) + '\n        want ' + JSON.stringify(want)));
 }
 
-async function open(browser, port, who, file) {
+async function open(browser, port, who, file, rows, rpc) {
   const page = await browser.newPage();
   // Catch-all FIRST: routes match in reverse registration order.
   await page.route('**/*', (r) => {
@@ -134,14 +142,14 @@ async function open(browser, port, who, file) {
     return r.fulfill({ status: 200, contentType: 'text/plain', body: '' });
   });
   await page.route('**cdn.jsdelivr.net/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_SUPABASE }));
-  await page.addInitScript(({ who, rows }) => {
+  await page.addInitScript(({ who, rows, rpc }) => {
     const user = { id: 'u1', email: who.email, user_metadata: { full_name: who.name } };
     window.__FAKE_SESSION = { access_token: 'x', user };
     window.__FAKE_PROFILE = { id: 'u1', email: who.email, full_name: who.name, user_type: 'system',
       permissions: { modules: Object.assign({ operation: 'normal' }, who.pms ? { pms: who.pms } : {}) } };
-    window.__ROWS = rows;
+    window.__ROWS = rows; window.__RPC = rpc || null;
     window.alert = () => {}; window.confirm = () => true;
-  }, { who, rows: ROWS() });
+  }, { who, rows: rows || ROWS(), rpc });
   await page.goto('http://localhost:' + port + '/' + (file || 'pms/pms_dashboard.html'), { waitUntil: 'domcontentloaded' });
   return page;
 }
@@ -176,85 +184,119 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     await p2.close();
   }
 
-  console.log('\n2. A module Admin');
+  const paNames = (page) => page.evaluate(() => [...document.querySelectorAll('#v-settings .pa-row .pa-name')].map((n) => n.firstChild.textContent));
+  const picks = (page) => page.evaluate(() => [...document.querySelectorAll('#fPerson option')].map((o) => o.value).filter(Boolean));
+  const openPerson = (page, name) => page.evaluate((name) => { const r = [...document.querySelectorAll('#v-settings .pa-row')].find((x) => x.querySelector('.pa-name').firstChild.textContent === name);
+    if (!r) return 'no row for ' + name; r.click(); return 'open'; }, name);
+  const setTab = (page, label, v) => page.evaluate(({ label, v }) => { const s = document.querySelector('.access-sheet select[aria-label="' + label + ' access"]');
+    if (!s) return 'no ' + label + ' select'; if (s.disabled) return 'disabled'; s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); return 'set'; }, { label, v });
+  const press = (page, sel, re) => page.evaluate(({ sel, re }) => { const b = [...document.querySelectorAll(sel)].find((x) => new RegExp(re, 'i').test(x.textContent)); if (!b) return 'no button'; b.click(); return 'pressed'; }, { sel, re });
+  const teamWrites = (page) => page.evaluate(() => window.__WRITES.filter((x) => x.table === 'pms_settings').map((x) => ({ op: x.op, id: x.row.id, team: x.row.team })));
+
+  console.log('\n2. A module Admin, and who the people are');
   {
     const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' });
     const d = await drawn(page);
     is(d && d.who, 'The Boss', 'is named from the portal profile, with no name to pick');
     is(await page.locator('select#who').count(), 0, 'there is no "Signed in as" dropdown at all');
-    is(d && d.tabs, TABS, 'has every tab, linked to no Team row at all');
+    is(d && d.tabs, TABS, 'has every tab');
     is(await page.title(), 'Project Monitoring System', 'the page is called Project Monitoring System');
     await go(page, 'list'); await page.waitForTimeout(200);
     is(await page.locator('#v-list').innerText().then((t) => t.includes('Batch Report from the portal tables')), true, 'the task list is read from pms_tasks');
     is(await page.locator('#addBtn').isVisible(), true, 'and may add a task');
     const reads = await page.evaluate(() => [...new Set(window.__READS)].sort());
-    is(reads.filter((t) => t !== 'shared_profiles'), ['pms_settings', 'pms_task_requests', 'pms_tasks'], 'only the pms_ tables are read');
+    is(reads.filter((t) => t !== 'shared_profiles' && !/^rpc:/.test(t)), ['pms_settings', 'pms_task_requests', 'pms_tasks'], 'only the pms_ tables are read');
+    is(await picks(page), ['Coco Lau', 'Ruth Wong', 'The Boss'], 'the assignees are whoever holds the module: not the staff without it, never the customer');
 
     // SHOT=/path.png draws the page as the office sees it: a check cannot read a layout.
-    if (process.env.SHOT) { await go(page, 'overview'); await page.setViewportSize({ width: 1400, height: 900 }); await page.waitForTimeout(200); await page.screenshot({ path: process.env.SHOT }); }
     await go(page, 'settings'); await page.waitForTimeout(250);
-    const opts = await page.evaluate(() => { const s = document.querySelector('#v-settings select[aria-label$="MJM AI login"]');
-      return s ? [...s.options].map((o) => o.value) : 'no login picker'; });
-    is(opts, ['', 'coco@mjm.test', 'ruth@mjm.test'], 'Team offers the staff logins, lower-cased, and never the customer');
+    if (process.env.SHOT) { await page.setViewportSize({ width: 1400, height: 1100 }); await page.waitForTimeout(200); await page.screenshot({ path: process.env.SHOT, fullPage: true }); }
+    const set = await page.evaluate(() => ({
+      panels: [...document.querySelectorAll('#v-settings .panel > h2')].map((h) => h.textContent).filter((t) => /team|user access/i.test(t)),
+      logins: document.querySelectorAll('#v-settings select[aria-label$="MJM AI login"], #v-settings input[type="email"]').length }));
+    is(set, { panels: ['User access'], logins: 0 }, 'Settings has User access and no Team panel, and no login to pick');
+    is(await paNames(page), ['Coco Lau', 'Ruth Wong', 'The Boss'], 'User access lists the same people');
+    const tags = await page.evaluate(() => [...document.querySelectorAll('#v-settings .pa-row .pa-def')].map((n) => n.textContent));
+    is(tags, ['Admin on User Access', 'Normal on User Access · changed here', 'Admin on User Access'], 'each with what they hold on User Access, and whether a tab was changed here');
     await page.close();
   }
 
-  console.log('\n3. A Normal login LINKED to a Team row by e-mail');
+  console.log('\n2b. The people come from pms_people() where it is installed');
   {
-    const page = await open(browser, port, { email: 'Ruth@MJM.test', name: 'Ruth W. (profile spelling)', pms: 'normal' });
-    const d = await drawn(page);
-    is(d && d.who, 'Ruth Wong', 'is the Team row its e-mail is linked to, whatever case it was keyed in');
-    is(d && d.tabs, TABS.filter((t) => t !== 'settings'), 'Settings is closed, as that row says');
-    await go(page, 'list'); await page.waitForTimeout(200);
-    is(await page.locator('#addBtn').isVisible(), true, 'and Tasks is Admin, as that row says');
+    // A login that may read nobody else's profile: the table hands back nothing useful, the function answers.
+    const rows = ROWS(); rows.shared_profiles = [];
+    const page = await open(browser, port, { email: 'ruth@mjm.test', name: 'Ruth Wong', pms: 'normal' }, null, rows,
+      { pms_people: [{ email: 'Coco@MJM.test', full_name: 'Coco Lau', level: 'admin' }, { email: 'ruth@mjm.test', full_name: 'Ruth Wong', level: 'normal' }] });
+    await drawn(page);
+    is(await picks(page), ['Coco Lau', 'Ruth Wong'], 'the list is the function answer, this login not listed twice');
     await page.close();
   }
 
-  console.log('\n4. A Normal login nobody has linked');
+  console.log('\n3. A Normal login with tabs changed for it, found by e-mail');
+  {
+    const page = await open(browser, port, { email: 'Ruth@MJM.test', name: 'Ruth Wong', pms: 'normal' });
+    const d = await drawn(page);
+    is(d && d.tabs, TABS.filter((t) => t !== 'settings'), 'Settings is closed for her, whatever case her e-mail was keyed in');
+    await go(page, 'list'); await page.waitForTimeout(200);
+    is(await page.locator('#addBtn').isVisible(), true, 'and Tasks is opened to Admin for her');
+    await page.close();
+  }
+
+  console.log('\n4. A Normal login nobody has changed anything for');
   {
     const page = await open(browser, port, { email: 'new@mjm.test', name: 'New Starter', pms: 'normal' });
     const d = await drawn(page);
     is(d && d.who, 'New Starter', 'is named from the portal profile');
-    is(d && d.tabs, TABS.filter((t) => t !== 'settings'), 'can look at everything but Settings');
+    is(d && d.tabs, TABS, 'is Normal on every tab, which is what User Access says');
     await go(page, 'list'); await page.waitForTimeout(200);
-    is(await page.locator('#addBtn').isVisible(), false, 'and cannot add a task');
+    is(await page.locator('#addBtn').isVisible(), false, 'so cannot add a task');
+    await go(page, 'settings'); await page.waitForTimeout(250);
+    const live = await page.evaluate(() => [...document.querySelectorAll('#v-settings input, #v-settings select')].filter((x) => !x.disabled).length);
+    is(live, 0, 'and Settings is view only: nothing in it can be keyed');
+    is((await paNames(page)).includes('New Starter'), true, 'this login is on the list even where the list did not name it');
     await page.close();
   }
 
   console.log('\n5. A name is never a login');
   {
-    // Coco Lau is Admin on every tab in Team. This login is CALLED Coco Lau and is somebody else.
-    const page = await open(browser, port, { email: 'someone.else@mjm.test', name: 'Coco Lau', pms: 'normal' });
+    // Ruth Wong has Tasks opened to Admin. This login is CALLED Ruth Wong and is somebody else.
+    const page = await open(browser, port, { email: 'someone.else@mjm.test', name: 'Ruth Wong', pms: 'normal' });
     const d = await drawn(page);
-    is(d && d.tabs.includes('settings'), false, 'a login named like a Team admin does not get her Settings');
+    is(d && d.tabs.includes('settings'), true, 'a login named like her does not get her closed Settings');
     await go(page, 'list'); await page.waitForTimeout(200);
     is(await page.locator('#addBtn').isVisible(), false, 'nor her right to add a task');
     await page.close();
   }
 
-  console.log('\n6. Saving Settings writes the link, to the portal table');
+  console.log('\n5b. A module Admin can have a tab closed, and never Settings');
   {
-    const rows = ROWS(); rows.pms_settings[0].team[1].email = '';       // Ruth not linked yet
-    const page = await browser.newPage();
-    await page.route('**/*', (r) => r.request().url().startsWith('http://localhost:' + port) ? r.continue() : r.fulfill({ status: 200, body: '' }));
-    await page.route('**cdn.jsdelivr.net/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_SUPABASE }));
-    await page.addInitScript(({ rows }) => {
-      window.__FAKE_SESSION = { access_token: 'x', user: { id: 'u1', email: 'boss@mjm.test', user_metadata: {} } };
-      window.__FAKE_PROFILE = { id: 'u1', email: 'boss@mjm.test', full_name: 'The Boss', user_type: 'system', permissions: { modules: { pms: 'admin' } } };
-      window.__ROWS = rows; window.confirm = () => true;
-    }, { rows });
-    await page.goto('http://localhost:' + port + '/pms/pms_dashboard.html#settings', { waitUntil: 'domcontentloaded' });
+    const page = await open(browser, port, { email: 'closed@mjm.test', name: 'Closed Admin', pms: 'admin' });
+    const d = await drawn(page);
+    is(d && d.tabs, TABS.filter((t) => t !== 'board'), 'Board is closed as saved; Settings stays open though the saved row closes it');
+    await go(page, 'settings'); await page.waitForTimeout(250);
+    is(await openPerson(page, 'Closed Admin'), 'open', 'their own row opens');
+    is(await setTab(page, 'Settings', 'None'), 'disabled', 'and Settings cannot be closed on a module Admin');
+    await page.close();
+  }
+
+  console.log('\n6. Saving Settings keeps only the difference, in the portal table');
+  {
+    const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' }, 'pms/pms_dashboard.html#settings');
     await drawn(page);
-    const picked = await page.evaluate(() => {
-      const s = document.querySelector('#v-settings select[aria-label="Ruth Wong MJM AI login"]');
-      if (!s) return 'no picker for Ruth';
-      s.value = 'ruth@mjm.test'; s.dispatchEvent(new Event('change', { bubbles: true })); return 'picked';
-    });
-    is(picked, 'picked', 'the login is picked against the person');
-    await page.evaluate(() => { const b = [...document.querySelectorAll('#v-settings .savebar button')].find((x) => /save/i.test(x.textContent)); if (b) b.click(); });
-    await page.waitForTimeout(400);
-    const w = await page.evaluate(() => window.__WRITES.filter((x) => x.table === 'pms_settings').map((x) => ({ op: x.op, id: x.row.id, ruth: (x.row.team.find((m) => m.name === 'Ruth Wong') || {}).email })));
-    is(w, [{ op: 'upsert', id: 'config', ruth: 'ruth@mjm.test' }], 'one save of pms_settings/config carrying the e-mail');
+    is(await openPerson(page, 'Ruth Wong'), 'open', 'a person is opened from User access');
+    is(await setTab(page, 'Value analysis', 'None'), 'set', 'and one tab is closed for her');
+    await press(page, '.access-sheet footer button', '^save'); await page.waitForTimeout(400);
+    is(await teamWrites(page), [{ op: 'upsert', id: 'config', team: [
+      { email: 'closed@mjm.test', access: { board: 'None', settings: 'None' } },
+      { email: 'ruth@mjm.test', access: { list: 'Admin', value: 'None', settings: 'None' } }] }],
+      'one save of pms_settings/config: her three changed tabs, somebody not on the list left as saved, the nameless row gone');
+
+    await page.evaluate(() => { window.__WRITES.length = 0; });
+    is(await openPerson(page, 'Ruth Wong'), 'open', 'opened again');
+    is(await press(page, '.access-sheet .acts button', 'follow user access'), 'pressed', 'Follow User Access');
+    await press(page, '.access-sheet footer button', '^save'); await page.waitForTimeout(400);
+    is(await teamWrites(page), [{ op: 'upsert', id: 'config', team: [{ email: 'closed@mjm.test', access: { board: 'None', settings: 'None' } }] }],
+      'puts her back on her module level, and nothing is kept for her at all');
     await page.close();
   }
 
@@ -298,13 +340,14 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
       people: [...document.querySelectorAll('#fPerson option')].map((o) => o.value).filter(Boolean),
       seed: typeof window.SEED_SETTINGS + '/' + typeof window.SEED_TASKS,
     }));
-    is(got, { projects: [], people: [], seed: 'undefined/undefined' }, 'with no project, no person and no seed of either');
+    is(got, { projects: [], people: ['The Boss'], seed: 'undefined/undefined' }, 'with no project, nobody but this login, and no seed of either');
     await page.close();
 
     is(fs.existsSync(path.join(ROOT, 'pms/pms_data.js')), false, 'there is no data file beside the app');
     const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
     const app = strip(fs.readFileSync(path.join(ROOT, 'pms/pms_app.js'), 'utf8'));
     is(/SEED_|Coco Lau|Ruth Wong|"Nursery"|'Nursery'/.test(app), false, 'the app names no person and no project');
+    is(/myRow|loginPick|teamPanel|"Team"\)/.test(app), false, 'and has no team list to keep');
     const sql = fs.readFileSync(path.join(ROOT, 'shared/RUN_ME_project_monitoring.sql'), 'utf8');
     is(/INSERT\s+INTO\s+public\.pms_/i.test(sql), false, 'and the SQL writes no row into any of the three tables');
   }
