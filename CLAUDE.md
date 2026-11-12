@@ -7361,6 +7361,14 @@ Loading Seedlings, Monthly Payroll) · Approval · Report · Settings.
 - **Others came off** with its sheet and its Monthly column: not one entry
   had ever been keyed in `mjmnpayroll_work_entries`, so no pay moved.
 
+- **Top and foot stand still, the middle scrolls.** Overview (Dashboard)
+  is the top; Payroll Record and Sign-off & Output are the middle, each
+  under a small heading, groups 18px apart against 2px between rows; the
+  foot is Settings and the signed-in name, under the one faint divider.
+  `sideShowActive` scrolls the open entry into view inside the bar.
+- **No Help and no Upgrade entry**: the module has neither screen, and a
+  button to nowhere is not added because a layout asked for the slot.
+
 `tests/nursery_payroll_has_a_side_bar.cjs` (`SHOT=/dir` draws the three
 new pages).
 

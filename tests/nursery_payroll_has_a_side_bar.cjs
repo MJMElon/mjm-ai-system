@@ -156,8 +156,39 @@ async function boot(browser, db) {
     const n = document.getElementById('side-nav');
     if (!n) return 'no side bar';
     return [...n.querySelectorAll('.side-btn, .side-head')].map(b => b.textContent.trim());
-  }), ['Dashboard', 'Payroll Record', 'Work Maintenance', 'Seed Planting', 'Transplanting',
-       'Loading Seedlings', 'Monthly Payroll', 'Approval', 'Report', 'Settings']);
+  }), ['Overview', 'Dashboard', 'Payroll Record', 'Work Maintenance', 'Seed Planting', 'Transplanting',
+       'Loading Seedlings', 'Monthly Payroll', 'Sign-off & Output', 'Approval', 'Report', 'Settings']);
+  /* Top and foot stand still and the middle scrolls: the bar is never
+     taller than the window, the middle is the only part that scrolls, and
+     Settings and the signed-in name are in the foot. */
+  check('top, scrolling middle and fixed foot', await ev(() => {
+    const n = document.getElementById('side-nav');
+    if (!n) return 'no side bar';
+    const top = n.querySelector('.side-top'), mid = n.querySelector('.side-mid'), foot = n.querySelector('.side-foot');
+    if (!top || !mid || !foot) return 'missing a part';
+    return [!!top.querySelector('[data-tab="dash"]'),
+            mid.querySelectorAll('.side-group').length,
+            getComputedStyle(mid).overflowY,
+            !!foot.querySelector('#tab-btn-locks'),
+            !!foot.querySelector('#side-account'),
+            n.getBoundingClientRect().height <= window.innerHeight];
+  }), [true, 2, 'auto', true, true, true]);
+  check('groups sit further apart than rows', await ev(() => {
+    const gs = [...document.querySelectorAll('#side-nav .side-mid .side-group')];
+    if (gs.length < 2) return 'fewer than two groups';
+    const rows = gs[0].querySelectorAll('.side-btn');
+    const rowGap = rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().bottom;
+    const groupGap = gs[1].getBoundingClientRect().top - gs[0].getBoundingClientRect().bottom;
+    return groupGap > rowGap * 3;
+  }), true);
+  check('the open page is a solid block and the others are quieter text', await ev(() => {
+    switchTab('dash');
+    const on = document.getElementById('tab-btn-dash'), off = document.getElementById('tab-btn-report');
+    const cs = (e) => getComputedStyle(e);
+    return [cs(on).backgroundColor !== 'rgba(0, 0, 0, 0)', cs(on).color, cs(off).color];
+  }), [true, 'rgb(255, 255, 255)', 'rgb(71, 85, 105)']);
+  check('the foot names who is signed in', await ev(() =>
+    ((document.getElementById('side-account') || {}).textContent || '').trim() !== ''), true);
   check('the old pill row and the topbar icons are gone', await ev(() => [
     !!document.querySelector('nav.subtabs'), !!document.getElementById('icon-btn-payroll'),
     !!document.querySelector('.topbar #tab-btn-locks')]), [false, false, false]);

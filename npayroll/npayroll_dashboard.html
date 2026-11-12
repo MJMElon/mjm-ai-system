@@ -45,7 +45,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=30">
+<link rel="stylesheet" href="npayroll_styles.css?v=31">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -95,30 +95,53 @@
 <main id="main" class="page hidden">
 <div class="pay-shell">
   <!-- ═══ THE SIDE BAR ═══
-       Five places, in the order a month is worked: what the month looks
-       like, the sheets somebody fills, the signatures, the paper, and the
-       settings. The Payroll Record entries keep class "subtab" and their
-       data-sub keys, because switchSub / activeSub / applyPageAccess find
-       them by that; the other four keep class "tab" and data-tab for
-       switchTab. Only the LABEL of seedplant moved, to Seed Planting —
-       the key it is verified and permitted under did not. -->
+       Three parts. The TOP and the FOOT stand still and the MIDDLE scrolls,
+       so a long list never pushes Settings or the signed-in name off the
+       screen. The middle is grouped by what somebody came to do — look at
+       the month, fill a sheet, sign and print — each group under a small
+       heading, and the groups sit further apart than the rows inside them.
+       The one divider is between the middle and the foot.
+
+       The Payroll Record entries keep class "subtab" and their data-sub
+       keys, because switchSub / activeSub / applyPageAccess find them by
+       that; the others keep class "tab" and data-tab for switchTab. Only
+       the LABEL of seedplant is Seed Planting — the key it is verified and
+       permitted under did not move.
+
+       There is no Help and no Upgrade entry, because this module has
+       neither screen, and none is invented: a button to nowhere is worse
+       than no button. The account is the name below; signing out is the
+       ribbon's, as on every page. -->
   <aside class="side-nav" id="side-nav" aria-label="Nursery Payroll">
-    <button type="button" class="tab side-btn" data-tab="dash" id="tab-btn-dash"
-            onclick="switchTab('dash')">Dashboard</button>
-    <div class="side-group" id="side-group-record">
-      <div class="side-head">Payroll Record</div>
-      <button type="button" class="subtab side-btn side-sub active" data-sub="maint"     onclick="switchSub('maint')">Work Maintenance</button>
-      <button type="button" class="subtab side-btn side-sub"        data-sub="seedplant" onclick="switchSub('seedplant')">Seed Planting</button>
-      <button type="button" class="subtab side-btn side-sub"        data-sub="transpl"   onclick="switchSub('transpl')">Transplanting</button>
-      <button type="button" class="subtab side-btn side-sub"        data-sub="seedling"  onclick="switchSub('seedling')">Loading Seedlings</button>
-      <button type="button" class="subtab side-btn side-sub"        data-sub="monthly"   onclick="switchSub('monthly')">Monthly Payroll</button>
+    <div class="side-top">
+      <div class="side-group" id="side-group-overview">
+        <div class="side-head">Overview</div>
+        <button type="button" class="tab side-btn" data-tab="dash" id="tab-btn-dash"
+                onclick="switchTab('dash')">Dashboard</button>
+      </div>
     </div>
-    <button type="button" class="tab side-btn" data-tab="approval" id="tab-btn-approval"
-            onclick="switchTab('approval')">Approval</button>
-    <button type="button" class="tab side-btn" data-tab="report" id="tab-btn-report"
-            onclick="switchTab('report')">Report</button>
-    <button type="button" class="tab side-btn side-foot hidden" data-tab="locks" id="tab-btn-locks"
-            onclick="switchTab('locks')">Settings</button>
+    <div class="side-mid">
+      <div class="side-group" id="side-group-record">
+        <div class="side-head">Payroll Record</div>
+        <button type="button" class="subtab side-btn side-sub active" data-sub="maint"     onclick="switchSub('maint')">Work Maintenance</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="seedplant" onclick="switchSub('seedplant')">Seed Planting</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="transpl"   onclick="switchSub('transpl')">Transplanting</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="seedling"  onclick="switchSub('seedling')">Loading Seedlings</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="monthly"   onclick="switchSub('monthly')">Monthly Payroll</button>
+      </div>
+      <div class="side-group" id="side-group-signoff">
+        <div class="side-head">Sign-off &amp; Output</div>
+        <button type="button" class="tab side-btn" data-tab="approval" id="tab-btn-approval"
+                onclick="switchTab('approval')">Approval</button>
+        <button type="button" class="tab side-btn" data-tab="report" id="tab-btn-report"
+                onclick="switchTab('report')">Report</button>
+      </div>
+    </div>
+    <div class="side-foot">
+      <button type="button" class="tab side-btn hidden" data-tab="locks" id="tab-btn-locks"
+              onclick="switchTab('locks')">Settings</button>
+      <div class="side-account" id="side-account" title="Signed in"></div>
+    </div>
   </aside>
 <div class="pay-content">
 
@@ -569,7 +592,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=106"></script>
+<script src="npayroll_script.js?v=107"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

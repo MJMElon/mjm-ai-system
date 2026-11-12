@@ -511,10 +511,29 @@ function applyPageAccess() {
   if (ap) ap.style.display = PAYROLL_SUBS.some(may) ? '' : 'none';
   const rp = $('tab-btn-report');
   if (rp) rp.style.display = REPORTS.some(r => may(r.page, 'export')) ? '' : 'none';
+  /* A heading over nothing is a group nobody can use, so it goes with
+     its last entry. */
+  const so = $('side-group-signoff');
+  if (so) so.style.display = (ap && ap.style.display === 'none' && rp && rp.style.display === 'none') ? 'none' : '';
+  /* Who is signed in, at the foot of the bar. A name, never the address. */
+  const acct = $('side-account');
+  if (acct) { try { acct.textContent = userEmail ? whoName(userEmail) : ''; } catch (_) {} }
 }
 /* The five sheets of the Payroll Record, in side-bar order. Others came off
    the day the side bar went in: not one entry had ever been keyed on it. */
 const PAYROLL_SUBS = ['maint', 'seedplant', 'transpl', 'seedling', 'monthly'];
+/* The middle of the side bar scrolls, so the page that is open could be
+   scrolled out of sight: bring it into view, inside the bar only. */
+function sideShowActive() {
+  const mid = document.querySelector('#side-nav .side-mid');
+  if (!mid) return;
+  const t = document.body.dataset.tab;
+  const on = t === 'payroll' ? mid.querySelector('.subtab.active') : mid.querySelector('.tab.active');
+  if (!on) return;
+  const m = mid.getBoundingClientRect(), r = on.getBoundingClientRect();
+  if (r.top < m.top) mid.scrollTop -= (m.top - r.top) + 8;
+  else if (r.bottom > m.bottom) mid.scrollTop += (r.bottom - m.bottom) + 8;
+}
 /* The first tab or sub-tab this user can actually open. */
 function firstOpen(candidates) { return candidates.find(may) || null; }
 
@@ -525,6 +544,7 @@ function switchTab(name) {
   if (name === 'rates') name = 'locks';
   if (!$('tab-' + name)) name = 'payroll';
   document.body.dataset.tab = name;
+  setTimeout(sideShowActive, 0);
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   $('tab-' + name).classList.add('active');
@@ -563,6 +583,7 @@ function switchSub(name) {
   try { localStorage.setItem('npayroll_sub', name); } catch (_) {}
   if (document.body.dataset.tab !== 'payroll') switchTab('payroll');
   else refreshPayrollTab();
+  setTimeout(sideShowActive, 0);
 }
 function activeSub() {
   const b = document.querySelector('.subtab.active');
@@ -6434,7 +6455,10 @@ document.addEventListener('keydown', (e) => {
        not draw when the table is missing. The strips repaint when it lands. */
     try {
       if (typeof MJMPeople !== 'undefined') {
-        MJMPeople.load(_supabase).then(() => { try { refreshPayrollTab(); } catch (_) {} });
+        MJMPeople.load(_supabase).then(() => {
+          try { refreshPayrollTab(); } catch (_) {}
+          try { const a = $('side-account'); if (a && userEmail) a.textContent = whoName(userEmail); } catch (_) {}
+        });
       }
     } catch (_) {}
 
