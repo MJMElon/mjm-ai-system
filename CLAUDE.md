@@ -7322,6 +7322,22 @@ exact shape this file exists to catch. Its band check compares the headings
 as WRITTEN, because they are uppercased in CSS and `innerText` hands back
 what the stylesheet did.
 
+## A loading DO belongs to the GANG that carried it, not to the plot
+
+`worked_by_by_nursery` is keyed by the GANG. A UNN 1 gang loading off a
+UNN 2 plot is ticked under UNN1, and the sheet and the claim used to ask
+only the plot nursery, so such a DO sat on the UNN 2 sheet with nobody
+ticked and was paid to nobody (Oct 2026: DO-NPGCE401 400, DO-0HVUL302 300).
+`MJMMaintPlots.doLoaderQty` is the rule, read by the Loading Seedlings sheet
+and the claim: the plot nursery gang if ticked, else the gangs that are,
+divided so a line is never paid twice.
+
+**The office chose the consequence:** a nursery total is what its GANG
+loaded, so October reads UNN1 10,400 / UNN2 11,341 where their own payroll
+PDF (which files by plot) reads 9,700 / 12,041. Same 21,741, same pay per
+person. Do not "fix" the totals back to the plot without asking.
+`tests/a_do_is_paid_to_the_gang_that_loaded_it.cjs`.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
