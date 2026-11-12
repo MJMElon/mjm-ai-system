@@ -7338,6 +7338,32 @@ PDF (which files by plot) reads 9,700 / 12,041. Same 21,741, same pay per
 person. Do not "fix" the totals back to the plot without asking.
 `tests/a_do_is_paid_to_the_gang_that_loaded_it.cjs`.
 
+## Nursery Payroll is a SIDE BAR, and the paper comes off the Report
+
+Dashboard · Payroll Record (Work Maintenance, Seed Planting, Transplanting,
+Loading Seedlings, Monthly Payroll) · Approval · Report · Settings.
+
+- **The sheet buttons are still `.subtab[data-sub]` and the other four
+  `.tab[data-tab]`**, because `switchSub` / `activeSub` / `applyPageAccess`
+  find them that way. `body[data-tab]` says which page is open, so a sheet
+  is lit only on the Payroll Record. A sheet pressed from any page goes to
+  the Payroll Record.
+- **Seed Planting is the LABEL; `seedplant` is still the key** it is
+  verified and permitted under.
+- **The sheets print nothing.** Every form leaves through `pdfOut(doc,
+  file)`; the Report sets `_pdfHow` to print or save for one press, sets
+  the sheet's own picker to the row's nursery, calls the SAME builder, and
+  puts both back. A second builder would be paper that disagrees with the
+  screen.
+- **Approval is the strips read together** (`approvalRows`): one row per
+  sheet per nursery off each sheet's own picker. Verify and Unlock stay on
+  the strip on the sheet; Approval only says what is signed and opens it.
+- **Others came off** with its sheet and its Monthly column: not one entry
+  had ever been keyed in `mjmnpayroll_work_entries`, so no pay moved.
+
+`tests/nursery_payroll_has_a_side_bar.cjs` (`SHOT=/dir` draws the three
+new pages).
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the

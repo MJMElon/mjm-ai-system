@@ -45,7 +45,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=29">
+<link rel="stylesheet" href="npayroll_styles.css?v=30">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -61,18 +61,10 @@
 <div id="mjm-ribbon" data-center="Nursery Payroll" data-center-scale="0.75"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
-<!-- Second row: what used to be three top tabs (Payroll / Settings / Module
-     Assess Control) is now the date picker plus one icon shortcut —
-     Settings moves here as a colour icon button, and Payroll itself has
-     no button of its own any more, because clicking any of the five work
-     tabs below (switchSub) already returns to it. tab-btn-locks keeps its
-     id and onclick/visibility wiring exactly as the old tab button had
-     it — applyPageAccess() still shows or hides it by the same
-     permissions, just as an icon instead of a text pill now. Module
-     Assess Control is not one of these icons any more: it is reached
-     from the Nursery Reporting System hub this module now lives inside
-     (reporting/reporting_admin.html), the same door everyone else who
-     may open it already presses. -->
+<!-- Second row: the month, and nothing else. Every page of this module
+     is now a row of the side bar below (Dashboard, Payroll Record,
+     Approval, Report, Settings), so the Payroll and Settings icons that
+     used to sit here would be a second way to one place. -->
 <header class="topbar">
   <div class="topbar-inner topbar-grid">
     <div></div>
@@ -94,40 +86,80 @@
       </button>
       <input type="month" id="global-month">
     </label>
-    <div class="topbar-icons">
-      <!-- Payroll is the default page, reached the same icon-only way as
-           Settings and Access now (no visible label on any of the three).
-           data-tab="payroll" is what applyPageAccess() hides this by
-           instead of the old (removed) tab button, when this user has no
-           work-type sub-tab open to them at all. -->
-      <button type="button" class="icon-btn icon-btn-payroll" id="icon-btn-payroll" data-tab="payroll"
-              onclick="switchTab('payroll')" title="Payroll" aria-label="Payroll">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-          <rect x="2" y="6" width="20" height="12" rx="2.5" stroke="#fff" stroke-width="2"/>
-          <circle cx="12" cy="12" r="2.6" fill="#fff"/>
-        </svg>
-      </button>
-      <button type="button" class="icon-btn icon-btn-settings hidden" id="tab-btn-locks"
-              onclick="switchTab('locks')" title="Settings" aria-label="Settings">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-          <circle cx="12" cy="12" r="6" stroke="#fff" stroke-width="3.4"/>
-          <g fill="#fff">
-            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1"/>
-            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(60 12 12)"/>
-            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(120 12 12)"/>
-            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(180 12 12)"/>
-            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(240 12 12)"/>
-            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(300 12 12)"/>
-          </g>
-        </svg>
-      </button>
-    </div>
+    <div></div>
   </div>
 </header>
 
 <div id="loading" class="loading">Checking access…</div>
 
 <main id="main" class="page hidden">
+<div class="pay-shell">
+  <!-- ═══ THE SIDE BAR ═══
+       Five places, in the order a month is worked: what the month looks
+       like, the sheets somebody fills, the signatures, the paper, and the
+       settings. The Payroll Record entries keep class "subtab" and their
+       data-sub keys, because switchSub / activeSub / applyPageAccess find
+       them by that; the other four keep class "tab" and data-tab for
+       switchTab. Only the LABEL of seedplant moved, to Seed Planting —
+       the key it is verified and permitted under did not. -->
+  <aside class="side-nav" id="side-nav" aria-label="Nursery Payroll">
+    <button type="button" class="tab side-btn" data-tab="dash" id="tab-btn-dash"
+            onclick="switchTab('dash')">Dashboard</button>
+    <div class="side-group" id="side-group-record">
+      <div class="side-head">Payroll Record</div>
+      <button type="button" class="subtab side-btn side-sub active" data-sub="maint"     onclick="switchSub('maint')">Work Maintenance</button>
+      <button type="button" class="subtab side-btn side-sub"        data-sub="seedplant" onclick="switchSub('seedplant')">Seed Planting</button>
+      <button type="button" class="subtab side-btn side-sub"        data-sub="transpl"   onclick="switchSub('transpl')">Transplanting</button>
+      <button type="button" class="subtab side-btn side-sub"        data-sub="seedling"  onclick="switchSub('seedling')">Loading Seedlings</button>
+      <button type="button" class="subtab side-btn side-sub"        data-sub="monthly"   onclick="switchSub('monthly')">Monthly Payroll</button>
+    </div>
+    <button type="button" class="tab side-btn" data-tab="approval" id="tab-btn-approval"
+            onclick="switchTab('approval')">Approval</button>
+    <button type="button" class="tab side-btn" data-tab="report" id="tab-btn-report"
+            onclick="switchTab('report')">Report</button>
+    <button type="button" class="tab side-btn side-foot hidden" data-tab="locks" id="tab-btn-locks"
+            onclick="switchTab('locks')">Settings</button>
+  </aside>
+<div class="pay-content">
+
+  <!-- ═══════════ DASHBOARD ═══════════ -->
+  <section id="tab-dash" class="panel">
+    <div class="bar">
+      <div>
+        <div class="bar-title">Dashboard</div>
+        <div class="bar-sub" id="dash-sub"></div>
+      </div>
+    </div>
+    <div id="dash-body"></div>
+  </section>
+
+  <!-- ═══════════ APPROVAL ═══════════
+       Every sheet and nursery of the month and whether it is signed. The
+       strip on each sheet is still where a sheet is verified or unlocked;
+       this is where somebody sees what is left without opening them all. -->
+  <section id="tab-approval" class="panel">
+    <div class="bar">
+      <div>
+        <div class="bar-title">Approval</div>
+        <div class="bar-sub" id="approval-sub"></div>
+      </div>
+    </div>
+    <div class="card"><div class="tbl-wrap"><table id="approval-table"></table></div></div>
+    <p class="foot-note">Verify or unlock a sheet on the strip at the top of the sheet itself. Open takes you there.</p>
+  </section>
+
+  <!-- ═══════════ REPORT ═══════════
+       Every form this module prints, for the month in the bar above. The
+       sheets carry no download of their own any more. -->
+  <section id="tab-report" class="panel">
+    <div class="bar">
+      <div>
+        <div class="bar-title">Report</div>
+        <div class="bar-sub" id="report-sub"></div>
+      </div>
+    </div>
+    <div class="card"><div class="tbl-wrap"><table id="report-table"></table></div></div>
+  </section>
 
   <div id="setup" class="warn hidden">
     <b>⚠️ Database not set up yet.</b>
@@ -136,34 +168,7 @@
   </div>
 
   <!-- ═══════════ PAYROLL ═══════════ -->
-  <section id="tab-payroll" class="panel active">
-    <!-- Five equal pills, edge to edge — back inside the Payroll panel
-         (it left briefly so it would stay visible from Settings too, but
-         that read as two nav rows competing; Payroll and Settings now each
-         show only their own). Labels here only; data-sub/switchSub and
-         every "Seedlings Collection" / "Others" elsewhere (bar titles,
-         CAT_LABEL, Monthly Payroll's own columns) are untouched, so this
-         is a display name, not a rename of the thing itself. -->
-    <nav class="subtabs">
-      <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
-      <!-- The Pre Nursery's own piece work, BOTH its jobs on one claim:
-           tanam biji benih, and mengisi tanah ke hyplug at its own rate. The
-           figures are keyed and CHECKED on Work Maintenance, Worker Activity,
-           under a sheet each; this prices the checked ones and totals them.
-           The office asked for one sheet of paper and one signature.
-           THE KEY DID NOT MOVE -- `seedplant` is what the verification, the
-           permission and the saved rows are filed under, so only the word
-           somebody reads changed. -->
-      <button class="subtab"        data-sub="seedplant" onclick="switchSub('seedplant')">Pre Nursery</button>
-      <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
-      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
-      <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
-      <!-- Everything that is paid by the piece and is none of the three above.
-           Its own sheet rather than a fourth guess at what to call it: the
-           Piece Rate screen has always offered "Other" as a Used For, and
-           until now there was nowhere to key the work that rate priced. -->
-      <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Other</button>
-    </nav>
+  <section id="tab-payroll" class="panel">
 
     <!-- ── Work Maintenance: the salary claim form, read from Work Maintenance ── -->
     <div id="sub-maint" class="subpanel active">
@@ -185,13 +190,6 @@
             <option value="UNN1">UNN1 — Ulu Niah 1</option>
             <option value="UNN2">UNN2 — Ulu Niah 2</option>
           </select>
-          <button class="btn btn-icon-dl" onclick="downloadMaintPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
-              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-            </svg>
-          </button>
         </div>
       </div>
             <div class="verify-bar" id="vb-maint"></div>
@@ -216,18 +214,6 @@
                learn twice. The select behind them is the value. -->
           <div class="nsel" id="transpl-section-pills"></div>
           <select id="transpl-section" class="sel cf-skip" style="display:none;" onchange="renderEntries('transplanting')"></select>
-          <!-- One button and one file: the claim, the plot summary, and every
-               nursery's drone maps on the end of it, two to an A4 page and a
-               nursery to a page. They had a button of their own beside this
-               one, which was two things to press and two things to file for
-               one month's work. -->
-          <button class="btn btn-icon-dl" onclick="downloadTransplantPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
-              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-            </svg>
-          </button>
           <button class="btn btn-primary" data-add onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
       </div>
@@ -306,13 +292,6 @@
         </div>
         <div class="bar-actions">
           <div class="nsel" id="loading-nursery-pills"></div>
-          <button class="btn btn-icon-dl" onclick="downloadLoadingPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
-              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-            </svg>
-          </button>
         </div>
       </div>
       <div class="verify-bar" id="vb-loading"></div>
@@ -333,23 +312,14 @@
     <div id="sub-seedplant" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Pre Nursery — Salary Claim</div>
+          <div class="bar-title">Seed Planting — Salary Claim</div>
           <div class="bar-sub" id="seedplant-sub"></div>
         </div>
-        <!-- ONE BUILDER, TWO BUTTONS — see _seedPlantingPDF. Print is what
-             the office asked for; the download icon is what the three claim
-             sheets beside this one carry, and a tab that offered only one of
-             them would be the odd one on a row of four. -->
+        <!-- Print and Download are on Report now, with every other claim
+             form of the month: one place to produce paper, so a sheet is a
+             screen to check and the Report is where it goes out. -->
         <div class="bar-actions">
           <a class="btn btn-sm" href="../nursery_ops/nursery_ops_maintenance.html?view=seed_planting">Check batches on Worker Activity &rarr;</a>
-          <button class="btn btn-sm" onclick="printSeedPlantingPDF()" title="Print the Salary Claim Form">&#128424; Print</button>
-          <button class="btn btn-icon-dl" onclick="downloadSeedPlantingPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
-              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-            </svg>
-          </button>
         </div>
       </div>
       <div class="verify-bar" id="vb-seedplant"></div>
@@ -367,21 +337,6 @@
       <div id="seedplant-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
     </div>
 
-    <!-- ── Others ── -->
-    <div id="sub-other" class="subpanel">
-      <div class="bar">
-        <div>
-          <div class="bar-title">Others — Salary Claim</div>
-          <div class="bar-sub" id="other-sub"></div>
-        </div>
-        <div class="bar-actions">
-          <select id="other-section" class="sel" onchange="renderEntries('other')"></select>
-          <button class="btn btn-primary" data-add onclick="openEntry('other')">+ Add Entry</button>
-        </div>
-      </div>
-            <div class="verify-bar" id="vb-other"></div>
-      <div class="card"><div class="tbl-wrap"><table id="other-table"></table></div></div>
-    </div>
 
     <!-- ── Monthly Payroll ── -->
     <div id="sub-monthly" class="subpanel">
@@ -392,13 +347,6 @@
         </div>
         <div class="bar-actions">
           <select id="monthly-section" class="sel" onchange="renderMonthly()"></select>
-          <button class="btn btn-icon-dl" onclick="downloadMonthlyPDF()" title="Monthly Payroll (PDF)" aria-label="Download Monthly Payroll (PDF)">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
-              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
-            </svg>
-          </button>
         </div>
       </div>
             <div class="verify-bar" id="vb-monthly"></div>
@@ -440,9 +388,9 @@
         <div class="lock-head">
           <div class="lock-title">Month Lock Calendar</div>
           <div class="lock-why">Each month auto-locks every payroll sheet on the day below, next month.
-            Click a month to force it locked or unlocked by hand instead. Re-opening a month also takes
-            back the verifications on it — the sheets go back to being editable, and whoever checked them
-            has to check them again.</div>
+            Click a month to force it locked or unlocked by hand instead. Re-opening a month keeps every
+            verification on it: a verified sheet stays closed until somebody presses Unlock on that sheet
+            itself.</div>
         </div>
         <div class="lock-ctrls">
           <label class="lock-field"><span>Year</span>
@@ -484,6 +432,8 @@
     </div>
   </section>
 
+</div>
+</div>
   <p class="access-note">
     Module access is granted per user on the main portal's
     <a href="../user_access.html">User Access</a>.
@@ -619,7 +569,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=105"></script>
+<script src="npayroll_script.js?v=106"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

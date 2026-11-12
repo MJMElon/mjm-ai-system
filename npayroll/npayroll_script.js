@@ -502,12 +502,19 @@ function applyPageAccess() {
       if (b) b.style.display = 'none';
     }
   });
-  const payrollSubs = ['maint', 'seedplant', 'transpl', 'seedling', 'other', 'monthly'];
-  if (!payrollSubs.some(may)) {
-    const b = $('icon-btn-payroll');
-    if (b) b.style.display = 'none';
-  }
+  /* The side bar: the Payroll Record group goes when no sheet in it is
+     open to this login; Approval shows to anybody who may open a sheet;
+     Report to anybody who may export one of the forms on it. */
+  const g = $('side-group-record');
+  if (g) g.style.display = PAYROLL_SUBS.some(may) ? '' : 'none';
+  const ap = $('tab-btn-approval');
+  if (ap) ap.style.display = PAYROLL_SUBS.some(may) ? '' : 'none';
+  const rp = $('tab-btn-report');
+  if (rp) rp.style.display = REPORTS.some(r => may(r.page, 'export')) ? '' : 'none';
 }
+/* The five sheets of the Payroll Record, in side-bar order. Others came off
+   the day the side bar went in: not one entry had ever been keyed on it. */
+const PAYROLL_SUBS = ['maint', 'seedplant', 'transpl', 'seedling', 'monthly'];
 /* The first tab or sub-tab this user can actually open. */
 function firstOpen(candidates) { return candidates.find(may) || null; }
 
@@ -516,11 +523,16 @@ function switchTab(name) {
   // applyPageAccess() — opens Settings instead of a panel that no longer
   // exists on its own.
   if (name === 'rates') name = 'locks';
+  if (!$('tab-' + name)) name = 'payroll';
+  document.body.dataset.tab = name;
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   $('tab-' + name).classList.add('active');
   try { localStorage.setItem('npayroll_tab', name); } catch (_) {}
   if (name === 'payroll') refreshPayrollTab();
+  if (name === 'dash')     renderDashboard();
+  if (name === 'approval') renderApproval();
+  if (name === 'report')   renderReport();
   // Lock Controls and Piece Rate both live on this one tab now, switched by
   // their own menu — reopen whichever this user had open last (or Lock
   // Controls first, then Piece Rate, if neither is remembered or the
@@ -549,7 +561,8 @@ function switchSub(name) {
   document.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
   $('sub-' + name).classList.add('active');
   try { localStorage.setItem('npayroll_sub', name); } catch (_) {}
-  refreshPayrollTab();
+  if (document.body.dataset.tab !== 'payroll') switchTab('payroll');
+  else refreshPayrollTab();
 }
 function activeSub() {
   const b = document.querySelector('.subtab.active');
@@ -577,8 +590,12 @@ function refreshPayrollTab() {
   if (s === 'transpl')  renderEntries('transplanting');
   if (s === 'seedling') { renderLoading(); }
   if (s === 'seedplant') renderSeedPlanting();
-  if (s === 'other')    renderEntries('other');
   if (s === 'monthly')  renderMonthly();
+  /* The month picker redraws whichever page is open, not only a sheet. */
+  const t = document.body.dataset.tab;
+  try { if (t === 'dash') renderDashboard(); } catch (_) {}
+  try { if (t === 'approval') renderApproval(); } catch (_) {}
+  try { if (t === 'report') renderReport(); } catch (_) {}
 }
 
 /* ════════════ SEED PLANTING ════════════
@@ -2779,10 +2796,6 @@ function renderCullIncentive(secFilter) {
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
   seedlings:     { table:'seedling-table', section:'seedling-section', title:'Seedlings Collection' },
-  /* Piece work that is none of the other three. The category value is `other`,
-     which is what the Piece Rate screen's "Used For" has always offered — so a
-     rate keyed against Other now has a sheet to price. */
-  other:         { table:'other-table',    section:'other-section',    title:'Others' }
 };
 
 /**
@@ -4180,10 +4193,9 @@ const LOCK_SHEETS = {
      to have moved is the day to do it. `shared/CHECK_...` is not owed
      either — `mjmnpayroll_verifications.sheet` is plain TEXT with no CHECK
      constraint on it, so a new sheet name needs nothing run. */
-  seedplant: { label: 'Pre Nursery',         scope: () => '' },
+  seedplant: { label: 'Seed Planting',       scope: () => '' },
   transpl:  { label: 'Transplanting',        scope: () => $('transpl-section').value || '' },
   seedling: { label: 'Seedlings Collection', scope: () => ($('seedling-section') || {}).value || '' },
-  other:    { label: 'Others',               scope: () => $('other-section').value || '' },
   monthly:  { label: 'Monthly Payroll',      scope: () => '' }
 };
 const lockScope = (sheet) => (LOCK_SHEETS[sheet] ? LOCK_SHEETS[sheet].scope() : '');
@@ -4481,8 +4493,8 @@ async function saveLockDay() {
 }
 
 /* ════════════ MONTHLY PAYROLL ════════════ */
-function monthlyRows() {
-  const secFilter = $('monthly-section').value || '';
+function monthlyRows(sec) {
+  const secFilter = sec !== undefined ? sec : ($('monthly-section').value || '');
   const month = monthValue();
   const monthTxt = maintMonthLabel(month);
 
@@ -4583,14 +4595,10 @@ function monthlyRows() {
     const row = touch(w.full_name, w.section || '');
     if (e.category === 'transplanting') row.transpl  += Number(e.amount || 0);
     if (e.category === 'seedlings')     row.seedling += Number(e.amount || 0);
-    /* Counted like any other sheet. Leaving it out of the total would be the
-       worst kind of wrong: the Others sheet would show the work priced and the
-       month's pay would quietly not include it. */
-    if (e.category === 'other')         row.other    += Number(e.amount || 0);
   });
 
   return [...rows.values()]
-    .map(r => ({ ...r, total: r.maint + r.transpl + r.seedling + r.other }))
+    .map(r => ({ ...r, total: r.maint + r.transpl + r.seedling }))
     .filter(r => r.total > 0 || !secFilter)
     .sort((a, b) => (a.section || '').localeCompare(b.section || '') || a.name.localeCompare(b.name));
 }
@@ -4613,27 +4621,260 @@ function renderMonthly() {
       <td>${r.maint    ? money(r.maint)    : '—'}</td>
       <td>${r.transpl  ? money(r.transpl)  : '—'}</td>
       <td>${r.seedling ? money(r.seedling) : '—'}</td>
-      <td>${r.other    ? money(r.other)    : '—'}</td>
       <td class="money">${money(r.total)}</td>
     </tr>`).join('')
-    : `<tr><td colspan="8" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
+    : `<tr><td colspan="7" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
 
   const sum = k => list.reduce((s, r) => s + r[k], 0);
   $('monthly-table').innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th class="l">Worker</th><th style="width:90px;">Section</th>
       <th style="width:140px;">Work Maintenance</th><th style="width:130px;">Transplanting</th>
-      <th style="width:150px;">Seedlings Collection</th><th style="width:110px;">Others</th>
+      <th style="width:150px;">Seedlings Collection</th>
       <th style="width:130px;">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
     ${list.length ? `<tfoot><tr><td class="l" colspan="3">GRAND TOTAL — ${esc(monthLabelFull(monthValue()))}</td>
       <td>${money(sum('maint'))}</td><td>${money(sum('transpl'))}</td>
-      <td>${money(sum('seedling'))}</td><td>${money(sum('other'))}</td>
+      <td>${money(sum('seedling'))}</td>
       <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
 
   $('monthly-note').textContent =
-    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes Culling Monitoring; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
+    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting includes Culling Monitoring; Transplanting and Seedlings Collection come from the sheets keyed here.';
+}
+
+/* ════════════ DASHBOARD · APPROVAL · REPORT ════════════
+   Three pages of the side bar that read what the sheets already worked out
+   and add nothing of their own: the Dashboard is the Monthly Payroll's own
+   figures (monthlyRows, all sections), Approval is the verifications every
+   strip already reads, and Report hands each form to the same builder the
+   sheet's own download button used to call. A second copy of any of those
+   would be a page that disagrees with the sheet it points at. */
+
+/* The options a sheet's own picker offers, as {v, t}. The pickers are the
+   answer to "which nurseries does this sheet have", and the circles are
+   drawn off them, so reading them here keeps Approval and Report on the
+   same list without a third copy of it. */
+function _pickerOptions(id, keepAll) {
+  const el = $(id);
+  if (!el) return [];
+  return [...el.options].map(o => ({ v: o.value, t: o.textContent }))
+                        .filter(o => keepAll || o.v);
+}
+
+/* Every sheet and nursery of the month, and whether it is signed. Loading
+   Seedlings is one of Work Maintenance's jobs and is verified with it (the
+   'maint' sheet), so it is one row per nursery, not two. */
+function approvalRows() {
+  const ym = monthValue();
+  const ready = typeof MJMPayrollLock !== 'undefined' && MJMPayrollLock.ready();
+  const monthLocked = ready && MJMPayrollLock.isMonthLockedStr(ym);
+  const plan = [];
+  if (may('maint') || may('seedling'))
+    _pickerOptions('maint-nursery').forEach(o => plan.push({ sheet: 'maint', sub: 'maint',
+      sel: 'maint-nursery', scope: o.v, what: 'Work Maintenance & Loading Seedlings', where: o.t }));
+  if (may('seedplant'))
+    plan.push({ sheet: 'seedplant', sub: 'seedplant', scope: '', what: 'Seed Planting', where: 'Pre Nursery' });
+  if (may('transpl'))
+    _pickerOptions('transpl-section').forEach(o => plan.push({ sheet: 'transpl', sub: 'transpl',
+      sel: 'transpl-section', scope: o.v, what: 'Transplanting', where: o.t }));
+  if (may('monthly'))
+    plan.push({ sheet: 'monthly', sub: 'monthly', scope: '', what: 'Monthly Payroll', where: 'The whole month' });
+  plan.forEach(p => {
+    p.v = ready ? MJMPayrollLock.verificationOf(ym, p.sheet, p.scope) : null;
+    p.state = p.v ? 'verified' : (monthLocked ? 'locked' : 'open');
+  });
+  return plan;
+}
+
+/* Open a sheet on the nursery a row is about. */
+function openSheetAt(sub, sel, scope) {
+  if (sel && $(sel)) $(sel).value = scope;
+  switchSub(sub);
+}
+
+function renderApproval() {
+  const tbl = $('approval-table');
+  if (!tbl) return;
+  const ym = monthValue();
+  const ready = typeof MJMPayrollLock !== 'undefined' && MJMPayrollLock.ready();
+  const rows = approvalRows();
+  const signed = rows.filter(r => r.state === 'verified').length;
+  const monthLocked = ready && MJMPayrollLock.isMonthLockedStr(ym);
+  const sub = $('approval-sub');
+  if (sub) sub.textContent = `${monthLabelFull(ym)} · ${signed} of ${rows.length} verified`
+    + (monthLocked ? ' · the month is locked' : '');
+  if (!ready) {
+    tbl.innerHTML = `<tbody><tr><td class="empty">Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.</td></tr></tbody>`;
+    return;
+  }
+  const status = r => r.state === 'verified'
+    ? `<span class="ap-done">✔ Verified</span>`
+    : r.state === 'locked' ? `<span class="ap-lock">🔒 Month locked</span>`
+    : `<span class="ap-open">Open</span>`;
+  tbl.innerHTML = `
+    <thead><tr>
+      <th class="l">Sheet</th><th class="l">Nursery / section</th><th>Status</th>
+      <th class="l">Verified by</th><th>When</th><th style="width:90px;"></th>
+    </tr></thead>
+    <tbody>${rows.length ? rows.map(r => `
+      <tr class="ap-row" data-sheet="${esc(r.sheet)}" data-scope="${esc(r.scope)}" data-state="${r.state}">
+        <td class="l" style="font-weight:700;color:var(--text-head);">${esc(r.what)}</td>
+        <td class="l">${esc(r.where)}</td>
+        <td>${status(r)}</td>
+        <td class="l">${r.v ? esc(whoName(r.v.verified_by)) : '—'}</td>
+        <td>${r.v ? esc(fmtStamp(r.v.verified_at)) : '—'}</td>
+        <td><button type="button" class="btn btn-sm"
+              onclick="openSheetAt('${r.sub}', '${r.sel || ''}', '${esc(r.scope)}')">Open</button></td>
+      </tr>`).join('')
+      : `<tr><td colspan="6" class="empty">No sheet is open to this login.</td></tr>`}</tbody>`;
+}
+
+function renderDashboard() {
+  const box = $('dash-body');
+  if (!box) return;
+  const ym = monthValue();
+  const sub = $('dash-sub');
+  if (sub) sub.textContent = monthLabelFull(ym);
+  let list = [];
+  try { list = monthlyRows('').filter(r => r.total > 0); } catch (_) {}
+  const sum = (rows, k) => rows.reduce((s, r) => s + r[k], 0);
+  const ready = typeof MJMPayrollLock !== 'undefined' && MJMPayrollLock.ready();
+  const monthLocked = ready && MJMPayrollLock.isMonthLockedStr(ym);
+  const ap = approvalRows();
+  const signed = ap.filter(r => r.state === 'verified').length;
+  const card = (label, val, note, go) => `
+    <button type="button" class="dash-card" onclick="${go}">
+      <div class="dc-label">${esc(label)}</div>
+      <div class="dc-val">${val}</div>
+      <div class="dc-sub">${esc(note)}</div>
+    </button>`;
+  const cards = [];
+  cards.push(card('This month', monthLocked ? '🔒 Locked' : 'Open',
+    monthLocked ? 'Every sheet is closed' : 'Sheets can still be changed',
+    may('locks') ? "switchTab('locks')" : "switchTab('approval')"));
+  if (ap.length) cards.push(card('Approval', `${signed} / ${ap.length}`,
+    signed === ap.length ? 'Every sheet verified' : `${ap.length - signed} still open`, "switchTab('approval')"));
+  if (may('maint')) cards.push(card('Work Maintenance', money(sum(list, 'maint')),
+    'Including Loading Seedlings', "switchSub('maint')"));
+  if (may('transpl')) cards.push(card('Transplanting', money(sum(list, 'transpl')),
+    'Including Culling Monitoring', "switchSub('transpl')"));
+  if (may('monthly')) cards.push(card('Monthly Payroll', money(sum(list, 'total')),
+    `${list.length} ${list.length === 1 ? 'worker' : 'workers'} paid`, "switchSub('monthly')"));
+
+  /* By section, the Monthly Payroll's own rows added up. */
+  const bySec = new Map();
+  list.forEach(r => {
+    const k = r.section || '';
+    if (!bySec.has(k)) bySec.set(k, []);
+    bySec.get(k).push(r);
+  });
+  const secName = s => !s ? 'No section' : (s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s));
+  const secRows = [...bySec.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const table = may('monthly') ? `
+    <div class="card"><div class="tbl-wrap"><table id="dash-table">
+      <thead><tr><th class="l">Section</th><th>Workers paid</th><th>Work Maintenance</th>
+        <th>Transplanting</th><th>Seedlings Collection</th><th>Total</th></tr></thead>
+      <tbody>${secRows.length ? secRows.map(([s, rs]) => `
+        <tr><td class="l" style="font-weight:700;color:var(--text-head);">${esc(secName(s))}</td>
+          <td>${rs.length}</td><td>${money(sum(rs, 'maint'))}</td><td>${money(sum(rs, 'transpl'))}</td>
+          <td>${money(sum(rs, 'seedling'))}</td><td class="money">${money(sum(rs, 'total'))}</td></tr>`).join('')
+        : `<tr><td colspan="6" class="empty">Nothing earned in ${esc(monthLabel(ym))} yet.</td></tr>`}</tbody>
+      ${secRows.length ? `<tfoot><tr><td class="l">TOTAL</td><td>${list.length}</td>
+        <td>${money(sum(list, 'maint'))}</td><td>${money(sum(list, 'transpl'))}</td>
+        <td>${money(sum(list, 'seedling'))}</td><td>${money(sum(list, 'total'))}</td></tr></tfoot>` : ''}
+    </table></div></div>
+    <p class="foot-note">The figures are the Monthly Payroll's. Seed Planting is paid on its own claim and is not on the Monthly Payroll yet.</p>` : '';
+  box.innerHTML = `<div class="dash-cards">${cards.join('')}</div>${table}`;
+}
+
+/* Every form this module prints. `page` is the permission the builder
+   itself asks (mayDo(page, 'export')), so the Report offers exactly the
+   forms the builder would produce. `select` is the sheet's own picker the
+   builder reads; the Report sets it for the one press and puts it back. */
+async function _ensureSeedPlanting() {
+  const m = maintMonthLabel(monthValue());
+  if (_seedPlant.month !== m || _seedPlant.rows === null) await loadSeedPlanting(m);
+}
+const REPORTS = [
+  { key: 'maint',     page: 'maint',     label: 'Work Maintenance — Salary Claim Form', select: 'maint-nursery',
+    run: () => downloadMaintPDF() },
+  { key: 'loading',   page: 'maint',     label: 'Loading Seedlings — Salary Claim Form', select: 'maint-nursery',
+    run: () => downloadLoadingPDF() },
+  { key: 'seedplant', page: 'seedplant', label: 'Seed Planting — Salary Claim Form', where: 'Pre Nursery',
+    before: _ensureSeedPlanting,
+    run: () => pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF(_pdfHow)) },
+  { key: 'transpl',   page: 'transpl',   label: 'Transplanting — Salary Claim Form', select: 'transpl-section',
+    run: () => downloadTransplantPDF() },
+  { key: 'monthly',   page: 'monthly',   label: 'Monthly Payroll', select: 'monthly-section', keepAll: true,
+    run: () => downloadMonthlyPDF() }
+];
+/* Which verification a report's chosen scope answers to: Loading Seedlings
+   is signed on the Work Maintenance sheet. */
+const _reportSheet = r => (r.key === 'loading' ? 'maint' : r.key);
+
+function _reportStatus(r, scope) {
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) return '';
+  const ym = monthValue();
+  const v = MJMPayrollLock.verificationOf(ym, _reportSheet(r), scope || '');
+  if (v) return `<span class="ap-done">✔ Verified by ${esc(whoName(v.verified_by))}</span>`;
+  if (MJMPayrollLock.isMonthLockedStr(ym)) return `<span class="ap-lock">🔒 Month locked</span>`;
+  return `<span class="ap-open">Not verified yet</span>`;
+}
+function renderReportStatus(key) {
+  const r = REPORTS.find(x => x.key === key);
+  const cell = $('rep-status-' + key), pick = $('rep-scope-' + key);
+  if (r && cell) cell.innerHTML = _reportStatus(r, pick ? pick.value : '');
+}
+
+function renderReport() {
+  const tbl = $('report-table');
+  if (!tbl) return;
+  const sub = $('report-sub');
+  if (sub) sub.textContent = `${monthLabelFull(monthValue())} · pick the month in the bar above`;
+  const list = REPORTS.filter(r => may(r.page, 'export'));
+  tbl.innerHTML = `
+    <thead><tr><th class="l">Report</th><th class="l">Nursery / section</th>
+      <th class="l">Status</th><th style="width:220px;"></th></tr></thead>
+    <tbody>${list.length ? list.map(r => {
+      const opts = r.select ? _pickerOptions(r.select, r.keepAll) : [];
+      const cur = r.select && $(r.select) ? $(r.select).value : '';
+      const scope = r.select
+        ? `<select id="rep-scope-${r.key}" class="sel cf-skip" onchange="renderReportStatus('${r.key}')">${
+            opts.map(o => `<option value="${esc(o.v)}"${o.v === cur ? ' selected' : ''}>${esc(o.t)}</option>`).join('')}</select>`
+        : esc(r.where || '—');
+      return `<tr class="rep-row" data-report="${r.key}">
+        <td class="l" style="font-weight:700;color:var(--text-head);">${esc(r.label)}</td>
+        <td class="l">${scope}</td>
+        <td class="l" id="rep-status-${r.key}">${_reportStatus(r, r.select ? (opts.some(o => o.v === cur) ? cur : (opts[0] || {}).v) : '')}</td>
+        <td><div class="rep-actions">
+          <button type="button" class="btn btn-sm" onclick="runReport('${r.key}', 'print')">&#128424; Print</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick="runReport('${r.key}', 'save')">&#8681; Download</button>
+        </div></td>
+      </tr>`; }).join('')
+      : `<tr><td colspan="4" class="empty">No report is open to this login.</td></tr>`}</tbody>`;
+}
+
+/* One press: set the sheet's own picker to what the Report row says, hand
+   the builder the button that was pressed, and put both back — whatever
+   the builder does, the sheet somebody goes back to is the one they left. */
+async function runReport(key, how) {
+  const r = REPORTS.find(x => x.key === key);
+  if (!r) return;
+  const pick = $('rep-scope-' + key);
+  const sel = r.select ? $(r.select) : null;
+  const was = sel ? sel.value : null;
+  if (sel && pick) sel.value = pick.value;
+  _pdfHow = how === 'print' ? 'print' : 'save';
+  try {
+    if (r.before) await r.before();
+    await r.run();
+  } catch (e) {
+    pdfFailed(r.label, e);
+  } finally {
+    _pdfHow = 'save';
+    if (sel && was !== null) sel.value = was;
+  }
 }
 
 /* ════════════ PDF ════════════ */
@@ -4659,6 +4900,25 @@ function pdfGuard(what, fn) {
     const r = fn();
     return (r && typeof r.then === 'function') ? r.catch(e => pdfFailed(what, e)) : r;
   } catch (e) { pdfFailed(what, e); }
+}
+
+/* EVERY FORM LEAVES THROUGH HERE. Download saves the file; Print is the
+   Seed Audit sheet's way: autoPrint, then the blob into a hidden iframe,
+   because a new tab is what a popup blocker eats. `how` defaults to what
+   the Report page asked for (_pdfHow), so a builder never has to know
+   which of the two buttons was pressed. */
+let _pdfHow = 'save';
+function pdfOut(doc, file, how) {
+  if ((how || _pdfHow) !== 'print') { doc.save(file); return; }
+  doc.autoPrint();
+  const url = doc.output('bloburl');
+  const old = document.getElementById('payroll-print-frame');
+  if (old) old.remove();
+  const f = document.createElement('iframe');
+  f.id = 'payroll-print-frame';
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  f.src = url;
+  document.body.appendChild(f);
 }
 
 function pdfDoc(orientation, format) {
@@ -4893,10 +5153,10 @@ function pdfFooterNote(doc, y, centerX, rightX, gap) {
    FLOOR and the paper widens to meet it, which a printer scales down once
    instead of the form being illegible by construction. */
 function downloadSeedPlantingPDF() {
-  return pdfGuard('Pre Nursery salary claim form', () => _seedPlantingPDF('save'));
+  return pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF('save'));
 }
 function printSeedPlantingPDF() {
-  return pdfGuard('Pre Nursery salary claim form', () => _seedPlantingPDF('print'));
+  return pdfGuard('Seed Planting salary claim form', () => _seedPlantingPDF('print'));
 }
 function _seedPlantingPDF(how) {
   if (!mayDo('seedplant', 'export',
@@ -4949,7 +5209,7 @@ function _seedPlantingPDF(how) {
   };
   const fig = v => v ? Number(v).toLocaleString('en-MY') : '—';
 
-  let y = pdfTitle(doc, ['SALARY CLAIM FORM — PRE NURSERY', 'Pre Nursery',
+  let y = pdfTitle(doc, ['SALARY CLAIM FORM — SEED PLANTING', 'Pre Nursery',
                          `Month ${monthTxt}`],
                    { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
 
@@ -5118,19 +5378,8 @@ function _seedPlantingPDF(how) {
   y = pdfVerifiedNote(doc, y, 'seedplant', '', CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
 
-  const file = `Salary_Claim_Pre_Nursery_${monthTxt.replace(/\s+/g, '_')}.pdf`;
-  if (how !== 'print') { doc.save(file); return; }
-  /* Print, the Seed Audit sheet's way: autoPrint, then the blob into a
-     hidden iframe. A new tab is what a popup blocker eats. */
-  doc.autoPrint();
-  const url = doc.output('bloburl');
-  const old = document.getElementById('seedplant-print-frame');
-  if (old) old.remove();
-  const f = document.createElement('iframe');
-  f.id = 'seedplant-print-frame';
-  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-  f.src = url;
-  document.body.appendChild(f);
+  const file = `Salary_Claim_Seed_Planting_${monthTxt.replace(/\s+/g, '_')}.pdf`;
+  pdfOut(doc, file, how);
 }
 function downloadMaintPDF() {
   return pdfGuard('Work Maintenance salary claim form', _downloadMaintPDF);
@@ -5312,7 +5561,7 @@ function _downloadMaintPDF() {
   y += FOOT_H;
   y = pdfVerifiedNote(doc, y, 'maint', n, CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
-  doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
+  pdfOut(doc, `Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 
 /* Loading Seedlings' own claim form — one job, so a portrait page is
@@ -5385,7 +5634,7 @@ function _downloadLoadingPDF() {
   y += FOOT_H;
   y = pdfVerifiedNote(doc, y, 'maint', n, CONTENT_R);
   pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
-  doc.save(`Salary_Claim_Loading_Seedlings_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
+  pdfOut(doc, `Salary_Claim_Loading_Seedlings_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 
 /* The Transplanting claim, on paper.
@@ -5687,7 +5936,7 @@ async function _downloadTransplantPDF() {
       + 'Drone Map column and print them from there.');
   }
 
-  doc.save(`Salary_Claim_Transplanting_${sec === NO_SECTION ? 'No_Section' : (sec || 'All')}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
+  pdfOut(doc, `Salary_Claim_Transplanting_${sec === NO_SECTION ? 'No_Section' : (sec || 'All')}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 
 /* THE PLOT SUMMARY, ON THE CLAIM FORM.
@@ -5902,10 +6151,9 @@ function _downloadMonthlyPDF() {
   if (!list.length) { alert('Nothing earned this month yet.'); return; }
   const sec = $('monthly-section').value;
   const doc = pdfDoc();
-  /* Eight columns now: Others sits between Seedlings Collection and Total.
-     The widths are proportions — they are scaled to 160mm below — so the room
-     for it comes out of the others rather than off the edge of the page. */
-  const COL = [8, 42, 16, 23, 21, 23, 19, 24];   // 176 → fits 160 after trim
+  /* Seven columns: Others came off with its sheet. The widths are
+     proportions — they are scaled to 160mm below. */
+  const COL = [8, 46, 17, 25, 23, 25, 26];
   const total = COL.reduce((a, b) => a + b, 0);
   const scale = 160 / total;
   const C = COL.map(w => w * scale);
@@ -5915,7 +6163,7 @@ function _downloadMonthlyPDF() {
   const drawHead = () => {
     let y = pdfTitle(doc, ['MONTHLY PAYROLL', sec ? (SECTION_NAME[sec] || sec) : 'All Sections', `Month ${monthLabelFull(monthValue())}`]);
     const H = 13;
-    ['No.', 'Worker Name', 'Section', 'Work Maintenance', 'Transplanting', 'Seedlings Collection', 'Others', 'Total (RM)']
+    ['No.', 'Worker Name', 'Section', 'Work Maintenance', 'Transplanting', 'Seedlings Collection', 'Total (RM)']
       .forEach((t, i) => pdfCell(doc, X[i], y, C[i], H, t, { bold: true, size: 7.5, fill: HF }));
     return y + H;
   };
@@ -5929,7 +6177,6 @@ function _downloadMonthlyPDF() {
                    r.maint ? money(r.maint) : '—',
                    r.transpl ? money(r.transpl) : '—',
                    r.seedling ? money(r.seedling) : '—',
-                   r.other ? money(r.other) : '—',
                    money(r.total)];
     cells.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH, t,
       { size: k === 1 ? 8.5 : 8, bold: k === cells.length - 1, nowrap: k !== 1, fill: z }));
@@ -5938,7 +6185,7 @@ function _downloadMonthlyPDF() {
 
   const sum = k => list.reduce((s, r) => s + r[k], 0);
   const foot = ['', 'GRAND TOTAL', '', money(sum('maint')), money(sum('transpl')),
-                money(sum('seedling')), money(sum('other')),
+                money(sum('seedling')),
                 money(sum('total'))];
   foot.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH + 1, t, { bold: true, size: 8, nowrap: k !== 1, fill: TF }));
   y += RH + 1;
@@ -5947,7 +6194,7 @@ function _downloadMonthlyPDF() {
      narrower than the paper, so page-centre and table-right are not the
      same place. */
   pdfFooterNote(doc, y, null, 25 + C.reduce((a, w) => a + w, 0));
-  doc.save(`Monthly_Payroll_${sec || 'All'}_${monthLabel(monthValue()).replace(/\s+/g, '_')}.pdf`);
+  pdfOut(doc, `Monthly_Payroll_${sec || 'All'}_${monthLabel(monthValue()).replace(/\s+/g, '_')}.pdf`);
 }
 
 /* ════════════ LOAD ════════════ */
@@ -6159,7 +6406,6 @@ document.addEventListener('keydown', (e) => {
        circles offer nurseries rather than every section this module files
        under. */
     fillSectionSelect($('seedling-section'), true, '');
-    fillSectionSelect($('other-section'),    true, '');
     fillSectionSelect($('monthly-section'),  true, '');
 
     /* The register first: the dropdown, the headings and which sheets exist
@@ -6194,7 +6440,7 @@ document.addEventListener('keydown', (e) => {
 
     applyPageAccess();
 
-    let tab = 'payroll', sub = 'maint';
+    let tab = 'dash', sub = 'maint';
     try { tab = localStorage.getItem('npayroll_tab') || tab; sub = localStorage.getItem('npayroll_sub') || sub; } catch (_) {}
     // A remembered 'rates' tab is from before Piece Rate moved into
     // Settings (see switchTab) — same remap, so the open-check below asks
@@ -6202,10 +6448,12 @@ document.addEventListener('keydown', (e) => {
     if (tab === 'rates') tab = 'locks';
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
-    if (!may(sub)) sub = firstOpen(['maint', 'seedplant', 'transpl', 'seedling', 'other', 'monthly']) || sub;
-    const tabOpen = { payroll: !!firstOpen(['maint','seedplant','transpl','seedling','other','monthly']),
+    if (!may(sub)) sub = firstOpen(PAYROLL_SUBS) || sub;
+    const anySheet = !!firstOpen(PAYROLL_SUBS);
+    const tabOpen = { dash: anySheet, payroll: anySheet, approval: anySheet,
+                      report: REPORTS.some(r => may(r.page, 'export')),
                       workers: may('workers'), locks: may('rates') || may('locks') };
-    if (!tabOpen[tab]) tab = ['payroll','workers','locks'].find(t => tabOpen[t]) || tab;
+    if (!tabOpen[tab]) tab = ['dash','payroll','report','locks'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);
     if ($('tab-' + tab)) switchTab(tab);
 
