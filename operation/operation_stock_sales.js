@@ -677,6 +677,77 @@
     // already real, not a forecast. Toggled by class + a couple of ids
     // rather than re-rendering the thead, so the row template below stays
     // one shape for every tab.
+    /* ONE SHAPE FOR EVERY MONTH, AND THE TWO RIGHT-HAND GROUPS IN THE
+       OFFICE'S ORDER. The widths are a colgroup on a fixed-layout table, so
+       Production and Plot Status keep their width whichever month is open;
+       Customers (drag here) has no width and takes what is left. The order
+       of Plot Status and Customer Allocation is the office's — they drag
+       one group heading onto the other — and it is remembered on this
+       machine. Cells are MOVED, never re-rendered, so the row template
+       stays one shape and every handler on a cell goes with it. */
+    const MAT_GROUP_ORDER_KEY = 'mjm_mat_group_order';
+    const MAT_COL_W = { prod: [112, 82, 82, 150, 118, 128], plot: [150, 112, 112], alloc: [null, 104, 138] };
+    function matGroupOrder() {
+        try { return localStorage.getItem(MAT_GROUP_ORDER_KEY) === 'alloc' ? 'alloc' : 'plot'; }
+        catch (e) { return 'plot'; }
+    }
+    function applyMatLayout() {
+        const table = document.querySelector('.mat-table');
+        if (!table) return;
+        const allocFirst = matGroupOrder() === 'alloc';
+        table.classList.toggle('alloc-first', allocFirst);
+        const isPR = table.classList.contains('pr-view');
+        let cg = table.querySelector('colgroup.mat-cols');
+        if (!cg) { cg = document.createElement('colgroup'); cg.className = 'mat-cols'; table.insertBefore(cg, table.firstChild); }
+        const prod = MAT_COL_W.prod.filter((w, i) => !(isPR && i === 5));
+        const seq = allocFirst ? [...prod, ...MAT_COL_W.alloc, ...MAT_COL_W.plot] : [...prod, ...MAT_COL_W.plot, ...MAT_COL_W.alloc];
+        cg.innerHTML = seq.map(w => w ? `<col style="width:${w}px">` : '<col>').join('');
+        const gr = table.querySelector('thead tr.mat-group-row');
+        const gp = gr && gr.querySelector('.mat-group-plot'), ga = gr && gr.querySelector('.mat-group-alloc');
+        if (gp && ga) { if (allocFirst) gr.insertBefore(ga, gp); else gr.appendChild(ga); }
+        table.querySelectorAll('thead tr:not(.mat-group-row), tbody tr, tfoot tr').forEach(tr => {
+            const kids = [...tr.children];
+            const p = kids.filter(c => c.classList.contains('col-plot'));
+            const a = kids.filter(c => c.classList.contains('col-alloc'));
+            if (p.length !== 3 || a.length !== 3) return;
+            if (allocFirst) a.forEach(c => tr.insertBefore(c, p[0]));
+            else p.forEach(c => tr.insertBefore(c, a[0]));
+        });
+        wireMatGroupDrag(table);
+    }
+    function setMatGroupOrder(order) {
+        try { localStorage.setItem(MAT_GROUP_ORDER_KEY, order); } catch (e) {}
+        applyMatLayout();
+    }
+    function wireMatGroupDrag(table) {
+        table.querySelectorAll('.mat-group-drag').forEach(th => {
+            if (th._matDragWired) return;
+            th._matDragWired = true;
+            th.addEventListener('dragstart', e => {
+                e.dataTransfer.setData('text/x-mat-group', th.dataset.matGroup);
+                e.dataTransfer.effectAllowed = 'move';
+                th.classList.add('mat-group-dragging');
+            });
+            th.addEventListener('dragend', () => {
+                table.querySelectorAll('.mat-group-drag').forEach(x => x.classList.remove('mat-group-dragging', 'mat-group-over'));
+            });
+            th.addEventListener('dragover', e => {
+                if (![...e.dataTransfer.types].includes('text/x-mat-group')) return;
+                e.preventDefault();
+                th.classList.add('mat-group-over');
+            });
+            th.addEventListener('dragleave', () => th.classList.remove('mat-group-over'));
+            th.addEventListener('drop', e => {
+                const from = e.dataTransfer.getData('text/x-mat-group');
+                th.classList.remove('mat-group-over');
+                if (!from || from === th.dataset.matGroup) return;
+                e.preventDefault();
+                setMatGroupOrder(matGroupOrder() === 'alloc' ? 'plot' : 'alloc');
+            });
+        });
+    }
+    window.setMatGroupOrder = setMatGroupOrder;
+
     function updateMaturityHeaders() {
         const isPR = activeMonthKey === PR_TAB_KEY;
         const table = document.querySelector('.mat-table');
@@ -686,6 +757,7 @@
         // one fewer again on Plot-R where After 10% Culling hides.
         const prodGroupTh = document.getElementById('mat-th-prod-group');
         if (prodGroupTh) prodGroupTh.colSpan = isPR ? 5 : 6;
+        applyMatLayout();
         const qtyTh = document.getElementById('mat-th-qty');
         if (qtyTh) qtyTh.textContent = isPR ? 'Qty Transferred' : 'Qty Transplanted';
         // Both header lines are sticky and the second sticks BELOW the
@@ -1028,7 +1100,7 @@
                     <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
                     <td class="col-prod font-mono">${escapeHtml(r.batch || '—')}</td>
-                    <td class="col-prod">${escapeHtml(r.breed || '—')}</td>
+                    <td class="col-prod" title="${escapeHtml(r.breed || '')}">${escapeHtml(r.breed || '—')}</td>
                     <td class="col-prod num">${r.qty.toLocaleString()}</td>
                     <td class="col-prod num text-emerald-700 mat-sep-r col-afterc">${r.afterCulling.toLocaleString()}</td>
                     <td class="col-plot">
@@ -1038,7 +1110,7 @@
                     <td class="col-plot num font-black mat-sep-r ${(soldOut || culled) ? 'text-red-600' : 'text-slate-800'}"${balTitle}>${plotBalance.toLocaleString()}</td>
                     <td class="col-alloc">${reservHtml}</td>
                     <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
-                    <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}"${adrTitle}>${afterDeductReserve.toLocaleString()}</td>
+                    <td class="col-alloc col-alloc-end num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}"${adrTitle}>${afterDeductReserve.toLocaleString()}</td>
                 </tr>
             `;
             return { html, allocSum, collected, otherDed, plotBalance, status, afterDeductReserve };
@@ -1119,16 +1191,17 @@
                 <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${totRowCount} rows)</td>
                 <td class="num text-slate-900">${totQty.toLocaleString()}</td>
                 <td class="num text-emerald-700 mat-sep-r col-afterc">${totCull.toLocaleString()}</td>
-                <td></td>
-                <td class="num text-blue-700">${totCollected.toLocaleString()}</td>
-                <td class="num text-slate-800 mat-sep-r">${totBalance.toLocaleString()}</td>
-                <td></td>
-                <td class="num text-slate-900">${totReserved.toLocaleString()}</td>
-                <td class="num ${totAfterDeduct < 0 ? 'text-red-600' : 'text-emerald-700'}">${totAfterDeduct.toLocaleString()}</td>
+                <td class="col-plot"></td>
+                <td class="col-plot num text-blue-700">${totCollected.toLocaleString()}</td>
+                <td class="col-plot num text-slate-800 mat-sep-r">${totBalance.toLocaleString()}</td>
+                <td class="col-alloc"></td>
+                <td class="col-alloc num text-slate-900">${totReserved.toLocaleString()}</td>
+                <td class="col-alloc col-alloc-end num ${totAfterDeduct < 0 ? 'text-red-600' : 'text-emerald-700'}">${totAfterDeduct.toLocaleString()}</td>
             </tr>`;
 
         renderDoUnmatched();
         renderMatReleased();
+        applyMatLayout();
     }
 
     // Expand/collapse Plot-R's History section. Toggles the rows directly
