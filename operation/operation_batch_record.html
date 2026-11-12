@@ -130,6 +130,16 @@
                 </div>
             </div>
 
+            <!-- 2nd cull status, one cell per nursery. Read from nops_2nd_cull_status;
+                 the FC Portal presses done, and the drone case is opened by the system. -->
+            <div id="sc2-strip" class="hidden mb-4 rounded-2xl border border-[#e8dcc8] bg-white px-4 py-3">
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-[#8a7a68]">2nd Cull &middot; <span id="sc2-month"></span></span>
+                    <span id="sc2-cells" class="flex flex-wrap gap-x-6 gap-y-1"></span>
+                    <span id="sc2-error" class="text-[11px] font-bold text-[#a83020]"></span>
+                </div>
+            </div>
+
             <div class="flex items-center gap-7 border-b-2 border-[#f0e7d8] mb-6 overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">Active</button>
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">Completed</button>
@@ -862,6 +872,50 @@
             if (chip) chip.style.display = canReview ? '' : 'none';
             if (!canReview && currentListTab === 'tocheck') switchListTab('active');
         }
+
+        /* 2nd cull status per nursery (Pusing Polibeg). The FC Portal records
+           "done" for each nursery; when all three are done the system opens
+           the Nelos case, and the status turns Done when that case is solved.
+           The office only reads it here. */
+        const SC2_LABEL = {
+            'pending workdone': 'Pending workdone',
+            'pending drone flight': 'Pending drone flight',
+            'done': 'Done',
+        };
+        function sc2StatusOf(row) {
+            if (row.state === 'done') return 'done';
+            if (row.state === 'pending drone flight') return 'pending drone flight';
+            return 'pending workdone';
+        }
+        async function loadSecondCullStrip() {
+            const strip = document.getElementById('sc2-strip');
+            if (!strip || typeof _supabase === 'undefined') return;
+            const now = new Date();
+            const month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('sc2-month').innerText = now.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+            const err = document.getElementById('sc2-error');
+            try {
+                const { data, error } = await _supabase.rpc('nops_2nd_cull_status', { p_month: month });
+                if (error) throw error;
+                const cells = (data || []).map(row => {
+                    const st = sc2StatusOf(row);
+                    const tone = st === 'done' ? 'text-[#4a7a2e]' : st === 'pending drone flight' ? 'text-[#3a7ab4]' : 'text-[#c07820]';
+                    return `<span class="text-[12px] font-black text-[#3d2610]">${row.nursery}</span>` +
+                           `<span class="text-[11px] font-black uppercase tracking-widest ${tone}">${SC2_LABEL[st]}</span>`;
+                });
+                document.getElementById('sc2-cells').innerHTML = cells.join('');
+                err.innerText = '';
+                strip.classList.toggle('hidden', !cells.length);
+            } catch (e) {
+                document.getElementById('sc2-cells').innerHTML = '';
+                err.innerText = '2nd cull status could not be read: ' + (e.message || e);
+                strip.classList.remove('hidden');
+            }
+        }
+        window.addEventListener('load', () => {
+            loadSecondCullStrip();
+            setInterval(loadSecondCullStrip, 5 * 60 * 1000);
+        });
 
         function switchListTab(tabName) {
             /* A tab somebody may not open is not opened, however they got
