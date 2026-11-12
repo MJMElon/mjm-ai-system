@@ -143,10 +143,11 @@ BEGIN
    WHERE id = auth.uid();
 
   -- caller_level is NULL for anybody who is not admin of p_module, and
-  -- comparing a NULL level with the word admin gives NULL rather than false -- `NOT (false OR NULL)`
-  -- is NULL too, and an `IF NULL` skips the RAISE instead of taking it,
-  -- which let a plain user or an admin of a DIFFERENT module straight
-  -- through. COALESCE pins the comparison to a real boolean first.
+  -- comparing it with the word admin gives NULL rather than false, so
+  -- `NOT (false OR NULL)` is NULL too, and an `IF NULL` skips the RAISE
+  -- instead of taking it, which let a plain user or an admin of a
+  -- DIFFERENT module straight through. COALESCE pins the comparison to a
+  -- real boolean first.
   IF NOT (caller_mu OR COALESCE(caller_level = 'admin', false)) THEN
     RAISE EXCEPTION 'Not an admin of % and not Manage Users', p_module;
   END IF;

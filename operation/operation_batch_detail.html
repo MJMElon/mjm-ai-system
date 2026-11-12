@@ -4678,6 +4678,25 @@
             return out.sort((a, b) => a - b);
         }
 
+        /* A SIGNATURE IS OVER WHAT IS IN THE DATABASE, NOT WHAT IS ON SCREEN.
+
+           Read by the three acts that sign a tab off — Verify, a per-row
+           Verify, and Mark as Reviewed — because a verify writes only the
+           verification row: it runs no save and clears no dirty flag. So
+           amending a tab and then verifying it signed off the report WITHOUT
+           the amendment, and then locked the tab, which is how the office met
+           this: the X offered to save Seed Planting, the save was refused by
+           the lock, and the row read "Did not save — nothing lost" over
+           keying that was about to be lost. The sentence was wrong and the
+           signature was worse.
+
+           It is exported for the review module, which lives in the other
+           script block. */
+        function _unsavedOnTab(tabIdx) {
+            return _dirtyTabIndices().indexOf(Number(tabIdx)) >= 0;
+        }
+        window._unsavedOnTab = _unsavedOnTab;
+
         function _leaveBatchRecord() {
             /* Cleared before navigating so the browser's own "Leave site?"
                prompt does not ask again about a question just answered. */
@@ -4702,7 +4721,38 @@
             if (!host || !list) {           // markup missing — never trap them here
                 return _leaveBatchRecord();
             }
-            list.innerHTML = dirty.map(n => `
+            /* A SAVE THAT CANNOT RUN IS NOT OFFERED.
+
+               A locked tab's save is refused by the wrapper on it, so the
+               Save button here could only ever report a failure — and the
+               row then kept its default choice of being KEPT, which put it
+               back in the list on Leave and refused to close. Stay and Leave
+               both did nothing: the only way out was a Don't save nobody had
+               a reason to press.
+
+               The test is `_tabSaveBlocked`, which is the save's OWN test, so
+               the row cannot say one thing while the save does another. The
+               row says it cannot be saved, says why and how to get back in,
+               and is decided as dropped — so Leave closes, and Stay leaves
+               somebody on the tab with the Unverify button on its banner. */
+            const _lockWhy = (n) => {
+                const r = (window.MJMReview && MJMReview.lockReason)
+                        ? MJMReview.lockReason(n) : '';
+                /* A FOURTH STATE: the class is on the tab and the module
+                   has no reason for it — a sync re-applying it, or a review
+                   module that never booted. It must not guess one. It names
+                   the banner, which is the one place on the tab that always
+                   says what state the report is in. */
+                return r || 'It is locked, so its own Save is refused. The banner at the '
+                          + 'top of the tab says why.';
+            };
+            list.innerHTML = dirty.map(n => _tabSaveBlocked(n) ? `
+                <div class="unsaved-row flex flex-wrap items-center gap-2 px-4 py-3 border-t border-[#e8dcc8]"
+                     data-tab="${n}" data-choice="drop">
+                    <span class="text-sm font-black text-[#3d2610] flex-1 min-w-[120px]">${TAB_TITLES[n] || ('Tab ' + n)}</span>
+                    <span class="unsaved-state text-[10px] font-black uppercase tracking-widest text-[#a83020]">Cannot be saved</span>
+                    <div class="unsaved-why basis-full text-[11px] text-[#8a7a68] leading-snug">${_lockWhy(n)}</div>
+                </div>` : `
                 <div class="unsaved-row flex flex-wrap items-center gap-2 px-4 py-3 border-t border-[#e8dcc8]"
                      data-tab="${n}">
                     <span class="text-sm font-black text-[#3d2610] flex-1 min-w-[120px]">${TAB_TITLES[n] || ('Tab ' + n)}</span>
@@ -4725,6 +4775,10 @@
         async function saveOneUnsaved(tab) {
             const row = document.querySelector(`#unsaved-modal-list .unsaved-row[data-tab="${tab}"]`);
             if (!row) return;
+            /* No Save button is drawn on a locked row, and the refusal is
+               here as well: a button that is absent is a paint, not a gate,
+               and this function is reachable from the console. */
+            if (_tabSaveBlocked(Number(tab))) { _markUnsavedRow(row, 'locked'); return; }
             const btn = row.querySelector('.unsaved-save');
             const drop = row.querySelector('.unsaved-drop');
             const fn = window[TAB_SAVE_FN[tab]];
@@ -4755,6 +4809,9 @@
             if (state !== 'failed') {
                 row.setAttribute('data-choice', state === 'saved' ? 'saved' : 'drop');
             }
+            /* 'locked' is decided as dropped, like a tab with no save of its
+               own: there is nothing on this screen that can store it, so
+               leaving it undecided would refuse to close as well. */
             const btn = row.querySelector('.unsaved-save');
             const drop = row.querySelector('.unsaved-drop');
             let tag = row.querySelector('.unsaved-state');
@@ -4771,6 +4828,11 @@
             } else if (state === 'failed') {
                 tag.className = 'unsaved-state text-[10px] font-black uppercase tracking-widest text-[#a83020]';
                 tag.innerText = 'Did not save — nothing lost';
+            } else if (state === 'locked') {
+                if (btn) btn.remove();
+                if (drop) drop.remove();
+                tag.className = 'unsaved-state text-[10px] font-black uppercase tracking-widest text-[#a83020]';
+                tag.innerText = 'Cannot be saved';
             } else {
                 if (btn) btn.remove();
                 if (drop) drop.remove();
@@ -9021,12 +9083,31 @@
 
                 await savePhotosToStorage(batchId);
                 setEditMetaUI(2, new Date().toISOString(), window.currentUserEmail);
+                /* A WARNING, NEVER AN ERROR -- the report IS in the database,
+                   which the comment above says in as many words: the save is
+                   not blocked. Sent as an error it did three things, and the
+                   third was only found when the office could not verify the
+                   tab at all:
+
+                     · the close guard left the tab dirty, so its own success
+                       told somebody their work had not saved;
+                     · the X then refused to close over a stored report;
+                     · and a tab that cannot stop being dirty cannot be
+                       SIGNED OFF either, once a sign-off started refusing
+                       keying that is not in the database. Batch 257 has a
+                       shortfall of 7 seeds, so every save of it raised this,
+                       and Verify answered nine times over that there were
+                       changes on screen. There were none.
+
+                   The shape check below missed it because the TYPE is worked
+                   out in a ternary, so the literal `'error')` it was looking
+                   for never appears -- the pin-the-spelling trap. */
                 showToast(
                     needsFollowUp && !_gap.note
                         ? 'Planting report saved — but the figures do not tally and nobody has said why. ' +
                           'Write the reason in "Explain the discrepancy" and save again.'
                         : `Planting report saved.${needsFollowUp ? ' Discrepancy explained.' : ''}`,
-                    needsFollowUp && !_gap.note ? 'error' : 'success');
+                    needsFollowUp && !_gap.note ? 'warn' : 'success');
                 btn.innerText = originalText;
                 btn.disabled = false;
 
@@ -17290,6 +17371,7 @@ Thank you.`;
           alert('A verifier must sign off this tab before it can be marked as reviewed.');
           return;
         }
+        if (_denySignOffUnsaved(tabIdx, 'reviewed', 'review')) return;
         const u = MJMAccess.user() || {};
         const payload = {
           batch_name:     batch,
@@ -17308,10 +17390,38 @@ Thank you.`;
         renderBanner(tabIdx);
       }
 
+      /* SIGNING OFF IS REFUSED WHILE SOMETHING IS KEYED AND NOT SAVED.
+
+         A verify writes the verification row and nothing else — it runs no
+         save and clears no dirty flag — so amending a tab and then verifying
+         it signed the report off WITHOUT the amendment, and the lock that
+         followed then refused the save that would have stored it. The
+         signature is the worse half: it says somebody checked figures the
+         report does not hold.
+
+         ONE RULE, THREE DOORS — the tab's own Verify, a per-row Verify on
+         tabs 3 to 6, and Mark as Reviewed. A rule living in one of them is a
+         rule the other two do not obey.
+
+         It FAILS OPEN on a page where the dirty tracking is not there at
+         all: there is then nothing to be out of step with, and refusing
+         every sign-off over a missing helper would shut the review flow. */
+      function _denySignOffUnsaved(tabIdx, done, doIt) {
+        if (typeof window._unsavedOnTab !== 'function') return false;
+        if (!window._unsavedOnTab(tabIdx)) return false;
+        const name = (typeof TAB_TITLES !== 'undefined' && TAB_TITLES[tabIdx])
+                   || ('Tab ' + tabIdx);
+        showToast('Nothing ' + done + ' — ' + name + ' has changes on screen that are not in '
+                + 'the database. Save the tab first, then ' + doIt
+                + ' it, so the signature is over what the report holds.', 'error');
+        return true;
+      }
+
       async function verify(tabIdx) {
         if (!isVerifier && !isAdmin) return;
         const batch = currentBatchId();
         if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
+        if (_denySignOffUnsaved(tabIdx, 'verified', 'verify')) return;
         const stage = STAGE_BY_TAB[tabIdx];
         const u = MJMAccess.user() || {};
         const payload = {
@@ -17519,6 +17629,7 @@ Thank you.`;
         const key   = decodeURIComponent(keyEnc);
         const batch = currentBatchId();
         if (!batch || !key) return;
+        if (_denySignOffUnsaved(tabIdx, 'verified', 'verify')) return;
         const stage   = STAGE_BY_TAB[tabIdx];
         const mapKey  = stage + '::' + key;
         const u       = MJMAccess.user() || {};
@@ -17733,6 +17844,28 @@ Thank you.`;
                            // moment its ring changes, rather than waiting for the
                            // next full refresh.
                            syncTicks: syncTabTicks,
+                           /* WHY A TAB IS LOCKED, in a sentence the close
+                              dialog can print. There are three reasons and
+                              they need different answers — unverify,
+                              unreview, or ask the office for the Fill in
+                              report tick — so a row reading only "locked"
+                              sends somebody hunting for a button that is not
+                              on their screen. Asked here because this is
+                              where the three answers live; a second copy in
+                              the dialog is a second thing to get wrong. */
+                           lockReason: (tabIdx) => {
+                             const stage = STAGE_BY_TAB[tabIdx];
+                             if (stage && reviews[stage])
+                               return 'HQ has reviewed and locked this tab. An admin presses '
+                                    + 'Unreview on the banner at the top of it to edit again.';
+                             if (stage && verifications[stage])
+                               return 'This tab is signed off and locked. Press Unverify on the '
+                                    + 'banner at the top of it, save, then verify it again.';
+                             if (!canFill)
+                               return 'Your login does not have the Fill in report tick, so this '
+                                    + 'tab is read-only. The office grants it on User Access.';
+                             return '';
+                           },
                            // Has HQ signed this stage off? Read by a tab whose own
                            // completion depends on the answer — see
                            // updateTransplantCompletion.
