@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- This page carries every line of its own code inline, so the PAGE is the
+     deploy: a cached copy goes on running yesterday's permission checks for
+     ever. These three are the only lever, the site being GitHub Pages with no
+     build step and nowhere to set a real header. One hard reload per machine
+     to pick them up in the first place. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Seal Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2714%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ESL%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -112,6 +120,16 @@
   .rp-filter-btn { display:inline-flex; align-items:center; gap:5px; text-transform:uppercase; letter-spacing:.12em; font-weight:900; color:inherit; }
   .rp-filter-btn.on { color:#0f766e; }
   .s-none { background:white; color:#94a3b8; border:1px dashed #cbd5e1; }
+  /* Seal log on View consent: green = scanned, red NUMBER = keyed by hand,
+     plain = issued and not scanned yet, amber = scanned but not issued here. */
+  .sl-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .sl-box { display:inline-block; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:800;
+            padding:5px 9px; border-radius:8px; border:1.5px solid #e2e8f0; background:#fff; color:#94a3b8; }
+  .sl-box.sl-hit { background:#dcfce7; border-color:#4ade80; color:#166534; }
+  .sl-box.sl-extra { background:#fef3c7; border-color:#fbbf24; color:#92400e; }
+  .sl-box.sl-typed { color:#dc2626; }
+  .sl-key { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:11px; font-weight:700; color:#94a3b8; }
+  .sl-key .sl-box { font-size:10px; padding:2px 6px; }
 </style>
 </head>
 <body>
@@ -251,6 +269,18 @@
 
   <!-- ═══════════════ SETTINGS ═══════════════ -->
   <section data-pane="settings" class="hidden">
+    <!-- Who may order, receive, pack a delivery, settle a missed-scan gap,
+         or open this Settings tab itself -- shown only to the same people
+         who may open it: a seal admin, or anybody holding Manage Users.
+         Hidden rather than removed when the module predates this screen,
+         same as every other module's own door. -->
+    <a id="st-user-access-link" class="card p-4 mb-4 max-w-[640px] flex items-center justify-between gap-3 hidden no-underline hover:bg-slate-50" href="seal_user_access.html">
+      <div>
+        <div class="font-black text-slate-800">Module Assess Control</div>
+        <div class="text-[12px] font-bold text-slate-500">Who may order, receive, pack a delivery, settle a NELOS case, or open this Settings tab</div>
+      </div>
+      <span class="text-slate-400 text-lg">&rsaquo;</span>
+    </a>
     <div class="card p-5 max-w-[640px]">
       <div class="font-black text-slate-800 mb-1">Check seals against received stock</div>
       <p class="text-sm font-bold text-slate-500 mb-3">
@@ -314,6 +344,48 @@ let nurseryView = 'cust';
 let doDates = {};       // DO number -> delivery date
 let isAdmin = false;
 let staffName = '';
+
+/* Module Assess Control's three ticks, read the same way every adminOnly
+   or fallbackTo action on that screen is read -- effectiveActions() in
+   shared_module_access.js is the display side, these are the runtime
+   ones. HQ ordering/receiving/packing and settling a NELOS case had NO
+   gate at all before this (anybody with seal access, admin or not, could
+   do either), so both fall back to 'view' -- open to anyone the module is
+   open to, exactly as it always was, until an admin explicitly ticks
+   somebody either way. Settings was always admin-only in code, so it
+   keeps that shape (and now also lets Manage Users open it, which the
+   plain isAdminOf('seal') check before this never did). */
+function mayManageHQ() {
+  if (MJMAccess.canManageUsers()) return true;
+  try {
+    const p = MJMAccess.permissions();
+    const acts = p && p.seal_actions && p.seal_actions.hq;
+    if (acts) { const k = ('manage' in acts) ? 'manage' : 'view'; return !!acts.view && !!acts[k]; }
+  } catch (_) { /* fall through to the module level */ }
+  return MJMAccess.canAccess('seal');
+}
+function maySettleSeal() {
+  // Key DO reaches this from two rows -- the NELOS tab's own case, and any
+  // Seal with Customer row on the Nursery tab -- so the tick is the
+  // Nursery page's, not the NELOS one, and it is asked the same way
+  // whichever row the press came from.
+  if (MJMAccess.canManageUsers()) return true;
+  try {
+    const p = MJMAccess.permissions();
+    const acts = p && p.seal_actions && p.seal_actions.nursery;
+    if (acts) { const k = ('settle' in acts) ? 'settle' : 'view'; return !!acts.view && !!acts[k]; }
+  } catch (_) { /* fall through to the module level */ }
+  return MJMAccess.canAccess('seal');
+}
+function maySealSettings() {
+  if (MJMAccess.canManageUsers()) return true;
+  try {
+    const p = MJMAccess.permissions();
+    const acts = p && p.seal_actions && p.seal_actions.settings;
+    if (acts) return !!acts.view && !!acts.manage;
+  } catch (_) { /* fall through to the module level */ }
+  return MJMAccess.isAdminOf('seal');
+}
 let hqStock = [];       // seal_hq_stock: the cabinet, and what a delivery may take
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -633,6 +705,7 @@ async function checkOrder() {
   el.innerHTML += data.map((x) => '<div class="text-red-600">' + range(x.from_code, x.to_code) + ': ' + esc(x.detail) + '</div>').join('');
 }
 async function saveOrder(e) {
+  if (!mayManageHQ()) { toast('Not allowed to order seals — ask an admin to grant it on Module Assess Control.', true); return; }
   const s = document.getElementById('ord-start').value.trim(), en = document.getElementById('ord-end').value.trim();
   if (sealNo(s) == null || sealNo(en) == null) { toast('Key the start and the end seal number.', true); return; }
   if (sealNo(en) < sealNo(s)) { toast('The end is before the start.', true); return; }
@@ -772,6 +845,7 @@ function rcvAll(on) {
   drawOrderReceive();
 }
 async function receiveTicked(e) {
+  if (!mayManageHQ()) { toast('Not allowed to receive seals — ask an admin to grant it on Module Assess Control.', true); return; }
   const picked = orderChunks(rcvOrder).filter((c) => c.nLeft > 0 && rcvTicked.has(c.s));
   if (!picked.length) return;
   // One receipt for everything ticked, running numbers joined.
@@ -881,6 +955,7 @@ async function checkDV(box) {
   if (el) el.innerHTML = dvBlocked ? '<span class="text-red-600">Only seals in the HQ cabinet can be delivered. Correct the ranges marked red.</span>' : '';
 }
 async function saveDV(e) {
+  if (!mayManageHQ()) { toast('Not allowed to pack a delivery — ask an admin to grant it on Module Assess Control.', true); return; }
   const rs = dvBox.ranges();
   if (!rs.length) { toast('Key at least one range.', true); return; }
   if (dvBox.incomplete()) { toast('Finish or remove the incomplete range.', true); return; }
@@ -936,6 +1011,7 @@ function deliveryCard(x, probs) {
 }
 
 async function markDelivered(id) {
+  if (!mayManageHQ()) { toast('Not allowed to mark a delivery delivered — ask an admin to grant it on Module Assess Control.', true); return; }
   const { error } = await _supabase.from('seal_deliveries').update({
     status: 'delivered', delivered_by: staffName, delivered_at: new Date().toISOString(),
   }).eq('id', id).eq('status', 'packed');
@@ -981,6 +1057,7 @@ function compareConfirm(id) {
   return { nm, nx };
 }
 async function saveConfirm(id) {
+  if (!mayManageHQ()) { toast('Not allowed to confirm a delivery — ask an admin to grant it on Module Assess Control.', true); return; }
   const box = confirmBoxes[id];
   const rs = box ? box.ranges() : [];
   if (!rs.length) { toast('Key the seals that arrived.', true); return; }
@@ -1182,9 +1259,69 @@ function renderList() {
 
 // The signed consent, as the customer signed it: the seals given, the
 // signature, and the photos taken with it.
+/* THE SEAL LOG OF ONE CONSENT, moved here off the Admin Portal Customer
+   Consent screen. One box per seal ISSUED on the consent:
+     green           -- scanned at collection (the FC Portal scan log)
+     green, red text -- scanned too, but KEYED BY HAND on the Add dialog
+     plain           -- issued and not scanned yet
+   A seal scanned against this consent that it was never issued is listed
+   under the boxes rather than left out: it is the one somebody needs to see.
+   Keyed by hand is the keyed_by_hand column (RUN_ME_scan_keyed_by_hand.sql);
+   a row from before it, or a database without it, reads as scanned, since
+   nothing recorded which it was. Matched as NUMBERS, so 3320 and 003320 are
+   one seal. */
+const SEAL_LOG_MAX_BOXES = 2000;
+function sealLogHtml(c, scans) {
+  if (scans === null) return '<div class="mb-4"><div class="lbl">Seal log</div>'
+    + '<div class="text-[12px] font-bold text-red-600">The scan log could not be read.</div></div>';
+  const issued = normRanges(Array.isArray(c.seal_ranges) ? c.seal_ranges : []);
+  const byNo = new Map();
+  (scans || []).forEach((s) => {
+    const n = sealNo(s.barcode);
+    if (n == null) return;
+    const prev = byNo.get(n);
+    // One seal scanned once and keyed once is still one seal; it counts as
+    // keyed only if every record of it was keyed.
+    byNo.set(n, { code: s.barcode, typed: prev ? (prev.typed && !!s.keyed_by_hand) : !!s.keyed_by_hand });
+  });
+  const total = issued.reduce((t, r) => t + r.e - r.s + 1, 0);
+  if (!total && !byNo.size) return '';
+  const boxes = [];
+  let scanned = 0, typed = 0;
+  const inIssued = new Set();
+  issued.forEach((r) => {
+    for (let n = r.s; n <= r.e; n++) {
+      inIssued.add(n);
+      const hit = byNo.get(n);
+      if (hit) { scanned++; if (hit.typed) typed++; }
+      if (boxes.length >= SEAL_LOG_MAX_BOXES) continue;
+      const code = esc(sealCode(n, r.w));
+      boxes.push(hit
+        ? '<span class="sl-box sl-hit' + (hit.typed ? ' sl-typed' : '') + '" title="' + (hit.typed ? 'Keyed by hand' : 'Scanned') + '">' + code + '</span>'
+        : '<span class="sl-box" title="Issued, not scanned yet">' + code + '</span>');
+    }
+  });
+  const extra = [...byNo.entries()].filter(([n]) => !inIssued.has(n)).sort((a, b) => a[0] - b[0]);
+  return '<div class="mb-4"><div class="lbl">Seal log — ' + fmt(scanned) + ' of ' + fmt(total) + ' issued scanned'
+    + (typed ? ' · <span class="text-red-600">' + fmt(typed) + ' keyed by hand</span>' : '') + '</div>'
+    + (boxes.length ? '<div class="sl-grid">' + boxes.join('') + '</div>' : '')
+    + (total > SEAL_LOG_MAX_BOXES ? '<div class="text-[11px] font-bold text-slate-400 mt-1">First ' + fmt(SEAL_LOG_MAX_BOXES) + ' of ' + fmt(total) + ' issued seals shown.</div>' : '')
+    + (extra.length ? '<div class="text-[11px] font-black text-amber-700 mt-2">Scanned on this consent but not issued on it — ' + fmt(extra.length) + '</div>'
+      + '<div class="sl-grid">' + extra.map(([n, h]) => '<span class="sl-box sl-extra' + (h.typed ? ' sl-typed' : '') + '">' + esc(sealShow(h.code)) + '</span>').join('') + '</div>' : '')
+    + '<div class="sl-key"><span class="sl-box sl-hit">000000</span> scanned <span class="sl-box sl-hit sl-typed">000000</span> keyed by hand <span class="sl-box">000000</span> not scanned yet</div>'
+    + '</div>';
+}
+
 async function openConsent(ids) {
   openModal('Signed consent', '<div class="text-sm font-bold text-slate-400">Loading…</div>');
-  const { data, error } = await _supabase.from('mobile_consent_records').select('*').in('id', ids);
+  // select('*') on the scan log too, so a database without keyed_by_hand
+  // answers rather than refusing the read over a column it has not got.
+  const [cres, sres] = await Promise.all([
+    _supabase.from('mobile_consent_records').select('*').in('id', ids),
+    _supabase.from('fcportal_scan_records').select('*').in('consent_id', ids).then((r) => r, (e) => ({ error: e })),
+  ]);
+  const { data, error } = cres;
+  const scansOf = (id) => (sres && !sres.error) ? (sres.data || []).filter((s) => String(s.consent_id) === String(id)) : null;
   const body = document.getElementById('modal-body');
   if (!body) return;
   if (error) { body.innerHTML = '<span class="text-red-600 font-bold">' + esc(error.message) + '</span>'; return; }
@@ -1201,6 +1338,7 @@ async function openConsent(ids) {
     +   '<div><div class="lbl">Seedlings</div><div class="font-black mono text-slate-800">' + fmt(c.consent_qty) + '</div></div>'
     + '</div>'
     + (Array.isArray(c.seal_ranges) && c.seal_ranges.length ? '<div class="mb-4"><div class="lbl">Seals given</div><div class="font-black mono text-slate-800">' + rangesHtml(c.seal_ranges, ', ') + '</div></div>' : '')
+    + sealLogHtml(c, scansOf(c.id))
     + '<div class="flex flex-wrap gap-4">' + img(c.signature_data, 'Signature') + img(c.photo_url, 'Photo') + img(c.seal_photo_url, 'Seal photo') + '</div>'
     + '</div>').join('<hr class="my-4 border-slate-100">');
 }
@@ -1472,6 +1610,7 @@ async function openSettle(ctx) {
 }
 function settleOutcome() { const r = document.querySelector('input[name="kd-out"]:checked'); return r ? r.value : 'delivered'; }
 async function saveSettle(e) {
+  if (!maySettleSeal()) { toast('Not allowed to key a DO to settle this — ask an admin to grant it on Module Assess Control.', true); return; }
   const msg = document.getElementById('kd-msg');
   const start = document.getElementById('kd-start').value.trim(), end = document.getElementById('kd-end').value.trim();
   const out = settleOutcome();
@@ -1510,6 +1649,7 @@ async function loadSettings() {
     + (m.data || []).map((x) => '<option value="' + esc(x.key) + '"' + (x.key === set.nelos_module ? ' selected' : '') + '>' + esc(x.label) + '</option>').join('');
 }
 document.getElementById('st-save').addEventListener('click', async () => {
+  if (!maySealSettings()) { toast('Only a seal admin — or somebody ticked for Settings on Module Assess Control — can save this.', true); return; }
   const { error } = await _supabase.from('seal_settings').update({
     enforce_stock: document.getElementById('st-enforce').checked,
     nelos_module: document.getElementById('st-module').value || null,
@@ -1536,9 +1676,12 @@ document.getElementById('st-save').addEventListener('click', async () => {
     // reading user_metadata alone put an email on every row.
     staffName = u.full_name || (u.user_metadata && u.user_metadata.full_name) || u.email || 'Staff';
     try {
-      isAdmin = MJMAccess.isAdminOf('seal');
+      isAdmin = maySealSettings();
     } catch (_) { /* keep the page usable */ }
     if (isAdmin) document.getElementById('tab-settings-btn').classList.remove('hidden');
+    if (MJMAccess.isAdminOf('seal') || MJMAccess.canManageUsers()) {
+      document.getElementById('st-user-access-link').classList.remove('hidden');
+    }
 
     if (MJMAccess.canAccess('nelos')) {
       MJMNelos.init(_supabase, { root: '../' });

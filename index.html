@@ -309,7 +309,13 @@
         <div class="module-tag">audit_</div>
       </a>
 
-      <a class="module-card" data-card="npayroll" data-module="npayroll" href="npayroll/npayroll_dashboard.html"
+      <!-- Nursery Reporting System — a module of its own now, where Nursery
+           Payroll System used to open directly. Payroll is its first
+           module (reporting/reporting_admin.html has the door to it) and
+           its one Module Assess Control; the card keeps the SAME module
+           key, `npayroll`, so nobody's access moved the day this tile's
+           name and door changed under it. -->
+      <a class="module-card" data-card="npayroll" data-module="npayroll" href="reporting/reporting_admin.html"
          style="--accent:#6366f1;--glow:rgba(99,102,241,.25);--glow-strong:rgba(99,102,241,.35);--icon-bg:rgba(99,102,241,.12);">
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
         <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
@@ -322,7 +328,7 @@
             <circle cx="24.5" cy="17" r="1.3" fill="#6366f1"/>
           </svg>
         </div>
-        <div class="module-name">Nursery Payroll<br>System</div>
+        <div class="module-name">Nursery Reporting<br>System</div>
         <div class="module-tag">mjmnpayroll_</div>
       </a>
 
@@ -393,6 +399,26 @@
         </div>
         <div class="module-name">MJM Training<br>Center</div>
         <div class="module-tag">training_</div>
+      </a>
+
+      <!-- Project Monitoring System — the company's project tracker: tasks by
+           project, the board, the timeline, task requests and the value
+           analysis. It is not a nursery module, so it sits in the MJM sector.
+           A new module, so hidden until granted on User Access (no
+           data-module-open). The login is this portal's own. -->
+      <a class="module-card" data-card="pms" data-module="pms" href="pms/pms_dashboard.html"
+         style="--accent:#22c55e;--glow:rgba(34,197,94,.25);--glow-strong:rgba(34,197,94,.35);--icon-bg:rgba(34,197,94,.12);">
+        <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
+        <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
+        <div class="module-icon-wrap">
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+            <rect x="5" y="6" width="24" height="22" rx="3.5" fill="rgba(34,197,94,.18)" stroke="#22c55e" stroke-width="1.5"/>
+            <path d="M10 13h8M10 18h13M10 23h5" stroke="#4ade80" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="24" cy="13" r="1.6" fill="#22c55e"/>
+          </svg>
+        </div>
+        <div class="module-name">Project Monitoring<br>System</div>
+        <div class="module-tag">PMS</div>
       </a>
 
       <!-- Main user access management — visible only to Manage Users admins.

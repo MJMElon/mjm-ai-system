@@ -761,15 +761,34 @@ async function load() {
   renderConds();
 }
 
+/* Module Assess Control's "Open Automate Cases" tick, read the same way
+   every adminOnly action on that screen is read — effectiveActions() in
+   shared_module_access.js is the display side, this is the runtime one.
+   A saved row wins outright; with none, the module level decides, which
+   is exactly the gate this door had before the tick existed: a Nelos
+   admin, or anybody holding Manage Users. */
+function mayOpenAutomation() {
+  if (MJMAccess.canManageUsers()) return true;
+  try {
+    const p = MJMAccess.permissions();
+    const acts = p && p.nelos_actions && p.nelos_actions.automation;
+    if (acts) return !!acts.view && !!acts.manage;
+  } catch (_) { /* fall through to the module level */ }
+  return MJMAccess.isAdminOf('nelos');
+}
+
 (async () => {
   try {
     await MJMAccess.load(_supabase);
     if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
 
-    // A standing instruction raises work for other people, so it is a
-    // setting — the same gate User Setting uses.
-    if (!(MJMAccess.isAdminOf('nelos') || MJMAccess.canManageUsers())) {
-      alert('Only a Nelos admin can open Automation Cases.');
+    // A standing instruction raises work for other people, so it was always
+    // admin-only. Module Assess Control can now hand this one door to a
+    // trusted non-admin without making them a full Nelos admin — see
+    // mayOpenAutomation() below, which keeps the old door shut for
+    // everybody it has always been shut for.
+    if (!mayOpenAutomation()) {
+      alert('Only a Nelos admin — or somebody ticked for it on Module Assess Control — can open Automate Cases.');
       window.location.href = 'nelos_dashboard.html';
       return;
     }

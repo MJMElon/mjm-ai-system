@@ -294,7 +294,19 @@ function check(name, ok) {
   /* The next one will be written the same way, so it is the shape that is
      held and not the sentences. A toast saying nothing WAS saved is a
      refusal and says so. */
-  const liars = (SRC.match(/showToast\([^;]*'error'\)/g) || [])
+  /* THE TYPE MAY BE WORKED OUT, so it is not looked for at the end of the
+     call. `showToast(msg, needsFollowUp ? 'error' : 'success')` never
+     contains the literal `'error')` the first version of this pattern was
+     written around, and that is exactly how Seed Planting went on calling a
+     stored report a failure -- until a verify started refusing a dirty tab
+     and the office could not sign the report off at all.
+
+     The comments come out first: this page explains at length why a warning
+     is not an error, and a plain search reads the explanation as an offence.
+     Same trap, fifth time. */
+  const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, ' ')
+                  .replace(/(^|[\s;{}()])\/\/[^\n]*/g, '$1 ');
+  const liars = (CODE.match(/showToast\([^;]*'error'[^;]*\)/g) || [])
     .filter(s => /\bsaved\b/i.test(s))
     .filter(s => !/not saved|nothing (?:was )?saved/i.test(s));
   check('none left' + (liars.length ? ': ' + liars.join(' | ') : ''), liars.length === 0);

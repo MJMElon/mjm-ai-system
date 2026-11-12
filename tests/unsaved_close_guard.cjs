@@ -367,16 +367,40 @@ const SEEDS_ROW = {
   check('…as an error, so the tab stays unsaved', locked.toasts[0].t, 'error');
   check('…and it is still listed as unsaved', locked.dirty, ['Transplanting']);
 
-  const held = await page.evaluate(async () => {
+  /* AND THE DIALOG DOES NOT OFFER THE SAVE AT ALL.
+
+     It used to, and the row then kept its default choice of being KEPT, so
+     Leave ran the save, the save was refused, and the page refused to
+     close. Stay and Leave both did nothing: the only way out was a Don't
+     save nobody had a reason to press. The office met it from the other
+     end -- amend, verify, close -- and said `按了save也save不到`. The row
+     now says it cannot be saved and why, is decided as dropped, and Leave
+     closes without rewriting anything.
+
+     See tests/a_verify_does_not_sign_off_unsaved_keying.cjs, which is the
+     cause rather than the symptom: a verify no longer signs off a tab with
+     keying on screen that is not in the database. */
+  const held = await page.evaluate(() => {
     window.__TOASTS = [];
     window.closeBatchRecord();
-    await window.confirmCloseBatchRecord();
-    await new Promise(r => setTimeout(r, 400));
-    return { left: window.location.pathname.endsWith('operation_batch_record.html'),
-             open: !document.getElementById('unsaved-modal').classList.contains('hidden') };
+    const r = document.querySelector('#unsaved-modal-list .unsaved-row[data-tab="3"]');
+    return { open:   !document.getElementById('unsaved-modal').classList.contains('hidden'),
+             row:    !!r,
+             save:   !!(r && r.querySelector('.unsaved-save')),
+             choice: r ? r.getAttribute('data-choice') : null,
+             tag:    ((r && r.querySelector('.unsaved-state')) || {}).textContent || '',
+             why:    ((r && r.querySelector('.unsaved-why'))   || {}).textContent || '' };
   });
-  check('pressing X and Leave does NOT rewrite a signed-off report', held.left, false);
-  check('…and the dialog is still there', held.open, true);
+  check('pressing X still asks about the signed-off tab', [held.open, held.row], [true, true]);
+  check('…but offers NO Save, there being nothing that can store it', held.save, false);
+  check('…saying so on the row', (held.tag || '').trim(), 'Cannot be saved');
+  /* The review module never booted in this harness, so it has no reason for
+     the lock and must not invent one — it points at the banner, which is
+     the one place on the tab that always says what state the report is in.
+     The three real reasons are driven in
+     tests/a_verify_does_not_sign_off_unsaved_keying.cjs. */
+  checkTrue('…with somewhere to look for why', /banner/i.test(held.why || ''));
+  check('…and decided, so Leave is not a dead end', held.choice, 'drop');
 
   /* PRINT AND DOWNLOAD CHANGE NOTHING, and a verified sheet is the one most
      worth having on paper. Greying them means unverifying a report to print
@@ -396,6 +420,15 @@ const SEEDS_ROW = {
 
   console.log('\nNo browser confirm box was used anywhere');
   check('not once', dialogs.length, 0);
+
+  /* LAST, because it navigates: with the signed-off tab decided as dropped,
+     Leave closes the batch instead of refusing for ever. Nothing was saved
+     on the way out -- the block above proved the save never runs. */
+  console.log('\nAnd Leave gets out');
+  await page.evaluate(() => window.confirmCloseBatchRecord());
+  await page.waitForTimeout(700);
+  check('Leave closes rather than trapping somebody in the dialog',
+        new URL(page.url()).pathname.endsWith('operation_batch_record.html'), true);
 
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

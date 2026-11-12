@@ -21,7 +21,7 @@
 <script src="../shared/shared_plot_movement.js?v=10"></script>
 <!-- Which nursery a plot belongs to. Shared with the Work Maintenance
      schedule, so a work record lands under the nursery it was drawn in. -->
-<script src="../shared/shared_maint_plots.js?v=2"></script>
+<script src="../shared/shared_maint_plots.js?v=3"></script>
 <!-- A worker is the register ROW, not the name on it: a tick saved under a
      name the register has since corrected still has to find its column.
      Read by this page AND by the one that prices it. -->
@@ -62,14 +62,17 @@
 <script src="../shared/shared_ribbon.js"></script>
 
 <!-- Second row: what used to be three top tabs (Payroll / Settings / Module
-     Assess Control) is now the date picker plus two icon shortcuts —
-     Settings and Module Assess Control move here as colour icon buttons,
-     and Payroll itself has
+     Assess Control) is now the date picker plus one icon shortcut —
+     Settings moves here as a colour icon button, and Payroll itself has
      no button of its own any more, because clicking any of the five work
-     tabs below (switchSub) already returns to it. tab-btn-locks and
-     user-access-tab keep their ids and onclick/visibility wiring exactly
-     as the old tab buttons had it — applyPageAccess() still shows or hides
-     them by the same permissions, just as icons instead of text pills now. -->
+     tabs below (switchSub) already returns to it. tab-btn-locks keeps its
+     id and onclick/visibility wiring exactly as the old tab button had
+     it — applyPageAccess() still shows or hides it by the same
+     permissions, just as an icon instead of a text pill now. Module
+     Assess Control is not one of these icons any more: it is reached
+     from the Nursery Reporting System hub this module now lives inside
+     (reporting/reporting_admin.html), the same door everyone else who
+     may open it already presses. -->
 <header class="topbar">
   <div class="topbar-inner topbar-grid">
     <div></div>
@@ -118,13 +121,6 @@
           </g>
         </svg>
       </button>
-      <a class="icon-btn icon-btn-access hidden" id="user-access-tab" href="npayroll_user_access.html"
-         title="Module Assess Control" aria-label="Module Assess Control">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-          <circle cx="12" cy="8.2" r="3.6" fill="#fff"/>
-          <path d="M4.2 20c0-4.3 3.5-6.8 7.8-6.8s7.8 2.5 7.8 6.8" fill="#fff"/>
-        </svg>
-      </a>
     </div>
   </div>
 </header>
@@ -639,7 +635,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=102"></script>
+<script src="npayroll_script.js?v=104"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

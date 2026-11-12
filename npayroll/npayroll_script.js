@@ -3496,8 +3496,10 @@ function maintTotals(nursery, month, ym) {
         if (!do_.delivery_date) d.noMonth++; else d.otherMonth++;
         return;
       }
-      const qty = maintDoQtyForNursery(do_, nursery);
-      if (!qty) return; // this DO's items are not this nursery's
+      // Paid to the gang that carried it (MJMMaintPlots.doLoaderQty), which
+      // is the plot nursery gang unless it is unticked and another is.
+      const qty = MJMMaintPlots.doLoaderQty(do_, nursery, maintDoLines(do_));
+      if (!qty) return; // this DO was not this nursery gang's
       d.rows++;
       d.tickRows++;
       d.capAll += qty;
@@ -3539,6 +3541,22 @@ function _doIsLoadingWork(d) {
    A single-line DO whose per-line qty was never keyed reads the DO's own
    total instead — the Sales Listing's fallback, so the same DO is the same
    quantity on both screens. */
+/* The same lines as maintDoQtyForNursery, each with the nursery its plot is
+   in -- what doLoaderQty divides between the gangs. */
+function maintDoLines(do_) {
+  let filled = 0;
+  for (let i = 1; i <= 5; i++) if (String(do_[`plot_${i}`] || '').trim()) filled++;
+  const out = [];
+  for (let i = 1; i <= 5; i++) {
+    const plot = do_[`plot_${i}`];
+    if (!plot) continue;
+    let q = Number(do_[`qty_${i}`]) || 0;
+    if (!q && filled === 1) q = Number(do_.total_qty) || 0;
+    out.push({ nursery: MJMMaintPlots.nurseryOfPlot(plot, maint.plotIndex), qty: q });
+  }
+  return out;
+}
+
 function maintDoQtyForNursery(do_, nursery) {
   let filled = 0;
   for (let i = 1; i <= 5; i++) if (String(do_[`plot_${i}`] || '').trim()) filled++;
@@ -6132,10 +6150,10 @@ document.addEventListener('keydown', (e) => {
     const u = MJMAccess.user();
     userEmail = u.email || '';
     isAdmin   = MJMAccess.isAdminOf('npayroll');
-    // One missing helper must not take the whole module down with it.
-    // Admin of npayroll may now open this module's own Module Assess
-    // Control too, not only Manage Users -- see shared_module_access.js.
-    try { if (isAdmin || MJMAccess.canManageUsers()) $('user-access-tab').classList.remove('hidden'); } catch (_) {}
+    // Module Assess Control moved out from under this topbar's own icons
+    // the day Nursery Payroll System became a module inside Nursery
+    // Reporting System -- it is reached from that system's own landing
+    // page now (reporting/reporting_admin.html), not from a door here.
 
     let savedMonth = null;
     try { savedMonth = localStorage.getItem('npayroll_month'); } catch (_) {}

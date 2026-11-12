@@ -78,6 +78,27 @@
            already a real figure, not a forecast. Hidden rather than removed
            from the DOM so the row template stays one shape for every tab. */
         .mat-table.pr-view .col-afterc{display:none;}
+        /* EVERY MONTH THE SAME SHAPE. The widths are a colgroup written by
+           applyMatLayout() and the table is fixed-layout, so Production and
+           Plot Status do not move when the month tab changes — only the
+           figures in them do. A body cell in those two groups is ONE line;
+           a long breed is cut with an ellipsis and its hover says the rest,
+           because a row that wraps in one month and not the next is the
+           movement this stops. Customers (drag here) takes whatever is
+           left, as the office asked: names are as long as they are. */
+        .mat-table{table-layout:fixed;}
+        .mat-table tbody td.col-prod,.mat-table tbody td.col-plot,
+        .mat-table tfoot td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        /* The two groups can be swapped by dragging their heading. The
+           separator follows whichever group is now in the middle. */
+        .mat-group-drag{cursor:grab;user-select:none;}
+        .mat-group-drag .mat-grip{opacity:.45;margin-right:6px;letter-spacing:-2px;}
+        .mat-group-drag.mat-group-over{outline:2px dashed #1d4ed8;outline-offset:-3px;}
+        .mat-group-drag.mat-group-dragging{opacity:.5;}
+        .mat-table.alloc-first .mat-group-plot{border-right:0;}
+        .mat-table.alloc-first .mat-group-alloc{border-right:2px solid #cbd5e1;}
+        .mat-table.alloc-first .col-plot.mat-sep-r{border-right:0;}
+        .mat-table.alloc-first .col-alloc-end{border-right:2px solid #cbd5e1;}
         /* Plot-R's History section — rows whose status is Sold Out or
            Culled, collapsed by default so the tab opens on what still
            needs acting on. */
@@ -391,7 +412,6 @@
     <div>
         <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
             <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🔥 Capacity Heatmap</h2>
-            <span class="text-[9px] font-bold text-slate-400">Live: matured-stock utilisation by nursery × month</span>
         </div>
         <div class="dash-card p-3 scroll-x-fade">
             <div id="heatmap-area" class="min-w-[700px]">
@@ -406,9 +426,6 @@
                 <span class="heat-cell heat-4" style="padding:2px 8px;">80–100%</span>
                 <span class="heat-cell heat-5" style="padding:2px 8px;">Oversold</span>
             </div>
-        </div>
-        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — % = pending-collection qty ÷ matured qty (after 10% culling) for that nursery × month. Higher % = less spare capacity.
         </div>
     </div>
 
@@ -452,12 +469,12 @@
                  overflow-x:auto wrapper never did — the thead had carried
                  sticky for months and stuck to nothing. -->
             <div class="scroll-x-fade mat-scroll">
-                <table class="mat-table min-w-[1400px]">
+                <table class="mat-table min-w-[1600px]">
                     <thead>
                         <tr class="mat-group-row">
                             <th id="mat-th-prod-group" colspan="6" class="mat-group mat-group-prod">📦 Production</th>
-                            <th colspan="3" class="mat-group mat-group-plot">🪴 Plot Status</th>
-                            <th colspan="3" class="mat-group mat-group-alloc">🛒 Customer Allocation</th>
+                            <th colspan="3" class="mat-group mat-group-plot mat-group-drag" data-mat-group="plot" draggable="true" title="Drag onto Customer Allocation to swap the two around"><span class="mat-grip">⋮⋮</span>🪴 Plot Status</th>
+                            <th colspan="3" class="mat-group mat-group-alloc mat-group-drag" data-mat-group="alloc" draggable="true" title="Drag onto Plot Status to swap the two around"><span class="mat-grip">⋮⋮</span>🛒 Customer Allocation</th>
                         </tr>
                         <tr>
                             <!-- Production -->
@@ -472,13 +489,13 @@
                             <th id="mat-th-qty" class="text-right">Qty Transplanted</th>
                             <th class="text-right mat-sep-r col-afterc">After 10% Culling</th>
                             <!-- Plot status -->
-                            <th>Status</th>
-                            <th class="text-right" title="Seedlings issued via Delivery Orders (cancelled DOs excluded)">DO Deducted</th>
-                            <th class="text-right mat-sep-r">Plot Balance</th>
+                            <th class="col-plot">Status</th>
+                            <th class="col-plot text-right" title="Seedlings issued via Delivery Orders (cancelled DOs excluded)">DO Deducted</th>
+                            <th class="col-plot text-right mat-sep-r">Plot Balance</th>
                             <!-- Customer allocation -->
-                            <th>Customers (drag here)</th>
-                            <th class="text-right">Reserved Qty</th>
-                            <th class="text-right">After Deduct Reserve</th>
+                            <th class="col-alloc">Customers (drag here)</th>
+                            <th class="col-alloc text-right">Reserved Qty</th>
+                            <th class="col-alloc col-alloc-end text-right">After Deduct Reserve</th>
                         </tr>
                     </thead>
                     <tbody id="maturity-rows">
@@ -529,7 +546,6 @@
                         <span id="mon-dash-cal-legend" style="display:none" class="inline-flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm bg-violet-500"></span>Calibration</span>
                     </div>
                     <div id="mon-dash-month-bars" class="grid grid-cols-12 gap-1 h-28 items-end"></div>
-                    <div class="text-[9px] font-bold text-slate-400 mt-2 text-center">Click a bar to see the rows behind that month.</div>
                 </div>
             </div>
         </div>
@@ -558,10 +574,24 @@
             </div>
         </div>
 
-        <!-- Customer Order Management -->
-        <div>
-            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
+        <!-- Customer Order Management — a CARD like its two neighbours, as
+             the office asked: "Make my Customer order management outer box
+             same with Order Monitoring Dashboard or This Week's Scheduled
+             Collection. It has a colour outer line." metric-card +
+             border-l-4 + its own colour + the icon-tile header. Every card
+             on this page is that shape — see "A card on the Stock & Sales
+             page" in CLAUDE.md.
+             NOT overflow-hidden, unlike its neighbours: the All Orders
+             filter's dropdown hangs below its button, and an
+             overflow-hidden card would clip it. -->
+        <div class="metric-card border-l-4 border-violet-500 relative">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center text-violet-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                    </div>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Customer Order Management</span>
+                </div>
                 <div class="cf-wrap" id="cust-filter-wrap">
                     <button type="button" id="cust-filter-btn" class="cf-btn" onclick="toggleCustFilterMenu(event)">
                         <span id="cust-filter-label">All Orders</span>
@@ -583,6 +613,7 @@
                  answer both (which is what "scroll right" used to be).
                  Same row as the search bar — one row for "which report",
                  one for "which orders", rather than three stacked rows. -->
+            <div class="p-3">
             <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <div class="ph-tabs" id="cust-main-tabs">
                     <button type="button" class="ph-tab active" data-main-tab="booking" onclick="selectCustMainTab('booking')">📦 Booking</button>
@@ -594,7 +625,7 @@
             </div>
 
             <div id="cust-view-booking">
-                <div class="dash-card scroll-x-fade">
+                <div class="rounded-xl border border-slate-200 scroll-x-fade">
                     <table class="cust-table min-w-[1400px]">
                         <thead id="cust-thead"></thead>
                         <tbody id="cust-tbody">
@@ -604,7 +635,7 @@
                     </table>
                 </div>
                 <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-                    <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — The current month plus any future month a customer has a booking in. <span class="inline-block px-1 rounded" style="background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;">amber</span> = qty booked for collection (<span class="font-mono">shared_collection_bookings</span>). Click a customer name for the full pickup history.
+                    <span class="inline-block px-1 rounded" style="background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;">amber</span> = booked for collection
                 </div>
             </div>
 
@@ -619,7 +650,7 @@
                     <button type="button" id="coll-months-toggle" onclick="toggleCollMonths()"
                         class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors hidden"></button>
                 </div>
-                <div class="dash-card scroll-x-fade">
+                <div class="rounded-xl border border-slate-200 scroll-x-fade">
                     <table class="cust-table min-w-[1400px]">
                         <thead id="coll-thead"></thead>
                         <tbody id="coll-tbody">
@@ -628,9 +659,7 @@
                         <tfoot id="coll-tfoot"></tfoot>
                     </table>
                 </div>
-                <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-                    <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Every month with an actual collection, built from <span class="font-mono">shared_do_records</span> (cancelled and CAL- calibration DOs excluded). Click a month's qty for its Delivery Date / DO Number breakdown.
-                </div>
+            </div>
             </div>
         </div>
 
@@ -820,7 +849,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=21"></script>
+<script src="operation_stock_sales.js?v=22"></script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>

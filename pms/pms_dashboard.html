@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- The ?v= on every script below lives in THIS page, so the page is the one
+     thing that must never be served from cache: a stale copy goes on asking
+     for the old script for ever. GitHub Pages gives nowhere to set a real
+     header, so these three are the only lever. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Project Monitoring System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="pms_styles.css?v=20261112b">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
+<script src="../shared/shared_access.js"></script>
+</head>
+<!-- data-boot hides the page until the portal has said who this is. pms_app.js
+     takes it off; a login that is refused never has it taken off, and is on
+     its way back to the hub. -->
+<body data-boot>
+<!-- THE SIDE BAR. Three parts: the name at the top and Settings at the foot
+     stay put, and only the middle scrolls when there are more entries than
+     the window is tall. The entries are grouped by what somebody came to do.
+     pms_app.js finds every entry as "nav.tabs button", so the nav keeps that
+     class whatever shape it is drawn in. -->
+<nav class="tabs side" aria-label="Views">
+  <div class="side-top">
+    <a class="back" href="../index.html" aria-label="Back to the MJM AI portal">&larr; Portal</a>
+    <div class="brand"><h1>Project Monitoring System</h1><small id="asof"></small></div>
+    <!-- Opens the request form in a window. Not a tab, so no data-view. -->
+    <button type="button" class="side-cta" id="reqBtn" hidden><span aria-hidden="true">+</span> Request a task</button>
+  </div>
+  <div class="side-mid">
+    <div class="side-group">
+      <div class="side-title">Overview</div>
+      <button data-view="overview" aria-selected="true">Dashboard</button>
+      <button data-view="board" aria-selected="false">Board</button>
+      <button data-view="timeline" aria-selected="false">Timeline</button>
+    </div>
+    <div class="side-group">
+      <div class="side-title">Task</div>
+      <button data-view="list" aria-selected="false">Task list</button>
+      <button data-view="requests" aria-selected="false">Task Request Status <span class="badge" id="reqCount" hidden></span></button>
+      <button data-view="value" aria-selected="false">Value analysis</button>
+    </div>
+  </div>
+  <div class="side-foot">
+    <button data-view="settings" aria-selected="false">Settings</button>
+    <span class="whoami"><span>Signed in as</span> <b id="who"></b></span>
+  </div>
+</nav>
+
+<main class="wrap">
+  <div class="filters" id="filters">
+    <select id="fProject" aria-label="Project"><option value="">All projects</option></select>
+    <select id="fPerson" aria-label="Person"><option value="">Everyone</option></select>
+    <select id="fStatus" aria-label="Status"><option value="">Any status</option></select>
+    <select id="fPri" aria-label="Priority"><option value="">Any priority</option></select>
+    <select id="fMonth" aria-label="Month" hidden><option value="">All months</option></select>
+    <select id="fYear" aria-label="Year" hidden><option value="">All years</option></select>
+    <input type="search" id="fSearch" placeholder="Search tasks" aria-label="Search tasks">
+    <label class="chk"><input type="checkbox" id="fOpen"> Open tasks only</label>
+    <span class="spacer"></span>
+    <select id="fSort" aria-label="Sort tasks" hidden>
+      <option value="" hidden>Custom sort</option>
+      <option value="latest">Latest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="priority">Priority: high to low</option>
+      <option value="due">Due date: soonest</option>
+      <option value="status">Status</option>
+    </select>
+    <button class="btn primary" id="addBtn" hidden>+ New task</button>
+  </div>
+  <div id="banner"></div>
+
+  <section class="view" id="v-overview"></section>
+  <section class="view" id="v-board" hidden></section>
+  <section class="view" id="v-timeline" hidden></section>
+  <section class="view" id="v-list" hidden></section>
+  <section class="view" id="v-requests" hidden></section>
+  <section class="view" id="v-value" hidden></section>
+  <section class="view" id="v-settings" hidden></section>
+</main>
+
+<div id="sheetRoot"></div>
+
+<script>
+/* THE LOGIN IS THE PORTAL'S. Nobody signs in here: this page reads the
+   session the MJM AI hub already holds and the same shared_profiles row
+   every other module reads, through the same MJMAccess the others use.
+
+   PMS_READY resolves ONLY for a member of staff holding the `pms` module
+   (User Access on the hub). For anybody else it never resolves, so
+   pms_app.js draws nothing while the redirect is on its way. A customer is
+   refused by shared_staff_gate.js inside MJMAccess.load before this is
+   reached at all. */
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+window.PMS_READY = (async () => {
+  const never = new Promise(() => {});
+  try { await MJMAccess.load(_supabase); }
+  catch (e) { return never; }                       // gated or redirecting
+  const u = MJMAccess.user();
+  if (!u || !MJMAccess.canAccess('pms')) { window.location.replace('../index.html'); return never; }
+
+  /* WHO IS IN THE MODULE. There is no team list kept here: the people are
+     the staff accounts holding `pms` on the hub User Access page, and they
+     are who a task can be assigned to. pms_people() answers for any login
+     that may open the module (shared/RUN_ME_project_monitoring.sql). On a
+     database that has not had it run, the profiles are read directly,
+     which answers only for a login allowed to read everybody's row. No
+     list costs the pickers and nothing else: this login is always added
+     by pms_app.js, and a customer is never staff and never listed. */
+  const lvOf = v => { v = String(v || '').toLowerCase(); return v === 'admin' || v === 'normal' ? v : ''; };
+  const person = (email, name, level) => ({ email: String(email || '').trim().toLowerCase(), name: String(name || '').trim(), level: lvOf(level) });
+  let people = [];
+  try {
+    const r = await _supabase.rpc('pms_people');
+    if (!r.error && Array.isArray(r.data)) people = r.data.map(p => person(p.email, p.full_name, p.level));
+    else {
+      const q = await _supabase.from('shared_profiles').select('email, full_name, user_type, permissions');
+      if (!q.error) people = (q.data || [])
+        .filter(p => String(p.user_type || 'system') !== 'customer')
+        .map(p => person(p.email, p.full_name, p.permissions && p.permissions.modules && p.permissions.modules.pms));
+    }
+  } catch (e) { /* no list */ }
+  people = people.filter(p => p.email && p.level);
+
+  return {
+    sb: _supabase,
+    email: String(u.email || '').trim().toLowerCase(),
+    name: u.full_name || u.email || '',
+    level: MJMAccess.isAdminOf('pms') ? 'admin' : 'normal',
+    people
+  };
+})();
+</script>
+<script src="pms_app.js?v=20261112b"></script>
+</body>
+</html>

@@ -3023,6 +3023,126 @@ never going to be what stopped it.
 tab: the save never runs, the tab stays unsaved, X and Leave does not
 rewrite it, and both read-only buttons are still live.
 
+### AND THE GATE THEN REFUSED THE ONE SAVE THAT HAD TO HAPPEN
+
+The office amended a report, verified it themselves, pressed the X, and
+sent the screen back: *"如果我自己amend 自己按verify 然后close 就会出现这个
+按了save也save不到"*. Batch 257, the LEAVE NOW? dialog listing **Seed
+Planting** with SAVE / DON'T SAVE and, in red, **DID NOT SAVE — NOTHING
+LOST**.
+
+**EVERY LINK OF THAT CHAIN WAS WORKING AS WRITTEN, which is why it took a
+screenshot to find.** `verify()` writes the verification row and nothing
+else — it runs no save and clears no dirty flag — then `renderBanner`
+locks the tab. So the close guard saw a dirty tab, offered Save, and the
+gate above refused it, exactly as that gate exists to do.
+
+Three things were wrong at once and the sentence on screen was the
+smallest of them:
+
+- **THE REPORT WAS SIGNED OFF WITHOUT THE AMENDMENT.** The signature says
+  somebody checked figures the report does not hold, and nothing anywhere
+  says otherwise — which is the half that would still have been wrong if
+  only the dialog had been fixed.
+- **"Nothing lost" was FALSE.** The keying was on screen and nowhere else.
+- **AND LEAVE COULD NOT CLOSE EITHER.** An untouched row defaults to being
+  KEPT, so Leave ran the save, the save was refused, `stillDirty` held it
+  and the page stayed. **Stay and Leave both did nothing** — the only way
+  out was a Don't save nobody had a reason to press. The office did not
+  mention that, because they never got past the Save.
+
+**THE REFUSAL BELONGS AT THE SIGNATURE, which is the earlier act.** A
+sign-off is about what is IN THE DATABASE, so `_denySignOffUnsaved` asks
+`_unsavedOnTab` first and refuses, naming the tab and saying to save it.
+**ONE RULE, THREE DOORS** — the tab's own Verify, a per-row Verify on tabs
+3 to 6, and Mark as Reviewed; a rule living in one of them is a rule the
+other two do not obey. A row tab stays UNLOCKED, so its save is never
+refused, and the signature there is just as wrong.
+
+**It does NOT save for them.** One press doing two things with different
+consequences is the fault this file has a heading about — `saveTab6` can
+answer with a warning and a To Do row, `saveSeedAudit` has refusals of its
+own — and somebody may have keyed something they do not mean to commit.
+Two presses, in the order the person already had in mind.
+
+**And the dialog no longer offers a Save that cannot run.** The test is
+`_tabSaveBlocked`, which is the SAVE's own test, so the row cannot say one
+thing while the save does another: the row says it cannot be saved, says
+WHY and how to get back in (`MJMReview.lockReason`, answered where the
+three lock states live), and is decided as DROPPED, so Leave closes. The
+refusal is in `saveOneUnsaved` as well, because a button that is absent is
+a paint and not a gate.
+
+**The state is still reachable** — a tab locked by HQ's review, or by a
+login with no Fill in report tick, which the keyboard still reaches — so
+that row is not dead code. A fourth case, the class on the tab with no
+reason behind it, **names the banner rather than guessing**: that is the
+one place on a tab that always says what state the report is in.
+
+**NOTHING IN THE DATA RECORDS THE FAULT**, and that is worth knowing
+before anybody goes looking: the verification row is ordinary and the
+report simply holds the older figures, so a signature over a lost
+amendment cannot be told from one over figures that were right.
+`shared/CHECK_a_signature_over_an_empty_report.sql` answers the worst
+outcome of it, which IS decidable — a stage signed off on a batch
+carrying no ledger row for that stage at all, which is what you get when
+the only keying there ever was never landed. **Nothing to run in the
+database**: the whole of this change is in the page.
+
+#### AND THE GUARD THEN FOUND THE TAB THAT COULD NEVER BE CLEAN
+
+The office pressed Verify on 257 and sent back **nine stacked red toasts**,
+every one of them *"Nothing verified — Seed Planting has changes on screen
+that are not in the database"* — with the banner still reading PENDING
+VERIFICATION. They had typed nothing. **`verify 不到`.**
+
+The toast above them is the whole answer, and it is the page's own: *"**Planting
+report saved** — but the figures do not tally and nobody has said why."*
+257 is **7 seeds short** and the discrepancy box is empty, so every save of
+that tab raises it — **as an `'error'`**.
+
+**AND `error` MEANS ONE THING**, which the heading two above this says: what
+you keyed is not in the database. So `_trackTabSave` never cleared
+`_tabDirty[2]`, and **the tab could not stop being dirty by any route** —
+its own success was what kept it dirty.
+
+**IT HAD BEEN WRONG SINCE THE DAY IT WAS WRITTEN and only ever mis-worded
+the X**, which is the part worth keeping: for months the cost was a close
+dialog saying *"Seed Planting did not save. Nothing has been lost"* over a
+report that was in the database, and an X that refused to close. **The
+moment a sign-off started refusing a dirty tab, the same flag meant the
+report could not be VERIFIED at all.** A gate does not create these; it
+finds them.
+
+The save's own comment says it in as many words — *"The save is not
+blocked"* — so it is a **`'warn'`**: amber, ⚠️, not a failure. Nothing else
+moved, and the report still does not read as complete until the reason is
+written.
+
+**THE SHAPE CHECK MISSED IT BECAUSE THE TYPE IS A TERNARY.**
+`a_warning_is_not_a_failed_save.cjs` looked for the literal `'error')`, and
+this call ends `needsFollowUp && !_gap.note ? 'error' : 'success')` — so the
+pattern never matched, in the one file it was written to sweep. It matches
+`showToast(… 'error' …)` anywhere in the call now, which takes the sweep
+from the three known saves to this one as well, **and it strips the comments
+first**, because this page explains at length why a warning is not an error.
+Same trap, fifth time.
+
+`tests/a_verify_does_not_sign_off_unsaved_keying.cjs` drives the real page
+through the office's own path; **23 of its 39 checks fail on the code before
+the guard, and 16 of its 42 on the code with the guard and not this** — the
+second run being the office's dead end exactly: the save warns as an error,
+the tab never clears, and the verify can never go through. Section 2 calls
+the REAL `savePlantingTab` with the discrepancy box empty, because a stub
+would have proved nothing about the one thing they were stuck on. Several of
+those failures are a CASCADE — the save is refused because the verify locked
+the tab underneath it — which is the fault reproducing itself, and
+*Leave closes the batch rather than refusing for ever* fails there too,
+which is the trap nobody had noticed. `unsaved_close_guard.cjs` asserted
+that trap in as many words (*"and the dialog is still there"*) and was
+corrected: what it was really protecting is that Leave does not REWRITE a
+signed-off report, and it still holds that.
+
 ## A tray empties every way the seedlings leave, not two of them
 
 Tray Status read **P3 · 230 (81)** over a batch with nothing standing in P3,
@@ -5763,6 +5883,34 @@ things it had to learn, each of which makes a browser test lie:
   stop; and the single Del writes `.eq('id', …)`, so a stub reading only
   `.in` reads a working button as a dead one.
 
+## A card on the Stock & Sales page is ONE shape, and the next one too
+
+The office, over the Customer pane: *"Make my Customer order management
+outer box same with Order Monitoring Dashboard or This Week's Scheduled
+Collection. It has a colour outer line ... Future new card added,
+standardise the UI as current."*
+
+So a card on `operation/operation_stock_sales.html` is:
+
+- **`metric-card border-l-4 border-<colour>-500 relative`** — the colour
+  line is the card's identity, so **each card has its own colour**:
+  Order Monitoring Dashboard is emerald, This Week's Scheduled Collection
+  blue, Customer Order Management violet. Pick an unused one for the next.
+- **The icon-tile header**: `px-4 pt-4 pb-3 border-b border-slate-100`,
+  a `w-7 h-7 bg-<colour>-100 text-<colour>-600` tile with an icon, and the
+  title as `text-[11px] font-black uppercase tracking-widest`. Controls
+  for the card (a filter, a week stepper) sit on the right of that row.
+- **Tables inside it sit in a plain bordered frame**
+  (`rounded-xl border border-slate-200`), never a second `.dash-card` —
+  a shadowed card inside a card reads as two things.
+- **`overflow-hidden` only if nothing hangs out of the card.** Customer
+  Order Management does without it because its All Orders dropdown hangs
+  below its button and would be clipped.
+
+`tests/every_customer_card_has_its_colour_line.cjs` holds every top-level
+card on the Customer pane to all of it, so a card added without the line,
+the header or its own colour fails by name.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened four times in this codebase now. A screen writes a setting, the
@@ -8235,3 +8383,119 @@ batches than the widest ends short of the table's right edge, because
 widest. It is how the stacked sheet has always drawn and the office has not
 mentioned it; padding each band to the widest would move the upper table's
 column widths as well, which is a change nobody asked for.
+
+## Project Monitoring System signs nobody in: it reads the portal's login
+
+`pms/` is the company's project tracker (tasks, board, timeline, task
+requests, value analysis), brought in from a stand-alone page that had its
+own Supabase project and **no login at all**: a "Signed in as" dropdown
+where anybody picked any name, and until somebody was made Admin everybody
+was one. The office asked for it as a module with *"the login user same
+with the ai mjm system. the shared profiles in supabase"*.
+
+So there are two layers, and they are the house pattern:
+
+| Where | Question |
+|---|---|
+| hub → User Access → Project Monitoring System (`modules.pms`) | may this person open it at all, and their level: Admin on every tab, or Normal — view only on the six working tabs, **Settings hidden** |
+| the module → Settings → User access | one tab opened or closed differently for one person |
+
+- **THERE IS NO TEAM LIST, and there was one for a day.** It was a list of
+  names each linked to a login by hand, and the office asked for it out:
+  *"remove the team as the assignee will be the user who get accessed for
+  this module"*. The people ARE the staff accounts holding the module
+  (`pms_people()`, a SECURITY DEFINER function because not every login may
+  read every profile; the page falls back to reading `shared_profiles`
+  where it is not installed, and always adds the login itself). They are
+  the assignee tick list and the rows of Settings → User access. To add or
+  remove a person, change their module level on User Access.
+- **ONLY THE DIFFERENCE IS STORED.** `pms_settings.team` kept its name and
+  now holds `[{email, access:{tab: level}}]` for the tabs that differ from
+  a person's module level, and nothing for anybody who follows it — so a
+  person raised or lowered on User Access moves here without anybody
+  re-keying seven tabs. A row with no e-mail is from the old list, ties to
+  no login, and is dropped on the next save; `pms_team_access_of` leaves
+  such rows out of its comparison, or that save would be refused to a
+  Value analysis Admin who changed nothing about anybody.
+- **AN OVERRIDE IS FOUND BY E-MAIL, NEVER BY NAME.** A profile's
+  `full_name` is the one thing its owner can edit, so matching on it would
+  let anybody take a colleague's access by renaming themselves. The
+  database compares the e-mail **on the session** (`auth.jwt()`).
+- **A NORMAL LOGIN DOES NOT SEE SETTINGS**, which it did for a day as a
+  greyed-out tab. The office asked for it gone: *"can make it normal user
+  cannot view settings?"*. It is the DEFAULT (`defAccess`, and the last
+  lines of `pms_tab_level`), so it can still be opened for one person
+  under User access like any other tab.
+- **THE TABS ARE A SIDE BAR**, grouped by what somebody came to do:
+  Overview (Dashboard, Board, Timeline), Task (Task list, Task requests,
+  Value analysis), and Settings pinned at the foot. **← Portal is in the
+  TOP part**, above the name, so it is always on screen: it was at the
+  foot for a day and the office asked for it up. The top and the foot stay put and the middle scrolls. The
+  nav is still `nav.tabs` and every entry still a `button[data-view]`,
+  because that is how `pms_app.js` finds them; the stored keys
+  (`overview`, `list`) did not move with the labels. A group whose
+  entries are all closed for a login is not drawn. Under 860px it lies
+  along the top as one row that scrolls sideways. **There is no upgrade
+  entry**: the request named one and the module has none, so none was
+  invented.
+- **+ REQUEST A TASK OPENS A WINDOW, AND TASK REQUEST STATUS IS THE LIST.**
+  It took four shapes in two days and this is the one the office settled
+  on: *"make the task request form a window pop out. then move the task
+  request to Task Request Status (put the task request under task
+  section)"*. The bright button at the top of the bar opens the form in a
+  centred window over whichever tab is open (`openRequestWindow`); it is
+  NOT a tab and carries no `data-view`, which is why every tab selector in
+  `pms_app.js` is `nav.tabs button[data-view]` — matched as a tab it would
+  call `setView(undefined)`. The list of requests is an ordinary entry
+  under Task, **Task Request Status**, still keyed `requests`.
+  **What is half typed is kept when the window is shut** (`reqDraft`), so
+  the scrim and Esc cost nothing; Clear and a request that went throw it
+  away.
+- **A SENT REQUEST FLIES THERE**, which the office asked for by name: a
+  paper aeroplane leaves the Submit button and lands on Task Request
+  Status (`flyToRequestStatus`). It is decoration over a write that has
+  ALREADY succeeded, so nothing waits on it; it is skipped under
+  `prefers-reduced-motion`, and where the entry is not on screen to land
+  on. The curve is SAMPLED and the nose follows its tangent with the angle
+  unwrapped — three hand-written keyframes had it flying backwards for
+  half the trip, and only a screenshot of a frame showed it.
+- **THE TASK LIST WAS EMPTIED ON REQUEST**, with
+  `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
+  else. It keeps no copy, so it is not a file to run again by habit.
+- **A MODULE ADMIN ALWAYS KEEPS SETTINGS.** Any other tab can be closed on
+  one; Settings is the tab that hands out the rest, so closing it on the
+  last Admin would leave nobody able to open anything again. Asked in both
+  copies of the rule and the select is disabled in the sheet.
+- **A TASK NAMES ITS ASSIGNEES AS TEXT**, the profile's full name. A person
+  renamed on their profile keeps their old name on their old tasks —
+  nothing carries a rename over any more, because nothing here knows one
+  happened. An assignee who no longer holds the module stays visible on
+  the task.
+- **THE DATABASE DECIDES IT TOO.** `pms_tab_level(tab)` in
+  `shared/RUN_ME_project_monitoring.sql` is `accessFor()` in
+  `pms/pms_app.js`, asked by the policies. Change one, change the other.
+  The settings row is saved WHOLE by two tabs (Settings and Value
+  analysis), so a trigger (`pms_guard_team`) refuses a save that moves an
+  override unless the saver is Admin on Settings.
+- **`PMS_READY` is the seam.** The page resolves it only for staff holding
+  the module; `pms_app.js` awaits it and draws nothing before, and
+  `body[data-boot]` keeps the shell hidden meanwhile.
+- **The tables are `pms_tasks`, `pms_settings`, `pms_task_requests`** in
+  the portal's own project. The app still speaks of `tasks` / `settings` /
+  `task_requests`; `TBL` is the one map.
+- **NOTHING IS PRESET IN CODE.** The first version carried the old
+  tracker's projects, team and lists in a `pms_data.js` and its 54 tasks in
+  the SQL, and the office asked for both out: *"the details in settings and
+  tasks should not be preset in code"*. So there is no data file, the app
+  starts from `applySettings(null)`, and the SQL makes tables and rules and
+  writes no row. **What was already seeded stayed where it is** — the 54
+  tasks and the settings row were in the database by then, and taking a
+  preset out of the code deletes nothing. A database with no settings row
+  is an empty tracker that the Settings tab fills. Statuses are the one
+  list still in code, because the board columns and the overdue rules are
+  written against them.
+
+`tests/project_monitoring_uses_the_portal_login.cjs` drives the real page.
+Its stub **fires `onAuthStateChange`**, because the hub gates its tiles
+inside that callback and fails open without it — the trap this file already
+names.
