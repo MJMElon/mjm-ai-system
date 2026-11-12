@@ -8321,6 +8321,12 @@
             setTrayTot('t2-tot-actual',  totalActualPlanted.toLocaleString());
 
             const accountedTotal = totalActualPlanted + damaged;
+            /* The basis of the shortfall is what the SEED AUDIT counted as
+               received, not the D/O + FOC + Replacement expected. Planted plus
+               damaged has to account for what actually arrived; anything
+               short of that is the discrepancy to explain. No audit yet means
+               there is nothing to measure against. */
+            const auditedRaw = parseInt((document.getElementById('t8-total-received')?.innerText || '0').replace(/,/g, '')) || 0;
 
             // ── Chart 1: Seeds Accounted — horizontal bar, vertical dashed target line ──
             // Target = 100% (D/O) + FOC% → e.g. 107% or 105%. Actual is computed as % of D/O qty.
@@ -8354,22 +8360,27 @@
             const matchTitle = document.getElementById('t2-match-title');
             const matchDesc = document.getElementById('t2-match-desc');
 
-            let isReceiveIssue = false;
+            let isReceiveIssue = false;  // set below: planted + damaged short of the audited count
 
             if (accountedTotal === 0 && damaged === 0) {
                 matchBox.className = "w-24 shrink-0 rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] flex flex-col justify-center items-center text-center transition-colors p-3";
                 matchIcon.innerText = "⏳"; 
                 matchTitle.innerText = "Awaiting"; matchTitle.className = "text-[10px] font-black uppercase tracking-wider text-[#8a7a68] leading-tight";
                 matchDesc.innerText = "Enter data"; matchDesc.className = "text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1 leading-tight";
-            } else if (accountedTotal < expectedRaw) {
-                const missing = expectedRaw - accountedTotal;
+            } else if (auditedRaw === 0) {
+                matchBox.className = "w-24 shrink-0 rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] flex flex-col justify-center items-center text-center transition-colors p-3";
+                matchIcon.innerText = "⏳";
+                matchTitle.innerText = "Awaiting"; matchTitle.className = "text-[10px] font-black uppercase tracking-wider text-[#8a7a68] leading-tight";
+                matchDesc.innerText = "No audit yet"; matchDesc.className = "text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1 leading-tight";
+            } else if (accountedTotal < auditedRaw) {
+                const missing = auditedRaw - accountedTotal;
                 matchBox.className = "w-24 shrink-0 rounded-xl border border-[#f8d7da] bg-[#fff5f5] flex flex-col justify-center items-center text-center transition-colors p-3";
                 matchIcon.innerText = "⚠️"; 
                 matchTitle.innerText = "Shortfall"; matchTitle.className = "text-[10px] font-black uppercase tracking-wider text-[#a83020] leading-tight";
                 matchDesc.innerText = `−${missing.toLocaleString()}`; matchDesc.className = "text-[9px] font-bold text-[#a83020] uppercase tracking-widest mt-1 leading-tight";
                 isReceiveIssue = true;
-            } else if (accountedTotal > expectedRaw) {
-                const over = accountedTotal - expectedRaw;
+            } else if (accountedTotal > auditedRaw) {
+                const over = accountedTotal - auditedRaw;
                 matchBox.className = "w-24 shrink-0 rounded-xl border border-[#c3e6cb] bg-[#f0f8ec] flex flex-col justify-center items-center text-center transition-colors shadow-[0_0_15px_rgba(106,168,60,0.3)] p-3";
                 matchIcon.innerText = "🌟"; 
                 matchTitle.innerText = "Surplus!"; matchTitle.className = "text-[10px] font-black uppercase tracking-wider text-[#4a7a2e] leading-tight";
@@ -8378,7 +8389,7 @@
                 matchBox.className = "w-24 shrink-0 rounded-xl border border-[#c3e6cb] bg-[#f0f8ec] flex flex-col justify-center items-center text-center transition-colors p-3";
                 matchIcon.innerText = "✅";
                 matchTitle.innerText = "Match"; matchTitle.className = "text-[10px] font-black uppercase tracking-wider text-[#4a7a2e] leading-tight";
-                matchDesc.innerText = (targetPct > 0 ? targetPct.toFixed(focPctNum % 1 === 0 ? 0 : 1) : '100') + '%'; matchDesc.className = "text-[9px] font-bold text-[#4a7a2e] uppercase tracking-widest mt-1 leading-tight";
+                matchDesc.innerText = '= audited'; matchDesc.className = "text-[9px] font-bold text-[#4a7a2e] uppercase tracking-widest mt-1 leading-tight";
             }
 
             // ── Chart 2: Damage Control — horizontal bar, vertical dashed FOC% line ──
@@ -8444,14 +8455,14 @@
                "discrepancy" on its own is not a question anybody can answer. */
             const gapPanel = document.getElementById('t2-gap-panel');
             if (gapPanel) {
-                const gap = isReceiveIssue || isDamageIssue;
+                const gap = isReceiveIssue || isDamageIssue;  // isReceiveIssue: planted + damaged < audited
                 gapPanel.classList.toggle('hidden', !gap);
                 if (gap) {
                     const lines = [];
                     if (isReceiveIssue) {
-                        const missing = expectedRaw - accountedTotal;
+                        const missing = auditedRaw - accountedTotal;
                         lines.push(`SHORTFALL — ${missing.toLocaleString()} seed(s) unaccounted for. ` +
-                                   `Expected ${expectedRaw.toLocaleString()} (D/O + FOC + Replacement); ` +
+                                   `Seed audited ${auditedRaw.toLocaleString()}; ` +
                                    `planted ${totalActualPlanted.toLocaleString()} + damaged ${damaged.toLocaleString()} ` +
                                    `= ${accountedTotal.toLocaleString()}.`);
                     }
@@ -10307,6 +10318,9 @@
 
             renderAuditAnalysis(totalSupplier, totalReceived, expectedRaw);
             updateSeedAuditCompletion();
+            // The planting explanation is measured against this total, so an
+            // audit change has to re-check it.
+            if (document.getElementById('t2-gap-panel')) calcPlanting();
         }
 
         function renderAuditAnalysis(totalSupplier, totalReceived, expectedRaw) {
