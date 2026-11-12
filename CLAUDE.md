@@ -8515,3 +8515,42 @@ So there are two layers, and they are the house pattern:
 Its stub **fires `onAuthStateChange`**, because the hub gates its tiles
 inside that callback and fails open without it — the trap this file already
 names.
+
+## A DO number is handed out by the DATABASE, so it is never handed out twice
+
+A customer collects in the morning (DO-MUGJB901), comes back for more the
+same day, and the second DO must be DO-MUGJB902. On 5 Nov both came out 901
+(qty 13 at 06:31, qty 47 at 06:33), and both are real collections.
+
+**Every app worked the next number out the same way**: read the highest
+number of that order, add one, insert. A read and a write in two separate
+steps, in four apps (FC Portal `generateDONumber`, Admin Portal
+`doAttach.js`, the office's `mjmGenerateDONumber`, the old
+`mobile_do_signing.html`) plus every phone still on an older version. So no
+app fix could close it. `shared/RUN_ME_do_number_never_repeats.sql` does:
+
+- **A BEFORE INSERT trigger** takes an advisory lock on the order and, if
+  the number is already used or is an OFF placeholder, gives the row the
+  next free number of that order. Two DOs saved at the same second queue on
+  the lock. SECURITY DEFINER, so the check sees every row whatever the
+  saver may read.
+- **Only the generated series is touched**: `DO-` + the AL number + a
+  running number. A number off a paper DO book (03783) is the paper's, and
+  is never changed.
+- **The number on the form is a PREVIEW.** Every writer reads the row back
+  (`.select().single()`) and the PDF, the customer portal and the toast use
+  the row's number.
+- **A retry is recognised by `client_uid`**, one id per press of Save, with
+  a partial unique index: a save that landed and lost its answer comes back
+  23505 and the row is fetched, rather than made again under a new number.
+  **Never by the number**: the Admin Portal's `sendDO` asked "is this
+  do_number already there" and on yes RETURNED WITHOUT INSERTING, so a
+  genuine second DO handed the same preview number was silently dropped.
+- **A database without the column still takes a DO**: a refusal naming
+  `client_uid` is remembered and the row sent again without it.
+
+The two pairs already sharing a number (DO-MUGJB901, 03783) are left as
+they are: the customer signed paper with that number on it.
+
+`FC-Portal/tests/a_do_is_numbered_at_save.cjs` (sections 5 to 7) and
+`Mobile/tests/a_second_do_the_same_day_is_its_own_do.cjs` hold it.
