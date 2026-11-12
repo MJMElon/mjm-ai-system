@@ -1742,7 +1742,14 @@
                     } 
                 }); 
                 
-                const { error: doErr } = await _supabase.from('shared_do_records').insert([doPayload]); 
+                /* The number is checked by the database: a DO- number of an
+                   order already used is moved to the next free one (shared/
+                   RUN_ME_do_number_never_repeats.sql), so a second DO the same
+                   day is 02 and never 01 again. The row that comes back is the
+                   DO, and its number is the one the customer portal gets. A
+                   number off a paper DO book is never changed. */
+                const { data: doRow, error: doErr } = await _supabase.from('shared_do_records').insert([doPayload]).select('do_number').single();
+                if (!doErr && doRow && doRow.do_number) doPayload.do_number = doRow.do_number;
                 if (!doErr) {
                     const newBalance = parentAL.balance_quantity - doTotalQty;
                     await _supabase.from('shared_al_orders').update({ balance_quantity: newBalance }).eq('id', parentAL.id);
