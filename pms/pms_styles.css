@@ -543,3 +543,7 @@ nav.tabs .badge[hidden]{display:none}
 @media (max-width:420px){.lvsel{width:116px}}
 
 /* Back to the MJM AI portal */
+/* The request form is on the Task requests page, above the list, at a width a form reads at. */
+.reqform-wrap:empty{display:none}
+.reqform{max-width:780px;margin:14px 0 22px}
+.reqform-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}

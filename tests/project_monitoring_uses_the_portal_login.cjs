@@ -329,16 +329,31 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     is(sb.selBg, true, 'the open entry wears a block the others do not');
     await go(page, 'value'); await page.waitForTimeout(150);
     is(await page.evaluate(() => [document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view, document.querySelector('#v-value').hidden]), ['value', false], 'pressing an entry opens its view');
-    // + Request a task IS the Task requests entry: one bright button on the top part of the bar.
+    // + Request a task IS the Task requests entry, and the form is ON that page: no panel slides in from the side.
     await go(page, 'board'); await page.waitForTimeout(150);
     const cta = await page.evaluate(() => { const b = document.querySelector('.side-top #reqBtn'); if (!b) return 'no request button';
       b.click();
       return { text: b.firstChild.nextSibling.textContent.trim(), shown: !b.hidden, view: b.dataset.view, open: b.getAttribute('aria-selected'),
-        list: !document.querySelector('#v-requests').hidden, sheet: !!document.querySelector('#sheetRoot .sheet #r-name'),
+        page: !document.querySelector('#v-requests').hidden, formOnPage: !!document.querySelector('#v-requests .reqform #r-name'),
+        sidePanel: !!document.querySelector('#sheetRoot .sheet'), listUnder: !!document.querySelector('#v-requests .reqform-wrap + .reqlist .seg'),
         badgeInside: !!b.querySelector('#reqCount'), entries: document.querySelectorAll('nav.tabs button[data-view="requests"]').length }; });
-    is(cta, { text: 'Request a task', shown: true, view: 'requests', open: 'true', list: true, sheet: true, badgeInside: true, entries: 1 },
-      'it opens the Task requests view with the request form on top, carries the pending count, and is the only entry for it');
-    await page.keyboard.press('Escape');
+    is(cta, { text: 'Request a task', shown: true, view: 'requests', open: 'true', page: true, formOnPage: true, sidePanel: false, listUnder: true, badgeInside: true, entries: 1 },
+      'it opens the Task requests page with the form on the page and the list under it, and no side panel');
+    // What is half typed survives the page being redrawn under it, and a request sent is written and the form cleared.
+    const sent = await page.evaluate(async () => {
+      const q = (s) => document.querySelector('#v-requests .reqform ' + s); if (!q('#r-name')) return 'no form';
+      const set = (e, val, ev) => { e.value = val; e.dispatchEvent(new Event(ev, { bubbles: true })); };
+      set(q('#r-name'), 'Stock card for the store', 'input');
+      document.querySelector('nav.tabs button[data-view="board"]').click(); document.querySelector('#reqBtn').click();
+      const kept = q('#r-name') && q('#r-name').value;
+      set(q('#f-project'), 'Nursery', 'change');
+      [...document.querySelectorAll('#v-requests .reqform-foot button')].find((b) => /send/i.test(b.textContent)).click();
+      await new Promise((r) => setTimeout(r, 300));
+      const w = window.__WRITES.filter((x) => x.table === 'pms_task_requests').map((x) => [x.row.data.name, x.row.data.project, x.row.data.status, x.row.data.requestedBy]);
+      return { kept, w, cleared: document.querySelector('#v-requests .reqform #r-name').value };
+    });
+    is(sent, { kept: 'Stock card for the store', w: [['Stock card for the store', 'Nursery', 'Pending', 'The Boss']], cleared: '' },
+      'a half-typed request survives leaving the page and coming back, and Send writes one request and clears the form');
     if (process.env.SHOT) { await page.setViewportSize({ width: 1400, height: 900 }); await go(page, 'overview'); await page.waitForTimeout(200); await page.screenshot({ path: process.env.SHOT.replace('.png', '_side.png') }); }
     await page.close();
     // A login with every entry of a group closed sees no title over nothing.

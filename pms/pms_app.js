@@ -235,10 +235,10 @@ function paintSort(){
 }
 
 document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
-// + Request a task IS the Task requests entry: it opens that view like any other, and then the form on top of it, so
-// somebody who came to ask is asking and somebody who came to approve closes the form and is on the list. Registered
-// after the line above, so the view is already open when this runs.
-{ const cta = $("#reqBtn"); if (cta) cta.addEventListener("click", () => { if (view === "requests" && canRequest) openRequestSheet(); }); }
+// + Request a task IS the Task requests entry, and the request form is ON that page, at the top of it. It was a
+// panel sliding in from the side for a day; a form somebody fills in belongs on the page it is about. The press opens
+// the view like any other entry (the line above) and this only puts the cursor in the form.
+{ const cta = $("#reqBtn"); if (cta) cta.addEventListener("click", () => { const f = document.querySelector("#v-requests .reqform select, #v-requests .reqform input"); if (f) f.focus(); }); }
 function setView(v){
   view = v; store.set("pm.view", v); syncPerms();
   document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v));
@@ -1352,23 +1352,32 @@ function watchRequests(db){
   }, e => { requestsErr = (e && e.message) || "unavailable"; render(); });
 }
 
-function openRequestSheet(){
-  openId = "request";
-  const draft = {project: $("#fProject").value || "", module:"", sub:"", name:"", type: TYPES.includes("Web") ? "Web" : TYPES[0]||"",
+// The request form, on the Task requests page. It is built ONCE and kept: the page under it is redrawn every time a
+// task or a request arrives, and a form redrawn with it would lose what somebody was half way through typing. It is
+// rebuilt only when what it offers changes (the projects, the lists, the people), and never over an unsent draft.
+let reqDraft = null, reqDirty = false, reqFormSig = "";
+function newReqDraft(){
+  return {project:"", module:"", sub:"", name:"", type: TYPES.includes("Web") ? "Web" : TYPES[0]||"",
     priority: PRIS.includes("Medium") ? "Medium" : PRIS[0]||"", due:"", reason:"", assignees: me ? [me] : []};
+}
+function buildRequestForm(){
+  if (!reqDraft) reqDraft = newReqDraft();
+  const draft = reqDraft, touch = () => { reqDirty = true; };
   const box = (label, id, input, full) => el("div",{class:"f"+(full?" full":"")}, el("label",{for:id, text:label}), input);
   const sel = (id, key, items) => { const s = el("select",{id}, ...items.map(i => el("option",{value:i, text:i})));
-    s.value = draft[key]; s.addEventListener("change", () => draft[key] = s.value); return s; };
+    s.value = draft[key]; s.addEventListener("change", () => { draft[key] = s.value; touch(); }); return s; };
   const nameIn = el("input",{id:"r-name", type:"text", placeholder:"What do you want to build or change?"});
-  nameIn.addEventListener("input", () => draft.name = nameIn.value);
-  const dueIn = el("input",{id:"r-due", type:"date"}); dueIn.addEventListener("input", () => draft.due = dueIn.value);
+  nameIn.value = draft.name; nameIn.addEventListener("input", () => { draft.name = nameIn.value; touch(); });
+  const dueIn = el("input",{id:"r-due", type:"date"}); dueIn.value = draft.due;
+  dueIn.addEventListener("input", () => { draft.due = dueIn.value; touch(); });
   const why = el("textarea",{id:"r-why", placeholder:"Why it's needed, who asked for it, anything the approver should know"});
-  why.addEventListener("input", () => draft.reason = why.value);
+  why.value = draft.reason; why.addEventListener("input", () => { draft.reason = why.value; touch(); });
   const picks = el("div",{class:"picks", role:"group"}, ...TEAM.map(n => {
     const cb = el("input",{type:"checkbox", value:n, checked: draft.assignees.includes(n) || null});
-    cb.addEventListener("change", () => { draft.assignees = TEAM.filter(x => x===n ? cb.checked : draft.assignees.includes(x)); });
+    cb.addEventListener("change", () => { draft.assignees = TEAM.filter(x => x===n ? cb.checked : draft.assignees.includes(x)); touch(); });
     return el("label",{class:"pick"}, cb, n);
   }));
+  const clear = () => { reqDraft = null; reqDirty = false; reqFormSig = ""; renderRequests(); };
 
   async function submit(){
     if (!draft.project) return toast("Pick a master project first");
@@ -1376,27 +1385,24 @@ function openRequestSheet(){
     const now = new Date().toISOString();
     const r = {...draft, id:"r" + Date.now().toString(36), name:draft.name.trim(), reason:draft.reason.trim(),
       status:"Pending", requestedBy:me, requestedAt:now, decidedBy:"", decidedAt:"", decisionNote:"", taskId:""};
-    try { await saveRequest(r); toast("Request sent for approval"); closeSheet(); }
+    try { await saveRequest(r); toast("Request sent for approval"); clear(); }
     catch(e){ toast("Could not send: " + (e && (e.message||e.code))); }
   }
 
-  const sheet = el("aside",{class:"sheet", role:"dialog", "aria-modal":"true", "aria-label":"Request a task"},
-    el("header",{}, el("div",{}, el("div",{class:"eyebrow", text:"Task request"}), el("h2",{text:"Request a task"})),
-      el("button",{class:"x", "aria-label":"Close", onclick:closeSheet}, "×")),
-    el("div",{class:"body"},
-      el("p",{class:"note", style:"margin:0", text:"An Approver reviews your request. Once it's approved, it's added to the task list automatically."}),
-      el("div",{class:"fields"},
-        ...hierSelects(draft, () => {}),
-        box("Task name","r-name",nameIn,true),
-        box("Type","r-type",sel("r-type","type",TYPES)),
-        box("Priority","r-pri",sel("r-pri","priority",PRIS)),
-        box("Needed by","r-due",dueIn),
-        el("div",{class:"f full"}, el("label",{text:"Who will do it"}), picks),
-        box("Details","r-why",why,true))),
-    el("footer",{}, el("button",{class:"btn primary", onclick:submit}, "Send request"), el("span",{class:"spacer"}),
+  return el("div",{class:"panel reqform"},
+    el("div",{class:"eyebrow", text:"Task request"}), el("h2",{style:"margin:2px 0 4px", text:"Request a task"}),
+    el("p",{class:"note", style:"margin:0 0 14px", text:"Someone with Admin access to Task requests reviews it. Once it's approved, it's added to the task list automatically."}),
+    el("div",{class:"fields"},
+      ...hierSelects(draft, touch),
+      box("Task name","r-name",nameIn,true),
+      box("Type","r-type",sel("r-type","type",TYPES)),
+      box("Priority","r-pri",sel("r-pri","priority",PRIS)),
+      box("Needed by","r-due",dueIn),
+      el("div",{class:"f full"}, el("label",{text:"Who will do it"}), picks),
+      box("Details","r-why",why,true)),
+    el("div",{class:"reqform-foot"}, el("button",{class:"btn primary", onclick:submit}, "Send request"),
+      el("button",{class:"btn", onclick:clear}, "Clear"), el("span",{class:"spacer"}),
       el("span",{class:"note", text:`Requested by ${me}`})));
-  $("#sheetRoot").replaceChildren(el("div",{class:"scrim", onclick:closeSheet}), sheet);
-  sheet.querySelector(draft.project ? "#f-module" : "#f-project").focus();
 }
 
 async function approveRequest(r, opts){
@@ -1421,12 +1427,23 @@ async function decideRequest(r, status, note){
 let reqOpen = null;   // {id, mode:"approve"|"reject"} for the request card showing its approve/reject form
 let reqShow = "Pending";
 function renderRequests(){
-  const root = $("#v-requests");
+  const page = $("#v-requests");
   if (requestsErr){
-    root.replaceChildren(el("div",{class:"empty"}, el("b",{text:"Task requests aren't set up yet"}),
+    reqFormSig = "";
+    page.replaceChildren(el("div",{class:"empty"}, el("b",{text:"Task requests aren't set up yet"}),
       "The database needs a task_requests table. Run the SQL from the setup notes in Supabase, then reload. (" + requestsErr + ")"));
     return;
   }
+  // Two parts: the form, kept, and the list under it, redrawn.
+  let formWrap = page.querySelector(":scope > .reqform-wrap"), root = page.querySelector(":scope > .reqlist");
+  if (!formWrap || !root){
+    formWrap = el("div",{class:"reqform-wrap"}); root = el("div",{class:"reqlist"});
+    page.replaceChildren(formWrap, root); reqFormSig = "";
+  }
+  const sig = JSON.stringify([canRequest, me, TYPES, PRIS, TEAM, PROJECTS.map(p => [p.key, (p.modules||[]).map(m => [m.name, (m.subs||[]).map(x => x.name)])])]);
+  if (!canRequest){ formWrap.replaceChildren(); reqFormSig = sig; }
+  else if (sig !== reqFormSig && (!reqDirty || !formWrap.firstChild)){ formWrap.replaceChildren(buildRequestForm()); reqFormSig = sig; }
+
   const path = r => [r.project, r.module, r.sub].filter(Boolean).join(" › ");
   const when = s => s ? fmtY(s.slice(0,10)) : "";
   const counts = Object.fromEntries(["Pending","Approved","Rejected","Withdrawn"].map(k => [k, requests.filter(r => r.status === k).length]));
@@ -1488,12 +1505,11 @@ function renderRequests(){
     el("div",{class:"reqhead"},
       el("div",{}, el("h2",{style:"margin:0", text:"Task requests"}),
         el("p",{class:"note", style:"margin:4px 0 0", text:`Approved requests are added to Tasks as Not Started. ${who}`})),
-      el("span",{class:"spacer"}),
-      canRequest ? el("button",{class:"btn primary", onclick:openRequestSheet}, "+ Request a task") : null),
+      el("span",{class:"spacer"})),
     seg,
     list.length ? el("div",{class:"reqs"}, ...list.map(reqCard))
       : el("div",{class:"empty"}, el("b",{text: reqShow === "Pending" ? "No requests waiting" : `No ${reqShow.toLowerCase()} requests`}),
-          reqShow === "Pending" && canRequest ? "Use “+ Request a task” to ask for something new." : ""));
+          reqShow === "Pending" && canRequest ? "Use the form above to ask for something new." : ""));
 }
 
 // ---------- storage ----------
@@ -1616,7 +1632,7 @@ function fromDoc(d){
   db.collection("tasks").onSnapshot(snap => {
     tasks = snap.docs.map(d => fromDoc(d));
     loaded = true; refreshPickers(); render();
-    if (openId && openId !== "new" && openId !== "request" && openId !== "access" && !tasks.find(x=>x.id===openId)) closeSheet();
+    if (openId && openId !== "new" && openId !== "access" && !tasks.find(x=>x.id===openId)) closeSheet();
   }, e => { loaded = true; render(); toast("Couldn't load the tasks: " + e.message); });
 })();
 })();

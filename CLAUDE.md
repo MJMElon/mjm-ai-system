@@ -8444,10 +8444,17 @@ So there are two layers, and they are the house pattern:
   *"task request will be remove under task section. + request a task =
   task request"*. So it carries `data-view="requests"` like any entry
   (hidden when that tab is None, ringed when open, the pending count on
-  it) and a press opens the view AND the request form on top of it:
-  somebody who came to ask is asking, somebody who came to approve closes
-  the form and is on the list. Without the view behind it there would be
-  no way left to reach the list at all.
+  it) and a press opens the Task requests page. **THE FORM IS ON THAT
+  PAGE, above the list** — it slid in from the side as a panel for a day
+  and the office asked for a page: *"the request task can be a page, no
+  need become sidebar"*. It is built ONCE and kept (`buildRequestForm`,
+  `reqFormSig`), because the list under it is redrawn every time a task or
+  a request arrives and a form redrawn with it loses what somebody was
+  half way through typing; it is rebuilt only when what it offers changes,
+  and never over an unsent draft.
+- **THE TASK LIST WAS EMPTIED ON REQUEST**, with
+  `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
+  else. It keeps no copy, so it is not a file to run again by habit.
 - **A MODULE ADMIN ALWAYS KEEPS SETTINGS.** Any other tab can be closed on
   one; Settings is the tab that hands out the rest, so closing it on the
   last Admin would leave nobody able to open anything again. Asked in both
