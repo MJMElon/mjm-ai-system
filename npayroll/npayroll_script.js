@@ -575,7 +575,7 @@ function refreshPayrollTab() {
   } catch (_) {}
   if (s === 'maint')    renderMaint();
   if (s === 'transpl')  renderEntries('transplanting');
-  if (s === 'seedling') { renderLoading(); renderEntries('seedlings'); }
+  if (s === 'seedling') { renderLoading(); }
   if (s === 'seedplant') renderSeedPlanting();
   if (s === 'other')    renderEntries('other');
   if (s === 'monthly')  renderMonthly();
@@ -4182,7 +4182,7 @@ const LOCK_SHEETS = {
      constraint on it, so a new sheet name needs nothing run. */
   seedplant: { label: 'Pre Nursery',         scope: () => '' },
   transpl:  { label: 'Transplanting',        scope: () => $('transpl-section').value || '' },
-  seedling: { label: 'Seedlings Collection', scope: () => $('seedling-section').value || '' },
+  seedling: { label: 'Seedlings Collection', scope: () => ($('seedling-section') || {}).value || '' },
   other:    { label: 'Others',               scope: () => $('other-section').value || '' },
   monthly:  { label: 'Monthly Payroll',      scope: () => '' }
 };
@@ -4420,14 +4420,16 @@ function renderLockCalendar() {
   $('lk-note').textContent = !ready
     ? 'Lock Controls are not set up yet — nothing locks and nothing can be verified.'
     : mayLock
-      ? 'Re-opening a month also takes back every verification on it, so the sheets go back to '
-      + 'being editable and whoever checked them has to check them again.'
+      ? 'Re-opening a month keeps every verification on it: a verified sheet stays closed until '
+      + 'somebody presses Unlock on that sheet itself.'
       : 'You can see this calendar, but changing it needs Lock Controls in Module Assess Control.';
 }
 
-/* Forcing one month either way. Re-opening takes its verifications with it:
-   leaving them would put a sheet back on screen as editable while still
-   showing somebody's name against it as checked, which is the worst of both. */
+/* Forcing one month either way. Re-opening the MONTH leaves every sheet
+   verification in place: the office asked for exactly that -- a sheet they
+   verified stays verified and closed, and is taken back one sheet at a time
+   with the Unlock on its own strip. isSheetLocked asks the month OR the
+   verification, so a verified sheet in an open month stays shut. */
 async function toggleLockMonth(month) {
   if (!mayDo('locks', 'manage',
       'You do not have permission to change the lock calendar. Ask an admin to grant it in Module Assess Control.')) return;
@@ -4437,20 +4439,14 @@ async function toggleLockMonth(month) {
   if (locked) {
     if (!confirm(`Re-open ${LOCK_MONTHS[month - 1]} ${_lockYear} for editing?`
       + (vers.length
-          ? `\n\nThis also takes back ${vers.length} verification${vers.length === 1 ? '' : 's'} on that `
-            + 'month. Those sheets become editable again and have to be checked again.'
+          ? `\n\n${vers.length} sheet${vers.length === 1 ? ' is' : 's are'} verified on that month and `
+            + `${vers.length === 1 ? 'stays' : 'stay'} verified and closed. Unlock a sheet on its own strip to change it.`
           : ''))) return;
   } else if (!confirm(`Lock ${LOCK_MONTHS[month - 1]} ${_lockYear}?\n\n`
                     + 'Every payroll sheet for that month stops being editable.')) return;
 
   const error = await MJMPayrollLock.setManualOverride(_supabase, _lockYear, month, !locked, userEmail || null);
   if (error) { alert('Could not change the lock: ' + error.message); return; }
-  if (locked) {
-    for (const v of vers) {
-      const e = await MJMPayrollLock.unverify(_supabase, v.month, v.sheet, v.scope);
-      if (e) { alert('Re-opened, but a verification could not be taken back: ' + e.message); break; }
-    }
-  }
   renderLockCalendar();
   refreshPayrollTab();
 }
@@ -6143,7 +6139,7 @@ document.addEventListener('keydown', (e) => {
     await MJMAccess.load(_supabase);
     if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
     if (!MJMAccess.canAccess('npayroll')) {
-      alert('You do not have access to the Nursery Payroll System.');
+      alert('You do not have access to Nursery Payroll.');
       window.location.href = '../index.html';
       return;
     }
@@ -6151,7 +6147,7 @@ document.addEventListener('keydown', (e) => {
     userEmail = u.email || '';
     isAdmin   = MJMAccess.isAdminOf('npayroll');
     // Module Assess Control moved out from under this topbar's own icons
-    // the day Nursery Payroll System became a module inside Nursery
+    // the day Nursery Payroll became a module inside Nursery
     // Reporting System -- it is reached from that system's own landing
     // page now (reporting/reporting_admin.html), not from a door here.
 

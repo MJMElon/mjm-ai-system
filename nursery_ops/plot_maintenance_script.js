@@ -1232,7 +1232,7 @@ function renderPayroll() {
 
   // Total capacity = the sum of every worker's earned capacity.
   const grand = wk.reduce((sum, w) => sum + totals[w], 0);
-  // Capacity only. Money lives in the Nursery Payroll System, which reads
+  // Capacity only. Money lives in the Nursery Payroll, which reads
   // this record and prices it — keeping one sheet for what was done and
   // another for what it pays.
   h += `</tbody><tfoot>
@@ -3680,7 +3680,7 @@ function _fmtRate(r) {
    pages with the Date / Plot / Capacity columns repeated, rather than
    squeezing the columns until they are useless.
 
-   Capacity only — no money. Pay is worked out in the Nursery Payroll System,
+   Capacity only — no money. Pay is worked out in the Nursery Payroll,
    which reads this same record. */
 function downloadPayrollPDF() {
   const { jsPDF } = window.jspdf;
@@ -4820,7 +4820,7 @@ const I18N = {
     'pay.notLinkedNote':'These names are this module\u2019s own old list \u2014 {nursery} is NOT taking them from the Worker System. Check that its workers are filed under that nursery and counted as general workers on the 555 Worker Portal\u2019s Manage page.',
     'pay.notLinkedWhy':'The register could not be read: {why}',
     'pay.offRegister':'⚠ Ticked this month but has no column here now, so their capacity is not counted:',
-    'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted and the Nursery Payroll System will not pay it:',
+    'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted and the Nursery Payroll will not pay it:',
     /* The five answers _whyNoColumn() can give. Said INSTEAD of "check the
        spelling, or that they are a general worker" — that sentence sent
        somebody off to check two things the register already knows the answer
@@ -4834,14 +4834,14 @@ const I18N = {
     'pay.whyRole':'is a {role} on the register, so has no column on these sheets',
     'pay.whyNotGeneral':'not counted as a general worker of this nursery on the register',
     'pay.whyUnknown':'on the register as a general worker of this nursery — reload the page',
-    'pay.saveFailed':'⚠ These ticks did not save, so the Nursery Payroll System cannot see them and will not pay them. Try ticking again:',
+    'pay.saveFailed':'⚠ These ticks did not save, so the Nursery Payroll cannot see them and will not pay them. Try ticking again:',
     /* The other half of the same warning: work that never reached the sheet
        at all, as against work that reached it with a name nobody could
        place. */
     'pay.unpaired':'⚠ Verified in the field but matched no row on this month\u2019s schedule, so it was not ticked and is not paid. Add the row to the schedule for this month, then Sync from Schedule:',
     'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
-    'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
+    'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll.',
     /* Salary claim form (PDF) */
     'pay.no':'No.', 'pay.worker':'Worker Name', 'pay.workersRange':'Workers', 'pay.ofTotal':'of',
     'pay.capBy':'CAPACITY COMPLETED (SEEDLINGS)', 'pay.totalEarn':'Total Earned (RM)',
