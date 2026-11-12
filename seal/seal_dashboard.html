@@ -120,6 +120,16 @@
   .rp-filter-btn { display:inline-flex; align-items:center; gap:5px; text-transform:uppercase; letter-spacing:.12em; font-weight:900; color:inherit; }
   .rp-filter-btn.on { color:#0f766e; }
   .s-none { background:white; color:#94a3b8; border:1px dashed #cbd5e1; }
+  /* Seal log on View consent: green = scanned, red NUMBER = keyed by hand,
+     plain = issued and not scanned yet, amber = scanned but not issued here. */
+  .sl-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .sl-box { display:inline-block; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:800;
+            padding:5px 9px; border-radius:8px; border:1.5px solid #e2e8f0; background:#fff; color:#94a3b8; }
+  .sl-box.sl-hit { background:#dcfce7; border-color:#4ade80; color:#166534; }
+  .sl-box.sl-extra { background:#fef3c7; border-color:#fbbf24; color:#92400e; }
+  .sl-box.sl-typed { color:#dc2626; }
+  .sl-key { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:11px; font-weight:700; color:#94a3b8; }
+  .sl-key .sl-box { font-size:10px; padding:2px 6px; }
 </style>
 </head>
 <body>
@@ -1249,9 +1259,69 @@ function renderList() {
 
 // The signed consent, as the customer signed it: the seals given, the
 // signature, and the photos taken with it.
+/* THE SEAL LOG OF ONE CONSENT, moved here off the Admin Portal Customer
+   Consent screen. One box per seal ISSUED on the consent:
+     green           -- scanned at collection (the FC Portal scan log)
+     green, red text -- scanned too, but KEYED BY HAND on the Add dialog
+     plain           -- issued and not scanned yet
+   A seal scanned against this consent that it was never issued is listed
+   under the boxes rather than left out: it is the one somebody needs to see.
+   Keyed by hand is the keyed_by_hand column (RUN_ME_scan_keyed_by_hand.sql);
+   a row from before it, or a database without it, reads as scanned, since
+   nothing recorded which it was. Matched as NUMBERS, so 3320 and 003320 are
+   one seal. */
+const SEAL_LOG_MAX_BOXES = 2000;
+function sealLogHtml(c, scans) {
+  if (scans === null) return '<div class="mb-4"><div class="lbl">Seal log</div>'
+    + '<div class="text-[12px] font-bold text-red-600">The scan log could not be read.</div></div>';
+  const issued = normRanges(Array.isArray(c.seal_ranges) ? c.seal_ranges : []);
+  const byNo = new Map();
+  (scans || []).forEach((s) => {
+    const n = sealNo(s.barcode);
+    if (n == null) return;
+    const prev = byNo.get(n);
+    // One seal scanned once and keyed once is still one seal; it counts as
+    // keyed only if every record of it was keyed.
+    byNo.set(n, { code: s.barcode, typed: prev ? (prev.typed && !!s.keyed_by_hand) : !!s.keyed_by_hand });
+  });
+  const total = issued.reduce((t, r) => t + r.e - r.s + 1, 0);
+  if (!total && !byNo.size) return '';
+  const boxes = [];
+  let scanned = 0, typed = 0;
+  const inIssued = new Set();
+  issued.forEach((r) => {
+    for (let n = r.s; n <= r.e; n++) {
+      inIssued.add(n);
+      const hit = byNo.get(n);
+      if (hit) { scanned++; if (hit.typed) typed++; }
+      if (boxes.length >= SEAL_LOG_MAX_BOXES) continue;
+      const code = esc(sealCode(n, r.w));
+      boxes.push(hit
+        ? '<span class="sl-box sl-hit' + (hit.typed ? ' sl-typed' : '') + '" title="' + (hit.typed ? 'Keyed by hand' : 'Scanned') + '">' + code + '</span>'
+        : '<span class="sl-box" title="Issued, not scanned yet">' + code + '</span>');
+    }
+  });
+  const extra = [...byNo.entries()].filter(([n]) => !inIssued.has(n)).sort((a, b) => a[0] - b[0]);
+  return '<div class="mb-4"><div class="lbl">Seal log — ' + fmt(scanned) + ' of ' + fmt(total) + ' issued scanned'
+    + (typed ? ' · <span class="text-red-600">' + fmt(typed) + ' keyed by hand</span>' : '') + '</div>'
+    + (boxes.length ? '<div class="sl-grid">' + boxes.join('') + '</div>' : '')
+    + (total > SEAL_LOG_MAX_BOXES ? '<div class="text-[11px] font-bold text-slate-400 mt-1">First ' + fmt(SEAL_LOG_MAX_BOXES) + ' of ' + fmt(total) + ' issued seals shown.</div>' : '')
+    + (extra.length ? '<div class="text-[11px] font-black text-amber-700 mt-2">Scanned on this consent but not issued on it — ' + fmt(extra.length) + '</div>'
+      + '<div class="sl-grid">' + extra.map(([n, h]) => '<span class="sl-box sl-extra' + (h.typed ? ' sl-typed' : '') + '">' + esc(sealShow(h.code)) + '</span>').join('') + '</div>' : '')
+    + '<div class="sl-key"><span class="sl-box sl-hit">000000</span> scanned <span class="sl-box sl-hit sl-typed">000000</span> keyed by hand <span class="sl-box">000000</span> not scanned yet</div>'
+    + '</div>';
+}
+
 async function openConsent(ids) {
   openModal('Signed consent', '<div class="text-sm font-bold text-slate-400">Loading…</div>');
-  const { data, error } = await _supabase.from('mobile_consent_records').select('*').in('id', ids);
+  // select('*') on the scan log too, so a database without keyed_by_hand
+  // answers rather than refusing the read over a column it has not got.
+  const [cres, sres] = await Promise.all([
+    _supabase.from('mobile_consent_records').select('*').in('id', ids),
+    _supabase.from('fcportal_scan_records').select('*').in('consent_id', ids).then((r) => r, (e) => ({ error: e })),
+  ]);
+  const { data, error } = cres;
+  const scansOf = (id) => (sres && !sres.error) ? (sres.data || []).filter((s) => String(s.consent_id) === String(id)) : null;
   const body = document.getElementById('modal-body');
   if (!body) return;
   if (error) { body.innerHTML = '<span class="text-red-600 font-bold">' + esc(error.message) + '</span>'; return; }
@@ -1268,6 +1338,7 @@ async function openConsent(ids) {
     +   '<div><div class="lbl">Seedlings</div><div class="font-black mono text-slate-800">' + fmt(c.consent_qty) + '</div></div>'
     + '</div>'
     + (Array.isArray(c.seal_ranges) && c.seal_ranges.length ? '<div class="mb-4"><div class="lbl">Seals given</div><div class="font-black mono text-slate-800">' + rangesHtml(c.seal_ranges, ', ') + '</div></div>' : '')
+    + sealLogHtml(c, scansOf(c.id))
     + '<div class="flex flex-wrap gap-4">' + img(c.signature_data, 'Signature') + img(c.photo_url, 'Photo') + img(c.seal_photo_url, 'Seal photo') + '</div>'
     + '</div>').join('<hr class="my-4 border-slate-100">');
 }
