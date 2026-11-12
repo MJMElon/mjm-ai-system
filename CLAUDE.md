@@ -8438,20 +8438,27 @@ So there are two layers, and they are the house pattern:
   along the top as one row that scrolls sideways. **There is no upgrade
   entry**: the request named one and the module has none, so none was
   invented.
-- **+ REQUEST A TASK IS THE TASK REQUESTS ENTRY**, drawn as the bar's one
-  bright button above the list. It was a second button beside a Task
-  requests entry for an hour, and the office said the two are one:
-  *"task request will be remove under task section. + request a task =
-  task request"*. So it carries `data-view="requests"` like any entry
-  (hidden when that tab is None, ringed when open, the pending count on
-  it) and a press opens the Task requests page. **THE FORM IS ON THAT
-  PAGE, above the list** — it slid in from the side as a panel for a day
-  and the office asked for a page: *"the request task can be a page, no
-  need become sidebar"*. It is built ONCE and kept (`buildRequestForm`,
-  `reqFormSig`), because the list under it is redrawn every time a task or
-  a request arrives and a form redrawn with it loses what somebody was
-  half way through typing; it is rebuilt only when what it offers changes,
-  and never over an unsent draft.
+- **+ REQUEST A TASK OPENS A WINDOW, AND TASK REQUEST STATUS IS THE LIST.**
+  It took four shapes in two days and this is the one the office settled
+  on: *"make the task request form a window pop out. then move the task
+  request to Task Request Status (put the task request under task
+  section)"*. The bright button at the top of the bar opens the form in a
+  centred window over whichever tab is open (`openRequestWindow`); it is
+  NOT a tab and carries no `data-view`, which is why every tab selector in
+  `pms_app.js` is `nav.tabs button[data-view]` — matched as a tab it would
+  call `setView(undefined)`. The list of requests is an ordinary entry
+  under Task, **Task Request Status**, still keyed `requests`.
+  **What is half typed is kept when the window is shut** (`reqDraft`), so
+  the scrim and Esc cost nothing; Clear and a request that went throw it
+  away.
+- **A SENT REQUEST FLIES THERE**, which the office asked for by name: a
+  paper aeroplane leaves the Submit button and lands on Task Request
+  Status (`flyToRequestStatus`). It is decoration over a write that has
+  ALREADY succeeded, so nothing waits on it; it is skipped under
+  `prefers-reduced-motion`, and where the entry is not on screen to land
+  on. The curve is SAMPLED and the nose follows its tangent with the angle
+  unwrapped — three hand-written keyframes had it flying backwards for
+  half the trip, and only a screenshot of a frame showed it.
 - **THE TASK LIST WAS EMPTIED ON REQUEST**, with
   `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
   else. It keeps no copy, so it is not a file to run again by habit.

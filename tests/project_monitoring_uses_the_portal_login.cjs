@@ -308,6 +308,7 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' });
     await page.setViewportSize({ width: 1400, height: 520 });
     await drawn(page);
+    const SHORT = { width: 1400, height: 520 }, TALL = { width: 1400, height: 900 };
     const sb = await page.evaluate(() => {
       const nav = document.querySelector('nav.tabs.side'); if (!nav) return 'no side bar';
       const txt = (b) => b.firstChild.textContent.trim();
@@ -322,38 +323,65 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
         selBg: getComputedStyle(sel).backgroundColor !== getComputedStyle(other).backgroundColor,
         midScrolls: getComputedStyle(mid).overflowY, footAtBottom: Math.round(r(foot).bottom) === window.innerHeight, topAtTop: Math.round(r(top).top) === 0 };
     });
-    is(sb.groups, [['Overview', ['Dashboard', 'Board', 'Timeline']], ['Task', ['Task list', 'Value analysis']]], 'two groups, each under its own title; Task requests is the button above them');
+    is(sb.groups, [['Overview', ['Dashboard', 'Board', 'Timeline']], ['Task', ['Task list', 'Task Request Status', 'Value analysis']]], 'two groups, each under its own title, Task Request Status under Task');
     is([sb.foot, sb.portal], [['Settings'], true], 'Settings is at the foot, and the way back to the portal is in the top part, which never scrolls');
     is([sb.column, sb.topAtTop, sb.footAtBottom, sb.midScrolls], [true, true, true, 'auto'], 'a column the height of the window: top and foot stay put, the middle scrolls');
     is(sb.groupGap >= sb.rowGap * 4 && sb.groupGap >= 16, true, 'the gap between groups is far wider than the gap between entries (' + sb.groupGap + ' against ' + sb.rowGap + ')');
     is(sb.selBg, true, 'the open entry wears a block the others do not');
     await go(page, 'value'); await page.waitForTimeout(150);
     is(await page.evaluate(() => [document.querySelector('nav.tabs button[aria-selected="true"]').dataset.view, document.querySelector('#v-value').hidden]), ['value', false], 'pressing an entry opens its view');
-    // + Request a task IS the Task requests entry, and the form is ON that page: no panel slides in from the side.
+    // + Request a task opens the form in a WINDOW, from any tab, and is not a tab itself.
+    await page.setViewportSize(TALL);
     await go(page, 'board'); await page.waitForTimeout(150);
+    await page.evaluate(() => { const b = document.querySelector('.side-top #reqBtn'); if (b) b.click(); });
+    await page.waitForTimeout(350);   // the window eases in, so it is measured once it has arrived
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_window.png') });
     const cta = await page.evaluate(() => { const b = document.querySelector('.side-top #reqBtn'); if (!b) return 'no request button';
-      b.click();
-      return { text: b.firstChild.nextSibling.textContent.trim(), shown: !b.hidden, view: b.dataset.view, open: b.getAttribute('aria-selected'),
-        page: !document.querySelector('#v-requests').hidden, formOnPage: !!document.querySelector('#v-requests .reqform #r-name'),
-        sidePanel: !!document.querySelector('#sheetRoot .sheet'), listUnder: !!document.querySelector('#v-requests .reqform-wrap + .reqlist .seg'),
-        badgeInside: !!b.querySelector('#reqCount'), entries: document.querySelectorAll('nav.tabs button[data-view="requests"]').length }; });
-    is(cta, { text: 'Request a task', shown: true, view: 'requests', open: 'true', page: true, formOnPage: true, sidePanel: false, listUnder: true, badgeInside: true, entries: 1 },
-      'it opens the Task requests page with the form on the page and the list under it, and no side panel');
-    // What is half typed survives the page being redrawn under it, and a request sent is written and the form cleared.
+      const w = document.querySelector('#sheetRoot .reqwin'); const r = w && w.getBoundingClientRect();
+      return { text: b.textContent.replace(/\s+/g, ' ').trim(), shown: !b.hidden, tab: b.hasAttribute('data-view'),
+        window: !!(w && w.querySelector('#r-name')), scrim: !!document.querySelector('#sheetRoot .scrim'),
+        centred: !!r && Math.abs((r.left + r.right) / 2 - innerWidth / 2) < 2 && Math.abs((r.top + r.bottom) / 2 - innerHeight / 2) < 2,
+        stayed: !document.querySelector('#v-board').hidden, onPage: !!document.querySelector('#v-requests .reqform') }; });
+    is(cta, { text: '+ Request a task', shown: true, tab: false, window: true, scrim: true, centred: true, stayed: true, onPage: false },
+      'it opens the form in a centred window over the tab that was open, and the form is no longer on a page');
+    // Shut half way through, it keeps what was typed. Submitted, it writes one request, shuts, and a paper aeroplane
+    // flies to Task Request Status, which is then marked as where it landed.
     const sent = await page.evaluate(async () => {
-      const q = (s) => document.querySelector('#v-requests .reqform ' + s); if (!q('#r-name')) return 'no form';
+      const q = (s) => document.querySelector('#sheetRoot .reqwin ' + s);
       const set = (e, val, ev) => { e.value = val; e.dispatchEvent(new Event(ev, { bubbles: true })); };
       set(q('#r-name'), 'Stock card for the store', 'input');
-      document.querySelector('nav.tabs button[data-view="board"]').click(); document.querySelector('#reqBtn').click();
+      document.querySelector('#sheetRoot .scrim').click();
+      const shut = !document.querySelector('#sheetRoot .reqwin');
+      document.querySelector('#reqBtn').click();
       const kept = q('#r-name') && q('#r-name').value;
       set(q('#f-project'), 'Nursery', 'change');
-      [...document.querySelectorAll('#v-requests .reqform-foot button')].find((b) => /send/i.test(b.textContent)).click();
-      await new Promise((r) => setTimeout(r, 300));
+      const send = [...document.querySelectorAll('#sheetRoot .reqform-foot button')].find((b) => /submit task request/i.test(b.textContent));
+      if (!send) return 'no submit button';
+      send.click(); await new Promise((r) => setTimeout(r, 200));
+      const plane = !!document.querySelector('svg.paperplane'), closed = !document.querySelector('#sheetRoot .reqwin');
+      await new Promise((r) => setTimeout(r, 1500));
+      const target = document.querySelector('nav.tabs button[data-view="requests"]');
       const w = window.__WRITES.filter((x) => x.table === 'pms_task_requests').map((x) => [x.row.data.name, x.row.data.project, x.row.data.status, x.row.data.requestedBy]);
-      return { kept, w, cleared: document.querySelector('#v-requests .reqform #r-name').value };
+      return { shut, kept, w, closed, plane, planeGone: !document.querySelector('svg.paperplane'), landed: target.classList.contains('landed'),
+        badge: (target.querySelector('#reqCount') || {}).textContent, stayed: !document.querySelector('#v-board').hidden };
     });
-    is(sent, { kept: 'Stock card for the store', w: [['Stock card for the store', 'Nursery', 'Pending', 'The Boss']], cleared: '' },
-      'a half-typed request survives leaving the page and coming back, and Send writes one request and clears the form');
+    is(sent, { shut: true, kept: 'Stock card for the store', w: [['Stock card for the store', 'Nursery', 'Pending', 'The Boss']], closed: true, plane: true, planeGone: true, landed: true, badge: '1', stayed: true },
+      'what was typed survives the window being shut; Submit writes one request, shuts the window and flies a paper aeroplane to Task Request Status');
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => document.querySelector('#reqBtn').click());
+    is(await page.evaluate(() => document.querySelector('#sheetRoot .reqwin #r-name').value), '', 'and the next request starts from an empty form');
+    if (process.env.SHOT) {   // a frame of the flight: a check cannot say whether it looks like an aeroplane
+      await page.evaluate(() => { const q = (s) => document.querySelector('#sheetRoot .reqwin ' + s), set = (e, val, ev) => { e.value = val; e.dispatchEvent(new Event(ev, { bubbles: true })); };
+        set(q('#r-name'), 'A second one', 'input'); set(q('#f-project'), 'Nursery', 'change');
+        [...document.querySelectorAll('#sheetRoot .reqform-foot button')].find((b) => /submit/i.test(b.textContent)).click(); });
+      await page.waitForTimeout(330); await page.screenshot({ path: process.env.SHOT.replace('.png', '_plane.png') });
+      await page.waitForTimeout(330); await page.screenshot({ path: process.env.SHOT.replace('.png', '_plane2.png') });
+      await page.waitForTimeout(1400); await page.evaluate(() => document.querySelector('#reqBtn').click());
+    }
+    await page.keyboard.press('Escape');
+    await go(page, 'requests'); await page.waitForTimeout(150);
+    is(await page.evaluate(() => [document.querySelector('#v-requests h2').textContent, !!document.querySelector('#v-requests .seg'), document.querySelector('#v-requests').innerText.includes('Stock card for the store')]),
+      ['Task Request Status', true, true], 'Task Request Status is the list of requests, with the one just sent on it');
     if (process.env.SHOT) { await page.setViewportSize({ width: 1400, height: 900 }); await go(page, 'overview'); await page.waitForTimeout(200); await page.screenshot({ path: process.env.SHOT.replace('.png', '_side.png') }); }
     await page.close();
     // A login with every entry of a group closed sees no title over nothing.

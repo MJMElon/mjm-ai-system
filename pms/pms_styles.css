@@ -70,9 +70,6 @@ nav.tabs button.side-cta{justify-content:center;gap:8px;margin-top:14px;padding:
   background:var(--cta);color:var(--on-cta);font-weight:600;font-size:14.5px}
 nav.tabs button.side-cta:hover{background:var(--cta-hover);color:var(--on-cta)}
 nav.tabs button.side-cta > span:first-child{font-size:18px;line-height:1;font-weight:500}
-/* Open, it keeps its own colour and takes a ring: the solid dark block stays the mark of the entries in the list. */
-nav.tabs button.side-cta[aria-selected="true"]{background:var(--cta);color:var(--on-cta);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
-nav.tabs button.side-cta .badge{margin-left:2px;background:var(--on-cta);color:var(--cta)}
 .side .back{display:inline-block;margin-bottom:12px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;text-align:center;
   font:500 11.5px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-decoration:none}
 .side .back:hover{color:var(--fg);border-color:var(--muted)}
@@ -543,7 +540,23 @@ nav.tabs .badge[hidden]{display:none}
 @media (max-width:420px){.lvsel{width:116px}}
 
 /* Back to the MJM AI portal */
-/* The request form is on the Task requests page, above the list, at a width a form reads at. */
-.reqform-wrap:empty{display:none}
-.reqform{max-width:780px;margin:14px 0 22px}
+/* The request form is a WINDOW: centred, over a scrim, as tall as it needs and never taller than the screen. */
+.reqwin{position:fixed;z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 24px));
+  max-height:calc(100dvh - 32px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:0 24px 60px rgba(10,20,15,.28)}
+.reqform{position:relative;padding:22px 24px 20px}
+.reqform > .x{position:absolute;top:12px;right:12px;border:0;background:none;font-size:24px;line-height:1;cursor:pointer;color:var(--muted);padding:4px 8px;border-radius:8px}
+.reqform > .x:hover{background:var(--sunk);color:var(--fg)}
 .reqform-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:no-preference){
+  .reqwin{animation:reqpop .18s ease-out}
+  @keyframes reqpop{from{transform:translate(-50%,-46%) scale(.97);opacity:0}}
+}
+/* The paper aeroplane a sent request leaves on, and the entry it lands on. */
+.paperplane{position:fixed;z-index:70;width:34px;height:34px;pointer-events:none;fill:var(--cta);stroke:var(--on-cta);stroke-width:1.4;
+  stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 4px 6px rgba(10,20,15,.25));transform-origin:50% 50%}
+nav.tabs button.landed{background:var(--cta);color:var(--on-cta);transition:background .15s}
+@media (prefers-reduced-motion:no-preference){
+  nav.tabs button.landed{animation:landed .7s ease-out}
+  @keyframes landed{0%{transform:scale(1)}30%{transform:scale(1.06)}60%{transform:scale(.98)}100%{transform:scale(1)}}
+}

@@ -21,7 +21,7 @@ const ACCESS_TABS = [
   ["board","Board","Task cards by status; drag to change status"],
   ["timeline","Timeline","Master project and task timeline"],
   ["list","Task list","Full task list; add, edit and delete tasks"],
-  ["requests","Task requests","Normal can submit requests; Admin approves or rejects"],
+  ["requests","Task Request Status","Normal can submit requests; Admin approves or rejects"],
   ["value","Value analysis","Savings figures, rates and expenses"],
   ["settings","Settings","Projects, lists and user access"]];
 const allAccess = lv => Object.fromEntries(ACCESS_TABS.map(([k]) => [k, lv]));
@@ -161,6 +161,7 @@ function syncPerms(){
   canAdmin = tabAdmin("settings");
   canApprove = tabAdmin("requests");
   canRequest = canWrite && access.requests !== "None";
+  { const cta = $("#reqBtn"); if (cta) cta.hidden = !canRequest; }
   document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.hidden = access[b.dataset.view] === "None");
   // A group with every entry closed keeps no title: a heading over nothing is a section somebody has to ask about.
   document.querySelectorAll("nav.tabs .side-group").forEach(g => g.hidden = ![...g.querySelectorAll("button")].some(b => !b.hidden));
@@ -235,10 +236,10 @@ function paintSort(){
 }
 
 document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
-// + Request a task IS the Task requests entry, and the request form is ON that page, at the top of it. It was a
-// panel sliding in from the side for a day; a form somebody fills in belongs on the page it is about. The press opens
-// the view like any other entry (the line above) and this only puts the cursor in the form.
-{ const cta = $("#reqBtn"); if (cta) cta.addEventListener("click", () => { const f = document.querySelector("#v-requests .reqform select, #v-requests .reqform input"); if (f) f.focus(); }); }
+// + Request a task opens the request form in a WINDOW, from whichever tab is open, and leaves that tab where it is.
+// It is not a tab: it carries no data-view, which is why every tab selector here asks for one. Where the requests
+// are read afterwards is Task Request Status, an ordinary entry under Task.
+{ const cta = $("#reqBtn"); if (cta) cta.addEventListener("click", () => { if (canRequest) openRequestWindow(); }); }
 function setView(v){
   view = v; store.set("pm.view", v); syncPerms();
   document.querySelectorAll("nav.tabs button[data-view]").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v));
@@ -1352,17 +1353,16 @@ function watchRequests(db){
   }, e => { requestsErr = (e && e.message) || "unavailable"; render(); });
 }
 
-// The request form, on the Task requests page. It is built ONCE and kept: the page under it is redrawn every time a
-// task or a request arrives, and a form redrawn with it would lose what somebody was half way through typing. It is
-// rebuilt only when what it offers changes (the projects, the lists, the people), and never over an unsent draft.
-let reqDraft = null, reqDirty = false, reqFormSig = "";
+// The request form, in a window of its own. What is half typed is KEPT when the window is shut (reqDraft), so a press
+// on the scrim or Esc costs nothing: the next open has it. It is thrown away by Clear, and by a request that went.
+let reqDraft = null;
 function newReqDraft(){
   return {project:"", module:"", sub:"", name:"", type: TYPES.includes("Web") ? "Web" : TYPES[0]||"",
     priority: PRIS.includes("Medium") ? "Medium" : PRIS[0]||"", due:"", reason:"", assignees: me ? [me] : []};
 }
 function buildRequestForm(){
   if (!reqDraft) reqDraft = newReqDraft();
-  const draft = reqDraft, touch = () => { reqDirty = true; };
+  const draft = reqDraft, touch = () => {};
   const box = (label, id, input, full) => el("div",{class:"f"+(full?" full":"")}, el("label",{for:id, text:label}), input);
   const sel = (id, key, items) => { const s = el("select",{id}, ...items.map(i => el("option",{value:i, text:i})));
     s.value = draft[key]; s.addEventListener("change", () => { draft[key] = s.value; touch(); }); return s; };
@@ -1377,7 +1377,7 @@ function buildRequestForm(){
     cb.addEventListener("change", () => { draft.assignees = TEAM.filter(x => x===n ? cb.checked : draft.assignees.includes(x)); touch(); });
     return el("label",{class:"pick"}, cb, n);
   }));
-  const clear = () => { reqDraft = null; reqDirty = false; reqFormSig = ""; renderRequests(); };
+  const clear = () => { reqDraft = null; openRequestWindow(); };
 
   async function submit(){
     if (!draft.project) return toast("Pick a master project first");
@@ -1385,12 +1385,15 @@ function buildRequestForm(){
     const now = new Date().toISOString();
     const r = {...draft, id:"r" + Date.now().toString(36), name:draft.name.trim(), reason:draft.reason.trim(),
       status:"Pending", requestedBy:me, requestedAt:now, decidedBy:"", decidedAt:"", decisionNote:"", taskId:""};
-    try { await saveRequest(r); toast("Request sent for approval"); clear(); }
+    const from = sendBtn.getBoundingClientRect();
+    try { await saveRequest(r); reqDraft = null; closeSheet(); flyToRequestStatus(from); toast("Request sent for approval"); }
     catch(e){ toast("Could not send: " + (e && (e.message||e.code))); }
   }
 
-  return el("div",{class:"panel reqform"},
-    el("div",{class:"eyebrow", text:"Task request"}), el("h2",{style:"margin:2px 0 4px", text:"Request a task"}),
+  const sendBtn = el("button",{class:"btn primary", onclick:submit}, "Submit task request");
+  return el("div",{class:"reqform"},
+    el("button",{class:"x", "aria-label":"Close", onclick:closeSheet}, "×"),
+    el("div",{class:"eyebrow", text:"Task request"}), el("h2",{id:"reqwin-title", style:"margin:2px 0 4px", text:"Request a task"}),
     el("p",{class:"note", style:"margin:0 0 14px", text:"Someone with Admin access to Task requests reviews it. Once it's approved, it's added to the task list automatically."}),
     el("div",{class:"fields"},
       ...hierSelects(draft, touch),
@@ -1400,7 +1403,7 @@ function buildRequestForm(){
       box("Needed by","r-due",dueIn),
       el("div",{class:"f full"}, el("label",{text:"Who will do it"}), picks),
       box("Details","r-why",why,true)),
-    el("div",{class:"reqform-foot"}, el("button",{class:"btn primary", onclick:submit}, "Send request"),
+    el("div",{class:"reqform-foot"}, sendBtn,
       el("button",{class:"btn", onclick:clear}, "Clear"), el("span",{class:"spacer"}),
       el("span",{class:"note", text:`Requested by ${me}`})));
 }
@@ -1426,24 +1429,56 @@ async function decideRequest(r, status, note){
 
 let reqOpen = null;   // {id, mode:"approve"|"reject"} for the request card showing its approve/reject form
 let reqShow = "Pending";
+function openRequestWindow(){
+  openId = "request";
+  const win = el("div",{class:"reqwin", role:"dialog", "aria-modal":"true", "aria-labelledby":"reqwin-title"}, buildRequestForm());
+  $("#sheetRoot").replaceChildren(el("div",{class:"scrim", onclick:closeSheet}), win);
+  const f = win.querySelector(reqDraft && reqDraft.project ? "#r-name" : "#f-project"); if (f) f.focus();
+}
+// A request that went is SEEN to go: a paper aeroplane leaves the Submit button and lands on Task Request Status in
+// the side bar, which is where the request now is. It is decoration over a write that has already succeeded, so
+// nothing waits on it, it is skipped for anybody who asked their device for less motion, and it is skipped where
+// the entry is not on screen to land on (closed for this login, or scrolled out of a phone's top row).
+function flyToRequestStatus(from){
+  const target = document.querySelector('nav.tabs button[data-view="requests"]');
+  if (!target || target.hidden || !from || !from.width) return;
+  const to = target.getBoundingClientRect();
+  if (!to.width || to.right < 0 || to.left > innerWidth || to.bottom < 0 || to.top > innerHeight) return;
+  const land = () => { target.classList.add("landed"); setTimeout(() => target.classList.remove("landed"), 900); };
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || !document.body.animate) return land();
+  const NS = "http://www.w3.org/2000/svg", SIZE = 34;
+  const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", "paperplane"); svg.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(NS, "path"); p.setAttribute("d", "M2.5 3.5 22 12 2.5 20.5 5.5 12Zm3 8.5H13"); svg.append(p);
+  const x0 = from.left + from.width/2 - SIZE/2, y0 = from.top + from.height/2 - SIZE/2;
+  const dx = to.left + Math.min(to.width/2, 60) - SIZE/2 - x0, dy = to.top + to.height/2 - SIZE/2 - y0;
+  // Up and over: a curve with its middle lifted, so it arcs like something thrown and not like a cursor. The curve
+  // is SAMPLED, and the nose follows its tangent at every sample, with the angle unwrapped so it never spins the
+  // long way round between two frames.
+  const lift = Math.max(110, Math.abs(dx) * 0.3), cx = dx * 0.45, cy = Math.min(0, dy) - lift;
+  const N = 14, frames = []; let prev = null;
+  for (let k = 0; k <= N; k++){
+    const u = k / N, v = 1 - u;
+    const x = 2*v*u*cx + u*u*dx, y = 2*v*u*cy + u*u*dy;
+    let ang = Math.atan2(2*v*cy + 2*u*(dy - cy), 2*v*cx + 2*u*(dx - cx)) * 180 / Math.PI;
+    if (prev !== null){ while (ang - prev > 180) ang -= 360; while (ang - prev < -180) ang += 360; }
+    prev = ang;
+    const s = u < .5 ? .7 + u * 1.1 : 1.25 - (u - .5) * 1.3;        // grows as it climbs, shrinks as it lands
+    frames.push({transform:`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) rotate(${ang.toFixed(1)}deg) scale(${s.toFixed(2)})`,
+      opacity: u < .08 ? u / .08 : 1, offset:u});
+  }
+  svg.style.left = x0 + "px"; svg.style.top = y0 + "px";
+  document.body.append(svg);
+  const fly = svg.animate(frames, {duration:1250, easing:"cubic-bezier(.4,.1,.35,1)"});
+  const done = () => { svg.remove(); land(); };
+  fly.onfinish = done; fly.oncancel = done;
+}
 function renderRequests(){
-  const page = $("#v-requests");
+  const root = $("#v-requests");
   if (requestsErr){
-    reqFormSig = "";
-    page.replaceChildren(el("div",{class:"empty"}, el("b",{text:"Task requests aren't set up yet"}),
+    root.replaceChildren(el("div",{class:"empty"}, el("b",{text:"Task requests aren't set up yet"}),
       "The database needs a task_requests table. Run the SQL from the setup notes in Supabase, then reload. (" + requestsErr + ")"));
     return;
   }
-  // Two parts: the form, kept, and the list under it, redrawn.
-  let formWrap = page.querySelector(":scope > .reqform-wrap"), root = page.querySelector(":scope > .reqlist");
-  if (!formWrap || !root){
-    formWrap = el("div",{class:"reqform-wrap"}); root = el("div",{class:"reqlist"});
-    page.replaceChildren(formWrap, root); reqFormSig = "";
-  }
-  const sig = JSON.stringify([canRequest, me, TYPES, PRIS, TEAM, PROJECTS.map(p => [p.key, (p.modules||[]).map(m => [m.name, (m.subs||[]).map(x => x.name)])])]);
-  if (!canRequest){ formWrap.replaceChildren(); reqFormSig = sig; }
-  else if (sig !== reqFormSig && (!reqDirty || !formWrap.firstChild)){ formWrap.replaceChildren(buildRequestForm()); reqFormSig = sig; }
-
   const path = r => [r.project, r.module, r.sub].filter(Boolean).join(" › ");
   const when = s => s ? fmtY(s.slice(0,10)) : "";
   const counts = Object.fromEntries(["Pending","Approved","Rejected","Withdrawn"].map(k => [k, requests.filter(r => r.status === k).length]));
@@ -1503,13 +1538,13 @@ function renderRequests(){
   const who = canApprove ? "You can approve requests." : canRequest ? "Someone with Admin access to this tab reviews each request." : "";
   root.replaceChildren(
     el("div",{class:"reqhead"},
-      el("div",{}, el("h2",{style:"margin:0", text:"Task requests"}),
+      el("div",{}, el("h2",{style:"margin:0", text:"Task Request Status"}),
         el("p",{class:"note", style:"margin:4px 0 0", text:`Approved requests are added to Tasks as Not Started. ${who}`})),
       el("span",{class:"spacer"})),
     seg,
     list.length ? el("div",{class:"reqs"}, ...list.map(reqCard))
       : el("div",{class:"empty"}, el("b",{text: reqShow === "Pending" ? "No requests waiting" : `No ${reqShow.toLowerCase()} requests`}),
-          reqShow === "Pending" && canRequest ? "Use the form above to ask for something new." : ""));
+          reqShow === "Pending" && canRequest ? "Use “+ Request a task” to ask for something new." : ""));
 }
 
 // ---------- storage ----------
@@ -1632,7 +1667,7 @@ function fromDoc(d){
   db.collection("tasks").onSnapshot(snap => {
     tasks = snap.docs.map(d => fromDoc(d));
     loaded = true; refreshPickers(); render();
-    if (openId && openId !== "new" && openId !== "access" && !tasks.find(x=>x.id===openId)) closeSheet();
+    if (openId && openId !== "new" && openId !== "request" && openId !== "access" && !tasks.find(x=>x.id===openId)) closeSheet();
   }, e => { loaded = true; render(); toast("Couldn't load the tasks: " + e.message); });
 })();
 })();
