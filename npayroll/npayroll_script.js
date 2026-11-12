@@ -3496,8 +3496,10 @@ function maintTotals(nursery, month, ym) {
         if (!do_.delivery_date) d.noMonth++; else d.otherMonth++;
         return;
       }
-      const qty = maintDoQtyForNursery(do_, nursery);
-      if (!qty) return; // this DO's items are not this nursery's
+      // Paid to the gang that carried it (MJMMaintPlots.doLoaderQty), which
+      // is the plot nursery gang unless it is unticked and another is.
+      const qty = MJMMaintPlots.doLoaderQty(do_, nursery, maintDoLines(do_));
+      if (!qty) return; // this DO was not this nursery gang's
       d.rows++;
       d.tickRows++;
       d.capAll += qty;
@@ -3539,6 +3541,22 @@ function _doIsLoadingWork(d) {
    A single-line DO whose per-line qty was never keyed reads the DO's own
    total instead — the Sales Listing's fallback, so the same DO is the same
    quantity on both screens. */
+/* The same lines as maintDoQtyForNursery, each with the nursery its plot is
+   in -- what doLoaderQty divides between the gangs. */
+function maintDoLines(do_) {
+  let filled = 0;
+  for (let i = 1; i <= 5; i++) if (String(do_[`plot_${i}`] || '').trim()) filled++;
+  const out = [];
+  for (let i = 1; i <= 5; i++) {
+    const plot = do_[`plot_${i}`];
+    if (!plot) continue;
+    let q = Number(do_[`qty_${i}`]) || 0;
+    if (!q && filled === 1) q = Number(do_.total_qty) || 0;
+    out.push({ nursery: MJMMaintPlots.nurseryOfPlot(plot, maint.plotIndex), qty: q });
+  }
+  return out;
+}
+
 function maintDoQtyForNursery(do_, nursery) {
   let filled = 0;
   for (let i = 1; i <= 5; i++) if (String(do_[`plot_${i}`] || '').trim()) filled++;

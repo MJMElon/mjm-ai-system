@@ -1679,11 +1679,34 @@ function _doQtyForNursery(d, n) {
   return qty;
 }
 
+/* Each item line with the nursery its plot is in, by the same resolution
+   _doQtyForNursery uses -- what MJMMaintPlots.doLoaderQty divides between
+   the gangs ticked on the DO. */
+function _doLines(d) {
+  let filled = 0;
+  for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
+  const out = [];
+  for (let i = 1; i <= 5; i++) {
+    const plot = d[`plot_${i}`];
+    if (!plot) continue;
+    let owner = _doPlotIndex ? MJMMaintPlots.nurseryOfPlot(plot, _doPlotIndex) : null;
+    if (!owner) owner = Object.keys(NURSERY_PLOTS).find(k => (NURSERY_PLOTS[k] || []).includes(plot)) || null;
+    let q = Number(d[`qty_${i}`]) || 0;
+    if (!q && filled === 1) q = Number(d.total_qty) || 0;
+    out.push({ nursery: owner, qty: q });
+  }
+  return out;
+}
+
+/* A sheet row is a DO this nursery GANG carried, which is the plot nursery
+   unless that gang is unticked and another is (doLoaderQty says why). A UNN 2
+   DO the UNN 1 gang loaded is therefore on the UNN 1 sheet, where its ticks
+   are, and not on the UNN 2 sheet with nobody against it. */
 function loadingSeedlingsRows(n, m) {
   const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
   return rows
     .filter(_doIsLoadingWork)
-    .map(d => ({ d, qty: _doQtyForNursery(d, n) }))
+    .map(d => ({ d, qty: MJMMaintPlots.doLoaderQty(d, n, _doLines(d)) }))
     .filter(x => x.qty > 0)
     .sort((a, b) => String(a.d.delivery_date || '').localeCompare(String(b.d.delivery_date || '')));
 }
