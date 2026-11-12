@@ -10,8 +10,8 @@
    It is asked here now, on the tab, beside the shortfall, while the person
    who caused it is standing in front of it.
 
-   The two things that make a discrepancy, unchanged:
-     · SHORTFALL      planted + damaged  <  D/O + FOC + Replacement
+   The two things that make a discrepancy:
+     · SHORTFALL      planted + damaged  <  seed audited (the Seed Audit total)
      · EXCESS DAMAGE  damaged  >  the FOC allowance
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/planting_gap.cjs
@@ -154,6 +154,10 @@ const ROWS = {
   await page.goto(`http://localhost:${port}/operation/operation_batch_detail.html?id=276`,
                   { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(4500);
+  /* The shortfall is measured against what the SEED AUDIT counted as
+     received, not against the D/O + FOC + Replacement. The audit here
+     counted all 10,906 that came in, so 10,194 accounted is 712 short. */
+  await page.evaluate(() => { addSeedAuditRow('B1', 10906, 10906); });
 
   const look = () => page.evaluate(async () => {
     switchTab(2);
