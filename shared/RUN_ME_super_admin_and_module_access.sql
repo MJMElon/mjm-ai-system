@@ -143,7 +143,7 @@ BEGIN
    WHERE id = auth.uid();
 
   -- caller_level is NULL for anybody who is not admin of p_module, and
-  -- `NULL = 'admin'` is NULL rather than false -- `NOT (false OR NULL)`
+  -- comparing a NULL level with the word admin gives NULL rather than false -- `NOT (false OR NULL)`
   -- is NULL too, and an `IF NULL` skips the RAISE instead of taking it,
   -- which let a plain user or an admin of a DIFFERENT module straight
   -- through. COALESCE pins the comparison to a real boolean first.
