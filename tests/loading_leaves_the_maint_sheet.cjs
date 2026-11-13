@@ -185,7 +185,7 @@ const SNAP = {
   checkTrue('its head names the job', loadHead.includes('Loading Seedlings'));
   const loadFoot = await page.evaluate(() =>
     [...document.querySelectorAll('#loading-table tfoot td')].map(td => td.textContent.trim()));
-  check('and its Grand Total is the loading money', loadFoot, ['Grand Total', '500', 'RM 50.00']);
+  check('and its Grand Total is the loading money', loadFoot, ['Grand Total', '500', '50.00']);
   const loadGlance = await page.evaluate(() =>
     [...document.querySelectorAll('#loading-glance .pt-label')].map(e => e.textContent));
   check('its own glance card stands', loadGlance, ['Loading Seedlings']);

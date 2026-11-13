@@ -367,9 +367,9 @@ const RECS = [
   check('one table, a band per job, each naming its own rate', v.bands,
     ['Seed Planting · RM 0.02 a seed', 'Mengisi Tanah ke Hyplug · RM 0.027 a biji']);
   check('…a total per job', v.subs.map(r => [r[0], r[r.length - 1]]),
-    [['Seed Planting total', 'RM 137.20'], ['Mengisi Tanah ke Hyplug total', 'RM 108.00']]);
+    [['Seed Planting total', '137.20'], ['Mengisi Tanah ke Hyplug total', '108.00']]);
   check('…and ONE figure under both, which is what the month pays',
-    v.foot, [['PRE NURSERY TOTAL', '', '10,860', '', 'RM 245.20']]);
+    v.foot, [['PRE NURSERY TOTAL', '', '10,860', '', '245.20']]);
   check('…the note names both rates', [/Seed Planting: RM 0\.02 a seed/.test(v.note),
     /Mengisi Tanah ke Hyplug: RM 0\.027 a biji/.test(v.note)], [true, true]);
   check('…and names the held batch WITH the job it is waiting on',

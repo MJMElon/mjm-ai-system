@@ -8655,3 +8655,31 @@ it asks anything about colour. The hover bolds with a text
 stroke, not a font weight, so columns do not shift width under the pointer.
 The colour table is in the stylesheet beside the rules that use it. The PDF is
 not part of this and still draws its own colours.
+
+### And then every tab took the same rules
+
+The office asked for the whole module in one visual system, so the claim's
+rules are no longer the claim's. **`tidyTable()` runs over every table in
+`#main` each time its contents are replaced**, off one MutationObserver
+rather than thirty render functions remembering to call it, so a table added
+next month is tidied without anybody knowing it exists. It takes a leading
+`RM ` off a cell ONLY where the cell is an amount (*RM 5 bonus agreed* is a
+sentence and is left), adds `(RM)` once to the heading over a column it
+stripped, marks a column of figures `.num` (right-aligned, heading included)
+and a dash `.nil`. The base `thead` / `tbody` / `tfoot` rules carry the rest:
+11px headings, 13.5px body, a mint hover, and **every tfoot one forest-green
+band**.
+
+**`decorateJobTable(tbl, codes, cats)`** is the claim-form layer, shared by
+Work Maintenance, Transplanting (its four jobs take cat-1 to cat-4 in order)
+and Loading Seedlings (cat-4, teal). The colours are SLOTS, `cat-1`..`cat-4`,
+so a sheet with jobs of its own gets the same four; the Monthly Payroll's
+three pay columns wear cat-1, cat-2 and cat-4 to match the sheets they come
+from. A job table is skipped by the observer, because its decorator tidies
+it on the spot.
+
+Tests that read a table cell expecting `RM …` were corrected to the bare
+figure; the PDF checks were not, because the paper still prints RM.
+`tests/every_payroll_tab_reads_the_same.cjs` walks all ten tabs and asks the
+same questions of every table on each, then draws a table the module has
+never seen and checks it was tidied.
