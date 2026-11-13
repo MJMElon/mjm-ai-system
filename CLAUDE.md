@@ -4972,6 +4972,119 @@ Two things fall out:
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 
+### The board is a RECORD until somebody presses Edit
+
+The office asked for it in one line, over a screenshot of the board: *"help
+to add save button and edit button. Editable only when user click edit
+button. and show last update date & who update."*
+
+**WHAT THEY WERE LOOKING AT IS WHY.** Every drag on that board wrote to the
+register the moment the name landed — one UPDATE, no confirm, and nothing
+on screen saying it had happened. A drag is the easiest gesture on a
+trackpad to make by accident, and moving a name moves **which nursery pays
+them and which Work Maintenance tick sheets they appear on**. A board that
+writes on contact cannot tell a decision from a sleeve.
+
+So there are two states and **the difference is visible**: in VIEW no chip
+is draggable, no cell offers Add, no signup offers the ✕, and a record opens
+read-only; in EDIT the board is exactly what it always was and the strip is
+tinted, because a live board and a locked one otherwise look identical.
+
+**IT IS A DRAFT AND ONE SAVE**, the shape Where Each Job Is Done already
+uses and for its reasons: a move stored before Save cannot be cancelled, and
+a round trip per chip somebody tried is a board that fights back.
+`boardDraft` is null in view and holds **only the workers who MOVED**, so
+Save knows exactly what it is being asked to write and Cancel has something
+real to throw away.
+
+Eight things in it, and five are rules this file already has:
+
+- **TWO DIFFERENT QUESTIONS, and folding them together is how a gate becomes
+  a paint.** `canEdit` is whether this person may EVER write to the register
+  — the permission, unchanged. `editing` is whether the board is unlocked
+  right now. No Edit button is drawn without the first; nothing on the board
+  moves without the second.
+- **THE GATE IS NOT THE PAINT, in four places.** `draggable` is an
+  attribute, Save Worker is hidden by a class, and a disabled input is still
+  a disabled input — none of them stops a call. So `boardDragStart`,
+  `boardDrop`, `rejectWorker` and `saveWorker` each ask in code, and section
+  6 of the test drives every one of them from the console with the board
+  locked. That is the only way to tell a gate from a greyed-out button.
+- **A RECORD STILL OPENS, READ-ONLY.** Looking somebody up is reading, and a
+  board whose names cannot be opened answers nothing. The form fills, the
+  boxes grey, Save Worker goes, a line says where the lever is, Cancel
+  becomes **Close** and the heading reads *Worker* rather than *Edit Worker*
+  — a form headed Edit with no Save is a contradiction somebody has to work
+  out. **`wfApplyReadOnly` only ever turns `disabled` ON**, because the PIN,
+  the two dates and the photo each disable themselves when their column is
+  not in the table yet and a blanket re-enable would hand back a box the
+  database cannot take; `openWorker` clears the form at the TOP instead,
+  which is what stops a record opened once read-only staying dead for the
+  rest of the session. That was a real bug and the test caught it.
+- **A DISABLED BOX HAS TO LOOK DISABLED.** The skinned selects grey
+  themselves and a plain input does not, so Name and Remark sat there
+  looking exactly as they always do. Being unable to type is not an answer.
+- **DRAGGED BACK IS NOT A MOVE.** Without it the draft carries a worker
+  whose two columns are what the register already holds, Save writes a row
+  that changes nothing, and the count beside the button asks the office to
+  save work they had just undone.
+- **ONE WRITE PER WORKER, SENT TOGETHER, AND THE COUNT IS WHAT CAME BACK.**
+  They are independent rows carrying different values, so there is no single
+  statement that does it — and an upsert would have to carry every NOT NULL
+  column of a row this form has not got. A worker whose write was refused
+  **stays in the draft with their name on screen**, so Save can be pressed
+  again; reporting success over a board that only agrees with itself is the
+  one outcome worth avoiding.
+- **THE FORM IS THE MORE SPECIFIC STATEMENT.** Saving a worker on their own
+  record, or rejecting a signup, takes them OFF the draft — left on it, the
+  next Save would put the row the board was holding back over what was
+  keyed. The draft deliberately does **not** hold a whole record: adding a
+  worker, editing one and rejecting a signup are their own acts with their
+  own Save and their own confirm, and queueing a photo upload and a PIN
+  behind this button would be a second, thinner save. They are simply not
+  OFFERED outside edit mode, which is the half the office asked for.
+- **A reload or a typed address never reaches a page's own dialog**, so
+  `beforeunload` is asked for the browser's — only ever over moves that
+  really are unsaved.
+
+**AND THE LAST-UPDATED LINE HAD BEEN ON THIS PAGE ALL ALONG**, which is the
+whole of why the office asked for it: it was a **foot-note under thirty-two
+rows of names**, so on the screen anybody actually looks at it was never
+there. A fact about the board belongs where the board starts. It is on the
+strip now, beside Edit, and it reads the NEWEST stamp across the whole
+register rather than off what is on screen — it answers *is what I am
+looking at current*, and a line that went quiet because somebody ticked Show
+inactive would answer it wrongly.
+
+**AND IT SHOWS A NAME, NEVER THE ADDRESS IT IS STORED AS** — the rule *A
+tick is a SIGNATURE* already names, asked a fourth time. `shared_people.js`
+is the one resolver, loaded on this page for the first time here and failing
+open, so an unreadable profile table leaves the address standing: an empty
+"by" would be worse than a plain one. The hover on a rejected signup goes
+through it too.
+
+**Nothing to run in the database.** `updated_at` / `updated_by` have been
+written by every save on this page since it was drawn; what changed is
+where they are read.
+
+`tests/the_board_is_read_only_until_edit.cjs` drives the real page in a real
+browser and the drag is the board's own handlers — a `DragEvent` dispatched
+at the chip and the cell, which fires the inline ondragstart / ondragover /
+ondrop exactly as a mouse does. A drag simulated by writing into
+`boardDraft` would prove nothing about the board. **50 of its 76 checks fail
+on the previous page**, each by NAME: every reader is guarded, because on
+the board as it was there is no strip, no Save and no `boardEdit`, and an
+unguarded `$eval` takes the harness down on the first line and leaves the
+seventy under it unasked.
+
+The two tests that drove the old always-live board had to learn the gate:
+`a_rejected_signup_leaves_the_queue.cjs` presses Edit in its own `open()`
+(section 1 asks the LOCKED board about the cross first, and section 6's
+plain user deliberately does not unlock), and `every_role_has_its_own_row.cjs`
+asks its Add row in BOTH states — *no Add anywhere* and *no Add on Other*
+are the same answer read off one row, and a check that only ever saw the
+locked board would pass with the Add button deleted outright.
+
 ## The Worker Record reads the conductor's transplanting, and writes ONE column
 
 The Field Conductor records the four transplanting jobs on his own portal:
