@@ -8594,6 +8594,14 @@ So there are two layers, and they are the house pattern:
   is a span of their own, so a break falls BETWEEN names and never through
   one. Under 1500px the padding and the date type tighten. The test asks it
   at 1280 wide: no sideways scroll.
+- **THE BOARD WRAPS AND THE TIMELINE SCROLLS IN ITS OWN FRAME.** The board
+  was six fixed columns that scrolled sideways; they share the width now
+  (`auto-fit`) and drop to a second row, then to one column on a phone.
+  The timeline chart (`.tl`) is shorter than the window and scrolls both
+  ways INSIDE itself, the dates pinned along the top and the names down
+  the left, so the page still scrolls round it. The name column narrows
+  with the window (`tlLabelWidth`, handed to the CSS as `--tl-lw`), and
+  because the chart is laid out in pixels a resize draws it again.
 - **THE TASK LIST WAS EMPTIED ON REQUEST**, with
   `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
   else. It keeps no copy, so it is not a file to run again by habit.

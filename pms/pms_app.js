@@ -820,6 +820,13 @@ function timelineTicks(s0, e0){
   return ticks;
 }
 
+function tlLabelWidth(){ const w = window.innerWidth; return w <= 600 ? 150 : w <= 1100 ? 220 : w <= 1500 ? 280 : 360; }
+// The chart is laid out in pixels, so a window that changes size has to draw it again.
+let tlResizeT = 0, tlLastW = 0;
+window.addEventListener("resize", () => { clearTimeout(tlResizeT); tlResizeT = setTimeout(() => {
+  if (document.body.dataset.view !== "timeline" || window.innerWidth === tlLastW) return;
+  tlLastW = window.innerWidth; renderTimeline(); }, 150); });
+
 function renderTimeline(){
   const all = filtered();
   const list = all.filter(t => t.start || t.due);
@@ -858,7 +865,8 @@ function renderTimeline(){
   else if (tlZoom==="month"){ s0.setDate(1); s0.setMonth(s0.getMonth()-1); e0.setDate(1); e0.setMonth(e0.getMonth()+2); }
   else { s0.setMonth(0, 1); e0.setFullYear(e0.getFullYear()+1, 0, 1); }
   const start = iso(s0); const days = diffDays(iso(e0), start);
-  const LW = matchMedia("(max-width:600px)").matches ? 170 : 360;
+  // The name column gives room back to the chart as the window narrows. tlLabelWidth is the one place that says how much.
+  const LW = tlLabelWidth();
   // Stretch a short range to fill the panel instead of leaving empty space on the right.
   const avail = ($("#v-timeline").clientWidth || 1200) - LW - 2;
   const PX = Math.max(ZOOMS[tlZoom].px, avail / days), MINW = Math.max(PX, 4);
@@ -902,7 +910,7 @@ function renderTimeline(){
   grid.forEach(g => body.append(el("div",{class:"tl-grid", style:`left:${LW+g}px`})));
   body.append(el("div",{class:"tl-today", style:`left:${LW+x(TODAY)+PX/2}px`}, el("span",{text:"Today"})));
   inner.append(body);
-  const wrap = el("div",{class:"tl"}, inner);
+  const wrap = el("div",{class:"tl", style:`--tl-lw:${LW}px`}, inner);
   const key = el("div",{class:"tl-key"},
     el("span",{}, el("i",{style:"width:22px;height:10px;border-radius:3px;background:var(--s-ip);opacity:.25"}), "Planned (start to due)"),
     el("span",{}, el("i",{style:"width:22px;height:6px;border-radius:2px;background:var(--s-ip)"}), "Actual work"),
