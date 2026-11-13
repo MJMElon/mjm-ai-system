@@ -7413,6 +7413,44 @@ Loading Seedlings, Monthly Payroll) · Approval · Report · Settings.
 `tests/nursery_payroll_has_a_side_bar.cjs` (`SHOT=/dir` draws the three
 new pages).
 
+### The bar is FIXED to the window, and the Dashboard is charts over a table
+
+- **Flush left, top to bottom, square.** `.side-nav` is `position:fixed;
+  left:0; top:0; height:100vh` with no radius and no margin; the ribbon, the
+  month bar and the page sit to its right because BODY takes
+  `padding-left: var(--side-w)` — asked as `body:has(#main:not(.hidden))`, so
+  the sign-in check and Access Denied are not pushed sideways by a bar that
+  is not drawn. Under 900px it goes back into the flow as before.
+- **The Dashboard is KPI cards (month status, approval with a meter, total
+  payroll, the two big sheets), then By nursery and Trend, then the
+  by-section table.** Every figure is `monthlyRows()`'s, the Monthly
+  Payroll's own, so the dashboard cannot disagree with the sheet it sums.
+- **THE TREND PRICES MONTHS THAT ARE NOT OPEN, and that is the dangerous
+  part.** `monthTotals(ym)` fetches that month's four per-month reads
+  (`fetchEntries`, `fetchEarnAdj`, `fetchTransplantRows`, the cull overrides
+  and checks) WITHOUT touching a global, then in ONE synchronous pass swaps
+  them in under `_monthOverride`, calls `monthlyRows('')`, and restores
+  everything in a `finally`. Nothing awaits while another month is in the
+  globals, so no render can read it. The `load*` functions are thin wrappers
+  over those `fetch*` reads now — one read, two callers. The test asks that
+  each past month comes out at its own figure AND that the open month is
+  exactly what it was afterwards.
+- **What the trend does NOT redo per month:** the culling incentive RULE
+  (`loadRule` mutates one shared rule, so the one already loaded prices
+  every month; it is dated and rarely moves). Months are cached and the
+  cache is cleared when the batch ledger lands, because a month priced
+  before it had no maintenance capacity.
+- **Hours are not recorded anywhere in this module**, so the trend offers
+  Payroll and Workers paid and nothing invented. Monthly is the twelve
+  months ending the open one; Yearly is last year and this year to date.
+- **Pure SVG, no chart library** — nothing to fetch, nothing to 404, and the
+  harness (which refuses CDNs) can measure it. The three series colours were
+  run through the dataviz validator; the legend, the tooltip and the table
+  carry identity as well as colour.
+
+`tests/the_payroll_dashboard_has_charts.cjs` — 23 of its 27 fail on the
+previous page, by name.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the

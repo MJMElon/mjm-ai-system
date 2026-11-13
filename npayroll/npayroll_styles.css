@@ -575,14 +575,25 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
    ones inside the side bar. A sheet is lit only while the Payroll
    Record is the page open — body[data-tab] is set by switchTab — or the
    bar would show two places active at once. */
-.pay-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 22px; align-items: start; }
 .pay-content { min-width: 0; }
-/* Top and foot stand still, the middle scrolls: the bar is never taller
-   than the window, so the foot is always on screen. */
-.side-nav { position: sticky; top: 76px; max-height: calc(100vh - 96px);
-            display: flex; flex-direction: column;
-            background: var(--white); border: 1.5px solid var(--border); border-radius: var(--r-lg);
-            box-shadow: var(--shadow-sm); padding: 12px; }
+/* FLUSH LEFT, FULL HEIGHT. The bar is fixed to the window's left edge from
+   the very top to the very bottom, square, with nothing around it; the
+   ribbon, the month bar and the page all sit to its right. The padding is
+   asked of BODY and only while the module is open (#main shown), so the
+   sign-in check and Access Denied are not pushed sideways by a bar that is
+   not there. Top and foot stand still, the middle scrolls. */
+:root { --side-w: 236px; }
+body:has(#main:not(.hidden)) { padding-left: var(--side-w); }
+.side-nav { position: fixed; left: 0; top: 0; bottom: 0; width: var(--side-w); height: 100vh;
+            margin: 0; z-index: 50; display: flex; flex-direction: column;
+            background: var(--white); border-right: 1px solid var(--border); border-radius: 0;
+            box-shadow: none; padding: 0 12px 14px; }
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 18px 8px 16px; margin: 0 -12px 12px;
+              padding-left: 20px; border-bottom: 1px solid #eef0f7; }
+.side-brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: #fff;
+                   display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex: none; }
+.side-brand-name { font-size: 13.5px; font-weight: 800; color: var(--text-head); line-height: 1.15; }
+.side-brand-sub { font-size: 11px; font-weight: 600; color: var(--text-muted); }
 .side-top, .side-foot { flex: none; }
 .side-mid { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
 /* Groups sit well apart; rows inside a group sit close. */
@@ -607,8 +618,9 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transpar
 .side-account:empty { display: none; }
 .side-nav .hidden { display: none !important; }
 @media (max-width: 900px) {
-  .pay-shell { grid-template-columns: 1fr; }
-  .side-nav { position: static; max-height: none; }
+  body:has(#main:not(.hidden)) { padding-left: 0; }
+  .side-nav { position: static; width: auto; height: auto; max-height: none; border-right: none;
+              border: 1.5px solid var(--border); border-radius: var(--r-lg); margin-bottom: 16px; padding: 0 12px 12px; }
   .side-mid { overflow: visible; }
   .side-group { flex-direction: row; flex-wrap: wrap; }
   .side-head { width: 100%; }
@@ -617,12 +629,46 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transpar
 
 /* Dashboard, Approval and Report */
 .dash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
-.dash-card { background: var(--white); border: 1.5px solid var(--border); border-radius: var(--r-md);
+.dash-card { background: var(--white); border: 1px solid var(--border); border-top: 4px solid #cbd5e1; border-radius: var(--r-md);
              box-shadow: var(--shadow-sm); padding: 14px 16px; text-align: left; font-family: inherit; cursor: pointer; }
 .dash-card:hover { border-color: var(--ink-mid); }
+.dash-card.dc-status   { border-top-color: #94a3b8; }
+.dash-card.dc-approval { border-top-color: #74c69d; }
+.dash-card.dc-total    { border-top-color: #1b4332; }
+.dash-card.dc-cat-1    { border-top-color: #2f9e5f; }
+.dash-card.dc-cat-2    { border-top-color: #d97706; }
 .dash-card .dc-label { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
-.dash-card .dc-val { font-size: 22px; font-weight: 800; color: var(--text-head); margin-top: 4px; }
+.dash-card .dc-val { font-size: 22px; font-weight: 800; color: var(--text-head); margin-top: 4px; font-variant-numeric: tabular-nums; }
 .dash-card .dc-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.dc-meter { height: 6px; border-radius: 999px; background: #eef2f0; margin-top: 10px; overflow: hidden; }
+.dc-meter i { display: block; height: 100%; background: #2f9e5f; border-radius: 999px; }
+.dash-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 18px; }
+@media (max-width: 1100px) { .dash-charts { grid-template-columns: 1fr; } }
+.dash-chart { padding: 16px 18px 12px; }
+.dash-chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.dch-title { font-size: 14px; font-weight: 800; color: var(--text-head); }
+.dch-sub { font-size: 12px; color: var(--text-muted); }
+.dash-segs { display: flex; gap: 8px; flex-wrap: wrap; }
+.dash-seg { display: inline-flex; background: #eef2f0; border-radius: 999px; padding: 3px; }
+.dash-seg button { border: none; background: transparent; font-family: inherit; font-size: 12px; font-weight: 700;
+                   color: #475569; padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+.dash-seg button.on { background: var(--white); color: var(--ink); box-shadow: var(--shadow-sm); }
+.dash-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #475569; margin: 2px 0 6px; }
+.dash-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.dash-svg { width: 100%; height: auto; display: block; }
+.dash-svg .dg-grid { stroke: #eef0f2; stroke-width: 1; }
+.dash-svg .dg-base { stroke: #cbd5e1; stroke-width: 1; }
+.dash-svg .dg-ax, .dash-svg .dg-xl { font-size: 11px; fill: #64748b; font-family: inherit; font-variant-numeric: tabular-nums; }
+.dash-svg .dg-xl { font-weight: 600; fill: #334155; }
+.dash-svg .dg-cross { stroke: #94a3b8; stroke-width: 1; stroke-dasharray: 3 3; }
+.dash-svg .dg-hit { cursor: default; }
+.dash-empty { padding: 60px 0; text-align: center; font-size: 13px; color: var(--text-muted); }
+.dash-tip { position: fixed; z-index: 200; pointer-events: none; display: none; background: #fff; border: 1px solid var(--border);
+            border-radius: 10px; box-shadow: var(--shadow-md); padding: 8px 12px; font-size: 12px; min-width: 190px; }
+.dash-tip .dt-h { font-weight: 800; color: var(--text-head); margin-bottom: 4px; }
+.dash-tip .dt-r { display: flex; align-items: center; gap: 8px; color: #475569; line-height: 1.7; }
+.dash-tip .dt-r b { margin-left: auto; color: var(--text-head); font-variant-numeric: tabular-nums; }
+.dash-tip .dt-sw { width: 9px; height: 9px; border-radius: 3px; flex: none; }
 .ap-open { color: var(--amber-tx); font-weight: 700; }
 .ap-done { color: var(--green); font-weight: 700; }
 .ap-lock { color: var(--red); font-weight: 700; }
