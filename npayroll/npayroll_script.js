@@ -2855,12 +2855,12 @@ function renderTransplGlance(secFilter) {
     const r = transplantRate({ work_type: key, jenis: (TRANSPLANT_JOB[key] || {}).jenis });
     return r ? Number(r.rate || 0) : null;
   };
-  box.innerHTML = TRANSPLANT_JOBS.map(j => {
+  box.innerHTML = TRANSPLANT_JOBS.map((j, ji) => {
     const cap = workdone[j.key] || 0;
     const rate = rateOf(j.key);
     const wd = rate == null ? null
       : Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
-    return `<div class="pt-card">
+    return `<div class="pt-card cat-card cat-${(ji % 4) + 1}">
         <div class="pt-label">${esc(j.label)}</div>
         <div class="pt-val">${capFmt(cap)}</div>
         <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
@@ -3015,6 +3015,7 @@ function renderTransplantClaim() {
     </tr></tfoot>`;
 
   $('transpl-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+  try { decorateJobTable($('transpl-table'), TRANSPLANT_JOBS.map(j => j.key), TRANSPLANT_JOBS.map((_, i) => (i % 4) + 1)); } catch (_) {}
 
   /* Anything that would make the claim short is said FIRST, because a claim
      missing work looks exactly like a quiet month. */
@@ -3847,45 +3848,205 @@ function workdoneCell(cap, rate, claimed, opts) {
            >${capLine}${wdLine}${gap}</th>`;
 }
 
-/* THE LOOK OF THE CLAIM, AND NOTHING ELSE.
-   Run over the table renderMaint() has just drawn. It adds classes and
-   takes the "RM " off the money cells, and never changes a FIGURE: every
-   Total, Subtotal and Grand Total heading already says (RM), so the cell
-   carries the number alone and the column of decimals lines up. Done here
-   rather than inside capCell/earnedCell because those draw the other
-   sheets too, which keep their RM. The PDF is drawn off the view, never
-   off this table, so the paper is untouched.
-     - each job's cells carry job-<code>, so the four jobs are four colour
-       blocks matching the cards above;
-     - a job's first cell carries jg-start (the heavy divider) and its
-       Total cell jg-tot (the light one);
-     - a cell holding only a dash is .nil, drawn faint;
-     - the Worker column is pinned beside No. at No.'s real width. */
-function decorateMaintTable(tbl) {
-  if (!tbl) return;
-  const codes = MAINT_SHEET_TYPES.map(t => t.code);
-  const hr = tbl.tHead ? tbl.tHead.rows : [];
-  if (hr[2]) Array.from(hr[2].cells).forEach((th, i) => {
-    if (codes[i]) th.classList.add('job-wd', 'job-' + codes[i], 'jg-start');
+/* ═══ ONE LOOK FOR EVERY TABLE IN THIS MODULE ═══════════════════════════════
+   The office asked for every tab to read the same way: figures right-aligned
+   on tabular digits, no "RM" repeated down a column, a faint dash where there
+   is nothing, one forest-green Grand Total. Every table here is drawn by
+   innerHTML in some render function, so rather than teach thirty of them the
+   rule, tidyTable() is run over a table each time its contents are replaced
+   (the observer at the foot of this block). It changes no FIGURE: it only
+   adds classes, takes a leading "RM " off a cell, and adds "(RM)" to the one
+   heading over a column it took the RM off -- the unit is said once, where
+   it belongs, instead of on every line.
+
+   decorateJobTable() is the second layer, for the three claim forms that are
+   a group of columns per JOB (Work Maintenance, Transplanting, Loading
+   Seedlings): each job is a colour block, cat-1 to cat-4, the same four
+   colours whichever sheet it is, and No., Worker and Subtotal are pinned. */
+
+const _NUM_RX = /^-?[\d,]+(\.\d+)?%?$/;
+
+/* The text of a cell that is ITS value -- not a stepper button, not the
+   calibrate line under a name, not a pill in a heading. */
+function _cellValueText(td) {
+  let s = '';
+  const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep')) continue;
+    s += n.nodeValue;
+  }
+  return s.trim();
+}
+
+/* A section of a table as a grid: grid[r][c] is the cell covering that
+   slot, rowspans and colspans expanded. */
+function _tableGrid(rows) {
+  const grid = [];
+  Array.from(rows).forEach((tr, r) => {
+    grid[r] = grid[r] || [];
+    let c = 0;
+    Array.from(tr.cells).forEach(cell => {
+      while (grid[r][c]) c++;
+      const rs = cell.rowSpan || 1, cs = cell.colSpan || 1;
+      for (let i = 0; i < rs; i++) for (let j = 0; j < cs; j++) {
+        grid[r + i] = grid[r + i] || [];
+        grid[r + i][c + j] = cell;
+      }
+      c += cs;
+    });
   });
-  Array.from(tbl.tBodies[0] ? tbl.tBodies[0].rows : []).forEach(tr => codes.forEach((c, i) => {
-    const a = tr.cells[2 + 2 * i], b = tr.cells[3 + 2 * i];
-    if (a) a.classList.add('job-' + c, 'jg-start');
-    if (b) b.classList.add('job-' + c, 'jg-tot');
-  }));
-  tbl.querySelectorAll('tbody td, tfoot td').forEach(td => {
-    const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
-    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-      if (n.parentNode.closest('button, .cal-line')) continue;
-      if (/^\s*RM\s[-\d]/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/^(\s*)RM\s/, '$1');
+  return grid;
+}
+
+function tidyTable(tbl) {
+  if (!tbl || !tbl.tBodies) return;
+  const bodyRows = [];
+  Array.from(tbl.tBodies).forEach(b => bodyRows.push(...b.rows));
+  if (tbl.tFoot) bodyRows.push(...tbl.tFoot.rows);
+  const grid = _tableGrid(bodyRows);
+  const width = grid.reduce((m, r) => Math.max(m, r ? r.length : 0), 0);
+  const numCols = new Set(), rmCols = new Set();
+
+  // 1. Strip a leading "RM " off each data cell, and mark the empty ones.
+  //    Only where the cell IS an amount: "RM 5 bonus agreed" is a sentence.
+  bodyRows.forEach(tr => Array.from(tr.cells).forEach(td => {
+    if (/^RM\s?-?[\d,]+(\.\d+)?$/.test(_cellValueText(td))) {
+      const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep')) continue;
+        if (/^\s*RM\s?[-\d]/.test(n.nodeValue)) {
+          n.nodeValue = n.nodeValue.replace(/^(\s*)RM\s?/, '$1');
+          td.dataset.rm = '1';
+          break;
+        }
+      }
     }
-    const txt = td.textContent.trim();
-    if (txt === '—' || txt === '-') td.classList.add('nil');
+    const v = _cellValueText(td);
+    if (v === '—' || v === '-') td.classList.add('nil');
+  }));
+
+  // 2. A column is a column of FIGURES when every cell that holds one
+  //    value holds a number or a dash, and at least one holds a number.
+  for (let c = 0; c < width; c++) {
+    let figs = 0, other = 0, rm = 0;
+    const seen = new Set();
+    grid.forEach(row => {
+      const td = row && row[c];
+      if (!td || seen.has(td) || (td.colSpan || 1) > 1) return;
+      seen.add(td);
+      const v = _cellValueText(td);
+      if (!v) return;
+      if (_NUM_RX.test(v)) figs++;
+      else if (v !== '—' && v !== '-') other++;
+      if (td.dataset.rm) rm++;
+    });
+    if (figs && !other) numCols.add(c);
+    if (rm) rmCols.add(c);
+  }
+  grid.forEach(row => (row || []).forEach((td, c) => {
+    if (td && numCols.has(c) && (td.colSpan || 1) === 1) td.classList.add('num');
+  }));
+
+  // 3. The heading over each such column: right-aligned with it, and
+  //    carrying the (RM) the cells no longer say.
+  if (tbl.tHead) {
+    const hg = _tableGrid(tbl.tHead.rows);
+    for (let c = 0; c < width; c++) {
+      let th = null;
+      for (let r = hg.length - 1; r >= 0; r--) {
+        const cell = hg[r] && hg[r][c];
+        if (cell && (cell.colSpan || 1) === 1) { th = cell; break; }
+      }
+      if (!th) continue;
+      if (numCols.has(c)) th.classList.add('num');
+      if (rmCols.has(c) && !/RM/.test(th.textContent) && th.textContent.trim()) {
+        th.appendChild(document.createTextNode(' (RM)'));
+      }
+    }
+  }
+}
+
+/* The claim forms laid out as a group of columns per job. `cats` is the
+   colour slot (1 to 4) of each job in order, and `codes` the job's own key,
+   which rides along as job-<code> so a rule or a test can name the job. */
+function decorateJobTable(tbl, codes, cats) {
+  if (!tbl || !tbl.tHead) return;
+  const n = codes.length;
+  const tag = (el, i, extra) => {
+    if (!el || i == null) return;
+    el.classList.add('cat-' + cats[i], 'job-' + codes[i]);
+    (extra || []).forEach(x => el.classList.add(x));
+  };
+  tbl.classList.add('job-table');
+  const hr = tbl.tHead.rows;
+  if (hr[0]) {
+    const c = Array.from(hr[0].cells);
+    if (c[0]) c[0].classList.add('stk-no');
+    if (c[1]) c[1].classList.add('l', 'stk-w');
+    for (let i = 0; i < n; i++) tag(c[2 + i], i, ['job-title', 'jg-start']);
+    if (c[2 + n]) c[2 + n].classList.add('stk-sub');
+  }
+  if (hr[1]) Array.from(hr[1].cells).forEach((th, i) => tag(th, i, ['job-rate', 'jg-start']));
+  if (hr[2]) Array.from(hr[2].cells).forEach((th, i) => tag(th, i, ['job-wd', 'jg-start']));
+  if (hr[3]) Array.from(hr[3].cells).forEach((th, k) => tag(th, Math.floor(k / 2), ['sub-h', k % 2 ? 'jg-tot' : 'jg-start']));
+  Array.from(tbl.tBodies[0] ? tbl.tBodies[0].rows : []).forEach(tr => {
+    const c = tr.cells;
+    if (c.length < 2 + 2 * n) return;
+    c[0].classList.add('stk-no');
+    c[1].classList.add('stk-w');
+    for (let i = 0; i < n; i++) { tag(c[2 + 2 * i], i, ['jg-start']); tag(c[3 + 2 * i], i, ['jg-tot']); }
+    if (c[2 + 2 * n]) c[2 + 2 * n].classList.add('stk-sub');
   });
+  if (tbl.tFoot && tbl.tFoot.rows[0]) {
+    const c = tbl.tFoot.rows[0].cells;
+    if (c[0]) c[0].classList.add('stk-foot');
+    for (let i = 0; i < n; i++) { tag(c[1 + 2 * i], i, ['jg-start']); tag(c[2 + 2 * i], i, ['jg-tot']); }
+    if (c[1 + 2 * n]) c[1 + 2 * n].classList.add('stk-sub');
+  }
+  tidyTable(tbl);
   const no = tbl.querySelector('thead th.stk-no');
   const w = no ? no.getBoundingClientRect().width : 0;
   if (w) tbl.querySelectorAll('.stk-w').forEach(el => { el.style.left = w + 'px'; });
 }
+
+/* Work Maintenance's four jobs take the four colours in their own order. */
+function decorateMaintTable(tbl) {
+  const codes = MAINT_SHEET_TYPES.map(t => t.code);
+  decorateJobTable(tbl, codes, codes.map((_, i) => (i % 4) + 1));
+}
+
+/* Every table, every time its contents are replaced. A mutation observer
+   rather than thirty calls, so a table added next month is tidied without
+   anybody remembering to. tidyTable writes only text and classes, never a
+   new row, so it cannot set itself off again. */
+(function watchTables() {
+  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
+  const pending = new Set();
+  let queued = false;
+  const flush = () => {
+    queued = false;
+    pending.forEach(t => { try { if (!t.classList.contains('job-table')) tidyTable(t); } catch (_) {} });
+    pending.clear();
+  };
+  const start = () => {
+    const root = document.getElementById('main') || document.body;
+    if (!root) return;
+    new MutationObserver(muts => {
+      muts.forEach(m => {
+        const t = m.target.closest ? m.target.closest('table') : null;
+        if (t) pending.add(t);
+        m.addedNodes.forEach(nd => {
+          if (nd.nodeType !== 1) return;
+          if (nd.tagName === 'TABLE') pending.add(nd);
+          nd.querySelectorAll && nd.querySelectorAll('table').forEach(x => pending.add(x));
+        });
+      });
+      if (pending.size && !queued) { queued = true; Promise.resolve().then(flush); }
+    }).observe(root, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 
 function renderMaint() {
   const n = $('maint-nursery').value;
@@ -4123,7 +4284,7 @@ function renderLoadingGlance(view) {
   const rate = view.rateOf(t.code);
   const wd = rate == null ? null
     : Math.round(cap2(capAll) * Math.round(rate * 100000) / 1000) / 100;
-  box.innerHTML = `<div class="pt-card">
+  box.innerHTML = `<div class="pt-card cat-card cat-4">
       <div class="pt-label">${esc(t.label)}</div>
       <div class="pt-val">${capFmt(capAll)}</div>
       <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
@@ -4193,6 +4354,7 @@ function renderLoading() {
     </tr></tfoot>`;
 
   $('loading-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+  try { decorateJobTable($('loading-table'), [t.code], [4]); } catch (_) {}
 
   /* A frozen (verified) claim stops reading Worker Record/DO records live —
      same reasoning as renderMaint()'s own note. */
@@ -4691,9 +4853,9 @@ function renderMonthly() {
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(r.name)}</td>
       <td>${esc(r.section || '—')}</td>
-      <td>${r.maint    ? money(r.maint)    : '—'}</td>
-      <td>${r.transpl  ? money(r.transpl)  : '—'}</td>
-      <td>${r.seedling ? money(r.seedling) : '—'}</td>
+      <td class="cat-1">${r.maint    ? money(r.maint)    : '—'}</td>
+      <td class="cat-2">${r.transpl  ? money(r.transpl)  : '—'}</td>
+      <td class="cat-4">${r.seedling ? money(r.seedling) : '—'}</td>
       <td class="money">${money(r.total)}</td>
     </tr>`).join('')
     : `<tr><td colspan="7" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
@@ -4702,8 +4864,8 @@ function renderMonthly() {
   $('monthly-table').innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th class="l">Worker</th><th style="width:90px;">Section</th>
-      <th style="width:140px;">Work Maintenance</th><th style="width:130px;">Transplanting</th>
-      <th style="width:150px;">Seedlings Collection</th>
+      <th class="cat-1" style="width:140px;">Work Maintenance</th><th class="cat-2" style="width:130px;">Transplanting</th>
+      <th class="cat-4" style="width:150px;">Seedlings Collection</th>
       <th style="width:130px;">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
