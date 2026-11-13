@@ -2017,3 +2017,25 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 #recview-list .rec-table .btn-act:hover{background:#eef3f0 !important;}
 #recview-list .rec-table .btn-act.btn-danger:hover{background:#fdeeee !important;}
 #recview-list .rec-table .btn-act:focus-visible{outline:2px solid var(--wr-ink);outline-offset:1px;}
+
+/* ── WORKER LIST FOR EACH JOB (Settings) ─────────────────────────────── */
+.jc-pal{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 12px;margin-bottom:12px;
+  border:1px solid var(--border);border-radius:8px;background:#fafbfa;}
+.jc-pal-live{background:#f3f9f5;border-color:var(--green-mid);}
+.jc-pal-sec{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+.jc-pal-h{font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);margin-right:2px;}
+.jc-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;white-space:nowrap;}
+.jc-n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#e8f0eb;
+  color:var(--green-text);font-size:10.5px;font-weight:800;text-align:center;}
+.jc-def{border-style:dashed;color:var(--text-mute,#5d6b63);}
+.jc-dtag{font-size:10px;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;}
+.jc-x{border:0;background:none;padding:0 0 0 2px;margin:0;font-size:15px;line-height:1;cursor:pointer;color:var(--text-faint);}
+.jc-x:hover{color:var(--danger,#c0392b);}
+.jc-tbl{width:100%;border-collapse:collapse;}
+.jc-tbl th,.jc-tbl td{border-bottom:1px solid var(--border);padding:8px 10px;vertical-align:middle;text-align:left;}
+.jc-tbl thead th{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);background:#f7f8f7;}
+.jc-tbl th.jc-job{width:190px;font-size:13px;font-weight:800;color:var(--green-text);}
+.jc-tbl thead th.jc-job{font-size:11px;color:var(--text-faint);}
+.jc-cell{min-width:150px;}
+.jc-cell .jc-chip{margin:2px 4px 2px 0;}
+.jc-off{color:var(--text-faint);text-align:center !important;}

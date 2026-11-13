@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=116">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=117">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -760,6 +760,18 @@
         </div>
         <div id="js-set-body"></div>
       </div>
+      <!-- WORKER LIST FOR EACH JOB. Team Board groups dragged onto a job
+           decide that job's columns on Worker Activity, per nursery. The
+           rule is shared/shared_job_crew.js and the salary claim reads it
+           too. `#jc-set-corner` is filled by the renderer, like the two
+           corners above. -->
+      <div class="card" style="padding:18px;margin-bottom:16px;">
+        <div class="lst-top">
+          <div class="set-h">Worker List for Each Job</div>
+          <div id="jc-set-corner"></div>
+        </div>
+        <div id="jc-set-body"></div>
+      </div>
     </div>
 
     </div><!-- /.sm-body -->
@@ -1007,6 +1019,7 @@
      name the register has since corrected still has to find its column.
      Read by this page AND by the one that prices it. -->
 <script src="../shared/shared_maint_workers.js?v=1"></script>
+<script src="../shared/shared_job_crew.js?v=1"></script>
 <!-- Pairing the field's work to a schedule row. Shared with the payroll
      module's salary claim, which prices what this page ticks. -->
 <script src="../shared/shared_maint_field.js?v=2"></script>
@@ -1028,7 +1041,7 @@
      page's own, and the office asked for it here; the rules are shared, so
      the file is shared. -->
 <script src="../shared/shared_npayroll_lock.js?v=3"></script>
-<script src="plot_maintenance_script.js?v=186"></script>
+<script src="plot_maintenance_script.js?v=187"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

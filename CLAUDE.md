@@ -8221,6 +8221,55 @@ draft would prove nothing about the board. **22 of its 40 checks fail on the
 previous code**, each by name: every reader is guarded, since a test that dies
 on the previous code proves nothing about it.
 
+### Who is on each job is KEYED too, and a group is a cell of the Team Board
+
+The office: *"I drag the BNN-Worker to PxD part. So the worker activity for
+pxd worker name list will show all BNN worker name."* The worker columns on
+Worker Activity used to be ONE answer per nursery — its general workers off
+the payroll register — for P & D, Manuring, Weeding, Interrow, Loading and
+Transplanting alike. **Settings → Worker List for Each Job** is a table of
+those six jobs down the side and the four nurseries across, with the Team
+Board's groups above it (*BNN · Workers 12*, *BNN · FC 1*, *UNE · Workers
+5*). Drag a group onto a cell and every person in it is a column on that
+job's sheet for that nursery.
+
+- **A GROUP IS A SECTION AND A ROLE**, `BNN|General Worker`, which is a cell
+  of the Team Board. **Only groups are stored, never names**, so somebody
+  moved on the board moves here with nothing re-keyed, and a worker hired
+  next month is on every job their group is on.
+- **"Workers" is the page's OWN general-worker rule**, handed into
+  `shared/shared_job_crew.js` rather than restated, so *BNN · Workers* is
+  exactly the list BNN's sheet showed before (the per-worker switch and the
+  unlabelled-nursery fallback included). Every other role is matched exactly.
+- **A DROP ADDS, never moves** — a crew can do several jobs, so one group
+  goes onto as many cells as it is dragged onto; the × takes it off. A cell
+  greyed `—` is a job Where Each Job Is Done says is not done there.
+- **NOTHING KEYED IS THE OLD LIST**, drawn on the card as the nursery's own
+  Workers marked *default*. Save writes a cell left as it stood as
+  **`default`** (read as no row at all), so a nursery whose register is
+  empty keeps the old `nops_maint_workers` fallback. An emptied cell is
+  saved as `''`, which is an answer: nobody.
+- **THE CLAIM PAYS THE SAME LIST.** `jobWorkers(n, job)` on the page and
+  `maintJobNames(n, ym, code)` in `npayroll_script.js` both ask the shared
+  file; a tick under a name a job's list does not hold has no column on the
+  sheet and is not paid on the claim. The claim gives a line to everybody on
+  ANY job of the nursery (`maintClaimNames`). The Worker Record PDF draws
+  each job with its own columns.
+- **It fails open**: a register that cannot be read leaves every job on the
+  old list.
+
+Storage is `nops_maint_config`, one row per nursery per job, key
+`job_crew:<NURSERY>:<job>`, groups in `txt_value`. **Nothing to run in the
+database.** Seed Planting keeps its own hand-picked list and Culling
+Monitoring its own named people, so neither is on the card.
+`ROLES` in the shared file is the third copy of the Team Board's
+`BOARD_ROLES` — change one, change the others.
+
+`tests/each_job_has_its_own_worker_list.cjs` drives the real card and the
+real drag, opens the sheet and reads its columns, and lifts the claim's
+`maintJobNames` out of the shipped file; **18 of its 25 checks fail on the
+previous code**.
+
 ### Worker Activity was two parts, and Seed Planting is the Pre Nursery one
 
 **The two headings this section is about are GONE** — see above. Everything
