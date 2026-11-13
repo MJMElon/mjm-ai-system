@@ -8945,3 +8945,42 @@ width, that a heading's edges are the column's edges, that a grouped
 heading is centred, and that figures are tabular. **11 of its tables fail
 on the previous code**, each by name. `AUDIT=1` prints every table's grid,
 `SHOT=/dir` draws each tab and `VW=400` draws them at phone width.
+
+## Work Records is one clean page, and the dashboard is a strip
+
+The office asked for the Work Records page redesigned: *"MINIMIZE THE
+DASHBOARD. MAXIMIZE THE WORKING AREA."* MJM green stays the one brand
+colour; everything else is white, a light grey and colour only where it says
+something.
+
+- **The three summary cards are ONE strip** (`_recProgressHtml`): Work
+  progress (total, completed, pending, %) and Repair progress (cases,
+  repaired, remaining, %), each over a slim green-on-grey bar. **The figures
+  are the same four counts `renderRecords` always worked out**, by the same
+  rules (done = verified field record or the old Gaia tick; a repair case =
+  an Unsatisfactory audit), so nothing is counted differently — only drawn
+  smaller. Under ~90px on a desk; the two halves stack on a phone.
+- **Check / Edit / Del are icon buttons** (`_recIconBtn`), on the approved
+  list and the sent-back list alike. **Each carries its old WORD as hidden
+  text** (`.sr-only`) as well as a tooltip and an `aria-label`, so a screen
+  reader, a test or anybody reading the button still reads "✓ Check", "Edit",
+  "Del" — and the `onclick` is the very handler the word button had. Delete
+  still confirms; a checked row still offers Uncheck and nothing else.
+- **Every column sits by type**, heading and cell together: Plot, Track,
+  Audit, Nelos, Repair and Actions centred, Quantity right, the rest left.
+  The cells carry classes (`rc-plot`, `rc-qty`, …) instead of inline styles,
+  so one rule says it.
+- **The chemical label is neutral** on this table only — `pillCls` still
+  colours it elsewhere — because the work type is the column beside it and
+  a red outline on every P & D row said nothing.
+- **One control height (34px), one radius, one hairline border** across the
+  head, the toolbar and the table, from `--wr-*` tokens in the last block of
+  `plot_maintenance_styles.css`. The head (nursery pills, month stepper) is
+  shared by every panel, so it changed on all of them, deliberately.
+
+`tests/work_records_is_one_clean_page.cjs` drives the real page: the strip's
+figures against the rows, the strip moving when a row is added, every
+heading and cell alignment, the icons against their handlers, and a Delete
+that still confirms. **23 of its 25 checks fail on the previous page**, each
+by name. `SHOT=/dir` draws it, `VW=400` at phone width. **Nothing to run in
+the database.**

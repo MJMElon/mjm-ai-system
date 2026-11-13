@@ -4878,6 +4878,10 @@ const I18N = {
     'rec.totalTasks':'Total Tasks', 'rec.gaiaDone':'Gaia Done', 'rec.gaiaPending':'Gaia Pending',
     'rec.pendingTask':'Pending Task', 'rec.repairCase':'Total Repair Case',
     'rec.doneOf':'{n} done \u00b7 {pct}%', 'rec.repairedOf':'{n} repaired \u00b7 {pct}%',
+    'rec.workProgress':'Work progress', 'rec.repairProgress':'Repair progress',
+    'rec.completedN':'Completed', 'rec.pendingN':'Pending', 'rec.repairCases':'Repair cases',
+    'rec.repairedN':'Repaired', 'rec.remainingN':'Remaining', 'rec.actions':'Actions',
+    'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Track Record', 'rec.trackView':'View track', 'rec.trackNone':'No walk was recorded for this job.',
     'rec.nelos':'Nelos Case', 'rec.repaired':'Done Repair',
     'rec.nelosNa':'A case is raised on Nelos when the auditor marks a job Unsatisfied. This one has not been.',
@@ -5067,6 +5071,10 @@ const I18N = {
     'rec.totalTasks':'Jumlah Tugasan', 'rec.gaiaDone':'Gaia Selesai', 'rec.gaiaPending':'Gaia Belum',
     'rec.pendingTask':'Tugasan Belum Siap', 'rec.repairCase':'Jumlah Kes Pembaikan',
     'rec.doneOf':'{n} siap \u00b7 {pct}%', 'rec.repairedOf':'{n} dibaiki \u00b7 {pct}%',
+    'rec.workProgress':'Kemajuan kerja', 'rec.repairProgress':'Kemajuan pembaikan',
+    'rec.completedN':'Siap', 'rec.pendingN':'Belum', 'rec.repairCases':'Kes pembaikan',
+    'rec.repairedN':'Dibaiki', 'rec.remainingN':'Baki', 'rec.actions':'Tindakan',
+    'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Rekod Laluan', 'rec.trackView':'Lihat laluan', 'rec.trackNone':'Tiada laluan direkodkan untuk kerja ini.',
     'rec.nelos':'Kes Nelos', 'rec.repaired':'Pembaikan Selesai',
     'rec.nelosNa':'Kes dibuka di Nelos apabila juruaudit menanda kerja Tidak Memuaskan. Kerja ini belum ditanda.',
@@ -8657,6 +8665,44 @@ function _recRowOrder(a, b) {
   return _recDayOrder(a, b);
 }
 
+/* ── THE WORK RECORDS PAGE: SHARED PIECES ─────────────────────────────────
+   One slim progress strip and one icon button, so the approved list and the
+   sent-back list draw their actions the same way. An icon button carries its
+   old WORD as hidden text: the tooltip, a screen reader and anything reading
+   the button's text all still read "Edit" or "Del", and the handler it calls
+   is exactly the one the word button called. */
+const _REC_ICONS = {
+  check: '<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>',
+  undo:  '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>',
+  edit:  '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>'
+};
+function _recIconBtn(icon, cls, onclick, label, tip) {
+  return `<button type="button" class="btn btn-sm btn-act ${cls}" onclick="${onclick}" `
+    + `title="${esc(tip || label)}" aria-label="${esc(label)}">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" `
+    + `stroke-linejoin="round" aria-hidden="true">${_REC_ICONS[icon]}</svg>`
+    + `<span class="sr-only">${esc(label)}</span></button>`;
+}
+function _recProgressHtml(m) {
+  const pc = (n, of) => (of ? Math.round(n / of * 100) : 0);
+  const fig = (n) => Number(n || 0).toLocaleString('en-MY');
+  const bar = (n, of) => `<div class="rp-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" `
+    + `aria-valuenow="${pc(n, of)}"><span style="width:${pc(n, of)}%"></span></div>`;
+  const item = (lbl, n, cls) => `<span class="rp-item${cls ? ' ' + cls : ''}"><span class="rp-lbl">${lbl}</span>`
+    + `<b class="rp-val">${fig(n)}</b></span>`;
+  return `<div class="rp-group rp-work">
+      <div class="rp-line"><span class="rp-title">${t('rec.workProgress')}</span>
+        ${item(t('rec.totalTasks'), m.total)}${item(t('rec.completedN'), m.done)}${item(t('rec.pendingN'), m.pend, 'rp-pend')}
+        <span class="rp-pct">${pc(m.done, m.total)}%</span></div>
+      ${bar(m.done, m.total)}</div>
+    <div class="rp-group rp-repair">
+      <div class="rp-line"><span class="rp-title">${t('rec.repairProgress')}</span>
+        ${item(t('rec.repairCases'), m.repair)}${item(t('rec.repairedN'), m.fixed)}${item(t('rec.remainingN'), m.repair - m.fixed, m.repair - m.fixed ? 'rp-pend' : '')}
+        <span class="rp-pct">${m.repair ? pc(m.fixed, m.repair) + '%' : '—'}</span></div>
+      ${bar(m.fixed, m.repair)}</div>`;
+}
+
 function renderRecords() {
   const jF   = document.getElementById('rf-filter-jenis').value;
   const pF   = document.getElementById('rf-filter-plot').value;
@@ -8714,19 +8760,13 @@ function renderRecords() {
   const repair = nurseryRecs.filter(_auditFailed).length;
   const fixed  = nurseryRecs.filter((r) => _auditFailed(r) && r.repaired).length;
 
+  /* THE OVERVIEW IS ONE SLIM STRIP, NOT THREE CARDS. The office asked for
+     the dashboard to be minimal and the table to be the page: the same four
+     counts as before (total, done, pending, repair cases and how many of
+     those are repaired), worked out exactly as before, drawn as two lines of
+     figures over two slim bars. Nothing here is counted differently. */
   const _recMx = document.getElementById('rec-metrics');
-  if (_recMx) _recMx.innerHTML=`
-    <div class="metric-card mc-blue"><div class="mc-label">${t('rec.totalTasks')}</div>
-      <div class="mc-value b">${total}</div>
-      <div class="mc-sub">${t('rec.doneOf', { n: done, pct: pct(done) })}</div></div>
-    <div class="metric-card mc-amber"><div class="mc-label">${t('rec.pendingTask')}</div>
-      <div class="mc-value a">${pend}</div>
-      <div class="mc-sub">${pct(pend)}%</div></div>
-    <div class="metric-card mc-red"><div class="mc-label">${t('rec.repairCase')}</div>
-      <div class="mc-value r">${repair}</div>
-      <div class="mc-sub">${repair ? t('rec.repairedOf', { n: fixed, pct: Math.round(fixed / repair * 100) })
-                                   : pct(repair) + '%'}</div></div>
-  `;
+  if (_recMx) _recMx.innerHTML = _recProgressHtml({ total, done, pend, repair, fixed });
 
   // Repopulate plot filter — only plots from current nursery that have records
   const pSel = document.getElementById('rf-filter-plot');
@@ -8770,13 +8810,9 @@ function renderRecords() {
        is how the office reads a plot, not what the plot is. */
     const recs = plotGroups[plot].slice().sort(_recRowOrder);
     html += `<tr class="plot-group-row">
-      <td colspan="12" class="rec-group-cell" style="padding:12px 14px 9px;font-weight:700;letter-spacing:1px;
-        text-transform:uppercase;color:var(--green-text);background:var(--green-light);
-        border-top:2px solid var(--green-mid);border-bottom:1px solid var(--green-mid);">
-        📍 Plot ${plot}
-        <span class="rec-group-sub" style="font-weight:400;color:var(--text-muted);margin-left:8px;">
-          Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}
-        </span>
+      <td colspan="12" class="rec-group-cell">
+        <span class="rec-group-plot">Plot ${plot}</span>
+        <span class="rec-group-sub">Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}</span>
       </td>
     </tr>`;
     recs.forEach(r => {
@@ -8786,37 +8822,28 @@ function renderRecords() {
          moving. The tint is very light on purpose: it marks the row without
          fighting the figures on it. */
       html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
-        <td style="font-weight:600;color:var(--green-text);">${_dateCell(r)}</td>
-        <td>${jenisLabel(r.jenis)}</td>
-        <td><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
-        <td style="text-align:center;font-weight:700;color:var(--green-text);">${r.plot}</td>
-        <td style="text-align:center;color:var(--text-muted);">${_batchCell(r)}</td>
-        <td style="text-align:center;font-weight:700;color:var(--text-head);">${_qtyCell(r)}</td>
-        <td style="text-align:center;">${_trackCell(r)}</td>
-        <td style="color:var(--text-muted);">${r.remark||'—'}</td>
-        <td style="text-align:center;">${_auditCell(r)}</td>
-        <td style="text-align:center;">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
-        <td style="text-align:center;">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
-        <td>
+        <td class="rc-date">${_dateCell(r)}</td>
+        <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
+        <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
+        <td class="rc-plot">${r.plot}</td>
+        <td class="rc-batch">${_batchCell(r)}</td>
+        <td class="rc-qty">${_qtyCell(r)}</td>
+        <td class="rc-track">${_trackCell(r)}</td>
+        <td class="rc-remark">${r.remark||'—'}</td>
+        <td class="rc-c">${_auditCell(r)}</td>
+        <td class="rc-c">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
+        <td class="rc-c">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
+        <td class="rc-act">
           ${r.checked
-            /* UNCHECK IS OFFERED TO WHOEVER COULD CHECK. Anybody could tick a
-               row and only an admin could untick it, so one mis-click locked
-               the row — its date, its batch, its quantity — until somebody
-               with the module admin tick could be found. A one-way button is
-               not a lock, it is a trap.
-
-               The lock itself stays: a checked row still refuses Edit and Del
-               to anybody but an admin, and the field sync still leaves it
-               alone. Unticking first is now the way in, which is a deliberate
-               act and says on screen what it undoes. */
-            /* Uncheck and nothing else. Edit and Del used to sit here for an
-               admin, which is the lock not being a lock — see _recLocked. */
-            ? `<span class="rec-checked-badge" title="Checked and locked — this row is settled, the field sync leaves it alone, and it is what the payroll claim pays on">✓ Checked</span>`
-              + `<button class="btn btn-sm" onclick="toggleChecked(${r.id})"
-                   title="Put this row back to unchecked — it can be edited again, its quantity goes back to live, and it comes off the payroll claim">Uncheck</button>`
-            : `<button class="btn btn-sm btn-check" onclick="toggleChecked(${r.id})" title="Mark as checked — locks the row for normal users">✓ Check</button>
-               <button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
-               <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>`}
+            /* UNCHECK IS OFFERED TO WHOEVER COULD CHECK. A one-way button is
+               not a lock, it is a trap. The lock itself stays: a checked row
+               offers Uncheck and nothing else -- see _recLocked. */
+            ? `<span class="rec-checked-badge" title="Checked and locked — this row is settled, the field sync leaves it alone, and it is what the payroll claim pays on">✓ ${t('rec.checkedChip')}</span>`
+              + _recIconBtn('undo', 'btn-uncheck', `toggleChecked(${r.id})`, t('rec.uncheck'),
+                  'Put this row back to unchecked — it can be edited again, its quantity goes back to live, and it comes off the payroll claim')
+            : _recIconBtn('check', 'btn-check', `toggleChecked(${r.id})`, '✓ Check', 'Check — locks the row for normal users')
+              + _recIconBtn('edit', 'btn-edit', `editRec(${r.id})`, t('rec.edit'), 'Edit')
+              + _recIconBtn('trash', 'btn-danger', `deleteRec(${r.id})`, t('rec.del'), 'Delete')}
         </td>
       </tr>`;
     });
@@ -8977,25 +9004,23 @@ function renderRejectedSubmissions(f) {
     const worked = _rejWorkedBy(r);
     const on = _rejPickedIds.has(String(r.id));
     return `<tr${on ? ' class="rej-row-picked"' : ''}>
-      <td style="font-weight:600;color:var(--green-text);"><input type="checkbox"
+      <td class="rc-date"><input type="checkbox"
             class="rej-pick" ${on ? 'checked' : ''}
             onclick="toggleRejPick(${r.id}, this.checked)"
             title="${esc(t('rej.pickTip'))}">${esc(_tarikhDisplay(r.work_date))}</td>
       <td>${esc(jenisLabel(jenis) || '—')}</td>
       <td><span class="pill ${pillCls(jenis)}">${esc(r.chemical || '—')}</span></td>
-      <td style="text-align:center;font-weight:700;color:var(--green-text);">${esc(r.plot_name || '—')}</td>
-      <td style="text-align:center;color:var(--text-muted);">${esc(r.batch_name || '—')}</td>
-      <td style="text-align:center;font-weight:700;color:var(--text-head);">${
-        r.qty == null || r.qty === '' ? '—' : Number(r.qty).toLocaleString()}</td>
-      <td style="text-align:center;">${esc(worked || '—')}</td>
+      <td class="rc-plot">${esc(r.plot_name || '—')}</td>
+      <td class="rc-batch">${esc(r.batch_name || '—')}</td>
+      <td class="rc-qty">${
+        r.qty == null || r.qty === '' ? '—' : Number(r.qty).toLocaleString('en-MY')}</td>
+      <td class="rc-remark">${esc(worked || '—')}</td>
       <td class="rej-why">${esc(r.reject_reason || t('rej.noReason'))}</td>
-      <td style="text-align:center;">${_rejSentBackCell(r)}</td>
-      <td>
-        <button class="btn btn-sm btn-check" onclick="approveSubmission(${r.id})"
-                title="${esc(t('rej.approveTip'))}">✓ ${esc(t('rej.approve'))}</button>
-        <button class="btn btn-sm" onclick="editSubmission(${r.id})">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteSubmission(${r.id})"
-                title="${esc(t('rej.delTip'))}">Del</button>
+      <td class="rc-c">${_rejSentBackCell(r)}</td>
+      <td class="rc-act">
+        ${_recIconBtn('check', 'btn-check', `approveSubmission(${r.id})`, '✓ ' + t('rej.approve'), t('rej.approveTip'))}${
+          _recIconBtn('edit', 'btn-edit', `editSubmission(${r.id})`, t('rec.edit'), 'Edit')}${
+          _recIconBtn('trash', 'btn-danger', `deleteSubmission(${r.id})`, t('rec.del'), t('rej.delTip'))}
       </td>
     </tr>`;
   }).join('');
