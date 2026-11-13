@@ -149,16 +149,21 @@ const SNAP = {
     return el ? getComputedStyle(el)[p] : 'no ' + s;
   }, [sel, prop]);
 
-  console.log('\nNothing a cell says has moved');
+  console.log('\nNo figure has moved, and a money cell carries the number alone');
   const cells = await page.evaluate(() =>
     [...document.querySelectorAll('#maint-table tfoot td')].map(td => td.textContent.trim()));
-  check('the Grand Total row reads as it always did', cells,
-        ['Grand Total', '3,280', 'RM 22.96', '2,500', 'RM 25.00', '4,199', 'RM 41.99',
-         '1,640', 'RM 13.12', 'RM 103.07']);
+  check('the Grand Total row carries the same figures, with no RM in a cell', cells,
+        ['Grand Total', '3,280', '22.96', '2,500', '25.00', '4,199', '41.99',
+         '1,640', '13.12', '103.07']);
   const row1 = await page.evaluate(() =>
     [...document.querySelectorAll('#maint-table tbody tr')[0].cells].map(td => td.textContent.trim()));
-  check('the first worker row reads as it always did', row1,
-        ['1', 'Ali Bin Hassan', '1,200', 'RM 8.40', '840', 'RM 8.40', '—', '—', '560', 'RM 4.48', 'RM 21.28']);
+  check('the first worker row carries the same figures, with no RM in a cell', row1,
+        ['1', 'Ali Bin Hassan', '1,200', '8.40', '840', '8.40', '—', '—', '560', '4.48', '21.28']);
+  check('no data cell anywhere in the table says RM', await page.evaluate(() =>
+    [...document.querySelectorAll('#maint-table tbody td, #maint-table tfoot td')]
+      .filter(td => /RM\s?\d/.test(td.textContent)).length), 0);
+  check('the headings still say RM', await page.evaluate(() =>
+    [...document.querySelectorAll('#maint-table thead th')].filter(th => /\(RM\)/.test(th.textContent)).length), 5);
 
   console.log('\nThe page is forest green, in Plus Jakarta Sans, with numbers that line up');
   checkTrue('the body font is Plus Jakarta Sans', /^"?Plus Jakarta Sans/.test(await css('body', 'fontFamily')));
@@ -208,10 +213,21 @@ const SNAP = {
 
   console.log('\nThe quiet parts are quiet');
   check('a dash is drawn faint', await css('#maint-table tbody td.nil', 'color'), 'rgb(203, 213, 225)');
-  check('the RM in a money cell is small and grey',
-        [await css('#maint-table tbody td.jg-tot .rm', 'fontSize'), await css('#maint-table tbody td.jg-tot .rm', 'color')],
-        ['11px', 'rgb(100, 116, 139)']);
-  check('the figure beside it is 13.5px 600', [await css('#maint-table tbody td.jg-tot:not(.nil)', 'fontSize'), await css('#maint-table tbody td.jg-tot:not(.nil)', 'fontWeight')], ['13.5px', '600']);
+  const align = await page.evaluate(() => {
+    const sel = ['#maint-table tbody td.jg-start', '#maint-table tbody td.jg-tot', '#maint-table tbody td.stk-sub',
+                 '#maint-table tfoot td.jg-start', '#maint-table tfoot td.jg-tot', '#maint-table thead th.sub-h'];
+    return sel.map(q => [...document.querySelectorAll(q)].every(e => getComputedStyle(e).textAlign === 'right'));
+  });
+  check('every Capacity, Total and Subtotal figure and its heading is right-aligned', align, [true, true, true, true, true, true]);
+  check('the decimal points of a Total column stand in one line', await page.evaluate(() => {
+    const cells = [...document.querySelectorAll('#maint-table tbody td.job-pd.jg-tot:not(.nil)')];
+    const r = cells.map(td => { const g = document.createRange(); g.selectNodeContents(td);
+      const t = [...td.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
+      if (!t) return null; const i = t.nodeValue.indexOf('.'); g.setStart(t, i); g.setEnd(t, i + 1);
+      return Math.round(g.getBoundingClientRect().left); });
+    return r.length > 1 && r.every(x => x === r[0]);
+  }), true);
+  check('a Total figure is 13.5px 600', [await css('#maint-table tbody td.jg-tot:not(.nil)', 'fontSize'), await css('#maint-table tbody td.jg-tot:not(.nil)', 'fontWeight')], ['13.5px', '600']);
   check('a capacity is 13.5px regular', [await css('#maint-table tbody td.jg-start', 'fontSize'), await css('#maint-table tbody td.jg-start', 'fontWeight')], ['13.5px', '400']);
   check('a worker name is 13.5px 600', [await css('#maint-table tbody td.stk-w', 'fontSize'), await css('#maint-table tbody td.stk-w', 'fontWeight')], ['13.5px', '600']);
   const gap = await page.evaluate(() => {
@@ -219,6 +235,14 @@ const SNAP = {
     return g ? [g.textContent.trim(), getComputedStyle(g).backgroundColor, getComputedStyle(g).color] : null;
   });
   check('Weeding says RM 0.01 not claimed in a coral pill', gap, ['RM 0.01 not claimed', 'rgb(254, 226, 226)', 'rgb(185, 28, 28)']);
+
+  console.log('\nThe Grand Total row is one band of forest green');
+  check('every Grand Total cell is the same forest green, job blocks included', await page.evaluate(() =>
+    [...new Set([...document.querySelectorAll('#maint-table tfoot td')].map(td => getComputedStyle(td).backgroundColor))]),
+    ['rgb(27, 67, 50)']);
+  check('in white', await page.evaluate(() =>
+    [...new Set([...document.querySelectorAll('#maint-table tfoot td:not(.nil)')].map(td => getComputedStyle(td).color))]),
+    ['rgb(255, 255, 255)']);
 
   console.log('\nOne worker can be followed across, and the ends stay put');
   try { await page.hover('#maint-table tbody tr:nth-child(2) td:nth-child(8)', { timeout: 3000 }); } catch (_) {}

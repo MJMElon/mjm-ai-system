@@ -173,12 +173,12 @@ const SNAP = {
   const maintRow = await page.evaluate(() =>
     [...document.querySelectorAll('#maint-table tbody tr td')].map(td => td.textContent.trim()));
   checkTrue('the row Subtotal is RM 10.00 — the four columns, not the snapshot earned of 60',
-            maintRow.includes('RM 10.00') && !maintRow.includes('RM 60.00'));
+            maintRow.includes('10.00') && !maintRow.includes('60.00'));
   const maintFoot = await page.evaluate(() =>
     [...document.querySelectorAll('#maint-table tfoot td')].map(td => td.textContent.trim()));
   check('the Grand Total row is the four pairs and their own sum',
-        maintFoot, ['Grand Total', '100', 'RM 1.00', '200', 'RM 2.00',
-                    '300', 'RM 3.00', '400', 'RM 4.00', 'RM 10.00']);
+        maintFoot, ['Grand Total', '100', '1.00', '200', '2.00',
+                    '300', '3.00', '400', '4.00', '10.00']);
 
   console.log('\nThe Loading Seedlings tab still shows the whole column');
   const loadHead = await page.evaluate(() => document.querySelector('#loading-table thead').textContent);

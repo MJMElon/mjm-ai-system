@@ -628,8 +628,9 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transpar
        a job's Capacity and its Total, so it reads as four blocks, not
        eleven loose columns;
      - a dash is drawn faint, so the figures stand out of the empty cells;
-     - the RM in a money cell is small and grey (the heading already says
-       RM), so the number is what the eye lands on;
+     - a money cell carries the number alone (the heading says RM), and
+       every Capacity and Total figure is right-aligned so the digits and
+       the decimal points stand in one column;
      - No. and Worker stay on the left and Subtotal on the right while the
        four jobs scroll between them on a narrow screen.
    Classes come from renderMaint() and decorateMaintTable(); no figure or
@@ -682,8 +683,12 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transpar
 
 /* An empty cell is quiet. */
 #maint-table td.nil { color: #cbd5e1 !important; font-weight: 400 !important; }
-/* The RM inside a money cell. */
-#maint-table .rm { font-size: 11px; font-weight: 500; color: #64748b; margin-right: 1px; }
+/* Figures right-aligned, headings over them too, so a column reads down. */
+#maint-table tbody td.jg-start, #maint-table tbody td.jg-tot,
+#maint-table tbody td.stk-sub, #maint-table tfoot td.jg-start,
+#maint-table tfoot td.jg-tot, #maint-table tfoot td.stk-sub,
+#maint-table thead th.sub-h, #maint-table thead th.stk-sub { text-align: right; }
+#maint-table td, #maint-table th { font-variant-numeric: tabular-nums; }
 
 /* Following one worker across: the whole row turns mint. The bolding is a
    stroke, not a font-weight, so the columns do not shift width on hover. */
@@ -699,11 +704,15 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transpar
 #maint-table .stk-foot { box-shadow: 6px 0 8px -6px rgba(15,23,42,.14); }
 #maint-table .stk-sub { right: 0; box-shadow: -6px 0 8px -6px rgba(15,23,42,.14); }
 
-#maint-table tfoot td { background: var(--ink-light); color: var(--ink-deep); font-size: 13.5px;
-  font-weight: 700; border-top: 2px solid var(--ink-mid); }
-#maint-table tfoot td.stk-foot, #maint-table tfoot td.stk-sub { background: var(--ink-light); }
-#maint-table tfoot td.stk-sub { background: var(--ink); color: #fff; }
-#maint-table tfoot td.stk-sub .rm { color: rgba(255,255,255,.75); }
+/* Grand Total: ONE band of forest green from end to end, no job tints,
+   so it reads as the close of the whole table. */
+#maint-table tfoot td, #maint-table tfoot td[class*="job-"],
+#maint-table tfoot td.stk-foot, #maint-table tfoot td.stk-sub {
+  background: #1b4332; color: #fff; font-size: 13.5px; font-weight: 700;
+  border-top: none; border-bottom: none; }
+#maint-table tfoot td.jg-start, #maint-table tfoot td.stk-sub { border-left: 2px solid rgba(255,255,255,.22); }
+#maint-table tfoot td.jg-tot { border-left: 1px dashed rgba(255,255,255,.18); }
+#maint-table tfoot td.nil { color: rgba(255,255,255,.45) !important; }
 
 /* The four cards above the table: the job's colour as a bar along the
    top, and a title as large as the table's job headings. */

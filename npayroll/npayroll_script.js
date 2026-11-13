@@ -3849,16 +3849,17 @@ function workdoneCell(cap, rate, claimed, opts) {
 
 /* THE LOOK OF THE CLAIM, AND NOTHING ELSE.
    Run over the table renderMaint() has just drawn. It adds classes and
-   wraps the "RM" in a span, and never changes a figure or a word: the
-   textContent of every cell is what it was, so every reader of the sheet
-   sees the same claim. Done here rather than inside capCell/earnedCell
-   because those draw the other sheets too.
+   takes the "RM " off the money cells, and never changes a FIGURE: every
+   Total, Subtotal and Grand Total heading already says (RM), so the cell
+   carries the number alone and the column of decimals lines up. Done here
+   rather than inside capCell/earnedCell because those draw the other
+   sheets too, which keep their RM. The PDF is drawn off the view, never
+   off this table, so the paper is untouched.
      - each job's cells carry job-<code>, so the four jobs are four colour
        blocks matching the cards above;
      - a job's first cell carries jg-start (the heavy divider) and its
        Total cell jg-tot (the light one);
      - a cell holding only a dash is .nil, drawn faint;
-     - "RM " before a figure is .rm, small and grey, so the number reads;
      - the Worker column is pinned beside No. at No.'s real width. */
 function decorateMaintTable(tbl) {
   if (!tbl) return;
@@ -3873,22 +3874,13 @@ function decorateMaintTable(tbl) {
     if (b) b.classList.add('job-' + c, 'jg-tot');
   }));
   tbl.querySelectorAll('tbody td, tfoot td').forEach(td => {
+    const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (n.parentNode.closest('button, .cal-line')) continue;
+      if (/^\s*RM\s[-\d]/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/^(\s*)RM\s/, '$1');
+    }
     const txt = td.textContent.trim();
     if (txt === '—' || txt === '-') td.classList.add('nil');
-    const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
-    const hits = [];
-    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-      if (/^\s*RM\s[-\d]/.test(n.nodeValue) && !n.parentNode.closest('button')) hits.push(n);
-    }
-    hits.forEach(n => {
-      const m = n.nodeValue.match(/^(\s*)(RM\s)/);
-      const span = document.createElement('span');
-      span.className = 'rm';
-      span.textContent = m[2];
-      n.nodeValue = n.nodeValue.slice(m[0].length);
-      n.parentNode.insertBefore(span, n);
-      if (m[1]) n.parentNode.insertBefore(document.createTextNode(m[1]), span);
-    });
   });
   const no = tbl.querySelector('thead th.stk-no');
   const w = no ? no.getBoundingClientRect().width : 0;
