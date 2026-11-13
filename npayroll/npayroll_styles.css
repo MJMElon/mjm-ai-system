@@ -5,15 +5,17 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --ink:        #4f46e5;
-  --ink-dark:   #4338ca;
-  --ink-deep:   #312e81;
-  --ink-light:  #eef2ff;
-  --ink-mid:    #c7d2fe;
-  --ink-faint:  #818cf8;
-  --bg:         #f5f5ff;
+  /* Forest green on warm grey. It was indigo (#4f46e5) on lavender; the
+     variable NAMES stay, so every rule that reads --ink follows. */
+  --ink:        #1b4332;
+  --ink-dark:   #143628;
+  --ink-deep:   #0f2a1f;
+  --ink-light:  #edf4f0;
+  --ink-mid:    #c3d9cc;
+  --ink-faint:  #5e8f75;
+  --bg:         #f6f8f7;
   --white:      #ffffff;
-  --border:     #e0e7ff;
+  --border:     #e2e8f0;
   --text:       #334155;
   --text-head:  #1e293b;
   --text-muted: #64748b;
@@ -25,13 +27,15 @@
   --amber-tx:   #78350f;
   --red:        #b91c1c;
   --red-bd:     #fecaca;
+  --brand:      #1b4332;
+  --brand-soft: #edf4f0;
   --r-sm: 8px; --r-md: 12px; --r-lg: 18px;
-  --shadow-sm: 0 2px 8px rgba(79,70,229,.07);
-  --shadow-md: 0 6px 20px rgba(79,70,229,.10);
+  --shadow-sm: 0 1px 3px rgba(15,23,42,.06);
+  --shadow-md: 0 6px 20px rgba(15,23,42,.08);
 }
 
 html { font-size: 15px; overflow-y: scroll; scrollbar-gutter: stable; }
-body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+body { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
 .hidden { display: none !important; }
 
 /* ── Ribbon, restyled into a rounded pill ──
@@ -82,7 +86,7 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
             transition: transform .14s, box-shadow .14s; text-decoration: none; flex-shrink: 0; }
 .icon-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
 .icon-btn-payroll  { background: var(--ink); }
-.icon-btn-settings { background: #7c3aed; }
+.icon-btn-settings { background: var(--ink); }
 .icon-btn-access   { background: #10b981; }
 
 @media (max-width: 640px) {
@@ -171,7 +175,7 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
 .sel { height: 38px; padding: 0 11px; border: 1.5px solid var(--border); border-radius: var(--r-sm);
        font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-head); background: var(--white);
        outline: none; cursor: pointer; }
-.sel:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+.sel:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27,67,50,.14); }
 input.sel { cursor: text; font-weight: 500; min-width: 190px; }
 .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
 .chk input { width: 15px; height: 15px; accent-color: var(--ink); }
@@ -180,7 +184,7 @@ input.sel { cursor: text; font-weight: 500; min-width: 190px; }
 .card { background: var(--white); border: 1.5px solid var(--border); border-radius: var(--r-md);
         box-shadow: var(--shadow-sm); overflow: hidden; }
 .tbl-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 thead th { background: var(--ink-light); color: var(--ink-dark); font-size: 10px; font-weight: 900;
            letter-spacing: .12em; text-transform: uppercase; padding: 11px 12px; text-align: center;
            border-bottom: 2px solid var(--ink-mid); white-space: nowrap; vertical-align: middle; }
@@ -190,7 +194,7 @@ tbody td { padding: 10px 12px; border-bottom: 1px solid var(--ink-light); font-s
 tbody td.l { text-align: left; }
 tbody td.r { text-align: right; }
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover td { background: #fafaff; }
+tbody tr:hover td { background: #ecfdf5; }
 tfoot td { padding: 11px 12px; background: var(--ink-light); font-size: 13px; font-weight: 900;
            color: var(--ink-deep); text-align: center; border-top: 2px solid var(--ink-mid); }
 tfoot td.l { text-align: left; }
@@ -280,7 +284,7 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
 #wf-pin { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 #wf-pin::placeholder { text-transform: none; letter-spacing: normal; font-weight: 500; }
 .pin-in::placeholder { letter-spacing: .1em; color: var(--text-faint); font-weight: 600; }
-.pin-in:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+.pin-in:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27,67,50,.14); }
 .pin-in:disabled { background: #f8fafc; color: var(--text-faint); cursor: not-allowed; }
 .pin-in.pin-saved { background: var(--green-bg); border-color: #86efac; }
 
@@ -319,7 +323,7 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
   width: 100%; padding: 9px 11px; border: 1.5px solid #e2e8f0; border-radius: 9px;
   font-size: 13px; font-family: inherit; color: var(--text-head); background: var(--white); outline: none; }
 .frow input:focus, .frow select:focus, .frow textarea:focus {
-  border-color: var(--ink); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+  border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27,67,50,.14); }
 .frow input[readonly] { background: #f8fafc; color: var(--text-muted); }
 /* A tick box and its wording sit on one line — .frow label alone would stack
    them, since it makes every label in the form a block. */
@@ -614,6 +618,100 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transpar
 .ap-done { color: var(--green); font-weight: 700; }
 .ap-lock { color: var(--red); font-weight: 700; }
 .rep-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+
+/* ═══ THE WORK MAINTENANCE CLAIM ════════════════════════════════════════
+   Four jobs, eleven columns of figures. What makes that readable:
+     - each job is a COLOUR BLOCK, the same colour as its card above, so a
+       figure is found by its colour before its heading;
+     - a heavy 2px line between jobs and only a faint dashed one between
+       a job's Capacity and its Total, so it reads as four blocks, not
+       eleven loose columns;
+     - a dash is drawn faint, so the figures stand out of the empty cells;
+     - the RM in a money cell is small and grey (the heading already says
+       RM), so the number is what the eye lands on;
+     - No. and Worker stay on the left and Subtotal on the right while the
+       four jobs scroll between them on a narrow screen.
+   Classes come from renderMaint() and decorateMaintTable(); no figure or
+   word in a cell is changed by any of it.
+
+   The four job colours, used here and on the cards:
+     P & D        sage   head #e8f3ee  text #1e5631  cell #f9fcfa  bar #74c69d
+     Manuring     amber  head #fef3c7  text #92400e  cell #fffdf7  bar #e0a84f
+     Weeding      sky    head #e0f2fe  text #075985  cell #f8fcff  bar #5ab4e5
+     Interrow     teal   head #ccfbf1  text #115e59  cell #f7fefc  bar #4fbfb0 */
+#maint-table { --j-head:#f1f5f9; --j-tx:#334155; --j-cell:#fff; --j-bar:#cbd5e1;
+  border-collapse: separate; border-spacing: 0; }
+#maint-table .job-pd,        .job-card.job-pd        { --j-head:#e8f3ee; --j-tx:#1e5631; --j-cell:#f9fcfa; --j-bar:#74c69d; }
+#maint-table .job-manuring,  .job-card.job-manuring  { --j-head:#fef3c7; --j-tx:#92400e; --j-cell:#fffdf7; --j-bar:#e0a84f; }
+#maint-table .job-weeding,   .job-card.job-weeding   { --j-head:#e0f2fe; --j-tx:#075985; --j-cell:#f8fcff; --j-bar:#5ab4e5; }
+#maint-table .job-interrow,  .job-card.job-interrow  { --j-head:#ccfbf1; --j-tx:#115e59; --j-cell:#f7fefc; --j-bar:#4fbfb0; }
+
+#maint-table thead th { background: #f8fafc; color: #475569; border-bottom: 1px solid var(--border);
+  letter-spacing: .04em; font-size: 11px; font-weight: 600; }
+#maint-table thead th[class*="job-"] { background: var(--j-head); color: var(--j-tx); }
+#maint-table thead th.job-title { font-size: 14.5px; font-weight: 700; letter-spacing: .03em;
+  padding-top: 13px; padding-bottom: 6px; border-bottom: none; border-top: 4px solid var(--j-bar); }
+#maint-table thead th.job-rate { font-size: 12px; font-weight: 500; text-transform: none;
+  letter-spacing: 0; padding-top: 0; padding-bottom: 6px; border-bottom: none; color: var(--j-tx); opacity: .9; }
+#maint-table thead th.job-wd { padding-top: 0; padding-bottom: 4px; border-bottom: none; }
+#maint-table thead th.job-wd:empty { padding: 0; }
+#maint-table thead th.sub-h { font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  border-bottom: 2px solid var(--j-bar); }
+#maint-table thead th.stk-no, #maint-table thead th.stk-w, #maint-table thead th.stk-sub {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #475569;
+  border-bottom: 2px solid #cbd5e1; }
+
+/* Weeding RM 0.01 not claimed: a soft coral pill rather than red text. */
+#maint-table .wd-gap { display: inline-block; background: #fee2e2; color: #b91c1c !important;
+  border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700 !important;
+  letter-spacing: .02em; text-transform: none; margin-top: 2px; }
+
+#maint-table tbody td { font-size: 13.5px; font-weight: 400; color: #334155;
+  border-bottom: 1px solid #edf1f5; }
+#maint-table tbody td[class*="job-"] { background: var(--j-cell); }
+#maint-table tbody td.jg-tot, #maint-table tfoot td.jg-tot { font-weight: 600; color: #1e293b; }
+#maint-table tbody td.stk-no { color: var(--text-faint); font-size: 12.5px; }
+#maint-table tbody td.stk-w { font-size: 13.5px; font-weight: 600; color: var(--text-head); }
+#maint-table tbody td.stk-sub { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+
+/* The two dividers. */
+#maint-table .jg-start { border-left: 2px solid #cbd5e1; }
+#maint-table .jg-tot   { border-left: 1px dashed #e2e8f0; }
+#maint-table .stk-sub  { border-left: 2px solid #cbd5e1; }
+
+/* An empty cell is quiet. */
+#maint-table td.nil { color: #cbd5e1 !important; font-weight: 400 !important; }
+/* The RM inside a money cell. */
+#maint-table .rm { font-size: 11px; font-weight: 500; color: #64748b; margin-right: 1px; }
+
+/* Following one worker across: the whole row turns mint. The bolding is a
+   stroke, not a font-weight, so the columns do not shift width on hover. */
+#maint-table tbody tr:hover td { background: #ecfdf5 !important; -webkit-text-stroke: .25px currentColor; }
+
+/* No. and Worker pinned left, Subtotal pinned right. `left` for Worker is
+   set by decorateMaintTable() from No.'s real width. */
+#maint-table .stk-no, #maint-table .stk-w, #maint-table .stk-sub, #maint-table .stk-foot {
+  position: sticky; z-index: 2; background: #fff; }
+#maint-table thead .stk-no, #maint-table thead .stk-w, #maint-table thead .stk-sub { z-index: 3; background: #f8fafc; }
+#maint-table .stk-no, #maint-table .stk-foot { left: 0; }
+#maint-table .stk-w  { left: 44px; box-shadow: 6px 0 8px -6px rgba(15,23,42,.14); }
+#maint-table .stk-foot { box-shadow: 6px 0 8px -6px rgba(15,23,42,.14); }
+#maint-table .stk-sub { right: 0; box-shadow: -6px 0 8px -6px rgba(15,23,42,.14); }
+
+#maint-table tfoot td { background: var(--ink-light); color: var(--ink-deep); font-size: 13.5px;
+  font-weight: 700; border-top: 2px solid var(--ink-mid); }
+#maint-table tfoot td.stk-foot, #maint-table tfoot td.stk-sub { background: var(--ink-light); }
+#maint-table tfoot td.stk-sub { background: var(--ink); color: #fff; }
+#maint-table tfoot td.stk-sub .rm { color: rgba(255,255,255,.75); }
+
+/* The four cards above the table: the job's colour as a bar along the
+   top, and a title as large as the table's job headings. */
+.pt-card.job-card { border: 1px solid var(--border); border-top: 4px solid var(--j-bar);
+  box-shadow: var(--shadow-sm); padding: 12px 16px 13px; }
+.pt-card.job-card .pt-label { font-size: 14px; font-weight: 700; letter-spacing: .02em; color: var(--j-tx); }
+.pt-card.job-card .pt-val { font-size: 22px; font-weight: 700; color: var(--text-head); }
+.pt-card.job-card .pt-wd { font-size: 12px; font-weight: 600; color: #475569; }
 
 /* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
    11px so they read on a phone. Written out per rule, because these sizes
