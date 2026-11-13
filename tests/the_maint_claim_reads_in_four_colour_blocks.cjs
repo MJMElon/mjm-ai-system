@@ -1,4 +1,5 @@
-/* THE WORK MAINTENANCE CLAIM READS IN FOUR COLOUR BLOCKS
+/* THE WORK MAINTENANCE CLAIM READS IN FOUR COLOUR BLOCKS -- now four groups
+   of one neutral table (the module redesign took the tinted blocks out)
 
    The office asked for the claim to stop being eleven columns of look-alike
    figures in a bright indigo: a calm forest green for the page, one soft
@@ -184,32 +185,39 @@ const SNAP = {
   });
   check('nothing on the page is indigo any more', purple, []);
 
-  console.log('\nEach job is a colour block, matching its card');
-  const JOBS = { pd: ['rgb(232, 243, 238)', 'rgb(30, 86, 49)', 'rgb(249, 252, 250)', 'rgb(116, 198, 157)'],
-                 manuring: ['rgb(254, 243, 199)', 'rgb(146, 64, 14)', 'rgb(255, 253, 247)', 'rgb(224, 168, 79)'],
-                 weeding: ['rgb(224, 242, 254)', 'rgb(7, 89, 133)', 'rgb(248, 252, 255)', 'rgb(90, 180, 229)'],
-                 interrow: ['rgb(204, 251, 241)', 'rgb(17, 94, 89)', 'rgb(247, 254, 252)', 'rgb(79, 191, 176)'] };
-  for (const [c, [head, tx, cell, bar]] of Object.entries(JOBS)) {
-    check(c + ': its heading is its own colour', await css(`#maint-table thead th.job-title.job-${c}`, 'backgroundColor'), head);
-    check(c + ': in its own dark text', await css(`#maint-table thead th.job-title.job-${c}`, 'color'), tx);
-    check(c + ': its body cells are tinted', await css(`#maint-table tbody tr:nth-child(2) td.job-${c}`, 'backgroundColor'), cell);
-    check(c + ': its card carries the same bar', await css(`#maint-glance .job-card.job-${c}`, 'borderTopColor'), bar);
+  /* THE REDESIGN TOOK THE COLOUR BLOCKS OUT, at the office's own ask: one
+     neutral data table across the whole module, no tinted columns and no
+     grid. A job keeps its colour as the DOT before its name, on its group
+     heading and on its card -- so the two still match, by a mark rather
+     than by a painted column. */
+  console.log('\nEach job is a group in the ONE neutral table, its dot matching its card');
+  const DOT = { pd: 'rgb(47, 158, 95)', manuring: 'rgb(217, 119, 6)', weeding: 'rgb(2, 132, 199)', interrow: 'rgb(13, 148, 136)' };
+  const pseudo = (s, p) => page.evaluate(([s, p]) => { const el = document.querySelector(s);
+    return el ? getComputedStyle(el, '::before')[p] : 'no ' + s; }, [s, p]);
+  for (const [c, dot] of Object.entries(DOT)) {
+    check(c + ': its heading is the neutral table heading', await css(`#maint-table thead th.job-title.job-${c}`, 'backgroundColor'), 'rgb(248, 250, 251)');
+    check(c + ': its body cells are white, not tinted', await css(`#maint-table tbody tr:nth-child(2) td.job-${c}`, 'backgroundColor'), 'rgb(255, 255, 255)');
+    check(c + ': its heading and its card carry the same dot', [await pseudo(`#maint-table thead th.job-title.job-${c}`, 'backgroundColor'),
+          await pseudo(`#maint-glance .job-card.job-${c} .pt-label`, 'backgroundColor')], [dot, dot]);
+    check(c + ': its card has no coloured bar along the top', await css(`#maint-glance .job-card.job-${c}`, 'borderTopWidth'), '1px');
   }
-  check('a job heading is 14.5px bold', [await css('#maint-table th.job-title', 'fontSize'), await css('#maint-table th.job-title', 'fontWeight')], ['14.5px', '700']);
+  check('a job heading is 12.5px bold', [await css('#maint-table th.job-title', 'fontSize'), await css('#maint-table th.job-title', 'fontWeight')], ['12.5px', '700']);
   check('the rate line is 12px medium', [await css('#maint-table th.job-rate', 'fontSize'), await css('#maint-table th.job-rate', 'fontWeight')], ['12px', '500']);
   check('Capacity / Total headings are 11px 600 capitals',
         [await css('#maint-table th.sub-h', 'fontSize'), await css('#maint-table th.sub-h', 'fontWeight'), await css('#maint-table th.sub-h', 'textTransform')],
         ['11px', '600', 'uppercase']);
-  check('a card title is as large as the table heading', await css('#maint-glance .job-card .pt-label', 'fontSize'), '14px');
 
-  console.log('\nFour blocks, not eleven columns');
-  check('a heavy line opens each job', await css('#maint-table tbody td.job-manuring.jg-start', 'borderLeftWidth'), '2px');
-  check('a faint dashed one sits between Capacity and Total',
-        [await css('#maint-table tbody td.job-manuring.jg-tot', 'borderLeftWidth'), await css('#maint-table tbody td.job-manuring.jg-tot', 'borderLeftStyle')],
-        ['1px', 'dashed']);
+  console.log('\nFour groups, no grid');
+  check('ONE faint line opens each job', [await css('#maint-table tbody td.job-manuring.jg-start', 'borderLeftWidth'),
+        await css('#maint-table tbody td.job-manuring.jg-start', 'borderLeftStyle')], ['1px', 'solid']);
+  check('and no line at all between Capacity and Total',
+        await css('#maint-table tbody td.job-manuring.jg-tot', 'borderLeftStyle'), 'none');
   check('every body row has 4 job openers and 4 job totals', await page.evaluate(() =>
     [...document.querySelectorAll('#maint-table tbody tr')].map(tr => [tr.querySelectorAll('.jg-start').length, tr.querySelectorAll('.jg-tot').length])),
     [[4, 4], [4, 4], [4, 4], [4, 4]]);
+  check('no body cell carries a box of its own', await page.evaluate(() =>
+    [...document.querySelectorAll('#maint-table tbody td')].filter(td => {
+      const s = getComputedStyle(td); return s.borderTopStyle !== 'none' || s.borderRightStyle !== 'none'; }).length), 0);
 
   console.log('\nThe quiet parts are quiet');
   check('a dash is drawn faint', await css('#maint-table tbody td.nil', 'color'), 'rgb(203, 213, 225)');
@@ -234,7 +242,7 @@ const SNAP = {
     const g = document.querySelector('#maint-table .job-weeding .wd-gap');
     return g ? [g.textContent.trim(), getComputedStyle(g).backgroundColor, getComputedStyle(g).color] : null;
   });
-  check('Weeding says RM 0.01 not claimed in a coral pill', gap, ['RM 0.01 not claimed', 'rgb(254, 226, 226)', 'rgb(185, 28, 28)']);
+  check('Weeding says RM 0.01 not claimed in a quiet error pill', gap, ['RM 0.01 not claimed', 'rgb(254, 242, 242)', 'rgb(185, 28, 28)']);
 
   console.log('\nThe Grand Total row is one band of forest green');
   check('every Grand Total cell is the same forest green, job blocks included', await page.evaluate(() =>
@@ -246,8 +254,8 @@ const SNAP = {
 
   console.log('\nOne worker can be followed across, and the ends stay put');
   try { await page.hover('#maint-table tbody tr:nth-child(2) td:nth-child(8)', { timeout: 3000 }); } catch (_) {}
-  check('the hovered row turns mint, job cells included',
-        await css('#maint-table tbody tr:nth-child(2) td.job-pd', 'backgroundColor'), 'rgb(236, 253, 245)');
+  check('the hovered row turns faintly green, job cells included',
+        await css('#maint-table tbody tr:nth-child(2) td.job-pd', 'backgroundColor'), 'rgb(244, 248, 246)');
   await page.mouse.move(5, 5);
   check('No., Worker and Subtotal are pinned', [await css('#maint-table tbody td.stk-no', 'position'),
         await css('#maint-table tbody td.stk-w', 'position'), await css('#maint-table tbody td.stk-sub', 'position')],

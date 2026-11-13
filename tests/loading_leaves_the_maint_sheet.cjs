@@ -49,7 +49,7 @@ checkTrue('the Monthly Payroll still pays all five',
 checkTrue('the verification snapshot still freezes all five',
           /buildMaintSnapshot[\s\S]{0,400}MAINT_TYPES\.forEach\(t => \{ cap\[w\]\[t\.code\]/.test(PAY));
 checkTrue('the Loading Seedlings tab is still on the strip',
-          /data-sub="seedling"[^>]*>Loading Seedlings</.test(HTML));
+          /data-sub="seedling"[^>]*>(<svg[\s\S]*?<\/svg>)?Loading Seedlings</.test(HTML));
 checkTrue('and still has its own claim form',
           /function _downloadLoadingPDF\(\)/.test(PAY));
 

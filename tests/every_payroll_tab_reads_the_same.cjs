@@ -168,7 +168,26 @@ const SNAP = {
         if (/rgb\((79, 70, 229|67, 56, 202|99, 102, 241|124, 58, 237|238, 242, 255)\)/.test(c)) purple.push(el.tagName + '.' + el.className);
       });
     });
-    return { n: tables.length, rmCells: rmCells.slice(0, 4), footBg: [...footBg], numLeft: numLeft.slice(0, 4),
+    /* THE DESIGN SYSTEM, asked of every tab: no vertical grid line on a
+       body cell except the one that opens a job group, the page title one
+       size, cards with no coloured bar along the top, controls one height,
+       a serial number centred, and the slim header carrying no page title. */
+    const vlines = [];
+    tables.forEach(t => t.querySelectorAll('tbody td').forEach(td => {
+      if (/jg-start|stk-sub/.test(td.className)) return;
+      const cs = getComputedStyle(td);
+      if (cs.borderLeftStyle !== 'none' || cs.borderRightStyle !== 'none') vlines.push((t.id || 'table') + ': ' + td.textContent.trim().slice(0, 20));
+    }));
+    const titles = [...document.querySelectorAll('#main .bar-title')].filter(vis).map(b => getComputedStyle(b).fontSize + '/' + getComputedStyle(b).fontWeight);
+    const cardBars = [...document.querySelectorAll('#main .dash-card, #main .pt-card')].filter(vis)
+      .map(c => getComputedStyle(c).borderTopWidth).filter(w => w !== '1px');
+    const btnH = [...new Set([...document.querySelectorAll('#main .btn:not(.btn-sm):not(.btn-icon-dl)')].filter(vis)
+      .map(b => Math.round(b.getBoundingClientRect().height)))];
+    const serialOff = [];
+    tables.forEach(t => [...t.querySelectorAll('thead th')].filter(th => /^(no\.?|#)$/i.test(th.textContent.trim()))
+      .forEach(th => { if (getComputedStyle(th).textAlign !== 'center') serialOff.push(t.id || 'table'); }));
+    return { n: tables.length, vlines: vlines.slice(0, 4), titles: [...new Set(titles)], cardBars, btnH, serialOff,
+             rmCells: rmCells.slice(0, 4), footBg: [...footBg], numLeft: numLeft.slice(0, 4),
              headSize: [...headSize], purple: purple.slice(0, 4),
              font: getComputedStyle(document.body).fontFamily.split(',')[0].replace(/"/g, ''),
              bg: getComputedStyle(document.body).backgroundColor,
@@ -187,6 +206,31 @@ const SNAP = {
     ['Piece Rate',       () => { openSettings('rate'); }],
     ['Dashboard',        () => { switchTab('dash'); }]
   ];
+  console.log('\nThe global header is slim, flat and says the system name only');
+  const head = await page.evaluate(() => {
+    const bar = document.querySelector('#mjm-ribbon .mjm-rb-bar');
+    if (!bar) return 'no header';
+    const r = bar.getBoundingClientRect(), cs = getComputedStyle(bar);
+    const side = document.getElementById('side-nav').getBoundingClientRect();
+    const brand = document.querySelector('.side-brand').getBoundingClientRect();
+    return { h: Math.round(r.height), radius: cs.borderTopLeftRadius, shadow: cs.boxShadow,
+             title: (bar.querySelector('.mjm-rb-title') || {}).textContent,
+             monthInHeader: !!bar.querySelector('#global-month'),
+             secondRow: !document.querySelector('header.topbar').classList.contains('hidden'),
+             portal: !!bar.querySelector('#portal-link'), signout: !!bar.querySelector('#logout-btn'),
+             sideBrandMatches: Math.round(brand.height) === Math.round(r.height),
+             rightOfSide: r.left >= side.right - 1 };
+  });
+  check('one row, 56px, square and flat', [head.h, head.radius, head.shadow], [56, '0px', 'none']);
+  check('it names the system and nothing else', head.title, 'Nursery Payroll');
+  check('the month rides in it, so there is no second header row', [head.monthInHeader, head.secondRow], [true, false]);
+  check('Portal and Sign Out are kept', [head.portal, head.signout], [true, true]);
+  check('the side bar top block is the header height, beside it', [head.sideBrandMatches, head.rightOfSide], [true, true]);
+  check('the side bar brand is the company, not the module name again', await page.evaluate(() =>
+    document.querySelector('.side-brand-name').textContent.trim()), 'MJM Nursery');
+  check('every side bar entry carries an icon', await page.evaluate(() =>
+    [...document.querySelectorAll('.side-nav .side-btn')].filter(b => !b.querySelector('svg.side-ic')).length), 0);
+
   if (SHOT) fs.mkdirSync(SHOT, { recursive: true });
   for (const [name, go] of TABS) {
     console.log('\n' + name);
@@ -202,6 +246,11 @@ const SNAP = {
     check('every Grand Total row is the one forest green', a.footBg.filter(c => c !== 'rgb(27, 67, 50)'), []);
     check('every table heading is the one size', a.headSize.filter(s => s !== '11px'), []);
     check('nothing is indigo', a.purple, []);
+    check('no body cell draws a vertical line (only a job group opens with one)', a.vlines, []);
+    check('the page title is the one size and weight', a.titles, ['20px/700']);
+    check('no summary card wears a coloured bar along its top', a.cardBars, []);
+    check('every ordinary button is the one control height', a.btnH.filter(h => h !== 36), []);
+    check('a serial number heading is centred', a.serialOff, []);
     if (SHOT) await page.screenshot({ path: `${SHOT}/${name.replace(/\W+/g, '_')}.png` });
   }
 
@@ -212,12 +261,17 @@ const SNAP = {
     const t = document.getElementById('loading-table');
     const css = s => { const el = t.querySelector(s); return el ? getComputedStyle(el).backgroundColor : 'none'; };
     return { cls: t.classList.contains('job-table'), head: css('thead th.job-title'), cell: css('tbody td.jg-tot'),
-             card: (() => { const c = document.querySelector('#loading-glance .pt-card'); return c ? getComputedStyle(c).borderTopColor : 'none'; })(),
+             dot: (() => { const h = t.querySelector('thead th.job-title'); return h ? getComputedStyle(h, '::before').backgroundColor : 'none'; })(),
+             card: (() => { const c = document.querySelector('#loading-glance .pt-card .pt-label'); return c ? getComputedStyle(c, '::before').backgroundColor : 'none'; })(),
              foot: [...t.querySelectorAll('tfoot td')].map(td => td.textContent.trim()) };
   });
   check('it is laid out as a job table', load.cls, true);
-  check('its heading, its cells and its card are the teal of Loading',
-        [load.head, load.cell, load.card], ['rgb(204, 251, 241)', 'rgb(247, 254, 252)', 'rgb(79, 191, 176)']);
+  /* The table is the module's one neutral table -- no tinted heading, no
+     tinted column -- and the job's colour is the DOT before its name, on the
+     group heading and on its card alike. */
+  check('its heading is the neutral one, its cells white, and the teal is the dot on heading and card',
+        [load.head, load.cell, load.dot, load.card],
+        ['rgb(248, 250, 251)', 'rgb(255, 255, 255)', 'rgb(13, 148, 136)', 'rgb(13, 148, 136)']);
   check('its Grand Total carries the figure alone', load.foot, ['Grand Total', '—', '0.00']);
 
   console.log('\nA table nobody has written yet is tidied the moment it is drawn');
@@ -248,8 +302,8 @@ const SNAP = {
          [['Ali', '1,200', '8.40', 'RM 5 bonus agreed'], ['Siti', '—', '12.00', '—']],
          ['Grand Total', '1,200', '20.40', '']]);
   check('a sentence that happens to start with RM is a sentence, and is left alone', fresh.rows[0][3], 'RM 5 bonus agreed');
-  check('the two columns of figures are right-aligned, heading and all',
-        [fresh.align, fresh.headAlign], [['left', 'right', 'right', 'center'], ['left', 'right', 'right', 'center']]);
+  check('the two columns of figures are right-aligned, heading and all, and text reads left',
+        [fresh.align, fresh.headAlign], [['left', 'right', 'right', 'left'], ['left', 'right', 'right', 'left']]);
   check('a dash is drawn faint', fresh.dash, 'rgb(203, 213, 225)');
   check('and its Grand Total is the forest green', fresh.foot_bg, 'rgb(27, 67, 50)');
 

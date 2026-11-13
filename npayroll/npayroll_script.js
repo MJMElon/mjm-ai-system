@@ -3961,9 +3961,17 @@ function tidyTable(tbl) {
   }));
 
   // 3. The heading over each such column: right-aligned with it, and
-  //    carrying the (RM) the cells no longer say.
+  //    carrying the (RM) the cells no longer say. Then the two other
+  //    alignments the design system names: a serial number (No. / #) is
+  //    CENTRED, and a column holding nothing but buttons -- the actions --
+  //    sits on the RIGHT, at the end of the row where actions go. Text
+  //    is left, which is the table's default and needs no mark.
   if (tbl.tHead) {
     const hg = _tableGrid(tbl.tHead.rows);
+    const markCol = (c, cls) => grid.forEach(row => {
+      const td = row && row[c];
+      if (td && (td.colSpan || 1) === 1) td.classList.add(cls);
+    });
     for (let c = 0; c < width; c++) {
       let th = null;
       for (let r = hg.length - 1; r >= 0; r--) {
@@ -3971,6 +3979,23 @@ function tidyTable(tbl) {
         if (cell && (cell.colSpan || 1) === 1) { th = cell; break; }
       }
       if (!th) continue;
+      const head = th.textContent.trim();
+      if (/^(no\.?|#)$/i.test(head)) {
+        // A serial number is a position, not a figure: centred, never .num.
+        th.classList.add('c'); th.classList.remove('num'); markCol(c, 'c');
+        grid.forEach(row => { const td = row && row[c]; if (td) td.classList.remove('num'); });
+        continue;
+      }
+      else if (!numCols.has(c) && !head) {
+        let btns = 0, other = 0;
+        grid.forEach(row => {
+          const td = row && row[c];
+          if (!td || (td.colSpan || 1) > 1) return;
+          if (td.querySelector('button, a.btn')) btns++;
+          else if (_cellValueText(td)) other++;
+        });
+        if (btns && !other) { th.classList.add('r'); markCol(c, 'r'); }
+      }
       if (numCols.has(c)) th.classList.add('num');
       if (rmCols.has(c) && !/RM/.test(th.textContent) && th.textContent.trim()) {
         th.appendChild(document.createTextNode(' (RM)'));
@@ -5083,9 +5108,12 @@ async function _gather(months) {
 
 const _compactRM = v => {
   const a = Math.abs(v);
-  if (a >= 1e6) return 'RM ' + (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'm';
-  if (a >= 1e3) return 'RM ' + (v / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k';
-  return 'RM ' + Math.round(v);
+  /* An AXIS label, not an amount: money() is what an amount goes through,
+     and this only shortens a gridline figure to a few characters. */
+  const short = (n, d) => Number(n).toLocaleString('en-MY', { maximumFractionDigits: d });
+  if (a >= 1e6) return `RM ${short(v / 1e6, a >= 1e7 ? 0 : 1)}m`;
+  if (a >= 1e3) return `RM ${short(v / 1e3, a >= 1e4 ? 0 : 1)}k`;
+  return `RM ${short(v, 0)}`;
 };
 function _niceMax(v) {
   if (!(v > 0)) return 1;

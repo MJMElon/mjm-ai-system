@@ -206,7 +206,7 @@ const RECS = [
      /hyplug_soil:'Mengisi Tanah ke Hyplug'/.test(SRC.payJs)], [true, true]);
 
   check('the claim tab reads Seed Planting, as the office renamed it',
-    /data-sub="seedplant" onclick="switchSub\('seedplant'\)">Seed Planting</.test(SRC.payHtml), true);
+    /data-sub="seedplant" onclick="switchSub\('seedplant'\)">(<svg[\s\S]*?<\/svg>)?Seed Planting</.test(SRC.payHtml), true);
   /* THE KEY DID NOT MOVE. `seedplant` is what the verification, the
      permission and every saved row are filed under; only the word somebody
      reads changed, or every tick the office ever set reads as unset. */

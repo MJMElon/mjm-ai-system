@@ -8735,3 +8735,50 @@ figure; the PDF checks were not, because the paper still prints RM.
 `tests/every_payroll_tab_reads_the_same.cjs` walks all ten tabs and asks the
 same questions of every table on each, then draws a table the module has
 never seen and checks it was tidied.
+
+### And then ONE design system, and the colour blocks came back out
+
+The office asked for the whole module redesigned as one enterprise system —
+*"the table should NOT look like an Excel spreadsheet"*, a slim header, one
+sidebar, one page header, one table, one card. So the four colour blocks two
+sections up are GONE, by the office's own later ask: what is left of a job's
+colour is a DOT before its name on the group heading and on its card.
+
+- **Tokens first.** `:root` in `npayroll_styles.css` carries the semantic
+  colours (success / warning / error / info, each with a bg and a border),
+  the line colours, a type scale (`--fs-xs` … `--fs-xl`), a 4px spacing scale,
+  one control height (`--h-ctl` 36px) and the table tokens. The COMPONENTS
+  layer at the end of the file is the last word and reads only those. A new
+  page that uses `.bar` / `.card` / `.btn` / a plain `<table>` looks like the
+  rest without anybody remembering how.
+- **The global header is the shared ribbon, flattened, one 56px row**: the
+  system name left; the month, the account, Portal and Sign Out right. The
+  ribbon's own markup is untouched (`data-brand=""`, `data-logo="off"`, and
+  overrides carrying `!important` because it writes its sizing inline).
+  **The month picker is MOVED into it** by `slimHead()` in the page, after
+  the ribbon mounts on DOMContentLoaded — moved, never copied, so every
+  reader of `#global-month` reads the same input. If the ribbon fails the
+  second row stays where it was.
+- **The sidebar brand is the COMPANY** (MJM Nursery · Nursery Reporting
+  System), its block the header's height, because the header already says
+  NURSERY PAYROLL and the same name twice on one row is what was taken out.
+  Every entry carries an inline SVG icon (`.side-ic`) BEFORE its label, so
+  `textContent` is still the label — two tests that read the label with a
+  regex were widened to allow the icon.
+- **The table**: neutral heading, white rows, ONE faint horizontal line,
+  no vertical line except where a job group opens, no tinted column.
+  Alignment is decided by `tidyTable()`: figures `.num` right, a serial
+  heading (No. / #) `.c` centred and never `.num`, a column of nothing but
+  buttons `.r` right, everything else LEFT, which is now the default. A
+  sub-total is a neutral band; the Grand Total is the one green band.
+- **Cards** have no coloured bar along the top; the nursery picker is a
+  segmented control at control height, not 52px circles; page titles are
+  20px/700 with no emoji; a heading inside a page is `.sec-label`.
+- **Nothing moved underneath it.** No figure, no calculation, no stored
+  key, no permission. `_compactRM` (the dashboard axis) was rewritten off
+  `'RM ' + toFixed` because `payroll_pdf_layout.cjs` forbids that shape.
+
+`tests/every_payroll_tab_reads_the_same.cjs` holds the system on all ten
+tabs — the header, the brand, the icons, no vertical lines, one title size,
+no card bars, one control height, a centred serial — and **27 of its 146
+fail on the previous page**, by name.

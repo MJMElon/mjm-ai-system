@@ -45,7 +45,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=36">
+<link rel="stylesheet" href="npayroll_styles.css?v=37">
     <script src="../shared/shared_cf_select.js"></script>
 <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 </head>
@@ -59,7 +59,7 @@
      "#mjm-ribbon .mjm-rb-bar") without touching the shared file: the
      ribbon's own markup and logic (Welcome name, Portal, Sign Out) are
      untouched, only its look on this one page is overridden. -->
-<div id="mjm-ribbon" data-center="Nursery Payroll" data-center-scale="0.75"></div>
+<div id="mjm-ribbon" data-brand="" data-logo="off" data-center="Nursery Payroll" data-center-scale="0.75"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
 <!-- Second row: the month, and nothing else. Every page of this module
@@ -90,6 +90,25 @@
     <div></div>
   </div>
 </header>
+<script>
+/* ONE slim header. The month is the one selection every page of this
+   module answers to, so it rides in the global header beside the account
+   rather than on a second row of its own; the element is MOVED, not copied,
+   so every reader of #global-month reads the same input it always did.
+   Where the ribbon has not drawn (its script failed), the second row stays
+   exactly where it was. */
+(function slimHead() {
+  /* The ribbon mounts on DOMContentLoaded, and its listener was added
+     first (its script is above this one), so this runs after it. */
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', slimHead); return; }
+  var right = document.querySelector('#mjm-ribbon .mjm-rb-right');
+  var pill = document.querySelector('header.topbar .date-pill');
+  if (!right || !pill) return;
+  right.insertBefore(pill, right.firstChild);
+  document.querySelector('header.topbar').classList.add('hidden');
+  document.body.classList.add('np-slim-head');
+})();
+</script>
 
 <div id="loading" class="loading">Checking access…</div>
 
@@ -114,30 +133,33 @@
        than no button. The account is the name below; signing out is the
        ribbon's, as on every page. -->
   <aside class="side-nav" id="side-nav" aria-label="Nursery Payroll">
-    <div class="side-brand"><div class="side-brand-mark">NP</div>
-      <div><div class="side-brand-name">Nursery Payroll</div><div class="side-brand-sub">MJM Nursery</div></div></div>
+    <!-- The company, not the module: the slim header to the right already
+         says NURSERY PAYROLL, and the same name twice on one row is the
+         duplication this layout was rebuilt to take out. -->
+    <div class="side-brand"><div class="side-brand-mark">MJM</div>
+      <div><div class="side-brand-name">MJM Nursery</div><div class="side-brand-sub">Nursery Reporting System</div></div></div>
     <div class="side-top">
       <div class="side-group" id="side-group-overview">
         <div class="side-head">Overview</div>
         <button type="button" class="tab side-btn" data-tab="dash" id="tab-btn-dash"
-                onclick="switchTab('dash')">Dashboard</button>
+                onclick="switchTab('dash')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard</button>
       </div>
     </div>
     <div class="side-mid">
       <div class="side-group" id="side-group-record">
         <div class="side-head">Payroll Record</div>
-        <button type="button" class="subtab side-btn side-sub active" data-sub="maint"     onclick="switchSub('maint')">Work Maintenance</button>
-        <button type="button" class="subtab side-btn side-sub"        data-sub="seedplant" onclick="switchSub('seedplant')">Seed Planting</button>
-        <button type="button" class="subtab side-btn side-sub"        data-sub="transpl"   onclick="switchSub('transpl')">Transplanting</button>
-        <button type="button" class="subtab side-btn side-sub"        data-sub="seedling"  onclick="switchSub('seedling')">Loading Seedlings</button>
-        <button type="button" class="subtab side-btn side-sub"        data-sub="monthly"   onclick="switchSub('monthly')">Monthly Payroll</button>
+        <button type="button" class="subtab side-btn side-sub active" data-sub="maint"     onclick="switchSub('maint')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/></svg>Work Maintenance</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="seedplant" onclick="switchSub('seedplant')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-9"/><path d="M12 12C12 7.5 8.5 4.5 4 4.5c0 4.5 3.5 7.5 8 7.5z"/><path d="M12 12c0-3.5 3-6.5 8-6.5 0 3.5-3 6.5-8 6.5z"/></svg>Seed Planting</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="transpl"   onclick="switchSub('transpl')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17h6l3-10h7"/><path d="M17 4l3 3-3 3"/><path d="M4 21h16"/></svg>Transplanting</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="seedling"  onclick="switchSub('seedling')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="6" width="13" height="10" rx="1.5"/><path d="M14.5 9h4l3 3.5V16h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg>Loading Seedlings</button>
+        <button type="button" class="subtab side-btn side-sub"        data-sub="monthly"   onclick="switchSub('monthly')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></svg>Monthly Payroll</button>
       </div>
       <div class="side-group" id="side-group-signoff">
         <div class="side-head">Sign-off &amp; Output</div>
         <button type="button" class="tab side-btn" data-tab="approval" id="tab-btn-approval"
-                onclick="switchTab('approval')">Approval</button>
+                onclick="switchTab('approval')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9.5"/></svg>Approval</button>
         <button type="button" class="tab side-btn" data-tab="report" id="tab-btn-report"
-                onclick="switchTab('report')">Report</button>
+                onclick="switchTab('report')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h4.5"/></svg>Report</button>
       </div>
     </div>
     <div class="side-foot">
@@ -149,9 +171,9 @@
       <div class="side-group hidden" id="tab-btn-locks">
         <div class="side-head">Settings</div>
         <button type="button" class="settings-menu-btn side-btn side-set" id="settings-tab-lock"
-                onclick="openSettings('lock')">Lock Controls</button>
+                onclick="openSettings('lock')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>Lock Controls</button>
         <button type="button" class="settings-menu-btn side-btn side-set" id="settings-tab-rate"
-                onclick="openSettings('rate')">Piece Rate</button>
+                onclick="openSettings('rate')"><svg class="side-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 13.5l-7 7a2 2 0 0 1-2.8 0L3 12.8V3h9.8l7.7 7.7a2 2 0 0 1 0 2.8z"/><circle cx="7.6" cy="7.6" r="1.4"/></svg>Piece Rate</button>
       </div>
       <div class="side-account" id="side-account" title="Signed in"></div>
     </div>
@@ -270,7 +292,7 @@
            credited on it: a record with no crew produces no claim line, and
            the plot would otherwise vanish from the month. -->
       <div id="transpl-plots-wrap" style="margin-bottom:1.1rem;">
-        <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;" id="transpl-plots-head">
+        <div class="sec-label" id="transpl-plots-head">
           Transplanting by plot</div>
         <div class="card"><div class="tbl-wrap"><table id="transpl-plots-table"></table></div></div>
         <div id="transpl-plots-note" class="bar-sub"
@@ -279,7 +301,7 @@
 
       <!-- The claim: workers down, the four jobs across, the same shape as
            Work Maintenance so one sheet is read the way the other is. -->
-      <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;">Salary claim</div>
+      <div class="sec-label">Salary claim</div>
       <!-- Same ribbon as Work Maintenance's — see renderTransplGlance(). -->
       <div id="transpl-glance" class="pt-glance"></div>
       <div class="card"><div class="tbl-wrap"><table id="transpl-table"></table></div></div>
@@ -290,7 +312,7 @@
            and who that pays. -->
       <div id="cull-inc-wrap" style="margin-top:1.1rem;">
         <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:.6rem;padding:0 .2rem .4rem;">
-          <div class="bar-sub" style="font-weight:700;" id="cull-inc-head">Culling Monitoring</div>
+          <div class="sec-label" id="cull-inc-head">Culling Monitoring</div>
           <a class="btn btn-sm" id="cull-inc-link" href="../nursery_ops/nursery_ops_maintenance.html?view=cull_incentive">Check plots on Worker Activity &rarr;</a>
         </div>
         <!-- ONE table. It was two cards — the plots with their dates, then
@@ -308,7 +330,7 @@
            usually all linked work is a table that has to be read and
            discarded every month. -->
       <div id="transpl-keyed-wrap" class="hidden" style="margin-top:1.1rem;">
-        <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;">Keyed by hand</div>
+        <div class="sec-label">Keyed by hand</div>
         <div class="card"><div class="tbl-wrap"><table id="transpl-keyed-table"></table></div></div>
       </div>
     </div>
@@ -404,7 +426,7 @@
     <div id="settings-lock-section" class="settings-section active">
       <div class="bar">
         <div>
-          <div class="bar-title">🔒 Lock Controls</div>
+          <div class="bar-title">Lock Controls</div>
           <div class="bar-sub">A payroll month closes one of two ways: somebody verifies a sheet, or the
             month itself locks. This calendar is the second, and the only thing that re-opens the first.</div>
         </div>
@@ -599,7 +621,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=112"></script>
+<script src="npayroll_script.js?v=113"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
