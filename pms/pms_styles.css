@@ -192,7 +192,20 @@ td .nm{font-weight:500}
 /* Tasks table: wider page, every column centred on one line; only the task name (2nd column) wraps, left-aligned. */
 body[data-view="list"] .wrap,body[data-view="timeline"] .wrap,body[data-view="board"] .wrap,body[data-view="value"] .wrap{max-width:1680px}
 table.tasks th,table.tasks td{text-align:center;white-space:nowrap;vertical-align:middle}
-table.tasks th:nth-child(2),table.tasks td:nth-child(2){text-align:left;white-space:normal;min-width:300px}
+table.tasks th:nth-child(2),table.tasks td:nth-child(2){text-align:left;white-space:normal;min-width:220px}
+/* The project path and the people WRAP, so the dates stay on screen instead of running off the right edge. */
+table.tasks td.proj{white-space:normal;min-width:150px;max-width:260px;overflow-wrap:anywhere}
+table.tasks td.who{white-space:normal;min-width:96px;max-width:170px}
+table.tasks td.who span{white-space:nowrap}
+table.tasks{min-width:860px}
+@media (max-width:1500px){
+  table.tasks th,table.tasks td{padding:8px 5px}
+  table.tasks th:nth-child(2),table.tasks td:nth-child(2){min-width:170px}
+  table.tasks td.proj{min-width:130px;max-width:190px}
+  table.tasks td.who{max-width:120px}
+  table.tasks td.date{font-size:11.5px}
+  table.tasks td:first-child,table.tasks th:first-child{padding-left:10px}
+}
 
 /* Timeline */
 .tl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;position:relative}

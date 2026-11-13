@@ -791,8 +791,9 @@ function renderList(){
       el("td",{}, el("div",{class:"nm",text:t.name}), t.link?el("a",{href:t.link.split(/\s/).find(x=>x.startsWith("http"))||t.link, target:"_blank", rel:"noopener", onclick:e=>e.stopPropagation(), class:"code", text:"open app ↗"}):null),
       el("td",{}, el("span",{class:"pri "+t.priority,text:t.priority})),
       el("td",{}, statusPill(t)),
-      el("td",{}, el("div",{text:t.project}), t.module ? el("small",{class:"path", text:[t.module,t.sub].filter(Boolean).join(" › ")}) : null), el("td",{text:t.type||""}),
-      el("td",{text:(t.assignees||[]).join(", ")}),
+      el("td",{class:"proj"}, el("div",{text:t.project}), t.module ? el("small",{class:"path", text:[t.module,t.sub].filter(Boolean).join(" › ")}) : null), el("td",{text:t.type||""}),
+      // One span per person, so a long list breaks BETWEEN names and never through the middle of one.
+      el("td",{class:"who"}, ...(t.assignees||[]).flatMap((n,i,arr) => [el("span",{text: n + (i < arr.length-1 ? "," : "")}), " "])),
       el("td",{class:"date",text:t.start?fmt(t.start):""}),
       el("td",{class:"date"+(isOverdue(t)?" l":""),text:t.due?fmt(t.due):""}),
       el("td",{class:"date"+(lateFinish(t)?" l":""),text:t.end?fmt(t.end):""}),

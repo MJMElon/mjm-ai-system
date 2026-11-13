@@ -8550,6 +8550,12 @@ So there are two layers, and they are the house pattern:
   on. The curve is SAMPLED and the nose follows its tangent with the angle
   unwrapped — three hand-written keyframes had it flying backwards for
   half the trip, and only a screenshot of a frame showed it.
+- **THE TASK LIST FITS THE SCREEN.** Every cell was on one line, so a long
+  project path and three assignees pushed Done and Days off the right edge.
+  The project cell (`td.proj`) and the people (`td.who`) wrap; each person
+  is a span of their own, so a break falls BETWEEN names and never through
+  one. Under 1500px the padding and the date type tighten. The test asks it
+  at 1280 wide: no sideways scroll.
 - **THE TASK LIST WAS EMPTIED ON REQUEST**, with
   `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
   else. It keeps no copy, so it is not a file to run again by habit.

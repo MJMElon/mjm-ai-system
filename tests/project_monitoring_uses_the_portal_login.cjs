@@ -115,6 +115,10 @@ const ROWS = () => ({
   pms_tasks: [
     { id: 't001', project: 'Nursery', type: 'Web', name: 'Batch Report from the portal tables', priority: 'High', status: 'In Progress',
       assignees: ['Ruth Wong'], start_date: '2026-11-01', due_date: '2026-11-20', end_date: null, sort_order: 1 },
+    // the office's own long row: a project path and three people, which used to push the dates off the screen
+    { id: 't002', project: 'Nursery', module: 'Machinery Admin & Operation System', sub: 'Machinery Maintenance System', type: 'Web',
+      name: 'Machinery CMMS - monthly SMU record', priority: 'Low', status: 'Complete',
+      assignees: ['Ruth Wong', 'Coco Lau', 'The Boss'], start_date: '2026-10-12', due_date: '2026-10-16', end_date: '2026-10-12', sort_order: 2 },
   ],
   pms_task_requests: [],
   // what a read of everybody's profile hands back: two holding the module, one member of
@@ -208,6 +212,21 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     await go(page, 'list'); await page.waitForTimeout(200);
     is(await page.locator('#v-list').innerText().then((t) => t.includes('Batch Report from the portal tables')), true, 'the task list is read from pms_tasks');
     is(await page.locator('#addBtn').isVisible(), true, 'and may add a task');
+    // The task list fits a laptop: the project path and the people wrap, so nothing runs off the right edge.
+    await page.setViewportSize({ width: 1280, height: 800 }); await page.waitForTimeout(150);
+    const fit = await page.evaluate(() => { const w = document.querySelector('#v-list .tablewrap'); if (!w) return 'no table';
+      const row = [...w.querySelectorAll('tbody tr')].find((r) => /SMU/.test(r.textContent));
+      const proj = row && row.querySelector('td.proj'), who = row && row.querySelector('td.who');
+      return { over: w.scrollWidth - w.clientWidth, projWraps: !!proj && getComputedStyle(proj).whiteSpace === 'normal',
+        names: who ? [...who.querySelectorAll('span')].map((x) => x.textContent) : 'no who cell',
+        whoText: who && who.textContent.trim(), whoLines: who ? Math.round(who.getBoundingClientRect().height) > 40 : null }; });
+    is(fit.over, 0, 'at 1280 wide the task list needs no sideways scroll');
+    is(fit.projWraps, true, 'the project path wraps');
+    is(fit.names, ['Ruth Wong,', 'Coco Lau,', 'The Boss'], 'each assignee is its own piece, so a break falls between names');
+    is(fit.whoText, 'Ruth Wong, Coco Lau, The Boss', 'and still reads as the same list');
+    is(fit.whoLines, true, 'three people take more than one line');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_list.png') });
+    await page.setViewportSize({ width: 1400, height: 900 });
     const reads = await page.evaluate(() => [...new Set(window.__READS)].sort());
     is(reads.filter((t) => t !== 'shared_profiles' && !/^rpc:/.test(t)), ['pms_settings', 'pms_task_requests', 'pms_tasks'], 'only the pms_ tables are read');
     is(await picks(page), ['Coco Lau', 'Ruth Wong', 'The Boss'], 'the assignees are whoever holds the module: not the staff without it, never the customer');
