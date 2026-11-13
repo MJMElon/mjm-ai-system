@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
     <title>Monthly Sales Analysis - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -35,7 +38,8 @@ window.MJM_PAGE_GATE = (async () => {
 })();
 </script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
+    <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
+<style>
         body { background:#f8fafc; margin:0; font-family:'Outfit',system-ui,sans-serif; }
         .bg-pattern { position:fixed; inset:0; background-image:radial-gradient(#cbd5e1 1px,transparent 1px); background-size:24px 24px; z-index:-1; opacity:.5; }
         .glass-panel { background:rgba(255,255,255,.95); backdrop-filter:blur(24px); border:1px solid #fff; border-left:12px solid #db2777; box-shadow:0 25px 50px -12px rgba(0,0,0,.15); }
@@ -47,7 +51,16 @@ window.MJM_PAGE_GATE = (async () => {
         .grp { background:linear-gradient(180deg,#fce7f3,#fbcfe8); color:#9d174d; font-weight:900; text-transform:uppercase; letter-spacing:.05em; font-size:10px; padding:6px 10px; border-bottom:2px solid #f9a8d4; text-align:center; }
         .est-input { width:88px; text-align:right; padding:5px 8px; font-weight:700; border:1px solid #cbd5e1; border-radius:6px; background:#fff; transition:border .15s; }
         .est-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.15); }
-    </style>
+    
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  table.msa th,
+  .grp { font-size:11px; }
+}
+</style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body class="min-h-screen p-4 md:p-8">

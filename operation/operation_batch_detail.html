@@ -95,7 +95,8 @@
     <!-- Month Lock Calendar — same lock DO/AL use, keyed to each row's own date. -->
     <script src="../shared/shared_month_lock.js?v=1"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
+    <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
+<style>
         /* Earthy Theme Colors */
         body { margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; overflow-x: hidden; background-color: #1a150d; }
         
@@ -424,7 +425,20 @@
           opacity: .55;
           filter: grayscale(.25);
         }
-    </style>
+    
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .label-style,
+  .stage-tab-btn,
+  .mjm-row-review .mjm-review-btn,
+  .mjm-row-chip,
+  .mjm-review-meta,
+  .mjm-review-btn { font-size:11px; }
+}
+</style>
     <!-- THE ONLY ONE OF THE 53 PAGES THAT CARRIES A NUMBER, and that is
          deliberate rather than tidy. The skin is otherwise loaded with no
          `?v=` anywhere, so a browser holding yesterday's copy keeps it
@@ -13831,7 +13845,7 @@ Thank you.`;
                                  line with the buttons pushed all three into whatever was
                                  left, which is how "Total Transferred" ended up over a
                                  figure two columns from where its heading was. -->
-                            <div class="grid grid-cols-3 gap-x-4 gap-y-1 items-baseline text-center">
+                            <div class="grid grid-cols-3 keep-cols gap-x-4 gap-y-1 items-baseline text-center">
                                 <span class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Plot</span>
                                 <span class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Balance</span>
                                 <span class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest leading-none">Total Transferred</span>

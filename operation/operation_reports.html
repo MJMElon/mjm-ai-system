@@ -23,6 +23,7 @@
      the two cannot disagree about which batches are Completed. -->
 <script src="../shared/shared_batch_completed.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
   body { background:#f8f4ec; margin:0; font-family:'Outfit', system-ui, sans-serif; color:#1a150d; }
   .bg-pattern { position:fixed; inset:0; background-image:radial-gradient(#e8dcc8 1px, transparent 1px); background-size:24px 24px; z-index:-2; opacity:.5; }
@@ -358,6 +359,18 @@
     .no-print { display:none !important; }
     table { box-shadow:none !important; }
   }
+
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .label-style,
+  .report-table th,
+  .los-table th,
+  .los-split > span,
+  .los-split .los-fig { font-size:11px; }
+}
 </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">

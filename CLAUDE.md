@@ -5883,6 +5883,43 @@ things it had to learn, each of which makes a browser test lie:
   stop; and the single Del writes `.eq('id', …)`, so a stub reading only
   `.in` reads a working button as a dead one.
 
+## Both modules read on a phone, and one file says how
+
+Seedling Stock Management (`operation/`) and the Nursery Reporting System
+(`reporting/`, `npayroll/`) were desk screens: on a 390px phone the Stock &
+Sales tabs ran 127px off the side, every form was three fields across, and
+the labels were 8 to 10px. **`shared/shared_responsive.css` is the phone
+baseline**, linked with a `?v=` from every page of both modules, and it
+changes nothing at 768px and up.
+
+- **IT WINS BY SPECIFICITY, NEVER BY ORDER.** The Tailwind CDN appends its
+  sheet after ours, so a one-class rule here loses the tie — the trap
+  `operation_batch_detail.html` documents twice. Every rule is one step
+  heavier than the utility it changes (`.grid-cols-3:not(.keep-cols)`).
+  The test appends a stand-in for Tailwind AFTER the file for that reason.
+- **Below 768px `grid-cols-2..6` stack to one column.** `.keep-cols` opts a
+  grid out where the columns ARE the meaning: the back · title · spacer
+  header, the Plot / Balance / Total Transferred labels that sit over their
+  figures (stacked, the labels read as a list and the figures as another),
+  and the month-lock tiles. `grid-cols-12` is never stacked; the only one
+  is a bar chart. **A new grid of labels over values needs `keep-cols`.**
+- **Pictures scale by WIDTH only**, so a Tailwind `h-8` on a logo still
+  wins. SVG and canvas are left alone.
+- **Type is raised a step, not made big**: 9–10px to 11, 11 to 12. Text
+  boxes are 16px, the size under which iOS zooms the page on focus, and
+  buttons are at least 36px tall.
+- **Small type a page sets in its OWN CSS cannot be reached from a shared
+  file**, so each page carries a `PHONE TYPE FLOOR` block at the end of its
+  style raising those rules to 11px. A page that adds a 9px rule without
+  adding it there fails `tests/the_two_modules_fit_a_phone.cjs`, which
+  reads every rule. Map tiles, the heat map and the bar chart are exempt:
+  their size is the size of the box they sit in.
+- **Wide tables keep their `min-width`** and scroll inside their frame. A
+  table squeezed to 390px is one nobody can read.
+
+The eleven pages with no no-cache metas got them, because a cached page
+goes on asking for no stylesheet at all. One hard reload per machine.
+
 ## A card on the Stock & Sales page is ONE shape, and the next one too
 
 The office, over the Customer pane: *"Make my Customer order management
@@ -6230,8 +6267,8 @@ metas that page would have gone on asking for the old `?v=` for ever.
 **`nursery_ops_user_access.html` now carries them too**, for the same reason
 one page along: the tick list lives in that page, so a cached copy goes on
 offering yesterday's labels — and the label on *Open Setting* was the thing
-being corrected. **Four pages are still unguarded** — the two PALMS pages,
-Life of Plot and `operation_settings.html` — and the test prints them every
+being corrected. **Three pages are still unguarded** — the two PALMS pages
+and Life of Plot — and the test prints them every
 run, so do not trust the list in this paragraph over the one the test gives
 you. It said five until `operation_delivery.html` was guarded, which is the
 whole reason for that sentence.

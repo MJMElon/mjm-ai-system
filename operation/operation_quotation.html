@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>MJM Nursery AI · Quotations</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -37,6 +40,7 @@ window.MJM_PAGE_GATE = (async () => {
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
   *{font-family:'Outfit',system-ui,sans-serif;}
   body{background:#f1f5f9;margin:0;min-height:100vh;}
@@ -81,6 +85,16 @@ window.MJM_PAGE_GATE = (async () => {
   @media (max-width:780px){ .item-grid{grid-template-columns:1fr 1fr;} .item-grid > *:first-child{grid-column:1/-1;} }
   .totals-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#334155;padding:6px 0;}
   .totals-row.grand{font-size:16px;font-weight:900;color:#065f46;border-top:2px solid #d1fae5;padding-top:10px;margin-top:6px;}
+
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .label,
+  .q-table th,
+  .status-pill { font-size:11px; }
+}
 </style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>

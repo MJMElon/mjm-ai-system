@@ -614,3 +614,23 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transpar
 .ap-done { color: var(--green); font-weight: 700; }
 .ap-lock { color: var(--red); font-weight: 700; }
 .rep-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  thead th,
+  tbody tr.pn-head th,
+  .pill,
+  .maint-chip,
+  .frow label,
+  .fhint-btn,
+  .lock-field span,
+  .lock-month .lm-how,
+  .lock-month .lm-date,
+  .tp-map-b,
+  .pt-label,
+  .pt-sub,
+  .side-head { font-size:11px; }
+}
