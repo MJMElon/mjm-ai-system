@@ -7364,7 +7364,11 @@ Loading Seedlings, Monthly Payroll) · Approval · Report · Settings.
 - **Top and foot stand still, the middle scrolls.** Overview (Dashboard)
   is the top; Payroll Record and Sign-off & Output are the middle, each
   under a small heading, groups 18px apart against 2px between rows; the
-  foot is Settings and the signed-in name, under the one faint divider.
+  foot is the Settings group (Lock Controls, Piece Rate) and the
+  signed-in name, under the one faint divider. Settings has no pill menu of
+  its own any more: `openSettings(which)` opens the page on a section, and
+  `#settings-tab-lock` / `#settings-tab-rate` kept their ids so the
+  permissions and the lit state work as they always did.
   `sideShowActive` scrolls the open entry into view inside the bar.
 - **No Help and no Upgrade entry**: the module has neither screen, and a
   button to nowhere is not added because a layout asked for the slot.

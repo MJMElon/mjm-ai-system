@@ -157,7 +157,21 @@ async function boot(browser, db) {
     if (!n) return 'no side bar';
     return [...n.querySelectorAll('.side-btn, .side-head')].map(b => b.textContent.trim());
   }), ['Overview', 'Dashboard', 'Payroll Record', 'Work Maintenance', 'Seed Planting', 'Transplanting',
-       'Loading Seedlings', 'Monthly Payroll', 'Sign-off & Output', 'Approval', 'Report', 'Settings']);
+       'Loading Seedlings', 'Monthly Payroll', 'Sign-off & Output', 'Approval', 'Report', 'Settings', 'Lock Controls', 'Piece Rate']);
+  check('Settings has no menu bar of its own any more', await ev(() =>
+    [!!document.querySelector('nav.settings-menu'),
+     !!document.querySelector('.side-foot #settings-tab-lock'),
+     !!document.querySelector('.side-foot #settings-tab-rate')]), [false, true, true]);
+  check('Piece Rate in the side bar opens Settings on Piece Rate, lit alone', await ev(() => {
+    document.getElementById('settings-tab-rate').click();
+    const r = [document.body.dataset.tab,
+      document.getElementById('settings-rate-section').classList.contains('active'),
+      document.getElementById('settings-tab-rate').classList.contains('active'),
+      document.getElementById('settings-tab-lock').classList.contains('active')];
+    switchTab('dash');
+    r.push(document.getElementById('settings-tab-rate').classList.contains('active'));
+    return r;
+  }), ['locks', true, true, false, false]);
   /* Top and foot stand still and the middle scrolls: the bar is never
      taller than the window, the middle is the only part that scrolls, and
      Settings and the signed-in name are in the foot. */

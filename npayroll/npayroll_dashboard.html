@@ -45,7 +45,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=31">
+<link rel="stylesheet" href="npayroll_styles.css?v=32">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -138,8 +138,18 @@
       </div>
     </div>
     <div class="side-foot">
-      <button type="button" class="tab side-btn hidden" data-tab="locks" id="tab-btn-locks"
-              onclick="switchTab('locks')">Settings</button>
+      <!-- Settings is a group of the bar, not a pill row inside its page:
+           Lock Controls and Piece Rate are two entries here, and the
+           horizontal menu they used to sit in is gone. The ids are the
+           ones applyPageAccess and switchSettingsSection always used, so
+           each still shows and lights on its own permission. -->
+      <div class="side-group hidden" id="tab-btn-locks">
+        <div class="side-head">Settings</div>
+        <button type="button" class="settings-menu-btn side-btn side-set" id="settings-tab-lock"
+                onclick="openSettings('lock')">Lock Controls</button>
+        <button type="button" class="settings-menu-btn side-btn side-set" id="settings-tab-rate"
+                onclick="openSettings('rate')">Piece Rate</button>
+      </div>
       <div class="side-account" id="side-account" title="Signed in"></div>
     </div>
   </aside>
@@ -386,12 +396,6 @@
        a permission doesn't allow; switchSettingsSection() picks which of
        the ones left shows. -->
   <section id="tab-locks" class="panel">
-    <nav class="settings-menu">
-      <button class="settings-menu-btn active" id="settings-tab-lock"
-              onclick="switchSettingsSection('lock')">Lock Controls</button>
-      <button class="settings-menu-btn" id="settings-tab-rate"
-              onclick="switchSettingsSection('rate')">Piece Rate</button>
-    </nav>
 
     <!-- ═══════════ LOCK CONTROLS ═══════════ -->
     <div id="settings-lock-section" class="settings-section active">
@@ -592,7 +596,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=107"></script>
+<script src="npayroll_script.js?v=108"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

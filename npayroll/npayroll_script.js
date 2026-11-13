@@ -545,6 +545,8 @@ function switchTab(name) {
   if (!$('tab-' + name)) name = 'payroll';
   document.body.dataset.tab = name;
   setTimeout(sideShowActive, 0);
+  /* A Settings entry is lit only while Settings is the page open. */
+  if (name !== 'locks') document.querySelectorAll('.settings-menu-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   $('tab-' + name).classList.add('active');
@@ -566,6 +568,13 @@ function switchTab(name) {
 }
 /* Settings' own menu — Lock Controls and Piece Rate, switched like the
    work-type pills are, just one level in. */
+/* A Settings entry in the side bar: open the Settings page on that
+   section. switchTab('locks') reopens the remembered section, so the
+   one pressed is chosen after it. */
+function openSettings(which) {
+  switchTab('locks');
+  switchSettingsSection(which);
+}
 function switchSettingsSection(which) {
   document.querySelectorAll('.settings-menu-btn').forEach(b =>
     b.classList.toggle('active', b.id === 'settings-tab-' + which));
