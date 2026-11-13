@@ -3686,7 +3686,7 @@ function renderMaintGlance(view) {
     const rate = view.rateOf(t.code);
     const wd = rate == null ? null
       : Math.round(cap2(capAll) * Math.round(rate * 100000) / 1000) / 100;
-    return `<div class="pt-card">
+    return `<div class="pt-card job-card job-${t.code}">
         <div class="pt-label">${esc(t.label)}</div>
         <div class="pt-val">${capFmt(capAll)}</div>
         <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
@@ -3840,11 +3840,59 @@ function workdoneCell(cap, rate, claimed, opts) {
      different figures — what the work came to, and what is missing from the
      claim for it — and on one line the second reads as part of the first. */
   const gap = Math.abs(short) < 0.005 ? '' :
-    `<div style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
+    `<div class="wd-gap" style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
       short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</div>`;
   const wdLine = compact ? '' : `<div>Total Workdone (RM) : ${money(total)}</div>`;
   return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
            >${capLine}${wdLine}${gap}</th>`;
+}
+
+/* THE LOOK OF THE CLAIM, AND NOTHING ELSE.
+   Run over the table renderMaint() has just drawn. It adds classes and
+   wraps the "RM" in a span, and never changes a figure or a word: the
+   textContent of every cell is what it was, so every reader of the sheet
+   sees the same claim. Done here rather than inside capCell/earnedCell
+   because those draw the other sheets too.
+     - each job's cells carry job-<code>, so the four jobs are four colour
+       blocks matching the cards above;
+     - a job's first cell carries jg-start (the heavy divider) and its
+       Total cell jg-tot (the light one);
+     - a cell holding only a dash is .nil, drawn faint;
+     - "RM " before a figure is .rm, small and grey, so the number reads;
+     - the Worker column is pinned beside No. at No.'s real width. */
+function decorateMaintTable(tbl) {
+  if (!tbl) return;
+  const codes = MAINT_SHEET_TYPES.map(t => t.code);
+  const hr = tbl.tHead ? tbl.tHead.rows : [];
+  if (hr[2]) Array.from(hr[2].cells).forEach((th, i) => {
+    if (codes[i]) th.classList.add('job-wd', 'job-' + codes[i], 'jg-start');
+  });
+  Array.from(tbl.tBodies[0] ? tbl.tBodies[0].rows : []).forEach(tr => codes.forEach((c, i) => {
+    const a = tr.cells[2 + 2 * i], b = tr.cells[3 + 2 * i];
+    if (a) a.classList.add('job-' + c, 'jg-start');
+    if (b) b.classList.add('job-' + c, 'jg-tot');
+  }));
+  tbl.querySelectorAll('tbody td, tfoot td').forEach(td => {
+    const txt = td.textContent.trim();
+    if (txt === '—' || txt === '-') td.classList.add('nil');
+    const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (/^\s*RM\s[-\d]/.test(n.nodeValue) && !n.parentNode.closest('button')) hits.push(n);
+    }
+    hits.forEach(n => {
+      const m = n.nodeValue.match(/^(\s*)(RM\s)/);
+      const span = document.createElement('span');
+      span.className = 'rm';
+      span.textContent = m[2];
+      n.nodeValue = n.nodeValue.slice(m[0].length);
+      n.parentNode.insertBefore(span, n);
+      if (m[1]) n.parentNode.insertBefore(document.createTextNode(m[1]), span);
+    });
+  });
+  const no = tbl.querySelector('thead th.stk-no');
+  const w = no ? no.getBoundingClientRect().width : 0;
+  if (w) tbl.querySelectorAll('.stk-w').forEach(el => { el.style.left = w + 'px'; });
 }
 
 function renderMaint() {
@@ -3887,13 +3935,13 @@ function renderMaint() {
   const head = `
     <thead>
       <tr>
-        <th rowspan="4" style="width:44px;">No.</th>
-        <th rowspan="4" class="l" style="width:165px;">Worker</th>
-        ${MAINT_SHEET_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
-        <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
+        <th rowspan="4" class="stk-no" style="width:44px;">No.</th>
+        <th rowspan="4" class="l stk-w" style="width:165px;">Worker</th>
+        ${MAINT_SHEET_TYPES.map(t => `<th colspan="2" class="job-title job-${t.code} jg-start">${esc(t.label)}</th>`).join('')}
+        <th rowspan="4" class="stk-sub" style="width:120px;">Subtotal (RM)</th>
       </tr>
       <tr>${MAINT_SHEET_TYPES.map(t =>
-        `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
+        `<th colspan="2" class="job-rate job-${t.code} jg-start">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
       <tr>${MAINT_SHEET_TYPES.map(t =>
         workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code), { compact: true })).join('')}</tr>
       <!-- Worker is now bounded (above) so the job columns sit beside it
@@ -3904,7 +3952,8 @@ function renderMaint() {
            starts. The first group needs none: there is nothing to its left
            but Worker, already bounded. -->
       <tr>${MAINT_SHEET_TYPES.map((t, i) =>
-        `<th style="width:${i ? 112 : 90}px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
+        `<th class="sub-h job-${t.code} jg-start" style="width:${i ? 112 : 90}px;">Capacity</th>`
+        + `<th class="sub-h job-${t.code} jg-tot" style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
 
   /* The row's Subtotal is the sum of the four columns BESIDE it, not the
@@ -3918,8 +3967,8 @@ function renderMaint() {
 
   const body = wk.map((w, i) => `
     <tr>
-      <td style="color:var(--text-faint);">${i + 1}</td>
-      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
+      <td class="stk-no">${i + 1}</td>
+      <td class="l stk-w">${esc(w)}${
         calibrationLine(capCalibrationOf('maint', n, w, MAINT_SHEET_TYPES.map(t => t.code),
                                          (c) => capWorked(w, c)), 'cap')}${
         calibrationLine(calibrationOf('maint', n, w, MAINT_SHEET_TYPES.map(t => t.code),
@@ -3930,18 +3979,20 @@ function renderMaint() {
              + earnedCell('maint', 'maint', n, w, t.code, t.label,
                           c ? rmOf(w, t.code) : 0);
       }).join('')}
-      <td class="money">${money(subOf(w))}</td>
+      <td class="money stk-sub">${money(subOf(w))}</td>
     </tr>`).join('');
 
   const foot = `
     <tfoot><tr>
-      <td colspan="2">Grand Total</td>
+      <td colspan="2" class="stk-foot">Grand Total</td>
       ${MAINT_SHEET_TYPES.map(t =>
-        `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
-      <td>${money(sheetGrand)}</td>
+        `<td class="job-${t.code} jg-start">${capFmt(capSum(t.code))}</td>`
+        + `<td class="job-${t.code} jg-tot">${money(rmSum(t.code))}</td>`).join('')}
+      <td class="stk-sub">${money(sheetGrand)}</td>
     </tr></tfoot>`;
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+  try { decorateMaintTable($('maint-table')); } catch (_) {}
 
   /* A frozen claim's notes would be about whatever Worker Record looks like
      NOW — missing rates, stray names, a batch report still loading — none

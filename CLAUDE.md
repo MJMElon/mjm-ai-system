@@ -8592,3 +8592,25 @@ they are: the customer signed paper with that number on it.
 
 `FC-Portal/tests/a_do_is_numbered_at_save.cjs` (sections 5 to 7) and
 `Mobile/tests/a_second_do_the_same_day_is_its_own_do.cjs` hold it.
+
+## The Work Maintenance claim is four colour blocks, and the look moves no figure
+
+The office asked for the Nursery Payroll to stop being eleven columns of
+look-alike figures in bright indigo. The module is now **forest green on warm
+grey** (`--ink` is `#1b4332`; the variable NAMES did not move, so every rule
+reading them followed) in **Plus Jakarta Sans**, with tabular figures on every
+table. On the Work Maintenance claim each job is its own soft colour — P & D
+sage, Manuring amber, Weeding sky, Interrow teal — carried from its card down
+into its heading and its cells; a heavy line opens each job and a faint dashed
+one splits Capacity from Total; a dash is faint; the RM in a money cell is
+small and grey; a hovered row turns mint; and No., Worker and Subtotal stay
+pinned while the four jobs scroll on a narrow screen.
+
+**`decorateMaintTable()` only adds classes and wraps the `RM ` in a span.** It
+runs after `renderMaint()` rather than inside `capCell` / `earnedCell`, because
+those draw the other sheets too, and every cell's `textContent` is exactly what
+it was — the first check in `tests/the_maint_claim_reads_in_four_colour_blocks.cjs`
+says so before it asks anything about colour. The hover bolds with a text
+stroke, not a font weight, so columns do not shift width under the pointer.
+The colour table is in the stylesheet beside the rules that use it. The PDF is
+not part of this and still draws its own colours.
