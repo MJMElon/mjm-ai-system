@@ -1270,7 +1270,7 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
      money then follows the capacity it is worked out from. A second stepper
      on the money would be two ways to move the same figure, disagreeing. */
   return `<td class="money"${open}>${money(shown)}`
-       + (canEdit && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
+       + (canEdit && !a ? '<span class="pen" aria-hidden="true">\u270e</span>' : '')
        + '</td>';
 }
 
@@ -3877,18 +3877,51 @@ function workdoneCell(cap, rate, claimed, opts) {
    Seedlings): each job is a colour block, cat-1 to cat-4, the same four
    colours whichever sheet it is, and No., Worker and Subtotal are pinned. */
 
+/* ── THE STANDARD TABLE ─────────────────────────────────────────────────
+   Every table in this module goes through tidyTable(), which a
+   MutationObserver runs the moment a table's contents are replaced, so a
+   table added next month obeys it without anybody remembering to. It
+   decides each column's TYPE off what the column holds and its heading,
+   and the type decides the alignment:
+
+     serial   No. / #                               centre, narrow
+     status   a heading naming a status             centre
+     action   a blank heading over nothing but buttons  centre, narrow
+     media    nothing but a picture or a map thumb  centre
+     number   figures, money, a figure and its unit right, tabular
+     text     everything else                        left
+
+   It also takes the RM off a cell that is only an amount (the heading
+   says it once), marks a dash faint, and centres a heading that spans
+   several columns over exactly those columns.
+
+   A table whose headings sit INSIDE its body -- the Pre Nursery claim has
+   one band per job, each with its own heading row -- is tidied BAND BY
+   BAND: column three of one job is not column three of the next, and
+   asking the whole body at once read the headings as text and left every
+   figure on that sheet aligned to the left. */
 const _NUM_RX = /^-?[\d,]+(\.\d+)?%?$/;
+const _MONTH_RX = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
+/* A figure with its unit after it -- "3,000 Bag" -- is a quantity and reads
+   right like any other figure. A day ("03 Nov") is not, so a unit that is a
+   month is not a unit. */
+function _isFigure(v) {
+  if (_NUM_RX.test(v)) return true;
+  const m = /^-?[\d,]+(\.\d+)?\s+([A-Za-z]{1,10})$/.exec(v);
+  return !!(m && !_MONTH_RX.test(m[2]));
+}
 
 /* The text of a cell that is ITS value -- not a stepper button, not the
-   calibrate line under a name, not a pill in a heading. */
+   calibrate line under a name, not a pill in a heading, not the pencil
+   that says the cell can be adjusted. */
 function _cellValueText(td) {
   let s = '';
   const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-    if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep')) continue;
+    if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep, .pen, .sp-sub')) continue;
     s += n.nodeValue;
   }
-  return s.trim();
+  return s.replace(/✎/g, '').trim();
 }
 
 /* A section of a table as a grid: grid[r][c] is the cell covering that
@@ -3911,95 +3944,114 @@ function _tableGrid(rows) {
   return grid;
 }
 
+const _isHeadRow = tr => tr.cells.length > 0 && Array.from(tr.cells).every(c => c.tagName === 'TH');
+
 function tidyTable(tbl) {
   if (!tbl || !tbl.tBodies) return;
   const bodyRows = [];
   Array.from(tbl.tBodies).forEach(b => bodyRows.push(...b.rows));
-  if (tbl.tFoot) bodyRows.push(...tbl.tFoot.rows);
-  const grid = _tableGrid(bodyRows);
-  const width = grid.reduce((m, r) => Math.max(m, r ? r.length : 0), 0);
-  const numCols = new Set(), rmCols = new Set();
+  const footRows = tbl.tFoot ? Array.from(tbl.tFoot.rows) : [];
 
   // 1. Strip a leading "RM " off each data cell, and mark the empty ones.
   //    Only where the cell IS an amount: "RM 5 bonus agreed" is a sentence.
-  bodyRows.forEach(tr => Array.from(tr.cells).forEach(td => {
-    if (/^RM\s?-?[\d,]+(\.\d+)?$/.test(_cellValueText(td))) {
-      const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
-      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-        if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep')) continue;
-        if (/^\s*RM\s?[-\d]/.test(n.nodeValue)) {
-          n.nodeValue = n.nodeValue.replace(/^(\s*)RM\s?/, '$1');
-          td.dataset.rm = '1';
-          break;
+  bodyRows.concat(footRows).forEach(tr => {
+    if (_isHeadRow(tr)) return;
+    Array.from(tr.cells).forEach(td => {
+      if (/^RM\s?-?[\d,]+(\.\d+)?$/.test(_cellValueText(td))) {
+        const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+          if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep, .pen')) continue;
+          if (/^\s*RM\s?[-\d]/.test(n.nodeValue)) {
+            n.nodeValue = n.nodeValue.replace(/^(\s*)RM\s?/, '$1');
+            td.dataset.rm = '1';
+            break;
+          }
         }
       }
-    }
-    const v = _cellValueText(td);
-    if (v === '—' || v === '-') td.classList.add('nil');
-  }));
+      const v = _cellValueText(td);
+      if (v === '—' || v === '-') td.classList.add('nil');
+    });
+  });
 
-  // 2. A column is a column of FIGURES when every cell that holds one
-  //    value holds a number or a dash, and at least one holds a number.
-  for (let c = 0; c < width; c++) {
-    let figs = 0, other = 0, rm = 0;
-    const seen = new Set();
+  // 2. The bands: the thead and the body under it, or -- where the body
+  //    carries its own heading rows -- one band per heading row.
+  const bands = [];
+  if (bodyRows.some(_isHeadRow)) {
+    let cur = null;
+    bodyRows.forEach(tr => {
+      if (_isHeadRow(tr)) { cur = { heads: [tr], rows: [] }; bands.push(cur); }
+      else if (cur) cur.rows.push(tr);
+    });
+    // The foot is laid out on the widest band.
+    if (footRows.length && bands.length) {
+      const widest = bands.reduce((a, b) => (_tableGrid(b.heads)[0] || []).length >= (_tableGrid(a.heads)[0] || []).length ? b : a);
+      bands.push({ heads: widest.heads, rows: footRows, footOnly: true });
+    }
+  } else {
+    bands.push({ heads: tbl.tHead ? Array.from(tbl.tHead.rows) : [], rows: bodyRows.concat(footRows) });
+  }
+  bands.forEach(b => _tidyBand(b.heads, b.rows, !!b.footOnly));
+
+  // 3. A heading that spans several columns is centred over them.
+  tbl.querySelectorAll('th').forEach(th => { if ((th.colSpan || 1) > 1) th.classList.add('grp'); });
+}
+
+function _tidyBand(headRows, rows, footOnly) {
+  const grid = _tableGrid(rows);
+  const hg = _tableGrid(headRows);
+  const width = Math.max(hg.reduce((m, r) => Math.max(m, r ? r.length : 0), 0),
+                         grid.reduce((m, r) => Math.max(m, r ? r.length : 0), 0));
+  const cellsOf = c => {
+    const out = [], seen = new Set();
     grid.forEach(row => {
       const td = row && row[c];
       if (!td || seen.has(td) || (td.colSpan || 1) > 1) return;
-      seen.add(td);
+      seen.add(td); out.push(td);
+    });
+    return out;
+  };
+  const leaf = c => {
+    for (let r = hg.length - 1; r >= 0; r--) {
+      const cell = hg[r] && hg[r][c];
+      if (cell && (cell.colSpan || 1) === 1) return cell;
+    }
+    return null;
+  };
+  const set = (c, cls, th) => {
+    cellsOf(c).forEach(td => { td.classList.remove('num', 'r', 'c'); cls.forEach(k => td.classList.add(k)); });
+    if (th && !footOnly) { th.classList.remove('num', 'r', 'c'); cls.forEach(k => th.classList.add(k)); }
+  };
+  for (let c = 0; c < width; c++) {
+    const th = leaf(c);
+    const head = th ? th.textContent.trim() : '';
+    let figs = 0, other = 0, rm = 0, btns = 0, media = 0;
+    cellsOf(c).forEach(td => {
+      // A picture with a caption under it is still a picture.
+      if (td.querySelector('img, .tp-maps')) { media++; return; }
       const v = _cellValueText(td);
-      if (!v) return;
-      if (_NUM_RX.test(v)) figs++;
-      else if (v !== '—' && v !== '-') other++;
       if (td.dataset.rm) rm++;
+      if (!v) {
+        if (td.querySelector('button, a.btn, input[type=checkbox]')) btns++;
+        return;
+      }
+      if (_isFigure(v)) figs++;
+      else if (v !== '—' && v !== '-') other++;
     });
-    if (figs && !other) numCols.add(c);
-    if (rm) rmCols.add(c);
-  }
-  grid.forEach(row => (row || []).forEach((td, c) => {
-    if (td && numCols.has(c) && (td.colSpan || 1) === 1) td.classList.add('num');
-  }));
-
-  // 3. The heading over each such column: right-aligned with it, and
-  //    carrying the (RM) the cells no longer say. Then the two other
-  //    alignments the design system names: a serial number (No. / #) is
-  //    CENTRED, and a column holding nothing but buttons -- the actions --
-  //    sits on the RIGHT, at the end of the row where actions go. Text
-  //    is left, which is the table's default and needs no mark.
-  if (tbl.tHead) {
-    const hg = _tableGrid(tbl.tHead.rows);
-    const markCol = (c, cls) => grid.forEach(row => {
-      const td = row && row[c];
-      if (td && (td.colSpan || 1) === 1) td.classList.add(cls);
-    });
-    for (let c = 0; c < width; c++) {
-      let th = null;
-      for (let r = hg.length - 1; r >= 0; r--) {
-        const cell = hg[r] && hg[r][c];
-        if (cell && (cell.colSpan || 1) === 1) { th = cell; break; }
-      }
-      if (!th) continue;
-      const head = th.textContent.trim();
-      if (/^(no\.?|#)$/i.test(head)) {
-        // A serial number is a position, not a figure: centred, never .num.
-        th.classList.add('c'); th.classList.remove('num'); markCol(c, 'c');
-        grid.forEach(row => { const td = row && row[c]; if (td) td.classList.remove('num'); });
-        continue;
-      }
-      else if (!numCols.has(c) && !head) {
-        let btns = 0, other = 0;
-        grid.forEach(row => {
-          const td = row && row[c];
-          if (!td || (td.colSpan || 1) > 1) return;
-          if (td.querySelector('button, a.btn')) btns++;
-          else if (_cellValueText(td)) other++;
-        });
-        if (btns && !other) { th.classList.add('r'); markCol(c, 'r'); }
-      }
-      if (numCols.has(c)) th.classList.add('num');
-      if (rmCols.has(c) && !/RM/.test(th.textContent) && th.textContent.trim()) {
-        th.appendChild(document.createTextNode(' (RM)'));
-      }
+    let type;
+    if (/^(no\.?|#)$/i.test(head))              type = 'serial';
+    else if (/\bstatus\b/i.test(head))           type = 'status';
+    else if (!head && btns && !figs && !other)   type = 'action';
+    else if (media && !figs && !other)           type = 'media';
+    else if (figs && !other)                     type = 'number';
+    else                                         type = 'text';
+    if (type === 'serial') set(c, ['c', 'col-ser'], th);
+    else if (type === 'status') set(c, ['c', 'col-st'], th);
+    else if (type === 'media') set(c, ['c'], th);
+    else if (type === 'action') set(c, ['c', 'col-act'], th);
+    else if (type === 'number') set(c, ['num'], th);
+    else if (th && !footOnly && !th.classList.contains('l')) th.classList.remove('num', 'r', 'c');
+    if (type === 'number' && rm && th && !footOnly && !/RM/.test(th.textContent) && head) {
+      th.appendChild(document.createTextNode(' (RM)'));
     }
   }
 }

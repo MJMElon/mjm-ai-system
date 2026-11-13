@@ -8782,3 +8782,53 @@ colour is a DOT before its name on the group heading and on its card.
 tabs — the header, the brand, the icons, no vertical lines, one title size,
 no card bars, one control height, a centred serial — and **27 of its 146
 fail on the previous page**, by name.
+
+### And every table is ONE STANDARD TABLE, typed by what its columns hold
+
+The office found alignment different from tab to tab and asked for one rule
+across the whole module. The rule lives in two places and nowhere else:
+`tidyTable()` in `npayroll_script.js`, which every table goes through
+(the MutationObserver runs it on every redraw, so a table added next month
+obeys it), and the **THE STANDARD TABLE** block at the end of
+`npayroll_styles.css`, which is the last word on alignment.
+
+`tidyTable` gives each column a TYPE, off its heading and what its cells
+hold, and the type decides everything:
+
+| type | how it is told | alignment |
+|---|---|---|
+| serial | heading No. / # | centre, 56px (`.col-ser`) |
+| status | heading names a status | centre, no wrap (`.col-st`) |
+| action | blank heading, nothing but buttons | centre, shrink to its buttons (`.col-act`) |
+| media | a picture or a drone-map thumb, caption or not | centre |
+| number | figures, money, or a figure and its unit ("3,000 Bag") | right, tabular |
+| text | anything else | left |
+
+A heading that spans several columns gets `.grp` and is centred over
+exactly them; the job tables' name, rate and note rows are centred too, and
+a long job name WRAPS instead of widening the table — sideways scroll had
+put the Transplanting group under the pinned Subtotal.
+
+Four things the audit found that the old rule got wrong:
+
+- **Seed Planting had every figure on the LEFT.** Its headings are rows
+  of `<th>` inside the BODY, one band per job, and the old pass read them
+  as text, so no column could be figures. A table like that is now tidied
+  **band by band** — column three of one job is not column three of the
+  next — and the foot is laid on the widest band.
+- **The pencil on an adjustable total made it text**, so no column under
+  one could be right-aligned by type. The pencil is `.pen` now, skipped
+  when a cell is read, and it hangs in the cell's padding so the figure
+  lines up with the total under it.
+- **Actions were on the RIGHT and Status on the left**; both are centred,
+  which is what the office asked for by name.
+- **A unit is not a month.** "3,000 Bag" is a quantity; "03 Nov" is a day.
+  `_isFigure` refuses a unit that is a month abbreviation.
+
+`tests/every_payroll_table_lines_up.cjs` loads all ten tabs with real-shaped
+data and asks every table, cell by cell with the spans expanded, for the
+computed alignment its type demands, that every row spans the heading's
+width, that a heading's edges are the column's edges, that a grouped
+heading is centred, and that figures are tabular. **11 of its tables fail
+on the previous code**, each by name. `AUDIT=1` prints every table's grid,
+`SHOT=/dir` draws each tab and `VW=400` draws them at phone width.

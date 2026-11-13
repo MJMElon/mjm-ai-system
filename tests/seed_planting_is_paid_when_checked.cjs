@@ -204,7 +204,7 @@ const read = (page) => page.evaluate(() => {
      is what says why. */
   let v = await read(a.page);
   check('a column per BATCH, with the worker down the side', v.head,
-    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate', 'Amount']);
+    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate (RM)', 'Amount (RM)']);
   check('a row per PLANTER, their own total, times RM 0.02', v.body, [
     ['Ani',  '—',     '2,000', '2,000', '0.02', '40.00'],
     ['Rina', '1,760', '—',     '1,760', '0.02', '35.20'],

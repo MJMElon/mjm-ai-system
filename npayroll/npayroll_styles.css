@@ -986,3 +986,50 @@ body:not([data-tab="payroll"]) .side-nav .side-sub.active .side-ic { color: #8a9
   .page { padding: var(--sp-4) var(--sp-4) var(--sp-8); }
   .bar-title { font-size: 18px; }
 }
+
+/* ══ THE STANDARD TABLE ═══════════════════════════════════════════════════
+   One table for the whole module. tidyTable() in the script types each
+   column (serial, status, action, media, number, text) and these are the
+   rules the types obey. This block is last on purpose: it is the word.
+
+   Alignment                                  Width
+   serial  No. / #       centre               narrow, never grows
+   status  Status        centre               as wide as its pill
+   action  the buttons   centre               as wide as its buttons
+   number  figures       right, tabular       as wide as its figure
+   text    names, notes  left                 takes what is left
+   A heading spanning several columns is centred over exactly them.     */
+table th.c, table td.c, table tfoot td.c { text-align: center !important; }
+table th.num, table td.num, table th.r, table td.r { text-align: right !important; }
+table thead th.grp, table tbody tr th.grp { text-align: center !important; }
+table th.col-ser, table td.col-ser { width: 56px; white-space: nowrap; }
+table th.col-act, table td.col-act { width: 1%; white-space: nowrap; }
+table th.col-st, table td.col-st { white-space: nowrap; }
+table td.col-act > * + * { margin-left: 6px; }
+table td.col-act .btn + .btn { margin-left: 6px; }
+
+/* The headings of one job group: name, rate and the note under them, all
+   centred over the pair of columns they belong to. A long job name WRAPS
+   rather than pushing the table wider than the page: sideways scrolling
+   put the last group under the pinned Subtotal. */
+table.job-table thead th.job-title, table.job-table thead th.job-rate,
+table.job-table thead th.job-wd { text-align: center !important; }
+table.job-table thead th.job-title { white-space: normal; line-height: 1.35; max-width: 220px; }
+table.job-table thead th.job-rate { white-space: normal; }
+
+/* A figure that can be adjusted carries a pencil. It hangs in the cell's
+   padding, so the figure itself lines up with every figure above and
+   below it and with the total under the column. */
+td.money, td.num { position: relative; }
+td .pen { position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+          color: var(--text-faint); font-size: .7rem; font-weight: 400; }
+table.job-table .stk-sub, table.job-table .stk-no, table.job-table .stk-w { position: sticky; }
+
+/* The cent stepper under a figure sits under the figure, at the right. */
+td.num .cal-step { justify-content: flex-end; }
+
+/* The headings inside the Pre Nursery claim are the same headings as any
+   other table: text over text left, figures over figures right. */
+tbody tr.pn-head th { text-align: left; }
+tbody tr.pn-head th.num { text-align: right !important; }
+tbody tr.pn-head th.grp { text-align: center !important; }
