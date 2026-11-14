@@ -129,7 +129,42 @@ const server = http.createServer((req, res) => {
   const { page, errors } = await open({ modules: { npayroll: 'normal' } });
   const vis = sel => page.evaluate(s => { const e = document.querySelector(s); return !!e && !e.classList.contains('hidden'); }, sel);
   ok(await vis('#dash-home') && !(await vis('#dash-seed')), 'the dashboard opens on All reports, with the cards');
-  ok(await page.$$eval('#dash-tabs .dash-tab', b => b.map(x => x.textContent.trim()).join('|')) === 'All reports|Seed Received Summary', 'a tab per report');
+  // ── the sidebar: drawn from report_menu.js, one component ──
+  const SB = () => page.evaluate(() => {
+    const a = document.getElementById('rs');
+    if (!a) return null;
+    return {
+      brand: a.querySelector('.rs-brand').textContent.replace(/\s+/g, ' ').trim(),
+      main: [...a.querySelectorAll('.rs-nav > .rs-item')].map(x => x.textContent.trim()),
+      cats: [...a.querySelectorAll('[data-rs-cat]')].map(b => ({ id: b.dataset.rsCat, label: b.querySelector('.rs-lbl').firstChild.textContent.trim(),
+        soon: !!b.querySelector('.rs-soon'), disabled: b.disabled, open: b.getAttribute('aria-expanded') === 'true', icon: !!b.querySelector('svg.rs-ic') })),
+      active: [...a.querySelectorAll('.rs-item.rs-active')].map(x => x.dataset.rsItem),
+      activeBg: (() => { const x = a.querySelector('.rs-item.rs-active'); return x ? getComputedStyle(x).backgroundColor + '|' + getComputedStyle(x).color : ''; })(),
+      width: Math.round(a.getBoundingClientRect().width), x: Math.round(a.getBoundingClientRect().left),
+      subOpen: [...a.querySelectorAll('.rs-sub.rs-open')].map(x => x.id),
+    };
+  });
+  let sb = await SB();
+  ok(!!sb, 'the page has the sidebar');
+  ok(sb && /NURSERY MANAGEMENT|Nursery Management/i.test(sb.brand) && /Reporting System/.test(sb.brand), 'sidebar header: Nursery Management, Reporting System', sb && sb.brand);
+  ok(await page.evaluate(() => { const t = document.querySelector('#rs .rs-brand'); return t.scrollWidth <= t.clientWidth; }), 'the brand name fits: NURSERY MANAGEMENT is not cut off');
+  ok(sb && sb.main.join('|') === 'Dashboard', 'main menu: Dashboard', sb && sb.main);
+  ok(sb && sb.cats.map(c => c.label).join('|') === 'Seed Procurement & Receiving|Sales & Marketing|Nursery Operations|Audit & Compliance|Inventory & Stock Control|Nursery Performance & Analytics', 'six categories, in the order asked', sb && sb.cats.map(c => c.label));
+  ok(sb && sb.cats.every(c => c.icon), 'every category has an icon');
+  ok(sb && sb.cats.slice(1).every(c => c.soon && c.disabled) && !sb.cats[0].soon && !sb.cats[0].disabled, 'the other five say Coming soon and cannot be opened', sb && sb.cats);
+  ok(sb && sb.active.join() === 'home' && sb.width === 260 && sb.x === 0, 'on the Dashboard: Dashboard is highlighted, the sidebar is 260px on the left', sb && [sb.active, sb.width, sb.x]);
+  ok(sb && sb.activeBg === 'rgb(234, 243, 237)|rgb(36, 107, 74)', 'the active item is light green with dark green text', sb && sb.activeBg);
+  ok(await page.$$eval('#rs a[href]', as => as.map(a => a.getAttribute('href')).join('|')) === 'nursery_dashboard.html|nursery_dashboard.html#seed|reporting_admin.html', 'no dummy routes: Dashboard, Seed Summary and the way back are the only links', await page.$$eval('#rs a[href]', as => as.map(a => a.getAttribute('href'))));
+  await page.click('#rs [data-rs-cat="sales"]', { force: true }).catch(() => {}); await page.waitForTimeout(80);
+  ok((await SB()).cats[1].open === false && !(await vis('#dash-seed')), 'a Coming soon category does nothing when pressed');
+  await page.click('#rs [data-rs-cat="seed-proc"]'); await page.waitForTimeout(250);
+  ok((await SB()).subOpen.join() === 'rs-sub-seed-proc', 'pressing Seed Procurement & Receiving opens it');
+  await page.click('#rs [data-rs-item="seed"]'); await page.waitForTimeout(150);
+  sb = await SB();
+  ok(await vis('#dash-seed') && sb.active.join() === 'seed' && await page.evaluate(() => location.hash) === '#seed', 'Seed Summary opens the existing report, highlighted, and the address says #seed', [sb.active]);
+  ok(await page.textContent('#page-title') === 'Seed Summary' && await page.textContent('#page-crumb') === 'Seed Procurement & Receiving', 'the heading names the report and its category');
+  await page.click('#rs [data-rs-item="home"]'); await page.waitForTimeout(120);
+  ok(await vis('#dash-home') && (await SB()).active.join() === 'home', 'Dashboard is always one press away');
   ok(await page.textContent('#card-seed-n') === '2', 'the Seed Received card counts the latest year (2026): 270 and 271', await page.textContent('#card-seed-n'));
   ok(await page.textContent('#card-seed-dmg') === (927 / 20500 * 100).toFixed(2) + '%', 'the card shows the year\'s damage %', await page.textContent('#card-seed-dmg'));
   ok(errors.length === 0, 'no page errors', errors);
@@ -247,8 +282,32 @@ const server = http.createServer((req, res) => {
   ok(!(await vis('#print-dlg')) && await page.evaluate(() => window.__printed) === 4, 'Cancel prints nothing');
   ok((await page.evaluate(() => getComputedStyle(document.getElementById('print-area')).display)) === 'none', 'the printed report is not on the screen');
 
-  await page.click('#dash-tabs .dash-tab[data-dash="home"]'); await page.waitForTimeout(100);
-  ok(await vis('#dash-home'), 'All reports takes you back to the cards');
+  // ── the sidebar, collapsed and on a phone ──
+  sb = await SB();
+  ok(sb.active.join() === 'seed' && sb.subOpen.join() === 'rs-sub-seed-proc', 'opened from the card, Seed Summary is highlighted and its category is open', [sb.active, sb.subOpen]);
+  await page.click('#rs [data-rs-collapse]'); await page.waitForTimeout(350);
+  sb = await SB();
+  ok(sb.width === 72, 'collapsed: 72px', sb.width);
+  const gaps = await page.$$eval('#rs .rs-cat', bs => bs.map(b => Math.round(b.getBoundingClientRect().height)));
+  ok(gaps.every(h => h === gaps[0]), 'collapsed: every category icon sits on the same rhythm', gaps);
+  await page.hover('#rs [data-rs-cat="audit"]'); await page.waitForTimeout(60);
+  const tipT = await page.evaluate(() => { const t = document.querySelector('.rs-tip'); return t.style.display === 'none' ? '' : t.textContent; });
+  ok(/Audit & Compliance/.test(tipT) && /Coming soon/.test(tipT), 'collapsed: a tooltip names the category', tipT);
+  const chartW = await page.evaluate(() => document.querySelector('#dash-seed .c1 svg').getAttribute('width'));
+  ok(+chartW > 1000, 'collapsed: the chart is redrawn into the room it got back', chartW);
+  await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(900);
+  ok((await SB()).width === 72 && await vis('#dash-seed'), 'a reload keeps the sidebar collapsed and the report open');
+  await page.click('#rs [data-rs-collapse]'); await page.waitForTimeout(350);
+  await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(350);
+  sb = await SB();
+  ok(sb.x < 0 && await page.isVisible('[data-rs-toggle]'), 'phone: the sidebar is a closed drawer with a menu button', [sb.x]);
+  ok(await page.evaluate(() => document.documentElement.scrollWidth) <= 390, 'phone: no sideways scroll');
+  await page.click('[data-rs-toggle]'); await page.waitForTimeout(350);
+  ok((await SB()).x === 0, 'phone: the menu button opens the drawer');
+  await page.click('#rs [data-rs-item="home"]'); await page.waitForTimeout(350);
+  ok((await SB()).x < 0 && await vis('#dash-home'), 'phone: picking an item opens it and closes the drawer');
+  await page.setViewportSize({ width: 1280, height: 1000 }); await page.waitForTimeout(200);
+  ok(await page.evaluate(() => /\.rs,[^{]*\{\s*display:none/.test(document.getElementById('rs-style').textContent)), 'the sidebar is not printed');
   ok(errors.length === 0, 'still no page errors', errors);
   await page.close();
 

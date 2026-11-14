@@ -15,6 +15,8 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
+<script src="report_menu.js?v=1"></script>
+<script src="report_sidebar.js?v=1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
@@ -40,18 +42,13 @@
 
   /* 1. Header */
   .page-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
-  .back { font-size:12px; font-weight:600; color:var(--green); text-decoration:none; }
-  .back:hover { text-decoration:underline; }
+  .ph-l { display:flex; align-items:flex-end; gap:12px; min-width:0; }
+  .crumb { font-size:12px; font-weight:600; color:var(--green); }
   .h1 { font-size:24px; font-weight:700; color:var(--ink); margin:6px 0 2px; letter-spacing:-.01em; }
   .h-sub { font-size:13px; color:var(--ink-2); }
   .head-meta { font-size:12px; color:var(--ink-2); text-align:right; }
 
-  /* 2. Tabs */
-  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); overflow-x:auto; }
-  .tab { appearance:none; border:0; background:none; height:var(--h); padding:0 16px; cursor:pointer;
-         font-size:13px; font-weight:600; line-height:1; font-family:inherit; color:var(--ink-2); border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; }
-  .tab:hover { color:var(--ink); }
-  .tab.on { color:var(--green); border-bottom-color:var(--green); }
+  /* 2. Navigation is the sidebar (report_sidebar.js), drawn from report_menu.js. */
 
   /* Cards */
   .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
@@ -140,6 +137,7 @@
   .rep-top { display:flex; gap:14px; align-items:flex-start; }
   .rep-ico { width:44px; height:44px; border-radius:10px; background:var(--green-l); color:var(--green); display:grid; place-items:center; flex-shrink:0; }
   .rep-ico svg { width:22px; height:22px; }
+  .rep-cat { display:block; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); margin-bottom:2px; }
   .rep-name { font-size:15px; font-weight:700; color:var(--ink); }
   .rep-sub { font-size:12px; color:var(--ink-2); line-height:1.5; margin-top:4px; }
   .rep-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; border-top:1px solid var(--line); padding-top:14px; }
@@ -239,6 +237,9 @@
 <div id="mjm-ribbon"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
+<!-- The sidebar is mounted into this shell once access is granted, so the
+     loading and refusal screens have no menu to offer. -->
+<div class="rs-shell" id="shell"><div class="rs-content">
 <div id="loading" class="wrap"><div class="empty">Checking access…</div></div>
 
 <div id="forbidden" class="wrap hidden">
@@ -252,19 +253,16 @@
 <div id="main" class="wrap stack hidden">
   <!-- 1. Header -->
   <header class="page-head">
-    <div>
-      <a href="reporting_admin.html" class="back">← Nursery Reporting System</a>
-      <h1 class="h1">Nursery Dashboard</h1>
-      <div class="h-sub">Reports read off the batch report. Figures follow the filters you pick.</div>
+    <div class="ph-l">
+      <span id="menu-btn-slot"></span>
+      <div>
+        <div class="crumb" id="page-crumb">Nursery Management</div>
+        <h1 class="h1" id="page-title">Dashboard</h1>
+        <div class="h-sub" id="page-sub">Every report at a glance. Open one from its card or from the menu.</div>
+      </div>
     </div>
     <div class="head-meta" id="head-meta"></div>
   </header>
-
-  <!-- 2. Tabs: one per report; "All reports" is the card grid. -->
-  <nav class="tabs" id="dash-tabs">
-    <button class="tab dash-tab on" data-dash="home">All reports</button>
-    <button class="tab dash-tab" data-dash="seed">Seed Received Summary</button>
-  </nav>
 
   <section id="dash-home" data-view="home">
     <div class="rep-grid">
@@ -272,7 +270,8 @@
         <span class="rep-top">
           <span class="rep-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-4-2-7-5.5-7-10a7 7 0 0 1 14 0c0 4.5-3 8-7 10z"/><path d="M12 21V9"/><path d="M12 13l-3-3M12 11l3-3"/></svg></span>
           <span>
-            <span class="rep-name">Seed Received Summary</span>
+            <span class="rep-cat">Seed Procurement &amp; Receiving</span>
+            <span class="rep-name" style="display:block">Seed Summary</span>
             <span class="rep-sub" style="display:block">Seed expected against actual seed received, and seed damage against the 5% maximum, by supplier and breed.</span>
           </span>
         </span>
@@ -323,6 +322,8 @@
      more) per supplier and breed, the company header, the filters, the
      summary, then the chart and/or table the option asked for, and the
      signature block naming whoever pressed Print, on that day. -->
+</div></div>
+
 <div id="print-area"></div>
 
 <div class="scrim hidden" id="print-dlg" role="dialog" aria-modal="true" aria-labelledby="print-dlg-t">
@@ -469,15 +470,38 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
   const pctOf = t => ({ v: t.expected > 0 ? (t.actual - t.expected) / t.expected * 100 : null,
                         d: t.expected > 0 ? t.damaged / t.expected * 100 : null });
 
-  /* ── tabs: All reports (the cards) and one per report ── */
+  /* ── views: the Dashboard (the cards) and one per report. Which view is
+     open lives in the address (#seed), so a reload or Back keeps it; the
+     sidebar is told so it highlights the same thing. The heading is read
+     off the MENU, so a report is named in one place. ── */
+  const MENU = window.MJM_REPORT_MENU;
+  const VIEWS = { home: { sub: 'Every report at a glance. Open one from its card or from the menu.' },
+                  seed: { sub: 'Seed expected against actual seed received, and seed damage against the 5% maximum, read off the batch report.' } };
+  function menuEntry(v) {
+    const main = (MENU.main || []).find(i => i.view === v);
+    if (main) return { item: main, cat: null };
+    for (const c of MENU.categories || []) { const i = (c.items || []).find(x => x.view === v); if (i) return { item: i, cat: c }; }
+    return null;
+  }
   function showView(v) {
-    if (!['home', 'seed'].includes(v)) v = 'home';
-    document.querySelectorAll('#dash-tabs .dash-tab').forEach(b => b.classList.toggle('on', b.dataset.dash === v));
+    if (!VIEWS[v]) v = 'home';
     document.querySelectorAll('section[data-view]').forEach(s => s.classList.toggle('hidden', s.dataset.view !== v));
     if (location.hash.slice(1) !== v) history.replaceState(null, '', v === 'home' ? location.pathname + location.search : '#' + v);
+    const m = menuEntry(v);
+    $('page-crumb').textContent = m && m.cat ? m.cat.label : (MENU.brand.title + ' · ' + MENU.brand.sub);
+    $('page-title').textContent = m ? m.item.label : 'Dashboard';
+    $('page-sub').textContent = VIEWS[v].sub;
+    document.title = (m ? m.item.label : 'Dashboard') + ' — Nursery Management Reporting';
+    if (window.MJMReportSidebar && SIDEBAR && m) MJMReportSidebar.setActive(m.item.id);
     if (v === 'seed' && LOADED) render();
   }
-  document.querySelectorAll('#dash-tabs .dash-tab').forEach(b => b.addEventListener('click', () => showView(b.dataset.dash)));
+  let SIDEBAR = null;
+  function mountSidebar(v) {
+    const m = menuEntry(v) || menuEntry('home');
+    SIDEBAR = MJMReportSidebar.mount({ host: $('shell'), menu: MENU, active: m.item.id, onSelect: it => showView(it.view) });
+    $('menu-btn-slot').outerHTML = MJMReportSidebar.menuButton();
+  }
+  addEventListener('hashchange', () => showView(location.hash.slice(1) || 'home'));
   document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => showView(b.dataset.open)));
 
   async function loadLedger() {
@@ -824,6 +848,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         $('loading').classList.add('hidden'); $('forbidden').classList.remove('hidden'); return;
       }
       $('loading').classList.add('hidden'); $('main').classList.remove('hidden');
+      mountSidebar(location.hash.slice(1) || 'home');
       showView(location.hash.slice(1) || 'home');
     } catch (e) { console.warn(e); location.href = '../index.html'; return; }
 
