@@ -62,6 +62,7 @@ ok(groupRows(B, 'batch').map(x => x.key).join() === '270,271,272,273', 'by batch
 const blocks = reportBlocks(B.filter(b => b.recorded), 'batch');
 ok(blocks.map(b => b.supplier + '/' + b.breed).join() === 'FGV/Calix 600,Sime Darby/Calix 600', 'by batch: one report per supplier + breed, as the office sheet is', blocks.map(b => b.supplier + '/' + b.breed));
 ok(reportBlocks(B, 'month').length === 1, 'by month: one report spanning every supplier');
+ok(reportBlocks(B.filter(b => b.recorded && b.breed === 'Calix 600'), 'batch', true).length === 1, 'a breed picked with no supplier: ONE report, every supplier together');
 
 // ── 2. the real page, in a real browser ──────────────────────────────
 console.log('\n2. the page');
@@ -162,7 +163,7 @@ const server = http.createServer((req, res) => {
   ok(S.k1[1].v === '20,500' && S.k1[2].v === '20,327', 'cards read 20,500 and 20,327 in full, never 20.5k', S.k1.map(k => k.v));
   ok(S.ytitle === 'Seed Quantity (Seeds)' && S.xtitle === 'Batch Number', 'the chart titles both axes', [S.ytitle, S.xtitle]);
   ok(S.yticks.join('|') === '0|5,000|10,000|15,000|20,000', 'the Y axis reads 0 · 5,000 · … · 20,000, with commas and no K', S.yticks);
-  ok(S.xticks.join('|') === 'B.270|B.271', 'the X axis reads B.270, B.271', S.xticks);
+  ok(S.xticks.join('|') === '270|271', 'the X axis reads 270, 271 — no B.', S.xticks);
   ok(S.step && S.bars === 2, 'green bars and the dashed expected line', [S.step, S.bars]);
   ok(S.vlabels.join('|') === '-0.70%|-1.00%', 'the variance sits above each batch', S.vlabels);
   ok(S.ref2 === 1 && S.y2title === 'Seed Damage (%)', 'the damage chart carries the 5% line and its own Y title', [S.ref2, S.y2title]);
@@ -223,6 +224,16 @@ const server = http.createServer((req, res) => {
   ok(P[1].rows.length === 1 && P[1].rows[0][6] === '10,500' && P[1].yticks.join('|') === '0|5,000|10,000|15,000|20,000', 'printed figures are in full', [P[1].rows[0], P[1].yticks]);
   const today = (() => { const d = new Date(); return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear(); })();
   ok(P.every(b => b.signName === 'Esther' && b.signDate === today && b.sigBox), 'printed: Prepared and Verified by whoever pressed Print, today, with a signature box', P.map(b => [b.signName, b.signDate]));
+  await page.selectOption('#f-breed', 'Calix 600'); await page.waitForTimeout(80);
+  await page.click('#btn-print'); await page.click('#print-dlg [data-print="both"]'); await page.waitForTimeout(80);
+  const PB = await readPrint();
+  ok(PB.length === 1 && /Supplier: All/.test(PB[0].meta) && /Breed: Calix 600/.test(PB[0].meta) && PB[0].rows.length === 2, 'breed picked, no supplier: one printed report with FGV and Sime Darby together', PB.map(b => [b.meta, b.rows.length]));
+  await page.emulateMedia({ media: 'print' }); await page.setViewportSize({ width: 1032, height: 703 });
+  const fit = await page.evaluate(() => document.documentElement.scrollWidth);
+  ok(fit <= 1032, 'printed: nothing is wider than the A4 page, so the browser does not shrink the sheet and leave paper under the signature', fit);
+  await page.emulateMedia({ media: 'screen' }); await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.selectOption('#f-breed', ''); await page.waitForTimeout(80);
+  ok(/\.sign\s*\{[^}]*margin-top:auto/.test(html) && /\.p-block\s*\{[^}]*display:flex[^}]*min-height:184mm/.test(html), 'the signature is pushed to the foot of the printed page');
   ok(/@page\s*\{\s*size:A4 landscape/.test(html) && /table\.pt thead\s*\{\s*display:table-header-group/.test(html) && /table\.pt tr\s*\{[^}]*break-inside:avoid/.test(html), 'A4 landscape, the header repeats, no row is cut');
 
   await page.click('#btn-print'); await page.click('#print-dlg [data-print="chart"]'); await page.waitForTimeout(80);
@@ -231,9 +242,9 @@ const server = http.createServer((req, res) => {
   await page.click('#btn-print'); await page.click('#print-dlg [data-print="table"]'); await page.waitForTimeout(80);
   P = await readPrint();
   ok(P.every(b => b.charts === 0 && b.table), 'table only: no chart', P.map(b => [b.charts, b.table]));
-  ok(await page.evaluate(() => window.__printed) === 3, 'each option printed once');
+  ok(await page.evaluate(() => window.__printed) === 4, 'each option printed once');
   await page.click('#btn-print'); await page.click('#print-cancel'); await page.waitForTimeout(40);
-  ok(!(await vis('#print-dlg')) && await page.evaluate(() => window.__printed) === 3, 'Cancel prints nothing');
+  ok(!(await vis('#print-dlg')) && await page.evaluate(() => window.__printed) === 4, 'Cancel prints nothing');
   ok((await page.evaluate(() => getComputedStyle(document.getElementById('print-area')).display)) === 'none', 'the printed report is not on the screen');
 
   await page.click('#dash-tabs .dash-tab[data-dash="home"]'); await page.waitForTimeout(100);
