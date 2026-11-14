@@ -45,5 +45,7 @@
   "shared/shared_cf_select.js@3": "9c056b80d21e",
   "operation/operation_stock_sales.js@22": "3396acc09dad",
   "pms/pms_styles.css@20261113b": "1b166d278dcf",
-  "pms/pms_app.js@20261113b": "34799e11a9c3"
+  "pms/pms_app.js@20261113b": "34799e11a9c3",
+  "reporting/report_menu.js@1": "efc0da7b33e9",
+  "reporting/report_sidebar.js@1": "9c02d941a4cc"
 }

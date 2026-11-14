@@ -7607,7 +7607,35 @@ signature takes `margin-top:auto`. **That only works if nothing is wider
 than the page** — the table's headings wrap for that reason; on one line it
 ran 1,280px on a 1,032px page and Chrome shrank the whole sheet, which is
 what left a band of empty paper under the signature. The test asks the
-width. Chart labels read 270, not B.270. The sheet's Delivery Note Quantity row has no
+width. Chart labels read 270, not B.270.
+
+**The dashboard's navigation is a SIDEBAR drawn from a menu**, never written
+into the page. `reporting/report_menu.js` is the menu and nothing else —
+Dashboard, then six categories in the office's order (Seed Procurement &
+Receiving, Sales & Marketing, Nursery Operations, Audit & Compliance,
+Inventory & Stock Control, Nursery Performance & Analytics), with **Seed
+Summary** the one report, under the first. `reporting/report_sidebar.js` is
+the component: it draws whatever the menu holds and knows no report.
+
+- **A report is ONE line in the menu.** An item with `view` is a view of the
+  dashboard page (`#seed`, handed to the page's `showView` without a
+  reload); one with `href` is a page of its own. A category with NO items is
+  drawn with its icon and *Coming soon*, and is DISABLED — no dummy page and
+  no dummy route; the test asserts the only links are Dashboard, Seed
+  Summary and the way back.
+- **The page heading is read off the menu** (crumb = the category, title =
+  the item), so a report is named in one place.
+- One category open at a time; the one holding the active report opens by
+  itself. Collapsed (72px) is kept per device in localStorage and defaults to
+  collapsed under 1200px; a collapsed category press opens the sidebar.
+  Tooltips are one fixed element (an `::after` inside the scrolling nav would
+  be clipped). Under 768px it is a drawer behind the header's menu button,
+  closed after a pick, on the scrim and on Esc.
+- **The width animates, so the component fires `resize` once it settles** —
+  the charts are drawn to their host width and would otherwise keep the old
+  one. The sidebar is not printed.
+- The sidebar is mounted only once access is granted, so the loading and
+  refusal screens have no menu. The sheet's Delivery Note Quantity row has no
 ledger field and is not drawn.
 
 Every figure is `calcPlanting`'s own, off the same ledger rows: Expected is
