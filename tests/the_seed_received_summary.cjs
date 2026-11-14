@@ -21,7 +21,7 @@ const ok = (c, m, got) => { if (c) { pass++; console.log('  ok   ' + m); } else 
 const L = [];
 let id = 1;
 const add = (o) => L.push(Object.assign({ id: id++, created_at: (o.transaction_date || '2026-01-01') + 'T08:00:00Z', remark: '' }, o));
-add({ transaction_type: 'Seeds_Received', batch_name: '270', breed_name: 'Calix 600', quantity_change: 10500, transaction_date: '2026-09-02', remark: 'Seeds received. Supplier: Sime Darby. MPOB: 1. DO_Qty: 10000. Incl. 5% FOC.' });
+add({ transaction_type: 'Seeds_Received', batch_name: '270', breed_name: 'Calix 600', quantity_change: 10500, transaction_date: '2026-09-02', remark: 'Seeds received. Supplier: Sime Darby. MPOB: 1. D/O: SSO/2026/09/02. DO_Qty: 10000. Incl. 5% FOC.' });
 add({ transaction_type: 'Planted', batch_name: '270', quantity_change: 6000, transaction_date: '2026-09-05' });
 add({ transaction_type: 'Planted', batch_name: '270', quantity_change: 4100, transaction_date: '2026-09-05' });
 add({ transaction_type: 'Damaged_Seeds', batch_name: '270', quantity_change: 327, transaction_date: '2026-09-05' });
@@ -42,11 +42,12 @@ const html = fs.readFileSync(path.join(ROOT, PAGE), 'utf8');
 const firstScript = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).find(s => /function buildBatches/.test(s));
 const mod = { exports: {} };
 new Function('module', firstScript)(mod);
-const { buildBatches, groupRows } = mod.exports;
+const { buildBatches, groupRows, reportBlocks } = mod.exports;
 const B = buildBatches(L);
 const by = Object.fromEntries(B.map(b => [b.batch, b]));
 ok(by['270'].expected === 10500 && by['270'].actual === 10427, '270: expected 10,500, actual = 10,100 planted + 327 damaged', by['270']);
 ok(by['270'].supplier === 'Sime Darby' && by['270'].breed === 'Calix 600', '270: supplier read off the remark, breed off the row', [by['270'].supplier, by['270'].breed]);
+ok(by['270'].doNo === 'SSO/2026/09/02' && by['270'].purchased === 10000 && by['270'].focPct === 5, '270: D/O number, seed purchased and FOC % read off the remark', [by['270'].doNo, by['270'].purchased, by['270'].focPct]);
 ok(by['272'].expected === 8000, '272: the NEWEST reception row wins, not the sum', by['272'].expected);
 ok(by['272'].recorded === false, '272: no Seed Planting saved, so it is marked unrecorded');
 const g = Object.fromEntries(groupRows(B, 'batch').map(x => [x.key, x]));
@@ -58,6 +59,9 @@ ok(byBreed['Calix 600'].n === 3 && byBreed['Calix 600'].expected === 21750, 'by 
 ok(Math.abs(byBreed['Calix 600'].damagePct - 927 / 21750 * 100) < 1e-9, 'by breed: % is worked on the sums, never an average of %', byBreed['Calix 600'].damagePct);
 ok(groupRows(B, 'month').map(x => x.key).join() === '2025-12,2026-09,2026-10', 'by month: in calendar order', groupRows(B, 'month').map(x => x.key));
 ok(groupRows(B, 'batch').map(x => x.key).join() === '270,271,272,273', 'by batch: in batch-number order');
+const blocks = reportBlocks(B.filter(b => b.recorded), 'batch');
+ok(blocks.map(b => b.supplier + '/' + b.breed).join() === 'FGV/Calix 600,Sime Darby/Calix 600', 'by batch: one report per supplier + breed, as the office sheet is', blocks.map(b => b.supplier + '/' + b.breed));
+ok(reportBlocks(B, 'month').length === 1, 'by month: one report spanning every supplier');
 
 // ── 2. the real page, in a real browser ──────────────────────────────
 console.log('\n2. the page');
@@ -121,52 +125,66 @@ const server = http.createServer((req, res) => {
   }
 
   const { page, errors } = await open({ modules: { npayroll: 'normal' } });
-  const shown = await page.evaluate(() => !document.getElementById('seed-body').classList.contains('hidden'));
-  ok(shown, 'a Nursery Reporting user sees the Seed Received Summary');
+  const vis = sel => page.evaluate(s => { const e = document.querySelector(s); return !!e && !e.classList.contains('hidden'); }, sel);
+  ok(await vis('#dash-home') && !(await vis('#dash-seed')), 'the dashboard opens on All reports, with the cards');
+  ok(await page.$$eval('#dash-tabs .dash-tab', b => b.map(x => x.textContent.trim()).join('|')) === 'All reports|Seed Received Summary', 'a tab per report', await page.$$eval('#dash-tabs .dash-tab', b => b.map(x => x.textContent.trim())));
+  ok(await page.textContent('#card-seed-n') === '2', 'the Seed Received card counts the latest year (2026): 270 and 271', await page.textContent('#card-seed-n'));
+  ok((await page.textContent('#card-seed-dmg')) === (927 / 20500 * 100).toFixed(2) + '%' || (await page.textContent('#card-seed-dmg')) === (927 / 20500 * 100 - 0).toFixed(2) + '%', 'the card shows the year\'s damage %', await page.textContent('#card-seed-dmg'));
   ok(errors.length === 0, 'no page errors', errors);
   ok(await page.evaluate(() => window.__ranges) >= 2, 'the ledger is read in pages', await page.evaluate(() => window.__ranges));
 
-  const rowsOf = id => page.$$eval(`#${id} tbody tr`, trs => trs.map(tr => [...tr.cells].map(td => td.textContent.trim())));
-  let t1 = await rowsOf('t1');
-  ok(t1.map(r => r[0]).join() === '270,271,273', 'table 1 lists the planted batches; 272 (not planted) is left out', t1.map(r => r[0]));
-  const r273 = t1.find(r => r[0] === '273');
-  ok(r273 && r273.includes('1,200'), '273: all 1,200 tray rows counted — the read went past 1,000', r273);
-  const r270 = t1.find(r => r[0] === '270');
-  ok(r270 && r270.includes('10,500') && r270.includes('10,427') && r270.includes('-0.70%'), '270 reads 10,500 · 10,427 · −0.70%', r270);
+  await page.click('#card-seed');
+  await page.waitForTimeout(150);
+  ok(await vis('#dash-seed') && !(await vis('#dash-home')), 'the card opens the Seed Received Summary tab');
+  ok(await page.inputValue('#f-year') === '2026', 'the report opens on the latest year, as the sheet is one year at a time');
+
+  // Read every report block: its supplier/breed and its two transposed tables.
+  const readBlocks = () => page.$$eval('.rep[data-block]', reps => reps.map(r => {
+    const tbl = cls => { const t = r.querySelector('table.' + cls); if (!t) return null;
+      const heads = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+      const rows = {}; t.querySelectorAll('tbody tr').forEach(tr => { const c = [...tr.cells].map(td => td.textContent.trim()); rows[c[0]] = c.slice(1); });
+      return { heads, rows }; };
+    return { meta: r.querySelector('.rep-meta').textContent.replace(/\s+/g, ' '), t1: tbl('t1'), t2: tbl('t2'),
+             bars1: r.querySelectorAll('.c1 svg .hit').length, ref2: r.querySelectorAll('.c2 svg line[stroke-dasharray="6 4"]').length };
+  }));
+  let R = await readBlocks();
+  ok(R.length === 2 && /FGV/.test(R[0].meta) && /Sime Darby/.test(R[1].meta) && /Calix 600/.test(R[1].meta), 'one report block per supplier + breed, named in its header', R.map(x => x.meta));
+  const sd = R[1];
+  ok(/B\.270/.test(sd.t1.heads[1]) && /SSO\/2026\/09\/02/.test(sd.t1.heads[1]), 'the batches go ACROSS, headed Batch / D/O number', sd.t1.heads);
+  ok(sd.t1.rows['Seed Purchased'][0] === '10,000', 'Seed Purchased is the D/O quantity', sd.t1.rows['Seed Purchased']);
+  const expKey = Object.keys(sd.t1.rows).find(k => /Seed Purchased with 5% FOC/.test(k));
+  ok(!!expKey && sd.t1.rows[expKey][0] === '10,500', 'Seed Purchased with 5% FOC is the expected 10,500', Object.keys(sd.t1.rows));
+  ok(sd.t1.rows['Actual Seed Received'][0] === '10,427' && sd.t1.rows['Variance (%)'][0] === '-0.70%', '270 reads 10,427 · −0.70%', [sd.t1.rows['Actual Seed Received'], sd.t1.rows['Variance (%)']]);
+  const fg = R[0];
+  ok(fg.t2.rows['Seed Damage'][0] === '600' && fg.t2.rows['Maximum (%)'][0] === '5%' && fg.t2.rows['Seed Damage (%)'][0] === '6.00%' && /Over/.test(fg.t2.rows['Status'][0]), '271: 600 · 5% · 6.00% · over', fg.t2.rows);
+  ok(/Within/.test(sd.t2.rows['Status'][0]), '270 at 3.11% is within');
+  ok(sd.bars1 === 1 && fg.bars1 === 1 && sd.ref2 === 1, 'each block draws its own two charts, the damage one with its 5% line', [sd.bars1, fg.bars1, sd.ref2]);
   ok(/left out/.test(await page.textContent('#foot-note')) && /272/.test(await page.textContent('#foot-note')), 'the page names the batch it left out');
 
-  const t2 = await rowsOf('t2');
-  const d271 = t2.find(r => r[0] === '271');
-  ok(d271 && d271.includes('600') && d271.includes('5%') && d271.includes('6.00%') && /Over/.test(d271.join(' ')), '271: 600 · 5% · 6.00% · over the maximum', d271);
-  ok(/Within/.test(t2.find(r => r[0] === '270').join(' ')), '270 at 3.11% is within');
-  ok(await page.$$eval('#c1 svg .hit', h => h.length) === 3 && await page.$$eval('#c2 svg .hit', h => h.length) === 3, 'both charts draw one column per batch');
-  ok(await page.$$eval('#c2 svg line[stroke-dasharray]', l => l.length) === 1, 'the damage chart carries the 5% line');
-
-  await page.check('#f-unplanted');
-  await page.waitForTimeout(100);
-  t1 = await rowsOf('t1');
-  ok(t1.map(r => r[0]).includes('272') && t1.find(r => r[0] === '272').includes('8,000'), 'ticking Include shows 272 at its newest 8,000', t1.find(r => r[0] === '272'));
+  await page.check('#f-unplanted'); await page.waitForTimeout(100);
+  R = await readBlocks();
+  const fg2 = R.find(b => /FGV/.test(b.meta) && /Yangambi/.test(b.meta));
+  ok(!!fg2 && fg2.t1.rows[Object.keys(fg2.t1.rows).find(k => /Seed Purchased with/.test(k))][0] === '8,000', 'ticking Include shows 272 at its newest 8,000, under its own breed', R.map(b => b.meta));
   await page.uncheck('#f-unplanted');
 
-  await page.selectOption('#f-group', 'breed');
-  await page.waitForTimeout(100);
-  t1 = await rowsOf('t1');
-  ok(t1.length === 1 && t1[0][0] === 'Calix 600' && t1[0][1] === '3', 'Show by Breed: one row, three batches', t1);
+  await page.selectOption('#f-year', ''); await page.waitForTimeout(100);
+  R = await readBlocks();
+  const sd3 = R.find(b => /Sime Darby/.test(b.meta));
+  ok(sd3 && sd3.t1.rows['Planted'].includes('1,200'), '273: all 1,200 tray rows counted — the read went past 1,000', sd3 && sd3.t1.rows['Planted']);
 
-  await page.selectOption('#f-group', 'supplier');
-  await page.selectOption('#f-year', '2026');
-  await page.waitForTimeout(100);
-  t1 = await rowsOf('t1');
-  ok(t1.map(r => r[0]).join() === 'FGV,Sime Darby', 'Show by Supplier, Year 2026: FGV and Sime Darby, 273 (2025) gone', t1.map(r => r[0]));
+  await page.selectOption('#f-group', 'breed'); await page.waitForTimeout(100);
+  R = await readBlocks();
+  ok(R.length === 1 && /Calix 600/.test(R[0].t1.heads[1]) && /3 batches/.test(R[0].t1.heads[1]), 'Show by Breed: one block, Calix 600 over 3 batches', R.map(b => b.t1.heads));
 
-  await page.selectOption('#f-group', 'month');
-  await page.selectOption('#f-year', '');
-  await page.waitForTimeout(100);
-  t1 = await rowsOf('t1');
-  ok(t1.map(r => r[0]).join() === 'Dec 2025,Sep 2026,Oct 2026', 'Show by Month: written out, in order', t1.map(r => r[0]));
+  await page.selectOption('#f-group', 'month'); await page.waitForTimeout(100);
+  R = await readBlocks();
+  ok(R[0].t1.heads.slice(1, 4).map(h => h.slice(0, 8)).join('|') === 'Dec 2025|Sep 2026|Oct 2026', 'Show by Month: written out, in order', R[0].t1.heads);
 
-  await page.hover('#c1 svg .hit');
+  await page.hover('.rep .c1 svg .hit');
   ok(await page.evaluate(() => !document.getElementById('tip').classList.contains('hidden')), 'hovering a column shows its figures');
+  ok(await page.$('#btn-print') !== null, 'the report has a Print button');
+  await page.click('#dash-tabs .dash-tab[data-dash="home"]'); await page.waitForTimeout(100);
+  ok(await vis('#dash-home'), 'All reports takes you back to the cards');
   await page.close();
 
   const closed = await open({ modules: { npayroll: 'normal' }, npayroll_actions: { dashboard: { view: false } } });

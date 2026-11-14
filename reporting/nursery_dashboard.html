@@ -22,43 +22,69 @@
     --surface: #ffffff;
     --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
     --grid: #e1e0d9; --axis: #c3c2b7;
-    --s-expected: #2a78d6;   /* categorical slot 1 */
-    --s-actual:   #eb6834;   /* categorical slot 2 */
+    --s-actual:   #2a78d6;   /* categorical slot 1 */
+    --s-expected: #eb6834;   /* categorical slot 2 */
     --s-damage:   #2a78d6;
     --critical:   #d03b3b;   /* status, never a series */
+    --brand:      #15803d;
   }
   * { font-family:'Outfit', system-ui, sans-serif; }
   body { background:#f1f5f9; margin:0; color:var(--ink); }
   .hidden { display:none !important; }
 
-  .dash-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
-  .dash-tab { border:1.5px solid #e0e7ff; background:#fff; color:#4f46e5; border-radius:999px;
-              padding:8px 16px; font-size:12px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
-  .dash-tab.on { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+  /* Tabs: one per report, and "All reports" is the card grid. */
+  .dash-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; border-bottom:1px solid #e2e8f0; }
+  .dash-tab { border:0; background:none; color:var(--ink-2); padding:10px 14px; font-size:12px; font-weight:900;
+              letter-spacing:.06em; text-transform:uppercase; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-1px; }
+  .dash-tab.on { color:var(--brand); border-bottom-color:var(--brand); }
+
+  /* The report cards on the landing tab. */
+  .rep-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .rep-card { display:flex; flex-direction:column; gap:12px; text-align:left; background:#fff; border:1px solid #e2e8f0;
+              border-left:4px solid var(--brand); border-radius:18px; padding:18px; cursor:pointer; transition:all .15s; }
+  .rep-card:hover { border-color:#86efac; border-left-color:var(--brand); transform:translateY(-2px); box-shadow:0 10px 24px -8px rgba(21,128,61,.3); }
+  .rep-card-top { display:flex; gap:12px; align-items:center; }
+  .rep-ico { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; background:#dcfce7; color:var(--brand); flex-shrink:0; }
+  .rep-ico svg { width:24px; height:24px; }
+  .rep-name { font-size:14px; font-weight:900; color:#1e293b; text-transform:uppercase; letter-spacing:.05em; }
+  .rep-sub { font-size:12px; font-weight:600; color:var(--ink-2); line-height:1.45; }
+  .rep-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; border-top:1px solid #f1f5f9; padding-top:12px; }
+  .rep-stat-l { font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .rep-stat-v { font-size:16px; font-weight:900; font-variant-numeric:tabular-nums; }
+  .rep-open { font-size:12px; font-weight:900; color:var(--brand); text-transform:uppercase; letter-spacing:.06em; }
 
   .filters { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; background:#fff;
              border:1px solid #e2e8f0; border-radius:18px; padding:14px 16px; margin-bottom:18px; }
   .filters label { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:900;
-                   color:var(--ink-2); text-transform:uppercase; letter-spacing:.08em; min-width:140px; flex:1 1 140px; }
+                   color:var(--ink-2); text-transform:uppercase; letter-spacing:.08em; min-width:130px; flex:1 1 130px; }
   .filters select { font-size:13px; font-weight:700; padding:8px 10px; border:1px solid #cbd5e1;
                     border-radius:10px; background:#fff; color:var(--ink); text-transform:none; letter-spacing:0; }
   .filters .chk { flex-direction:row; align-items:center; gap:8px; text-transform:none; letter-spacing:0;
                   font-size:12px; font-weight:700; min-width:0; flex:0 1 auto; padding-bottom:8px; }
+  .btn-print { border:1px solid var(--brand); background:var(--brand); color:#fff; border-radius:10px; padding:9px 16px;
+               font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
 
-  .card { background:var(--surface); border:1px solid #e2e8f0; border-left:4px solid #4f46e5;
-          border-radius:18px; padding:18px; margin-bottom:22px; }
-  .card.dmg { border-left-color:#d03b3b; }
-  .card-title { font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.1em; color:#1e293b; }
-  .card-sub { font-size:12px; font-weight:600; color:var(--ink-2); margin-top:4px; }
+  /* One report block per supplier and breed, the shape of the office sheet. */
+  .rep { background:#fff; border:1px solid #e2e8f0; border-radius:18px; padding:20px; margin-bottom:22px; }
+  .rep-head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; border-bottom:2px solid #1e293b; padding-bottom:12px; margin-bottom:14px; }
+  .rep-co { font-size:12px; font-weight:900; letter-spacing:.12em; color:var(--ink-2); }
+  .rep-title { font-size:18px; font-weight:900; letter-spacing:.04em; color:#1e293b; }
+  .rep-meta { font-size:13px; font-weight:600; color:var(--ink-2); line-height:1.6; text-align:right; }
+  .rep-meta b { color:var(--ink); }
 
-  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 0; }
+  .sec { margin-top:18px; }
+  .sec-title { font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.1em; color:#1e293b; }
+  .sec-sub { font-size:12px; font-weight:600; color:var(--ink-2); margin-top:3px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:12px 0; }
   .kpi { border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; }
   .kpi-l { font-size:11px; font-weight:800; color:var(--ink-2); text-transform:uppercase; letter-spacing:.06em; }
   .kpi-v { font-size:20px; font-weight:900; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .kpi-v.over { color:var(--critical); }
 
   .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; font-weight:700; color:var(--ink-2); margin:6px 0 4px; }
   .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:6px; }
-  .legend .dash { width:18px; height:0; border-top:2px dashed var(--critical); border-radius:0; vertical-align:3px; }
+  .legend .dash { width:18px; height:0; border-top:2px dashed var(--s-expected); border-radius:0; vertical-align:3px; }
+  .legend .dash.red { border-top-color:var(--critical); }
 
   .chart-frame { overflow-x:auto; -webkit-overflow-scrolling:touch; position:relative; }
   .chart-frame svg { display:block; }
@@ -67,20 +93,35 @@
 
   .tip { position:fixed; pointer-events:none; z-index:50; background:#0f172a; color:#fff; border-radius:10px;
          padding:8px 10px; font-size:12px; font-weight:600; line-height:1.5; box-shadow:0 8px 20px rgba(0,0,0,.2);
-         font-variant-numeric:tabular-nums; max-width:260px; }
+         font-variant-numeric:tabular-nums; max-width:280px; }
   .tip b { font-weight:900; }
   .tip .sw { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; }
 
+  /* The sheet's own table: the batches go ACROSS, the measures go DOWN. */
   .tbl-wrap { overflow-x:auto; border:1px solid #e2e8f0; border-radius:12px; margin-top:14px; }
-  table.t { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
-  table.t th { background:#f8fafc; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.06em;
-               color:var(--ink-2); padding:9px 10px; text-align:left; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
-  table.t td { padding:8px 10px; border-bottom:1px solid #f1f5f9; white-space:nowrap; }
-  table.t th.num, table.t td.num { text-align:right; }
-  table.t tfoot td { font-weight:900; background:#f8fafc; border-top:1px solid #e2e8f0; }
+  table.t { border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; min-width:100%; }
+  table.t th, table.t td { padding:8px 12px; border-bottom:1px solid #f1f5f9; white-space:nowrap; text-align:right; }
+  table.t thead th { background:#f8fafc; font-size:11px; font-weight:900; letter-spacing:.04em; color:var(--ink-2);
+                     border-bottom:1px solid #e2e8f0; vertical-align:bottom; line-height:1.35; }
+  table.t thead th small { display:block; font-weight:700; color:var(--muted); letter-spacing:0; }
+  table.t th.lbl, table.t td.lbl { text-align:left; position:sticky; left:0; background:#fff; z-index:1;
+                                   font-weight:800; color:#1e293b; border-right:1px solid #e2e8f0; }
+  table.t thead th.lbl { background:#f8fafc; text-transform:uppercase; }
+  table.t th.tot, table.t td.tot { background:#f8fafc; font-weight:900; border-left:1px solid #e2e8f0; }
+  table.t tr.key td { font-weight:900; }
   .over { color:var(--critical); font-weight:900; }
   .ok { color:#15803d; font-weight:800; }
   .note { font-size:12px; font-weight:600; color:var(--ink-2); margin-top:8px; }
+  .sign { display:flex; justify-content:flex-end; margin-top:18px; font-size:12px; font-weight:600; color:var(--ink-2); text-align:center; }
+  .sign b { display:block; color:var(--ink); font-size:13px; margin-top:22px; border-top:1px solid #94a3b8; padding-top:4px; min-width:200px; }
+
+  @media print {
+    body { background:#fff; }
+    #mjm-ribbon, .dash-tabs, .filters, .back-link, .no-print, #nelos-dock-root { display:none !important; }
+    .rep { border:0; padding:0; page-break-after:always; }
+    .chart-frame, .tbl-wrap { overflow:visible; }
+    .tip { display:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -100,16 +141,37 @@
 </div>
 
 <div id="main" class="max-w-[1200px] mx-auto px-4 md:px-6 py-7 hidden">
-  <a href="reporting_admin.html" class="text-[11px] font-bold text-indigo-600 uppercase tracking-widest no-underline">← Nursery Reporting System</a>
+  <a href="reporting_admin.html" class="back-link text-[11px] font-bold text-indigo-600 uppercase tracking-widest no-underline">← Nursery Reporting System</a>
   <div class="text-[22px] font-black text-slate-800 mt-2 mb-4">Nursery Dashboard</div>
 
-  <!-- One tab per dashboard. Seed Received Summary is the first; the next
-       one is a button here and a <section> below. -->
+  <!-- One tab per report. "All reports" is the card grid; a new report is a
+       card there, a tab here and a <section> below. -->
   <div class="dash-tabs" id="dash-tabs">
-    <button class="dash-tab on" data-dash="seed">Seed Received Summary</button>
+    <button class="dash-tab on" data-dash="home">All reports</button>
+    <button class="dash-tab" data-dash="seed">Seed Received Summary</button>
   </div>
 
-  <section id="dash-seed">
+  <section id="dash-home" data-view="home">
+    <div class="rep-grid">
+      <button class="rep-card" id="card-seed" data-open="seed">
+        <span class="rep-card-top">
+          <span class="rep-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-4-2-7-5.5-7-10a7 7 0 0 1 14 0c0 4.5-3 8-7 10z"/><path d="M12 21V9"/><path d="M12 13l-3-3M12 11l3-3"/></svg></span>
+          <span>
+            <span class="rep-name">Seed Received Summary</span><br>
+            <span class="rep-sub">Seed purchased against actual seed received, and seed damage against the 5% maximum — by supplier and breed.</span>
+          </span>
+        </span>
+        <span class="rep-stats">
+          <span><span class="rep-stat-l">Batches</span><br><span class="rep-stat-v" id="card-seed-n">…</span></span>
+          <span><span class="rep-stat-l">Variance</span><br><span class="rep-stat-v" id="card-seed-var">…</span></span>
+          <span><span class="rep-stat-l">Damage</span><br><span class="rep-stat-v" id="card-seed-dmg">…</span></span>
+        </span>
+        <span class="rep-open" id="card-seed-scope">Open report →</span>
+      </button>
+    </div>
+  </section>
+
+  <section id="dash-seed" data-view="seed" class="hidden">
     <div class="filters">
       <label>Show by
         <select id="f-group">
@@ -122,42 +184,15 @@
       </label>
       <label>Year <select id="f-year"></select></label>
       <label>Month <select id="f-month"></select></label>
-      <label>Breed <select id="f-breed"></select></label>
       <label>Supplier <select id="f-supplier"></select></label>
+      <label>Breed <select id="f-breed"></select></label>
       <label class="chk"><input type="checkbox" id="f-unplanted"> Include batches not planted yet</label>
+      <button class="btn-print" id="btn-print" type="button">Print</button>
     </div>
 
     <div id="load-msg" class="empty">Loading the batch report…</div>
-
-    <div id="seed-body" class="hidden">
-      <!-- 1. Expected against what actually came out of the bags -->
-      <div class="card">
-        <div class="card-title">1 · Seed Expected vs Actual Seed Received</div>
-        <div class="card-sub">Actual Seed Received = Planted + Damaged, off Seed Planting (Tab 2). Variance = (Actual − Expected) ÷ Expected.</div>
-        <div class="kpis" id="k1"></div>
-        <div class="legend">
-          <span><i style="background:var(--s-expected)"></i>Total Seed Expected</span>
-          <span><i style="background:var(--s-actual)"></i>Actual Seed Received</span>
-        </div>
-        <div class="chart-frame" id="c1"></div>
-        <div class="tbl-wrap"><table class="t" id="t1"></table></div>
-      </div>
-
-      <!-- 2. Damage against the 5% ceiling -->
-      <div class="card dmg">
-        <div class="card-title">2 · Seed Damage</div>
-        <div class="card-sub">Seed damage (%) = Damaged ÷ Total Seed Expected, the batch report's own rate. Maximum allowed is <b>5%</b>.</div>
-        <div class="kpis" id="k2"></div>
-        <div class="legend">
-          <span><i style="background:var(--s-damage)"></i>Seed damage (%)</span>
-          <span><i style="background:var(--critical)"></i>Over the maximum</span>
-          <span><i class="dash"></i>Maximum 5%</span>
-        </div>
-        <div class="chart-frame" id="c2"></div>
-        <div class="tbl-wrap"><table class="t" id="t2"></table></div>
-      </div>
-      <div class="note" id="foot-note"></div>
-    </div>
+    <div id="seed-body" class="hidden"></div>
+    <div class="note" id="foot-note"></div>
   </section>
 </div>
 
@@ -165,7 +200,12 @@
 
 <script>
 /* ═══ Seed Received Summary ════════════════════════════════════════════
-   Every figure is the BATCH REPORT's own, read off the same ledger rows:
+   Laid out the way the office's own sheet "Seed Received Summary (From
+   Batch 189)" is: one report per SUPPLIER and BREED, the batches going
+   across, and the measures going down.
+
+   Every figure is the BATCH REPORT's own, off the same ledger rows:
+     Seed Purchased       = DO_Qty: in the Seeds_Received remark
      Total Seed Expected  = Seeds_Received.quantity_change (D/O + FOC + replacement)
      Planted              = sum of the batch's Planted rows (per tray)
      Damaged              = the batch's Damaged_Seeds row
@@ -177,6 +217,9 @@
 const MAX_DAMAGE_PCT = 5;
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const RE_SUPPLIER = /Supplier:\s*(.*?)\s*\.?\s*(?=MPOB:|D\/O:|DO_Qty:|Incl\.|Replacement:|$)/i;
+const RE_DO = /D\/O:\s*(.*?)\s*\.?\s*(?=DO_Qty:|Incl\.|Replacement:|$)/i;
+const RE_DOQTY = /DO_Qty:\s*(\d+)/i;
+const RE_FOC = /Incl\.\s*([\d.]+)%\s*FOC/i;
 
 const nf = n => Number(n || 0).toLocaleString('en-MY');
 const pf = (n, d = 2) => (n == null || !isFinite(n)) ? '—' : (n > 0 ? '+' : '') + n.toFixed(d) + '%';
@@ -203,14 +246,18 @@ function buildBatches(rows) {
   return Object.keys(recv).map(b => {
     const r = recv[b];
     const d = dayOf(r);
-    const m = (r.remark || '').match(RE_SUPPLIER);
+    const rem = r.remark || '';
+    const m = rem.match(RE_SUPPLIER), dm = rem.match(RE_DO), qm = rem.match(RE_DOQTY), fm = rem.match(RE_FOC);
     const expected = Number(r.quantity_change) || 0;
-    const pl = planted[b] || 0, dm = damaged[b] || 0;
+    const pl = planted[b] || 0, dmg = damaged[b] || 0;
     return {
       batch: b, date: d, year: d.slice(0, 4), month: d.slice(0, 7),
       breed: (r.breed_name || '').trim() || 'No breed',
       supplier: (m && m[1].trim()) || 'No supplier',
-      expected, planted: pl, damaged: dm, actual: pl + dm, recorded: !!hasPlant[b],
+      doNo: (dm && dm[1].trim()) || '',
+      purchased: qm ? Number(qm[1]) : null,
+      focPct: fm ? Number(fm[1]) : null,
+      expected, planted: pl, damaged: dmg, actual: pl + dmg, recorded: !!hasPlant[b],
     };
   });
 }
@@ -221,8 +268,9 @@ function groupRows(batches, by) {
   const g = {};
   for (const x of batches) {
     const k = by === 'batch' ? x.batch : by === 'month' ? x.month : by === 'year' ? x.year : by === 'breed' ? x.breed : x.supplier;
-    const o = g[k] || (g[k] = { key: k, n: 0, expected: 0, planted: 0, damaged: 0, actual: 0, src: [] });
+    const o = g[k] || (g[k] = { key: k, n: 0, purchased: 0, purchasedKnown: true, expected: 0, planted: 0, damaged: 0, actual: 0, src: [] });
     o.n++; o.expected += x.expected; o.planted += x.planted; o.damaged += x.damaged; o.actual += x.actual; o.src.push(x);
+    if (x.purchased == null) o.purchasedKnown = false; else o.purchased += x.purchased;
   }
   const out = Object.values(g).map(o => Object.assign(o, {
     variancePct: o.expected > 0 ? (o.actual - o.expected) / o.expected * 100 : null,
@@ -230,9 +278,21 @@ function groupRows(batches, by) {
   }));
   const numKey = s => { const m = String(s).match(/\d+/); return m ? Number(m[0]) : Infinity; };
   out.sort((a, b) => by === 'batch' ? (numKey(a.key) - numKey(b.key)) || String(a.key).localeCompare(b.key)
-                   : by === 'month' || by === 'year' ? String(a.key).localeCompare(b.key)
                    : String(a.key).localeCompare(b.key));
   return out;
+}
+
+/* Pure: which report blocks to draw. Shown by batch, it is the office's
+   sheet: one block per supplier + breed. Shown by anything else, it is ONE
+   block, because a month or a supplier already spans the blocks. */
+function reportBlocks(batches, by) {
+  if (by !== 'batch') return [{ supplier: null, breed: null, batches }];
+  const m = {};
+  for (const x of batches) {
+    const k = x.supplier + '\u0000' + x.breed;
+    (m[k] || (m[k] = { supplier: x.supplier, breed: x.breed, batches: [] })).batches.push(x);
+  }
+  return Object.values(m).sort((a, b) => a.supplier.localeCompare(b.supplier) || a.breed.localeCompare(b.breed));
 }
 
 function labelOf(key, by) {
@@ -240,7 +300,7 @@ function labelOf(key, by) {
   return key || '—';
 }
 
-if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, labelOf, MAX_DAMAGE_PCT };
+if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, reportBlocks, labelOf, MAX_DAMAGE_PCT };
 </script>
 
 <script>
@@ -249,6 +309,18 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, l
   const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
   const $ = id => document.getElementById(id);
   let BATCHES = [];
+  let LOADED = false;
+
+  /* ── tabs: All reports (the cards) and one per report ── */
+  function showView(v) {
+    if (!['home', 'seed'].includes(v)) v = 'home';
+    document.querySelectorAll('#dash-tabs .dash-tab').forEach(b => b.classList.toggle('on', b.dataset.dash === v));
+    document.querySelectorAll('section[data-view]').forEach(s => s.classList.toggle('hidden', s.dataset.view !== v));
+    if (location.hash.slice(1) !== v) history.replaceState(null, '', v === 'home' ? location.pathname + location.search : '#' + v);
+    if (v === 'seed' && LOADED) render();
+  }
+  document.querySelectorAll('#dash-tabs .dash-tab').forEach(b => b.addEventListener('click', () => showView(b.dataset.dash)));
+  document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => showView(b.dataset.open)));
 
   async function loadLedger() {
     const out = [], seen = new Set(), PAGE = 1000;
@@ -270,7 +342,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, l
     sel.innerHTML = '<option value="">All</option>' + values.map(v => `<option value="${esc(v)}">${esc(fmt ? fmt(v) : v)}</option>`).join('');
     if (values.includes(cur)) sel.value = cur;
   }
-  function uniq(a) { return [...new Set(a)].filter(Boolean); }
+  const uniq = a => [...new Set(a)].filter(Boolean);
 
   function filtered() {
     const y = $('f-year').value, m = $('f-month').value, br = $('f-breed').value, sp = $('f-supplier').value;
@@ -285,7 +357,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, l
     const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p;
     return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
   }
-  function barPath(x, y, w, h, r) {   // rounded top, square at the baseline
+  function barPath(x, y, w, h, r) {   // rounded at the end away from the baseline
     if (h <= 0) return '';
     r = Math.min(r, w / 2, h);
     return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
@@ -301,17 +373,21 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, l
   }
   function hideTip() { tip.classList.add('hidden'); }
 
+  /* cfg.bar(g) -> {v,color}; cfg.mark(g) -> value drawn as a dashed tick
+     across the column (the expected figure); cfg.ref -> dashed reference
+     line across the plot. ONE axis: the mark and the bar share its unit. */
   function drawChart(host, groups, by, cfg) {
     if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
     const frameW = Math.max(320, host.clientWidth || 900);
-    const colW = Math.max(cfg.minCol, (frameW - 70) / groups.length);
-    const W = Math.max(frameW, 70 + colW * groups.length), H = 300;
-    const L = 62, R = 8, T = 14, B = 58, ph = H - T - B;
-    const vmax = niceMax(cfg.max(groups));
-    const ys = v => T + ph - (v / vmax) * ph;
+    const L = 62, R = 10, T = 22, B = 62, H = 300, ph = H - T - B;
+    const colW = Math.max(cfg.minCol, (frameW - L - R) / groups.length);
+    const W = Math.max(frameW, L + R + colW * groups.length);
+    const lo = cfg.min ? cfg.min(groups) : 0;
+    const hi = niceMax(cfg.max(groups) - lo) + lo;
+    const ys = v => T + ph - ((v - lo) / (hi - lo)) * ph;
     let s = `<svg width="${W}" height="${H}" role="img" aria-label="${esc(cfg.aria)}">`;
     for (let i = 0; i <= 4; i++) {
-      const v = vmax * i / 4, y = ys(v);
+      const v = lo + (hi - lo) * i / 4, y = ys(v);
       s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`;
       s += `<text x="${L - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${cfg.tick(v)}</text>`;
     }
@@ -321,20 +397,20 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, l
       s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--critical)" stroke-width="2" stroke-dasharray="6 4"/>`;
       s += `<text x="${W - R - 4}" y="${y - 6}" text-anchor="end" font-size="11" font-weight="800" fill="var(--ink-2)">Max ${cfg.ref}%</text>`;
     }
-    const plotW = W - L - R, cw = plotW / groups.length;
-    const rot = cw < 56;
+    const cw = (W - L - R) / groups.length;
+    const rot = cw < 64;
     groups.forEach((g, i) => {
       const x0 = L + i * cw;
-      const ser = cfg.series(g);
-      const gap = 2, inner = Math.min(cw * 0.72, ser.length * 28);
-      const bw = (inner - gap * (ser.length - 1)) / ser.length;
-      let bx = x0 + (cw - inner) / 2;
-      ser.forEach(sv => {
-        const v = Math.max(0, sv.v || 0), y = ys(Math.min(v, vmax));
-        s += `<path d="${barPath(bx, y, bw, T + ph - y, 4)}" fill="${sv.color}"/>`;
-        bx += bw + gap;
-      });
-      const lab = esc(labelOf(g.key, by));
+      const bw = Math.min(cw * 0.56, 46), bx = x0 + (cw - bw) / 2;
+      const b = cfg.bar(g), v = Math.max(lo, Math.min(b.v || 0, hi)), y = ys(v);
+      s += `<path d="${barPath(bx, y, bw, T + ph - y, 4)}" fill="${b.color}"/>`;
+      if (cfg.label) s += `<text x="${bx + bw / 2}" y="${y - 5}" text-anchor="middle" font-size="11" font-weight="800" fill="var(--ink-2)">${esc(cfg.label(g))}</text>`;
+      if (cfg.mark) {
+        const mv = cfg.mark(g);
+        if (mv != null) { const my = ys(Math.min(Math.max(mv, lo), hi));
+          s += `<line x1="${x0 + 4}" x2="${x0 + cw - 4}" y1="${my}" y2="${my}" stroke="var(--s-expected)" stroke-width="2" stroke-dasharray="5 3"/>`; }
+      }
+      const lab = esc(cfg.xLabel ? cfg.xLabel(g) : labelOf(g.key, by));
       const lx = x0 + cw / 2, ly = T + ph + 16;
       s += rot ? `<text x="${lx}" y="${ly}" font-size="11" fill="var(--ink-2)" text-anchor="end" transform="rotate(-40 ${lx} ${ly})">${lab}</text>`
                : `<text x="${lx}" y="${ly}" font-size="11" fill="var(--ink-2)" text-anchor="middle">${lab}</text>`;
@@ -350,69 +426,160 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, l
   }
 
   const head = by => ({ batch: 'Batch', month: 'Month', year: 'Year', breed: 'Breed', supplier: 'Supplier' }[by]);
+  const totalsOf = rows => rows.reduce((a, g) => ({
+    n: a.n + 1, expected: a.expected + g.expected, actual: a.actual + g.actual, damaged: a.damaged + g.damaged,
+    planted: a.planted + g.planted, purchased: a.purchased + (g.purchased || 0), purchasedKnown: a.purchasedKnown && g.purchased != null,
+  }), { n: 0, expected: 0, actual: 0, damaged: 0, planted: 0, purchased: 0, purchasedKnown: true });
 
+  /* The column heading of the sheet: Invoice No. / Batch No. The ledger
+     carries the D/O number, so that is what stands over the batch. */
+  function colHead(g, by) {
+    if (by !== 'batch') return `${esc(labelOf(g.key, by))}<small>${g.n} batch${g.n === 1 ? '' : 'es'}</small>`;
+    const x = g.src[0];
+    return `B.${esc(g.key)}<small>${x.doNo ? 'D/O ' + esc(x.doNo) : esc(x.date)}</small>`;
+  }
+
+  function blockHtml(blk, bi, by) {
+    const groups = groupRows(blk.batches, by);
+    const t = totalsOf(blk.batches);
+    const tVar = t.expected > 0 ? (t.actual - t.expected) / t.expected * 100 : null;
+    const tDmg = t.expected > 0 ? t.damaged / t.expected * 100 : null;
+    const overN = groups.filter(g => (g.damagePct || 0) > MAX_DAMAGE_PCT).length;
+    const foc = uniq(blk.batches.map(x => x.focPct == null ? '' : String(x.focPct)));
+    const expLabel = foc.length === 1 ? `Seed Purchased with ${foc[0]}% FOC` : 'Seed Purchased with FOC';
+    const year = $('f-year').value, month = $('f-month').value;
+    const period = year ? (month ? MONTHS[+month - 1] + ' ' + year : year) : (month ? MONTHS[+month - 1] + ', every year' : 'All years');
+    const meta = blk.supplier == null
+      ? `<div>Shown by <b>${esc(head(by))}</b></div><div>Supplier: <b>${esc($('f-supplier').value || 'All')}</b> · Breed: <b>${esc($('f-breed').value || 'All')}</b></div>`
+      : `<div>Supplier Name: <b>${esc(blk.supplier)}</b></div><div>Breed: <b>${esc(blk.breed)}</b></div>`;
+    const cols = groups.map(g => `<th>${colHead(g, by)}</th>`).join('');
+    const row = (label, cell, tot, cls = '') => `<tr class="${cls}"><td class="lbl">${label}</td>${groups.map(cell).join('')}<td class="tot">${tot}</td></tr>`;
+    const td = (v, c = '') => `<td class="${c}">${v}</td>`;
+
+    const t1 = `<thead><tr><th class="lbl">${by === 'batch' ? 'Invoice No. / Batch No.' : esc(head(by))}</th>${cols}<th class="tot">Total</th></tr></thead><tbody>
+      ${row('Seed Purchased', g => td(g.purchasedKnown ? nf(g.purchased) : '—'), t.purchasedKnown ? nf(t.purchased) : '—')}
+      ${row(esc(expLabel) + '<br><small style="font-weight:600;color:var(--muted)">Total Seed Expected</small>', g => td(nf(g.expected)), nf(t.expected))}
+      ${row('Planted', g => td(nf(g.planted)), nf(t.planted))}
+      ${row('Damaged', g => td(nf(g.damaged)), nf(t.damaged))}
+      ${row('Actual Seed Received', g => td(nf(g.actual)), nf(t.actual), 'key')}
+      ${row('Variance (%)', g => td(pf(g.variancePct)), pf(tVar), 'key')}
+    </tbody>`;
+    const t2 = `<thead><tr><th class="lbl">${by === 'batch' ? 'Invoice No. / Batch No.' : esc(head(by))}</th>${cols}<th class="tot">Total</th></tr></thead><tbody>
+      ${row('Seed Damage', g => td(nf(g.damaged)), nf(t.damaged))}
+      ${row('Maximum (%)', () => td(MAX_DAMAGE_PCT + '%'), MAX_DAMAGE_PCT + '%')}
+      ${row('Seed Damage (%)', g => td(pfu(g.damagePct), (g.damagePct || 0) > MAX_DAMAGE_PCT ? 'over' : ''), (tDmg || 0) > MAX_DAMAGE_PCT ? `<span class="over">${pfu(tDmg)}</span>` : pfu(tDmg), 'key')}
+      ${row('Status', g => { const o = (g.damagePct || 0) > MAX_DAMAGE_PCT; return td(o ? '▲ Over' : '✓ Within', o ? 'over' : 'ok'); }, overN ? `<span class="over">${overN} over</span>` : '<span class="ok">✓ All within</span>')}
+    </tbody>`;
+
+    const who = (window.MJMAccess && MJMAccess.user && MJMAccess.user()) || {};
+    const today = new Date(); const dd = String(today.getDate()).padStart(2, '0') + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + today.getFullYear();
+    return `<div class="rep" data-block="${bi}">
+      <div class="rep-head">
+        <div><div class="rep-co">MEGA JUTAMAS SDN BHD</div><div class="rep-title">SEED RECEIVED SUMMARY REPORT</div></div>
+        <div class="rep-meta">${meta}<div>Period: <b>${esc(period)}</b></div></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">1 · Seed Received</div>
+        <div class="sec-sub">Actual Seed Received = Planted + Damaged, off Seed Planting. Variance = (Actual − Expected) ÷ Expected.</div>
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-l">Batches</div><div class="kpi-v">${nf(t.n)}</div></div>
+          <div class="kpi"><div class="kpi-l">Total Seed Expected</div><div class="kpi-v">${nf(t.expected)}</div></div>
+          <div class="kpi"><div class="kpi-l">Actual Seed Received</div><div class="kpi-v">${nf(t.actual)}</div></div>
+          <div class="kpi"><div class="kpi-l">Variance</div><div class="kpi-v">${pf(tVar)}</div></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--s-actual)"></i>Actual Seed Received</span>
+          <span><i class="dash"></i>${esc(expLabel)} (expected)</span>
+        </div>
+        <div class="chart-frame c1"></div>
+        <div class="tbl-wrap"><table class="t t1">${t1}</table></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">2 · Seed Damage</div>
+        <div class="sec-sub">Seed damage (%) = Damaged ÷ Total Seed Expected, the batch report's own rate. Maximum allowed is <b>5%</b>.</div>
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-l">Seed Damage</div><div class="kpi-v">${nf(t.damaged)}</div></div>
+          <div class="kpi"><div class="kpi-l">Seed damage (%)</div><div class="kpi-v ${(tDmg || 0) > MAX_DAMAGE_PCT ? 'over' : ''}">${pfu(tDmg)}</div></div>
+          <div class="kpi"><div class="kpi-l">Maximum</div><div class="kpi-v">${MAX_DAMAGE_PCT}%</div></div>
+          <div class="kpi"><div class="kpi-l">Over the maximum</div><div class="kpi-v ${overN ? 'over' : ''}">${overN} of ${groups.length}</div></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--s-damage)"></i>Seed damage (%)</span>
+          <span><i style="background:var(--critical)"></i>Over the maximum</span>
+          <span><i class="dash red"></i>Maximum 5%</span>
+        </div>
+        <div class="chart-frame c2"></div>
+        <div class="tbl-wrap"><table class="t t2">${t2}</table></div>
+      </div>
+
+      <div class="sign"><div>Prepared and Verified by<b>${esc(who.full_name || who.email || '')}</b>${dd}</div></div>
+    </div>`;
+  }
+
+  function drawBlockCharts(el, blk, by) {
+    const groups = groupRows(blk.batches, by);
+    const xLabel = g => by === 'batch' ? 'B.' + g.key : labelOf(g.key, by);
+    drawChart(el.querySelector('.c1'), groups, by, {
+      aria: 'Actual seed received against seed expected', minCol: by === 'batch' ? 56 : 80, xLabel,
+      max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.08,
+      tick: v => v >= 1000 ? nf(Math.round(v / 100) / 10) + 'k' : nf(Math.round(v)),
+      bar: g => ({ v: g.actual, color: 'var(--s-actual)' }),
+      mark: g => g.expected,
+      label: g => pf(g.variancePct),
+      tipHtml: g => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${g.n} batch${g.n === 1 ? '' : 'es'}` : (g.src[0].doNo ? ` · D/O ${esc(g.src[0].doNo)}` : '')}<br>
+        <span class="sw" style="background:var(--s-expected)"></span>Expected ${nf(g.expected)}${g.purchasedKnown ? ` <span style="opacity:.7">(purchased ${nf(g.purchased)})</span>` : ''}<br>
+        <span class="sw" style="background:var(--s-actual)"></span>Actual ${nf(g.actual)} <span style="opacity:.7">(${nf(g.planted)} planted + ${nf(g.damaged)} damaged)</span><br>
+        Variance <b>${pf(g.variancePct)}</b>`,
+    });
+    drawChart(el.querySelector('.c2'), groups, by, {
+      aria: 'Seed damage percentage against the 5% maximum', minCol: by === 'batch' ? 48 : 70, ref: MAX_DAMAGE_PCT, xLabel,
+      max: gs => Math.max(MAX_DAMAGE_PCT * 1.2, ...gs.map(g => g.damagePct || 0)), tick: v => (Math.round(v * 10) / 10) + '%',
+      bar: g => ({ v: g.damagePct || 0, color: (g.damagePct || 0) > MAX_DAMAGE_PCT ? 'var(--critical)' : 'var(--s-damage)' }),
+      label: g => pfu(g.damagePct),
+      tipHtml: g => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b><br>Seed damage ${nf(g.damaged)} of ${nf(g.expected)} expected<br>
+        Seed damage (%) <b>${pfu(g.damagePct)}</b> · ${(g.damagePct || 0) > MAX_DAMAGE_PCT ? '▲ over the 5% maximum' : '✓ within 5%'}`,
+    });
+  }
+
+  let BLOCKS = [];
   function render() {
     hideTip();
     const by = $('f-group').value;
     const { rows, left } = filtered();
-    const groups = groupRows(rows, by);
-    const tot = rows.reduce((a, g) => ({ expected: a.expected + g.expected, actual: a.actual + g.actual, damaged: a.damaged + g.damaged, planted: a.planted + g.planted }), { expected: 0, actual: 0, damaged: 0, planted: 0 });
-    const tVar = tot.expected > 0 ? (tot.actual - tot.expected) / tot.expected * 100 : null;
-    const tDmg = tot.expected > 0 ? tot.damaged / tot.expected * 100 : null;
-    const overN = groups.filter(g => g.damagePct != null && g.damagePct > MAX_DAMAGE_PCT).length;
-    const unit = by === 'batch' ? 'batches' : 'groups';
-
-    $('k1').innerHTML = [
-      ['Batches', nf(rows.length)], ['Total Seed Expected', nf(tot.expected)],
-      ['Actual Seed Received', nf(tot.actual)], ['Variance', pf(tVar)],
-    ].map(([l, v]) => `<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div></div>`).join('');
-    $('k2').innerHTML = [
-      ['Seed Damage', nf(tot.damaged)], ['Seed damage (%)', pfu(tDmg)], ['Maximum', MAX_DAMAGE_PCT + '%'],
-      [`Over the maximum`, `${overN} of ${groups.length} ${unit}`],
-    ].map(([l, v]) => `<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div></div>`).join('');
-
-    drawChart($('c1'), groups, by, {
-      aria: 'Total seed expected against actual seed received', minCol: by === 'batch' ? 46 : 70,
-      max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))), tick: v => v >= 1000 ? nf(Math.round(v / 1000)) + 'k' : nf(v),
-      series: g => [{ v: g.expected, color: 'var(--s-expected)' }, { v: g.actual, color: 'var(--s-actual)' }],
-      tipHtml: g => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${g.n} batch${g.n === 1 ? '' : 'es'}` : ''}<br>
-        <span class="sw" style="background:var(--s-expected)"></span>Expected ${nf(g.expected)}<br>
-        <span class="sw" style="background:var(--s-actual)"></span>Actual ${nf(g.actual)} <span style="opacity:.7">(${nf(g.planted)} planted + ${nf(g.damaged)} damaged)</span><br>
-        Variance <b>${pf(g.variancePct)}</b>`,
-    });
-    drawChart($('c2'), groups, by, {
-      aria: 'Seed damage percentage against the 5% maximum', minCol: by === 'batch' ? 34 : 60, ref: MAX_DAMAGE_PCT,
-      max: gs => Math.max(MAX_DAMAGE_PCT * 1.2, ...gs.map(g => g.damagePct || 0)), tick: v => (Math.round(v * 10) / 10) + '%',
-      series: g => [{ v: g.damagePct || 0, color: (g.damagePct || 0) > MAX_DAMAGE_PCT ? 'var(--critical)' : 'var(--s-damage)' }],
-      tipHtml: g => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b><br>Seed damage ${nf(g.damaged)} of ${nf(g.expected)} expected<br>
-        Seed damage (%) <b>${pfu(g.damagePct)}</b> · ${(g.damagePct || 0) > MAX_DAMAGE_PCT ? '▲ over the 5% maximum' : '✓ within 5%'}`,
-    });
-
-    const extra = by === 'batch';
-    const xHead = extra ? '<th>Received</th><th>Breed</th><th>Supplier</th>' : '<th class="num">Batches</th>';
-    const xCell = g => extra ? `<td>${esc(g.src[0].date)}</td><td>${esc(g.src[0].breed)}</td><td>${esc(g.src[0].supplier)}</td>` : `<td class="num">${g.n}</td>`;
-    const xFoot = extra ? '<td></td><td></td><td></td>' : `<td class="num">${rows.length}</td>`;
-    const none = `<tr><td colspan="9" class="empty">Nothing matches these filters.</td></tr>`;
-
-    $('t1').innerHTML = `<thead><tr><th>${head(by)}</th>${xHead}<th class="num">Total Seed Expected</th><th class="num">Planted</th><th class="num">Damaged</th><th class="num">Actual Seed Received</th><th class="num">Variance (%)</th></tr></thead>
-      <tbody>${groups.length ? groups.map(g => `<tr><td><b>${esc(labelOf(g.key, by))}</b></td>${xCell(g)}<td class="num">${nf(g.expected)}</td><td class="num">${nf(g.planted)}</td><td class="num">${nf(g.damaged)}</td><td class="num">${nf(g.actual)}</td><td class="num">${pf(g.variancePct)}</td></tr>`).join('') : none}</tbody>
-      ${groups.length ? `<tfoot><tr><td>Total</td>${xFoot}<td class="num">${nf(tot.expected)}</td><td class="num">${nf(tot.planted)}</td><td class="num">${nf(tot.damaged)}</td><td class="num">${nf(tot.actual)}</td><td class="num">${pf(tVar)}</td></tr></tfoot>` : ''}`;
-
-    $('t2').innerHTML = `<thead><tr><th>${head(by)}</th>${xHead}<th class="num">Seed Damage</th><th class="num">Maximum (%)</th><th class="num">Seed damage (%)</th><th>Status</th></tr></thead>
-      <tbody>${groups.length ? groups.map(g => { const over = (g.damagePct || 0) > MAX_DAMAGE_PCT;
-        return `<tr><td><b>${esc(labelOf(g.key, by))}</b></td>${xCell(g)}<td class="num">${nf(g.damaged)}</td><td class="num">${MAX_DAMAGE_PCT}%</td><td class="num ${over ? 'over' : ''}">${pfu(g.damagePct)}</td><td class="${over ? 'over' : 'ok'}">${over ? '▲ Over maximum' : '✓ Within'}</td></tr>`; }).join('') : none}</tbody>
-      ${groups.length ? `<tfoot><tr><td>Total</td>${xFoot}<td class="num">${nf(tot.damaged)}</td><td class="num">${MAX_DAMAGE_PCT}%</td><td class="num ${(tDmg || 0) > MAX_DAMAGE_PCT ? 'over' : ''}">${pfu(tDmg)}</td><td></td></tr></tfoot>` : ''}`;
-
+    BLOCKS = reportBlocks(rows, by);
+    const body = $('seed-body');
+    body.innerHTML = rows.length ? BLOCKS.map((b, i) => blockHtml(b, i, by)).join('')
+                                 : '<div class="rep"><div class="empty">Nothing matches these filters.</div></div>';
+    if (rows.length) body.querySelectorAll('.rep[data-block]').forEach(el => drawBlockCharts(el, BLOCKS[+el.dataset.block], by));
     $('foot-note').textContent = left.length
       ? `${left.length} batch${left.length === 1 ? ' has' : 'es have'} no Seed Planting saved yet and ${left.length === 1 ? 'is' : 'are'} left out (${left.map(x => x.batch).slice(0, 12).join(', ')}${left.length > 12 ? '…' : ''}). Tick “Include batches not planted yet” to show ${left.length === 1 ? 'it' : 'them'}.`
       : '';
   }
 
   function refreshFilterOptions() {
-    fillSelect('f-year', uniq(BATCHES.map(x => x.year)).sort().reverse());
+    const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
+    fillSelect('f-year', years);
     fillSelect('f-month', ['01','02','03','04','05','06','07','08','09','10','11','12'], m => MONTHS[+m - 1]);
     fillSelect('f-breed', uniq(BATCHES.map(x => x.breed)).sort());
     fillSelect('f-supplier', uniq(BATCHES.map(x => x.supplier)).sort());
+    // The office's sheet is one year at a time, so the report opens on the latest.
+    if (years.length && !$('f-year').dataset.touched) $('f-year').value = years[0];
+  }
+
+  /* The card on All reports says what is behind it, for the latest year. */
+  function fillCard() {
+    const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
+    const y = years[0] || '';
+    const rows = BATCHES.filter(x => x.recorded && (!y || x.year === y));
+    const t = totalsOf(rows);
+    $('card-seed-n').textContent = nf(t.n);
+    $('card-seed-var').textContent = t.expected ? pf((t.actual - t.expected) / t.expected * 100) : '—';
+    const d = t.expected ? t.damaged / t.expected * 100 : null;
+    $('card-seed-dmg').textContent = pfu(d);
+    $('card-seed-dmg').classList.toggle('over', (d || 0) > MAX_DAMAGE_PCT);
+    $('card-seed-scope').textContent = (y ? y + ' · ' : '') + 'Open report →';
   }
 
   (async () => {
@@ -423,18 +590,23 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, l
         $('loading').classList.add('hidden'); $('forbidden').classList.remove('hidden'); return;
       }
       $('loading').classList.add('hidden'); $('main').classList.remove('hidden');
+      showView(location.hash.slice(1) || 'home');
     } catch (e) { console.warn(e); location.href = '../index.html'; return; }
 
     try {
       BATCHES = buildBatches(await loadLedger());
+      LOADED = true;
       refreshFilterOptions();
+      fillCard();
       $('load-msg').classList.add('hidden'); $('seed-body').classList.remove('hidden');
-      ['f-group', 'f-year', 'f-month', 'f-breed', 'f-supplier', 'f-unplanted'].forEach(id => $(id).addEventListener('change', render));
-      let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(render, 150); });
+      ['f-group', 'f-year', 'f-month', 'f-breed', 'f-supplier', 'f-unplanted'].forEach(id => $(id).addEventListener('change', () => { $(id).dataset.touched = '1'; render(); }));
+      $('btn-print').addEventListener('click', () => window.print());
+      let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (!$('dash-seed').classList.contains('hidden')) render(); }, 150); });
       render();
     } catch (e) {
       console.warn(e);
       $('load-msg').textContent = 'Could not read the batch report: ' + (e.message || e);
+      ['card-seed-n', 'card-seed-var', 'card-seed-dmg'].forEach(id => $(id).textContent = '—');
     }
   })();
 })();

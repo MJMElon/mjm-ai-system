@@ -7568,7 +7568,21 @@ previous page, by name.
 
 `reporting/nursery_dashboard.html`, a door on the Nursery Reporting System
 (same `npayroll` module, its own page tick `dashboard` on Module Assess
-Control). One tab per dashboard; **Seed Received Summary** is the first.
+Control). It opens on **All reports**, a grid of report CARDS (each with the
+latest year's headline figures); every report is a card there, a tab beside
+All reports and a `<section data-view>`. **Seed Received Summary** is the first.
+
+**It is laid out like the office's own sheet, "Seed Received Summary (From
+Batch 189)"**: one report block per SUPPLIER + BREED, headed MEGA JUTAMAS SDN
+BHD / SEED RECEIVED SUMMARY REPORT, the batches going ACROSS (B.270 over its
+D/O number) and the measures going DOWN — Seed Purchased (`DO_Qty:`), Seed
+Purchased with N% FOC (the expected), Actual, Variance; Seed Damage, Maximum
+5%, Seed Damage %. It opens on the latest year, as the sheet is a year a tab.
+Shown by month, year, breed or supplier it is ONE block. The sheet's charts
+put Variance on a second axis; here it is a label on each bar instead, one
+axis per chart. The sheet's Delivery Note Quantity row has no ledger field
+and is not drawn. Print prints one block a page with a Prepared and Verified
+by line carrying the signed-in name.
 
 Every figure is `calcPlanting`'s own, off the same ledger rows: Expected is
 the `Seeds_Received` row (newest per batch wins), Actual is the batch's
