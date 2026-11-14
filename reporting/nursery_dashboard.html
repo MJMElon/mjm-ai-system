@@ -112,15 +112,50 @@
   .over { color:var(--critical); font-weight:900; }
   .ok { color:#15803d; font-weight:800; }
   .note { font-size:12px; font-weight:600; color:var(--ink-2); margin-top:8px; }
-  .sign { display:flex; justify-content:flex-end; margin-top:18px; font-size:12px; font-weight:600; color:var(--ink-2); text-align:center; }
-  .sign b { display:block; color:var(--ink); font-size:13px; margin-top:22px; border-top:1px solid #94a3b8; padding-top:4px; min-width:200px; }
+  /* On SCREEN a section is a dashboard card; the sheet layout is the PRINT's. */
+  .card { background:var(--surface); border:1px solid #e2e8f0; border-left:4px solid #2a78d6; border-radius:18px; padding:18px; margin-bottom:22px; }
+  .card.dmg { border-left-color:#d03b3b; }
+  table.g { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  table.g th { background:#f8fafc; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.06em;
+               color:var(--ink-2); padding:9px 7px; text-align:left; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+  table.g td { padding:8px 7px; border-bottom:1px solid #f1f5f9; white-space:nowrap; }
+  table.g th.num, table.g td.num { text-align:right; }
+  table.g tfoot td { font-weight:900; background:#f8fafc; border-top:1px solid #e2e8f0; }
 
+  /* The signature block: who pressed Print, the day, and a box to sign in. */
+  .sign { display:flex; justify-content:flex-end; margin-top:22px; page-break-inside:avoid; break-inside:avoid; }
+  .sign-box { width:300px; font-size:12px; color:var(--ink-2); }
+  .sign-cap { font-weight:900; text-transform:uppercase; letter-spacing:.08em; color:#1e293b; margin-bottom:6px; }
+  .sign-sig { height:70px; border:1.5px solid #64748b; border-radius:4px; position:relative; }
+  .sign-sig span { position:absolute; left:8px; bottom:4px; font-size:11px; color:var(--muted); }
+  .sign-line { display:flex; gap:8px; margin-top:6px; }
+  .sign-line span:first-child { width:46px; font-weight:800; }
+  .sign-line b { flex:1; border-bottom:1px solid #94a3b8; color:var(--ink); font-weight:800; }
+
+  #print-area { display:none; }
+  .p-charts { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .p-chart .legend { font-size:11px; }
+  table.t tr.brk td { border-bottom:2px solid #94a3b8; }
   @media print {
+    @page { size:A4 landscape; margin:12mm; }
     body { background:#fff; }
-    #mjm-ribbon, .dash-tabs, .filters, .back-link, .no-print, #nelos-dock-root { display:none !important; }
-    .rep { border:0; padding:0; page-break-after:always; }
+    #mjm-ribbon, #main, #loading, #forbidden, .tip, #nelos-dock-root { display:none !important; }
+    #print-area { display:block; }
+    .rep { border:0; border-radius:0; padding:0; margin:0; page-break-after:always; break-after:page; }
+    .rep:last-child { page-break-after:auto; break-after:auto; }
+    .rep-head { margin-bottom:8px; padding-bottom:8px; }
+    .rep-title { font-size:15px; }
+    .rep-meta { font-size:11px; line-height:1.45; }
+    table.t { font-size:11px; }
+    table.t th, table.t td { padding:3px 8px; }
+    table.t thead th { font-size:11px; }
+    .tbl-wrap { margin-top:8px; border-radius:6px; }
+    .sign { margin-top:10px; }
+    .sign-sig { height:46px; }
     .chart-frame, .tbl-wrap { overflow:visible; }
-    .tip { display:none !important; }
+    .chart-frame svg { width:100%; height:auto; }
+    table.t th.lbl, table.t td.lbl { position:static; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }
 </style>
 </head>
@@ -195,6 +230,11 @@
     <div class="note" id="foot-note"></div>
   </section>
 </div>
+
+<!-- The PRINTED report: the office sheet's own layout, one page per
+     supplier and breed. Built when Print is pressed, so the name on it is
+     whoever pressed it and the date is that day. -->
+<div id="print-area"></div>
 
 <div class="tip hidden" id="tip"></div>
 
@@ -378,14 +418,14 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
      line across the plot. ONE axis: the mark and the bar share its unit. */
   function drawChart(host, groups, by, cfg) {
     if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
-    const frameW = Math.max(320, host.clientWidth || 900);
-    const L = 62, R = 10, T = 22, B = 62, H = 300, ph = H - T - B;
-    const colW = Math.max(cfg.minCol, (frameW - L - R) / groups.length);
-    const W = Math.max(frameW, L + R + colW * groups.length);
+    const frameW = cfg.fixedW || Math.max(320, host.clientWidth || 900);
+    const L = 62, R = 10, T = 22, B = 62, H = cfg.fixedW ? 230 : 300, ph = H - T - B;
+    const colW = cfg.fixedW ? (frameW - L - R) / groups.length : Math.max(cfg.minCol, (frameW - L - R) / groups.length);
+    const W = cfg.fixedW ? frameW : Math.max(frameW, L + R + colW * groups.length);
     const lo = cfg.min ? cfg.min(groups) : 0;
     const hi = niceMax(cfg.max(groups) - lo) + lo;
     const ys = v => T + ph - ((v - lo) / (hi - lo)) * ph;
-    let s = `<svg width="${W}" height="${H}" role="img" aria-label="${esc(cfg.aria)}">`;
+    let s = `<svg ${cfg.fixedW ? `viewBox="0 0 ${W} ${H}" width="100%"` : `width="${W}" height="${H}"`} role="img" aria-label="${esc(cfg.aria)}">`;
     for (let i = 0; i <= 4; i++) {
       const v = lo + (hi - lo) * i / 4, y = ys(v);
       s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`;
@@ -456,73 +496,56 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const row = (label, cell, tot, cls = '') => `<tr class="${cls}"><td class="lbl">${label}</td>${groups.map(cell).join('')}<td class="tot">${tot}</td></tr>`;
     const td = (v, c = '') => `<td class="${c}">${v}</td>`;
 
-    const t1 = `<thead><tr><th class="lbl">${by === 'batch' ? 'Invoice No. / Batch No.' : esc(head(by))}</th>${cols}<th class="tot">Total</th></tr></thead><tbody>
+    // ONE table, as the sheet has: the received rows, then the damage rows.
+    const tbl = `<thead><tr><th class="lbl">${by === 'batch' ? 'Invoice No. / Batch No.' : esc(head(by))}</th>${cols}<th class="tot">Total</th></tr></thead><tbody>
       ${row('Seed Purchased', g => td(g.purchasedKnown ? nf(g.purchased) : '—'), t.purchasedKnown ? nf(t.purchased) : '—')}
-      ${row(esc(expLabel) + '<br><small style="font-weight:600;color:var(--muted)">Total Seed Expected</small>', g => td(nf(g.expected)), nf(t.expected))}
+      ${row(esc(expLabel), g => td(nf(g.expected)), nf(t.expected))}
       ${row('Planted', g => td(nf(g.planted)), nf(t.planted))}
       ${row('Damaged', g => td(nf(g.damaged)), nf(t.damaged))}
       ${row('Actual Seed Received', g => td(nf(g.actual)), nf(t.actual), 'key')}
-      ${row('Variance (%)', g => td(pf(g.variancePct)), pf(tVar), 'key')}
-    </tbody>`;
-    const t2 = `<thead><tr><th class="lbl">${by === 'batch' ? 'Invoice No. / Batch No.' : esc(head(by))}</th>${cols}<th class="tot">Total</th></tr></thead><tbody>
+      ${row('Variance (%)', g => td(pf(g.variancePct)), pf(tVar), 'key brk')}
       ${row('Seed Damage', g => td(nf(g.damaged)), nf(t.damaged))}
       ${row('Maximum (%)', () => td(MAX_DAMAGE_PCT + '%'), MAX_DAMAGE_PCT + '%')}
       ${row('Seed Damage (%)', g => td(pfu(g.damagePct), (g.damagePct || 0) > MAX_DAMAGE_PCT ? 'over' : ''), (tDmg || 0) > MAX_DAMAGE_PCT ? `<span class="over">${pfu(tDmg)}</span>` : pfu(tDmg), 'key')}
       ${row('Status', g => { const o = (g.damagePct || 0) > MAX_DAMAGE_PCT; return td(o ? '▲ Over' : '✓ Within', o ? 'over' : 'ok'); }, overN ? `<span class="over">${overN} over</span>` : '<span class="ok">✓ All within</span>')}
     </tbody>`;
 
-    const who = (window.MJMAccess && MJMAccess.user && MJMAccess.user()) || {};
-    const today = new Date(); const dd = String(today.getDate()).padStart(2, '0') + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + today.getFullYear();
+    const pb = PRINTED_BY || { name: '', date: '' };
     return `<div class="rep" data-block="${bi}">
       <div class="rep-head">
         <div><div class="rep-co">MEGA JUTAMAS SDN BHD</div><div class="rep-title">SEED RECEIVED SUMMARY REPORT</div></div>
         <div class="rep-meta">${meta}<div>Period: <b>${esc(period)}</b></div></div>
       </div>
 
-      <div class="sec">
-        <div class="sec-title">1 · Seed Received</div>
-        <div class="sec-sub">Actual Seed Received = Planted + Damaged, off Seed Planting. Variance = (Actual − Expected) ÷ Expected.</div>
-        <div class="kpis">
-          <div class="kpi"><div class="kpi-l">Batches</div><div class="kpi-v">${nf(t.n)}</div></div>
-          <div class="kpi"><div class="kpi-l">Total Seed Expected</div><div class="kpi-v">${nf(t.expected)}</div></div>
-          <div class="kpi"><div class="kpi-l">Actual Seed Received</div><div class="kpi-v">${nf(t.actual)}</div></div>
-          <div class="kpi"><div class="kpi-l">Variance</div><div class="kpi-v">${pf(tVar)}</div></div>
+      <div class="p-charts">
+        <div class="p-chart">
+          <div class="sec-title">Seed Received</div>
+          <div class="legend"><span><i style="background:var(--s-actual)"></i>Actual Seed Received</span><span><i class="dash"></i>${esc(expLabel)}</span></div>
+          <div class="chart-frame c1"></div>
         </div>
-        <div class="legend">
-          <span><i style="background:var(--s-actual)"></i>Actual Seed Received</span>
-          <span><i class="dash"></i>${esc(expLabel)} (expected)</span>
+        <div class="p-chart">
+          <div class="sec-title">Seed Damage</div>
+          <div class="legend"><span><i style="background:var(--s-damage)"></i>Seed damage (%)</span><span><i style="background:var(--critical)"></i>Over the maximum</span><span><i class="dash red"></i>Maximum 5%</span></div>
+          <div class="chart-frame c2"></div>
         </div>
-        <div class="chart-frame c1"></div>
-        <div class="tbl-wrap"><table class="t t1">${t1}</table></div>
       </div>
 
-      <div class="sec">
-        <div class="sec-title">2 · Seed Damage</div>
-        <div class="sec-sub">Seed damage (%) = Damaged ÷ Total Seed Expected, the batch report's own rate. Maximum allowed is <b>5%</b>.</div>
-        <div class="kpis">
-          <div class="kpi"><div class="kpi-l">Seed Damage</div><div class="kpi-v">${nf(t.damaged)}</div></div>
-          <div class="kpi"><div class="kpi-l">Seed damage (%)</div><div class="kpi-v ${(tDmg || 0) > MAX_DAMAGE_PCT ? 'over' : ''}">${pfu(tDmg)}</div></div>
-          <div class="kpi"><div class="kpi-l">Maximum</div><div class="kpi-v">${MAX_DAMAGE_PCT}%</div></div>
-          <div class="kpi"><div class="kpi-l">Over the maximum</div><div class="kpi-v ${overN ? 'over' : ''}">${overN} of ${groups.length}</div></div>
-        </div>
-        <div class="legend">
-          <span><i style="background:var(--s-damage)"></i>Seed damage (%)</span>
-          <span><i style="background:var(--critical)"></i>Over the maximum</span>
-          <span><i class="dash red"></i>Maximum 5%</span>
-        </div>
-        <div class="chart-frame c2"></div>
-        <div class="tbl-wrap"><table class="t t2">${t2}</table></div>
-      </div>
+      <div class="tbl-wrap"><table class="t t1 t2">${tbl}</table></div>
 
-      <div class="sign"><div>Prepared and Verified by<b>${esc(who.full_name || who.email || '')}</b>${dd}</div></div>
+      <div class="sign"><div class="sign-box">
+        <div class="sign-cap">Prepared and Verified by</div>
+        <div class="sign-sig"><span>Signature</span></div>
+        <div class="sign-line"><span>Name</span><b class="sign-name">${esc(pb.name)}</b></div>
+        <div class="sign-line"><span>Date</span><b class="sign-date">${esc(pb.date)}</b></div>
+      </div></div>
     </div>`;
   }
 
-  function drawBlockCharts(el, blk, by) {
+  function drawBlockCharts(el, blk, by, fixedW) {
     const groups = groupRows(blk.batches, by);
     const xLabel = g => by === 'batch' ? 'B.' + g.key : labelOf(g.key, by);
     drawChart(el.querySelector('.c1'), groups, by, {
-      aria: 'Actual seed received against seed expected', minCol: by === 'batch' ? 56 : 80, xLabel,
+      aria: 'Actual seed received against seed expected', minCol: by === 'batch' ? 56 : 80, xLabel, fixedW,
       max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.08,
       tick: v => v >= 1000 ? nf(Math.round(v / 100) / 10) + 'k' : nf(Math.round(v)),
       bar: g => ({ v: g.actual, color: 'var(--s-actual)' }),
@@ -534,7 +557,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         Variance <b>${pf(g.variancePct)}</b>`,
     });
     drawChart(el.querySelector('.c2'), groups, by, {
-      aria: 'Seed damage percentage against the 5% maximum', minCol: by === 'batch' ? 48 : 70, ref: MAX_DAMAGE_PCT, xLabel,
+      aria: 'Seed damage percentage against the 5% maximum', minCol: by === 'batch' ? 48 : 70, ref: MAX_DAMAGE_PCT, xLabel, fixedW,
       max: gs => Math.max(MAX_DAMAGE_PCT * 1.2, ...gs.map(g => g.damagePct || 0)), tick: v => (Math.round(v * 10) / 10) + '%',
       bar: g => ({ v: g.damagePct || 0, color: (g.damagePct || 0) > MAX_DAMAGE_PCT ? 'var(--critical)' : 'var(--s-damage)' }),
       label: g => pfu(g.damagePct),
@@ -544,19 +567,76 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
   }
 
   let BLOCKS = [];
+  let PRINTED_BY = null;
+
+  /* ON SCREEN: a dashboard. One set of KPI cards, two charts and two tables
+     for whatever the filters hold — no company header, no signature. */
+  function screenHtml(rows, by) {
+    const groups = groupRows(rows, by);
+    const t = totalsOf(rows);
+    const tVar = t.expected > 0 ? (t.actual - t.expected) / t.expected * 100 : null;
+    const tDmg = t.expected > 0 ? t.damaged / t.expected * 100 : null;
+    const overN = groups.filter(g => (g.damagePct || 0) > MAX_DAMAGE_PCT).length;
+    const unit = by === 'batch' ? 'batches' : 'groups';
+    const extra = by === 'batch';
+    const xHead = extra ? '<th>Received</th><th>Breed</th><th>Supplier</th><th>D/O No.</th>' : '<th class="num">Batches</th>';
+    const xCell = g => extra ? `<td>${esc(g.src[0].date)}</td><td>${esc(g.src[0].breed)}</td><td>${esc(g.src[0].supplier)}</td><td>${esc(g.src[0].doNo || '—')}</td>` : `<td class="num">${g.n}</td>`;
+    const xFoot = extra ? '<td></td><td></td><td></td><td></td>' : `<td class="num">${rows.length}</td>`;
+    const kpi = (l, v, c = '') => `<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v ${c}">${v}</div></div>`;
+    return `<div class="rep-screen" data-block="0">
+      <div class="card">
+        <div class="sec-title">1 · Seed Expected vs Actual Seed Received</div>
+        <div class="sec-sub">Actual Seed Received = Planted + Damaged, off Seed Planting. Variance = (Actual − Expected) ÷ Expected.</div>
+        <div class="kpis">${kpi('Batches', nf(rows.length))}${kpi('Total Seed Expected', nf(t.expected))}${kpi('Actual Seed Received', nf(t.actual))}${kpi('Variance', pf(tVar))}</div>
+        <div class="legend"><span><i style="background:var(--s-actual)"></i>Actual Seed Received</span><span><i class="dash"></i>Total Seed Expected</span></div>
+        <div class="chart-frame c1"></div>
+        <div class="tbl-wrap"><table class="g g1"><thead><tr><th>${head(by)}</th>${xHead}<th class="num">Seed Purchased</th><th class="num">Total Seed Expected</th><th class="num">Planted</th><th class="num">Damaged</th><th class="num">Actual Seed Received</th><th class="num">Variance (%)</th></tr></thead>
+          <tbody>${groups.map(g => `<tr><td><b>${esc(labelOf(g.key, by))}</b></td>${xCell(g)}<td class="num">${g.purchasedKnown ? nf(g.purchased) : '—'}</td><td class="num">${nf(g.expected)}</td><td class="num">${nf(g.planted)}</td><td class="num">${nf(g.damaged)}</td><td class="num">${nf(g.actual)}</td><td class="num">${pf(g.variancePct)}</td></tr>`).join('')}</tbody>
+          <tfoot><tr><td>Total</td>${xFoot}<td class="num">${t.purchasedKnown ? nf(t.purchased) : '—'}</td><td class="num">${nf(t.expected)}</td><td class="num">${nf(t.planted)}</td><td class="num">${nf(t.damaged)}</td><td class="num">${nf(t.actual)}</td><td class="num">${pf(tVar)}</td></tr></tfoot></table></div>
+      </div>
+      <div class="card dmg">
+        <div class="sec-title">2 · Seed Damage</div>
+        <div class="sec-sub">Seed damage (%) = Damaged ÷ Total Seed Expected, the batch report's own rate. Maximum allowed is <b>5%</b>.</div>
+        <div class="kpis">${kpi('Seed Damage', nf(t.damaged))}${kpi('Seed damage (%)', pfu(tDmg), (tDmg || 0) > MAX_DAMAGE_PCT ? 'over' : '')}${kpi('Maximum', MAX_DAMAGE_PCT + '%')}${kpi('Over the maximum', `${overN} of ${groups.length} ${unit}`, overN ? 'over' : '')}</div>
+        <div class="legend"><span><i style="background:var(--s-damage)"></i>Seed damage (%)</span><span><i style="background:var(--critical)"></i>Over the maximum</span><span><i class="dash red"></i>Maximum 5%</span></div>
+        <div class="chart-frame c2"></div>
+        <div class="tbl-wrap"><table class="g g2"><thead><tr><th>${head(by)}</th>${xHead}<th class="num">Seed Damage</th><th class="num">Maximum (%)</th><th class="num">Seed damage (%)</th><th>Status</th></tr></thead>
+          <tbody>${groups.map(g => { const o = (g.damagePct || 0) > MAX_DAMAGE_PCT;
+            return `<tr><td><b>${esc(labelOf(g.key, by))}</b></td>${xCell(g)}<td class="num">${nf(g.damaged)}</td><td class="num">${MAX_DAMAGE_PCT}%</td><td class="num ${o ? 'over' : ''}">${pfu(g.damagePct)}</td><td class="${o ? 'over' : 'ok'}">${o ? '▲ Over maximum' : '✓ Within'}</td></tr>`; }).join('')}</tbody>
+          <tfoot><tr><td>Total</td>${xFoot}<td class="num">${nf(t.damaged)}</td><td class="num">${MAX_DAMAGE_PCT}%</td><td class="num ${(tDmg || 0) > MAX_DAMAGE_PCT ? 'over' : ''}">${pfu(tDmg)}</td><td></td></tr></tfoot></table></div>
+      </div>
+    </div>`;
+  }
+
   function render() {
     hideTip();
     const by = $('f-group').value;
     const { rows, left } = filtered();
-    BLOCKS = reportBlocks(rows, by);
     const body = $('seed-body');
-    body.innerHTML = rows.length ? BLOCKS.map((b, i) => blockHtml(b, i, by)).join('')
-                                 : '<div class="rep"><div class="empty">Nothing matches these filters.</div></div>';
-    if (rows.length) body.querySelectorAll('.rep[data-block]').forEach(el => drawBlockCharts(el, BLOCKS[+el.dataset.block], by));
+    body.innerHTML = rows.length ? screenHtml(rows, by) : '<div class="card"><div class="empty">Nothing matches these filters.</div></div>';
+    if (rows.length) drawBlockCharts(body.querySelector('.rep-screen'), { batches: rows }, by);
     $('foot-note').textContent = left.length
       ? `${left.length} batch${left.length === 1 ? ' has' : 'es have'} no Seed Planting saved yet and ${left.length === 1 ? 'is' : 'are'} left out (${left.map(x => x.batch).slice(0, 12).join(', ')}${left.length > 12 ? '…' : ''}). Tick “Include batches not planted yet” to show ${left.length === 1 ? 'it' : 'them'}.`
       : '';
   }
+
+  /* ON PAPER: the office sheet. One page per supplier + breed, the company
+     header, the batches across, and the signature block naming whoever
+     pressed Print, on the day they pressed it. */
+  function buildPrint() {
+    const who = (window.MJMAccess && MJMAccess.user && MJMAccess.user()) || {};
+    const d = new Date();
+    PRINTED_BY = { name: who.full_name || who.email || '',
+                   date: String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear() };
+    const by = $('f-group').value;
+    const { rows } = filtered();
+    BLOCKS = reportBlocks(rows, by);
+    const area = $('print-area');
+    area.innerHTML = rows.length ? BLOCKS.map((b, i) => blockHtml(b, i, by)).join('')
+                                 : '<div class="rep"><div class="empty">Nothing matches these filters.</div></div>';
+    if (rows.length) area.querySelectorAll('.rep[data-block]').forEach(el => drawBlockCharts(el, BLOCKS[+el.dataset.block], by, 640));
+  }
+  window.ndBuildPrint = buildPrint;
 
   function refreshFilterOptions() {
     const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
@@ -600,7 +680,9 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       fillCard();
       $('load-msg').classList.add('hidden'); $('seed-body').classList.remove('hidden');
       ['f-group', 'f-year', 'f-month', 'f-breed', 'f-supplier', 'f-unplanted'].forEach(id => $(id).addEventListener('change', () => { $(id).dataset.touched = '1'; render(); }));
-      $('btn-print').addEventListener('click', () => window.print());
+      $('btn-print').addEventListener('click', () => { buildPrint(); window.print(); });
+      // Ctrl/Cmd + P prints the same report, signed by whoever pressed it.
+      addEventListener('beforeprint', () => { if (LOADED) buildPrint(); });
       let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (!$('dash-seed').classList.contains('hidden')) render(); }, 150); });
       render();
     } catch (e) {

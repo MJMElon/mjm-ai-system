@@ -89,6 +89,7 @@ const server = http.createServer((req, res) => {
     await page.route('**://*.supabase.co/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
     await page.addInitScript(({ ledger, perms }) => {
       window.__ranges = 0;
+      window.print = () => { window.__printed = (window.__printed || 0) + 1; };
       function q(table) {
         const st = { from: 0, to: 1e9, types: null };
         const rows = () => {
@@ -138,16 +139,41 @@ const server = http.createServer((req, res) => {
   ok(await vis('#dash-seed') && !(await vis('#dash-home')), 'the card opens the Seed Received Summary tab');
   ok(await page.inputValue('#f-year') === '2026', 'the report opens on the latest year, as the sheet is one year at a time');
 
-  // Read every report block: its supplier/breed and its two transposed tables.
-  const readBlocks = () => page.$$eval('.rep[data-block]', reps => reps.map(r => {
+  // ON SCREEN: a dashboard, not the sheet.
+  const readScreen = () => page.evaluate(() => {
+    const tbl = cls => { const t = document.querySelector('#seed-body table.' + cls); if (!t) return null;
+      return [...t.querySelectorAll('tbody tr')].map(tr => [...tr.cells].map(td => td.textContent.trim())); };
+    return { g1: tbl('g1'), g2: tbl('g2'), company: /MEGA JUTAMAS/.test(document.querySelector('#seed-body').textContent),
+             sign: !!document.querySelector('#seed-body .sign'), bars: document.querySelectorAll('#seed-body .c1 svg .hit').length };
+  });
+  const S = await readScreen();
+  ok(S.g1 && S.g2, 'on screen: a dashboard with its two tables', S);
+  ok(!S.company && !S.sign, 'on screen: no company header and no signature — those are the print\'s', S);
+  ok(S.g1 && S.g1.map(r => r[0]).join() === '270,271' && S.bars === 2, 'on screen: one row and one column per batch', S.g1);
+  const s270 = S.g1 && S.g1.find(r => r[0] === '270');
+  ok(s270 && s270.includes('10,500') && s270.includes('10,427') && s270.includes('-0.70%') && s270.includes('SSO/2026/09/02'), 'on screen: 270 reads 10,500 · 10,427 · −0.70% with its D/O', s270);
+  const s271 = S.g2 && S.g2.find(r => r[0] === '271');
+  ok(s271 && s271.includes('6.00%') && /Over/.test(s271.join(' ')), 'on screen: 271 at 6.00% is over the maximum', s271);
+  ok((await page.evaluate(() => getComputedStyle(document.getElementById('print-area')).display)) === 'none', 'the printed report is not on the screen');
+
+  // ON PAPER: press Print (window.print is stubbed) and read what it built.
+  const readBlocks = async () => { await page.click('#btn-print'); await page.waitForTimeout(80);
+    return page.$$eval('#print-area .rep[data-block]', reps => reps.map(r => {
     const tbl = cls => { const t = r.querySelector('table.' + cls); if (!t) return null;
       const heads = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
       const rows = {}; t.querySelectorAll('tbody tr').forEach(tr => { const c = [...tr.cells].map(td => td.textContent.trim()); rows[c[0]] = c.slice(1); });
       return { heads, rows }; };
     return { meta: r.querySelector('.rep-meta').textContent.replace(/\s+/g, ' '), t1: tbl('t1'), t2: tbl('t2'),
-             bars1: r.querySelectorAll('.c1 svg .hit').length, ref2: r.querySelectorAll('.c2 svg line[stroke-dasharray="6 4"]').length };
-  }));
+             bars1: r.querySelectorAll('.c1 svg .hit').length, ref2: r.querySelectorAll('.c2 svg line[stroke-dasharray="6 4"]').length,
+             company: /MEGA JUTAMAS SDN BHD/.test(r.textContent) && /SEED RECEIVED SUMMARY REPORT/.test(r.textContent),
+             signName: (r.querySelector('.sign-name') || {}).textContent, signDate: (r.querySelector('.sign-date') || {}).textContent,
+             sigBox: !!r.querySelector('.sign-sig') };
+  })); };
   let R = await readBlocks();
+  ok(await page.evaluate(() => window.__printed) === 1, 'Print builds the report and opens the print dialog');
+  ok(R.length && R.every(b => b.company), 'printed: every page carries MEGA JUTAMAS SDN BHD / SEED RECEIVED SUMMARY REPORT', R.map(b => b.company));
+  const today = (() => { const d = new Date(); return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear(); })();
+  ok(R.every(b => b.signName === 'Esther' && b.signDate === today && b.sigBox), 'printed: Prepared and Verified by the person who pressed Print, today, with a signature box', R.map(b => [b.signName, b.signDate, b.sigBox]));
   ok(R.length === 2 && /FGV/.test(R[0].meta) && /Sime Darby/.test(R[1].meta) && /Calix 600/.test(R[1].meta), 'one report block per supplier + breed, named in its header', R.map(x => x.meta));
   const sd = R[1];
   ok(/B\.270/.test(sd.t1.heads[1]) && /SSO\/2026\/09\/02/.test(sd.t1.heads[1]), 'the batches go ACROSS, headed Batch / D/O number', sd.t1.heads);
@@ -180,7 +206,7 @@ const server = http.createServer((req, res) => {
   R = await readBlocks();
   ok(R[0].t1.heads.slice(1, 4).map(h => h.slice(0, 8)).join('|') === 'Dec 2025|Sep 2026|Oct 2026', 'Show by Month: written out, in order', R[0].t1.heads);
 
-  await page.hover('.rep .c1 svg .hit');
+  await page.hover('#seed-body .c1 svg .hit');
   ok(await page.evaluate(() => !document.getElementById('tip').classList.contains('hidden')), 'hovering a column shows its figures');
   ok(await page.$('#btn-print') !== null, 'the report has a Print button');
   await page.click('#dash-tabs .dash-tab[data-dash="home"]'); await page.waitForTimeout(100);
