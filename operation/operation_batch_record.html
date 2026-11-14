@@ -1218,7 +1218,28 @@
             return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
         }
         function c2Group(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-        function c2Show(msg, kind) { if (typeof showToast === 'function') showToast(msg, kind); else alert(msg); }
+        /* A line at the foot of the screen, not a dialog. A save is done when the row
+           changes, so the message only has to be readable for a few seconds. */
+        function c2Show(msg, kind) {
+            let box = document.getElementById('c2-toast');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'c2-toast';
+                box.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;max-width:90vw;padding:10px 16px;border-radius:12px;font:700 13px/1.4 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.18);pointer-events:none;display:none';
+                document.body.appendChild(box);
+            }
+            const look = kind === 'success' ? ['#e7f3dc', '#2f5a1d']
+                       : kind === 'warn'    ? ['#fdf1dc', '#8a5410']
+                       : kind === 'error'   ? ['#fbe3df', '#8a2a1c']
+                       :                      ['#f3efe6', '#3d2610'];
+            box.style.background = look[0];
+            box.style.color = look[1];
+            box.textContent = msg;
+            box.style.display = 'block';
+            clearTimeout(box._hide);
+            box._hide = setTimeout(() => { box.style.display = 'none'; }, (kind === 'warn' || kind === 'error') ? 7000 : 3000);
+            if (kind === 'warn' || kind === 'error') console.warn('[2nd cull]', msg);
+        }
 
         async function c2UploadMap(batch, plot, file) {
             const ext = file.type === 'application/pdf' ? 'pdf'
