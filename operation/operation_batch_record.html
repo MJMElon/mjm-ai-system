@@ -972,7 +972,7 @@
                         ? '<th>Batch</th><th>Breed</th><th style="min-width: 260px;">Waiting To Be Checked</th>'
                           + '<th style="min-width: 180px;">Current Stage</th><th>Survival %</th><th>Culling Rate %</th><th>Actions</th>'
                     : tabName === 'cull2'
-                        ? '<th>Batch</th><th>Nursery</th><th>Plot</th><th>Due Date</th><th>2nd Cull</th><th>Open</th>'
+                        ? '<th>Batch</th><th>Nursery</th><th>Plot</th><th>Due Date</th><th>Transplanted</th><th>Dead</th><th>Cull Date</th><th>Map</th><th>Save</th>'
                     : window._defaultLedgerHead;
             }
 
@@ -1099,25 +1099,60 @@
                     due.push({ plot: e.plot, batch: e.batch, nursery });
                 }
 
-                // Which of them already carry a 2nd culling log.
+                // What is already logged for these batches, and what each plot was transplanted with.
                 const dueBatches = [...new Set(due.map(d => d.batch))];
-                const logged = new Set();
+                const logMap = new Map();
+                const transMap = new Map();
+                const breedOf = new Map();
                 if (dueBatches.length) {
                     const logs = await c2ReadAll(() => _supabase.from('shared_inventory_logs')
-                        .select('plot_name, batch_name')
+                        .select('id, plot_name, batch_name, quantity_change, remark')
                         .eq('transaction_type', '2nd_Culling')
                         .in('batch_name', dueBatches)
                         .order('id', { ascending: true }));
-                    logs.forEach(l => logged.add(String(l.batch_name || '').trim() + '#' + c2PlotKey(l.plot_name)));
+                    logs.forEach(l => {
+                        const k = String(l.batch_name || '').trim() + '#' + c2PlotKey(l.plot_name);
+                        const rem = String(l.remark || '');
+                        const cd = rem.match(/CullDate:\s*(\d{4}-\d{2}-\d{2})/);
+                        const mu = rem.match(/MapUrl:(\S+)/);
+                        const e = logMap.get(k) || { ids: [], dead: null, cullDate: '', mapUrl: '' };
+                        e.ids.push(l.id);
+                        e.dead = Number(l.quantity_change) || 0;
+                        if (cd) e.cullDate = cd[1];
+                        if (mu) e.mapUrl = mu[1];
+                        logMap.set(k, e);
+                    });
+                    const trans = await c2ReadAll(() => _supabase.from('shared_inventory_logs')
+                        .select('plot_name, batch_name, quantity_change, breed_name')
+                        .in('transaction_type', C2_TRANSPLANT_TYPES)
+                        .in('batch_name', dueBatches)
+                        .order('id', { ascending: true }));
+                    trans.forEach(t => {
+                        const b = String(t.batch_name || '').trim();
+                        const k = b + '#' + c2PlotKey(t.plot_name);
+                        transMap.set(k, (transMap.get(k) || 0) + (Number(t.quantity_change) || 0));
+                        if (!breedOf.has(b) && t.breed_name) breedOf.set(b, t.breed_name);
+                    });
                 }
-
                 const [y, m] = month.split('-').map(Number);
                 const dueText = new Date(y, m - 1, 14).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                due.forEach(d => { d.dueText = dueText; d.logged = logged.has(d.batch + '#' + d.plot); });
+                due.forEach(d => {
+                    const k = d.batch + '#' + d.plot;
+                    const lg = logMap.get(k);
+                    d.dueText = dueText;
+                    d.transplanted = transMap.get(k) || 0;
+                    d.breed = breedOf.get(d.batch) || null;
+                    d.logged = !!lg;
+                    d.logIds = lg ? lg.ids : [];
+                    d.dead = lg ? lg.dead : null;
+                    d.cullDate = lg ? lg.cullDate : '';
+                    d.mapUrl = lg ? lg.mapUrl : '';
+                });
                 const numOf = s => parseInt(String(s).replace(/\D/g, ''), 10) || 0;
                 due.sort((a, b) => a.nursery.localeCompare(b.nursery)
                     || a.plot.localeCompare(b.plot, undefined, { numeric: true })
                     || numOf(a.batch) - numOf(b.batch));
+                due.forEach((d, i) => { d.idx = i; });
                 cull2Rows = due;
             } catch (e) {
                 console.error('[2nd cull] could not read the due list', e);
@@ -1129,9 +1164,94 @@
             }
         }
 
+        /* ── 2nd Cull list: fill and save from here ───────────────────────────
+           A plot that is already logged shows its saved figures and stays
+           read-only until Edit is pressed, because some plots are done early
+           (B4 259) and the office must be able to see at a glance that they
+           are filled. Saving writes the same remark Tab 5 writes, so the batch
+           page reads it back unchanged. Only this batch+plot's old 2nd_Culling
+           rows are removed, and only after the new one is in. */
+        const cull2Draft = new Map();    // row idx -> typed but not saved
+        const cull2Editing = new Set();  // logged rows opened with Edit
+
+        function c2Typed(idx, field, value) {
+            if (!cull2Draft.has(idx)) cull2Draft.set(idx, {});
+            cull2Draft.get(idx)[field] = value;
+        }
+        function c2Edit(idx) { cull2Editing.add(idx); renderLedgerTable(); }
+        function c2Cancel(idx) { cull2Editing.delete(idx); cull2Draft.delete(idx); renderLedgerTable(); }
+        function c2PickMap(idx, input) {
+            const file = input.files && input.files[0];
+            c2Typed(idx, 'file', file || null);
+            const el = document.getElementById('c2-map-' + idx);
+            if (el) el.textContent = file ? '✓ ' + file.name : (cull2Rows[idx].mapUrl ? '✓ on file' : 'No map');
+        }
+        function c2Today() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+        function c2Group(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+        function c2Show(msg, kind) { if (typeof showToast === 'function') showToast(msg, kind); else alert(msg); }
+
+        async function c2UploadMap(batch, plot, file) {
+            const ext = file.type === 'application/pdf' ? 'pdf'
+                      : file.type === 'image/jpeg' ? 'jpg'
+                      : /^image\//.test(file.type) ? (file.type.slice(6).replace(/[^a-z0-9]/gi, '').toLowerCase() || 'img')
+                      : 'bin';
+            const safe = s => String(s || 'x').replace(/[^A-Za-z0-9_-]/g, '_');
+            const path = `cull2_maps/${safe(batch)}/${safe(plot)}-${Date.now()}.${ext}`;
+            const { error } = await _supabase.storage.from('documents').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: true });
+            if (error) throw new Error('Map upload failed: ' + (error.message || error));
+            return _supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+        }
+
+        async function saveCull2Row(idx) {
+            const r = cull2Rows[idx];
+            if (!r) return;
+            const dr = cull2Draft.get(idx) || {};
+            const deadRaw = dr.dead !== undefined ? String(dr.dead).trim() : (r.dead === null ? '' : String(r.dead));
+            const dead = Number(deadRaw);
+            const cullDate = dr.date !== undefined ? dr.date : (r.cullDate || c2Today());
+            if (deadRaw === '' || !Number.isInteger(dead) || dead < 0) return c2Show('Key the Dead count as a whole number, 0 or more.', 'error');
+            if (dead > r.transplanted) return c2Show(`Dead ${dead} is more than the ${c2Group(r.transplanted)} transplanted into ${r.plot}.`, 'error');
+            if (!cullDate) return c2Show('Pick the cull date.', 'error');
+            const btn = document.getElementById('c2-save-' + idx);
+            if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+            try {
+                let mapUrl = r.mapUrl || '';
+                if (dr.file) mapUrl = await c2UploadMap(r.batch, r.plot, dr.file);
+                const alive = Math.max(0, r.transplanted - dead);
+                const pct = r.transplanted > 0 ? ((dead / r.transplanted) * 100).toFixed(2) : '0';
+                const remark = `2nd Culling. Alive: ${alive}, Dead: ${dead}, Cull: ${pct}%. Transplanted: ${r.transplanted}. CullDate: ${cullDate}${mapUrl ? ' MapUrl:' + mapUrl : ''}`;
+                // Ids of this plot's existing rows, read now; only these are removed after the insert.
+                const existing = await c2ReadAll(() => _supabase.from('shared_inventory_logs')
+                    .select('id, plot_name')
+                    .eq('transaction_type', '2nd_Culling')
+                    .eq('batch_name', r.batch)
+                    .order('id', { ascending: true }));
+                const oldIds = existing.filter(x => c2PlotKey(x.plot_name) === r.plot).map(x => x.id);
+                const { data: ins, error: insErr } = await _supabase.from('shared_inventory_logs')
+                    .insert({ transaction_type: '2nd_Culling', batch_name: r.batch, breed_name: r.breed, plot_name: r.plot, quantity_change: dead, remark })
+                    .select('id').single();
+                if (insErr) throw insErr;
+                Object.assign(r, { logged: true, dead, cullDate, mapUrl, logIds: [ins.id] });
+                cull2Draft.delete(idx); cull2Editing.delete(idx);
+                if (oldIds.length) {
+                    const { data: gone, error: delErr } = await _supabase.from('shared_inventory_logs').delete().in('id', oldIds).select('id');
+                    if (delErr) throw new Error('The new figure is saved, but the old record for this plot could not be removed: ' + delErr.message);
+                    if ((gone || []).length !== oldIds.length) throw new Error('The new figure is saved, but the old record for this plot was not removed. Tell the office before saving again.');
+                }
+                c2Show(`2nd cull saved for batch ${r.batch}, ${r.plot}.`, 'success');
+            } catch (e) {
+                c2Show('Not saved: ' + (e.message || e), 'error');
+            } finally {
+                renderLedgerTable();
+            }
+        }
+
         function renderCull2Table(body, query) {
             if (cull2Loading || cull2Rows === null) {
-                body.innerHTML = `<tr><td colspan="6" class="text-center p-16 text-[#8a7a68] font-bold">Reading the 2nd cull for ${cull2Month ? c2MonthLabel(cull2Month) : 'this month'}…</td></tr>`;
+                body.innerHTML = `<tr><td colspan="9" class="text-center p-16 text-[#8a7a68] font-bold">Reading the 2nd cull for ${cull2Month ? c2MonthLabel(cull2Month) : 'this month'}…</td></tr>`;
                 updatePagination(0, 1);
                 return;
             }
@@ -1143,26 +1263,56 @@
             if (currentPage < 1) currentPage = 1;
             updatePagination(rows.length, totalPages);
             if (cull2Error) {
-                body.innerHTML = `<tr><td colspan="6" class="text-center p-16 text-[#a83020] font-bold">The 2nd cull list could not be read: ${cull2Error}</td></tr>`;
+                body.innerHTML = `<tr><td colspan="9" class="text-center p-16 text-[#a83020] font-bold">The 2nd cull list could not be read: ${cull2Error}</td></tr>`;
                 return;
             }
             if (rows.length === 0) {
-                body.innerHTML = `<tr><td colspan="6" class="text-center p-16 text-[#8a7a68] font-bold">${query ? `Nothing matching "${query}".` : `Nothing is due for 2nd cull in ${c2MonthLabel(cull2Month)}.`}</td></tr>`;
+                body.innerHTML = `<tr><td colspan="9" class="text-center p-16 text-[#8a7a68] font-bold">${query ? `Nothing matching "${query}".` : `Nothing is due for 2nd cull in ${c2MonthLabel(cull2Month)}.`}</td></tr>`;
                 return;
             }
             const start = (currentPage - 1) * PAGE_SIZE;
             rows.slice(start, start + PAGE_SIZE).forEach(r => {
                 const href = `operation_batch_detail.html?id=${encodeURIComponent(r.batch)}&stage=cull_2`;
-                body.insertAdjacentHTML('beforeend', `
-                    <tr>
+                const base = `
                         <td><a href="${href}" class="font-black text-[#3a7ab4] hover:underline">${r.batch}</a></td>
                         <td class="font-bold text-[#8a7a68]">${r.nursery}</td>
                         <td class="font-black text-[#3d2610]">${r.plot}</td>
                         <td class="font-bold text-[#3d2610]">${r.dueText}</td>
-                        <td>${r.logged
-                            ? '<span class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e]">Logged</span>'
-                            : '<span class="text-[10px] font-black uppercase tracking-widest text-[#c07820]">To fill</span>'}</td>
-                        <td><a href="${href}" class="text-[10px] font-black uppercase tracking-widest text-[#3a7ab4] hover:underline">Open 2nd Cull →</a></td>
+                        <td class="font-black text-[#3d2610]">${c2Group(r.transplanted)}</td>`;
+                if (r.logged && !cull2Editing.has(r.idx)) {
+                    const mapTxt = r.mapUrl
+                        ? `<a href="${r.mapUrl}" target="_blank" rel="noopener" class="font-bold text-[#3a7ab4] underline">Map</a>`
+                        : '<span class="text-[#8a7a68]">No map</span>';
+                    body.insertAdjacentHTML('beforeend', `
+                    <tr class="bg-[#f3f9ec]">${base}
+                        <td class="font-black text-[#3d2610]">${c2Group(r.dead)}</td>
+                        <td class="font-bold text-[#3d2610]">${r.cullDate || '—'}</td>
+                        <td class="text-[11px]">${mapTxt}</td>
+                        <td class="whitespace-nowrap">
+                            <span class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e] mr-3">Already filled</span>
+                            <button onclick="c2Edit(${r.idx})" class="h-9 px-4 rounded-xl border border-[#e8dcc8] bg-white text-[11px] font-black uppercase tracking-widest text-[#3d2610] hover:border-[#6aa83c]">Edit</button>
+                        </td>
+                    </tr>`);
+                    return;
+                }
+                const dr = cull2Draft.get(r.idx) || {};
+                const deadVal = dr.dead !== undefined ? dr.dead : (r.dead === null ? '' : String(r.dead));
+                const dateVal = dr.date !== undefined ? dr.date : (r.cullDate || c2Today());
+                const mapLabel = dr.file ? '✓ ' + dr.file.name : (r.mapUrl ? '✓ on file' : 'No map');
+                body.insertAdjacentHTML('beforeend', `
+                    <tr>${base}
+                        <td><input type="number" min="0" max="${r.transplanted}" value="${deadVal}" oninput="c2Typed(${r.idx}, 'dead', this.value)" class="w-24 h-9 rounded-lg border border-[#e8dcc8] bg-white px-2 text-sm font-black outline-none focus:border-[#6aa83c]"></td>
+                        <td><input type="date" value="${dateVal}" onchange="c2Typed(${r.idx}, 'date', this.value)" class="h-9 rounded-lg border border-[#e8dcc8] bg-white px-2 text-sm font-bold outline-none focus:border-[#6aa83c]"></td>
+                        <td>
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                                <input type="file" accept="image/*,application/pdf" class="hidden" onchange="c2PickMap(${r.idx}, this)">
+                                <span id="c2-map-${r.idx}" class="text-[11px] font-bold text-[#3a7ab4] underline">${mapLabel}</span>
+                            </label>
+                        </td>
+                        <td class="whitespace-nowrap">
+                            <button id="c2-save-${r.idx}" onclick="saveCull2Row(${r.idx})" class="h-9 px-4 rounded-xl bg-[#6aa83c] text-white text-[11px] font-black uppercase tracking-widest hover:bg-[#4a7a2e]">Save</button>
+                            ${r.logged ? `<button onclick="c2Cancel(${r.idx})" class="h-9 px-3 ml-2 text-[11px] font-black uppercase tracking-widest text-[#8a7a68]">Cancel</button>` : ''}
+                        </td>
                     </tr>`);
             });
         }
