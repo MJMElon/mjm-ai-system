@@ -981,7 +981,7 @@
             // The month bar shows only on this tab, and the list is read for the month on it.
             const cull2Bar = document.getElementById('cull2-bar');
             if (cull2Bar) cull2Bar.classList.toggle('hidden', tabName !== 'cull2');
-            if (tabName === 'cull2') loadCull2Month(cull2Month || c2CurrentMonth());
+            if (tabName === 'cull2') loadCull2Month(cull2Month || c2DefaultMonth());
             // The 2nd cull status line belongs to the other tabs; the 2nd Cull list has its own rows.
             const sc2Strip = document.getElementById('sc2-strip');
             if (sc2Strip && tabName === 'cull2') sc2Strip.classList.add('hidden');
@@ -1040,6 +1040,13 @@
         function c2MonthIndex(ym) { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); }
         function c2YmOf(i) { return Math.floor(i / 12) + '-' + String((i % 12) + 1).padStart(2, '0'); }
         function c2CurrentMonth(d = new Date()) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+        /* The month the list opens on. A month's list is finished in its own month, so the next
+           month only takes over on the 7th; until then the previous month stays on screen. */
+        function c2DefaultMonth(d = new Date()) {
+            const base = new Date(d.getFullYear(), d.getMonth(), 1);
+            if (d.getDate() < 7) base.setMonth(base.getMonth() - 1);
+            return c2CurrentMonth(base);
+        }
         function c2MonthLabel(ym) { const [y, m] = ym.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' }); }
         function c2PlotKey(p) { return String(p || '').trim().split(/\s+/)[0].toUpperCase(); }
         function c2NurseryOf(plot) {
