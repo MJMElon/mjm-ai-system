@@ -126,6 +126,9 @@ function runLoader(answer, lock) {
     + stmt(CLAIM, "const TP_FIELD_COLS = ") + '\n'
     + stmt(CLAIM, 'const _tpNotDone = (rec) =>') + '\n'
     + lift(CLAIM, 'async function loadTransplantField()') + '\n'
+    /* The read itself moved into fetchTransplantRows(ym) so the dashboard
+       trend can ask another month; lifted when it is there. */
+    + (CLAIM.includes('async function fetchTransplantRows(ym)') ? lift(CLAIM, 'async function fetchTransplantRows(ym)') + '\n' : '')
     + lift(CLAIM, 'function _tpVerifiedMonth(sec)') + '\n'
     + stmt(CLAIM, 'const _tpAgreed = (rec) =>') + '\n'
     + lift(CLAIM, 'function splitTransplantField()')

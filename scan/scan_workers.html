@@ -30,6 +30,11 @@
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_worker_locations.js?v=2"></script>
+<!-- "Last updated by" is stored as an email, because that is what identifies
+     an account, and must not be SHOWN as one. This is the one resolver; it
+     fails open, so a profile table that cannot be read leaves the address
+     standing rather than leaving the line blank. -->
+<script src="../shared/shared_people.js?v=1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <!-- The register's own stylesheet, borrowed rather than copied. The screen
      moved; it did not get redrawn, and two copies of a stylesheet are two
@@ -152,6 +157,46 @@
   .pend-rej-title { font-size: 11px; font-weight: 900; letter-spacing: .08em;
                     text-transform: uppercase; color: #a16207; margin-bottom: 7px; }
   .pend-rej .wchip { opacity: .72; }
+
+  /* ── The strip: Edit / Cancel / Save, and when this was last touched ───
+     ABOVE the board and not under it. The last-updated line has been on
+     this page since the board was drawn and the office asked for it again,
+     which is the whole answer: it was a foot-note under thirty-two rows of
+     names, so on the screen somebody actually looks at it was never there.
+     A fact about the board belongs where the board starts.
+
+     Editing COLOURS THE STRIP as well as changing the buttons. A board
+     that is live and a board that is not look identical otherwise, and the
+     difference is whether a name moves when a sleeve brushes the trackpad. */
+  .bd-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 14px;
+            margin-bottom: 14px; padding: 11px 15px; border-radius: var(--r-md);
+            border: 1.5px solid var(--border); background: var(--white); }
+  .bd-bar-when { flex: 1 1 220px; font-size: 11.5px; font-weight: 600;
+                 color: var(--text-muted); line-height: 1.55; }
+  .bd-bar-when b { color: var(--text-head); font-weight: 800; }
+  .bd-bar-btns { display: flex; align-items: center; gap: 8px; }
+  .bd-bar.is-edit { border-color: var(--ink-mid); background: var(--ink-light); }
+  .bd-bar-live { font-size: 11px; font-weight: 900; letter-spacing: .09em;
+                 text-transform: uppercase; color: var(--ink-dark); }
+  /* How many moves Save is holding. A count beside the button is the only
+     thing on screen that says a drag was recorded but not written. */
+  .bd-bar-n { display: inline-block; margin-left: 6px; padding: 1px 8px;
+              border-radius: 999px; background: var(--ink-light);
+              color: var(--ink-dark); font-size: 11px; font-weight: 800; }
+  .bd-bar-btns .btn-primary .bd-bar-n { background: rgba(255,255,255,.22); color: #fff; }
+
+  /* A record opened with the board locked. The note sits where Save Worker
+     would be, which is where somebody looks when a button is missing. */
+  .wf-ro-note { font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+                line-height: 1.45; max-width: 330px; }
+  .wf-ro-note b { color: var(--ink-dark); font-weight: 800; white-space: nowrap; }
+  /* A DISABLED BOX HAS TO LOOK DISABLED. The skinned selects grey
+     themselves; a plain input does not, so Name and Remark sat there
+     looking exactly as they always do and the only way to find out was to
+     click in and type nothing. Being unable to type is not an answer. */
+  #worker-modal input:disabled,
+  #worker-modal textarea:disabled { background: #f6f7fb; color: var(--text-muted);
+                                    cursor: not-allowed; }
 </style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
@@ -300,8 +345,14 @@
            their last day, which keeps their name against the work they did
            and their pay entries where they are; deleting the row took those
            with it. Nothing on this screen deletes a worker any more. -->
+      <!-- Why Save Worker is not there. A form with its fields greyed and
+           nothing saying why reads as a broken screen, and the one thing
+           somebody needs is the sentence that tells them where the lever
+           is. -->
+      <span class="wf-ro-note hidden" id="wf-ro-note">
+        Read-only — press <b>&#9998; Edit</b> above the board to change this record.</span>
       <span style="flex:1"></span>
-      <button class="btn" onclick="closeModal('worker-modal')">Cancel</button>
+      <button class="btn" id="wf-close" onclick="closeModal('worker-modal')">Cancel</button>
       <button class="btn btn-primary" id="wf-save" onclick="saveWorker()">Save Worker</button>
     </div>
   </div>
@@ -810,7 +861,7 @@ function workerTitle(w) {
   if (isRejected(w)) {
     const on = fmtDay(w.rejected_at);
     bits.push('registration rejected' + (on ? ' ' + on : '')
-      + (w.rejected_by ? ' by ' + w.rejected_by : ''));
+      + (w.rejected_by ? ' by ' + whoName(w.rejected_by) : ''));
   }
   return bits.join(' · ');
 }
@@ -880,11 +931,64 @@ function boardRoleOf(w) {
   return hit ? hit.key : BOARD_OTHER;
 }
 
+/* ── THE BOARD IS A RECORD UNTIL SOMEBODY PRESSES EDIT ───────────────────
+   The office asked for it in one line: *"help to add save button and edit
+   button. Editable only when user click edit button."*
+
+   THEY ARE RIGHT, AND WHAT THEY WERE LOOKING AT IS WHY. Every drag on this
+   board wrote to the register the moment the name landed — one UPDATE, no
+   confirm, nothing on screen saying it had happened. A drag is the easiest
+   gesture on a trackpad to make by accident, and moving a name moves which
+   nursery pays them and which tick sheets they appear on. A board that
+   writes on contact cannot tell a decision from a sleeve.
+
+   SO THERE ARE TWO STATES AND THE DIFFERENCE IS VISIBLE. In VIEW nothing on
+   the board moves: no chip is draggable, no cell offers Add, no signup
+   offers the ✕, and a record opens read-only. In EDIT the board is exactly
+   what it always was, the strip is tinted, and the moves are a DRAFT.
+
+   A DRAFT, NEVER A WRITE PER DRAG — the same shape as Where Each Job Is
+   Done, and for its reasons: a move stored before Save cannot be cancelled,
+   and a round trip per chip somebody tried is a board that fights back.
+   `boardDraft` is null in view and holds only the workers who MOVED in
+   edit, so Save knows exactly what it is being asked to write and Cancel
+   has something real to throw away.
+
+   WHAT THE DRAFT DOES NOT HOLD is a whole record: adding a worker, editing
+   one, and rejecting a signup are their own acts with their own Save and
+   their own confirm, and queueing a photo upload and a PIN behind this
+   button would be a second, thinner save. They are simply not OFFERED
+   outside edit mode — which is the half the office asked for. A record
+   saved from the form takes that worker OUT of the draft (see saveWorker),
+   because the form is the more specific statement about that person. */
+let boardDraft = null;           // null = view; {id: {section, role}} = editing
+let _bdSaving  = false;
+
+const boardEditing = () => !!boardDraft;
+const boardMoves   = () => Object.keys(boardDraft || {}).length;
+
+/* Where a name is drawn: the draft if it has been moved, the register
+   otherwise. `boardRoleOf` reads `.role` only, so a draft entry answers it
+   exactly as a worker row does. */
+function boardPos(w) {
+  const d = boardDraft && boardDraft[w.id];
+  return d || { section: w.section || '', role: w.role || null };
+}
+
 function renderWorkerBoard() {
   const box     = $('worker-board');
+  /* TWO DIFFERENT QUESTIONS, and folding them together is how a gate
+     becomes a paint. `canEdit` is whether this person may EVER write to the
+     register — the permission, unchanged. `editing` is whether the board is
+     unlocked right now. No Edit button is drawn without the first; nothing
+     on the board moves without the second. */
   const canEdit = may('workers', 'manage');
+  const editing = boardEditing();
   const shown   = workers.filter(workerShown);
-  const at = (sec, role) => shown.filter(w => (w.section || '') === sec && boardRoleOf(w) === role);
+  const at = (sec, role) => shown.filter(w => {
+    const p = boardPos(w);
+    return (p.section || '') === sec && boardRoleOf(p) === role;
+  });
 
   /* AN ORPHAN COLUMN IS ITS PEOPLE, so it goes when they do. It is drawn
      for a section the nursery list does not hold — a nursery since renamed,
@@ -895,7 +999,7 @@ function renderWorkerBoard() {
      added. A worker is only hidden here by Show inactive, which redraws, so
      the column comes back with them. */
   const orphan = new Set(SECTIONS.filter(s => s.orphan).map(s => s.code));
-  const peopled = (c) => shown.some(w => (w.section || '') === c);
+  const peopled = (c) => shown.some(w => (boardPos(w).section || '') === c);
   const cols = boardColumns()
     .map(d => ({ ...d, sections: d.sections.filter(c => !orphan.has(c) || peopled(c)) }))
     .filter(d => d.sections.length);
@@ -922,14 +1026,14 @@ function renderWorkerBoard() {
     const cells = flat.map(c => {
       const chips = at(c, r.key).map(w => `
         <span class="wchip ${w.active === false ? 'wchip-off' : ''}"
-              ${canEdit ? 'draggable="true"' : ''}
+              ${editing ? 'draggable="true"' : ''}
               ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
               onclick="openWorker(${w.id})"
               title="${esc(workerTitle(w))}"
               >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>`).join('');
       // Adding from the Other row would have to invent a role for them, so
       // that one row takes drops but does not offer to add.
-      const add = (canEdit && r.key !== BOARD_OTHER)
+      const add = (editing && r.key !== BOARD_OTHER)
         ? `<button class="wchip-add" onclick="openWorker(null, '${esc(c)}', '${esc(r.key)}')">+ Add person</button>`
         : '';
       return `<td class="bd-cell" ondragover="boardDragOver(event)" ondragleave="boardDragLeave(event)"
@@ -955,14 +1059,17 @@ function renderWorkerBoard() {
      than in it, so the count above is the work actually left to do. Both
      lists are cut from `shown`, so neither is on screen at all unless Show
      inactive is ticked, which is how a rejection leaves the board. */
-  const noSection = shown.filter(w => !String(w.section || '').trim());
+  /* The draft decides here too, so a name dragged out of the queue leaves
+     it at once — the queue is a count of work left to do, and one that
+     still carried somebody already filed would be counting it twice. */
+  const noSection = shown.filter(w => !String(boardPos(w).section || '').trim());
   const pending   = noSection.filter(w => !isRejected(w));
   const rejected  = noSection.filter(w =>  isRejected(w));
 
   const pendChip = (w, offer) => `
         <span class="pend-item">
           <span class="wchip ${w.active === false ? 'wchip-off' : ''}"
-                ${canEdit ? 'draggable="true"' : ''}
+                ${editing ? 'draggable="true"' : ''}
                 ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
                 onclick="openWorker(${w.id})"
                 title="${esc(workerTitle(w))}"
@@ -983,9 +1090,10 @@ function renderWorkerBoard() {
         <span class="pend-title">Waiting to be allocated</span>
         <span class="pend-count">${pending.length}</span>
         <span class="pend-why">Signed up, but not filed under a nursery yet${
-          canEdit ? ' — drag a name into a column below, or ✕ to reject the registration' : ''}.</span>
+          editing ? ' — drag a name into a column below, or ✕ to reject the registration'
+          : canEdit ? ' — press Edit above to file one' : ''}.</span>
       </div>
-      <div class="pend-list">${pending.map(w => pendChip(w, canEdit)).join('')}</div>` : ''}
+      <div class="pend-list">${pending.map(w => pendChip(w, editing)).join('')}</div>` : ''}
       ${rejectedHtml}
     </div>` : '';
 
@@ -1002,20 +1110,55 @@ function renderWorkerBoard() {
      Neither can be worked out by looking. */
   const note = (canEdit ? '' : 'You can look, but moving a worker needs the Workers permission.')
              + hiddenNote;
+
+  /* ── The strip ──────────────────────────────────────────────────────────
+     EDIT IS DRAWN ONLY FOR SOMEBODY WHO MAY WRITE. A button that refuses
+     the press is worse than no button, because it looks like a door.
+
+     Save is offered with nothing moved, DISABLED and saying so, rather
+     than hidden: a button that appears halfway through is a button nobody
+     knows is coming, and the count beside it is where somebody reads how
+     many moves are being held. Cancel is how you leave with none. */
+  const n = boardMoves();
+  const btns = !canEdit ? ''
+    : editing
+      ? `<button class="btn" onclick="boardCancel()">Cancel</button>
+         <button class="btn btn-primary" id="bd-save" onclick="boardSave()" ${n ? '' : 'disabled'}>
+           Save${n ? `<span class="bd-bar-n">${n}</span>` : ''}</button>`
+      : `<button class="btn btn-sm" onclick="boardEdit()">&#9998; Edit</button>`;
+
+  const when = editing
+    ? `<span class="bd-bar-live">Editing</span> &middot; ` + (n
+        ? `${n} ${n === 1 ? 'name has' : 'names have'} been moved and
+           <b>nothing is saved yet</b> — press Save, or Cancel to put them back.`
+        : `drag a name to move it. Nothing is written until you press Save.`)
+    : esc(lastUpdatedLine());
+
   box.innerHTML =
-    `${pendingHtml}
+    `<div class="bd-bar ${editing ? 'is-edit' : ''}">
+       <div class="bd-bar-when">${when}</div>
+       <div class="bd-bar-btns">${btns}</div>
+     </div>
+     ${pendingHtml}
      <div class="card bd-wrap"><table class="bd"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-     ${note.trim() ? `<p class="foot-note">${note.trim()}</p>` : ''}
-     <p class="foot-note">${esc(lastUpdatedLine())}</p>`;
+     ${note.trim() ? `<p class="foot-note">${note.trim()}</p>` : ''}`;
 }
 
-/* WHEN THE REGISTER WAS LAST TOUCHED, under the board.
+/* WHEN THE REGISTER WAS LAST TOUCHED, AND BY WHOM — on the strip above the
+   board, where the office asked for it.
 
    Read off the whole register, not off what is on screen: this answers "is
    what I am looking at current", and a line that went quiet because somebody
    ticked Show inactive would answer it wrongly. Every save writes updated_at
-   (see saveWorker), and a row added before that column was filled in falls
-   back to when it was written. */
+   (see saveWorker, boardSave, rejectWorker and setPin), and a row added
+   before that column was filled in falls back to when it was written.
+
+   THE NAME IS RESOLVED AND THE ROW IS NOT. `updated_by` is an email,
+   because that is what identifies an account; a line reading
+   "by esther.wong@mjmnursery.com" is harder to read than one reading
+   "by Esther Wong" and puts a working address on a screen the office
+   shares. `MJMPeople` fails open, so an unreadable profile table leaves the
+   address standing — an empty "by" would be worse than a plain one. */
 function lastUpdatedLine() {
   let best = null, who = '';
   workers.forEach(w => {
@@ -1028,23 +1171,139 @@ function lastUpdatedLine() {
   const when = isNaN(d) ? String(best).slice(0, 10)
     : d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
       + ', ' + d.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
-  return `Last updated ${when}${who ? ' by ' + who : ''}.`;
+  return `Last updated ${when}${who ? ' by ' + whoName(who) : ''}.`;
 }
+
+/* One resolver, and it answers with what it was given when the shared file
+   is not on the page at all — the same fail-open the file itself has. */
+function whoName(v) {
+  return (typeof MJMPeople !== 'undefined' && MJMPeople && typeof MJMPeople.name === 'function')
+    ? (MJMPeople.name(v) || v) : v;
+}
+
+/* ── Edit, Cancel, Save ──────────────────────────────────────────────────
+   The permission is asked at EVERY one of these, not only when the button
+   was drawn: a strip rendered before somebody's access changed is still
+   sitting on the screen, and `boardSave` is reachable from a console
+   whatever the stylesheet is doing. */
+function boardEdit() {
+  if (!mayDo('workers', 'manage',
+      'You do not have permission to move a worker. Ask an admin to grant it in Module Assess Control.')) return;
+  if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
+  boardDraft = {};
+  renderWorkers();
+}
+
+/* Cancel THROWS MOVES AWAY, so it says so first. With nothing moved it is
+   simply the way out of edit mode and asks nothing — a confirm over an
+   empty draft is a box people learn to dismiss. */
+function boardCancel() {
+  const n = boardMoves();
+  if (n && !confirm(`Put ${n} ${n === 1 ? 'name' : 'names'} back where ${n === 1 ? 'it was' : 'they were'}?\n\n`
+      + 'Nothing has been saved, so the board goes back to the register as it stands.')) return;
+  boardDraft = null;
+  renderWorkers();
+}
+
+/* ONE WRITE PER WORKER, SENT TOGETHER. They are independent rows carrying
+   different values, so there is no single statement that does it — and an
+   upsert would have to carry every NOT NULL column of a row this form has
+   not got. A `for` loop with an await in it is one round trip per name on
+   a nursery line; `Promise.all` is one wave.
+
+   THE COUNT IS WHAT CAME BACK. A worker whose write was refused STAYS in
+   the draft with their name on screen, so Save can be pressed again — the
+   opposite of reporting success over a board that only agrees with itself.
+   A draft entry whose worker has since left the register is dropped rather
+   than written into nothing. */
+async function boardSave() {
+  if (!boardDraft || _bdSaving) return;
+  if (!mayDo('workers', 'manage',
+      'You do not have permission to move a worker. Ask an admin to grant it in Module Assess Control.')) return;
+  const ids = Object.keys(boardDraft);
+  if (!ids.length) return;
+
+  const btn = $('bd-save');
+  _bdSaving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const now = new Date().toISOString();
+    const jobs = ids.map(k => {
+      const id = Number(k);
+      const w  = workers.find(x => x.id === id);
+      const p  = boardDraft[k];
+      if (!w) return { id, gone: true };
+      return _supabase.from('mjmnpayroll_workers')
+        .update({ section: p.section, role: p.role,
+                  // Kept in step so anything still reading the original
+                  // columns agrees with the board, as saveWorker does.
+                  nursery: p.section, job_title: p.role,
+                  updated_at: now, updated_by: userEmail || null })
+        .eq('id', id)
+        .then(r => ({ id, error: r.error, name: w.full_name }),
+              e => ({ id, error: e, name: w.full_name }));
+    });
+    const out  = await Promise.all(jobs);
+    const bad  = out.filter(r => r && r.error);
+
+    /* Everything that WENT comes off the draft; everything refused stays on
+       it, so Save can be pressed again with those names still in their new
+       boxes. A clean save leaves edit mode — the board locks itself behind
+       the person who finished with it. */
+    if (bad.length) {
+      const kept = {};
+      bad.forEach(r => { kept[r.id] = boardDraft[r.id]; });
+      boardDraft = kept;
+    } else {
+      boardDraft = null;
+    }
+
+    /* Rebuilt from the DATABASE and not from the screen, the rule the
+       reject cross already follows: a board agreeing with itself and not
+       with the table is worse than one that takes a second. */
+    await loadWorkers();
+    resolveMaintWorkers();          // a role or a section changes the tick sheets
+
+    if (bad.length) {
+      renderWorkers();
+      alert('Saved ' + (out.length - bad.length) + ' of ' + out.length + '.\n\n'
+        + 'These were not moved and are still on the board waiting:\n'
+        + bad.map(r => '• ' + r.name + ' — ' + (r.error.message || r.error)).join('\n'));
+    }
+  } finally {
+    /* Always redrawn, so a throw anywhere above cannot leave Saving… on a
+       dead button with no way back but a reload. */
+    _bdSaving = false;
+    renderWorkers();
+  }
+}
+
+/* A RELOAD OR A TYPED ADDRESS NEVER REACHES THIS PAGE'S OWN DIALOG, so the
+   browser's is asked for instead. Only ever raised over moves that really
+   are unsaved. */
+window.addEventListener('beforeunload', (e) => {
+  if (!boardMoves()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
 
 /* -- Moving a name ------------------------------------------------------
    The board writes the same two columns the Edit Worker form writes, and
    keeps the original nursery/job_title pair in step exactly as saveWorker
    does, so nothing still reading the old names disagrees with the board.
 
-   The move is drawn before the database has answered. A name that hangs in
-   its old box until the round trip finishes reads as a drag that did not
-   take, and it is the second attempt that causes the trouble. If the save
-   fails the name goes back and says why.
+   THE MOVE IS A DRAFT and the database is not told until Save. It is still
+   drawn the instant the name lands: a chip that hangs in its old box reads
+   as a drag that did not take, and it is the second attempt that causes the
+   trouble.
    ---------------------------------------------------------------------- */
 let _dragId = null;
 
 function boardDragStart(ev, id) {
-  if (!may('workers', 'manage')) { ev.preventDefault(); return; }
+  /* THE EDIT GATE AND THE PERMISSION ARE BOTH ASKED. `draggable` is only
+     written onto a chip while editing, and an attribute is a paint: a chip
+     can be made draggable from a console, and the drop would then write. */
+  if (!boardEditing() || !may('workers', 'manage')) { ev.preventDefault(); return; }
   _dragId = id;
   ev.dataTransfer.effectAllowed = 'move';
   // Firefox will not start a drag at all unless something is carried.
@@ -1067,12 +1326,13 @@ function boardDragOver(ev) {
 
 function boardDragLeave(ev) { ev.currentTarget.classList.remove('bd-cell-over'); }
 
-async function boardDrop(ev, section, roleKey) {
+function boardDrop(ev, section, roleKey) {
   ev.preventDefault();
   ev.currentTarget.classList.remove('bd-cell-over');
   const id = _dragId;
   _dragId = null;
   if (id == null) return;
+  if (!boardEditing()) return;            // a drop that arrived with the board locked
   const w = workers.find(x => x.id === id);
   if (!w) return;
   if (!mayDo('workers', 'manage',
@@ -1080,25 +1340,19 @@ async function boardDrop(ev, section, roleKey) {
 
   // Other is not a role anybody holds. Dropped there, a worker changes
   // section and keeps whatever role they arrived with.
-  const role = (roleKey === BOARD_OTHER) ? (w.role || null) : roleKey;
-  if ((w.section || '') === section && (w.role || '') === (role || '')) return;   // nothing moved
+  const now  = boardPos(w);
+  const role = (roleKey === BOARD_OTHER) ? (now.role || null) : roleKey;
+  if ((now.section || '') === section && (now.role || '') === (role || '')) return;   // nothing moved
 
-  const was = { section: w.section, role: w.role, nursery: w.nursery, job_title: w.job_title };
-  Object.assign(w, { section, role, nursery: section, job_title: role });
+  /* DRAGGED BACK TO WHERE THEY STARTED IS NOT A MOVE. Without this the
+     draft would carry a worker whose two columns are what the register
+     already holds, Save would write a row that changes nothing, and the
+     count beside the button would be asking the office to save work they
+     had just undone. */
+  if ((w.section || '') === section && (w.role || '') === (role || '')) delete boardDraft[id];
+  else boardDraft[id] = { section, role };
+
   renderWorkers();
-  resolveMaintWorkers();          // a role or a section changes the tick sheets
-
-  const { error } = await _supabase.from('mjmnpayroll_workers')
-    .update({ section, role, nursery: section, job_title: role,
-              updated_at: new Date().toISOString(), updated_by: userEmail || null })
-    .eq('id', id);
-
-  if (error) {
-    Object.assign(w, was);
-    renderWorkers();
-    resolveMaintWorkers();
-    alert('Could not move ' + w.full_name + '.\n\n' + (error.message || error));
-  }
 }
 
 /* ── Turning a signup down ───────────────────────────────────────────────
@@ -1129,6 +1383,10 @@ async function boardDrop(ev, section, roleKey) {
 async function rejectWorker(id) {
   const w = workers.find(x => x.id === id);
   if (!w) return;
+  /* The cross is only DRAWN while the board is unlocked, and a drawn
+     control is a paint — this is the gate. Rejecting a signup is a write to
+     the register like any other, so it answers to the same button. */
+  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
   if (!mayDo('workers', 'manage',
       'You do not have permission to reject a registration. Ask an admin to grant it in Module Assess Control.')) return;
 
@@ -1147,6 +1405,11 @@ async function rejectWorker(id) {
 
   const { error } = await _supabase.from('mjmnpayroll_workers').update(row).eq('id', id);
   if (error) { alert('Could not reject ' + w.full_name + '.\n\n' + (error.message || error)); return; }
+
+  /* A rejection is the later and more specific statement about this person,
+     so any move still waiting in the draft for them is dropped rather than
+     written over the top of it by the next Save. */
+  if (boardDraft) delete boardDraft[id];
 
   await loadWorkers();
   resolveMaintWorkers();          // an inactive worker is off the tick sheets
@@ -1258,10 +1521,32 @@ let editWorkerId = null;
    is no location to fill in, and no filing a Batu Niah sprayer under PN because
    the form happened to open on PN. Editing can still move somebody, but that is
    behind "Move…" rather than a field to answer every time. */
+/* READ-ONLY UNLESS THE BOARD IS UNLOCKED. A chip is still clickable in view
+   mode — looking somebody up is reading, and a board whose names cannot be
+   opened is a board that answers nothing — but the record it opens cannot
+   be saved. Leaving Save Worker live here would make Edit a paint on the
+   drag and nothing at all on the form, which is the same screen governed by
+   two rules. Only the PERMISSION refuses outright, because somebody who may
+   not write to the register has nothing to open the form for either. */
+let _wfReadOnly = false;
+
 function openWorker(id, section, role) {
   if (!mayDo('workers', 'manage',
       'You do not have permission to add or edit workers. Ask an admin to grant it in Module Assess Control.')) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
+  /* Add is only offered while editing, so a press with no id and the board
+     locked is a console call or a stale button. Nothing to show. */
+  _wfReadOnly = !boardEditing();
+  if (_wfReadOnly && !id) return;
+  /* EVERY BOX IS ENABLED FIRST, and then the things that know better
+     disable their own. Without this a form opened once with the board
+     locked stayed dead for the rest of the session: `wfApplyReadOnly` only
+     ever turns `disabled` ON, deliberately — it must never WIDEN what the
+     column probes below decided — so something has to put the form back to
+     neutral before they are asked. This is that something, and it runs
+     before any of them. */
+  document.querySelectorAll('#worker-modal input, #worker-modal select, #worker-modal textarea')
+    .forEach(el => { el.disabled = false; });
   const w = id ? workers.find(x => x.id === id) : null;
   editWorkerId = w ? w.id : null;
   fillSectionSelect($('wf-section'), false, w?.section || section || SECTIONS[0].code);
@@ -1289,8 +1574,35 @@ function openWorker(id, section, role) {
   _maintExplicit = w ? (w.maint_general === true || w.maint_general === false) : false;
   $('wf-maint').checked = w ? onMaintSheet(w) : true;
   onWorkerRoleChange();
+  wfApplyReadOnly();
   $('worker-modal').classList.add('open');
-  $('wf-name').focus();
+  /* Focusing the name box on a form nobody can type into puts a caret in a
+     disabled field, which reads as a screen that has stopped responding. */
+  if (!_wfReadOnly) $('wf-name').focus();
+}
+
+/* THE FIELDS ARE DISABLED AND THE SAVE IS GONE, and `saveWorker` refuses as
+   well — an attribute is a paint and the handler is reachable from a
+   console.
+
+   IT ONLY EVER TURNS `disabled` ON. The PIN, the two dates and the photo
+   each disable themselves when their column is not in the table yet, and a
+   blanket `disabled = false` here would hand back a box the database cannot
+   take. So it runs LAST in openWorker, narrowing what those decided and
+   never widening it — and openWorker clears the form at the top, which is
+   what stops a record opened once read-only staying dead afterwards. */
+function wfApplyReadOnly() {
+  const ro = _wfReadOnly;
+  document.querySelectorAll('#worker-modal input, #worker-modal select, #worker-modal textarea')
+    .forEach(el => { if (ro) el.disabled = true; });
+  document.querySelectorAll('#worker-modal .wf-photo-btn')
+    .forEach(b => b.classList.toggle('hidden', ro));
+  $('wf-save').classList.toggle('hidden', ro);
+  $('wf-ro-note').classList.toggle('hidden', !ro);
+  // Nothing has been keyed, so there is nothing to cancel — it is a Close.
+  $('wf-close').textContent = ro ? 'Close' : 'Cancel';
+  // Moving somebody to another section is an edit like any other.
+  if (ro) $('wf-move-btn').classList.add('hidden');
 }
 
 /* Whether somebody is still here decides whether "until when" is a question
@@ -1338,7 +1650,11 @@ function onWorkerRoleChange() {
 function onWorkerSectionChange() {
   const code  = $('wf-section').value;
   const label = SECTION_NAME[code] || code;
-  $('worker-modal-title').textContent = `${editWorkerId ? 'Edit' : 'Add'} Worker — ${label}`;
+  /* A form headed Edit with no Save on it is a contradiction somebody has
+     to work out. With the board locked this is a record being looked at,
+     and the heading says that much. */
+  $('worker-modal-title').textContent =
+    `${_wfReadOnly ? 'Worker' : (editWorkerId ? 'Edit Worker' : 'Add Worker')} — ${label}`;
   $('wf-section-hint').textContent = `Filed under ${label}.`;
   if ($('wf-maint-row')) onWorkerRoleChange();
 }
@@ -1352,6 +1668,12 @@ function showWorkerSectionSelect() {
 }
 
 async function saveWorker() {
+  /* The gate, not the paint. Save Worker is hidden on a read-only form and
+     every box on it is disabled, and neither of those stops this function
+     being called. */
+  if (_wfReadOnly) { alert('Press Edit above the board first.'); return; }
+  if (!mayDo('workers', 'manage',
+      'You do not have permission to add or edit workers. Ask an admin to grant it in Module Assess Control.')) return;
   const name = $('wf-name').value.trim();
   if (!name) { alert('Enter the worker\'s name.'); return; }
   const row = {
@@ -1402,6 +1724,12 @@ async function saveWorker() {
     if (editWorkerId) ({ error } = await _supabase.from('mjmnpayroll_workers').update(row).eq('id', editWorkerId));
     else { row.created_by = userEmail || null; ({ error } = await _supabase.from('mjmnpayroll_workers').insert(row)); }
     if (error) throw error;
+    /* THE FORM IS THE MORE SPECIFIC STATEMENT about this person, and it has
+       just written their section and role. A move still waiting in the
+       draft for them is therefore stale — left there, the next Save would
+       put the row the board was holding back over the top of what was
+       keyed here. */
+    if (boardDraft && editWorkerId) delete boardDraft[editWorkerId];
     closeModal('worker-modal');
     await loadWorkers();
     resolveMaintWorkers();          // the maintenance sheets read this register
@@ -1437,6 +1765,11 @@ async function saveWorker() {
     }
 
     await loadSections();
+    /* Who last touched the register is stored as an email and shown as a
+       name. Awaited with the rest rather than after the first draw, so the
+       line does not change under the office a second later; it fails open,
+       so a profile table that cannot be read costs nothing but the name. */
+    if (typeof MJMPeople !== 'undefined') { try { await MJMPeople.load(_supabase); } catch (_) {} }
     await loadWorkers();
     addOrphanSections();
     renderWorkers();

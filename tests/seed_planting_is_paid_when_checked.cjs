@@ -204,20 +204,20 @@ const read = (page) => page.evaluate(() => {
      is what says why. */
   let v = await read(a.page);
   check('a column per BATCH, with the worker down the side', v.head,
-    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate', 'Amount']);
+    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate (RM)', 'Amount (RM)']);
   check('a row per PLANTER, their own total, times RM 0.02', v.body, [
-    ['Ani',  '—',     '2,000', '2,000', 'RM 0.02', 'RM 40.00'],
-    ['Rina', '1,760', '—',     '1,760', 'RM 0.02', 'RM 35.20'],
-    ['Siti', '2,000', '1,000', '3,000', 'RM 0.02', 'RM 60.00']]);
+    ['Ani',  '—',     '2,000', '2,000', '0.02', '40.00'],
+    ['Rina', '1,760', '—',     '1,760', '0.02', '35.20'],
+    ['Siti', '2,000', '1,000', '3,000', '0.02', '60.00']]);
   check('…and the planted day rides in the batch HEADING, which is what the columns order on',
     v.days, ['28 Sep', '05 Oct']);
   check('a job total under the section: each batch’s, the job’s and its money', v.sub,
-    ['Seed Planting total', '3,760', '3,000', '6,760', '', 'RM 135.20']);
+    ['Seed Planting total', '3,760', '3,000', '6,760', '', '135.20']);
   /* AND THE CLAIM'S OWN TOTAL UNDER BOTH JOBS, which is the figure somebody
      is signing for. Drawn even where one job carried the lot: a foot that
      repeats the section above it still has to say that is the whole of it. */
   check('one foot row: the PRE NURSERY total and the money', v.foot, [
-    ['PRE NURSERY TOTAL', '', '6,760', '', 'RM 135.20']]);
+    ['PRE NURSERY TOTAL', '', '6,760', '', '135.20']]);
   check('…and the Amount column adds up to the total in the foot',
     await a.page.evaluate(() => {
       const rm = s => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
@@ -370,7 +370,7 @@ const read = (page) => page.evaluate(() => {
   const at = (grid, i, j) => ((grid || [])[i] || [])[j];
   check('the Piece Rate row prices it',
     [at(v.body, 0, 4), at(v.body, 0, 5), at([v.sub], 0, 5), at([v.sub], 0, 3)],
-    ['RM 0.025', 'RM 50.00', 'RM 169.00', '6,760']);
+    ['0.025', '50.00', '169.00', '6,760']);
   check('…and the note names where the rate came from', /Seed Planting: RM 0.025 a seed, from Piece Rate \(Seed Planting\)/.test(v.note), true);
   await b.page.close();
 

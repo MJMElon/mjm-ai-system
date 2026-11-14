@@ -49,7 +49,7 @@ checkTrue('the Monthly Payroll still pays all five',
 checkTrue('the verification snapshot still freezes all five',
           /buildMaintSnapshot[\s\S]{0,400}MAINT_TYPES\.forEach\(t => \{ cap\[w\]\[t\.code\]/.test(PAY));
 checkTrue('the Loading Seedlings tab is still on the strip',
-          /data-sub="seedling"[^>]*>Loading Seedlings</.test(HTML));
+          /data-sub="seedling"[^>]*>(<svg[\s\S]*?<\/svg>)?Loading Seedlings</.test(HTML));
 checkTrue('and still has its own claim form',
           /function _downloadLoadingPDF\(\)/.test(PAY));
 
@@ -173,19 +173,19 @@ const SNAP = {
   const maintRow = await page.evaluate(() =>
     [...document.querySelectorAll('#maint-table tbody tr td')].map(td => td.textContent.trim()));
   checkTrue('the row Subtotal is RM 10.00 — the four columns, not the snapshot earned of 60',
-            maintRow.includes('RM 10.00') && !maintRow.includes('RM 60.00'));
+            maintRow.includes('10.00') && !maintRow.includes('60.00'));
   const maintFoot = await page.evaluate(() =>
     [...document.querySelectorAll('#maint-table tfoot td')].map(td => td.textContent.trim()));
   check('the Grand Total row is the four pairs and their own sum',
-        maintFoot, ['Grand Total', '100', 'RM 1.00', '200', 'RM 2.00',
-                    '300', 'RM 3.00', '400', 'RM 4.00', 'RM 10.00']);
+        maintFoot, ['Grand Total', '100', '1.00', '200', '2.00',
+                    '300', '3.00', '400', '4.00', '10.00']);
 
   console.log('\nThe Loading Seedlings tab still shows the whole column');
   const loadHead = await page.evaluate(() => document.querySelector('#loading-table thead').textContent);
   checkTrue('its head names the job', loadHead.includes('Loading Seedlings'));
   const loadFoot = await page.evaluate(() =>
     [...document.querySelectorAll('#loading-table tfoot td')].map(td => td.textContent.trim()));
-  check('and its Grand Total is the loading money', loadFoot, ['Grand Total', '500', 'RM 50.00']);
+  check('and its Grand Total is the loading money', loadFoot, ['Grand Total', '500', '50.00']);
   const loadGlance = await page.evaluate(() =>
     [...document.querySelectorAll('#loading-glance .pt-label')].map(e => e.textContent));
   check('its own glance card stands', loadGlance, ['Loading Seedlings']);

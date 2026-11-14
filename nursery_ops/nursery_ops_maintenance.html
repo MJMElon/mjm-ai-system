@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=115">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=117">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -304,33 +304,33 @@
               <col style="width:84px;" ><!-- Audit    -->
               <col style="width:58px;" ><!-- Nelos Case  -->
               <col style="width:58px;" ><!-- Done Repair -->
-              <col style="width:148px;"><!-- Check / Edit / Del — the buttons wrap -->
+              <col style="width:128px;"><!-- Check / Edit / Del — three icon buttons on one line -->
             </colgroup>
             <thead><tr>
               <th class="th-left"          data-i18n="rec.tarikh">Tarikh</th>
               <th class="th-left"          data-i18n="rec.jenis">Jenis Kerja</th>
               <th class="th-left"          data-i18n="rec.racun">Racun / Chemical</th>
-              <th style="text-align:center;" data-i18n="rec.plot">Plot</th>
-              <th style="text-align:center;" data-i18n="rec.batch">Batch</th>
-              <th style="text-align:center;" data-i18n="rec.qty">Quantity</th>
+              <th class="th-c"     data-i18n="rec.plot">Plot</th>
+              <th class="th-left"  data-i18n="rec.batch">Batch</th>
+              <th class="th-r"     data-i18n="rec.qty">Quantity</th>
               <!-- The walk the worker recorded while doing the job, on the
                    records the Field Conductor has signed off. Only those: an
                    unverified record is not yet evidence of anything, and
                    loadFieldRecords never reads one. -->
-              <th style="text-align:center;" data-i18n="rec.track">Track Record</th>
+              <th class="th-c" data-i18n="rec.track">Track Record</th>
               <th class="th-left"          data-i18n="rec.remark">Remark</th>
               <!-- The Auditor Portal's verdict on this job. Read-only here:
                    the audit is conducted there, this list only shows how it
                    came out. -->
-              <th style="text-align:center;" data-i18n="rec.audit">Audit</th>
+              <th class="th-c" data-i18n="rec.audit">Audit</th>
               <!-- What happens AFTER an Unsatisfied verdict, and in order:
                    the auditor opens a case on Nelos, the conductor repairs
                    the work and closes it. Both are ticks kept here rather
                    than read from Nelos, because Nelos does not know which
                    maintenance row a case belongs to — see _nelosCell. -->
-              <th style="text-align:center;" data-i18n="rec.nelos">Nelos Case</th>
-              <th style="text-align:center;" data-i18n="rec.repaired">Done Repair</th>
-              <th></th>
+              <th class="th-c" data-i18n="rec.nelos">Nelos Case</th>
+              <th class="th-c" data-i18n="rec.repaired">Done Repair</th>
+              <th class="th-c" data-i18n="rec.actions">Actions</th>
             </tr></thead>
             <tbody id="rec-body"></tbody>
           </table>
@@ -376,7 +376,7 @@
               <col style="width:104px;"><!-- Worked by   -->
               <col style="width:170px;"><!-- Reason sent back -->
               <col style="width:104px;"><!-- Sent back by -->
-              <col style="width:158px;"><!-- Approve / Edit / Del -->
+              <col style="width:128px;"><!-- Approve / Edit / Del — three icon buttons -->
             </colgroup>
             <thead><tr>
               <!-- SELECT ALL RIDES IN THE DATE HEADING, and its box rides in
@@ -396,13 +396,13 @@
                 ><span data-i18n="rec.tarikh">Tarikh</span></th>
               <th class="th-left"            data-i18n="rec.jenis">Jenis Kerja</th>
               <th class="th-left"            data-i18n="rec.racun">Racun / Chemical</th>
-              <th style="text-align:center;" data-i18n="rec.plot">Plot</th>
-              <th style="text-align:center;" data-i18n="rec.batch">Batch</th>
-              <th style="text-align:center;" data-i18n="rec.qty">Quantity</th>
-              <th style="text-align:center;" data-i18n="rej.workedBy">Worked By</th>
-              <th class="th-left"            data-i18n="rej.reason">Reason Sent Back</th>
-              <th style="text-align:center;" data-i18n="rej.by">Sent Back By</th>
-              <th></th>
+              <th class="th-c"     data-i18n="rec.plot">Plot</th>
+              <th class="th-left"  data-i18n="rec.batch">Batch</th>
+              <th class="th-r"     data-i18n="rec.qty">Quantity</th>
+              <th class="th-left" data-i18n="rej.workedBy">Worked By</th>
+              <th class="th-left" data-i18n="rej.reason">Reason Sent Back</th>
+              <th class="th-c"    data-i18n="rej.by">Sent Back By</th>
+              <th class="th-c"    data-i18n="rec.actions">Actions</th>
             </tr></thead>
             <tbody id="rej-body"></tbody>
           </table>
@@ -760,6 +760,18 @@
         </div>
         <div id="js-set-body"></div>
       </div>
+      <!-- WORKER LIST FOR EACH JOB. Team Board groups dragged onto a job
+           decide that job's columns on Worker Activity, per nursery. The
+           rule is shared/shared_job_crew.js and the salary claim reads it
+           too. `#jc-set-corner` is filled by the renderer, like the two
+           corners above. -->
+      <div class="card" style="padding:18px;margin-bottom:16px;">
+        <div class="lst-top">
+          <div class="set-h">Worker List for Each Job</div>
+          <div id="jc-set-corner"></div>
+        </div>
+        <div id="jc-set-body"></div>
+      </div>
     </div>
 
     </div><!-- /.sm-body -->
@@ -1007,6 +1019,7 @@
      name the register has since corrected still has to find its column.
      Read by this page AND by the one that prices it. -->
 <script src="../shared/shared_maint_workers.js?v=1"></script>
+<script src="../shared/shared_job_crew.js?v=1"></script>
 <!-- Pairing the field's work to a schedule row. Shared with the payroll
      module's salary claim, which prices what this page ticks. -->
 <script src="../shared/shared_maint_field.js?v=2"></script>
@@ -1028,7 +1041,7 @@
      page's own, and the office asked for it here; the rules are shared, so
      the file is shared. -->
 <script src="../shared/shared_npayroll_lock.js?v=3"></script>
-<script src="plot_maintenance_script.js?v=185"></script>
+<script src="plot_maintenance_script.js?v=187"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

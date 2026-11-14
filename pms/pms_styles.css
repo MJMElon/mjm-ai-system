@@ -164,16 +164,20 @@ h2{font:600 17px/1.2 var(--f-display);margin:0 0 12px}
 .pri.High{color:var(--late)} .pri.Medium{color:var(--s-oh)} .pri.Low{color:var(--muted)}
 
 /* Board */
-.board{margin-top:16px;display:grid;grid-template-columns:repeat(6,minmax(220px,1fr));gap:14px;overflow-x:auto;padding-bottom:8px}
+/* The columns share the width and WRAP onto a second row when the screen is too narrow for all six,
+   so the board is never scrolled sideways: six across on a desk, three on a laptop split, one on a phone. */
+.board{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding-bottom:8px;align-items:start}
+@media (max-width:1100px){.board{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
+@media (max-width:520px){.board{grid-template-columns:1fr}}
 .col{background:var(--sunk);border-radius:12px;padding:10px;min-width:0;display:flex;flex-direction:column;gap:8px}
 .col.urgent{background:var(--s-ug-bg);box-shadow:inset 0 3px 0 var(--s-ug)}
 .col.urgent h3{color:var(--s-ug)}
 .col.drop{outline:2px dashed var(--accent);outline-offset:-2px}
-.col h3{display:flex;justify-content:space-between;align-items:center;margin:2px 4px 4px;font:600 14px var(--f-display)}
+.col h3{display:flex;justify-content:space-between;align-items:center;gap:6px;margin:2px 4px 4px;font:600 14px var(--f-display)}
 .col h3 span{font:500 12px var(--f-mono);color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--sc,var(--line));border-radius:8px;padding:10px 11px;cursor:pointer;display:flex;flex-direction:column;gap:6px}
 .card:hover{box-shadow:var(--shadow)}
-.card .nm{font-weight:500;line-height:1.35}
+.card .nm{font-weight:500;line-height:1.35;overflow-wrap:anywhere}
 .card .meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px;color:var(--muted)}
 .card .due.l{color:var(--late);font-weight:500}
 .col .more{border:0;background:none;color:var(--muted);cursor:pointer;padding:6px;font-size:13px}
@@ -192,25 +196,38 @@ td .nm{font-weight:500}
 /* Tasks table: wider page, every column centred on one line; only the task name (2nd column) wraps, left-aligned. */
 body[data-view="list"] .wrap,body[data-view="timeline"] .wrap,body[data-view="board"] .wrap,body[data-view="value"] .wrap{max-width:1680px}
 table.tasks th,table.tasks td{text-align:center;white-space:nowrap;vertical-align:middle}
-table.tasks th:nth-child(2),table.tasks td:nth-child(2){text-align:left;white-space:normal;min-width:300px}
+table.tasks th:nth-child(2),table.tasks td:nth-child(2){text-align:left;white-space:normal;min-width:220px}
+/* The project path and the people WRAP, so the dates stay on screen instead of running off the right edge. */
+table.tasks td.proj{white-space:normal;min-width:150px;max-width:260px;overflow-wrap:anywhere}
+table.tasks td.who{white-space:normal;min-width:96px;max-width:170px}
+table.tasks td.who span{white-space:nowrap}
+table.tasks{min-width:860px}
+@media (max-width:1500px){
+  table.tasks th,table.tasks td{padding:8px 5px}
+  table.tasks th:nth-child(2),table.tasks td:nth-child(2){min-width:170px}
+  table.tasks td.proj{min-width:130px;max-width:190px}
+  table.tasks td.who{max-width:120px}
+  table.tasks td.date{font-size:11.5px}
+  table.tasks td:first-child,table.tasks th:first-child{padding-left:10px}
+}
 
 /* Timeline */
-.tl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;position:relative}
+/* The chart scrolls INSIDE its own frame, both ways: the dates stay pinned along the top and the task names down
+   the left. It is shorter than the window, so the page itself still scrolls round it. */
+.tl{overflow:auto;max-height:max(320px,calc(100vh - 140px));background:var(--surface);border:1px solid var(--line);border-radius:12px;position:relative}
 .tl-inner{position:relative;width:max-content;min-width:100%}
 .tl-row,.tl-head{width:max-content}
 .tl-row{display:flex;align-items:stretch;min-height:32px;border-bottom:1px solid var(--line)}
 .tl-row.grp{min-height:38px;background:var(--sunk)}
 .tl-row.grp .tl-label small{font:400 12px var(--f-mono);color:var(--muted)}
 .tl-row.grp .tl-label{background:var(--sunk);font:600 13px var(--f-display)}
-.tl-label{position:sticky;left:0;z-index:3;width:360px;flex:none;padding:6px 12px;background:var(--surface);font-size:13px;line-height:1.35;border-right:1px solid var(--line);display:flex;align-items:center;cursor:pointer;overflow-wrap:anywhere}
-@media (max-width:600px){.tl-label{width:170px}}
+.tl-label{position:sticky;left:0;z-index:3;width:var(--tl-lw,360px);flex:none;padding:6px 12px;background:var(--surface);font-size:13px;line-height:1.35;border-right:1px solid var(--line);display:flex;align-items:center;cursor:pointer;overflow-wrap:anywhere}
 .tl-track{position:relative;flex:none}
 .tl-plan{position:absolute;top:calc(50% - 7px);height:14px;border-radius:4px;background:var(--sc);opacity:.22}
 .tl-act{position:absolute;top:calc(50% - 4px);height:8px;border-radius:3px;background:var(--sc)}
 .tl-due{position:absolute;top:calc(50% - 9px);width:2px;height:18px;background:var(--fg);opacity:.5}
 .tl-proj{position:absolute;top:calc(50% - 10px);height:20px;border:1.5px solid var(--accent);border-radius:5px;background:var(--accent-soft)}
-.tl-proj span{position:sticky;left:368px;display:inline-block;padding:0 8px;font:500 11px/17px var(--f-mono);color:var(--accent);white-space:nowrap}
-@media (max-width:600px){.tl-proj span{left:178px}}
+.tl-proj span{position:sticky;left:calc(var(--tl-lw,360px) + 8px);display:inline-block;padding:0 8px;font:500 11px/17px var(--f-mono);color:var(--accent);white-space:nowrap}
 .tl-head{display:flex;height:40px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4;background:var(--surface)}
 .tl-head .tl-label{align-items:center;font:500 11px var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;cursor:default}
 .tl-week{position:absolute;top:0;height:100%;border-left:1px solid var(--line);font:11px var(--f-mono);color:var(--muted);padding:4px 0 0 4px;white-space:nowrap}

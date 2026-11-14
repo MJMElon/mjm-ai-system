@@ -207,7 +207,7 @@ function maintExtraNurseries() {
   const m = monthValue();
   return MAINT_NURSERIES.filter(c => {
     if (CLAIM_NURSERIES.includes(c)) return false;
-    try { return maintWorkerNames(c, m).length > 0; } catch (_) { return false; }
+    try { return maintClaimNames(c, m).length > 0; } catch (_) { return false; }
   });
 }
 
@@ -420,15 +420,40 @@ function resolveMaintWorkers() {
    already on the register, which for anybody typed up from an older paper
    list is years after they actually started — dropping them off those months
    on the strength of a guess is worse than carrying them. */
-function maintWorkerNames(nursery, ym) {
-  const rows = maint.rows && maint.rows[nursery];
-  if (!rows || !rows.length) return maint.workers[nursery] || [];
+function _rowsOnMonth(rows, ym) {
   const monthStart = `${ym}-01`;
   return rows.filter(w => {
     if (w.active !== false) return true;
     const last = w.last_day ? String(w.last_day).slice(0, 10) : '';
     return !!last && last >= monthStart;
   }).map(w => String(w.full_name).trim());
+}
+function maintWorkerNames(nursery, ym) {
+  const rows = maint.rows && maint.rows[nursery];
+  if (!rows || !rows.length) return maint.workers[nursery] || [];
+  return _rowsOnMonth(rows, ym);
+}
+
+/* WHO IS ON ONE JOB'S SHEET. Settings → Worker List for Each Job on Work
+   Maintenance can give a job, in a nursery, the people of any Team Board
+   group. SHARED RULE: jobWorkers() in nursery_ops/plot_maintenance_script.js
+   asks the same file, shared/shared_job_crew.js, for the same answer — a
+   sheet with eight columns and a claim pricing seven is one plot divided
+   among different numbers of people. Nothing keyed is the old list. */
+function maintJobNames(nursery, ym, code) {
+  const k = `${nursery}:${code}`;
+  const groups = (maint.crews && Object.prototype.hasOwnProperty.call(maint.crews, k)) ? maint.crews[k] : null;
+  if (!groups || !window.MJMJobCrew || !workers || !workers.length) return maintWorkerNames(nursery, ym);
+  return _rowsOnMonth(MJMJobCrew.crewRows(workers, groups, {
+    isGeneral: (w, named) => isGeneralWorker(w, named), sectionKey: registerNurseryKey }), ym);
+}
+/* Everybody on ANY job of this nursery: the people a claim has a line for. */
+function maintClaimNames(nursery, ym) {
+  const out = maintWorkerNames(nursery, ym).slice();
+  MAINT_TYPES.forEach(t => maintJobNames(nursery, ym, t.code).forEach(w => {
+    if (!out.includes(w)) out.push(w);
+  }));
+  return out;
 }
 
 /* "RM 1,000.00", not "RM 1000.00". A payroll sheet is read down a column at
@@ -453,7 +478,11 @@ function rateTxt(v) {
   return 'RM ' + grouped(4);
 }
 const num   = v => (Number(v) || 0).toLocaleString();
-function monthValue() { return $('global-month').value || todayMonth(); }
+/* _monthOverride is set ONLY inside monthTotals(), for the length of one
+   synchronous pass, so the dashboard trend can price another month with the
+   same monthlyRows() the Monthly Payroll uses. Nothing awaits while it is set. */
+let _monthOverride = null;
+function monthValue() { return _monthOverride || $('global-month').value || todayMonth(); }
 function todayMonth() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
 function monthLabel(m) { const [y, mo] = String(m).split('-'); return `${MONTHS_SHORT[+mo-1] || mo} ${y}`; }
 /* The maintenance module stores its month as "Apr 2026". */
@@ -1209,14 +1238,15 @@ function mayAdjust(page) {
 const _adjKey = (sheet, section, name, code) =>
   [sheet, section || '', name, code].join('\u0001');
 
-async function loadEarnAdj() {
+async function fetchEarnAdj(ym) {
   const res = await _supabase.from('mjmnpayroll_earn_adjustments')
-    .select('*').eq('month', monthValue())
+    .select('*').eq('month', ym)
     .then(r => r, () => ({ data: [] }));
   // A database without the table is not an error: the payroll ran before
   // this existed and must go on running.
-  earnAdj = (res && !res.error && res.data) ? res.data : [];
+  return (res && !res.error && res.data) ? res.data : [];
 }
+async function loadEarnAdj() { earnAdj = await fetchEarnAdj(monthValue()); }
 
 function adjOf(sheet, section, name, code) {
   return earnAdj.find(a => _adjKey(a.sheet, a.section, a.worker_name, a.work_code)
@@ -1265,7 +1295,7 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
      money then follows the capacity it is worked out from. A second stepper
      on the money would be two ways to move the same figure, disagreeing. */
   return `<td class="money"${open}>${money(shown)}`
-       + (canEdit && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
+       + (canEdit && !a ? '<span class="pen" aria-hidden="true">\u270e</span>' : '')
        + '</td>';
 }
 
@@ -1661,9 +1691,18 @@ const _tpNotDone = (rec) => !!(rec && rec.not_done);
 async function loadTransplantField() {
   transplantField = []; transplantHeld = []; transplantNotDone = [];
   transplantGateOff = false;
+  const got = await fetchTransplantRows(monthValue());
+  transplantGateOff = got.gateOff;
+  transplantRowsAll = got.rows;
+  splitTransplantField();
+}
+/* The read, for any month, touching no global — loadTransplantField is the
+   open month's, monthTotals() the dashboard trend's. */
+async function fetchTransplantRows(ym) {
+  let gateOff = false;
   const ask = (cols) => _supabase.from('nops_transplant_field_records')
     .select(cols)
-    .eq('schedule_month', monthLabel(monthValue()))
+    .eq('schedule_month', monthLabel(ym))
     .then(r => r, (e) => ({ error: e || { message: 'unreachable' } }));
 
   /* TWO OPTIONAL COLUMNS, AND POSTGREST NAMES ONLY THE FIRST ONE IT CANNOT
@@ -1681,14 +1720,13 @@ async function loadTransplantField() {
     const msg = String(res.error.message || '');
     if (want.nd && /not_done/i.test(msg)) { want.nd = false; }
     else if (want.chk && /checked_at|checked_by/i.test(msg)) {
-      want.chk = false; transplantGateOff = true;
+      want.chk = false; gateOff = true;
     } else break;
     res = await ask(build());
   }
   // A database without the table is not an error here: the office ran the
   // payroll module before this button existed and must go on running it.
-  transplantRowsAll = (res && !res.error && res.data) ? res.data : [];
-  splitTransplantField();
+  return { gateOff, rows: (res && !res.error && res.data) ? res.data : [] };
 }
 
 /* A MONTH THE OFFICE HAS VERIFIED HAS BEEN AGREED, and more strongly than a
@@ -2855,12 +2893,12 @@ function renderTransplGlance(secFilter) {
     const r = transplantRate({ work_type: key, jenis: (TRANSPLANT_JOB[key] || {}).jenis });
     return r ? Number(r.rate || 0) : null;
   };
-  box.innerHTML = TRANSPLANT_JOBS.map(j => {
+  box.innerHTML = TRANSPLANT_JOBS.map((j, ji) => {
     const cap = workdone[j.key] || 0;
     const rate = rateOf(j.key);
     const wd = rate == null ? null
       : Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
-    return `<div class="pt-card">
+    return `<div class="pt-card cat-card cat-${(ji % 4) + 1}">
         <div class="pt-label">${esc(j.label)}</div>
         <div class="pt-val">${capFmt(cap)}</div>
         <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
@@ -3015,6 +3053,7 @@ function renderTransplantClaim() {
     </tr></tfoot>`;
 
   $('transpl-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+  try { decorateJobTable($('transpl-table'), TRANSPLANT_JOBS.map(j => j.key), TRANSPLANT_JOBS.map((_, i) => (i % 4) + 1)); } catch (_) {}
 
   /* Anything that would make the claim short is said FIRST, because a claim
      missing work looks exactly like a quiet month. */
@@ -3404,7 +3443,8 @@ function maintRateTxt(t, rate) {
 function _maintInMonth(r, m) { return !!r && r._month === m; }
 
 function maintTotals(nursery, month, ym) {
-  const wk = maintWorkerNames(nursery, ym || monthValue());
+  const wkYm = ym || monthValue();
+  const wk = maintClaimNames(nursery, wkYm);
   const per = {};                       // worker → { code: capacity }
   wk.forEach(w => { per[w] = {}; MAINT_TYPES.forEach(t => per[w][t.code] = 0); });
   const why = {};
@@ -3418,6 +3458,9 @@ function maintTotals(nursery, month, ym) {
   let fromField = 0;
 
   MAINT_TYPES.forEach(t => {
+    /* This job's own columns. A tick under a name the job's list does not
+       hold is not paid here, exactly as it has no column on the sheet. */
+    const wk = maintJobNames(nursery, wkYm, t.code);
     const store = maint.ticks[`${nursery}_${month}_${t.code}`] || {};
     const d = why[t.code] = {
       label: t.label,
@@ -3533,6 +3576,7 @@ function maintTotals(nursery, month, ym) {
       stray: new Set(), orphanTicks: 0, fromField: 0, noTaker: new Set(), tickRows: 0
     };
     const wantYm = ym || monthValue();
+    const wkLoad = maintJobNames(nursery, wantYm, code);
     (maint.doRecords || []).forEach(do_ => {
       if (!_doIsLoadingWork(do_)) return; // a CAL- correction or a cancelled DO loaded no lorry
       if (String(do_.delivery_date || '').slice(0, 7) !== wantYm) {
@@ -3547,8 +3591,8 @@ function maintTotals(nursery, month, ym) {
       d.tickRows++;
       d.capAll += qty;
       const cells = (do_.worked_by_by_nursery || {})[nursery] || [];
-      const ticked = wk.filter(w => cells.includes(w));
-      cells.forEach(name => { if (!wk.includes(name)) d.stray.add(name); });
+      const ticked = wkLoad.filter(w => cells.includes(w));
+      cells.forEach(name => { if (!wkLoad.includes(name)) d.stray.add(name); });
       if (!ticked.length) return;
       d.ticked++;
       d.paid++;
@@ -3743,7 +3787,7 @@ function maintViewFromSnapshot(s) {
 }
 
 function maintLiveView(n, ym, monthTxt) {
-  const wk = maintWorkerNames(n, ym);
+  const wk = maintClaimNames(n, ym);
   const rateOf = c => maintRateOf(n, c);
   const per = maintTotals(n, monthTxt, ym);
   // Money from the capacity AS SHOWN, so the printed row multiplies out.
@@ -3847,53 +3891,282 @@ function workdoneCell(cap, rate, claimed, opts) {
            >${capLine}${wdLine}${gap}</th>`;
 }
 
-/* THE LOOK OF THE CLAIM, AND NOTHING ELSE.
-   Run over the table renderMaint() has just drawn. It adds classes and
-   wraps the "RM" in a span, and never changes a figure or a word: the
-   textContent of every cell is what it was, so every reader of the sheet
-   sees the same claim. Done here rather than inside capCell/earnedCell
-   because those draw the other sheets too.
-     - each job's cells carry job-<code>, so the four jobs are four colour
-       blocks matching the cards above;
-     - a job's first cell carries jg-start (the heavy divider) and its
-       Total cell jg-tot (the light one);
-     - a cell holding only a dash is .nil, drawn faint;
-     - "RM " before a figure is .rm, small and grey, so the number reads;
-     - the Worker column is pinned beside No. at No.'s real width. */
-function decorateMaintTable(tbl) {
-  if (!tbl) return;
-  const codes = MAINT_SHEET_TYPES.map(t => t.code);
-  const hr = tbl.tHead ? tbl.tHead.rows : [];
-  if (hr[2]) Array.from(hr[2].cells).forEach((th, i) => {
-    if (codes[i]) th.classList.add('job-wd', 'job-' + codes[i], 'jg-start');
-  });
-  Array.from(tbl.tBodies[0] ? tbl.tBodies[0].rows : []).forEach(tr => codes.forEach((c, i) => {
-    const a = tr.cells[2 + 2 * i], b = tr.cells[3 + 2 * i];
-    if (a) a.classList.add('job-' + c, 'jg-start');
-    if (b) b.classList.add('job-' + c, 'jg-tot');
-  }));
-  tbl.querySelectorAll('tbody td, tfoot td').forEach(td => {
-    const txt = td.textContent.trim();
-    if (txt === '—' || txt === '-') td.classList.add('nil');
-    const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
-    const hits = [];
-    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-      if (/^\s*RM\s[-\d]/.test(n.nodeValue) && !n.parentNode.closest('button')) hits.push(n);
-    }
-    hits.forEach(n => {
-      const m = n.nodeValue.match(/^(\s*)(RM\s)/);
-      const span = document.createElement('span');
-      span.className = 'rm';
-      span.textContent = m[2];
-      n.nodeValue = n.nodeValue.slice(m[0].length);
-      n.parentNode.insertBefore(span, n);
-      if (m[1]) n.parentNode.insertBefore(document.createTextNode(m[1]), span);
+/* ═══ ONE LOOK FOR EVERY TABLE IN THIS MODULE ═══════════════════════════════
+   The office asked for every tab to read the same way: figures right-aligned
+   on tabular digits, no "RM" repeated down a column, a faint dash where there
+   is nothing, one forest-green Grand Total. Every table here is drawn by
+   innerHTML in some render function, so rather than teach thirty of them the
+   rule, tidyTable() is run over a table each time its contents are replaced
+   (the observer at the foot of this block). It changes no FIGURE: it only
+   adds classes, takes a leading "RM " off a cell, and adds "(RM)" to the one
+   heading over a column it took the RM off -- the unit is said once, where
+   it belongs, instead of on every line.
+
+   decorateJobTable() is the second layer, for the three claim forms that are
+   a group of columns per JOB (Work Maintenance, Transplanting, Loading
+   Seedlings): each job is a colour block, cat-1 to cat-4, the same four
+   colours whichever sheet it is, and No., Worker and Subtotal are pinned. */
+
+/* ── THE STANDARD TABLE ─────────────────────────────────────────────────
+   Every table in this module goes through tidyTable(), which a
+   MutationObserver runs the moment a table's contents are replaced, so a
+   table added next month obeys it without anybody remembering to. It
+   decides each column's TYPE off what the column holds and its heading,
+   and the type decides the alignment:
+
+     serial   No. / #                               centre, narrow
+     status   a heading naming a status             centre
+     action   a blank heading over nothing but buttons  centre, narrow
+     media    nothing but a picture or a map thumb  centre
+     number   figures, money, a figure and its unit right, tabular
+     text     everything else                        left
+
+   It also takes the RM off a cell that is only an amount (the heading
+   says it once), marks a dash faint, and centres a heading that spans
+   several columns over exactly those columns.
+
+   A table whose headings sit INSIDE its body -- the Pre Nursery claim has
+   one band per job, each with its own heading row -- is tidied BAND BY
+   BAND: column three of one job is not column three of the next, and
+   asking the whole body at once read the headings as text and left every
+   figure on that sheet aligned to the left. */
+const _NUM_RX = /^-?[\d,]+(\.\d+)?%?$/;
+const _MONTH_RX = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
+/* A figure with its unit after it -- "3,000 Bag" -- is a quantity and reads
+   right like any other figure. A day ("03 Nov") is not, so a unit that is a
+   month is not a unit. */
+function _isFigure(v) {
+  if (_NUM_RX.test(v)) return true;
+  const m = /^-?[\d,]+(\.\d+)?\s+([A-Za-z]{1,10})$/.exec(v);
+  return !!(m && !_MONTH_RX.test(m[2]));
+}
+
+/* The text of a cell that is ITS value -- not a stepper button, not the
+   calibrate line under a name, not a pill in a heading, not the pencil
+   that says the cell can be adjusted. */
+function _cellValueText(td) {
+  let s = '';
+  const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep, .pen, .sp-sub')) continue;
+    s += n.nodeValue;
+  }
+  return s.replace(/✎/g, '').trim();
+}
+
+/* A section of a table as a grid: grid[r][c] is the cell covering that
+   slot, rowspans and colspans expanded. */
+function _tableGrid(rows) {
+  const grid = [];
+  Array.from(rows).forEach((tr, r) => {
+    grid[r] = grid[r] || [];
+    let c = 0;
+    Array.from(tr.cells).forEach(cell => {
+      while (grid[r][c]) c++;
+      const rs = cell.rowSpan || 1, cs = cell.colSpan || 1;
+      for (let i = 0; i < rs; i++) for (let j = 0; j < cs; j++) {
+        grid[r + i] = grid[r + i] || [];
+        grid[r + i][c + j] = cell;
+      }
+      c += cs;
     });
   });
+  return grid;
+}
+
+const _isHeadRow = tr => tr.cells.length > 0 && Array.from(tr.cells).every(c => c.tagName === 'TH');
+
+function tidyTable(tbl) {
+  if (!tbl || !tbl.tBodies) return;
+  const bodyRows = [];
+  Array.from(tbl.tBodies).forEach(b => bodyRows.push(...b.rows));
+  const footRows = tbl.tFoot ? Array.from(tbl.tFoot.rows) : [];
+
+  // 1. Strip a leading "RM " off each data cell, and mark the empty ones.
+  //    Only where the cell IS an amount: "RM 5 bonus agreed" is a sentence.
+  bodyRows.concat(footRows).forEach(tr => {
+    if (_isHeadRow(tr)) return;
+    Array.from(tr.cells).forEach(td => {
+      if (/^RM\s?-?[\d,]+(\.\d+)?$/.test(_cellValueText(td))) {
+        const walk = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+          if (n.parentNode.closest('button, .cal-line, .wd-gap, .calstep, .pen')) continue;
+          if (/^\s*RM\s?[-\d]/.test(n.nodeValue)) {
+            n.nodeValue = n.nodeValue.replace(/^(\s*)RM\s?/, '$1');
+            td.dataset.rm = '1';
+            break;
+          }
+        }
+      }
+      const v = _cellValueText(td);
+      if (v === '—' || v === '-') td.classList.add('nil');
+    });
+  });
+
+  // 2. The bands: the thead and the body under it, or -- where the body
+  //    carries its own heading rows -- one band per heading row.
+  const bands = [];
+  if (bodyRows.some(_isHeadRow)) {
+    let cur = null;
+    bodyRows.forEach(tr => {
+      if (_isHeadRow(tr)) { cur = { heads: [tr], rows: [] }; bands.push(cur); }
+      else if (cur) cur.rows.push(tr);
+    });
+    // The foot is laid out on the widest band.
+    if (footRows.length && bands.length) {
+      const widest = bands.reduce((a, b) => (_tableGrid(b.heads)[0] || []).length >= (_tableGrid(a.heads)[0] || []).length ? b : a);
+      bands.push({ heads: widest.heads, rows: footRows, footOnly: true });
+    }
+  } else {
+    bands.push({ heads: tbl.tHead ? Array.from(tbl.tHead.rows) : [], rows: bodyRows.concat(footRows) });
+  }
+  bands.forEach(b => _tidyBand(b.heads, b.rows, !!b.footOnly));
+
+  // 3. A heading that spans several columns is centred over them.
+  tbl.querySelectorAll('th').forEach(th => { if ((th.colSpan || 1) > 1) th.classList.add('grp'); });
+}
+
+function _tidyBand(headRows, rows, footOnly) {
+  const grid = _tableGrid(rows);
+  const hg = _tableGrid(headRows);
+  const width = Math.max(hg.reduce((m, r) => Math.max(m, r ? r.length : 0), 0),
+                         grid.reduce((m, r) => Math.max(m, r ? r.length : 0), 0));
+  const cellsOf = c => {
+    const out = [], seen = new Set();
+    grid.forEach(row => {
+      const td = row && row[c];
+      if (!td || seen.has(td) || (td.colSpan || 1) > 1) return;
+      seen.add(td); out.push(td);
+    });
+    return out;
+  };
+  const leaf = c => {
+    for (let r = hg.length - 1; r >= 0; r--) {
+      const cell = hg[r] && hg[r][c];
+      if (cell && (cell.colSpan || 1) === 1) return cell;
+    }
+    return null;
+  };
+  const set = (c, cls, th) => {
+    cellsOf(c).forEach(td => { td.classList.remove('num', 'r', 'c'); cls.forEach(k => td.classList.add(k)); });
+    if (th && !footOnly) { th.classList.remove('num', 'r', 'c'); cls.forEach(k => th.classList.add(k)); }
+  };
+  for (let c = 0; c < width; c++) {
+    const th = leaf(c);
+    const head = th ? th.textContent.trim() : '';
+    let figs = 0, other = 0, rm = 0, btns = 0, media = 0;
+    cellsOf(c).forEach(td => {
+      // A picture with a caption under it is still a picture.
+      if (td.querySelector('img, .tp-maps')) { media++; return; }
+      const v = _cellValueText(td);
+      if (td.dataset.rm) rm++;
+      if (!v) {
+        if (td.querySelector('button, a.btn, input[type=checkbox]')) btns++;
+        return;
+      }
+      if (_isFigure(v)) figs++;
+      else if (v !== '—' && v !== '-') other++;
+    });
+    let type;
+    if (/^(no\.?|#)$/i.test(head))              type = 'serial';
+    else if (/\bstatus\b/i.test(head))           type = 'status';
+    else if (!head && btns && !figs && !other)   type = 'action';
+    else if (media && !figs && !other)           type = 'media';
+    else if (figs && !other)                     type = 'number';
+    else                                         type = 'text';
+    if (type === 'serial') set(c, ['c', 'col-ser'], th);
+    else if (type === 'status') set(c, ['c', 'col-st'], th);
+    else if (type === 'media') set(c, ['c'], th);
+    else if (type === 'action') set(c, ['c', 'col-act'], th);
+    else if (type === 'number') set(c, ['num'], th);
+    else if (th && !footOnly && !th.classList.contains('l')) th.classList.remove('num', 'r', 'c');
+    if (type === 'number' && rm && th && !footOnly && !/RM/.test(th.textContent) && head) {
+      th.appendChild(document.createTextNode(' (RM)'));
+    }
+  }
+}
+
+/* The claim forms laid out as a group of columns per job. `cats` is the
+   colour slot (1 to 4) of each job in order, and `codes` the job's own key,
+   which rides along as job-<code> so a rule or a test can name the job. */
+function decorateJobTable(tbl, codes, cats) {
+  if (!tbl || !tbl.tHead) return;
+  const n = codes.length;
+  const tag = (el, i, extra) => {
+    if (!el || i == null) return;
+    el.classList.add('cat-' + cats[i], 'job-' + codes[i]);
+    (extra || []).forEach(x => el.classList.add(x));
+  };
+  tbl.classList.add('job-table');
+  const hr = tbl.tHead.rows;
+  if (hr[0]) {
+    const c = Array.from(hr[0].cells);
+    if (c[0]) c[0].classList.add('stk-no');
+    if (c[1]) c[1].classList.add('l', 'stk-w');
+    for (let i = 0; i < n; i++) tag(c[2 + i], i, ['job-title', 'jg-start']);
+    if (c[2 + n]) c[2 + n].classList.add('stk-sub');
+  }
+  if (hr[1]) Array.from(hr[1].cells).forEach((th, i) => tag(th, i, ['job-rate', 'jg-start']));
+  if (hr[2]) Array.from(hr[2].cells).forEach((th, i) => tag(th, i, ['job-wd', 'jg-start']));
+  if (hr[3]) Array.from(hr[3].cells).forEach((th, k) => tag(th, Math.floor(k / 2), ['sub-h', k % 2 ? 'jg-tot' : 'jg-start']));
+  Array.from(tbl.tBodies[0] ? tbl.tBodies[0].rows : []).forEach(tr => {
+    const c = tr.cells;
+    if (c.length < 2 + 2 * n) return;
+    c[0].classList.add('stk-no');
+    c[1].classList.add('stk-w');
+    for (let i = 0; i < n; i++) { tag(c[2 + 2 * i], i, ['jg-start']); tag(c[3 + 2 * i], i, ['jg-tot']); }
+    if (c[2 + 2 * n]) c[2 + 2 * n].classList.add('stk-sub');
+  });
+  if (tbl.tFoot && tbl.tFoot.rows[0]) {
+    const c = tbl.tFoot.rows[0].cells;
+    if (c[0]) c[0].classList.add('stk-foot');
+    for (let i = 0; i < n; i++) { tag(c[1 + 2 * i], i, ['jg-start']); tag(c[2 + 2 * i], i, ['jg-tot']); }
+    if (c[1 + 2 * n]) c[1 + 2 * n].classList.add('stk-sub');
+  }
+  tidyTable(tbl);
   const no = tbl.querySelector('thead th.stk-no');
   const w = no ? no.getBoundingClientRect().width : 0;
   if (w) tbl.querySelectorAll('.stk-w').forEach(el => { el.style.left = w + 'px'; });
 }
+
+/* Work Maintenance's four jobs take the four colours in their own order. */
+function decorateMaintTable(tbl) {
+  const codes = MAINT_SHEET_TYPES.map(t => t.code);
+  decorateJobTable(tbl, codes, codes.map((_, i) => (i % 4) + 1));
+}
+
+/* Every table, every time its contents are replaced. A mutation observer
+   rather than thirty calls, so a table added next month is tidied without
+   anybody remembering to. tidyTable writes only text and classes, never a
+   new row, so it cannot set itself off again. */
+(function watchTables() {
+  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
+  const pending = new Set();
+  let queued = false;
+  const flush = () => {
+    queued = false;
+    pending.forEach(t => { try { if (!t.classList.contains('job-table')) tidyTable(t); } catch (_) {} });
+    pending.clear();
+  };
+  const start = () => {
+    const root = document.getElementById('main') || document.body;
+    if (!root) return;
+    new MutationObserver(muts => {
+      muts.forEach(m => {
+        const t = m.target.closest ? m.target.closest('table') : null;
+        if (t) pending.add(t);
+        m.addedNodes.forEach(nd => {
+          if (nd.nodeType !== 1) return;
+          if (nd.tagName === 'TABLE') pending.add(nd);
+          nd.querySelectorAll && nd.querySelectorAll('table').forEach(x => pending.add(x));
+        });
+      });
+      if (pending.size && !queued) { queued = true; Promise.resolve().then(flush); }
+    }).observe(root, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 
 function renderMaint() {
   const n = $('maint-nursery').value;
@@ -4131,7 +4404,7 @@ function renderLoadingGlance(view) {
   const rate = view.rateOf(t.code);
   const wd = rate == null ? null
     : Math.round(cap2(capAll) * Math.round(rate * 100000) / 1000) / 100;
-  box.innerHTML = `<div class="pt-card">
+  box.innerHTML = `<div class="pt-card cat-card cat-4">
       <div class="pt-label">${esc(t.label)}</div>
       <div class="pt-val">${capFmt(capAll)}</div>
       <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
@@ -4201,6 +4474,7 @@ function renderLoading() {
     </tr></tfoot>`;
 
   $('loading-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+  try { decorateJobTable($('loading-table'), [t.code], [4]); } catch (_) {}
 
   /* A frozen (verified) claim stops reading Worker Record/DO records live —
      same reasoning as renderMaint()'s own note. */
@@ -4601,7 +4875,7 @@ function monthlyRows(sec) {
   workers.forEach(w => { if (w.full_name) byName.set(w.full_name.trim().toLowerCase(), w); });
 
   ['PN','BNN','UNN1','UNN2'].forEach(n => {
-    const wk = maintWorkerNames(n, month);
+    const wk = maintClaimNames(n, month);
     if (!wk.length) return;
     const per = maintTotals(n, monthTxt, month);
     const rateOf = c => maintRateOf(n, c);
@@ -4699,9 +4973,9 @@ function renderMonthly() {
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(r.name)}</td>
       <td>${esc(r.section || '—')}</td>
-      <td>${r.maint    ? money(r.maint)    : '—'}</td>
-      <td>${r.transpl  ? money(r.transpl)  : '—'}</td>
-      <td>${r.seedling ? money(r.seedling) : '—'}</td>
+      <td class="cat-1">${r.maint    ? money(r.maint)    : '—'}</td>
+      <td class="cat-2">${r.transpl  ? money(r.transpl)  : '—'}</td>
+      <td class="cat-4">${r.seedling ? money(r.seedling) : '—'}</td>
       <td class="money">${money(r.total)}</td>
     </tr>`).join('')
     : `<tr><td colspan="7" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
@@ -4710,8 +4984,8 @@ function renderMonthly() {
   $('monthly-table').innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th class="l">Worker</th><th style="width:90px;">Section</th>
-      <th style="width:140px;">Work Maintenance</th><th style="width:130px;">Transplanting</th>
-      <th style="width:150px;">Seedlings Collection</th>
+      <th class="cat-1" style="width:140px;">Work Maintenance</th><th class="cat-2" style="width:130px;">Transplanting</th>
+      <th class="cat-4" style="width:150px;">Seedlings Collection</th>
       <th style="width:130px;">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -4811,6 +5085,274 @@ function renderApproval() {
       : `<tr><td colspan="6" class="empty">No sheet is open to this login.</td></tr>`}</tbody>`;
 }
 
+/* ════════════ DASHBOARD ════════════
+   KPI cards, then two charts, then the by-section table. Every figure is the
+   Monthly Payroll's own monthlyRows(), so the dashboard cannot disagree with
+   the sheet it summarises.
+
+   The trend needs months that are not open. monthTotals(ym) fetches that
+   month's four per-month reads WITHOUT touching a global, then in ONE
+   synchronous pass swaps them in, prices the month with monthlyRows(), and
+   puts the open month back — nothing awaits while another month is in the
+   globals, so no render can read it. The culling incentive is priced on the
+   rule already loaded (it is dated and rarely moves); everything else is
+   that month's own. Hours are not recorded anywhere in this module, so the
+   trend offers payroll and workers paid and nothing invented. */
+const DASH_CATS = [
+  { k: 'maint',    label: 'Work Maintenance',     color: '#2f9e5f' },
+  { k: 'transpl',  label: 'Transplanting',        color: '#d97706' },
+  { k: 'seedling', label: 'Seedlings Collection', color: '#0891b2' }
+];
+const DASH_TOTAL_COLOR = '#1b4332';
+const _trendCache = new Map();          // ym -> Promise of totals
+let _dashTrend = { mode: 'month', metric: 'pay' };
+
+function _summarise(rows) {
+  const out = { total: 0, maint: 0, transpl: 0, seedling: 0, names: new Set(), bySec: {} };
+  rows.filter(r => r.total > 0).forEach(r => {
+    DASH_CATS.forEach(c => { out[c.k] += r[c.k]; });
+    out.total += r.total;
+    out.names.add(String(r.name).toLowerCase());
+    const sec = r.section || '';
+    const b = out.bySec[sec] || (out.bySec[sec] = { maint: 0, transpl: 0, seedling: 0, total: 0, n: 0 });
+    DASH_CATS.forEach(c => { b[c.k] += r[c.k]; });
+    b.total += r.total; b.n += 1;
+  });
+  out.workers = out.names.size;
+  return out;
+}
+
+async function monthTotals(ym) {
+  const [ent, adj, tp, cull] = await Promise.all([
+    fetchEntries(ym).then(r => (r && !r.error && r.data) || []),
+    fetchEarnAdj(ym),
+    fetchTransplantRows(ym),
+    window.MJMCullIncentive
+      ? Promise.all([MJMCullIncentive.loadOverrides(_supabase, ym), MJMCullIncentive.loadChecks(_supabase, ym)])
+          .then(([ov, ck]) => ({ ov: ov.rows, ck: ck.rows, ready: ck.ready }), () => null)
+      : Promise.resolve(null)
+  ]);
+  const keep = { entries, earnAdj, transplantRowsAll, transplantField, transplantHeld,
+                 transplantNotDone, transplantGateOff, cullOverrides, cullChecks, cullChecksReady };
+  let rows = [];
+  try {
+    _monthOverride = ym;
+    entries = ent; earnAdj = adj;
+    transplantRowsAll = tp.rows; transplantGateOff = tp.gateOff;
+    splitTransplantField();
+    if (cull) { cullOverrides = cull.ov || []; cullChecks = cull.ck || []; cullChecksReady = cull.ready; }
+    rows = monthlyRows('');
+  } finally {
+    _monthOverride = null;
+    ({ entries, earnAdj, transplantRowsAll, transplantField, transplantHeld,
+       transplantNotDone, transplantGateOff, cullOverrides, cullChecks, cullChecksReady } = keep);
+  }
+  return _summarise(rows);
+}
+function _monthTotalsCached(ym) {
+  if (ym === monthValue()) {           // the open month is always live
+    try { return Promise.resolve(_summarise(monthlyRows(''))); } catch (_) { return Promise.resolve(_summarise([])); }
+  }
+  if (!_trendCache.has(ym)) {
+    _trendCache.set(ym, monthTotals(ym).catch(e => {
+      console.warn('[payroll] trend month not read:', ym, e);
+      _trendCache.delete(ym);
+      return null;
+    }));
+  }
+  return _trendCache.get(ym);
+}
+function _ymAdd(ym, n) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function _trendMonths(mode, ym) {
+  if (mode === 'year') {
+    const y = +ym.slice(0, 4), out = [];
+    for (let m = 1; m <= 12; m++) out.push(`${y - 1}-${String(m).padStart(2, '0')}`);
+    for (let m = 1; m <= +ym.slice(5, 7); m++) out.push(`${y}-${String(m).padStart(2, '0')}`);
+    return out;
+  }
+  const out = [];
+  for (let i = 11; i >= 0; i--) out.push(_ymAdd(ym, -i));
+  return out;
+}
+/* Three at a time: a year of months is ~50 reads, and a nursery signal does
+   not thank anybody for firing them all at once. */
+async function _gather(months) {
+  const res = new Array(months.length);
+  let i = 0;
+  const worker = async () => { while (i < months.length) { const k = i++; res[k] = await _monthTotalsCached(months[k]); } };
+  await Promise.all([worker(), worker(), worker()]);
+  return res;
+}
+
+const _compactRM = v => {
+  const a = Math.abs(v);
+  /* An AXIS label, not an amount: money() is what an amount goes through,
+     and this only shortens a gridline figure to a few characters. */
+  const short = (n, d) => Number(n).toLocaleString('en-MY', { maximumFractionDigits: d });
+  if (a >= 1e6) return `RM ${short(v / 1e6, a >= 1e7 ? 0 : 1)}m`;
+  if (a >= 1e3) return `RM ${short(v / 1e3, a >= 1e4 ? 0 : 1)}k`;
+  return `RM ${short(v, 0)}`;
+};
+function _niceMax(v) {
+  if (!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const f = v / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+
+/* One tooltip for the whole dashboard, placed off the pointer. */
+function _dashTip(e, html) {
+  let t = $('dash-tip');
+  if (!t) { t = document.createElement('div'); t.id = 'dash-tip'; t.className = 'dash-tip'; document.body.appendChild(t); }
+  if (!html) { t.style.display = 'none'; return; }
+  t.innerHTML = html; t.style.display = 'block';
+  const w = t.offsetWidth, h = t.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY - h - 12;
+  if (x + w > window.innerWidth - 8) x = e.clientX - w - 14;
+  if (y < 8) y = e.clientY + 16;
+  t.style.left = x + 'px'; t.style.top = y + 'px';
+}
+function _tipRows(title, items) {
+  return `<div class="dt-h">${esc(title)}</div>` + items.map(i =>
+    `<div class="dt-r"><span class="dt-sw" style="background:${i.color}"></span><span>${esc(i.label)}</span><b>${esc(i.val)}</b></div>`).join('');
+}
+const _legend = items => `<div class="dash-legend">${items.map(i =>
+  `<span><i style="background:${i.color}"></i>${esc(i.label)}</span>`).join('')}</div>`;
+
+/* Grouped bars: one group per nursery, one bar per kind of work. */
+function _drawNurseryChart(sum) {
+  const box = $('dash-nursery-chart');
+  if (!box) return;
+  const order = SECTIONS.map(s => s.code);
+  const secs = Object.keys(sum.bySec).filter(k => sum.bySec[k].total > 0)
+    .sort((a, b) => ((order.indexOf(a) + 1) || 99) - ((order.indexOf(b) + 1) || 99) || a.localeCompare(b));
+  if (!secs.length) { box.innerHTML = `<div class="dash-empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</div>`; return; }
+  const W = 640, H = 260, L = 58, R = 10, T = 14, B = 34;
+  const max = _niceMax(Math.max(...secs.flatMap(s => DASH_CATS.map(c => sum.bySec[s][c.k]))));
+  const gw = (W - L - R) / secs.length, bw = Math.min(26, (gw - 22) / DASH_CATS.length - 2);
+  const y = v => T + (H - T - B) * (1 - v / max);
+  let g = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = max * i / 4, yy = y(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" class="dg-grid"/>`
+       + `<text x="${L - 8}" y="${yy + 4}" class="dg-ax" text-anchor="end">${esc(_compactRM(v))}</text>`;
+  }
+  const secLabel = s => !s ? 'No section' : s;
+  secs.forEach((s, gi) => {
+    const b = sum.bySec[s];
+    const x0 = L + gi * gw + (gw - (bw + 2) * DASH_CATS.length) / 2;
+    DASH_CATS.forEach((c, ci) => {
+      const v = b[c.k], x = x0 + ci * (bw + 2), top = y(v), h = Math.max(0, y(0) - top);
+      const tip = encodeURIComponent(_tipRows(SECTION_NAME[s] || secLabel(s),
+        DASH_CATS.map(cc => ({ color: cc.color, label: cc.label, val: money(b[cc.k]) }))
+          .concat([{ color: DASH_TOTAL_COLOR, label: 'Total', val: money(b.total) }])));
+      const r = Math.min(4, bw / 2, h);
+      g += `<path class="dg-bar" data-sec="${esc(s)}" data-cat="${c.k}" fill="${c.color}" d="M${x},${y(0)}V${top + r}Q${x},${top} ${x + r},${top}H${x + bw - r}Q${x + bw},${top} ${x + bw},${top + r}V${y(0)}Z"/>`
+         + `<rect class="dg-hit" x="${x - 1}" y="${T}" width="${bw + 2}" height="${H - T - B}" fill="transparent" data-tip="${tip}"/>`;
+    });
+    g += `<text x="${L + gi * gw + gw / 2}" y="${H - 12}" class="dg-xl" text-anchor="middle">${esc(secLabel(s))}</text>`;
+  });
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" class="dg-base"/>`;
+  box.innerHTML = _legend(DASH_CATS) + `<svg viewBox="0 0 ${W} ${H}" class="dash-svg" role="img"
+    aria-label="Payroll by nursery and kind of work">${g}</svg>`;
+  _wireTips(box);
+}
+function _wireTips(box) {
+  box.querySelectorAll('[data-tip]').forEach(el => {
+    el.addEventListener('mousemove', e => _dashTip(e, decodeURIComponent(el.dataset.tip)));
+    el.addEventListener('mouseleave', e => _dashTip(e, ''));
+  });
+}
+
+function setDashTrend(k, v) { _dashTrend[k] = v; _drawTrend(); }
+
+async function _drawTrend() {
+  const box = $('dash-trend-chart');
+  if (!box) return;
+  const ym = monthValue(), mode = _dashTrend.mode, metric = _dashTrend.metric;
+  document.querySelectorAll('.dash-seg [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  document.querySelectorAll('.dash-seg [data-metric]').forEach(b => b.classList.toggle('on', b.dataset.metric === metric));
+  const months = _trendMonths(mode, ym);
+  const ticket = (box._ticket = (box._ticket || 0) + 1);
+  if (!box.querySelector('svg')) box.innerHTML = `<div class="dash-empty">Reading ${months.length} months…</div>`;
+  const got = await _gather(months);
+  if (box._ticket !== ticket || !document.body.contains(box)) return;
+
+  let pts;                                   // [{ label, total, maint, transpl, seedling, workers }]
+  if (mode === 'year') {
+    const byY = new Map();
+    months.forEach((m, i) => {
+      const y = m.slice(0, 4), t = got[i];
+      if (!byY.has(y)) byY.set(y, { label: y, total: 0, maint: 0, transpl: 0, seedling: 0, names: new Set(), n: 0 });
+      const e = byY.get(y);
+      e.n += 1;
+      if (!t) return;
+      ['total', 'maint', 'transpl', 'seedling'].forEach(k => { e[k] += t[k]; });
+      t.names.forEach(nm => e.names.add(nm));
+    });
+    pts = [...byY.values()].map(e => ({ ...e, workers: e.names.size,
+      label: e.n < 12 ? `${e.label} (to ${MONTHS_SHORT[e.n - 1]})` : e.label }));
+  } else {
+    pts = months.map((m, i) => ({ label: monthLabel(m), ...(got[i] || { total: 0, maint: 0, transpl: 0, seedling: 0, workers: 0 }) }));
+  }
+  const series = metric === 'workers'
+    ? [{ k: 'workers', label: 'Workers paid', color: DASH_TOTAL_COLOR }]
+    : [{ k: 'total', label: 'Total payroll', color: DASH_TOTAL_COLOR }].concat(DASH_CATS);
+  const fmtV = v => metric === 'workers' ? String(v) : money(v);
+  const fmtA = v => metric === 'workers' ? String(Math.round(v)) : _compactRM(v);
+
+  const W = 640, H = 260, L = 58, R = 26, T = 14, B = 34;
+  const peak = Math.max(0, ...pts.flatMap(p => series.map(s => p[s.k] || 0)));
+  if (!(peak > 0)) {
+    box.innerHTML = `<div class="dash-empty">Nothing paid in ${esc(pts[0].label)} – ${esc(pts[pts.length - 1].label)}.</div>`;
+    return;
+  }
+  const max = _niceMax(peak);
+  const n = pts.length;
+  const x = i => n === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (n - 1);
+  const y = v => T + (H - T - B) * (1 - v / max);
+  let g = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = max * i / 4, yy = y(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" class="dg-grid"/>`
+       + `<text x="${L - 8}" y="${yy + 4}" class="dg-ax" text-anchor="end">${esc(fmtA(v))}</text>`;
+  }
+  const every = n > 8 ? 2 : 1;
+  pts.forEach((p, i) => {
+    if ((n - 1 - i) % every) return;          // counted back from the open month, so the last two never collide
+    g += `<text x="${x(i)}" y="${H - 12}" class="dg-xl" text-anchor="${i === n - 1 && n > 1 ? 'end' : i === 0 && n > 1 ? 'start' : 'middle'}">${esc(mode === 'year' ? p.label : p.label.replace(/ (\d\d)(\d\d)$/, ' $2'))}</text>`;
+  });
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" class="dg-base"/>`;
+  g += `<line class="dg-cross" id="dg-cross" x1="0" x2="0" y1="${T}" y2="${y(0)}" style="display:none"/>`;
+  series.slice().reverse().forEach(s => {
+    const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[s.k] || 0).toFixed(1)}`).join('');
+    g += `<path class="dg-line" data-series="${s.k}" d="${d}" stroke="${s.color}" stroke-width="${s.k === 'total' || s.k === 'workers' ? 2.5 : 2}" fill="none"/>`;
+    pts.forEach((p, i) => { g += `<circle cx="${x(i)}" cy="${y(p[s.k] || 0)}" r="3.5" fill="${s.color}" stroke="#fff" stroke-width="2"/>`; });
+  });
+  pts.forEach((p, i) => {
+    const half = n === 1 ? (W - L - R) / 2 : (W - L - R) / (n - 1) / 2;
+    const tip = encodeURIComponent(_tipRows(p.label, series.map(s => ({ color: s.color, label: s.label, val: fmtV(p[s.k] || 0) }))));
+    g += `<rect class="dg-hit" data-i="${i}" data-x="${x(i)}" x="${x(i) - half}" y="${T}" width="${half * 2}" height="${H - T - B}" fill="transparent" data-tip="${tip}"/>`;
+  });
+  box.innerHTML = (series.length > 1 ? _legend(series) : '') + `<svg viewBox="0 0 ${W} ${H}" class="dash-svg" role="img"
+    aria-label="Payroll trend">${g}</svg>`;
+  box.querySelectorAll('.dg-hit').forEach(el => {
+    el.addEventListener('mousemove', e => {
+      const c = box.querySelector('#dg-cross');
+      if (c) { c.setAttribute('x1', el.dataset.x); c.setAttribute('x2', el.dataset.x); c.style.display = ''; }
+      _dashTip(e, decodeURIComponent(el.dataset.tip));
+    });
+    el.addEventListener('mouseleave', e => {
+      const c = box.querySelector('#dg-cross'); if (c) c.style.display = 'none';
+      _dashTip(e, '');
+    });
+  });
+}
+
 function renderDashboard() {
   const box = $('dash-body');
   if (!box) return;
@@ -4824,8 +5366,8 @@ function renderDashboard() {
   const monthLocked = ready && MJMPayrollLock.isMonthLockedStr(ym);
   const ap = approvalRows();
   const signed = ap.filter(r => r.state === 'verified').length;
-  const card = (label, val, note, go) => `
-    <button type="button" class="dash-card" onclick="${go}">
+  const card = (label, val, note, go, extra) => `
+    <button type="button" class="dash-card${extra ? ' ' + extra : ''}" onclick="${go}">
       <div class="dc-label">${esc(label)}</div>
       <div class="dc-val">${val}</div>
       <div class="dc-sub">${esc(note)}</div>
@@ -4833,15 +5375,19 @@ function renderDashboard() {
   const cards = [];
   cards.push(card('This month', monthLocked ? '🔒 Locked' : 'Open',
     monthLocked ? 'Every sheet is closed' : 'Sheets can still be changed',
-    may('locks') ? "switchTab('locks')" : "switchTab('approval')"));
-  if (ap.length) cards.push(card('Approval', `${signed} / ${ap.length}`,
-    signed === ap.length ? 'Every sheet verified' : `${ap.length - signed} still open`, "switchTab('approval')"));
+    may('locks') ? "switchTab('locks')" : "switchTab('approval')", 'dc-status'));
+  if (ap.length) {
+    const pct = Math.round(signed * 100 / ap.length);
+    cards.push(card('Approval', `${signed} / ${ap.length}`,
+      signed === ap.length ? 'Every sheet verified' : `${ap.length - signed} still open`, "switchTab('approval')", 'dc-approval')
+      .replace('</button>', `<div class="dc-meter"><i style="width:${pct}%"></i></div></button>`));
+  }
+  if (may('monthly')) cards.push(card('Total payroll', money(sum(list, 'total')),
+    `${list.length} ${list.length === 1 ? 'worker' : 'workers'} paid`, "switchSub('monthly')", 'dc-total'));
   if (may('maint')) cards.push(card('Work Maintenance', money(sum(list, 'maint')),
-    'Including Loading Seedlings', "switchSub('maint')"));
+    'Including Loading Seedlings', "switchSub('maint')", 'dc-cat-1'));
   if (may('transpl')) cards.push(card('Transplanting', money(sum(list, 'transpl')),
-    'Including Culling Monitoring', "switchSub('transpl')"));
-  if (may('monthly')) cards.push(card('Monthly Payroll', money(sum(list, 'total')),
-    `${list.length} ${list.length === 1 ? 'worker' : 'workers'} paid`, "switchSub('monthly')"));
+    'Including Culling Monitoring', "switchSub('transpl')", 'dc-cat-2'));
 
   /* By section, the Monthly Payroll's own rows added up. */
   const bySec = new Map();
@@ -4852,6 +5398,25 @@ function renderDashboard() {
   });
   const secName = s => !s ? 'No section' : (s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s));
   const secRows = [...bySec.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const charts = may('monthly') ? `
+    <div class="dash-charts">
+      <div class="card dash-chart">
+        <div class="dash-chart-head"><div>
+          <div class="dch-title">By nursery</div>
+          <div class="dch-sub">${esc(monthLabelFull(ym))} · what each kind of work pays</div></div></div>
+        <div id="dash-nursery-chart"></div>
+      </div>
+      <div class="card dash-chart">
+        <div class="dash-chart-head"><div>
+          <div class="dch-title">Trend</div>
+          <div class="dch-sub">Payroll over time, priced the way the Monthly Payroll prices it</div></div>
+          <div class="dash-segs">
+            <div class="dash-seg"><button type="button" data-mode="month" onclick="setDashTrend('mode','month')">Monthly</button><button type="button" data-mode="year" onclick="setDashTrend('mode','year')">Yearly</button></div>
+            <div class="dash-seg"><button type="button" data-metric="pay" onclick="setDashTrend('metric','pay')">Payroll</button><button type="button" data-metric="workers" onclick="setDashTrend('metric','workers')">Workers</button></div>
+          </div></div>
+        <div id="dash-trend-chart"></div>
+      </div>
+    </div>` : '';
   const table = may('monthly') ? `
     <div class="card"><div class="tbl-wrap"><table id="dash-table">
       <thead><tr><th class="l">Section</th><th>Workers paid</th><th>Work Maintenance</th>
@@ -4864,9 +5429,12 @@ function renderDashboard() {
       ${secRows.length ? `<tfoot><tr><td class="l">TOTAL</td><td>${list.length}</td>
         <td>${money(sum(list, 'maint'))}</td><td>${money(sum(list, 'transpl'))}</td>
         <td>${money(sum(list, 'seedling'))}</td><td>${money(sum(list, 'total'))}</td></tr></tfoot>` : ''}
-    </table></div></div>
-    <p class="foot-note">The figures are the Monthly Payroll's. Seed Planting is paid on its own claim and is not on the Monthly Payroll yet.</p>` : '';
-  box.innerHTML = `<div class="dash-cards">${cards.join('')}</div>${table}`;
+    </table></div></div>` : '';
+  box.innerHTML = `<div class="dash-cards">${cards.join('')}</div>${charts}${table}`;
+  if (may('monthly')) {
+    try { _drawNurseryChart(_summarise(list)); } catch (e) { console.warn('[payroll] nursery chart:', e); }
+    _drawTrend().catch(e => console.warn('[payroll] trend:', e));
+  }
 }
 
 /* Every form this module prints. `page` is the permission the builder
@@ -6310,9 +6878,13 @@ async function loadRates() {
   _rateGroupCol = !probe.error;
   $('rate-setup').classList.toggle('hidden', _rateGroupCol);
 }
+function fetchEntries(ym) {
+  return _supabase.from('mjmnpayroll_work_entries')
+    .select('*').eq('month', ym).order('work_date')
+    .then(r => r, e => ({ error: e || { message: 'unreachable' } }));
+}
 async function loadEntries() {
-  const { data, error } = await _supabase.from('mjmnpayroll_work_entries')
-    .select('*').eq('month', monthValue()).order('work_date');
+  const { data, error } = await fetchEntries(monthValue());
   if (error) { flagSetup(error.message); return; }
   entries = data || [];
 }
@@ -6324,7 +6896,7 @@ function flagSetup(msg) {
 
 /* Work Maintenance lives in the Nursery Operation module; read it as-is. */
 async function loadMaint() {
-  const [recRes, tickRes, rateRes, wkRes, doRes, fieldRes] = await Promise.all([
+  const [recRes, tickRes, rateRes, wkRes, doRes, fieldRes, crewRes] = await Promise.all([
     _supabase.from('nops_maint_records').select('records').eq('id', 1).maybeSingle().then(r => r, () => ({ data: null })),
     _supabase.from('nops_maint_payroll').select('nursery, month, work_type, data').then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_piece_rates').select('nursery, work_type, rate').then(r => r, () => ({ data: [] })),
@@ -6349,8 +6921,14 @@ async function loadMaint() {
     PlotMovement.fetchAll(() => _supabase.from('nops_maint_field_records')
       .select('id, work_date, plot_name, work_type, jenis, chemical, qty, batch_name, week_no, schedule_month, worked_by, reported_by')
       .not('verified_at', 'is', null)
-      .order('id', { ascending: true })).then(r => r, () => ({ data: [] }))
+      .order('id', { ascending: true })).then(r => r, () => ({ data: [] })),
+    /* Each job's worker list (Settings → Worker List for Each Job). Soft:
+       a database that cannot answer leaves every job on its old list. */
+    _supabase.from('nops_maint_config').select('key, txt_value').like('key', 'job_crew:%')
+      .then(r => r, () => ({ data: [] }))
   ]);
+  try { maint.crews = window.MJMJobCrew ? MJMJobCrew.readConfig((crewRes && !crewRes.error && crewRes.data) || []) : {}; }
+  catch (e) { maint.crews = {}; }
 
   // The maintenance module's own old list — only the fallback now.
   maint.localWorkers = {};
@@ -6502,6 +7080,7 @@ document.addEventListener('keydown', (e) => {
        repaint once it lands. */
     PlotMovement.load(_supabase).then(() => {
       if (!PlotMovement.ready()) return;
+      _trendCache.clear();   // months priced before the ledger had no capacity
       try { refreshPayrollTab(); } catch (_) {}
     });
 

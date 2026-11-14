@@ -1081,7 +1081,7 @@ function capFmt(v) {
 function payrollTotalsFor(type) {
   const n = getNursery(), m = getMonth();
   resolveWorkers();                      // the month decides who has a column
-  const wk = workers[n] || [];
+  const wk = jobWorkers(n, type);
   const store = payrollData[payrollKey(n, m, type)] || {};
   const perWorker = {}; wk.forEach(w => perWorker[w] = 0);
   let capTotal = 0;
@@ -1147,7 +1147,7 @@ function renderPayroll() {
     hint.classList.toggle('pay-hint-warn', !isLinked(n));
   }
 
-  const wk = workers[n] || [];
+  const wk = jobWorkers(n, _payrollView);
   const rows = payrollRows();
   const store = payrollData[payrollKey(n, m, _payrollView)] || {};
 
@@ -2011,7 +2011,7 @@ function transplantingRows(n, m) {
    records carry that the register does not know -- see the note inside
    renderTransplantingPayroll for why such a name still gets a column. */
 function tpWorkerColumns(n, rows) {
-  const reg = workers[n] || [];
+  const reg = jobWorkers(n, 'transplanting');
   const onRecords = [...new Set(rows.flatMap(r =>
     (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
   const extra = onRecords.filter(name => !reg.includes(name)).sort();
@@ -2874,7 +2874,7 @@ function renderLoadingSeedlingsPayroll() {
     loadDoRecordsForPayroll(n, m);
   }
 
-  const wk = workers[n] || [];
+  const wk = jobWorkers(n, 'loading_seedlings');
   if (_doRecordsLoading[key]) {
     tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.loading')}</td></tr></tbody>`;
     return;
@@ -3703,8 +3703,13 @@ function downloadPayrollPDF() {
   const MID = PW / 2;
 
   const n = spView ? SP_NURSERY : getNursery(), m = getMonth();
-  const wk = workers[n] || [];
   const TYPES = ['pd', 'manuring', 'weeding', 'interrow'];
+  /* Each job draws ITS OWN worker list (Settings → Worker List for Each
+     Job), so the page asks per type; `wk` is every name on any of the four,
+     which is what "is there anybody at all" is a question about. */
+  const wkOfType = {};
+  TYPES.forEach(ty => { wkOfType[ty] = jobWorkers(n, ty); });
+  let wk = [...new Set(TYPES.flatMap(ty => wkOfType[ty]))];
 
   if (!wide && !wk.length) {
     alert(t('pay.noWorkers'));
@@ -4067,8 +4072,12 @@ function downloadPayrollPDF() {
   const maxPerPage = Math.max(1, Math.floor((CONTENT_W - FIXED) / MIN_WK));
 
   // Split the worker list only when it genuinely will not fit.
-  const chunks = [];
-  for (let i = 0; i < wk.length; i += maxPerPage) chunks.push(wk.slice(i, i + maxPerPage));
+  const chunksOf = (list) => {
+    const out = [];
+    for (let i = 0; i < list.length; i += maxPerPage) out.push(list.slice(i, i + maxPerPage));
+    return out;
+  };
+  let chunks = chunksOf(wk);
 
   const ROW_H = 8;
   if (tpView) { drawTransplantingSheet(); return; }
@@ -4079,6 +4088,9 @@ function downloadPayrollPDF() {
     const cfg = PAYROLL_TYPES[type];
     const rows = payrollRowsFor(type);
     const store = payrollData[payrollKey(n, m, type)] || {};
+    wk = wkOfType[type];
+    chunks = chunksOf(wk);
+    if (!chunks.length) chunks = [[]];
 
     chunks.forEach((chunk, ci) => {
       if (!firstPage) doc.addPage();
@@ -4089,7 +4101,7 @@ function downloadPayrollPDF() {
         : '';
       let y = titleBlock(t(cfg.label), part);
 
-      const wkW  = (CONTENT_W - FIXED) / chunk.length;
+      const wkW  = chunk.length ? (CONTENT_W - FIXED) / chunk.length : 0;
       const xs = [];
       let x = MARGIN;
       [W_DATE, W_PLOT, W_CAP, ...chunk.map(() => wkW), W_PER].forEach(w => { xs.push(x); x += w; });
@@ -4500,6 +4512,9 @@ async function loadLinkedWorkers() {
   // sheet would go on showing the old spelling with no column.
   try { _canonicalisePayrollNames(); } catch (e) { console.warn('[maint] worker names:', e); }
   resolveWorkers();
+  // The Settings card's groups are the register's, so it is drawn again
+  // once the register is in.
+  try { renderJobCrewSetting(); } catch (_) {}
 }
 
 /* EVERY TICK EVER MADE UNDER A NAME THE REGISTER HAS SINCE CHANGED.
@@ -4546,6 +4561,10 @@ function _whyNoColumn(nursery, name) {
   const want = key(name);
   const hit = _registerRows.filter(r => key(r.full_name) === want);
   if (!hit.length) return t('pay.whyNotOnRegister');
+  /* A job with a worker list of its own: somebody on the register and not
+     in one of the groups dragged onto this job has no column for THAT
+     reason, and the setting is where it is put right. */
+  if (jobCrewKeyed(nursery, _payrollView)) return t('pay.whyNotInCrew');
   const here = hit.find(r => _registerNurseryKey(r) === nursery);
   if (!here) {
     const where = _registerNurseryKey(hit[0]) || '—';
@@ -4590,6 +4609,38 @@ function resolveWorkers() {
   });
 }
 function isLinked(n) { return (_linkedRows[n] || []).length > 0; }
+
+/* ── WHO IS ON EACH JOB ───────────────────────────────────────────────────
+   Settings → Worker List for Each Job. A (nursery, job) the office has
+   keyed reads its columns off the Team Board groups dragged onto it; one
+   nobody has keyed reads `workers[n]`, which is exactly what every sheet
+   read before the setting existed. shared/shared_job_crew.js is the rule
+   and the salary claim reads the same file. */
+let jobCrews = {};                  // 'BNN:pd' → ['BNN|General Worker', …], ONLY what is keyed
+const CREW_OPTS = { isGeneral: (r, named) => isGeneralWorker(r, named),
+                    sectionKey: (r) => _registerNurseryKey(r) };
+function jobCrewKeyed(n, job) {
+  const k = `${n}:${job}`;
+  return Object.prototype.hasOwnProperty.call(jobCrews, k) ? jobCrews[k] : null;
+}
+function jobWorkers(n, job) {
+  const groups = window.MJMJobCrew ? jobCrewKeyed(n, job) : null;
+  /* Fails OPEN to the old list: a register that could not be read has no
+     groups to resolve, and an empty sheet over a read error reads as a
+     nursery with nobody in it. */
+  if (!groups || _linkErr || !(_registerRows || []).length) return (workers[n] || []).slice();
+  const m = (typeof getMonth === 'function' && document.getElementById('global-month')) ? getMonth() : '';
+  return workersForMonth(MJMJobCrew.crewRows(_registerRows, groups, CREW_OPTS), m);
+}
+/* Everybody any job in this nursery could be ticked under — the list a
+   correction made from outside one sheet chooses from. */
+function nurseryCrewUnion(n) {
+  const out = (workers[n] || []).slice();
+  ((window.MJMJobCrew && MJMJobCrew.JOBS) || []).forEach(j => {
+    jobWorkers(n, j).forEach(w => { if (!out.includes(w)) out.push(w); });
+  });
+  return out;
+}
 
 /* Pick up an amendment made in the payroll module while this page is open.
    Throttled — opening the Worker Record tab twice in a row should not fire
@@ -4834,6 +4885,7 @@ const I18N = {
     'pay.whyRole':'is a {role} on the register, so has no column on these sheets',
     'pay.whyNotGeneral':'not counted as a general worker of this nursery on the register',
     'pay.whyUnknown':'on the register as a general worker of this nursery — reload the page',
+    'pay.whyNotInCrew':'not in the worker list for this job — Settings, Worker List for Each Job',
     'pay.saveFailed':'⚠ These ticks did not save, so the Nursery Payroll cannot see them and will not pay them. Try ticking again:',
     /* The other half of the same warning: work that never reached the sheet
        at all, as against work that reached it with a name nobody could
@@ -4878,6 +4930,10 @@ const I18N = {
     'rec.totalTasks':'Total Tasks', 'rec.gaiaDone':'Gaia Done', 'rec.gaiaPending':'Gaia Pending',
     'rec.pendingTask':'Pending Task', 'rec.repairCase':'Total Repair Case',
     'rec.doneOf':'{n} done \u00b7 {pct}%', 'rec.repairedOf':'{n} repaired \u00b7 {pct}%',
+    'rec.workProgress':'Work progress', 'rec.repairProgress':'Repair progress',
+    'rec.completedN':'Completed', 'rec.pendingN':'Pending', 'rec.repairCases':'Repair cases',
+    'rec.repairedN':'Repaired', 'rec.remainingN':'Remaining', 'rec.actions':'Actions',
+    'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Track Record', 'rec.trackView':'View track', 'rec.trackNone':'No walk was recorded for this job.',
     'rec.nelos':'Nelos Case', 'rec.repaired':'Done Repair',
     'rec.nelosNa':'A case is raised on Nelos when the auditor marks a job Unsatisfied. This one has not been.',
@@ -5026,6 +5082,7 @@ const I18N = {
     'pay.whyRole':'ialah {role} dalam daftar, jadi tiada lajur pada helaian ini',
     'pay.whyNotGeneral':'tidak dikira sebagai pekerja am nurseri ini dalam daftar',
     'pay.whyUnknown':'ada dalam daftar sebagai pekerja am nurseri ini \u2014 muat semula halaman',
+    'pay.whyNotInCrew':'tiada dalam senarai pekerja kerja ini \u2014 Tetapan, Senarai Pekerja Setiap Kerja',
     'pay.saveFailed':'⚠ Tanda ini tidak disimpan, jadi Sistem Payroll Nurseri tidak dapat melihatnya dan tidak akan membayarnya. Cuba tanda semula:',
     'pay.unpaired':'⚠ Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi ia tidak ditanda dan tidak dibayar. Tambah baris itu pada jadual bulan ini, kemudian Sync dari Jadual:',
     'pay.roundN':'Pusingan {n}',
@@ -5067,6 +5124,10 @@ const I18N = {
     'rec.totalTasks':'Jumlah Tugasan', 'rec.gaiaDone':'Gaia Selesai', 'rec.gaiaPending':'Gaia Belum',
     'rec.pendingTask':'Tugasan Belum Siap', 'rec.repairCase':'Jumlah Kes Pembaikan',
     'rec.doneOf':'{n} siap \u00b7 {pct}%', 'rec.repairedOf':'{n} dibaiki \u00b7 {pct}%',
+    'rec.workProgress':'Kemajuan kerja', 'rec.repairProgress':'Kemajuan pembaikan',
+    'rec.completedN':'Siap', 'rec.pendingN':'Belum', 'rec.repairCases':'Kes pembaikan',
+    'rec.repairedN':'Dibaiki', 'rec.remainingN':'Baki', 'rec.actions':'Tindakan',
+    'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Rekod Laluan', 'rec.trackView':'Lihat laluan', 'rec.trackNone':'Tiada laluan direkodkan untuk kerja ini.',
     'rec.nelos':'Kes Nelos', 'rec.repaired':'Pembaikan Selesai',
     'rec.nelosNa':'Kes dibuka di Nelos apabila juruaudit menanda kerja Tidak Memuaskan. Kerja ini belum ditanda.',
@@ -6384,11 +6445,14 @@ const _PAYROLL_TYPE_BY_JENIS = Object.keys(PAYROLL_TYPES).reduce((acc, k) => {
    capacity out of the totals silently. So match on letters and digits, and
    return the column's own spelling so what gets written is what this page
    counts. */
-function _matchWorkerName(nursery, name) {
+function _matchWorkerName(nursery, name, type) {
   const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
   const want = key(name);
   if (!want) return null;
-  return (workers[nursery] || []).find((w) => key(w) === want) || null;
+  /* The job's OWN list where the job is known: a name with no column on
+     that sheet is not a tick that sheet can carry. */
+  const list = type ? jobWorkers(nursery, type) : (workers[nursery] || []);
+  return list.find((w) => key(w) === want) || null;
 }
 
 /* All of these are shared/shared_maint_field.js's, named locally so the rest
@@ -6501,7 +6565,7 @@ function applyFieldRecords(nursery, monthLbl) {
 
     const next = {};
     names.forEach((n) => {
-      const col = _matchWorkerName(nursery, n);
+      const col = _matchWorkerName(nursery, n, type);
       if (col) next[col] = 'field';
       else unmatched.add(n);
     });
@@ -8657,6 +8721,44 @@ function _recRowOrder(a, b) {
   return _recDayOrder(a, b);
 }
 
+/* ── THE WORK RECORDS PAGE: SHARED PIECES ─────────────────────────────────
+   One slim progress strip and one icon button, so the approved list and the
+   sent-back list draw their actions the same way. An icon button carries its
+   old WORD as hidden text: the tooltip, a screen reader and anything reading
+   the button's text all still read "Edit" or "Del", and the handler it calls
+   is exactly the one the word button called. */
+const _REC_ICONS = {
+  check: '<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>',
+  undo:  '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>',
+  edit:  '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>'
+};
+function _recIconBtn(icon, cls, onclick, label, tip) {
+  return `<button type="button" class="btn btn-sm btn-act ${cls}" onclick="${onclick}" `
+    + `title="${esc(tip || label)}" aria-label="${esc(label)}">`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" `
+    + `stroke-linejoin="round" aria-hidden="true">${_REC_ICONS[icon]}</svg>`
+    + `<span class="sr-only">${esc(label)}</span></button>`;
+}
+function _recProgressHtml(m) {
+  const pc = (n, of) => (of ? Math.round(n / of * 100) : 0);
+  const fig = (n) => Number(n || 0).toLocaleString('en-MY');
+  const bar = (n, of) => `<div class="rp-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" `
+    + `aria-valuenow="${pc(n, of)}"><span style="width:${pc(n, of)}%"></span></div>`;
+  const item = (lbl, n, cls) => `<span class="rp-item${cls ? ' ' + cls : ''}"><span class="rp-lbl">${lbl}</span>`
+    + `<b class="rp-val">${fig(n)}</b></span>`;
+  return `<div class="rp-group rp-work">
+      <div class="rp-line"><span class="rp-title">${t('rec.workProgress')}</span>
+        ${item(t('rec.totalTasks'), m.total)}${item(t('rec.completedN'), m.done)}${item(t('rec.pendingN'), m.pend, 'rp-pend')}
+        <span class="rp-pct">${pc(m.done, m.total)}%</span></div>
+      ${bar(m.done, m.total)}</div>
+    <div class="rp-group rp-repair">
+      <div class="rp-line"><span class="rp-title">${t('rec.repairProgress')}</span>
+        ${item(t('rec.repairCases'), m.repair)}${item(t('rec.repairedN'), m.fixed)}${item(t('rec.remainingN'), m.repair - m.fixed, m.repair - m.fixed ? 'rp-pend' : '')}
+        <span class="rp-pct">${m.repair ? pc(m.fixed, m.repair) + '%' : '—'}</span></div>
+      ${bar(m.fixed, m.repair)}</div>`;
+}
+
 function renderRecords() {
   const jF   = document.getElementById('rf-filter-jenis').value;
   const pF   = document.getElementById('rf-filter-plot').value;
@@ -8714,19 +8816,13 @@ function renderRecords() {
   const repair = nurseryRecs.filter(_auditFailed).length;
   const fixed  = nurseryRecs.filter((r) => _auditFailed(r) && r.repaired).length;
 
+  /* THE OVERVIEW IS ONE SLIM STRIP, NOT THREE CARDS. The office asked for
+     the dashboard to be minimal and the table to be the page: the same four
+     counts as before (total, done, pending, repair cases and how many of
+     those are repaired), worked out exactly as before, drawn as two lines of
+     figures over two slim bars. Nothing here is counted differently. */
   const _recMx = document.getElementById('rec-metrics');
-  if (_recMx) _recMx.innerHTML=`
-    <div class="metric-card mc-blue"><div class="mc-label">${t('rec.totalTasks')}</div>
-      <div class="mc-value b">${total}</div>
-      <div class="mc-sub">${t('rec.doneOf', { n: done, pct: pct(done) })}</div></div>
-    <div class="metric-card mc-amber"><div class="mc-label">${t('rec.pendingTask')}</div>
-      <div class="mc-value a">${pend}</div>
-      <div class="mc-sub">${pct(pend)}%</div></div>
-    <div class="metric-card mc-red"><div class="mc-label">${t('rec.repairCase')}</div>
-      <div class="mc-value r">${repair}</div>
-      <div class="mc-sub">${repair ? t('rec.repairedOf', { n: fixed, pct: Math.round(fixed / repair * 100) })
-                                   : pct(repair) + '%'}</div></div>
-  `;
+  if (_recMx) _recMx.innerHTML = _recProgressHtml({ total, done, pend, repair, fixed });
 
   // Repopulate plot filter — only plots from current nursery that have records
   const pSel = document.getElementById('rf-filter-plot');
@@ -8770,13 +8866,9 @@ function renderRecords() {
        is how the office reads a plot, not what the plot is. */
     const recs = plotGroups[plot].slice().sort(_recRowOrder);
     html += `<tr class="plot-group-row">
-      <td colspan="12" class="rec-group-cell" style="padding:12px 14px 9px;font-weight:700;letter-spacing:1px;
-        text-transform:uppercase;color:var(--green-text);background:var(--green-light);
-        border-top:2px solid var(--green-mid);border-bottom:1px solid var(--green-mid);">
-        📍 Plot ${plot}
-        <span class="rec-group-sub" style="font-weight:400;color:var(--text-muted);margin-left:8px;">
-          Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}
-        </span>
+      <td colspan="12" class="rec-group-cell">
+        <span class="rec-group-plot">Plot ${plot}</span>
+        <span class="rec-group-sub">Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}</span>
       </td>
     </tr>`;
     recs.forEach(r => {
@@ -8786,37 +8878,28 @@ function renderRecords() {
          moving. The tint is very light on purpose: it marks the row without
          fighting the figures on it. */
       html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
-        <td style="font-weight:600;color:var(--green-text);">${_dateCell(r)}</td>
-        <td>${jenisLabel(r.jenis)}</td>
-        <td><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
-        <td style="text-align:center;font-weight:700;color:var(--green-text);">${r.plot}</td>
-        <td style="text-align:center;color:var(--text-muted);">${_batchCell(r)}</td>
-        <td style="text-align:center;font-weight:700;color:var(--text-head);">${_qtyCell(r)}</td>
-        <td style="text-align:center;">${_trackCell(r)}</td>
-        <td style="color:var(--text-muted);">${r.remark||'—'}</td>
-        <td style="text-align:center;">${_auditCell(r)}</td>
-        <td style="text-align:center;">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
-        <td style="text-align:center;">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
-        <td>
+        <td class="rc-date">${_dateCell(r)}</td>
+        <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
+        <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
+        <td class="rc-plot">${r.plot}</td>
+        <td class="rc-batch">${_batchCell(r)}</td>
+        <td class="rc-qty">${_qtyCell(r)}</td>
+        <td class="rc-track">${_trackCell(r)}</td>
+        <td class="rc-remark">${r.remark||'—'}</td>
+        <td class="rc-c">${_auditCell(r)}</td>
+        <td class="rc-c">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
+        <td class="rc-c">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
+        <td class="rc-act">
           ${r.checked
-            /* UNCHECK IS OFFERED TO WHOEVER COULD CHECK. Anybody could tick a
-               row and only an admin could untick it, so one mis-click locked
-               the row — its date, its batch, its quantity — until somebody
-               with the module admin tick could be found. A one-way button is
-               not a lock, it is a trap.
-
-               The lock itself stays: a checked row still refuses Edit and Del
-               to anybody but an admin, and the field sync still leaves it
-               alone. Unticking first is now the way in, which is a deliberate
-               act and says on screen what it undoes. */
-            /* Uncheck and nothing else. Edit and Del used to sit here for an
-               admin, which is the lock not being a lock — see _recLocked. */
-            ? `<span class="rec-checked-badge" title="Checked and locked — this row is settled, the field sync leaves it alone, and it is what the payroll claim pays on">✓ Checked</span>`
-              + `<button class="btn btn-sm" onclick="toggleChecked(${r.id})"
-                   title="Put this row back to unchecked — it can be edited again, its quantity goes back to live, and it comes off the payroll claim">Uncheck</button>`
-            : `<button class="btn btn-sm btn-check" onclick="toggleChecked(${r.id})" title="Mark as checked — locks the row for normal users">✓ Check</button>
-               <button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
-               <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>`}
+            /* UNCHECK IS OFFERED TO WHOEVER COULD CHECK. A one-way button is
+               not a lock, it is a trap. The lock itself stays: a checked row
+               offers Uncheck and nothing else -- see _recLocked. */
+            ? `<span class="rec-checked-badge" title="Checked and locked — this row is settled, the field sync leaves it alone, and it is what the payroll claim pays on">✓ ${t('rec.checkedChip')}</span>`
+              + _recIconBtn('undo', 'btn-uncheck', `toggleChecked(${r.id})`, t('rec.uncheck'),
+                  'Put this row back to unchecked — it can be edited again, its quantity goes back to live, and it comes off the payroll claim')
+            : _recIconBtn('check', 'btn-check', `toggleChecked(${r.id})`, '✓ Check', 'Check — locks the row for normal users')
+              + _recIconBtn('edit', 'btn-edit', `editRec(${r.id})`, t('rec.edit'), 'Edit')
+              + _recIconBtn('trash', 'btn-danger', `deleteRec(${r.id})`, t('rec.del'), 'Delete')}
         </td>
       </tr>`;
     });
@@ -8977,25 +9060,23 @@ function renderRejectedSubmissions(f) {
     const worked = _rejWorkedBy(r);
     const on = _rejPickedIds.has(String(r.id));
     return `<tr${on ? ' class="rej-row-picked"' : ''}>
-      <td style="font-weight:600;color:var(--green-text);"><input type="checkbox"
+      <td class="rc-date"><input type="checkbox"
             class="rej-pick" ${on ? 'checked' : ''}
             onclick="toggleRejPick(${r.id}, this.checked)"
             title="${esc(t('rej.pickTip'))}">${esc(_tarikhDisplay(r.work_date))}</td>
       <td>${esc(jenisLabel(jenis) || '—')}</td>
       <td><span class="pill ${pillCls(jenis)}">${esc(r.chemical || '—')}</span></td>
-      <td style="text-align:center;font-weight:700;color:var(--green-text);">${esc(r.plot_name || '—')}</td>
-      <td style="text-align:center;color:var(--text-muted);">${esc(r.batch_name || '—')}</td>
-      <td style="text-align:center;font-weight:700;color:var(--text-head);">${
-        r.qty == null || r.qty === '' ? '—' : Number(r.qty).toLocaleString()}</td>
-      <td style="text-align:center;">${esc(worked || '—')}</td>
+      <td class="rc-plot">${esc(r.plot_name || '—')}</td>
+      <td class="rc-batch">${esc(r.batch_name || '—')}</td>
+      <td class="rc-qty">${
+        r.qty == null || r.qty === '' ? '—' : Number(r.qty).toLocaleString('en-MY')}</td>
+      <td class="rc-remark">${esc(worked || '—')}</td>
       <td class="rej-why">${esc(r.reject_reason || t('rej.noReason'))}</td>
-      <td style="text-align:center;">${_rejSentBackCell(r)}</td>
-      <td>
-        <button class="btn btn-sm btn-check" onclick="approveSubmission(${r.id})"
-                title="${esc(t('rej.approveTip'))}">✓ ${esc(t('rej.approve'))}</button>
-        <button class="btn btn-sm" onclick="editSubmission(${r.id})">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteSubmission(${r.id})"
-                title="${esc(t('rej.delTip'))}">Del</button>
+      <td class="rc-c">${_rejSentBackCell(r)}</td>
+      <td class="rc-act">
+        ${_recIconBtn('check', 'btn-check', `approveSubmission(${r.id})`, '✓ ' + t('rej.approve'), t('rej.approveTip'))}${
+          _recIconBtn('edit', 'btn-edit', `editSubmission(${r.id})`, t('rec.edit'), 'Edit')}${
+          _recIconBtn('trash', 'btn-danger', `deleteSubmission(${r.id})`, t('rec.del'), t('rej.delTip'))}
       </td>
     </tr>`;
   }).join('');
@@ -9268,7 +9349,7 @@ function renderRejWorkers() {
   const host = document.getElementById('rj-worked-chips');
   if (!host) return;
   const n = _rejNursery();
-  const roster = (workers[n] || []).slice()
+  const roster = nurseryCrewUnion(n)
     .sort((a, b) => String(a).localeCompare(String(b)));
   const picked = _rejPicked();
   const key = MJMMaintField.nameKey;
@@ -11207,6 +11288,8 @@ async function loadSettingLists() {
   ((tsRes && tsRes.data) || []).forEach(r => { traySize[r.nursery] = +r.per_tray || 0; });
   const cfg = ((cfgRes && cfgRes.data) || []).find(r => r.key === 'pump_coverage');
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
+  try { jobCrews = window.MJMJobCrew ? MJMJobCrew.readConfig((cfgRes && cfgRes.data) || []) : {}; }
+  catch (e) { jobCrews = {}; console.warn('[maint] job worker lists:', e); }
   jobScopes = {};
   ((cfgRes && cfgRes.data) || []).forEach(r => {
     if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
@@ -11339,6 +11422,8 @@ function renderSetting() {
      capacities down with it. */
   try { renderJobScopeSetting(); }
   catch (e) { console.warn('[maint] job scope settings card:', e); }
+  try { renderJobCrewSetting(); }
+  catch (e) { console.warn('[maint] job worker list settings card:', e); }
 }
 
 /* ══ THE CARD THE SCOPES ARE KEYED ON ════════════════════════════════════
@@ -11496,6 +11581,217 @@ async function jsSave() {
     syncJobNurseries();
   } finally {
     _jsSaving = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
+/* ══ WORKER LIST FOR EACH JOB ═══════════════════════════════════════════
+   The office: "I drag the BNN-Worker to PxD part. So the worker activity
+   for pxd worker name list will show all BNN worker name."
+
+   A table of the jobs down the side and the nurseries across, and above it
+   the Team Board's groups — a section and a role, "BNN · Workers", with how
+   many people stand in it today. Dragging a group onto a cell puts every
+   one of those people on that job's sheet for that nursery; the × on a
+   chip takes the group off. The group is what is stored, never the names,
+   so somebody moved on the Team Board moves here with nothing re-keyed.
+
+   A DROP ADDS, where the job board above it MOVES. A job is in one row; a
+   group of people can do several jobs, so the same chip goes onto as many
+   cells as it is dragged onto.
+
+   A CELL NOBODY HAS KEYED SHOWS ITS OWN NURSERY'S WORKERS, marked as the
+   default, because that is what the sheet reads for it — the general
+   workers of that nursery, which is every sheet before this existed. Save
+   writes a cell left as it stood as DEFAULT rather than as that group, so a
+   nursery whose register is still empty keeps the old fallback list.
+
+   IT IS A DRAFT AND ONE SAVE, the shape of the two boards above it. */
+let jobCrewDraft = null;         // null = not editing; else { 'BNN:pd': [groups] | null }
+let _jcDrag = null;              // the group being dragged
+let _jcSaving = false;
+const JC_SECTION_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'OTHERS'];
+
+function _jcJobs() {
+  return ((window.MJMJobCrew && MJMJobCrew.JOBS) || []).filter(j => PAYROLL_VIEW_KEYS.includes(j));
+}
+function _jcDefault(n) { return [MJMJobCrew.group(n, MJMJobCrew.GENERAL)]; }
+function _jcSectionName(s) { return MAINT_NURSERIES.includes(s) ? nurseryShort(s) : s; }
+function _jcGroupLabel(g) {
+  const p = MJMJobCrew.splitGroup(g);
+  return p ? `${_jcSectionName(p.section)} · ${MJMJobCrew.roleLabel(p.role)}` : g;
+}
+/* The names a group stands for TODAY, for the hover. */
+function _jcNames(g) {
+  return MJMJobCrew.rowsOf(_registerRows, g, CREW_OPTS)
+    .filter(r => r.active !== false).map(r => String(r.full_name).trim())
+    .sort((a, b) => a.localeCompare(b));
+}
+function _jcState() {
+  const out = {};
+  MAINT_NURSERIES.forEach(n => _jcJobs().forEach(j => {
+    const keyed = jobCrewKeyed(n, j);
+    out[`${n}:${j}`] = keyed ? keyed.slice() : null;     // null = default
+  }));
+  return out;
+}
+
+function _jcChipHtml(g, opts) {
+  const names = _jcNames(g);
+  const tip = names.length ? names.join(', ') : 'Nobody in this group today';
+  const cls = 'jb-chip jc-chip' + (opts.def ? ' jc-def' : '');
+  const drag = opts.palette && opts.editing
+    ? ` draggable="true" ondragstart="jcDragStart(event,'${esc(g)}')" ondragend="jcDragEnd(event)"` : '';
+  const x = opts.removable
+    ? `<button type="button" class="jc-x" title="Take this group off" aria-label="Remove ${esc(_jcGroupLabel(g))}"
+         onclick="jcRemove('${esc(opts.cell)}','${esc(g)}')">&times;</button>` : '';
+  const count = opts.palette ? ` <span class="jc-n">${names.length}</span>` : '';
+  return `<span class="${cls}" title="${esc(tip)}"${drag}>${esc(_jcGroupLabel(g))}${count}${opts.def ? ' <span class="jc-dtag">default</span>' : ''}${x}</span>`;
+}
+
+function renderJobCrewSetting() {
+  const box = document.getElementById('jc-set-body');
+  if (!box || !window.MJMJobCrew) return;
+  const corner = document.getElementById('jc-set-corner');
+  const editing = !!jobCrewDraft;
+  const state = editing ? jobCrewDraft : _jcState();
+  const jobs = _jcJobs();
+
+  const groups = MJMJobCrew.groupsOnRegister(_registerRows, CREW_OPTS).sort((a, b) => {
+    const ia = JC_SECTION_ORDER.indexOf(a.section), ib = JC_SECTION_ORDER.indexOf(b.section);
+    return ((ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)) || a.section.localeCompare(b.section);
+  });
+  const bySec = {};
+  groups.forEach(g => { (bySec[g.section] ||= []).push(g.group); });
+  const palette = Object.keys(bySec).length
+    ? Object.keys(bySec).map(s => `<div class="jc-pal-sec"><span class="jc-pal-h">${esc(_jcSectionName(s))}</span>
+        ${bySec[s].map(g => _jcChipHtml(g, { palette: true, editing })).join('')}</div>`).join('')
+    : `<span class="jb-none">${_linkErr ? 'The Team Board could not be read — every sheet keeps its own nursery workers.' : 'Nobody is on the Team Board yet.'}</span>`;
+
+  const head = `<tr><th class="jc-job">Job</th>${MAINT_NURSERIES.map(n => `<th>${esc(nurseryShort(n))}</th>`).join('')}</tr>`;
+  const body = jobs.map(j => {
+    const on = jobNurseries(j);
+    return `<tr><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>${MAINT_NURSERIES.map(n => {
+      const cell = `${n}:${j}`;
+      if (!on.includes(n)) return `<td class="jc-off" title="${esc(jobLabel(j))} is not done in ${esc(nurseryShort(n))} (Where Each Job Is Done)">—</td>`;
+      const keyed = state[cell];
+      const list = keyed || _jcDefault(n);
+      const chips = list.length
+        ? list.map(g => _jcChipHtml(g, { def: !keyed, removable: editing, cell })).join('')
+        : `<span class="jb-none">Nobody</span>`;
+      const drop = editing
+        ? ` ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcDrop(event,'${esc(cell)}')"` : '';
+      return `<td class="jc-cell" data-cell="${esc(cell)}"${drop}>${chips}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
+
+  box.innerHTML = `<div class="jc-pal${editing ? ' jc-pal-live' : ''}">${palette}</div>
+    <div class="tbl-wrap jc-wrap"><table class="jc-tbl"><thead>${head}</thead><tbody>${body}</tbody></table></div>`
+    + (editing
+      ? `<div class="jb-note">Drag a group from the Team Board above onto a job. Its
+           people become that job&rsquo;s columns on Worker Activity for that
+           nursery, and the salary claim pays the same list.</div>
+         <div class="lst-foot">
+           <button class="btn" onclick="jcCancel()">Cancel</button>
+           <button class="btn btn-primary" id="jc-save-btn" onclick="jcSave()">Save</button>
+         </div>`
+      : '');
+  if (corner) {
+    corner.innerHTML = editing || !maySetting() ? ''
+      : `<button class="btn btn-sm cm-set-open" onclick="jcEdit()">&#9998; Edit</button>`;
+  }
+}
+
+function jcEdit() {
+  if (!maySetting()) return;
+  jobCrewDraft = _jcState();
+  renderJobCrewSetting();
+}
+function jcCancel() { jobCrewDraft = null; renderJobCrewSetting(); }
+
+function jcDragStart(ev, g) {
+  if (!jobCrewDraft) { ev.preventDefault(); return; }
+  _jcDrag = g;
+  ev.dataTransfer.effectAllowed = 'copy';
+  try { ev.dataTransfer.setData('text/plain', g); } catch (_) {}
+  ev.currentTarget.classList.add('jb-chip-drag');
+}
+function jcDragEnd(ev) {
+  if (ev && ev.currentTarget) ev.currentTarget.classList.remove('jb-chip-drag');
+  _jcDrag = null;
+  document.querySelectorAll('.jb-cell-over').forEach(el => el.classList.remove('jb-cell-over'));
+}
+function jcDragOver(ev) {
+  if (!_jcDrag) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'copy';
+  ev.currentTarget.classList.add('jb-cell-over');
+}
+function jcDrop(ev, cell) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('jb-cell-over');
+  const g = _jcDrag;
+  _jcDrag = null;
+  if (!g || !jobCrewDraft || !(cell in jobCrewDraft)) return;
+  const n = cell.split(':')[0];
+  const list = (jobCrewDraft[cell] || _jcDefault(n)).slice();
+  if (list.includes(g)) return;                 // already on it
+  list.push(g);
+  jobCrewDraft[cell] = list;
+  renderJobCrewSetting();
+}
+function jcRemove(cell, g) {
+  if (!jobCrewDraft || !(cell in jobCrewDraft)) return;
+  const n = cell.split(':')[0];
+  jobCrewDraft[cell] = (jobCrewDraft[cell] || _jcDefault(n)).filter(x => x !== g);
+  renderJobCrewSetting();
+}
+
+/* One nops_maint_config row per nursery per job. A cell still showing its
+   default is written as DEFAULT — the same answer as no row at all — and a
+   cell somebody put back to exactly the default group is too, so the sheet
+   goes on taking that nursery's old fallback list where its register is
+   empty. The permission is asked again at the write. */
+async function jcSave() {
+  if (!jobCrewDraft || _jcSaving) return;
+  if (!maySetting()) { alert('Setting is not open to you.'); return; }
+  if (!_supabase) { alert('Not signed in — nothing was saved.'); return; }
+  const draft = jobCrewDraft;
+  const btn = document.getElementById('jc-save-btn');
+  _jcSaving = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const now = new Date().toISOString();
+    const next = {};
+    const rows = Object.keys(draft).map(cell => {
+      const [n, j] = cell.split(':');
+      const list = draft[cell];
+      const isDef = !list || MJMJobCrew.serialise(list) === MJMJobCrew.serialise(_jcDefault(n));
+      if (!isDef) next[cell] = MJMJobCrew.parse(list.join(','));
+      return {
+        key: MJMJobCrew.configKey(n, j),
+        txt_value: isDef ? MJMJobCrew.DEFAULT : MJMJobCrew.serialise(list),
+        note: 'Who is on this job in this nursery: Team Board groups (section|role). '
+            + 'Keyed on Work Maintenance, Settings, Worker List for Each Job.',
+        updated_by: (typeof userEmail !== 'undefined' && userEmail) || null,
+        updated_at: now,
+      };
+    });
+    const { error } = await _supabase.from('nops_maint_config')
+      .upsert(rows, { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+    if (error) {
+      alert('Could not save — ' + (error.message || 'try again')
+        + (/txt_value/i.test(error.message || '')
+          ? '\n\nThis database has no txt_value on nops_maint_config yet. '
+            + 'Run shared/RUN_ME_nops_maint_config.sql in the Supabase SQL '
+            + 'Editor once, then save again.' : ''));
+      return;
+    }
+    jobCrews = next;
+    jobCrewDraft = null;
+    renderJobCrewSetting();
+  } finally {
+    _jcSaving = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
   }
 }
