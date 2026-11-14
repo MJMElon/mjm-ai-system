@@ -147,11 +147,17 @@
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">Completed</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Work waiting to be DONE on a batch: a report HQ sent back, or a figure the report itself is asking about — a drone map that does not tally, a planting gap with no reason against it. Open one and it lands on the tab that needs it. Once it is answered the batch moves to the To Check List.">To Do List</button>
                 <button id="tab-tocheck" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')" title="Reports that are filled in and still waiting for somebody to check them: Seeds In, Seed Audit, Planting &amp; Damage, Transplanting and 1st Culling. 2nd and 3rd Culling are not counted here.">To Check List</button>
-                <button id="tab-cull2" class="list-tab-btn list-tab-inactive" onclick="switchListTab('cull2')" title="Every batch and plot whose 2nd cull falls due in the month you pick: the fourth month after its first transplant into that plot. Fill the figures, save, and it links back to the batch.">2nd Cull</button>
                 <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">Tray Status</button>
             </div>
 
             <!-- 2nd Cull lives here: its month bar and the month status line. Shown only on that tab. -->
+            <!-- To Check List has two views: the batches waiting to be checked, and the 2nd Cull list. -->
+            <div id="tocheck-sub" class="hidden mb-4">
+                <div class="flex items-center gap-2">
+                    <button id="sub-batches" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')">Batches to check</button>
+                    <button id="sub-cull2" class="list-tab-btn list-tab-inactive" onclick="switchListTab('cull2')" title="Every batch and plot whose 2nd cull falls due in the month you pick. Fill the figures, save, and it links back to the batch.">2nd Cull</button>
+                </div>
+            </div>
             <div id="cull2-panel" class="hidden mb-4">
                 <!-- 2nd cull status, one cell per nursery. Read from nops_2nd_cull_status;
                      the FC Portal presses done, and the drone case is opened by the system. -->
@@ -892,7 +898,7 @@
         function applyListTabAccess() {
             const chip = document.getElementById('tab-tocheck');
             if (chip) chip.style.display = canReview ? '' : 'none';
-            if (!canReview && currentListTab === 'tocheck') switchListTab('active');
+            if (!canReview && (currentListTab === 'tocheck' || currentListTab === 'cull2')) switchListTab('active');
         }
 
         /* 2nd cull status per nursery (Pusing Polibeg). The FC Portal records
@@ -942,14 +948,23 @@
         function switchListTab(tabName) {
             /* A tab somebody may not open is not opened, however they got
                here — a restored session, a stale button, the address bar. */
-            if (tabName === 'tocheck' && !canReview) tabName = 'active';
+            if ((tabName === 'tocheck' || tabName === 'cull2') && !canReview) tabName = 'active';
             currentListTab = tabName;
             currentPage = 1;
 
             // Update Button Styles
-            ['active', 'completed', 'amendment', 'tocheck', 'tray', 'cull2'].forEach(name => {
+            // 2nd Cull lives inside To Check List, so it lights that tab.
+            const topTab = tabName === 'cull2' ? 'tocheck' : tabName;
+            ['active', 'completed', 'amendment', 'tocheck', 'tray'].forEach(name => {
                 const el = document.getElementById('tab-' + name);
-                if (el) el.className = 'list-tab-btn ' + (tabName === name ? 'list-tab-active' : 'list-tab-inactive');
+                if (el) el.className = 'list-tab-btn ' + (topTab === name ? 'list-tab-active' : 'list-tab-inactive');
+            });
+            const subBar = document.getElementById('tocheck-sub');
+            if (subBar) subBar.classList.toggle('hidden', topTab !== 'tocheck');
+            ['batches', 'cull2'].forEach(name => {
+                const el = document.getElementById('sub-' + name);
+                const on = name === 'cull2' ? tabName === 'cull2' : tabName === 'tocheck';
+                if (el) el.className = 'list-tab-btn ' + (on ? 'list-tab-active' : 'list-tab-inactive');
             });
 
             // Some tabs ask for different columns from the batch list's own.
