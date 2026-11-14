@@ -11148,23 +11148,23 @@ Thank you.`;
             const aTarget = numOf('t2-chart-target-text');
             const aDamage = readNumericInput('t2-damaged');
             const aFoc = parseInt((document.getElementById('display-foc-qty') || {}).dataset?.raw || 0, 10) || 0;
-            const barW = (pageW - margin * 2) - 150, barH = 14;
+            const anBarW = (pageW - margin * 2) - 150, anBarH = 14;
             const drawBar = (title, value, max, marker, markerText, fill, valueText) => {
                 doc.setFont('times', 'bold'); doc.setFontSize(8); setText(INK_SOFT);
                 doc.text(title, margin, y); y += 10;
                 setFill([232, 220, 200]);
-                doc.roundedRect(margin, y, barW, barH, 3, 3, 'F');
-                const fw = Math.min(barW, (value / max) * barW);
-                if (fw > 0) { setFill(fill); doc.roundedRect(margin, y, Math.max(fw, 3), barH, 3, 3, 'F'); }
-                const mx = margin + Math.min(barW - 1, (marker / max) * barW);
+                doc.roundedRect(margin, y, anBarW, anBarH, 3, 3, 'F');
+                const fw = Math.min(anBarW, (value / max) * anBarW);
+                if (fw > 0) { setFill(fill); doc.roundedRect(margin, y, Math.max(fw, 3), anBarH, 3, 3, 'F'); }
+                const mx = margin + Math.min(anBarW - 1, (marker / max) * anBarW);
                 setStroke(RED); doc.setLineWidth(1); doc.setLineDashPattern([2, 2], 0);
-                doc.line(mx, y - 3, mx, y + barH + 3);
+                doc.line(mx, y - 3, mx, y + anBarH + 3);
                 doc.setLineDashPattern([], 0);
                 doc.setFont('times', 'bold'); doc.setFontSize(7); setText(RED);
-                doc.text(markerText, Math.min(mx + 3, margin + barW - 150), y + barH + 10);
+                doc.text(markerText, Math.min(mx + 3, margin + anBarW - 150), y + anBarH + 10);
                 doc.setFont('times', 'bold'); doc.setFontSize(10); setText(INK);
-                doc.text(valueText, margin + barW + 10, y + barH - 3);
-                y += barH + 24;
+                doc.text(valueText, margin + anBarW + 10, y + anBarH - 3);
+                y += anBarH + 24;
             };
             _need(14 + 14 + 6 + 2 * (barH + 34) + 8);
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
