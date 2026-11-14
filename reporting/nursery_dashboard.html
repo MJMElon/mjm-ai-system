@@ -198,14 +198,19 @@
   .p-chart-t { font-size:12px; font-weight:700; margin-bottom:4px; }
   .p-block .legend { font-size:11px; gap:12px; margin-bottom:2px; }
   table.pt { width:100%; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
-  table.pt th, table.pt td { border:1px solid var(--line); padding:4px 6px; text-align:left; white-space:nowrap; }
+  /* The headings WRAP. Left on one line the table ran 1,280px wide on a page
+     of 1,032, and the browser shrank the whole sheet to fit it — which is
+     what left the signature at four fifths of the page with a band of empty
+     paper under it. */
+  table.pt th, table.pt td { border:1px solid var(--line); padding:4px 5px; text-align:left; white-space:nowrap; }
+  table.pt thead th { white-space:normal; vertical-align:bottom; line-height:1.25; }
   table.pt thead th { background:#F2F5F7; font-weight:700; color:var(--ink); }
   table.pt th.num, table.pt td.num { text-align:right; }
   table.pt tfoot td { font-weight:700; background:#F2F5F7; }
-  .sign { display:flex; justify-content:flex-end; margin-top:14px; break-inside:avoid; page-break-inside:avoid; }
+  .sign { display:flex; justify-content:flex-end; margin-top:auto; padding-top:14px; break-inside:avoid; page-break-inside:avoid; }
   .sign-box { width:300px; font-size:12px; color:var(--ink-2); }
   .sign-cap { font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--ink); margin-bottom:6px; font-size:11px; }
-  .sign-sig { height:56px; border:1.5px solid #64748b; border-radius:4px; position:relative; }
+  .sign-sig { height:46px; border:1.5px solid #64748b; border-radius:4px; position:relative; }
   .sign-sig span { position:absolute; left:8px; bottom:4px; font-size:11px; color:var(--muted); }
   .sign-line { display:flex; gap:8px; margin-top:6px; }
   .sign-line span:first-child { width:46px; font-weight:600; }
@@ -215,7 +220,11 @@
     body { background:#fff; }
     #mjm-ribbon, #main, #loading, #forbidden, .tip, .scrim, #nelos-dock-root { display:none !important; }
     #print-area { display:block; }
-    .p-block { break-after:page; page-break-after:always; }
+    /* A block is at least one page tall and the signature takes the space
+       left (margin-top:auto), so it always sits at the foot of the page with
+       nothing under it. 184mm, not the full 186: a block exactly a page
+       tall would round over and print a blank page after it. */
+    .p-block { break-after:page; page-break-after:always; display:flex; flex-direction:column; min-height:184mm; }
     .p-block:last-child { break-after:auto; page-break-after:auto; }
     .p-charts, .p-kpis, .p-head { break-inside:avoid; page-break-inside:avoid; }
     table.pt thead { display:table-header-group; }
@@ -415,9 +424,12 @@ function groupRows(batches, by) {
 
 /* Pure: which report blocks to draw. Shown by batch, it is the office's
    sheet: one block per supplier + breed. Shown by anything else, it is ONE
-   block, because a month or a supplier already spans the blocks. */
-function reportBlocks(batches, by) {
+   block, because a month or a supplier already spans the blocks.
+   byBreed: a breed is picked and no supplier, so every supplier of that
+   breed is ONE block — the office asked for the breed all together. */
+function reportBlocks(batches, by, byBreed) {
   if (by !== 'batch') return [{ supplier: null, breed: null, batches }];
+  if (byBreed) return [{ supplier: null, breed: null, batches }];
   const m = {};
   for (const x of batches) {
     const k = x.supplier + '\u0000' + x.breed;
@@ -449,7 +461,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
   const vcls = v => v == null ? '' : v > 0 ? 'v-pos' : v < 0 ? 'v-neg' : '';
   const head = by => ({ batch: 'Batch', month: 'Month', year: 'Year', breed: 'Breed', supplier: 'Supplier' }[by]);
   const xTitle = by => ({ batch: 'Batch Number', month: 'Month Received', year: 'Year Received', breed: 'Breed', supplier: 'Supplier' }[by]);
-  const xLabel = (g, by) => by === 'batch' ? 'B.' + g.key : labelOf(g.key, by);
+  const xLabel = (g, by) => labelOf(g.key, by);
   const totalsOf = rows => rows.reduce((a, g) => ({
     n: a.n + 1, expected: a.expected + g.expected, actual: a.actual + g.actual, damaged: a.damaged + g.damaged,
     planted: a.planted + g.planted, purchased: a.purchased + (g.purchased || 0), purchasedKnown: a.purchasedKnown && g.purchased != null,
@@ -530,7 +542,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
     const fixed = !!cfg.fixedW;
     const frameW = cfg.fixedW || Math.max(320, host.clientWidth || 900);
-    const L = 86, R = 16, T = 30, B = cfg.rotate ? 92 : 70, H = fixed ? 280 : 360, ph = H - T - B;
+    const L = 86, R = 16, T = 30, B = cfg.rotate ? 92 : 70, H = fixed ? 236 : 360, ph = H - T - B;
     const minCol = fixed ? 0 : 54;
     const W = fixed ? frameW : Math.max(frameW, L + R + minCol * groups.length);
     const cw = (W - L - R) / groups.length;
@@ -581,7 +593,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     });
   }
 
-  const tipHead = (g, by) => `<b>${esc(head(by))} ${esc(by === 'batch' ? 'B.' + g.key : labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${nf(g.n)} batch${g.n === 1 ? '' : 'es'}` : (g.src[0].doNo ? ` · D/O ${esc(g.src[0].doNo)}` : '')}`;
+  const tipHead = (g, by) => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${nf(g.n)} batch${g.n === 1 ? '' : 'es'}` : (g.src[0].doNo ? ` · D/O ${esc(g.src[0].doNo)}` : '')}`;
   const tipRow = (sw, l, v) => `<div class="row"><span>${sw ? `<span class="sw" style="background:${sw}"></span>` : ''}${l}</span><b>${v}</b></div>`;
 
   function drawCharts(root, groups, by, fixedW) {
@@ -730,7 +742,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
                    date: String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear() };
     const by = $('f-group').value;
     const { rows } = filtered();
-    const blocks = reportBlocks(rows, by);
+    const blocks = reportBlocks(rows, by, !!$('f-breed').value && !$('f-supplier').value);
     const fl = filterLine().map(([k, v]) => `${k}: <b>${esc(v)}</b>`).join(' · ');
     const year = $('f-year').value, month = $('f-month').value;
     const period = year ? (month ? MONTHS[+month - 1] + ' ' + year : year) : (month ? MONTHS[+month - 1] + ', every year' : 'All years');

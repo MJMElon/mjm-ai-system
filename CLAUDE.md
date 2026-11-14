@@ -7598,7 +7598,16 @@ summary strip, and the COMPLETE table as rows (A4 landscape, the header
 repeated on every page, no row cut). It was the sheet's transposed table
 for a day; rows are what repeat a header and fit a long year on A4. The
 print area is `display:none` on screen. It opens on the latest year, as
-the sheet is a year a tab. The sheet's Delivery Note Quantity row has no
+the sheet is a year a tab. **A breed picked with no supplier prints ONE block**
+with every supplier of it together (`reportBlocks(..., byBreed)`); a
+supplier picked, or neither, keeps one per supplier + breed. **The
+signature sits at the foot of the page**: a printed block is a flex column
+at least 184mm tall (not 186, which rounds over into a blank page) and the
+signature takes `margin-top:auto`. **That only works if nothing is wider
+than the page** — the table's headings wrap for that reason; on one line it
+ran 1,280px on a 1,032px page and Chrome shrank the whole sheet, which is
+what left a band of empty paper under the signature. The test asks the
+width. Chart labels read 270, not B.270. The sheet's Delivery Note Quantity row has no
 ledger field and is not drawn.
 
 Every figure is `calcPlanting`'s own, off the same ledger rows: Expected is
