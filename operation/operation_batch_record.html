@@ -124,12 +124,6 @@
             </div>
 
             <!-- Top pagination bar (mirror of the bottom one, plus a "jump to page" input) -->
-            <div id="cull2-bar" class="hidden items-center gap-3 mb-4 flex-wrap">
-                <label for="cull2-month-input" class="text-[10px] font-black uppercase tracking-widest text-[#8a7a68]">Month due</label>
-                <input type="month" id="cull2-month-input" onchange="if (this.value) loadCull2Month(this.value)"
-                       class="h-9 rounded-xl border border-[#e8dcc8] bg-white px-3 text-sm font-black text-[#3d2610] outline-none focus:border-[#6aa83c]">
-                <span class="text-[11px] font-bold text-[#8a7a68]">Read-only for now. Key the 2nd cull on each batch's detail page.</span>
-            </div>
             <div id="ledger-pagination-top" class="hidden items-center justify-between gap-3 mb-4 flex-wrap">
                 <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest" id="ledger-page-summary-top">—</div>
                 <div class="flex items-center gap-2">
@@ -148,16 +142,6 @@
                 </div>
             </div>
 
-            <!-- 2nd cull status, one cell per nursery. Read from nops_2nd_cull_status;
-                 the FC Portal presses done, and the drone case is opened by the system. -->
-            <div id="sc2-strip" class="hidden mb-4 rounded-2xl border border-[#e8dcc8] bg-white px-4 py-3">
-                <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                    <span class="text-[10px] font-black uppercase tracking-widest text-[#8a7a68]">2nd Cull &middot; <span id="sc2-month"></span></span>
-                    <span id="sc2-cells" class="flex flex-wrap gap-x-6 gap-y-1"></span>
-                    <span id="sc2-error" class="text-[11px] font-bold text-[#a83020]"></span>
-                </div>
-            </div>
-
             <div class="flex items-center gap-7 border-b-2 border-[#f0e7d8] mb-6 overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">Active</button>
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">Completed</button>
@@ -165,6 +149,26 @@
                 <button id="tab-tocheck" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')" title="Reports that are filled in and still waiting for somebody to check them: Seeds In, Seed Audit, Planting &amp; Damage, Transplanting and 1st Culling. 2nd and 3rd Culling are not counted here.">To Check List</button>
                 <button id="tab-cull2" class="list-tab-btn list-tab-inactive" onclick="switchListTab('cull2')" title="Every batch and plot whose 2nd cull falls due in the month you pick: the fourth month after its first transplant into that plot. Read-only here; open a batch to key the 2nd cull.">2nd Cull</button>
                 <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">Tray Status</button>
+            </div>
+
+            <!-- 2nd Cull lives here: its month bar and the month status line. Shown only on that tab. -->
+            <div id="cull2-panel" class="hidden mb-4">
+                <!-- 2nd cull status, one cell per nursery. Read from nops_2nd_cull_status;
+                     the FC Portal presses done, and the drone case is opened by the system. -->
+                <div id="sc2-strip" class="hidden mb-4 rounded-2xl border border-[#e8dcc8] bg-white px-4 py-3">
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-[#8a7a68]">2nd Cull &middot; <span id="sc2-month"></span></span>
+                        <span id="sc2-cells" class="flex flex-wrap gap-x-6 gap-y-1"></span>
+                        <span id="sc2-error" class="text-[11px] font-bold text-[#a83020]"></span>
+                    </div>
+                </div>
+
+                <div id="cull2-bar" class="flex items-center gap-3 mb-3 flex-wrap">
+                    <label for="cull2-month-input" class="text-[10px] font-black uppercase tracking-widest text-[#8a7a68]">Month due</label>
+                    <input type="month" id="cull2-month-input" onchange="if (this.value) loadCull2Month(this.value)"
+                           class="h-9 rounded-xl border border-[#e8dcc8] bg-white px-3 text-sm font-black text-[#3d2610] outline-none focus:border-[#6aa83c]">
+                    <span class="text-[11px] font-bold text-[#8a7a68]">Read-only for now. Key the 2nd cull on each batch's detail page.</span>
+                </div>
             </div>
 
             <!-- Said only when a search has crossed the Active/Completed line,
@@ -924,13 +928,11 @@
                 });
                 document.getElementById('sc2-cells').innerHTML = cells.join('');
                 err.innerText = '';
-                window._sc2Visible = !!cells.length;
-                strip.classList.toggle('hidden', !cells.length || currentListTab === 'cull2');
+                strip.classList.toggle('hidden', !cells.length);
             } catch (e) {
                 document.getElementById('sc2-cells').innerHTML = '';
                 err.innerText = '2nd cull status could not be read: ' + (e.message || e);
-                window._sc2Visible = true;
-                strip.classList.toggle('hidden', currentListTab === 'cull2');
+                strip.classList.remove('hidden');
             }
         }
         window.addEventListener('load', () => {
@@ -979,13 +981,9 @@
             }
 
             // The month bar shows only on this tab, and the list is read for the month on it.
-            const cull2Bar = document.getElementById('cull2-bar');
-            if (cull2Bar) cull2Bar.classList.toggle('hidden', tabName !== 'cull2');
+            const cull2Panel = document.getElementById('cull2-panel');
+            if (cull2Panel) cull2Panel.classList.toggle('hidden', tabName !== 'cull2');
             if (tabName === 'cull2') loadCull2Month(cull2Month || c2DefaultMonth());
-            // The 2nd cull status line belongs to the other tabs; the 2nd Cull list has its own rows.
-            const sc2Strip = document.getElementById('sc2-strip');
-            if (sc2Strip && tabName === 'cull2') sc2Strip.classList.add('hidden');
-            else if (sc2Strip) sc2Strip.classList.toggle('hidden', !window._sc2Visible);
 
             renderLedgerTable();
         }
