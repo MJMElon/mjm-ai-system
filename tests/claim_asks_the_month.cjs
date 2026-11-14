@@ -38,6 +38,9 @@ function run(records) {
   const fn = new Function('env', 'MAINT_TYPES', `
     const maint = env.maint;
     const maintWorkerNames = () => ['Asriawan', 'Haerul'];
+    /* Nothing keyed on Settings → Worker List for Each Job: every job reads
+       the nursery's own list, which is what this test is about. */
+    const maintClaimNames = maintWorkerNames, maintJobNames = maintWorkerNames;
     const maintFieldCredits = () => ({ credits: {}, unmatched: [], noTaker: {} });
     const monthValue = () => '2026-09';
     const PlotMovement = { recQty: (r) => ({ value: Number(r.qtyFrozen || r.qty || 0) }) };

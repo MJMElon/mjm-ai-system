@@ -115,6 +115,10 @@ const ROWS = () => ({
   pms_tasks: [
     { id: 't001', project: 'Nursery', type: 'Web', name: 'Batch Report from the portal tables', priority: 'High', status: 'In Progress',
       assignees: ['Ruth Wong'], start_date: '2026-11-01', due_date: '2026-11-20', end_date: null, sort_order: 1 },
+    // the office's own long row: a project path and three people, which used to push the dates off the screen
+    { id: 't002', project: 'Nursery', module: 'Machinery Admin & Operation System', sub: 'Machinery Maintenance System', type: 'Web',
+      name: 'Machinery CMMS - monthly SMU record', priority: 'Low', status: 'Complete',
+      assignees: ['Ruth Wong', 'Coco Lau', 'The Boss'], start_date: '2026-10-12', due_date: '2026-10-16', end_date: '2026-10-12', sort_order: 2 },
   ],
   pms_task_requests: [],
   // what a read of everybody's profile hands back: two holding the module, one member of
@@ -208,6 +212,21 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     await go(page, 'list'); await page.waitForTimeout(200);
     is(await page.locator('#v-list').innerText().then((t) => t.includes('Batch Report from the portal tables')), true, 'the task list is read from pms_tasks');
     is(await page.locator('#addBtn').isVisible(), true, 'and may add a task');
+    // The task list fits a laptop: the project path and the people wrap, so nothing runs off the right edge.
+    await page.setViewportSize({ width: 1280, height: 800 }); await page.waitForTimeout(150);
+    const fit = await page.evaluate(() => { const w = document.querySelector('#v-list .tablewrap'); if (!w) return 'no table';
+      const row = [...w.querySelectorAll('tbody tr')].find((r) => /SMU/.test(r.textContent));
+      const proj = row && row.querySelector('td.proj'), who = row && row.querySelector('td.who');
+      return { over: w.scrollWidth - w.clientWidth, projWraps: !!proj && getComputedStyle(proj).whiteSpace === 'normal',
+        names: who ? [...who.querySelectorAll('span')].map((x) => x.textContent) : 'no who cell',
+        whoText: who && who.textContent.trim(), whoLines: who ? Math.round(who.getBoundingClientRect().height) > 40 : null }; });
+    is(fit.over, 0, 'at 1280 wide the task list needs no sideways scroll');
+    is(fit.projWraps, true, 'the project path wraps');
+    is(fit.names, ['Ruth Wong,', 'Coco Lau,', 'The Boss'], 'each assignee is its own piece, so a break falls between names');
+    is(fit.whoText, 'Ruth Wong, Coco Lau, The Boss', 'and still reads as the same list');
+    is(fit.whoLines, true, 'three people take more than one line');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_list.png') });
+    await page.setViewportSize({ width: 1400, height: 900 });
     const reads = await page.evaluate(() => [...new Set(window.__READS)].sort());
     is(reads.filter((t) => t !== 'shared_profiles' && !/^rpc:/.test(t)), ['pms_settings', 'pms_task_requests', 'pms_tasks'], 'only the pms_ tables are read');
     is(await picks(page), ['Coco Lau', 'Ruth Wong', 'The Boss'], 'the assignees are whoever holds the module: not the staff without it, never the customer');
@@ -443,6 +462,56 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     is(/myRow|loginPick|teamPanel|"Team"\)/.test(app), false, 'and has no team list to keep');
     const sql = fs.readFileSync(path.join(ROOT, 'shared/RUN_ME_project_monitoring.sql'), 'utf8');
     is(/INSERT\s+INTO\s+public\.pms_/i.test(sql), false, 'and the SQL writes no row into any of the three tables');
+  }
+
+  console.log('\n7c. The board wraps, and the timeline scrolls inside its own frame');
+  {
+    // Forty dated tasks over a year: more rows than a window is tall, more days than it is wide.
+    const rows = ROWS();
+    const STAT = ['Not Started', 'In Progress', 'On Hold', 'Complete', 'Cancelled'];
+    for (let i = 0; i < 40; i++) { const m = String(1 + (i % 12)).padStart(2, '0');
+      rows.pms_tasks.push({ id: 'x' + i, project: 'Nursery', type: 'Web', name: 'Timeline task number ' + i + ' with a name long enough to wrap in a narrow column',
+        priority: i % 3 ? 'Low' : 'High', status: STAT[i % 5], assignees: ['Ruth Wong'],
+        start_date: '2026-' + m + '-03', due_date: '2026-' + m + '-20', end_date: i % 5 === 3 ? '2026-' + m + '-18' : null, sort_order: 10 + i }); }
+    const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' }, null, rows);
+    await drawn(page);
+    for (const w of [1440, 1280, 900, 390]) {
+      await page.setViewportSize({ width: w, height: 800 }); await go(page, 'board'); await page.waitForTimeout(250);
+      const b = await page.evaluate(() => { const el = document.querySelector('#v-board .board'); if (!el) return 'no board';
+        const cols = [...el.querySelectorAll('.col')], tops = new Set(cols.map((c) => Math.round(c.getBoundingClientRect().top)));
+        return { cols: cols.length, rows: tops.size, over: el.scrollWidth - el.clientWidth, page: document.documentElement.scrollWidth - window.innerWidth,
+          narrowest: Math.round(Math.min(...cols.map((c) => c.getBoundingClientRect().width))) }; });
+      is(b && b.cols, 6, 'board at ' + w + ': all six columns are drawn');
+      is(b && b.over <= 0 && b.page <= 0, true, 'board at ' + w + ': nothing runs off the side (board ' + (b && b.over) + ', page ' + (b && b.page) + ')');
+      is(b && b.narrowest >= 150, true, 'board at ' + w + ': no column is squeezed under 150px (' + (b && b.narrowest) + ')');
+      if (w === 1440) is(b && b.rows, 1, 'board at 1440: six across in one row');
+      if (w === 390) is(b && b.rows, 6, 'board at 390: one column to a row');
+      if (process.env.SHOT && (w === 1280 || w === 390)) await page.screenshot({ path: process.env.SHOT.replace('.png', '_board' + w + '.png') });
+    }
+    for (const w of [1440, 1280, 900]) {
+      await page.setViewportSize({ width: w, height: 800 }); await go(page, 'timeline'); await page.waitForTimeout(450);
+      const t = await page.evaluate(async () => { const el = document.querySelector('#v-timeline .tl'); if (!el) return 'no chart';
+        const head = el.querySelector('.tl-head'), lab = el.querySelector('.tl-row:not(.grp) .tl-label');
+        const out = { h: Math.round(el.clientHeight), vh: window.innerHeight, canY: el.scrollHeight > el.clientHeight + 5, canX: el.scrollWidth > el.clientWidth + 5,
+          page: document.documentElement.scrollWidth - window.innerWidth, pageCanY: document.documentElement.scrollHeight > window.innerHeight + 5,
+          lw: Math.round(lab.getBoundingClientRect().width) };
+        const pageY = window.scrollY; el.scrollTop = 300; el.scrollLeft = 200; await new Promise((r) => setTimeout(r, 60));
+        const box = el.getBoundingClientRect();
+        out.moved = el.scrollTop > 250 && el.scrollLeft > 150; out.pageStill = window.scrollY === pageY;
+        out.headPinned = Math.abs(head.getBoundingClientRect().top - box.top) <= 2;
+        out.namePinned = Math.abs(el.querySelector('.tl-row:not(.grp) .tl-label').getBoundingClientRect().left - box.left) <= 2;
+        window.scrollTo(0, 120); await new Promise((r) => setTimeout(r, 60)); out.pageScrolls = window.scrollY > 100; window.scrollTo(0, 0);
+        return out; });
+      is(t && t.h < t.vh, true, 'timeline at ' + w + ': the chart is shorter than the window (' + (t && t.h) + ' of ' + (t && t.vh) + ')');
+      is(t && t.canY && t.canX, true, 'timeline at ' + w + ': it has its own scroll, up and down and left and right');
+      is(t && t.moved && t.pageStill, true, 'timeline at ' + w + ': scrolling the chart moves the chart and not the page');
+      is(t && t.headPinned && t.namePinned, true, 'timeline at ' + w + ': the dates stay along the top and the names down the left');
+      is(t && t.pageCanY && t.pageScrolls, true, 'timeline at ' + w + ': and the page itself still scrolls up and down');
+      is(t && t.page <= 0, true, 'timeline at ' + w + ': the page has no sideways scroll (' + (t && t.page) + ')');
+      is(t && t.lw, w <= 1100 ? 220 : w <= 1500 ? 280 : 360, 'timeline at ' + w + ': the name column narrows with the window');
+      if (process.env.SHOT && w !== 1440) await page.screenshot({ path: process.env.SHOT.replace('.png', '_timeline' + w + '.png') });
+    }
+    await page.close();
   }
 
   console.log('\n8. The hub shows the tile only to a login holding the module');

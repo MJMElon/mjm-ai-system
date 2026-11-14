@@ -172,6 +172,17 @@ async function open(browser, port, opts) {
   }, { manage: o.manage !== false, cols: o.cols || BASE_COLS.concat(REJ_COLS), workers: o.workers || WORKERS });
   await page.goto('http://localhost:' + port + '/scan/scan_workers.html', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#worker-board .bd', { timeout: 8000 });
+  /* THE BOARD IS A RECORD UNTIL EDIT IS PRESSED, and the cross is one of
+     the things it locks -- rejecting a signup is a write to the register
+     like any other. Every section below is about the cross, so the board is
+     unlocked here rather than in each of them; section 1 asks the locked
+     board about it first, and section 6 deliberately does not unlock,
+     because a plain user is offered neither the cross nor the Edit that
+     would draw it. See the_board_is_read_only_until_edit.cjs. */
+  if (o.manage !== false && o.edit !== false) {
+    await page.evaluate(() => boardEdit());
+    await page.waitForSelector('#bd-save', { timeout: 4000 });
+  }
   return page;
 }
 
@@ -192,7 +203,15 @@ const rejectedList = (page) => page.$$eval('.pend-rej .wchip > span:last-child',
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   try {
     // ── 1. the queue, and the cross on every name in it ──
-    let page = await open(browser, port, {});
+    /* Opened LOCKED first. The cross writes to the register, so it is not
+       offered until Edit is pressed -- and the queue itself is a reading
+       and is there either way. */
+    let page = await open(browser, port, { edit: false });
+    is(await queue(page), ['Florence Indun', 'Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
+      'the queue is drawn with the board locked -- it is a reading');
+    is(await page.$$eval('.pend-x', (e) => e.length), 0,
+      'and carries no cross until somebody presses Edit');
+    await page.evaluate(() => boardEdit());
     is(await queue(page), ['Florence Indun', 'Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
       'the four signups with no section are the queue');
     is(await page.$eval('.pend-count', (e) => e.textContent), '4', 'and the count agrees with it');

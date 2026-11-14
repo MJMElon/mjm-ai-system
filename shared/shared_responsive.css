@@ -1,0 +1,97 @@
+/* shared_responsive.css — the phone baseline for Seedling Stock Management
+   (operation/) and the Nursery Reporting System (reporting/, npayroll/).
+
+   One file, linked from every page of both modules, so a rule about what a
+   phone needs is written once and not forty times. Each page keeps its own
+   desktop layout; this only changes what a narrow screen gets.
+
+   SPECIFICITY, NOT !important. The Tailwind CDN appends its stylesheet AFTER
+   this one, so a rule here at the same weight as a utility loses the tie
+   (operation_batch_detail.html has a long note about the time that broke a
+   row). Every rule below is one step heavier than the utility it changes:
+   two classes against one, or a class with an element. That wins whatever
+   order the sheets load in. */
+
+/* 1. A picture or a video never runs off the screen. Only the WIDTH is capped
+      and the height follows it. A Tailwind h-8 on a logo is a class, so it
+      still beats the height here. SVG and canvas are left alone, because an
+      icon carries its own height and a chart sizes its own canvas. */
+img, video { max-width: 100%; height: auto; }
+
+@media (max-width: 767.98px) {
+
+  /* 2. Multi-column sections stack. Two classes beat Tailwind's one, so this
+        wins below 768px, and md:/lg: grids above that are untouched.
+        .keep-cols opts a grid out, where the columns ARE the meaning: a
+        heading row (back · title · spacer), labels that pair with the values
+        under them, or a set of month tiles. grid-cols-12 is never stacked,
+        because the only one is a bar chart and a bar chart in one column is
+        one bar. */
+  .grid-cols-2:not(.keep-cols),
+  .grid-cols-3:not(.keep-cols),
+  .grid-cols-4:not(.keep-cols),
+  .grid-cols-5:not(.keep-cols),
+  .grid-cols-6:not(.keep-cols),
+  .sm\:grid-cols-2:not(.keep-cols),
+  .sm\:grid-cols-3:not(.keep-cols),
+  .sm\:grid-cols-4:not(.keep-cols),
+  .sm\:grid-cols-6:not(.keep-cols) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* A cell told to span two columns of a grid that now has one would make
+     an extra track rather than fill the row. */
+  :is(.grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-6,
+      .sm\:grid-cols-2, .sm\:grid-cols-3, .sm\:grid-cols-4, .sm\:grid-cols-6):not(.keep-cols)
+      > [class*="col-span-"] { grid-column: auto; }
+
+  /* 3. Type that can be read at arm's length. The small labels these pages
+        use (uppercase, letter-spaced, 7 to 11px) are fine on a desk and too
+        small on a phone. Raised one step, not made big: they are labels, and
+        a label as large as the figure under it reads as a second figure. */
+  body .text-\[7px\], body .text-\[8px\]  { font-size: 10px; }
+  body .text-\[9px\], body .text-\[10px\] { font-size: 11px; }
+  body .text-\[11px\]                      { font-size: 12px; }
+
+  /* 4. A box somebody types into is 16px, which is the size below which iOS
+        zooms the whole page on focus and leaves it zoomed. And it is tall
+        enough to hit with a thumb. */
+  body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="color"]),
+  body select,
+  body textarea {
+    font-size: 16px;
+    min-height: 40px;
+  }
+  body textarea { min-height: 72px; }
+
+  /* 5. A button is a thing to press. 36px is the floor: big enough for a
+        thumb, small enough that a row of icon buttons in a table still fits.
+        Padding is only ADDED where a button had almost none, so a button
+        that was already comfortable keeps its own. */
+  body button,
+  body [role="button"],
+  body input[type="button"],
+  body input[type="submit"] {
+    min-height: 36px;
+    touch-action: manipulation;
+  }
+  body button.p-0, body button.p-1, body button.py-0, body button.py-0\.5, body button.py-1 {
+    padding-top: 6px; padding-bottom: 6px;
+  }
+
+  /* 6. A fixed width wider than the phone gives way to the phone. A table
+        keeps its min-width, because it sits in a frame that scrolls sideways
+        and a table squeezed to 390px is a table nobody can read. */
+  body [class*="w-[1"]:not(table):not([class*="min-w-"]),
+  body [class*="w-[9"]:not(table):not([class*="min-w-"]) { max-width: 100%; }
+  body .overflow-x-auto, body .overflow-auto { -webkit-overflow-scrolling: touch; }
+
+  /* The shared ribbon draws Portal and Sign Out with an INLINE 10px, which
+     only !important can reach. Raised here, for the pages that link this
+     file, rather than in shared_ribbon.js, which other modules load too. */
+  #mjm-ribbon #portal-link, #mjm-ribbon #logout-btn { font-size: 11px !important; }
+
+  /* 7. Page gutters: px-6 / px-8 on the main column spend 48 to 64px of a
+        390px screen on nothing. 16px a side, which is the house gutter. */
+  body .max-w-\[900px\].px-6, body .max-w-\[1200px\].px-6, body .max-w-\[1400px\].px-6,
+  body .max-w-\[1500px\].px-5 { padding-left: 16px; padding-right: 16px; }
+}

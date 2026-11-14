@@ -205,14 +205,14 @@ const RECS = [
     [/seed_planting:'Seed Planting'/.test(SRC.payJs),
      /hyplug_soil:'Mengisi Tanah ke Hyplug'/.test(SRC.payJs)], [true, true]);
 
-  check('the claim tab reads Pre Nursery, since it carries both jobs',
-    /data-sub="seedplant" onclick="switchSub\('seedplant'\)">Pre Nursery</.test(SRC.payHtml), true);
+  check('the claim tab reads Seed Planting, as the office renamed it',
+    /data-sub="seedplant" onclick="switchSub\('seedplant'\)">(<svg[\s\S]*?<\/svg>)?Seed Planting</.test(SRC.payHtml), true);
   /* THE KEY DID NOT MOVE. `seedplant` is what the verification, the
      permission and every saved row are filed under; only the word somebody
      reads changed, or every tick the office ever set reads as unset. */
   check('…and the KEY did not move with the label',
     [/data-sub="seedplant"/.test(SRC.payHtml),
-     /seedplant: \{ label: 'Pre Nursery'/.test(SRC.payJs),
+     /seedplant: \{ label: 'Seed Planting'/.test(SRC.payJs),
      /pdfVerifiedNote\(doc, y, 'seedplant'/.test(SRC.payJs)], [true, true, true]);
 
   /* The section head cannot be a <thead> -- there are two of them -- so it
@@ -367,9 +367,9 @@ const RECS = [
   check('one table, a band per job, each naming its own rate', v.bands,
     ['Seed Planting · RM 0.02 a seed', 'Mengisi Tanah ke Hyplug · RM 0.027 a biji']);
   check('…a total per job', v.subs.map(r => [r[0], r[r.length - 1]]),
-    [['Seed Planting total', 'RM 137.20'], ['Mengisi Tanah ke Hyplug total', 'RM 108.00']]);
+    [['Seed Planting total', '137.20'], ['Mengisi Tanah ke Hyplug total', '108.00']]);
   check('…and ONE figure under both, which is what the month pays',
-    v.foot, [['PRE NURSERY TOTAL', '', '10,860', '', 'RM 245.20']]);
+    v.foot, [['PRE NURSERY TOTAL', '', '10,860', '', '245.20']]);
   check('…the note names both rates', [/Seed Planting: RM 0\.02 a seed/.test(v.note),
     /Mengisi Tanah ke Hyplug: RM 0\.027 a biji/.test(v.note)], [true, true]);
   check('…and names the held batch WITH the job it is waiting on',
@@ -392,8 +392,8 @@ const RECS = [
     [true, true, true, true, true, true]);
   check('…and the column reads Biji filled on the one, Seeds planted on the other',
     dl && [dl.lines.includes('Seeds planted'), dl.lines.includes('Biji filled')], [true, true]);
-  check('…and it is the Pre Nursery claim it saves',
-    dl && /^Salary_Claim_Pre_Nursery_/.test(dl.saved || ''), true);
+  check('…and it is the Seed Planting claim it saves',
+    dl && /^Salary_Claim_Seed_Planting_/.test(dl.saved || ''), true);
 
   console.log('\n5. The summary at the top, which is a card per BATCH');
   /* *"Payroll那里的seed planting我要像transplanting那样，上边有summary 有

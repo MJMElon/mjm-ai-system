@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Audit Trail — MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -11,6 +14,7 @@
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
   * { font-family: 'Outfit', system-ui, sans-serif; }
   body { background:#f1f5f9; margin:0; }
@@ -31,13 +35,22 @@
   .modal { position:fixed; left:50%; top:5%; transform:translateX(-50%); width:min(960px, 95vw); max-height:90vh; z-index:51; background:white; border-radius:24px; box-shadow:0 30px 80px rgba(0,0,0,.3); display:flex; flex-direction:column; overflow:hidden; }
   .json-block { font-family:'JetBrains Mono', monospace; font-size:12px; background:#0f172a; color:#e2e8f0; padding:14px; border-radius:12px; overflow:auto; max-height:50vh; }
   .changed-key { background:rgba(250,204,21,.25); padding:0 4px; border-radius:3px; }
+
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .label,
+  .op-pill { font-size:11px; }
+}
 </style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
 
 <!-- Header — back-left, title-center, brand-right (matches other module pages) -->
-<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 keep-cols items-center sticky top-0 z-30 shadow-sm">
   <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
   <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Audit Trail</span>
   <div class="justify-self-end flex items-center gap-2">

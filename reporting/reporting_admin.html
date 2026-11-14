@@ -19,6 +19,7 @@
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
   body { background:#f1f5f9; margin:0; }
@@ -58,7 +59,7 @@
 
   <div class="text-[22px] font-black text-slate-800 mb-6">Nursery Reporting System</div>
 
-  <!-- The modules this system has today. Nursery Payroll System is the
+  <!-- The modules this system has today. Nursery Payroll is the
        first of them — moved here from its own tile on the hub, same
        module key (npayroll), so nobody's access moved on the day this
        shipped. The next report-shaped module this system grows joins it
@@ -73,8 +74,23 @@
           <path d="M9.5 17h1M23.5 17h1"/>
         </svg>
       </span>
-      <span class="door-name">Nursery Payroll System</span>
+      <span class="door-name">Nursery Payroll</span>
       <span class="door-sub">Worker register, pay periods, payslips</span>
+    </a>
+    <!-- Nursery Dashboard — charts and tables read off the batch report.
+         Same module key; its own page tick ('dashboard') on Module Assess
+         Control can close it for one person. -->
+    <a class="door hidden" id="door-dashboard" href="nursery_dashboard.html">
+      <span class="door-ico" style="background:#dcfce7;color:#15803d;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 28h22"/>
+          <rect x="8" y="17" width="4" height="9" rx="1"/>
+          <rect x="15" y="11" width="4" height="15" rx="1"/>
+          <rect x="22" y="6" width="4" height="20" rx="1"/>
+        </svg>
+      </span>
+      <span class="door-name">Nursery Dashboard</span>
+      <span class="door-sub">Seed Received Summary — expected, received and damage, by batch, month, breed or supplier</span>
     </a>
   </div>
 
@@ -111,6 +127,9 @@ const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
       return;
     }
 
+    if (MJMAccess.canOpenPage('npayroll', 'dashboard')) {
+      document.getElementById('door-dashboard').classList.remove('hidden');
+    }
     if (MJMAccess.isAdminOf('npayroll') || MJMAccess.canManageUsers()) {
       document.getElementById('door-user-access').classList.remove('hidden');
     }

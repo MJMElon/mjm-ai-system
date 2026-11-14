@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Every line of this page's code is inline, so the PAGE is the deploy.
+     GitHub Pages has no headers to set, so these three metas are the lever. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Nursery Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%236366f1%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
+<style>
+  :root {
+    --surface: #ffffff;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7;
+    --s-actual:   #2a78d6;   /* categorical slot 1 */
+    --s-expected: #eb6834;   /* categorical slot 2 */
+    --s-damage:   #2a78d6;
+    --critical:   #d03b3b;   /* status, never a series */
+    --brand:      #15803d;
+  }
+  * { font-family:'Outfit', system-ui, sans-serif; }
+  body { background:#f1f5f9; margin:0; color:var(--ink); }
+  .hidden { display:none !important; }
+
+  /* Tabs: one per report, and "All reports" is the card grid. */
+  .dash-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; border-bottom:1px solid #e2e8f0; }
+  .dash-tab { border:0; background:none; color:var(--ink-2); padding:10px 14px; font-size:12px; font-weight:900;
+              letter-spacing:.06em; text-transform:uppercase; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-1px; }
+  .dash-tab.on { color:var(--brand); border-bottom-color:var(--brand); }
+
+  /* The report cards on the landing tab. */
+  .rep-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .rep-card { display:flex; flex-direction:column; gap:12px; text-align:left; background:#fff; border:1px solid #e2e8f0;
+              border-left:4px solid var(--brand); border-radius:18px; padding:18px; cursor:pointer; transition:all .15s; }
+  .rep-card:hover { border-color:#86efac; border-left-color:var(--brand); transform:translateY(-2px); box-shadow:0 10px 24px -8px rgba(21,128,61,.3); }
+  .rep-card-top { display:flex; gap:12px; align-items:center; }
+  .rep-ico { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; background:#dcfce7; color:var(--brand); flex-shrink:0; }
+  .rep-ico svg { width:24px; height:24px; }
+  .rep-name { font-size:14px; font-weight:900; color:#1e293b; text-transform:uppercase; letter-spacing:.05em; }
+  .rep-sub { font-size:12px; font-weight:600; color:var(--ink-2); line-height:1.45; }
+  .rep-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; border-top:1px solid #f1f5f9; padding-top:12px; }
+  .rep-stat-l { font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .rep-stat-v { font-size:16px; font-weight:900; font-variant-numeric:tabular-nums; }
+  .rep-open { font-size:12px; font-weight:900; color:var(--brand); text-transform:uppercase; letter-spacing:.06em; }
+
+  .filters { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; background:#fff;
+             border:1px solid #e2e8f0; border-radius:18px; padding:14px 16px; margin-bottom:18px; }
+  .filters label { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:900;
+                   color:var(--ink-2); text-transform:uppercase; letter-spacing:.08em; min-width:130px; flex:1 1 130px; }
+  .filters select { font-size:13px; font-weight:700; padding:8px 10px; border:1px solid #cbd5e1;
+                    border-radius:10px; background:#fff; color:var(--ink); text-transform:none; letter-spacing:0; }
+  .filters .chk { flex-direction:row; align-items:center; gap:8px; text-transform:none; letter-spacing:0;
+                  font-size:12px; font-weight:700; min-width:0; flex:0 1 auto; padding-bottom:8px; }
+  .btn-print { border:1px solid var(--brand); background:var(--brand); color:#fff; border-radius:10px; padding:9px 16px;
+               font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
+
+  /* One report block per supplier and breed, the shape of the office sheet. */
+  .rep { background:#fff; border:1px solid #e2e8f0; border-radius:18px; padding:20px; margin-bottom:22px; }
+  .rep-head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; border-bottom:2px solid #1e293b; padding-bottom:12px; margin-bottom:14px; }
+  .rep-co { font-size:12px; font-weight:900; letter-spacing:.12em; color:var(--ink-2); }
+  .rep-title { font-size:18px; font-weight:900; letter-spacing:.04em; color:#1e293b; }
+  .rep-meta { font-size:13px; font-weight:600; color:var(--ink-2); line-height:1.6; text-align:right; }
+  .rep-meta b { color:var(--ink); }
+
+  .sec { margin-top:18px; }
+  .sec-title { font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.1em; color:#1e293b; }
+  .sec-sub { font-size:12px; font-weight:600; color:var(--ink-2); margin-top:3px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:12px 0; }
+  .kpi { border:1px solid #e2e8f0; border-radius:12px; padding:10px 12px; }
+  .kpi-l { font-size:11px; font-weight:800; color:var(--ink-2); text-transform:uppercase; letter-spacing:.06em; }
+  .kpi-v { font-size:20px; font-weight:900; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .kpi-v.over { color:var(--critical); }
+
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; font-weight:700; color:var(--ink-2); margin:6px 0 4px; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:6px; }
+  .legend .dash { width:18px; height:0; border-top:2px dashed var(--s-expected); border-radius:0; vertical-align:3px; }
+  .legend .dash.red { border-top-color:var(--critical); }
+
+  .chart-frame { overflow-x:auto; -webkit-overflow-scrolling:touch; position:relative; }
+  .chart-frame svg { display:block; }
+  .chart-frame svg text { font-family:'Outfit', system-ui, sans-serif; }
+  .empty { padding:40px 10px; text-align:center; font-size:13px; font-weight:700; color:var(--muted); }
+
+  .tip { position:fixed; pointer-events:none; z-index:50; background:#0f172a; color:#fff; border-radius:10px;
+         padding:8px 10px; font-size:12px; font-weight:600; line-height:1.5; box-shadow:0 8px 20px rgba(0,0,0,.2);
+         font-variant-numeric:tabular-nums; max-width:280px; }
+  .tip b { font-weight:900; }
+  .tip .sw { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; }
+
+  /* The sheet's own table: the batches go ACROSS, the measures go DOWN. */
+  .tbl-wrap { overflow-x:auto; border:1px solid #e2e8f0; border-radius:12px; margin-top:14px; }
+  table.t { border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; min-width:100%; }
+  table.t th, table.t td { padding:8px 12px; border-bottom:1px solid #f1f5f9; white-space:nowrap; text-align:right; }
+  table.t thead th { background:#f8fafc; font-size:11px; font-weight:900; letter-spacing:.04em; color:var(--ink-2);
+                     border-bottom:1px solid #e2e8f0; vertical-align:bottom; line-height:1.35; }
+  table.t thead th small { display:block; font-weight:700; color:var(--muted); letter-spacing:0; }
+  table.t th.lbl, table.t td.lbl { text-align:left; position:sticky; left:0; background:#fff; z-index:1;
+                                   font-weight:800; color:#1e293b; border-right:1px solid #e2e8f0; }
+  table.t thead th.lbl { background:#f8fafc; text-transform:uppercase; }
+  table.t th.tot, table.t td.tot { background:#f8fafc; font-weight:900; border-left:1px solid #e2e8f0; }
+  table.t tr.key td { font-weight:900; }
+  .over { color:var(--critical); font-weight:900; }
+  .ok { color:#15803d; font-weight:800; }
+  .note { font-size:12px; font-weight:600; color:var(--ink-2); margin-top:8px; }
+  /* On SCREEN a section is a dashboard card; the sheet layout is the PRINT's. */
+  .card { background:var(--surface); border:1px solid #e2e8f0; border-left:4px solid #2a78d6; border-radius:18px; padding:18px; margin-bottom:22px; }
+  .card.dmg { border-left-color:#d03b3b; }
+  table.g { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  table.g th { background:#f8fafc; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.06em;
+               color:var(--ink-2); padding:9px 7px; text-align:left; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+  table.g td { padding:8px 7px; border-bottom:1px solid #f1f5f9; white-space:nowrap; }
+  table.g th.num, table.g td.num { text-align:right; }
+  table.g tfoot td { font-weight:900; background:#f8fafc; border-top:1px solid #e2e8f0; }
+
+  /* The signature block: who pressed Print, the day, and a box to sign in. */
+  .sign { display:flex; justify-content:flex-end; margin-top:22px; page-break-inside:avoid; break-inside:avoid; }
+  .sign-box { width:300px; font-size:12px; color:var(--ink-2); }
+  .sign-cap { font-weight:900; text-transform:uppercase; letter-spacing:.08em; color:#1e293b; margin-bottom:6px; }
+  .sign-sig { height:70px; border:1.5px solid #64748b; border-radius:4px; position:relative; }
+  .sign-sig span { position:absolute; left:8px; bottom:4px; font-size:11px; color:var(--muted); }
+  .sign-line { display:flex; gap:8px; margin-top:6px; }
+  .sign-line span:first-child { width:46px; font-weight:800; }
+  .sign-line b { flex:1; border-bottom:1px solid #94a3b8; color:var(--ink); font-weight:800; }
+
+  #print-area { display:none; }
+  .p-charts { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .p-chart .legend { font-size:11px; }
+  table.t tr.brk td { border-bottom:2px solid #94a3b8; }
+  @media print {
+    @page { size:A4 landscape; margin:12mm; }
+    body { background:#fff; }
+    #mjm-ribbon, #main, #loading, #forbidden, .tip, #nelos-dock-root { display:none !important; }
+    #print-area { display:block; }
+    .rep { border:0; border-radius:0; padding:0; margin:0; page-break-after:always; break-after:page; }
+    .rep:last-child { page-break-after:auto; break-after:auto; }
+    .rep-head { margin-bottom:8px; padding-bottom:8px; }
+    .rep-title { font-size:15px; }
+    .rep-meta { font-size:11px; line-height:1.45; }
+    table.t { font-size:11px; }
+    table.t th, table.t td { padding:3px 8px; }
+    table.t thead th { font-size:11px; }
+    .tbl-wrap { margin-top:8px; border-radius:6px; }
+    .sign { margin-top:10px; }
+    .sign-sig { height:46px; }
+    .chart-frame, .tbl-wrap { overflow:visible; }
+    .chart-frame svg { width:100%; height:auto; }
+    table.t th.lbl, table.t td.lbl { position:static; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+
+<div id="mjm-ribbon"></div>
+<script src="../shared/shared_ribbon.js"></script>
+
+<div id="loading" class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
+
+<div id="forbidden" class="max-w-[860px] mx-auto px-6 py-16 hidden">
+  <div class="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow">
+    <div class="text-4xl mb-3">🔒</div>
+    <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
+    <p class="text-xs text-slate-500 mt-2">You do not have access to the Nursery Dashboard.</p>
+    <a href="reporting_admin.html" class="inline-block mt-6 text-[11px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Nursery Reporting System</a>
+  </div>
+</div>
+
+<div id="main" class="max-w-[1200px] mx-auto px-4 md:px-6 py-7 hidden">
+  <a href="reporting_admin.html" class="back-link text-[11px] font-bold text-indigo-600 uppercase tracking-widest no-underline">← Nursery Reporting System</a>
+  <div class="text-[22px] font-black text-slate-800 mt-2 mb-4">Nursery Dashboard</div>
+
+  <!-- One tab per report. "All reports" is the card grid; a new report is a
+       card there, a tab here and a <section> below. -->
+  <div class="dash-tabs" id="dash-tabs">
+    <button class="dash-tab on" data-dash="home">All reports</button>
+    <button class="dash-tab" data-dash="seed">Seed Received Summary</button>
+  </div>
+
+  <section id="dash-home" data-view="home">
+    <div class="rep-grid">
+      <button class="rep-card" id="card-seed" data-open="seed">
+        <span class="rep-card-top">
+          <span class="rep-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-4-2-7-5.5-7-10a7 7 0 0 1 14 0c0 4.5-3 8-7 10z"/><path d="M12 21V9"/><path d="M12 13l-3-3M12 11l3-3"/></svg></span>
+          <span>
+            <span class="rep-name">Seed Received Summary</span><br>
+            <span class="rep-sub">Seed purchased against actual seed received, and seed damage against the 5% maximum — by supplier and breed.</span>
+          </span>
+        </span>
+        <span class="rep-stats">
+          <span><span class="rep-stat-l">Batches</span><br><span class="rep-stat-v" id="card-seed-n">…</span></span>
+          <span><span class="rep-stat-l">Variance</span><br><span class="rep-stat-v" id="card-seed-var">…</span></span>
+          <span><span class="rep-stat-l">Damage</span><br><span class="rep-stat-v" id="card-seed-dmg">…</span></span>
+        </span>
+        <span class="rep-open" id="card-seed-scope">Open report →</span>
+      </button>
+    </div>
+  </section>
+
+  <section id="dash-seed" data-view="seed" class="hidden">
+    <div class="filters">
+      <label>Show by
+        <select id="f-group">
+          <option value="batch">Batch</option>
+          <option value="month">Month received</option>
+          <option value="year">Year received</option>
+          <option value="breed">Breed</option>
+          <option value="supplier">Supplier</option>
+        </select>
+      </label>
+      <label>Year <select id="f-year"></select></label>
+      <label>Month <select id="f-month"></select></label>
+      <label>Supplier <select id="f-supplier"></select></label>
+      <label>Breed <select id="f-breed"></select></label>
+      <label class="chk"><input type="checkbox" id="f-unplanted"> Include batches not planted yet</label>
+      <button class="btn-print" id="btn-print" type="button">Print</button>
+    </div>
+
+    <div id="load-msg" class="empty">Loading the batch report…</div>
+    <div id="seed-body" class="hidden"></div>
+    <div class="note" id="foot-note"></div>
+  </section>
+</div>
+
+<!-- The PRINTED report: the office sheet's own layout, one page per
+     supplier and breed. Built when Print is pressed, so the name on it is
+     whoever pressed it and the date is that day. -->
+<div id="print-area"></div>
+
+<div class="tip hidden" id="tip"></div>
+
+<script>
+/* ═══ Seed Received Summary ════════════════════════════════════════════
+   Laid out the way the office's own sheet "Seed Received Summary (From
+   Batch 189)" is: one report per SUPPLIER and BREED, the batches going
+   across, and the measures going down.
+
+   Every figure is the BATCH REPORT's own, off the same ledger rows:
+     Seed Purchased       = DO_Qty: in the Seeds_Received remark
+     Total Seed Expected  = Seeds_Received.quantity_change (D/O + FOC + replacement)
+     Planted              = sum of the batch's Planted rows (per tray)
+     Damaged              = the batch's Damaged_Seeds row
+     Actual Received      = Planted + Damaged   (calcPlanting's accountedTotal)
+     Damage %             = Damaged / Expected  (calcPlanting's dmgRatePct)
+   One reception per batch, the NEWEST row wins — the rule the Seeds In
+   form and the batch list follow (a batch has had 95 copies of its row).
+   The ledger is PAGED: PostgREST stops at 1,000 rows and says nothing. */
+const MAX_DAMAGE_PCT = 5;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const RE_SUPPLIER = /Supplier:\s*(.*?)\s*\.?\s*(?=MPOB:|D\/O:|DO_Qty:|Incl\.|Replacement:|$)/i;
+const RE_DO = /D\/O:\s*(.*?)\s*\.?\s*(?=DO_Qty:|Incl\.|Replacement:|$)/i;
+const RE_DOQTY = /DO_Qty:\s*(\d+)/i;
+const RE_FOC = /Incl\.\s*([\d.]+)%\s*FOC/i;
+
+const nf = n => Number(n || 0).toLocaleString('en-MY');
+const pf = (n, d = 2) => (n == null || !isFinite(n)) ? '—' : (n > 0 ? '+' : '') + n.toFixed(d) + '%';
+const pfu = (n, d = 2) => (n == null || !isFinite(n)) ? '—' : n.toFixed(d) + '%';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dayOf = r => String(r.transaction_date || r.created_at || '').slice(0, 10);
+
+/* Pure: ledger rows in, one record per batch out. Exported for the test. */
+function buildBatches(rows) {
+  const recv = {}, planted = {}, damaged = {}, hasPlant = {};
+  for (const r of rows || []) {
+    const b = String(r.batch_name || '').trim(); if (!b) continue;
+    const q = Number(r.quantity_change) || 0;
+    if (r.transaction_type === 'Seeds_Received') {
+      const cur = recv[b];
+      const key = String(r.created_at || '') + '|' + String(r.id).padStart(12, '0');
+      if (!cur || key > cur._k) recv[b] = Object.assign({ _k: key }, r);
+    } else if (r.transaction_type === 'Planted') {
+      planted[b] = (planted[b] || 0) + q; hasPlant[b] = true;
+    } else if (r.transaction_type === 'Damaged_Seeds') {
+      damaged[b] = (damaged[b] || 0) + q; hasPlant[b] = true;
+    }
+  }
+  return Object.keys(recv).map(b => {
+    const r = recv[b];
+    const d = dayOf(r);
+    const rem = r.remark || '';
+    const m = rem.match(RE_SUPPLIER), dm = rem.match(RE_DO), qm = rem.match(RE_DOQTY), fm = rem.match(RE_FOC);
+    const expected = Number(r.quantity_change) || 0;
+    const pl = planted[b] || 0, dmg = damaged[b] || 0;
+    return {
+      batch: b, date: d, year: d.slice(0, 4), month: d.slice(0, 7),
+      breed: (r.breed_name || '').trim() || 'No breed',
+      supplier: (m && m[1].trim()) || 'No supplier',
+      doNo: (dm && dm[1].trim()) || '',
+      purchased: qm ? Number(qm[1]) : null,
+      focPct: fm ? Number(fm[1]) : null,
+      expected, planted: pl, damaged: dmg, actual: pl + dmg, recorded: !!hasPlant[b],
+    };
+  });
+}
+
+/* Pure: batches + a group key in, one row per group out, percentages
+   worked out on the SUMS (never an average of percentages). */
+function groupRows(batches, by) {
+  const g = {};
+  for (const x of batches) {
+    const k = by === 'batch' ? x.batch : by === 'month' ? x.month : by === 'year' ? x.year : by === 'breed' ? x.breed : x.supplier;
+    const o = g[k] || (g[k] = { key: k, n: 0, purchased: 0, purchasedKnown: true, expected: 0, planted: 0, damaged: 0, actual: 0, src: [] });
+    o.n++; o.expected += x.expected; o.planted += x.planted; o.damaged += x.damaged; o.actual += x.actual; o.src.push(x);
+    if (x.purchased == null) o.purchasedKnown = false; else o.purchased += x.purchased;
+  }
+  const out = Object.values(g).map(o => Object.assign(o, {
+    variancePct: o.expected > 0 ? (o.actual - o.expected) / o.expected * 100 : null,
+    damagePct:   o.expected > 0 ? o.damaged / o.expected * 100 : null,
+  }));
+  const numKey = s => { const m = String(s).match(/\d+/); return m ? Number(m[0]) : Infinity; };
+  out.sort((a, b) => by === 'batch' ? (numKey(a.key) - numKey(b.key)) || String(a.key).localeCompare(b.key)
+                   : String(a.key).localeCompare(b.key));
+  return out;
+}
+
+/* Pure: which report blocks to draw. Shown by batch, it is the office's
+   sheet: one block per supplier + breed. Shown by anything else, it is ONE
+   block, because a month or a supplier already spans the blocks. */
+function reportBlocks(batches, by) {
+  if (by !== 'batch') return [{ supplier: null, breed: null, batches }];
+  const m = {};
+  for (const x of batches) {
+    const k = x.supplier + '\u0000' + x.breed;
+    (m[k] || (m[k] = { supplier: x.supplier, breed: x.breed, batches: [] })).batches.push(x);
+  }
+  return Object.values(m).sort((a, b) => a.supplier.localeCompare(b.supplier) || a.breed.localeCompare(b.breed));
+}
+
+function labelOf(key, by) {
+  if (by === 'month' && /^\d{4}-\d{2}$/.test(key)) return MONTHS[+key.slice(5, 7) - 1] + ' ' + key.slice(0, 4);
+  return key || '—';
+}
+
+if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, reportBlocks, labelOf, MAX_DAMAGE_PCT };
+</script>
+
+<script>
+(function () {
+  if (typeof window === 'undefined' || !window.supabase) return;
+  const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+  const $ = id => document.getElementById(id);
+  let BATCHES = [];
+  let LOADED = false;
+
+  /* ── tabs: All reports (the cards) and one per report ── */
+  function showView(v) {
+    if (!['home', 'seed'].includes(v)) v = 'home';
+    document.querySelectorAll('#dash-tabs .dash-tab').forEach(b => b.classList.toggle('on', b.dataset.dash === v));
+    document.querySelectorAll('section[data-view]').forEach(s => s.classList.toggle('hidden', s.dataset.view !== v));
+    if (location.hash.slice(1) !== v) history.replaceState(null, '', v === 'home' ? location.pathname + location.search : '#' + v);
+    if (v === 'seed' && LOADED) render();
+  }
+  document.querySelectorAll('#dash-tabs .dash-tab').forEach(b => b.addEventListener('click', () => showView(b.dataset.dash)));
+  document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => showView(b.dataset.open)));
+
+  async function loadLedger() {
+    const out = [], seen = new Set(), PAGE = 1000;
+    for (let p = 0; p < 50; p++) {
+      const { data, error } = await _supabase.from('shared_inventory_logs')
+        .select('id,batch_name,breed_name,transaction_type,quantity_change,transaction_date,created_at,remark')
+        .in('transaction_type', ['Seeds_Received', 'Planted', 'Damaged_Seeds'])
+        .order('id', { ascending: true })
+        .range(p * PAGE, p * PAGE + PAGE - 1);
+      if (error) throw error;
+      for (const r of data || []) if (!seen.has(r.id)) { seen.add(r.id); out.push(r); }
+      if (!data || data.length < PAGE) break;
+    }
+    return out;
+  }
+
+  function fillSelect(id, values, fmt) {
+    const sel = $(id), cur = sel.value;
+    sel.innerHTML = '<option value="">All</option>' + values.map(v => `<option value="${esc(v)}">${esc(fmt ? fmt(v) : v)}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  const uniq = a => [...new Set(a)].filter(Boolean);
+
+  function filtered() {
+    const y = $('f-year').value, m = $('f-month').value, br = $('f-breed').value, sp = $('f-supplier').value;
+    const incl = $('f-unplanted').checked;
+    const all = BATCHES.filter(x => (!y || x.year === y) && (!m || x.month.slice(5, 7) === m) && (!br || x.breed === br) && (!sp || x.supplier === sp));
+    return { rows: all.filter(x => incl || x.recorded), left: all.filter(x => !incl && !x.recorded) };
+  }
+
+  /* ── charts: hand-drawn SVG, one axis each, hover tooltip per column ── */
+  function niceMax(v) {
+    if (!(v > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  }
+  function barPath(x, y, w, h, r) {   // rounded at the end away from the baseline
+    if (h <= 0) return '';
+    r = Math.min(r, w / 2, h);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+  const tip = $('tip');
+  function showTip(e, html) {
+    tip.innerHTML = html; tip.classList.remove('hidden');
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + 14, y = e.clientY - h - 10;
+    if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+    if (y < 8) y = e.clientY + 16;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function hideTip() { tip.classList.add('hidden'); }
+
+  /* cfg.bar(g) -> {v,color}; cfg.mark(g) -> value drawn as a dashed tick
+     across the column (the expected figure); cfg.ref -> dashed reference
+     line across the plot. ONE axis: the mark and the bar share its unit. */
+  function drawChart(host, groups, by, cfg) {
+    if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
+    const frameW = cfg.fixedW || Math.max(320, host.clientWidth || 900);
+    const L = 62, R = 10, T = 22, B = 62, H = cfg.fixedW ? 230 : 300, ph = H - T - B;
+    const colW = cfg.fixedW ? (frameW - L - R) / groups.length : Math.max(cfg.minCol, (frameW - L - R) / groups.length);
+    const W = cfg.fixedW ? frameW : Math.max(frameW, L + R + colW * groups.length);
+    const lo = cfg.min ? cfg.min(groups) : 0;
+    const hi = niceMax(cfg.max(groups) - lo) + lo;
+    const ys = v => T + ph - ((v - lo) / (hi - lo)) * ph;
+    let s = `<svg ${cfg.fixedW ? `viewBox="0 0 ${W} ${H}" width="100%"` : `width="${W}" height="${H}"`} role="img" aria-label="${esc(cfg.aria)}">`;
+    for (let i = 0; i <= 4; i++) {
+      const v = lo + (hi - lo) * i / 4, y = ys(v);
+      s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`;
+      s += `<text x="${L - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${cfg.tick(v)}</text>`;
+    }
+    s += `<line x1="${L}" x2="${W - R}" y1="${T + ph}" y2="${T + ph}" stroke="var(--axis)" stroke-width="1"/>`;
+    if (cfg.ref != null) {
+      const y = ys(cfg.ref);
+      s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--critical)" stroke-width="2" stroke-dasharray="6 4"/>`;
+      s += `<text x="${W - R - 4}" y="${y - 6}" text-anchor="end" font-size="11" font-weight="800" fill="var(--ink-2)">Max ${cfg.ref}%</text>`;
+    }
+    const cw = (W - L - R) / groups.length;
+    const rot = cw < 64;
+    groups.forEach((g, i) => {
+      const x0 = L + i * cw;
+      const bw = Math.min(cw * 0.56, 46), bx = x0 + (cw - bw) / 2;
+      const b = cfg.bar(g), v = Math.max(lo, Math.min(b.v || 0, hi)), y = ys(v);
+      s += `<path d="${barPath(bx, y, bw, T + ph - y, 4)}" fill="${b.color}"/>`;
+      if (cfg.label) s += `<text x="${bx + bw / 2}" y="${y - 5}" text-anchor="middle" font-size="11" font-weight="800" fill="var(--ink-2)">${esc(cfg.label(g))}</text>`;
+      if (cfg.mark) {
+        const mv = cfg.mark(g);
+        if (mv != null) { const my = ys(Math.min(Math.max(mv, lo), hi));
+          s += `<line x1="${x0 + 4}" x2="${x0 + cw - 4}" y1="${my}" y2="${my}" stroke="var(--s-expected)" stroke-width="2" stroke-dasharray="5 3"/>`; }
+      }
+      const lab = esc(cfg.xLabel ? cfg.xLabel(g) : labelOf(g.key, by));
+      const lx = x0 + cw / 2, ly = T + ph + 16;
+      s += rot ? `<text x="${lx}" y="${ly}" font-size="11" fill="var(--ink-2)" text-anchor="end" transform="rotate(-40 ${lx} ${ly})">${lab}</text>`
+               : `<text x="${lx}" y="${ly}" font-size="11" fill="var(--ink-2)" text-anchor="middle">${lab}</text>`;
+      s += `<rect class="hit" data-i="${i}" x="${x0}" y="${T}" width="${cw}" height="${ph}" fill="transparent"/>`;
+    });
+    s += '</svg>';
+    host.innerHTML = s;
+    host.querySelectorAll('.hit').forEach(r => {
+      const g = groups[+r.dataset.i];
+      r.addEventListener('mousemove', e => { r.setAttribute('fill', 'rgba(15,23,42,.05)'); showTip(e, cfg.tipHtml(g)); });
+      r.addEventListener('mouseleave', () => { r.setAttribute('fill', 'transparent'); hideTip(); });
+    });
+  }
+
+  const head = by => ({ batch: 'Batch', month: 'Month', year: 'Year', breed: 'Breed', supplier: 'Supplier' }[by]);
+  const totalsOf = rows => rows.reduce((a, g) => ({
+    n: a.n + 1, expected: a.expected + g.expected, actual: a.actual + g.actual, damaged: a.damaged + g.damaged,
+    planted: a.planted + g.planted, purchased: a.purchased + (g.purchased || 0), purchasedKnown: a.purchasedKnown && g.purchased != null,
+  }), { n: 0, expected: 0, actual: 0, damaged: 0, planted: 0, purchased: 0, purchasedKnown: true });
+
+  /* The column heading of the sheet: Invoice No. / Batch No. The ledger
+     carries the D/O number, so that is what stands over the batch. */
+  function colHead(g, by) {
+    if (by !== 'batch') return `${esc(labelOf(g.key, by))}<small>${g.n} batch${g.n === 1 ? '' : 'es'}</small>`;
+    const x = g.src[0];
+    return `B.${esc(g.key)}<small>${x.doNo ? 'D/O ' + esc(x.doNo) : esc(x.date)}</small>`;
+  }
+
+  function blockHtml(blk, bi, by) {
+    const groups = groupRows(blk.batches, by);
+    const t = totalsOf(blk.batches);
+    const tVar = t.expected > 0 ? (t.actual - t.expected) / t.expected * 100 : null;
+    const tDmg = t.expected > 0 ? t.damaged / t.expected * 100 : null;
+    const overN = groups.filter(g => (g.damagePct || 0) > MAX_DAMAGE_PCT).length;
+    const foc = uniq(blk.batches.map(x => x.focPct == null ? '' : String(x.focPct)));
+    const expLabel = foc.length === 1 ? `Seed Purchased with ${foc[0]}% FOC` : 'Seed Purchased with FOC';
+    const year = $('f-year').value, month = $('f-month').value;
+    const period = year ? (month ? MONTHS[+month - 1] + ' ' + year : year) : (month ? MONTHS[+month - 1] + ', every year' : 'All years');
+    const meta = blk.supplier == null
+      ? `<div>Shown by <b>${esc(head(by))}</b></div><div>Supplier: <b>${esc($('f-supplier').value || 'All')}</b> · Breed: <b>${esc($('f-breed').value || 'All')}</b></div>`
+      : `<div>Supplier Name: <b>${esc(blk.supplier)}</b></div><div>Breed: <b>${esc(blk.breed)}</b></div>`;
+    const cols = groups.map(g => `<th>${colHead(g, by)}</th>`).join('');
+    const row = (label, cell, tot, cls = '') => `<tr class="${cls}"><td class="lbl">${label}</td>${groups.map(cell).join('')}<td class="tot">${tot}</td></tr>`;
+    const td = (v, c = '') => `<td class="${c}">${v}</td>`;
+
+    // ONE table, as the sheet has: the received rows, then the damage rows.
+    const tbl = `<thead><tr><th class="lbl">${by === 'batch' ? 'Invoice No. / Batch No.' : esc(head(by))}</th>${cols}<th class="tot">Total</th></tr></thead><tbody>
+      ${row('Seed Purchased', g => td(g.purchasedKnown ? nf(g.purchased) : '—'), t.purchasedKnown ? nf(t.purchased) : '—')}
+      ${row(esc(expLabel), g => td(nf(g.expected)), nf(t.expected))}
+      ${row('Planted', g => td(nf(g.planted)), nf(t.planted))}
+      ${row('Damaged', g => td(nf(g.damaged)), nf(t.damaged))}
+      ${row('Actual Seed Received', g => td(nf(g.actual)), nf(t.actual), 'key')}
+      ${row('Variance (%)', g => td(pf(g.variancePct)), pf(tVar), 'key brk')}
+      ${row('Seed Damage', g => td(nf(g.damaged)), nf(t.damaged))}
+      ${row('Maximum (%)', () => td(MAX_DAMAGE_PCT + '%'), MAX_DAMAGE_PCT + '%')}
+      ${row('Seed Damage (%)', g => td(pfu(g.damagePct), (g.damagePct || 0) > MAX_DAMAGE_PCT ? 'over' : ''), (tDmg || 0) > MAX_DAMAGE_PCT ? `<span class="over">${pfu(tDmg)}</span>` : pfu(tDmg), 'key')}
+      ${row('Status', g => { const o = (g.damagePct || 0) > MAX_DAMAGE_PCT; return td(o ? '▲ Over' : '✓ Within', o ? 'over' : 'ok'); }, overN ? `<span class="over">${overN} over</span>` : '<span class="ok">✓ All within</span>')}
+    </tbody>`;
+
+    const pb = PRINTED_BY || { name: '', date: '' };
+    return `<div class="rep" data-block="${bi}">
+      <div class="rep-head">
+        <div><div class="rep-co">MEGA JUTAMAS SDN BHD</div><div class="rep-title">SEED RECEIVED SUMMARY REPORT</div></div>
+        <div class="rep-meta">${meta}<div>Period: <b>${esc(period)}</b></div></div>
+      </div>
+
+      <div class="p-charts">
+        <div class="p-chart">
+          <div class="sec-title">Seed Received</div>
+          <div class="legend"><span><i style="background:var(--s-actual)"></i>Actual Seed Received</span><span><i class="dash"></i>${esc(expLabel)}</span></div>
+          <div class="chart-frame c1"></div>
+        </div>
+        <div class="p-chart">
+          <div class="sec-title">Seed Damage</div>
+          <div class="legend"><span><i style="background:var(--s-damage)"></i>Seed damage (%)</span><span><i style="background:var(--critical)"></i>Over the maximum</span><span><i class="dash red"></i>Maximum 5%</span></div>
+          <div class="chart-frame c2"></div>
+        </div>
+      </div>
+
+      <div class="tbl-wrap"><table class="t t1 t2">${tbl}</table></div>
+
+      <div class="sign"><div class="sign-box">
+        <div class="sign-cap">Prepared and Verified by</div>
+        <div class="sign-sig"><span>Signature</span></div>
+        <div class="sign-line"><span>Name</span><b class="sign-name">${esc(pb.name)}</b></div>
+        <div class="sign-line"><span>Date</span><b class="sign-date">${esc(pb.date)}</b></div>
+      </div></div>
+    </div>`;
+  }
+
+  function drawBlockCharts(el, blk, by, fixedW) {
+    const groups = groupRows(blk.batches, by);
+    const xLabel = g => by === 'batch' ? 'B.' + g.key : labelOf(g.key, by);
+    drawChart(el.querySelector('.c1'), groups, by, {
+      aria: 'Actual seed received against seed expected', minCol: by === 'batch' ? 56 : 80, xLabel, fixedW,
+      max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.08,
+      tick: v => v >= 1000 ? nf(Math.round(v / 100) / 10) + 'k' : nf(Math.round(v)),
+      bar: g => ({ v: g.actual, color: 'var(--s-actual)' }),
+      mark: g => g.expected,
+      label: g => pf(g.variancePct),
+      tipHtml: g => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${g.n} batch${g.n === 1 ? '' : 'es'}` : (g.src[0].doNo ? ` · D/O ${esc(g.src[0].doNo)}` : '')}<br>
+        <span class="sw" style="background:var(--s-expected)"></span>Expected ${nf(g.expected)}${g.purchasedKnown ? ` <span style="opacity:.7">(purchased ${nf(g.purchased)})</span>` : ''}<br>
+        <span class="sw" style="background:var(--s-actual)"></span>Actual ${nf(g.actual)} <span style="opacity:.7">(${nf(g.planted)} planted + ${nf(g.damaged)} damaged)</span><br>
+        Variance <b>${pf(g.variancePct)}</b>`,
+    });
+    drawChart(el.querySelector('.c2'), groups, by, {
+      aria: 'Seed damage percentage against the 5% maximum', minCol: by === 'batch' ? 48 : 70, ref: MAX_DAMAGE_PCT, xLabel, fixedW,
+      max: gs => Math.max(MAX_DAMAGE_PCT * 1.2, ...gs.map(g => g.damagePct || 0)), tick: v => (Math.round(v * 10) / 10) + '%',
+      bar: g => ({ v: g.damagePct || 0, color: (g.damagePct || 0) > MAX_DAMAGE_PCT ? 'var(--critical)' : 'var(--s-damage)' }),
+      label: g => pfu(g.damagePct),
+      tipHtml: g => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b><br>Seed damage ${nf(g.damaged)} of ${nf(g.expected)} expected<br>
+        Seed damage (%) <b>${pfu(g.damagePct)}</b> · ${(g.damagePct || 0) > MAX_DAMAGE_PCT ? '▲ over the 5% maximum' : '✓ within 5%'}`,
+    });
+  }
+
+  let BLOCKS = [];
+  let PRINTED_BY = null;
+
+  /* ON SCREEN: a dashboard. One set of KPI cards, two charts and two tables
+     for whatever the filters hold — no company header, no signature. */
+  function screenHtml(rows, by) {
+    const groups = groupRows(rows, by);
+    const t = totalsOf(rows);
+    const tVar = t.expected > 0 ? (t.actual - t.expected) / t.expected * 100 : null;
+    const tDmg = t.expected > 0 ? t.damaged / t.expected * 100 : null;
+    const overN = groups.filter(g => (g.damagePct || 0) > MAX_DAMAGE_PCT).length;
+    const unit = by === 'batch' ? 'batches' : 'groups';
+    const extra = by === 'batch';
+    const xHead = extra ? '<th>Received</th><th>Breed</th><th>Supplier</th><th>D/O No.</th>' : '<th class="num">Batches</th>';
+    const xCell = g => extra ? `<td>${esc(g.src[0].date)}</td><td>${esc(g.src[0].breed)}</td><td>${esc(g.src[0].supplier)}</td><td>${esc(g.src[0].doNo || '—')}</td>` : `<td class="num">${g.n}</td>`;
+    const xFoot = extra ? '<td></td><td></td><td></td><td></td>' : `<td class="num">${rows.length}</td>`;
+    const kpi = (l, v, c = '') => `<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v ${c}">${v}</div></div>`;
+    return `<div class="rep-screen" data-block="0">
+      <div class="card">
+        <div class="sec-title">1 · Seed Expected vs Actual Seed Received</div>
+        <div class="sec-sub">Actual Seed Received = Planted + Damaged, off Seed Planting. Variance = (Actual − Expected) ÷ Expected.</div>
+        <div class="kpis">${kpi('Batches', nf(rows.length))}${kpi('Total Seed Expected', nf(t.expected))}${kpi('Actual Seed Received', nf(t.actual))}${kpi('Variance', pf(tVar))}</div>
+        <div class="legend"><span><i style="background:var(--s-actual)"></i>Actual Seed Received</span><span><i class="dash"></i>Total Seed Expected</span></div>
+        <div class="chart-frame c1"></div>
+        <div class="tbl-wrap"><table class="g g1"><thead><tr><th>${head(by)}</th>${xHead}<th class="num">Seed Purchased</th><th class="num">Total Seed Expected</th><th class="num">Planted</th><th class="num">Damaged</th><th class="num">Actual Seed Received</th><th class="num">Variance (%)</th></tr></thead>
+          <tbody>${groups.map(g => `<tr><td><b>${esc(labelOf(g.key, by))}</b></td>${xCell(g)}<td class="num">${g.purchasedKnown ? nf(g.purchased) : '—'}</td><td class="num">${nf(g.expected)}</td><td class="num">${nf(g.planted)}</td><td class="num">${nf(g.damaged)}</td><td class="num">${nf(g.actual)}</td><td class="num">${pf(g.variancePct)}</td></tr>`).join('')}</tbody>
+          <tfoot><tr><td>Total</td>${xFoot}<td class="num">${t.purchasedKnown ? nf(t.purchased) : '—'}</td><td class="num">${nf(t.expected)}</td><td class="num">${nf(t.planted)}</td><td class="num">${nf(t.damaged)}</td><td class="num">${nf(t.actual)}</td><td class="num">${pf(tVar)}</td></tr></tfoot></table></div>
+      </div>
+      <div class="card dmg">
+        <div class="sec-title">2 · Seed Damage</div>
+        <div class="sec-sub">Seed damage (%) = Damaged ÷ Total Seed Expected, the batch report's own rate. Maximum allowed is <b>5%</b>.</div>
+        <div class="kpis">${kpi('Seed Damage', nf(t.damaged))}${kpi('Seed damage (%)', pfu(tDmg), (tDmg || 0) > MAX_DAMAGE_PCT ? 'over' : '')}${kpi('Maximum', MAX_DAMAGE_PCT + '%')}${kpi('Over the maximum', `${overN} of ${groups.length} ${unit}`, overN ? 'over' : '')}</div>
+        <div class="legend"><span><i style="background:var(--s-damage)"></i>Seed damage (%)</span><span><i style="background:var(--critical)"></i>Over the maximum</span><span><i class="dash red"></i>Maximum 5%</span></div>
+        <div class="chart-frame c2"></div>
+        <div class="tbl-wrap"><table class="g g2"><thead><tr><th>${head(by)}</th>${xHead}<th class="num">Seed Damage</th><th class="num">Maximum (%)</th><th class="num">Seed damage (%)</th><th>Status</th></tr></thead>
+          <tbody>${groups.map(g => { const o = (g.damagePct || 0) > MAX_DAMAGE_PCT;
+            return `<tr><td><b>${esc(labelOf(g.key, by))}</b></td>${xCell(g)}<td class="num">${nf(g.damaged)}</td><td class="num">${MAX_DAMAGE_PCT}%</td><td class="num ${o ? 'over' : ''}">${pfu(g.damagePct)}</td><td class="${o ? 'over' : 'ok'}">${o ? '▲ Over maximum' : '✓ Within'}</td></tr>`; }).join('')}</tbody>
+          <tfoot><tr><td>Total</td>${xFoot}<td class="num">${nf(t.damaged)}</td><td class="num">${MAX_DAMAGE_PCT}%</td><td class="num ${(tDmg || 0) > MAX_DAMAGE_PCT ? 'over' : ''}">${pfu(tDmg)}</td><td></td></tr></tfoot></table></div>
+      </div>
+    </div>`;
+  }
+
+  function render() {
+    hideTip();
+    const by = $('f-group').value;
+    const { rows, left } = filtered();
+    const body = $('seed-body');
+    body.innerHTML = rows.length ? screenHtml(rows, by) : '<div class="card"><div class="empty">Nothing matches these filters.</div></div>';
+    if (rows.length) drawBlockCharts(body.querySelector('.rep-screen'), { batches: rows }, by);
+    $('foot-note').textContent = left.length
+      ? `${left.length} batch${left.length === 1 ? ' has' : 'es have'} no Seed Planting saved yet and ${left.length === 1 ? 'is' : 'are'} left out (${left.map(x => x.batch).slice(0, 12).join(', ')}${left.length > 12 ? '…' : ''}). Tick “Include batches not planted yet” to show ${left.length === 1 ? 'it' : 'them'}.`
+      : '';
+  }
+
+  /* ON PAPER: the office sheet. One page per supplier + breed, the company
+     header, the batches across, and the signature block naming whoever
+     pressed Print, on the day they pressed it. */
+  function buildPrint() {
+    const who = (window.MJMAccess && MJMAccess.user && MJMAccess.user()) || {};
+    const d = new Date();
+    PRINTED_BY = { name: who.full_name || who.email || '',
+                   date: String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear() };
+    const by = $('f-group').value;
+    const { rows } = filtered();
+    BLOCKS = reportBlocks(rows, by);
+    const area = $('print-area');
+    area.innerHTML = rows.length ? BLOCKS.map((b, i) => blockHtml(b, i, by)).join('')
+                                 : '<div class="rep"><div class="empty">Nothing matches these filters.</div></div>';
+    if (rows.length) area.querySelectorAll('.rep[data-block]').forEach(el => drawBlockCharts(el, BLOCKS[+el.dataset.block], by, 640));
+  }
+  window.ndBuildPrint = buildPrint;
+
+  function refreshFilterOptions() {
+    const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
+    fillSelect('f-year', years);
+    fillSelect('f-month', ['01','02','03','04','05','06','07','08','09','10','11','12'], m => MONTHS[+m - 1]);
+    fillSelect('f-breed', uniq(BATCHES.map(x => x.breed)).sort());
+    fillSelect('f-supplier', uniq(BATCHES.map(x => x.supplier)).sort());
+    // The office's sheet is one year at a time, so the report opens on the latest.
+    if (years.length && !$('f-year').dataset.touched) $('f-year').value = years[0];
+  }
+
+  /* The card on All reports says what is behind it, for the latest year. */
+  function fillCard() {
+    const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
+    const y = years[0] || '';
+    const rows = BATCHES.filter(x => x.recorded && (!y || x.year === y));
+    const t = totalsOf(rows);
+    $('card-seed-n').textContent = nf(t.n);
+    $('card-seed-var').textContent = t.expected ? pf((t.actual - t.expected) / t.expected * 100) : '—';
+    const d = t.expected ? t.damaged / t.expected * 100 : null;
+    $('card-seed-dmg').textContent = pfu(d);
+    $('card-seed-dmg').classList.toggle('over', (d || 0) > MAX_DAMAGE_PCT);
+    $('card-seed-scope').textContent = (y ? y + ' · ' : '') + 'Open report →';
+  }
+
+  (async () => {
+    try {
+      await MJMAccess.load(_supabase);
+      if (!MJMAccess.user()) { location.href = '../index.html'; return; }
+      if (!MJMAccess.canAccess('npayroll') || !MJMAccess.canOpenPage('npayroll', 'dashboard')) {
+        $('loading').classList.add('hidden'); $('forbidden').classList.remove('hidden'); return;
+      }
+      $('loading').classList.add('hidden'); $('main').classList.remove('hidden');
+      showView(location.hash.slice(1) || 'home');
+    } catch (e) { console.warn(e); location.href = '../index.html'; return; }
+
+    try {
+      BATCHES = buildBatches(await loadLedger());
+      LOADED = true;
+      refreshFilterOptions();
+      fillCard();
+      $('load-msg').classList.add('hidden'); $('seed-body').classList.remove('hidden');
+      ['f-group', 'f-year', 'f-month', 'f-breed', 'f-supplier', 'f-unplanted'].forEach(id => $(id).addEventListener('change', () => { $(id).dataset.touched = '1'; render(); }));
+      $('btn-print').addEventListener('click', () => { buildPrint(); window.print(); });
+      // Ctrl/Cmd + P prints the same report, signed by whoever pressed it.
+      addEventListener('beforeprint', () => { if (LOADED) buildPrint(); });
+      let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (!$('dash-seed').classList.contains('hidden')) render(); }, 150); });
+      render();
+    } catch (e) {
+      console.warn(e);
+      $('load-msg').textContent = 'Could not read the batch report: ' + (e.message || e);
+      ['card-seed-n', 'card-seed-var', 'card-seed-dmg'].forEach(id => $(id).textContent = '—');
+    }
+  })();
+})();
+</script>
+
+<script src="../shared/shared_nelos_dock.js"></script>
+</body>
+</html>

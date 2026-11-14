@@ -20,6 +20,7 @@
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
   * { font-family: 'Outfit', system-ui, sans-serif; }
   body { background:#f1f5f9; margin:0; }
@@ -71,11 +72,20 @@
   .user-row { padding:18px 22px; display:flex; align-items:center; gap:16px; border-bottom:1px solid #f1f5f9; transition:background .15s; }
   .user-row:hover { background:#f8fafc; }
   .user-row:last-child { border-bottom:none; }
+
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .chip,
+  .acts-toggle { font-size:11px; }
+}
 </style>
 </head>
 <body>
 
-<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 keep-cols items-center sticky top-0 z-30 shadow-sm">
   <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
   <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Module Assess Control</span>
   <div class="justify-self-end flex items-center gap-2">

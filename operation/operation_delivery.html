@@ -16,7 +16,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
+    <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
+<style>
         body { background-color: #f0fdf4; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
         .bg-pattern { position: fixed; inset: 0; background-image: radial-gradient(#bbf7d0 1px, transparent 1px); background-size: 24px 24px; z-index: -2; opacity: 0.5; }
         .glass-panel { background-color: rgba(255, 255, 255, 0.9); backdrop-filter: blur(24px); border: 1px solid #ffffff; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1); border-l: 12px solid #10b981; }
@@ -35,7 +36,15 @@
         @keyframes floatSlow { 0% { transform: translate(0, 0) scale(0.6) rotate(-10deg); opacity: 0; } 20% { opacity: 0.9; } 80% { opacity: 0.9; } 100% { transform: translate(var(--tx), var(--ty)) scale(1.2) rotate(10deg); opacity: 0; } }
         .mini-input { padding: 4px 6px; font-size: 10px; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; background-color: white;}
         .mini-input:focus { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
-    </style>
+    
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .mini-input { font-size:11px; }
+}
+</style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
@@ -1742,7 +1751,14 @@
                     } 
                 }); 
                 
-                const { error: doErr } = await _supabase.from('shared_do_records').insert([doPayload]); 
+                /* The number is checked by the database: a DO- number of an
+                   order already used is moved to the next free one (shared/
+                   RUN_ME_do_number_never_repeats.sql), so a second DO the same
+                   day is 02 and never 01 again. The row that comes back is the
+                   DO, and its number is the one the customer portal gets. A
+                   number off a paper DO book is never changed. */
+                const { data: doRow, error: doErr } = await _supabase.from('shared_do_records').insert([doPayload]).select('do_number').single();
+                if (!doErr && doRow && doRow.do_number) doPayload.do_number = doRow.do_number;
                 if (!doErr) {
                     const newBalance = parentAL.balance_quantity - doTotalQty;
                     await _supabase.from('shared_al_orders').update({ balance_quantity: newBalance }).eq('id', parentAL.id);

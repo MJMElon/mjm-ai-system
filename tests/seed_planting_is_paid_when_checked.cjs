@@ -193,7 +193,7 @@ const read = (page) => page.evaluate(() => {
   const a = await boot(browser, { nops_seed_planting_batch_workers: RECS, mjmnpayroll_piece_rates: [] });
   check('the Seed Planting tab sits before Transplanting', await a.page.evaluate(() =>
     [...document.querySelectorAll('.subtab')].map(b => b.dataset.sub)),
-    ['maint', 'seedplant', 'transpl', 'seedling', 'monthly', 'other']);
+    ['maint', 'seedplant', 'transpl', 'seedling', 'monthly']);
 
   /* ── 2. A PLANTER A ROW, A BATCH A COLUMN ───────────────────────────────
      It was turned over for a day — *"我要横向的 batch是row 工人是column"* —
@@ -204,20 +204,20 @@ const read = (page) => page.evaluate(() => {
      is what says why. */
   let v = await read(a.page);
   check('a column per BATCH, with the worker down the side', v.head,
-    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate', 'Amount']);
+    ['Worker', 'Batch 277', 'Batch 278', 'Seeds planted', 'Rate (RM)', 'Amount (RM)']);
   check('a row per PLANTER, their own total, times RM 0.02', v.body, [
-    ['Ani',  '—',     '2,000', '2,000', 'RM 0.02', 'RM 40.00'],
-    ['Rina', '1,760', '—',     '1,760', 'RM 0.02', 'RM 35.20'],
-    ['Siti', '2,000', '1,000', '3,000', 'RM 0.02', 'RM 60.00']]);
+    ['Ani',  '—',     '2,000', '2,000', '0.02', '40.00'],
+    ['Rina', '1,760', '—',     '1,760', '0.02', '35.20'],
+    ['Siti', '2,000', '1,000', '3,000', '0.02', '60.00']]);
   check('…and the planted day rides in the batch HEADING, which is what the columns order on',
     v.days, ['28 Sep', '05 Oct']);
   check('a job total under the section: each batch’s, the job’s and its money', v.sub,
-    ['Seed Planting total', '3,760', '3,000', '6,760', '', 'RM 135.20']);
+    ['Seed Planting total', '3,760', '3,000', '6,760', '', '135.20']);
   /* AND THE CLAIM'S OWN TOTAL UNDER BOTH JOBS, which is the figure somebody
      is signing for. Drawn even where one job carried the lot: a foot that
      repeats the section above it still has to say that is the whole of it. */
   check('one foot row: the PRE NURSERY total and the money', v.foot, [
-    ['PRE NURSERY TOTAL', '', '6,760', '', 'RM 135.20']]);
+    ['PRE NURSERY TOTAL', '', '6,760', '', '135.20']]);
   check('…and the Amount column adds up to the total in the foot',
     await a.page.evaluate(() => {
       const rm = s => Number(String(s).replace(/[^0-9.]/g, '')) || 0;
@@ -252,15 +252,23 @@ const read = (page) => page.evaluate(() => {
          no strip at all has to FAIL this check, not kill the run. */
       return [!!el, el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : 'no strip'];
     }),
-    [true, 'Open — Pre Nursery · the Pre Nursery · ' +
+    [true, 'Open — Seed Planting · the Pre Nursery · ' +
       (() => { const d = new Date(); const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                return `${M[d.getMonth()]} ${d.getFullYear()}`; })() +
       '\u2714 Verify & lock']);
-  check('…and Print and Download are both offered',
-    await a.page.evaluate(() => [
-      !!document.querySelector('#sub-seedplant [onclick="printSeedPlantingPDF()"]'),
-      !!document.querySelector('#sub-seedplant [onclick="downloadSeedPlantingPDF()"]')]),
-    [true, true]);
+  /* Print and Download moved to the Report page with every other form of
+     the month; the sheet is a screen to check. */
+  check('…and Print and Download are on the Report, not the sheet',
+    await a.page.evaluate(() => {
+      const r = [!!document.querySelector('#sub-seedplant [onclick*="SeedPlantingPDF"]')];
+      switchTab('report');
+      r.push(
+      !!document.querySelector('#report-table [onclick="runReport(\'seedplant\', \'print\')"]'),
+      !!document.querySelector('#report-table [onclick="runReport(\'seedplant\', \'save\')"]'));
+      switchSub('seedplant');
+      return r;
+    }),
+    [false, true, true]);
   /* ── 2c. THE CLAIM FORM, AND IT IS THE SAME TABLE ───────────────────────
      One builder, two buttons — Download saves it, Print calls the browser's
      own dialog on the same document. Two drawings of one report drift, and a
@@ -279,7 +287,7 @@ const read = (page) => page.evaluate(() => {
   }, fn);
   const dl = await pdfOf(a.page, 'downloadSeedPlantingPDF');
   check('Download draws the form and names the file',
-    [!!dl, dl && /^Salary_Claim_Pre_Nursery_/.test(dl.saved || ''), dl && dl.printed],
+    [!!dl, dl && /^Salary_Claim_Seed_Planting_/.test(dl.saved || ''), dl && dl.printed],
     [true, true, false]);
   check('…and the paper is the screen’s table: a planter a row, a batch a column',
     dl && [dl.lines.includes('Worker'), dl.lines.includes('Siti'),
@@ -362,7 +370,7 @@ const read = (page) => page.evaluate(() => {
   const at = (grid, i, j) => ((grid || [])[i] || [])[j];
   check('the Piece Rate row prices it',
     [at(v.body, 0, 4), at(v.body, 0, 5), at([v.sub], 0, 5), at([v.sub], 0, 3)],
-    ['RM 0.025', 'RM 50.00', 'RM 169.00', '6,760']);
+    ['0.025', '50.00', '169.00', '6,760']);
   check('…and the note names where the rate came from', /Seed Planting: RM 0.025 a seed, from Piece Rate \(Seed Planting\)/.test(v.note), true);
   await b.page.close();
 

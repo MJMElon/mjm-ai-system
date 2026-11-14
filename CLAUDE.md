@@ -4972,6 +4972,119 @@ Two things fall out:
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 
+### The board is a RECORD until somebody presses Edit
+
+The office asked for it in one line, over a screenshot of the board: *"help
+to add save button and edit button. Editable only when user click edit
+button. and show last update date & who update."*
+
+**WHAT THEY WERE LOOKING AT IS WHY.** Every drag on that board wrote to the
+register the moment the name landed — one UPDATE, no confirm, and nothing
+on screen saying it had happened. A drag is the easiest gesture on a
+trackpad to make by accident, and moving a name moves **which nursery pays
+them and which Work Maintenance tick sheets they appear on**. A board that
+writes on contact cannot tell a decision from a sleeve.
+
+So there are two states and **the difference is visible**: in VIEW no chip
+is draggable, no cell offers Add, no signup offers the ✕, and a record opens
+read-only; in EDIT the board is exactly what it always was and the strip is
+tinted, because a live board and a locked one otherwise look identical.
+
+**IT IS A DRAFT AND ONE SAVE**, the shape Where Each Job Is Done already
+uses and for its reasons: a move stored before Save cannot be cancelled, and
+a round trip per chip somebody tried is a board that fights back.
+`boardDraft` is null in view and holds **only the workers who MOVED**, so
+Save knows exactly what it is being asked to write and Cancel has something
+real to throw away.
+
+Eight things in it, and five are rules this file already has:
+
+- **TWO DIFFERENT QUESTIONS, and folding them together is how a gate becomes
+  a paint.** `canEdit` is whether this person may EVER write to the register
+  — the permission, unchanged. `editing` is whether the board is unlocked
+  right now. No Edit button is drawn without the first; nothing on the board
+  moves without the second.
+- **THE GATE IS NOT THE PAINT, in four places.** `draggable` is an
+  attribute, Save Worker is hidden by a class, and a disabled input is still
+  a disabled input — none of them stops a call. So `boardDragStart`,
+  `boardDrop`, `rejectWorker` and `saveWorker` each ask in code, and section
+  6 of the test drives every one of them from the console with the board
+  locked. That is the only way to tell a gate from a greyed-out button.
+- **A RECORD STILL OPENS, READ-ONLY.** Looking somebody up is reading, and a
+  board whose names cannot be opened answers nothing. The form fills, the
+  boxes grey, Save Worker goes, a line says where the lever is, Cancel
+  becomes **Close** and the heading reads *Worker* rather than *Edit Worker*
+  — a form headed Edit with no Save is a contradiction somebody has to work
+  out. **`wfApplyReadOnly` only ever turns `disabled` ON**, because the PIN,
+  the two dates and the photo each disable themselves when their column is
+  not in the table yet and a blanket re-enable would hand back a box the
+  database cannot take; `openWorker` clears the form at the TOP instead,
+  which is what stops a record opened once read-only staying dead for the
+  rest of the session. That was a real bug and the test caught it.
+- **A DISABLED BOX HAS TO LOOK DISABLED.** The skinned selects grey
+  themselves and a plain input does not, so Name and Remark sat there
+  looking exactly as they always do. Being unable to type is not an answer.
+- **DRAGGED BACK IS NOT A MOVE.** Without it the draft carries a worker
+  whose two columns are what the register already holds, Save writes a row
+  that changes nothing, and the count beside the button asks the office to
+  save work they had just undone.
+- **ONE WRITE PER WORKER, SENT TOGETHER, AND THE COUNT IS WHAT CAME BACK.**
+  They are independent rows carrying different values, so there is no single
+  statement that does it — and an upsert would have to carry every NOT NULL
+  column of a row this form has not got. A worker whose write was refused
+  **stays in the draft with their name on screen**, so Save can be pressed
+  again; reporting success over a board that only agrees with itself is the
+  one outcome worth avoiding.
+- **THE FORM IS THE MORE SPECIFIC STATEMENT.** Saving a worker on their own
+  record, or rejecting a signup, takes them OFF the draft — left on it, the
+  next Save would put the row the board was holding back over what was
+  keyed. The draft deliberately does **not** hold a whole record: adding a
+  worker, editing one and rejecting a signup are their own acts with their
+  own Save and their own confirm, and queueing a photo upload and a PIN
+  behind this button would be a second, thinner save. They are simply not
+  OFFERED outside edit mode, which is the half the office asked for.
+- **A reload or a typed address never reaches a page's own dialog**, so
+  `beforeunload` is asked for the browser's — only ever over moves that
+  really are unsaved.
+
+**AND THE LAST-UPDATED LINE HAD BEEN ON THIS PAGE ALL ALONG**, which is the
+whole of why the office asked for it: it was a **foot-note under thirty-two
+rows of names**, so on the screen anybody actually looks at it was never
+there. A fact about the board belongs where the board starts. It is on the
+strip now, beside Edit, and it reads the NEWEST stamp across the whole
+register rather than off what is on screen — it answers *is what I am
+looking at current*, and a line that went quiet because somebody ticked Show
+inactive would answer it wrongly.
+
+**AND IT SHOWS A NAME, NEVER THE ADDRESS IT IS STORED AS** — the rule *A
+tick is a SIGNATURE* already names, asked a fourth time. `shared_people.js`
+is the one resolver, loaded on this page for the first time here and failing
+open, so an unreadable profile table leaves the address standing: an empty
+"by" would be worse than a plain one. The hover on a rejected signup goes
+through it too.
+
+**Nothing to run in the database.** `updated_at` / `updated_by` have been
+written by every save on this page since it was drawn; what changed is
+where they are read.
+
+`tests/the_board_is_read_only_until_edit.cjs` drives the real page in a real
+browser and the drag is the board's own handlers — a `DragEvent` dispatched
+at the chip and the cell, which fires the inline ondragstart / ondragover /
+ondrop exactly as a mouse does. A drag simulated by writing into
+`boardDraft` would prove nothing about the board. **50 of its 76 checks fail
+on the previous page**, each by NAME: every reader is guarded, because on
+the board as it was there is no strip, no Save and no `boardEdit`, and an
+unguarded `$eval` takes the harness down on the first line and leaves the
+seventy under it unasked.
+
+The two tests that drove the old always-live board had to learn the gate:
+`a_rejected_signup_leaves_the_queue.cjs` presses Edit in its own `open()`
+(section 1 asks the LOCKED board about the cross first, and section 6's
+plain user deliberately does not unlock), and `every_role_has_its_own_row.cjs`
+asks its Add row in BOTH states — *no Add anywhere* and *no Add on Other*
+are the same answer read off one row, and a check that only ever saw the
+locked board would pass with the Add button deleted outright.
+
 ## The Worker Record reads the conductor's transplanting, and writes ONE column
 
 The Field Conductor records the four transplanting jobs on his own portal:
@@ -5883,6 +5996,43 @@ things it had to learn, each of which makes a browser test lie:
   stop; and the single Del writes `.eq('id', …)`, so a stub reading only
   `.in` reads a working button as a dead one.
 
+## Both modules read on a phone, and one file says how
+
+Seedling Stock Management (`operation/`) and the Nursery Reporting System
+(`reporting/`, `npayroll/`) were desk screens: on a 390px phone the Stock &
+Sales tabs ran 127px off the side, every form was three fields across, and
+the labels were 8 to 10px. **`shared/shared_responsive.css` is the phone
+baseline**, linked with a `?v=` from every page of both modules, and it
+changes nothing at 768px and up.
+
+- **IT WINS BY SPECIFICITY, NEVER BY ORDER.** The Tailwind CDN appends its
+  sheet after ours, so a one-class rule here loses the tie — the trap
+  `operation_batch_detail.html` documents twice. Every rule is one step
+  heavier than the utility it changes (`.grid-cols-3:not(.keep-cols)`).
+  The test appends a stand-in for Tailwind AFTER the file for that reason.
+- **Below 768px `grid-cols-2..6` stack to one column.** `.keep-cols` opts a
+  grid out where the columns ARE the meaning: the back · title · spacer
+  header, the Plot / Balance / Total Transferred labels that sit over their
+  figures (stacked, the labels read as a list and the figures as another),
+  and the month-lock tiles. `grid-cols-12` is never stacked; the only one
+  is a bar chart. **A new grid of labels over values needs `keep-cols`.**
+- **Pictures scale by WIDTH only**, so a Tailwind `h-8` on a logo still
+  wins. SVG and canvas are left alone.
+- **Type is raised a step, not made big**: 9–10px to 11, 11 to 12. Text
+  boxes are 16px, the size under which iOS zooms the page on focus, and
+  buttons are at least 36px tall.
+- **Small type a page sets in its OWN CSS cannot be reached from a shared
+  file**, so each page carries a `PHONE TYPE FLOOR` block at the end of its
+  style raising those rules to 11px. A page that adds a 9px rule without
+  adding it there fails `tests/the_two_modules_fit_a_phone.cjs`, which
+  reads every rule. Map tiles, the heat map and the bar chart are exempt:
+  their size is the size of the box they sit in.
+- **Wide tables keep their `min-width`** and scroll inside their frame. A
+  table squeezed to 390px is one nobody can read.
+
+The eleven pages with no no-cache metas got them, because a cached page
+goes on asking for no stylesheet at all. One hard reload per machine.
+
 ## A card on the Stock & Sales page is ONE shape, and the next one too
 
 The office, over the Customer pane: *"Make my Customer order management
@@ -6230,8 +6380,8 @@ metas that page would have gone on asking for the old `?v=` for ever.
 **`nursery_ops_user_access.html` now carries them too**, for the same reason
 one page along: the tick list lives in that page, so a cached copy goes on
 offering yesterday's labels — and the label on *Open Setting* was the thing
-being corrected. **Four pages are still unguarded** — the two PALMS pages,
-Life of Plot and `operation_settings.html` — and the test prints them every
+being corrected. **Three pages are still unguarded** — the two PALMS pages
+and Life of Plot — and the test prints them every
 run, so do not trust the list in this paragraph over the one the test gives
 you. It said five until `operation_delivery.html` was guarded, which is the
 whole reason for that sentence.
@@ -7322,6 +7472,138 @@ exact shape this file exists to catch. Its band check compares the headings
 as WRITTEN, because they are uppercased in CSS and `innerText` hands back
 what the stylesheet did.
 
+## A loading DO belongs to the GANG that carried it, not to the plot
+
+`worked_by_by_nursery` is keyed by the GANG. A UNN 1 gang loading off a
+UNN 2 plot is ticked under UNN1, and the sheet and the claim used to ask
+only the plot nursery, so such a DO sat on the UNN 2 sheet with nobody
+ticked and was paid to nobody (Oct 2026: DO-NPGCE401 400, DO-0HVUL302 300).
+`MJMMaintPlots.doLoaderQty` is the rule, read by the Loading Seedlings sheet
+and the claim: the plot nursery gang if ticked, else the gangs that are,
+divided so a line is never paid twice.
+
+**The office chose the consequence:** a nursery total is what its GANG
+loaded, so October reads UNN1 10,400 / UNN2 11,341 where their own payroll
+PDF (which files by plot) reads 9,700 / 12,041. Same 21,741, same pay per
+person. Do not "fix" the totals back to the plot without asking.
+`tests/a_do_is_paid_to_the_gang_that_loaded_it.cjs`.
+
+## Nursery Payroll is a SIDE BAR, and the paper comes off the Report
+
+Dashboard · Payroll Record (Work Maintenance, Seed Planting, Transplanting,
+Loading Seedlings, Monthly Payroll) · Approval · Report · Settings.
+
+- **The sheet buttons are still `.subtab[data-sub]` and the other four
+  `.tab[data-tab]`**, because `switchSub` / `activeSub` / `applyPageAccess`
+  find them that way. `body[data-tab]` says which page is open, so a sheet
+  is lit only on the Payroll Record. A sheet pressed from any page goes to
+  the Payroll Record.
+- **Seed Planting is the LABEL; `seedplant` is still the key** it is
+  verified and permitted under.
+- **The sheets print nothing.** Every form leaves through `pdfOut(doc,
+  file)`; the Report sets `_pdfHow` to print or save for one press, sets
+  the sheet's own picker to the row's nursery, calls the SAME builder, and
+  puts both back. A second builder would be paper that disagrees with the
+  screen.
+- **Approval is the strips read together** (`approvalRows`): one row per
+  sheet per nursery off each sheet's own picker. Verify and Unlock stay on
+  the strip on the sheet; Approval only says what is signed and opens it.
+- **Others came off** with its sheet and its Monthly column: not one entry
+  had ever been keyed in `mjmnpayroll_work_entries`, so no pay moved.
+
+- **Top and foot stand still, the middle scrolls.** Overview (Dashboard)
+  is the top; Payroll Record and Sign-off & Output are the middle, each
+  under a small heading, groups 18px apart against 2px between rows; the
+  foot is the Settings group (Lock Controls, Piece Rate) and the
+  signed-in name, under the one faint divider. Settings has no pill menu of
+  its own any more: `openSettings(which)` opens the page on a section, and
+  `#settings-tab-lock` / `#settings-tab-rate` kept their ids so the
+  permissions and the lit state work as they always did.
+  `sideShowActive` scrolls the open entry into view inside the bar.
+- **No Help and no Upgrade entry**: the module has neither screen, and a
+  button to nowhere is not added because a layout asked for the slot.
+
+`tests/nursery_payroll_has_a_side_bar.cjs` (`SHOT=/dir` draws the three
+new pages).
+
+### The bar is FIXED to the window, and the Dashboard is charts over a table
+
+- **Flush left, top to bottom, square.** `.side-nav` is `position:fixed;
+  left:0; top:0; height:100vh` with no radius and no margin; the ribbon, the
+  month bar and the page sit to its right because BODY takes
+  `padding-left: var(--side-w)` — asked as `body:has(#main:not(.hidden))`, so
+  the sign-in check and Access Denied are not pushed sideways by a bar that
+  is not drawn. Under 900px it goes back into the flow as before.
+- **The Dashboard is KPI cards (month status, approval with a meter, total
+  payroll, the two big sheets), then By nursery and Trend, then the
+  by-section table.** Every figure is `monthlyRows()`'s, the Monthly
+  Payroll's own, so the dashboard cannot disagree with the sheet it sums.
+- **THE TREND PRICES MONTHS THAT ARE NOT OPEN, and that is the dangerous
+  part.** `monthTotals(ym)` fetches that month's four per-month reads
+  (`fetchEntries`, `fetchEarnAdj`, `fetchTransplantRows`, the cull overrides
+  and checks) WITHOUT touching a global, then in ONE synchronous pass swaps
+  them in under `_monthOverride`, calls `monthlyRows('')`, and restores
+  everything in a `finally`. Nothing awaits while another month is in the
+  globals, so no render can read it. The `load*` functions are thin wrappers
+  over those `fetch*` reads now — one read, two callers. The test asks that
+  each past month comes out at its own figure AND that the open month is
+  exactly what it was afterwards.
+- **What the trend does NOT redo per month:** the culling incentive RULE
+  (`loadRule` mutates one shared rule, so the one already loaded prices
+  every month; it is dated and rarely moves). Months are cached and the
+  cache is cleared when the batch ledger lands, because a month priced
+  before it had no maintenance capacity.
+- **Hours are not recorded anywhere in this module**, so the trend offers
+  Payroll and Workers paid and nothing invented. Monthly is the twelve
+  months ending the open one; Yearly is last year and this year to date.
+- **Pure SVG, no chart library** — nothing to fetch, nothing to 404, and the
+  harness (which refuses CDNs) can measure it. The three series colours were
+  run through the dataviz validator; the legend, the tooltip and the table
+  carry identity as well as colour.
+
+`tests/the_payroll_dashboard_has_charts.cjs` — 23 of its 27 fail on the
+previous page, by name.
+
+## Nursery Dashboard reads the batch report and writes nothing
+
+`reporting/nursery_dashboard.html`, a door on the Nursery Reporting System
+(same `npayroll` module, its own page tick `dashboard` on Module Assess
+Control). It opens on **All reports**, a grid of report CARDS (each with the
+latest year's headline figures); every report is a card there, a tab beside
+All reports and a `<section data-view>`. **Seed Received Summary** is the first.
+
+**On SCREEN it is a dashboard** — KPI cards, two charts, and two tables with
+a row per batch (or month, year, breed, supplier) — with no company header
+and no signature. **On PAPER it is the office's own sheet**: Print builds
+`#print-area` at the moment it is pressed (Ctrl/Cmd+P too, through
+`beforeprint`), so the **Prepared and Verified by** block names whoever
+pressed it, carries that day's date, and has an empty box to sign in. The
+print area is `display:none` on screen and is the only thing on paper.
+
+**The printed sheet is laid out like "Seed Received Summary (From
+Batch 189)"**: one report block per SUPPLIER + BREED, headed MEGA JUTAMAS SDN
+BHD / SEED RECEIVED SUMMARY REPORT, the batches going ACROSS (B.270 over its
+D/O number) and the measures going DOWN — Seed Purchased (`DO_Qty:`), Seed
+Purchased with N% FOC (the expected), Actual, Variance; Seed Damage, Maximum
+5%, Seed Damage %, in ONE table with the two charts side by side above it,
+so a supplier and breed is one A4 landscape page. It opens on the latest
+year, as the sheet is a year a tab.
+Shown by month, year, breed or supplier it is ONE block. The sheet's charts
+put Variance on a second axis; here it is a label on each bar instead, one
+axis per chart. The sheet's Delivery Note Quantity row has no ledger field
+and is not drawn.
+
+Every figure is `calcPlanting`'s own, off the same ledger rows: Expected is
+the `Seeds_Received` row (newest per batch wins), Actual is the batch's
+`Planted` rows plus its `Damaged_Seeds`, Variance is (Actual − Expected) ÷
+Expected and Damage % is Damaged ÷ Expected against a 5% maximum. Grouped
+by month, year, breed or supplier, the percentages are worked on the SUMS,
+never averaged. A batch with no Seed Planting saved is left out and NAMED
+(its variance would read −100%), with a tick to show it. The read is paged,
+because PostgREST stops at 1,000 rows and a batch is a row per tray.
+`tests/the_seed_received_summary.cjs` holds it. Nothing to run in the
+database.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
@@ -7979,6 +8261,55 @@ draft would prove nothing about the board. **22 of its 40 checks fail on the
 previous code**, each by name: every reader is guarded, since a test that dies
 on the previous code proves nothing about it.
 
+### Who is on each job is KEYED too, and a group is a cell of the Team Board
+
+The office: *"I drag the BNN-Worker to PxD part. So the worker activity for
+pxd worker name list will show all BNN worker name."* The worker columns on
+Worker Activity used to be ONE answer per nursery — its general workers off
+the payroll register — for P & D, Manuring, Weeding, Interrow, Loading and
+Transplanting alike. **Settings → Worker List for Each Job** is a table of
+those six jobs down the side and the four nurseries across, with the Team
+Board's groups above it (*BNN · Workers 12*, *BNN · FC 1*, *UNE · Workers
+5*). Drag a group onto a cell and every person in it is a column on that
+job's sheet for that nursery.
+
+- **A GROUP IS A SECTION AND A ROLE**, `BNN|General Worker`, which is a cell
+  of the Team Board. **Only groups are stored, never names**, so somebody
+  moved on the board moves here with nothing re-keyed, and a worker hired
+  next month is on every job their group is on.
+- **"Workers" is the page's OWN general-worker rule**, handed into
+  `shared/shared_job_crew.js` rather than restated, so *BNN · Workers* is
+  exactly the list BNN's sheet showed before (the per-worker switch and the
+  unlabelled-nursery fallback included). Every other role is matched exactly.
+- **A DROP ADDS, never moves** — a crew can do several jobs, so one group
+  goes onto as many cells as it is dragged onto; the × takes it off. A cell
+  greyed `—` is a job Where Each Job Is Done says is not done there.
+- **NOTHING KEYED IS THE OLD LIST**, drawn on the card as the nursery's own
+  Workers marked *default*. Save writes a cell left as it stood as
+  **`default`** (read as no row at all), so a nursery whose register is
+  empty keeps the old `nops_maint_workers` fallback. An emptied cell is
+  saved as `''`, which is an answer: nobody.
+- **THE CLAIM PAYS THE SAME LIST.** `jobWorkers(n, job)` on the page and
+  `maintJobNames(n, ym, code)` in `npayroll_script.js` both ask the shared
+  file; a tick under a name a job's list does not hold has no column on the
+  sheet and is not paid on the claim. The claim gives a line to everybody on
+  ANY job of the nursery (`maintClaimNames`). The Worker Record PDF draws
+  each job with its own columns.
+- **It fails open**: a register that cannot be read leaves every job on the
+  old list.
+
+Storage is `nops_maint_config`, one row per nursery per job, key
+`job_crew:<NURSERY>:<job>`, groups in `txt_value`. **Nothing to run in the
+database.** Seed Planting keeps its own hand-picked list and Culling
+Monitoring its own named people, so neither is on the card.
+`ROLES` in the shared file is the third copy of the Team Board's
+`BOARD_ROLES` — change one, change the others.
+
+`tests/each_job_has_its_own_worker_list.cjs` drives the real card and the
+real drag, opens the sheet and reads its columns, and lifts the claim's
+`maintJobNames` out of the shipped file; **18 of its 25 checks fail on the
+previous code**.
+
 ### Worker Activity was two parts, and Seed Planting is the Pre Nursery one
 
 **The two headings this section is about are GONE** — see above. Everything
@@ -8459,6 +8790,20 @@ So there are two layers, and they are the house pattern:
   on. The curve is SAMPLED and the nose follows its tangent with the angle
   unwrapped — three hand-written keyframes had it flying backwards for
   half the trip, and only a screenshot of a frame showed it.
+- **THE TASK LIST FITS THE SCREEN.** Every cell was on one line, so a long
+  project path and three assignees pushed Done and Days off the right edge.
+  The project cell (`td.proj`) and the people (`td.who`) wrap; each person
+  is a span of their own, so a break falls BETWEEN names and never through
+  one. Under 1500px the padding and the date type tighten. The test asks it
+  at 1280 wide: no sideways scroll.
+- **THE BOARD WRAPS AND THE TIMELINE SCROLLS IN ITS OWN FRAME.** The board
+  was six fixed columns that scrolled sideways; they share the width now
+  (`auto-fit`) and drop to a second row, then to one column on a phone.
+  The timeline chart (`.tl`) is shorter than the window and scrolls both
+  ways INSIDE itself, the dates pinned along the top and the names down
+  the left, so the page still scrolls round it. The name column narrows
+  with the window (`tlLabelWidth`, handed to the CSS as `--tl-lw`), and
+  because the chart is laid out in pixels a resize draws it again.
 - **THE TASK LIST WAS EMPTIED ON REQUEST**, with
   `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
   else. It keeps no copy, so it is not a file to run again by habit.
@@ -8499,3 +8844,232 @@ So there are two layers, and they are the house pattern:
 Its stub **fires `onAuthStateChange`**, because the hub gates its tiles
 inside that callback and fails open without it — the trap this file already
 names.
+
+## A DO number is handed out by the DATABASE, so it is never handed out twice
+
+A customer collects in the morning (DO-MUGJB901), comes back for more the
+same day, and the second DO must be DO-MUGJB902. On 5 Nov both came out 901
+(qty 13 at 06:31, qty 47 at 06:33), and both are real collections.
+
+**Every app worked the next number out the same way**: read the highest
+number of that order, add one, insert. A read and a write in two separate
+steps, in four apps (FC Portal `generateDONumber`, Admin Portal
+`doAttach.js`, the office's `mjmGenerateDONumber`, the old
+`mobile_do_signing.html`) plus every phone still on an older version. So no
+app fix could close it. `shared/RUN_ME_do_number_never_repeats.sql` does:
+
+- **A BEFORE INSERT trigger** takes an advisory lock on the order and, if
+  the number is already used or is an OFF placeholder, gives the row the
+  next free number of that order. Two DOs saved at the same second queue on
+  the lock. SECURITY DEFINER, so the check sees every row whatever the
+  saver may read.
+- **Only the generated series is touched**: `DO-` + the AL number + a
+  running number. A number off a paper DO book (03783) is the paper's, and
+  is never changed.
+- **The number on the form is a PREVIEW.** Every writer reads the row back
+  (`.select().single()`) and the PDF, the customer portal and the toast use
+  the row's number.
+- **A retry is recognised by `client_uid`**, one id per press of Save, with
+  a partial unique index: a save that landed and lost its answer comes back
+  23505 and the row is fetched, rather than made again under a new number.
+  **Never by the number**: the Admin Portal's `sendDO` asked "is this
+  do_number already there" and on yes RETURNED WITHOUT INSERTING, so a
+  genuine second DO handed the same preview number was silently dropped.
+- **A database without the column still takes a DO**: a refusal naming
+  `client_uid` is remembered and the row sent again without it.
+
+The two pairs already sharing a number (DO-MUGJB901, 03783) are left as
+they are: the customer signed paper with that number on it.
+
+`FC-Portal/tests/a_do_is_numbered_at_save.cjs` (sections 5 to 7) and
+`Mobile/tests/a_second_do_the_same_day_is_its_own_do.cjs` hold it.
+
+## The Work Maintenance claim is four colour blocks, and the look moves no figure
+
+The office asked for the Nursery Payroll to stop being eleven columns of
+look-alike figures in bright indigo. The module is now **forest green on warm
+grey** (`--ink` is `#1b4332`; the variable NAMES did not move, so every rule
+reading them followed) in **Plus Jakarta Sans**, with tabular figures on every
+table. On the Work Maintenance claim each job is its own soft colour — P & D
+sage, Manuring amber, Weeding sky, Interrow teal — carried from its card down
+into its heading and its cells; a heavy line opens each job and a faint dashed
+one splits Capacity from Total; a dash is faint; the RM in a money cell is
+**not in the cell at all** — the headings say (RM), every Capacity and Total
+figure is right-aligned so the decimal points stand in one column, and the
+Grand Total is one forest-green band from end to end with no job tints; a
+hovered row turns mint; and No., Worker and Subtotal stay
+pinned while the four jobs scroll on a narrow screen.
+
+**`decorateMaintTable()` only adds classes and takes the `RM ` off the money
+cells.** It runs after `renderMaint()` rather than inside `capCell` /
+`earnedCell`, because those draw the other sheets too, which keep their RM —
+and no FIGURE moves: the first check in
+`tests/the_maint_claim_reads_in_four_colour_blocks.cjs` reads every cell before
+it asks anything about colour. The hover bolds with a text
+stroke, not a font weight, so columns do not shift width under the pointer.
+The colour table is in the stylesheet beside the rules that use it. The PDF is
+not part of this and still draws its own colours.
+
+### And then every tab took the same rules
+
+The office asked for the whole module in one visual system, so the claim's
+rules are no longer the claim's. **`tidyTable()` runs over every table in
+`#main` each time its contents are replaced**, off one MutationObserver
+rather than thirty render functions remembering to call it, so a table added
+next month is tidied without anybody knowing it exists. It takes a leading
+`RM ` off a cell ONLY where the cell is an amount (*RM 5 bonus agreed* is a
+sentence and is left), adds `(RM)` once to the heading over a column it
+stripped, marks a column of figures `.num` (right-aligned, heading included)
+and a dash `.nil`. The base `thead` / `tbody` / `tfoot` rules carry the rest:
+11px headings, 13.5px body, a mint hover, and **every tfoot one forest-green
+band**.
+
+**`decorateJobTable(tbl, codes, cats)`** is the claim-form layer, shared by
+Work Maintenance, Transplanting (its four jobs take cat-1 to cat-4 in order)
+and Loading Seedlings (cat-4, teal). The colours are SLOTS, `cat-1`..`cat-4`,
+so a sheet with jobs of its own gets the same four; the Monthly Payroll's
+three pay columns wear cat-1, cat-2 and cat-4 to match the sheets they come
+from. A job table is skipped by the observer, because its decorator tidies
+it on the spot.
+
+Tests that read a table cell expecting `RM …` were corrected to the bare
+figure; the PDF checks were not, because the paper still prints RM.
+`tests/every_payroll_tab_reads_the_same.cjs` walks all ten tabs and asks the
+same questions of every table on each, then draws a table the module has
+never seen and checks it was tidied.
+
+### And then ONE design system, and the colour blocks came back out
+
+The office asked for the whole module redesigned as one enterprise system —
+*"the table should NOT look like an Excel spreadsheet"*, a slim header, one
+sidebar, one page header, one table, one card. So the four colour blocks two
+sections up are GONE, by the office's own later ask: what is left of a job's
+colour is a DOT before its name on the group heading and on its card.
+
+- **Tokens first.** `:root` in `npayroll_styles.css` carries the semantic
+  colours (success / warning / error / info, each with a bg and a border),
+  the line colours, a type scale (`--fs-xs` … `--fs-xl`), a 4px spacing scale,
+  one control height (`--h-ctl` 36px) and the table tokens. The COMPONENTS
+  layer at the end of the file is the last word and reads only those. A new
+  page that uses `.bar` / `.card` / `.btn` / a plain `<table>` looks like the
+  rest without anybody remembering how.
+- **The global header is the shared ribbon, flattened, one 56px row**: the
+  system name left; the month, the account, Portal and Sign Out right. The
+  ribbon's own markup is untouched (`data-brand=""`, `data-logo="off"`, and
+  overrides carrying `!important` because it writes its sizing inline).
+  **The month picker is MOVED into it** by `slimHead()` in the page, after
+  the ribbon mounts on DOMContentLoaded — moved, never copied, so every
+  reader of `#global-month` reads the same input. If the ribbon fails the
+  second row stays where it was.
+- **The sidebar brand is the COMPANY** (MJM Nursery · Nursery Reporting
+  System), its block the header's height, because the header already says
+  NURSERY PAYROLL and the same name twice on one row is what was taken out.
+  Every entry carries an inline SVG icon (`.side-ic`) BEFORE its label, so
+  `textContent` is still the label — two tests that read the label with a
+  regex were widened to allow the icon.
+- **The table**: neutral heading, white rows, ONE faint horizontal line,
+  no vertical line except where a job group opens, no tinted column.
+  Alignment is decided by `tidyTable()`: figures `.num` right, a serial
+  heading (No. / #) `.c` centred and never `.num`, a column of nothing but
+  buttons `.r` right, everything else LEFT, which is now the default. A
+  sub-total is a neutral band; the Grand Total is the one green band.
+- **Cards** have no coloured bar along the top; the nursery picker is a
+  segmented control at control height, not 52px circles; page titles are
+  20px/700 with no emoji; a heading inside a page is `.sec-label`.
+- **Nothing moved underneath it.** No figure, no calculation, no stored
+  key, no permission. `_compactRM` (the dashboard axis) was rewritten off
+  `'RM ' + toFixed` because `payroll_pdf_layout.cjs` forbids that shape.
+
+`tests/every_payroll_tab_reads_the_same.cjs` holds the system on all ten
+tabs — the header, the brand, the icons, no vertical lines, one title size,
+no card bars, one control height, a centred serial — and **27 of its 146
+fail on the previous page**, by name.
+
+### And every table is ONE STANDARD TABLE, typed by what its columns hold
+
+The office found alignment different from tab to tab and asked for one rule
+across the whole module. The rule lives in two places and nowhere else:
+`tidyTable()` in `npayroll_script.js`, which every table goes through
+(the MutationObserver runs it on every redraw, so a table added next month
+obeys it), and the **THE STANDARD TABLE** block at the end of
+`npayroll_styles.css`, which is the last word on alignment.
+
+`tidyTable` gives each column a TYPE, off its heading and what its cells
+hold, and the type decides everything:
+
+| type | how it is told | alignment |
+|---|---|---|
+| serial | heading No. / # | centre, 56px (`.col-ser`) |
+| status | heading names a status | centre, no wrap (`.col-st`) |
+| action | blank heading, nothing but buttons | centre, shrink to its buttons (`.col-act`) |
+| media | a picture or a drone-map thumb, caption or not | centre |
+| number | figures, money, or a figure and its unit ("3,000 Bag") | right, tabular |
+| text | anything else | left |
+
+A heading that spans several columns gets `.grp` and is centred over
+exactly them; the job tables' name, rate and note rows are centred too, and
+a long job name WRAPS instead of widening the table — sideways scroll had
+put the Transplanting group under the pinned Subtotal.
+
+Four things the audit found that the old rule got wrong:
+
+- **Seed Planting had every figure on the LEFT.** Its headings are rows
+  of `<th>` inside the BODY, one band per job, and the old pass read them
+  as text, so no column could be figures. A table like that is now tidied
+  **band by band** — column three of one job is not column three of the
+  next — and the foot is laid on the widest band.
+- **The pencil on an adjustable total made it text**, so no column under
+  one could be right-aligned by type. The pencil is `.pen` now, skipped
+  when a cell is read, and it hangs in the cell's padding so the figure
+  lines up with the total under it.
+- **Actions were on the RIGHT and Status on the left**; both are centred,
+  which is what the office asked for by name.
+- **A unit is not a month.** "3,000 Bag" is a quantity; "03 Nov" is a day.
+  `_isFigure` refuses a unit that is a month abbreviation.
+
+`tests/every_payroll_table_lines_up.cjs` loads all ten tabs with real-shaped
+data and asks every table, cell by cell with the spans expanded, for the
+computed alignment its type demands, that every row spans the heading's
+width, that a heading's edges are the column's edges, that a grouped
+heading is centred, and that figures are tabular. **11 of its tables fail
+on the previous code**, each by name. `AUDIT=1` prints every table's grid,
+`SHOT=/dir` draws each tab and `VW=400` draws them at phone width.
+
+## Work Records is one clean page, and the dashboard is a strip
+
+The office asked for the Work Records page redesigned: *"MINIMIZE THE
+DASHBOARD. MAXIMIZE THE WORKING AREA."* MJM green stays the one brand
+colour; everything else is white, a light grey and colour only where it says
+something.
+
+- **The three summary cards are ONE strip** (`_recProgressHtml`): Work
+  progress (total, completed, pending, %) and Repair progress (cases,
+  repaired, remaining, %), each over a slim green-on-grey bar. **The figures
+  are the same four counts `renderRecords` always worked out**, by the same
+  rules (done = verified field record or the old Gaia tick; a repair case =
+  an Unsatisfactory audit), so nothing is counted differently — only drawn
+  smaller. Under ~90px on a desk; the two halves stack on a phone.
+- **Check / Edit / Del are icon buttons** (`_recIconBtn`), on the approved
+  list and the sent-back list alike. **Each carries its old WORD as hidden
+  text** (`.sr-only`) as well as a tooltip and an `aria-label`, so a screen
+  reader, a test or anybody reading the button still reads "✓ Check", "Edit",
+  "Del" — and the `onclick` is the very handler the word button had. Delete
+  still confirms; a checked row still offers Uncheck and nothing else.
+- **Every column sits by type**, heading and cell together: Plot, Track,
+  Audit, Nelos, Repair and Actions centred, Quantity right, the rest left.
+  The cells carry classes (`rc-plot`, `rc-qty`, …) instead of inline styles,
+  so one rule says it.
+- **The chemical label is neutral** on this table only — `pillCls` still
+  colours it elsewhere — because the work type is the column beside it and
+  a red outline on every P & D row said nothing.
+- **One control height (34px), one radius, one hairline border** across the
+  head, the toolbar and the table, from `--wr-*` tokens in the last block of
+  `plot_maintenance_styles.css`. The head (nursery pills, month stepper) is
+  shared by every panel, so it changed on all of them, deliberately.
+
+`tests/work_records_is_one_clean_page.cjs` drives the real page: the strip's
+figures against the rows, the strip moving when a row is added, every
+heading and cell alignment, the icons against their handlers, and a Delete
+that still confirms. **23 of its 25 checks fail on the previous page**, each
+by name. `SHOT=/dir` draws it, `VW=400` at phone width. **Nothing to run in
+the database.**

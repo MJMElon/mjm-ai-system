@@ -5,15 +5,17 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --ink:        #4f46e5;
-  --ink-dark:   #4338ca;
-  --ink-deep:   #312e81;
-  --ink-light:  #eef2ff;
-  --ink-mid:    #c7d2fe;
-  --ink-faint:  #818cf8;
-  --bg:         #f5f5ff;
+  /* Forest green on warm grey. It was indigo (#4f46e5) on lavender; the
+     variable NAMES stay, so every rule that reads --ink follows. */
+  --ink:        #1b4332;
+  --ink-dark:   #143628;
+  --ink-deep:   #0f2a1f;
+  --ink-light:  #edf4f0;
+  --ink-mid:    #c3d9cc;
+  --ink-faint:  #5e8f75;
+  --bg:         #f6f8f7;
   --white:      #ffffff;
-  --border:     #e0e7ff;
+  --border:     #e2e8f0;
   --text:       #334155;
   --text-head:  #1e293b;
   --text-muted: #64748b;
@@ -25,13 +27,48 @@
   --amber-tx:   #78350f;
   --red:        #b91c1c;
   --red-bd:     #fecaca;
-  --r-sm: 8px; --r-md: 12px; --r-lg: 18px;
-  --shadow-sm: 0 2px 8px rgba(79,70,229,.07);
-  --shadow-md: 0 6px 20px rgba(79,70,229,.10);
+  --brand:      #1b4332;
+  --brand-soft: #edf4f0;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,.04);
+  --shadow-md: 0 8px 24px rgba(15,23,42,.08);
+
+  /* ── THE DESIGN SYSTEM ────────────────────────────────────────────────
+     Every page of Nursery Payroll draws from these and from nothing else,
+     so a page added next month looks like the rest without anybody having
+     to remember how. Semantic colours mean one thing each, everywhere:
+     success green, warning amber, error red, information blue. */
+  --c-success: #15803d;  --c-success-bg: #f0fdf4;  --c-success-bd: #bbf7d0;
+  --c-warning: #b45309;  --c-warning-bg: #fffbeb;  --c-warning-bd: #fde68a;
+  --c-error:   #b91c1c;  --c-error-bg:   #fef2f2;  --c-error-bd:   #fecaca;
+  --c-info:    #1d4ed8;  --c-info-bg:    #eff6ff;  --c-info-bd:    #bfdbfe;
+  --line:        #e8ecf0;   /* card edges, dividers */
+  --line-strong: #d7dee5;   /* control borders */
+
+  /* Type scale: one size per job, never a size per page. */
+  --fs-xs: 11px;     /* table headings, labels, helper text */
+  --fs-sm: 12.5px;   /* secondary text, buttons, badges */
+  --fs-base: 13.5px; /* body and table text */
+  --fs-md: 15px;     /* section headings */
+  --fs-lg: 20px;     /* the page title, once per page */
+  --fs-xl: 24px;     /* a headline figure on a card */
+
+  /* Spacing scale (4px base). */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+
+  /* Controls share one height so a select, a box and a button line up. */
+  --h-ctl: 36px; --h-ctl-sm: 30px;
+
+  /* Tables. */
+  --tbl-head-bg: #f8fafb;  --tbl-head-tx: #5b6878;
+  --tbl-line: #edf0f3;     --tbl-line-strong: #e1e6eb;
+  --tbl-hover: #f4f8f6;    --tbl-sub-bg: #f8fafb;
+  --tbl-total-bg: #1b4332;
+  --header-h: 56px;
 }
 
 html { font-size: 15px; overflow-y: scroll; scrollbar-gutter: stable; }
-body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+body { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
 .hidden { display: none !important; }
 
 /* ── Ribbon, restyled into a rounded pill ──
@@ -82,7 +119,7 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
             transition: transform .14s, box-shadow .14s; text-decoration: none; flex-shrink: 0; }
 .icon-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
 .icon-btn-payroll  { background: var(--ink); }
-.icon-btn-settings { background: #7c3aed; }
+.icon-btn-settings { background: var(--ink); }
 .icon-btn-access   { background: #10b981; }
 
 @media (max-width: 640px) {
@@ -141,59 +178,88 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
   .settings-menu-btn { font-size: 11px; padding: 12px 4px; }
 }
 
-/* ── Section bar ── */
-.bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
-       flex-wrap: wrap; margin-bottom: 14px; }
-.bar-title { font-size: 19px; font-weight: 900; color: var(--ink-deep); letter-spacing: .01em; }
-.bar-sub { font-size: 12px; font-weight: 500; color: var(--text-muted); margin-top: 2px; }
-.bar-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+/* ── PAGE HEADER ────────────────────────────────────────────────────────
+   Every page opens the same way, inside the content area: the page title,
+   a muted line under it (the nursery and the month), and the page's own
+   controls on the right. The system name is the header's and is never
+   repeated here. */
+.bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+       flex-wrap: wrap; margin-bottom: var(--sp-5); min-height: 44px; }
+.bar-title { font-size: var(--fs-lg); font-weight: 700; color: var(--text-head);
+             letter-spacing: -.01em; line-height: 1.25; }
+.bar-sub { font-size: var(--fs-sm); font-weight: 500; color: var(--text-muted); margin-top: 3px; }
+.bar-actions { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+/* A heading INSIDE a page: one size, one weight, one gap, wherever it is. */
+.sec-label { font-size: var(--fs-sm); font-weight: 700; color: var(--text-head);
+             margin: var(--sp-5) 0 var(--sp-2); letter-spacing: .01em; }
+.sec-label:first-child { margin-top: 0; }
 
-/* ── Controls ── */
-.btn { font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .03em; border-radius: var(--r-sm);
-       border: 1.5px solid var(--ink-mid); background: var(--white); color: var(--ink-dark);
-       padding: 9px 16px; cursor: pointer; transition: all .15s; white-space: nowrap; text-decoration: none;
-       display: inline-flex; align-items: center; gap: 6px; }
-.btn:hover { background: var(--ink-light); }
+/* ── BUTTONS ──────────────────────────────────────────────────────────────
+   Two kinds and a danger: PRIMARY (solid green, the one thing the page is
+   for), SECONDARY (white, grey edge, everything else), DANGER (red text).
+   One height, one radius, one weight. */
+.btn { font-family: inherit; font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0;
+       border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--white);
+       color: var(--text-head); height: var(--h-ctl); padding: 0 14px; cursor: pointer;
+       transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
+       text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn:hover { background: #f6f8f7; border-color: #c8d1d9; }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(27,67,50,.18); }
 .btn-primary { background: var(--ink); border-color: var(--ink); color: #fff; }
-.btn-primary:hover { background: var(--ink-dark); }
-.btn-danger { border-color: var(--red-bd); color: var(--red); }
-.btn-danger:hover { background: #fef2f2; }
-.btn-sm { padding: 5px 11px; font-size: 11px; }
-/* The PDF download, as a round icon button rather than a text pill — same
-   indigo .btn-primary already was, same circle shape as .icon-btn in the
-   topbar, just scaled down to sit beside the nursery circles. The file it
-   downloads is named by its title/aria-label, not by wording on the button. */
-.btn-icon-dl { height: 38px; width: 38px; min-width: 38px; padding: 0; border-radius: 50%;
-               background: var(--ink); border-color: var(--ink); color: #fff;
-               display: inline-flex; align-items: center; justify-content: center;
-               box-shadow: var(--shadow-sm); }
-.btn-icon-dl:hover { background: var(--ink-dark); transform: translateY(-1px); }
-.sel { height: 38px; padding: 0 11px; border: 1.5px solid var(--border); border-radius: var(--r-sm);
-       font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-head); background: var(--white);
-       outline: none; cursor: pointer; }
-.sel:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
-input.sel { cursor: text; font-weight: 500; min-width: 190px; }
-.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.btn-primary:hover { background: var(--ink-dark); border-color: var(--ink-dark); }
+.btn-danger { border-color: var(--c-error-bd); color: var(--c-error); }
+.btn-danger:hover { background: var(--c-error-bg); border-color: var(--c-error-bd); }
+.btn-sm { height: var(--h-ctl-sm); padding: 0 11px; font-size: 12px; }
+/* The download icon: a secondary-sized square, same height as a button. */
+.btn-icon-dl { height: var(--h-ctl); width: var(--h-ctl); min-width: var(--h-ctl); padding: 0;
+               border-radius: var(--r-sm); background: var(--ink); border-color: var(--ink); color: #fff;
+               display: inline-flex; align-items: center; justify-content: center; }
+.btn-icon-dl:hover { background: var(--ink-dark); }
+
+/* ── INPUTS ───────────────────────────────────────────────────────────── */
+.sel { height: var(--h-ctl); padding: 0 11px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+       font-family: inherit; font-size: var(--fs-base); font-weight: 500; color: var(--text-head); background: var(--white);
+       outline: none; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.sel:hover { border-color: #c8d1d9; }
+.sel:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27,67,50,.14); }
+input.sel { cursor: text; min-width: 190px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 500; color: var(--text-muted); }
 .chk input { width: 15px; height: 15px; accent-color: var(--ink); }
 
-/* ── Card + table ── */
-.card { background: var(--white); border: 1.5px solid var(--border); border-radius: var(--r-md);
+/* ── CARD ─────────────────────────────────────────────────────────────── */
+.card { background: var(--white); border: 1px solid var(--line); border-radius: var(--r-md);
         box-shadow: var(--shadow-sm); overflow: hidden; }
+
+/* ── THE DATA TABLE ───────────────────────────────────────────────────────
+   ONE table, every page. A quiet neutral heading, white rows divided by a
+   single faint horizontal line, NO vertical lines and no box round a cell.
+   Text reads left, figures right on tabular digits, a serial number
+   centred -- tidyTable() in the script marks the columns (.l / .num / .c),
+   so a table added next month is aligned without anybody remembering to.
+   A dash is faint (.nil), a row under the pointer turns faintly green, a
+   sub-total is a neutral band and the Grand Total is the one green band. */
 .tbl-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-thead th { background: var(--ink-light); color: var(--ink-dark); font-size: 10px; font-weight: 900;
-           letter-spacing: .12em; text-transform: uppercase; padding: 11px 12px; text-align: center;
-           border-bottom: 2px solid var(--ink-mid); white-space: nowrap; vertical-align: middle; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+thead th { background: var(--tbl-head-bg); color: var(--tbl-head-tx); font-size: var(--fs-xs); font-weight: 600;
+           letter-spacing: .05em; text-transform: uppercase; padding: 11px 14px; text-align: left;
+           border-bottom: 1px solid var(--tbl-line-strong); white-space: nowrap; vertical-align: middle; }
 thead th.l { text-align: left; }
-tbody td { padding: 10px 12px; border-bottom: 1px solid var(--ink-light); font-size: 13px;
-           color: var(--text); text-align: center; vertical-align: middle; }
+thead th.num, thead th.r { text-align: right; }
+thead th.c { text-align: center; }
+tbody td { padding: 11px 14px; border-bottom: 1px solid var(--tbl-line); font-size: var(--fs-base);
+           color: var(--text); text-align: left; vertical-align: middle; height: 44px; }
 tbody td.l { text-align: left; }
-tbody td.r { text-align: right; }
+tbody td.r, tbody td.num, tfoot td.num, tfoot td.r { text-align: right; }
+tbody td.c, tfoot td.c { text-align: center; }
+td.num, th.num { white-space: nowrap; }
+td.nil { color: #cbd5e1 !important; font-weight: 400 !important; }
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover td { background: #fafaff; }
-tfoot td { padding: 11px 12px; background: var(--ink-light); font-size: 13px; font-weight: 900;
-           color: var(--ink-deep); text-align: center; border-top: 2px solid var(--ink-mid); }
+tbody tr:hover td { background: var(--tbl-hover) !important; }
+tfoot td { padding: 12px 14px; background: var(--tbl-total-bg); font-size: var(--fs-base); font-weight: 700;
+           color: #fff; text-align: left; border-top: none; }
 tfoot td.l { text-align: left; }
+tfoot td.nil { color: rgba(255,255,255,.45) !important; }
+tfoot td a, tfoot td button { color: #fff; }
 
 /* ── THE PRE NURSERY CLAIM IS TWO JOBS ON ONE SHEET ──────────────────────
    Sowing the seed and filling the hyplug trays, one under the other with a
@@ -203,24 +269,24 @@ tfoot td.l { text-align: left; }
    So the head belongs to the SECTION and cannot be a <thead> -- there are
    two of them. These carry the look `thead th` gives the ordinary tables,
    because a head that reads as a body row is a column nobody can place. */
-tbody tr.pn-job-row td.pn-job { background: var(--ink-light); color: var(--ink-deep);
-           font-size: 12px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
-           padding: 12px 12px 6px; text-align: left; border-bottom: none; }
-tbody tr.pn-job-row:hover td { background: var(--ink-light); }
-tbody tr.pn-head th { background: var(--ink-light); color: var(--ink-dark); font-size: 10px;
-           font-weight: 900; letter-spacing: .12em; text-transform: uppercase; padding: 8px 12px 11px;
-           text-align: center; border-bottom: 2px solid var(--ink-mid); white-space: nowrap;
+tbody tr.pn-job-row td.pn-job { background: #fff; color: var(--text-head);
+           font-size: var(--fs-sm); font-weight: 700; letter-spacing: .02em;
+           padding: 18px 14px 8px; text-align: left; border-bottom: none; height: auto; }
+tbody tr.pn-job-row:hover td { background: #fff !important; }
+tbody tr.pn-head th { background: var(--tbl-head-bg); color: var(--tbl-head-tx); font-size: var(--fs-xs);
+           font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 10px 14px;
+           text-align: center; border-bottom: 1px solid var(--tbl-line-strong); white-space: nowrap;
            vertical-align: middle; }
 /* A JOB TOTAL IS NOT THE CLAIM TOTAL, so it does not wear the foot's weight
    -- two figures of the same colour, one above the other, is how somebody
    signs for the wrong one. */
-tbody tr.pn-sub-row td { background: #f6f7fd; font-weight: 800; color: var(--ink-deep);
-           border-bottom: 2px solid var(--ink-mid); }
-tbody tr.pn-sub-row:hover td { background: #f6f7fd; }
+tbody tr.pn-sub-row td { background: var(--tbl-sub-bg); font-weight: 700; color: var(--text-head);
+           border-top: 1px solid var(--tbl-line-strong); border-bottom: 1px solid var(--tbl-line-strong); }
+tbody tr.pn-sub-row:hover td { background: var(--tbl-sub-bg) !important; }
 tbody tr.pn-sub-row td:first-child { text-align: left; }
 
-.empty { text-align: center; color: var(--text-faint); padding: 42px 14px; font-size: 13px; }
-.money { font-weight: 800; color: var(--ink-deep); white-space: nowrap; }
+.empty { text-align: center !important; color: var(--text-faint); padding: 40px 14px; font-size: var(--fs-base); }
+.money { font-weight: 700; color: var(--text-head); white-space: nowrap; }
 
 /* ── CALIBRATING A CELL BY THE CENT ─────────────────────────────────────
    A capacity divided among seven people does not land on a whole cent, so a
@@ -280,7 +346,7 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
 #wf-pin { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 #wf-pin::placeholder { text-transform: none; letter-spacing: normal; font-weight: 500; }
 .pin-in::placeholder { letter-spacing: .1em; color: var(--text-faint); font-weight: 600; }
-.pin-in:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+.pin-in:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27,67,50,.14); }
 .pin-in:disabled { background: #f8fafc; color: var(--text-faint); cursor: not-allowed; }
 .pin-in.pin-saved { background: var(--green-bg); border-color: #86efac; }
 
@@ -319,7 +385,7 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
   width: 100%; padding: 9px 11px; border: 1.5px solid #e2e8f0; border-radius: 9px;
   font-size: 13px; font-family: inherit; color: var(--text-head); background: var(--white); outline: none; }
 .frow input:focus, .frow select:focus, .frow textarea:focus {
-  border-color: var(--ink); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+  border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27,67,50,.14); }
 .frow input[readonly] { background: #f8fafc; color: var(--text-muted); }
 /* A tick box and its wording sit on one line — .frow label alone would stack
    them, since it makes every label in the form a block. */
@@ -554,3 +620,416 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
    have something on that batch; see renderPreNurseryGlance(). */
 .pt-sub{font-size:10px;font-weight:600;color:var(--text-muted);margin-top:4px;
   line-height:1.45;font-variant-numeric:tabular-nums;}
+
+/* ── The side bar ──────────────────────────────────────────────────────
+   Dashboard, Payroll Record (the five sheets), Approval, Report, Settings.
+   The sheet buttons are still .subtab (switchSub finds them by it), so
+   everything .subtab used to be as a pill row is undone here for the
+   ones inside the side bar. A sheet is lit only while the Payroll
+   Record is the page open — body[data-tab] is set by switchTab — or the
+   bar would show two places active at once. */
+.pay-content { min-width: 0; }
+/* FLUSH LEFT, FULL HEIGHT. The bar is fixed to the window's left edge from
+   the very top to the very bottom, square, with nothing around it; the
+   ribbon, the month bar and the page all sit to its right. The padding is
+   asked of BODY and only while the module is open (#main shown), so the
+   sign-in check and Access Denied are not pushed sideways by a bar that is
+   not there. Top and foot stand still, the middle scrolls. */
+:root { --side-w: 236px; }
+body:has(#main:not(.hidden)) { padding-left: var(--side-w); }
+.side-nav { position: fixed; left: 0; top: 0; bottom: 0; width: var(--side-w); height: 100vh;
+            margin: 0; z-index: 50; display: flex; flex-direction: column;
+            background: var(--white); border-right: 1px solid var(--border); border-radius: 0;
+            box-shadow: none; padding: 0 12px 14px; }
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 18px 8px 16px; margin: 0 -12px 12px;
+              padding-left: 20px; border-bottom: 1px solid #eef0f7; }
+.side-brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: #fff;
+                   display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex: none; }
+.side-brand-name { font-size: 13.5px; font-weight: 800; color: var(--text-head); line-height: 1.15; }
+.side-brand-sub { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.side-top, .side-foot { flex: none; }
+.side-mid { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+/* Groups sit well apart; rows inside a group sit close. */
+.side-group { display: flex; flex-direction: column; gap: 2px; }
+.side-top .side-group { margin-bottom: 18px; }
+.side-mid .side-group + .side-group { margin-top: 18px; }
+.side-head { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+             color: var(--text-faint); padding: 0 12px 6px; }
+/* Rows: one step quieter than body text, still plainly readable. The
+   open page is a solid ink block, which nothing else on the bar is. */
+.side-nav .side-btn { flex: none; display: block; width: 100%; text-align: left; font-family: inherit;
+            font-size: 13.5px; font-weight: 600; color: #475569; background: transparent;
+            border: none; border-radius: var(--r-sm); padding: 9px 12px; cursor: pointer; transition: background .14s, color .14s; }
+.side-nav .side-btn:hover { background: var(--ink-light); color: var(--ink-dark); }
+.side-nav .side-btn.active { background: var(--ink); color: #fff; font-weight: 800; }
+body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transparent; color: #475569; font-weight: 600; }
+/* The one divider: between the list and the foot, and faint. */
+.side-foot { margin-top: 12px; padding-top: 12px; border-top: 1px solid #eef0f7;
+             display: flex; flex-direction: column; gap: 6px; }
+.side-account { font-size: 12px; color: var(--text-muted); padding: 2px 12px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-account:empty { display: none; }
+.side-nav .hidden { display: none !important; }
+@media (max-width: 900px) {
+  body:has(#main:not(.hidden)) { padding-left: 0; }
+  .side-nav { position: static; width: auto; height: auto; max-height: none; border-right: none;
+              border: 1.5px solid var(--border); border-radius: var(--r-lg); margin-bottom: 16px; padding: 0 12px 12px; }
+  .side-mid { overflow: visible; }
+  .side-group { flex-direction: row; flex-wrap: wrap; }
+  .side-head { width: 100%; }
+  .side-nav .side-btn { width: auto; }
+}
+
+/* Dashboard, Approval and Report */
+.dash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.dash-card { background: var(--white); border: 1px solid var(--border); border-top: 4px solid #cbd5e1; border-radius: var(--r-md);
+             box-shadow: var(--shadow-sm); padding: 14px 16px; text-align: left; font-family: inherit; cursor: pointer; }
+.dash-card:hover { border-color: var(--ink-mid); }
+.dash-card.dc-status   { border-top-color: #94a3b8; }
+.dash-card.dc-approval { border-top-color: #74c69d; }
+.dash-card.dc-total    { border-top-color: #1b4332; }
+.dash-card.dc-cat-1    { border-top-color: #2f9e5f; }
+.dash-card.dc-cat-2    { border-top-color: #d97706; }
+.dash-card .dc-label { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.dash-card .dc-val { font-size: 22px; font-weight: 800; color: var(--text-head); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.dash-card .dc-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.dc-meter { height: 6px; border-radius: 999px; background: #eef2f0; margin-top: 10px; overflow: hidden; }
+.dc-meter i { display: block; height: 100%; background: #2f9e5f; border-radius: 999px; }
+.dash-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 18px; }
+@media (max-width: 1100px) { .dash-charts { grid-template-columns: 1fr; } }
+.dash-chart { padding: 16px 18px 12px; }
+.dash-chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.dch-title { font-size: 14px; font-weight: 800; color: var(--text-head); }
+.dch-sub { font-size: 12px; color: var(--text-muted); }
+.dash-segs { display: flex; gap: 8px; flex-wrap: wrap; }
+.dash-seg { display: inline-flex; background: #eef2f0; border-radius: 999px; padding: 3px; }
+.dash-seg button { border: none; background: transparent; font-family: inherit; font-size: 12px; font-weight: 700;
+                   color: #475569; padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+.dash-seg button.on { background: var(--white); color: var(--ink); box-shadow: var(--shadow-sm); }
+.dash-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #475569; margin: 2px 0 6px; }
+.dash-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.dash-svg { width: 100%; height: auto; display: block; }
+.dash-svg .dg-grid { stroke: #eef0f2; stroke-width: 1; }
+.dash-svg .dg-base { stroke: #cbd5e1; stroke-width: 1; }
+.dash-svg .dg-ax, .dash-svg .dg-xl { font-size: 11px; fill: #64748b; font-family: inherit; font-variant-numeric: tabular-nums; }
+.dash-svg .dg-xl { font-weight: 600; fill: #334155; }
+.dash-svg .dg-cross { stroke: #94a3b8; stroke-width: 1; stroke-dasharray: 3 3; }
+.dash-svg .dg-hit { cursor: default; }
+.dash-empty { padding: 60px 0; text-align: center; font-size: 13px; color: var(--text-muted); }
+.dash-tip { position: fixed; z-index: 200; pointer-events: none; display: none; background: #fff; border: 1px solid var(--border);
+            border-radius: 10px; box-shadow: var(--shadow-md); padding: 8px 12px; font-size: 12px; min-width: 190px; }
+.dash-tip .dt-h { font-weight: 800; color: var(--text-head); margin-bottom: 4px; }
+.dash-tip .dt-r { display: flex; align-items: center; gap: 8px; color: #475569; line-height: 1.7; }
+.dash-tip .dt-r b { margin-left: auto; color: var(--text-head); font-variant-numeric: tabular-nums; }
+.dash-tip .dt-sw { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.ap-open { color: var(--amber-tx); font-weight: 700; }
+.ap-done { color: var(--green); font-weight: 700; }
+.ap-lock { color: var(--red); font-weight: 700; }
+.rep-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+
+/* ── CLAIM TABLES GROUPED BY JOB ───────────────────────────────────────
+   Work Maintenance, Transplanting and Loading Seedlings lay a claim out as
+   a group of columns per job. They read as ONE data table like every other
+   in the module: neutral heading, white rows, no tinted columns and no grid.
+   What tells the jobs apart is the GROUP HEADING (the job name over its pair
+   of columns, a small dot of its colour, the rate under it) and one faint
+   rule where a group starts. The job colour survives as that dot and as
+   the dot on its card above, which is the one place colour carries meaning.
+   Classes come from decorateJobTable(); no figure or word in a cell moves. */
+table.job-table { border-collapse: separate; border-spacing: 0; }
+table.job-table .cat-1, .cat-card.cat-1, .job-card.job-pd       { --j-dot: #2f9e5f; }
+table.job-table .cat-2, .cat-card.cat-2, .job-card.job-manuring { --j-dot: #d97706; }
+table.job-table .cat-3, .cat-card.cat-3, .job-card.job-weeding  { --j-dot: #0284c7; }
+table.job-table .cat-4, .cat-card.cat-4, .job-card.job-interrow { --j-dot: #0d9488; }
+
+table.job-table thead th { background: var(--tbl-head-bg); color: var(--tbl-head-tx);
+  border-bottom: none; }
+table.job-table thead th.job-title { font-size: 12.5px; font-weight: 700; letter-spacing: .04em;
+  color: var(--text-head); padding: 12px 14px 2px; }
+table.job-table thead th.job-title::before { content: ""; display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--j-dot, #94a3b8); margin-right: 7px; vertical-align: 1px; }
+table.job-table thead th.job-rate { font-size: 12px; font-weight: 500; text-transform: none;
+  letter-spacing: 0; color: var(--text-muted); padding: 0 14px 6px; }
+table.job-table thead th.job-wd { padding: 0 14px 4px; }
+table.job-table thead th.job-wd:empty { padding: 0; }
+table.job-table thead tr:last-child th { border-bottom: 1px solid var(--tbl-line-strong); }
+table.job-table thead th.stk-no, table.job-table thead th.stk-w, table.job-table thead th.stk-sub {
+  border-bottom: 1px solid var(--tbl-line-strong); }
+
+/* Weeding RM 0.01 not claimed: a quiet warning pill. */
+table.job-table .wd-gap { display: inline-block; background: #fef2f2; color: #b91c1c !important;
+  border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600 !important;
+  letter-spacing: 0; text-transform: none; margin-top: 2px; }
+
+table.job-table tbody td { background: #fff; }
+table.job-table tbody td.jg-tot { font-weight: 600; color: var(--text-head); }
+table.job-table tfoot td.jg-tot { font-weight: 700; }
+table.job-table tbody td.stk-no { color: var(--text-faint); }
+table.job-table tbody td.stk-w { font-weight: 600; color: var(--text-head); }
+table.job-table tbody td.stk-sub { font-weight: 700; color: var(--ink); }
+
+/* ONE separator, where a job group starts. No line between Capacity and
+   its Total: they are a pair and the group heading says so. */
+table.job-table .jg-start, table.job-table .stk-sub { border-left: 1px solid var(--tbl-line); }
+
+table.job-table tbody td.jg-start, table.job-table tbody td.jg-tot,
+table.job-table tbody td.stk-sub, table.job-table tfoot td.jg-start,
+table.job-table tfoot td.jg-tot, table.job-table tfoot td.stk-sub,
+table.job-table thead th.sub-h, table.job-table thead th.stk-sub { text-align: right; }
+table.job-table tbody td.stk-no, table.job-table thead th.stk-no { text-align: center; }
+
+/* No. and Worker pinned left, Subtotal pinned right. `left` for Worker is
+   set by decorateJobTable() from No.'s real width. */
+table.job-table .stk-no, table.job-table .stk-w, table.job-table .stk-sub, table.job-table .stk-foot {
+  position: sticky; z-index: 2; background: #fff; }
+table.job-table thead .stk-no, table.job-table thead .stk-w, table.job-table thead .stk-sub { z-index: 3; background: var(--tbl-head-bg); }
+table.job-table .stk-no, table.job-table .stk-foot { left: 0; }
+table.job-table .stk-w  { left: 44px; }
+table.job-table .stk-sub { right: 0; }
+
+/* Grand Total: one band of the primary green, end to end. */
+table.job-table tfoot td, table.job-table tfoot td.stk-foot, table.job-table tfoot td.stk-sub {
+  background: var(--tbl-total-bg); color: #fff; border-top: none; }
+table.job-table tfoot td.jg-start, table.job-table tfoot td.stk-sub { border-left: 1px solid rgba(255,255,255,.16); }
+
+/* The cards above a job table: neutral, with the job's dot before its
+   name instead of a coloured bar along the top. */
+.pt-card.job-card .pt-label::before, .pt-card.cat-card .pt-label::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--j-dot, #94a3b8); margin-right: 7px; vertical-align: 1px; }
+
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  thead th,
+  tbody tr.pn-head th,
+  .pill,
+  .maint-chip,
+  .frow label,
+  .fhint-btn,
+  .lock-field span,
+  .lock-month .lm-how,
+  .lock-month .lm-date,
+  .tp-map-b,
+  .pt-label,
+  .pt-sub,
+  .side-head { font-size:11px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COMPONENTS — the design system's last word.
+   Everything above was written page by page; this layer is what makes the
+   module ONE system. It comes last on purpose, so a rule here is the rule.
+   It draws only on the tokens in :root.
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ── GLOBAL HEADER ───────────────────────────────────────────────────────
+   Slim, flat, one row, the same on every page: the system name on the
+   left, the month (the one selection every page answers to), the account,
+   Portal and Sign Out on the right. No page title lives here -- that is
+   the page's own, inside the content. shared_ribbon.js writes its sizing
+   inline, so every rule that changes it carries !important; the ribbon's
+   own markup and behaviour are untouched. */
+#mjm-ribbon .mjm-rb-bar { border-radius: 0 !important; margin: 0 !important; max-width: none !important;
+  box-shadow: none !important; border-bottom: 1px solid var(--line) !important; background: #fff !important;
+  padding: 0 var(--sp-6) !important; min-height: var(--header-h); font-family: inherit !important; }
+@media (min-width: 641px) {
+  #mjm-ribbon .mjm-rb-bar.mjm-rb-has-centre { grid-template-columns: auto 1fr !important; }
+  #mjm-ribbon .mjm-rb-left { display: none !important; }
+  #mjm-ribbon .mjm-rb-centre { text-align: left !important; padding: 0 !important; }
+}
+#mjm-ribbon .mjm-rb-title { font-size: 14px !important; font-weight: 800 !important; letter-spacing: .16em !important;
+  color: var(--text-head) !important; line-height: 1 !important; }
+#mjm-ribbon .mjm-rb-right { gap: var(--sp-3) !important; }
+#mjm-ribbon #welcome-text { font-size: var(--fs-sm) !important; font-weight: 600 !important; color: var(--text) !important;
+  padding-left: var(--sp-3); border-left: 1px solid var(--line); }
+#mjm-ribbon a#portal-link, #mjm-ribbon button#logout-btn {
+  height: 32px; display: inline-flex !important; align-items: center; padding: 0 12px !important;
+  border-radius: var(--r-sm) !important; font-size: 12px !important; letter-spacing: 0 !important;
+  text-transform: none !important; font-weight: 600 !important; background: #fff !important;
+  border: 1px solid var(--line-strong) !important; color: var(--text) !important; font-family: inherit !important; }
+#mjm-ribbon a#portal-link:hover { background: #f6f8f7 !important; color: var(--ink) !important; }
+#mjm-ribbon button#logout-btn:hover { background: var(--c-error-bg) !important; color: var(--c-error) !important;
+  border-color: var(--c-error-bd) !important; }
+/* The month, moved up into the header by the page's slimHead(). */
+#mjm-ribbon .date-pill { padding: 0 12px; height: 32px; gap: 8px; border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm); box-shadow: none; background: #fff; }
+#mjm-ribbon .date-pill input[type="month"] { font-size: var(--fs-sm); font-weight: 600; color: var(--text-head); }
+.topbar-inner { padding: var(--sp-3) var(--sp-6) 0; }
+
+/* ── SIDEBAR ─────────────────────────────────────────────────────────────
+   One width, one type size, an icon on every entry, groups under small
+   labels, and the open page in the primary green. Its top block is the
+   header's height so the two read as one frame. */
+.side-nav { border-right: 1px solid var(--line); background: #fff; padding: 0 var(--sp-3) var(--sp-4); }
+.side-brand { height: var(--header-h); padding: 0 var(--sp-5); margin: 0 calc(-1 * var(--sp-3)) var(--sp-4);
+  border-bottom: 1px solid var(--line); gap: 10px; }
+.side-brand-mark { width: 30px; height: 30px; border-radius: var(--r-sm); font-size: 10px; letter-spacing: .02em; }
+.side-brand-name { font-size: var(--fs-base); font-weight: 700; }
+.side-brand-sub { font-size: var(--fs-xs); font-weight: 500; }
+.side-head { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; color: var(--text-faint); padding: 0 12px 6px; }
+.side-nav .side-btn { display: flex; align-items: center; gap: 10px; font-size: var(--fs-base); font-weight: 500;
+  color: #475569; border-radius: var(--r-sm); padding: 0 12px; height: 38px; }
+.side-nav .side-btn .side-ic { flex: none; color: #8a96a3; transition: color .14s; }
+.side-nav .side-btn:hover { background: #f3f6f4; color: var(--text-head); }
+.side-nav .side-btn:hover .side-ic { color: var(--ink); }
+.side-nav .side-btn.active { background: var(--ink); color: #fff; font-weight: 600; }
+.side-nav .side-btn.active .side-ic { color: #fff; }
+body:not([data-tab="payroll"]) .side-nav .side-sub.active { background: transparent; color: #475569; font-weight: 500; }
+body:not([data-tab="payroll"]) .side-nav .side-sub.active .side-ic { color: #8a96a3; }
+.side-foot { border-top: 1px solid var(--line); margin-top: var(--sp-3); padding-top: var(--sp-3); }
+.side-account { font-size: var(--fs-xs); }
+@media (max-width: 900px) {
+  .side-brand { height: auto; padding: var(--sp-3) var(--sp-4); }
+  .side-nav .side-btn { height: 34px; }
+}
+
+/* ── PAGE ── the content column and its rhythm. */
+.page { padding: var(--sp-6) var(--sp-6) var(--sp-8); }
+.access-note { font-size: var(--fs-xs); margin-top: var(--sp-8); }
+.foot-note { font-size: var(--fs-xs); color: var(--text-muted); margin-top: var(--sp-3); }
+
+/* ── SUMMARY CARDS ───────────────────────────────────────────────────────
+   One card: white, a hairline edge, the same radius and padding, a small
+   label, the figure, a muted line. Colour only where it MEANS something --
+   a job's dot, the approval meter -- never a decorative bar. */
+.dash-cards, .pt-glance { gap: var(--sp-3); margin-bottom: var(--sp-5); }
+.dash-card, .pt-card, .pt-card.job-card, .pt-card.cat-card {
+  background: var(--white); border: 1px solid var(--line) !important; border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm); padding: var(--sp-4) var(--sp-5); min-height: 104px; }
+.dash-card { transition: border-color .15s, box-shadow .15s; }
+.dash-card:hover { border-color: var(--line-strong) !important; box-shadow: var(--shadow-md); }
+.dash-card .dc-label, .pt-label, .pt-card.job-card .pt-label, .pt-card.cat-card .pt-label {
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+.dash-card .dc-val, .pt-val, .pt-card.job-card .pt-val, .pt-card.cat-card .pt-val {
+  font-size: var(--fs-xl); font-weight: 700; color: var(--text-head); margin-top: 6px; letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums; }
+.dash-card .dc-sub, .pt-wd, .pt-card.job-card .pt-wd, .pt-card.cat-card .pt-wd {
+  font-size: var(--fs-sm); font-weight: 500; color: var(--text-muted); margin-top: 4px; }
+.dc-meter i { background: var(--ink); }
+.dash-chart { padding: var(--sp-5); }
+.dch-title { font-size: var(--fs-md); font-weight: 700; }
+.dch-sub { font-size: var(--fs-sm); }
+
+/* ── STATUS STRIP, BADGES ────────────────────────────────────────────────
+   Semantic colours only, a hairline edge, the same radius as a card. */
+.verify-bar { border-radius: var(--r-md); padding: 10px var(--sp-4); font-size: var(--fs-sm); font-weight: 600;
+  margin-bottom: var(--sp-4); }
+.verify-open   { background: #fff; border: 1px solid var(--line); color: var(--text-muted); }
+.verify-done   { background: var(--c-success-bg); border: 1px solid var(--c-success-bd); color: var(--c-success); }
+.verify-locked { background: var(--c-error-bg); border: 1px solid var(--c-error-bd); color: var(--c-error); }
+.verify-bar .vb-who { font-weight: 700; }
+.pill { padding: 2px 9px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0; }
+.pill-on  { background: var(--c-success-bg); color: var(--c-success); }
+.pill-off { background: #f1f5f9; color: var(--text-muted); }
+.ap-open { color: var(--c-warning); font-weight: 600; }
+.ap-done { color: var(--c-success); font-weight: 600; }
+.ap-lock { color: var(--c-error); font-weight: 600; }
+.warn { border: 1px solid var(--c-warning-bd); background: var(--c-warning-bg); color: #78350f;
+  border-radius: var(--r-md); font-size: var(--fs-sm); }
+
+/* ── NURSERY PICKER ──────────────────────────────────────────────────────
+   A segmented choice at control height, not a row of big circles: the
+   nursery is a filter, and a filter is the size of the other controls on
+   its row. Same element and same .on, so nothing that reads it moved. */
+.nsel { gap: 0; background: #f1f4f2; border-radius: var(--r-sm); padding: 3px; }
+.npill { height: 30px; width: auto; min-width: 56px; padding: 0 12px; border-radius: 6px;
+  border: none; background: transparent; color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; }
+.npill:hover { background: rgba(255,255,255,.7); color: var(--text-head); border: none; }
+.npill.on { background: var(--ink); color: #fff; box-shadow: var(--shadow-sm); }
+.npill.on:hover { background: var(--ink-dark); }
+.npill.npill-odd { border: 1px dashed var(--c-error-bd); color: var(--c-error); }
+.npill.npill-odd.on { background: var(--c-error); color: #fff; }
+.vtoggle { background: #f1f4f2; border-radius: var(--r-sm); }
+.vtoggle-btn { font-size: var(--fs-sm); font-weight: 600; border-radius: 6px; }
+
+/* ── GROUP BLOCKS (Piece Rate's MN / PN / Machinery) ── a card with a
+   quiet heading row, not a green tile. */
+.wsec { margin-bottom: var(--sp-4); }
+.wsec-head { background: #fff; border: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md) var(--r-md) 0 0; }
+.wsec-name { font-size: var(--fs-sm); font-weight: 700; letter-spacing: .04em; color: var(--text-head); }
+.wsec-count { font-size: var(--fs-xs); color: var(--text-muted); }
+.wsec-body { border: 1px solid var(--line); border-top: none; box-shadow: var(--shadow-sm); }
+
+/* ── LOCK CONTROLS ── */
+.lock-head { border-bottom: 1px solid var(--line); }
+.lock-title { font-size: var(--fs-md); font-weight: 700; text-transform: none; letter-spacing: 0; }
+.lock-why { font-size: var(--fs-sm); font-weight: 500; color: var(--text-muted); }
+.lock-field span { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; color: var(--text-muted); }
+.lock-month { border: 1px solid var(--line); border-radius: var(--r-md); }
+.lock-month .lm-name { font-size: var(--fs-sm); font-weight: 700; letter-spacing: .04em; }
+.lock-month .lm-how { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; }
+.lock-open { background: var(--c-success-bg); border-color: var(--c-success-bd); color: var(--c-success); }
+.lock-shut { background: var(--c-error-bg); border-color: var(--c-error-bd); color: var(--c-error); }
+
+/* ── MODALS & FORMS ── one dialog, one field. */
+.modal-bg { background: rgba(15,23,42,.45); }
+.modal { border-radius: var(--r-lg); box-shadow: 0 24px 60px rgba(15,23,42,.22); }
+.modal-top { padding: var(--sp-4) var(--sp-6); border-bottom: 1px solid var(--line); }
+.modal-title { font-size: var(--fs-md); font-weight: 700; }
+.modal-body { padding: var(--sp-5) var(--sp-6); }
+.modal-foot { padding: var(--sp-4) var(--sp-6); border-top: 1px solid var(--line); gap: var(--sp-2); }
+.frow { margin-bottom: var(--sp-4); }
+.frow label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 6px; }
+.frow input:not([type="checkbox"]):not([type="radio"]), .frow select { height: var(--h-ctl); }
+.frow input, .frow select, .frow textarea { border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  font-size: var(--fs-base); }
+.frow input:focus, .frow select:focus, .frow textarea:focus { border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(27,67,50,.14); }
+
+@media (max-width: 640px) {
+  #mjm-ribbon .mjm-rb-bar { padding: var(--sp-2) var(--sp-4) !important; }
+  .page { padding: var(--sp-4) var(--sp-4) var(--sp-8); }
+  .bar-title { font-size: 18px; }
+}
+
+/* ══ THE STANDARD TABLE ═══════════════════════════════════════════════════
+   One table for the whole module. tidyTable() in the script types each
+   column (serial, status, action, media, number, text) and these are the
+   rules the types obey. This block is last on purpose: it is the word.
+
+   Alignment                                  Width
+   serial  No. / #       centre               narrow, never grows
+   status  Status        centre               as wide as its pill
+   action  the buttons   centre               as wide as its buttons
+   number  figures       right, tabular       as wide as its figure
+   text    names, notes  left                 takes what is left
+   A heading spanning several columns is centred over exactly them.     */
+table th.c, table td.c, table tfoot td.c { text-align: center !important; }
+table th.num, table td.num, table th.r, table td.r { text-align: right !important; }
+table thead th.grp, table tbody tr th.grp { text-align: center !important; }
+table th.col-ser, table td.col-ser { width: 56px; white-space: nowrap; }
+table th.col-act, table td.col-act { width: 1%; white-space: nowrap; }
+table th.col-st, table td.col-st { white-space: nowrap; }
+table td.col-act > * + * { margin-left: 6px; }
+table td.col-act .btn + .btn { margin-left: 6px; }
+
+/* The headings of one job group: name, rate and the note under them, all
+   centred over the pair of columns they belong to. A long job name WRAPS
+   rather than pushing the table wider than the page: sideways scrolling
+   put the last group under the pinned Subtotal. */
+table.job-table thead th.job-title, table.job-table thead th.job-rate,
+table.job-table thead th.job-wd { text-align: center !important; }
+table.job-table thead th.job-title { white-space: normal; line-height: 1.35; max-width: 220px; }
+table.job-table thead th.job-rate { white-space: normal; }
+
+/* A figure that can be adjusted carries a pencil. It hangs in the cell's
+   padding, so the figure itself lines up with every figure above and
+   below it and with the total under the column. */
+td.money, td.num { position: relative; }
+td .pen { position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+          color: var(--text-faint); font-size: .7rem; font-weight: 400; }
+table.job-table .stk-sub, table.job-table .stk-no, table.job-table .stk-w { position: sticky; }
+
+/* The cent stepper under a figure sits under the figure, at the right. */
+td.num .cal-step { justify-content: flex-end; }
+
+/* The headings inside the Pre Nursery claim are the same headings as any
+   other table: text over text left, figures over figures right. */
+tbody tr.pn-head th { text-align: left; }
+tbody tr.pn-head th.num { text-align: right !important; }
+tbody tr.pn-head th.grp { text-align: center !important; }

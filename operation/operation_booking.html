@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
     <title>AL Management - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -10,7 +13,8 @@
     <script src="../shared/shared_staff_gate.js"></script>
     <script src="../shared/shared_access.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
+    <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
+<style>
         body { background-color: #f8fafc; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
         .bg-pattern { position: fixed; inset: 0; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 24px 24px; z-index: -2; opacity: 0.5; }
         .glass-panel { background-color: rgba(255, 255, 255, 0.85); backdrop-filter: blur(24px); border: 1px solid #ffffff; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15); border-l: 12px solid #3b82f6; }
@@ -51,7 +55,15 @@
         .cf-opt:hover{background:#f8fafc;}
         .cf-opt.active{color:#1d4ed8;}
         .cf-opt.active::after{content:'✓';font-size:13px;font-weight:900;color:#1d4ed8;flex-shrink:0;}
-    </style>
+    
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .cf-btn { font-size:11px; }
+}
+</style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">

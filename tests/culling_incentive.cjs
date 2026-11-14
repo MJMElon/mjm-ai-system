@@ -894,7 +894,7 @@ const payOf = (page, sec) => page.evaluate((s) =>
   /* The RM on a line is what that plot paid that person, so the column adds
      up to the total — 20 + 20 + 50. */
   check('the money is per plot per person, and the total is under it',
-    [(screen.plots.match(/RM 20\.00/g) || []).length, /RM 50\.00/.test(screen.plots),
+    [(screen.plots.match(/(?<![\d.])20\.00/g) || []).length, /(?<![\d.])50\.00/.test(screen.plots),
      /TOTAL INCENTIVE.*90\.00/.test(screen.plots)],
     [2, true, true]);
   /* NO COLUMN TAKES THE SLACK ON ITS OWN — *"alignment 不对 有些太大有些

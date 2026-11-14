@@ -225,28 +225,13 @@ async function boot(browser) {
   checkTrue('stored under the real sheet — "maint", not a parallel one',
             after.adjRow && after.adjRow.sheet === 'maint');
 
-  console.log('\nThe older manual sheet is still there, demoted to "Keyed by hand"');
-  // Only drawn when its own tab is the one on screen — same as every other
-  // sheet here (renderEntries runs from refreshPayrollTab's dispatch).
+  console.log('\nThe hand-keyed Seedlings Collection section is gone from the tab');
   await page.evaluate(() => { switchSub('seedling'); });
   await page.waitForTimeout(100);
-  checkTrue('its row is drawn, with its own old wording',
-            await page.evaluate(() => document.getElementById('seedling-table').textContent.includes('Seedlings Collection (by hand)')));
-  checkTrue('and the wrap around it is not hidden, because there IS something keyed',
-            await page.evaluate(() => !document.getElementById('seedling-keyed-wrap').classList.contains('hidden')));
-  checkTrue('Add Entry is still reachable from the tab',
-            await page.evaluate(() => !!document.querySelector('#sub-seedling .bar-actions [data-add]')));
-
-  console.log('\n…and stays out of the way when there is nothing keyed');
-  await page.evaluate(async () => {
-    window.__DB.mjmnpayroll_work_entries = [];
-    await loadEntries();
-    renderEntries('seedlings');
-  });
-  checkTrue('the wrap hides itself',
-            await page.evaluate(() => document.getElementById('seedling-keyed-wrap').classList.contains('hidden')));
-  checkTrue('Add Entry is still there regardless',
-            await page.evaluate(() => !!document.querySelector('#sub-seedling .bar-actions [data-add]')));
+  checkTrue('no keyed-by-hand table on the tab',
+            await page.evaluate(() => !document.getElementById('seedling-table') && !document.getElementById('seedling-keyed-wrap')));
+  checkTrue('and no Add Entry for it',
+            await page.evaluate(() => !document.querySelector('#sub-seedling [data-add]')));
   checkTrue('and the Loading Seedlings claim above it is untouched by that',
             await page.evaluate(() => document.getElementById('loading-table').textContent.includes('500.01')));
 

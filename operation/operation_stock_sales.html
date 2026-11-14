@@ -11,7 +11,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
+    <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
+<style>
         * { font-family: 'Outfit', system-ui, sans-serif; }
         body { background-color: #f1f5f9; margin: 0; min-height: 100vh; }
 
@@ -209,6 +210,12 @@
         .ssm-tab .ssm-tab-emoji{font-size:14px;line-height:1;}
         .ssm-tab .ssm-tab-sub{font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:.04em;text-transform:none;}
         .ssm-tab.active .ssm-tab-sub{color:currentColor;opacity:.7;}
+        /* Below 768px the three tabs stack: side by side their labels need
+           517px and the phone has 390, so Inventory Map ran off the screen. */
+        @media (max-width:767.98px){
+            .ssm-tabs{flex-direction:column;gap:4px;}
+            .ssm-tab{flex:0 0 auto;justify-content:flex-start;padding:12px 14px;text-align:left;}
+        }
 
         /* ── Aging report ── */
         .aging-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
@@ -361,20 +368,55 @@
         .invmap-breed-chip:hover{border-color:#3b82f6;color:#1d4ed8;background:#eff6ff;}
         .invmap-breed-chip.active{background:#f59e0b;color:white;border-color:#d97706;box-shadow:0 2px 6px -1px rgba(245,158,11,.4);}
         .invmap-breed-chip-count{display:inline-block;margin-left:5px;font-size:9px;opacity:.8;}
-    </style>
+    
+/* PHONE TYPE FLOOR — below 768px the small labels on this page are raised to
+   11px so they read on a phone. Written out per rule, because these sizes
+   live in this page and not in a Tailwind class shared_responsive.css can
+   reach. Generated: the list is every rule above under 11px. */
+@media (max-width:767.98px){
+  .combo-switch-btn .csw-sub,
+  .mat-table thead th,
+  .mat-card-title-sub,
+  .mat-table thead .mat-group-row th,
+  .mat-history-toggle td,
+  .plot-status-empty,
+  .pill,
+  .mat-loc-btn,
+  .reserv-empty-locked,
+  .cust-table thead th,
+  .cust-table tbody td.t-cust .t-sub,
+  .pill-status,
+  .ssm-tab .ssm-tab-sub,
+  .aging-table thead th,
+  .aging-pill,
+  .ph-table thead th,
+  .alloc-fab .alloc-fab-badge,
+  .alloc-drawer-head p,
+  .alloc-drawer-tab,
+  .alloc-drawer-tab .alloc-tab-count,
+  .alloc-tab-qty,
+  .alloc-drawer-empty,
+  .order-card-meta,
+  .order-card-qty-sub,
+  .order-card-remark,
+  .order-card-dup,
+  .reserv-chip-qty,
+  .reserv-empty { font-size:11px; }
+}
+</style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
 
 <!-- Header -->
-<div class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+<div class="bg-white border-b border-slate-200 px-5 py-3 flex flex-wrap gap-2 justify-between items-center sticky top-0 z-30 shadow-sm">
     <div class="flex items-center gap-3">
         <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back
         </button>
         <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Sales Control</span>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
         <a href="operation_sales_analysis.html" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 uppercase tracking-widest bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded-full border border-pink-200 transition-colors no-underline" style="text-decoration:none;">📊 Sales Analysis</a>
         <a href="operation_quotation.html" class="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full border border-emerald-200 transition-colors no-underline" style="text-decoration:none;">📝 Create Quotation</a>
     </div>

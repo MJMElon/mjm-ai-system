@@ -223,7 +223,26 @@ const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x)
     console.log('\n-- 4. every row but Other can be added to --');
     /* Adding from Other would have to invent a role, so that one row takes
        drops and does not offer to add -- which is exactly why Driver and
-       Gardener needed rows rather than a wider Other. */
+       Gardener needed rows rather than a wider Other.
+
+       THE BOARD IS A RECORD UNTIL EDIT IS PRESSED, so Add is on no row at
+       all until it is -- see the_board_is_read_only_until_edit.cjs. Asked
+       in BOTH states here, because "no Add anywhere" and "no Add on Other"
+       are the same answer read off one row, and a check that only ever saw
+       the locked board would pass with the Add button deleted outright. */
+    const addRows = () => page.evaluate(() => {
+      const out = {};
+      document.querySelectorAll('#worker-board tbody tr').forEach((tr) => {
+        const n = tr.querySelector('.bd-role-name');
+        if (n) out[n.textContent.trim()] = tr.querySelectorAll('.wchip-add').length > 0;
+      });
+      return out;
+    });
+    const locked = await addRows();
+    is(Object.values(locked).filter(Boolean).length, 0,
+      'with the board locked, no row offers Add at all');
+
+    await page.evaluate(() => boardEdit());
     const addable = await page.evaluate(() => {
       const out = {};
       document.querySelectorAll('#worker-board tbody tr').forEach((tr) => {
