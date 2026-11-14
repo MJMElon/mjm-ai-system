@@ -12493,7 +12493,7 @@ Thank you.`;
                                      Save — the box is still a box. A plot with no transplant
                                      date to count from keeps whatever it has. -->
                                 <input type="date" class="input-style !text-[#3d2610] font-black t5-cull-date text-xs"
-                                    value="${t5CullDateFor(p.transplantDate) || p.savedCullDate || ''}"
+                                    value="${p.savedCullDate || t5PresetFor(p.transplantDate) || ''}"
                                     placeholder="${due.text}"
                                     data-due-date="${p.transplantDate ? (() => { const d = new Date(p.transplantDate); d.setMonth(d.getMonth()+4); return d.toISOString().split('T')[0]; })() : ''}">
                                 <div class="text-[9px] font-bold ${due.cls} mt-0.5" id="${rowId}-due-status">${due.status}</div>
@@ -12604,6 +12604,17 @@ Thank you.`;
            Fixing the day at 14 first makes that impossible: every month has
            a 14th. Month arithmetic is done 0-based and the year carried, so
            November + 4 is March of the next year. */
+        /* The 14th is a PRESET only for a due month that has already passed. From the
+           current month on, the cull date is whatever was keyed (here or on the 2nd Cull
+           list in the batch report), and a row with no date stays blank for somebody to fill. */
+        function t5PresetFor(transplantDateStr) {
+            const due = t5CullDateFor(transplantDateStr);
+            if (!due) return '';
+            const now = new Date();
+            const nowYm = now.getFullYear() * 12 + now.getMonth();
+            const dueYm = parseInt(due.slice(0, 4), 10) * 12 + (parseInt(due.slice(5, 7), 10) - 1);
+            return dueYm < nowYm ? due : '';
+        }
         function t5CullDateFor(transplantDateStr) {
             const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(transplantDateStr || ''));
             if (!m) return '';
@@ -12628,8 +12639,7 @@ Thank you.`;
             if (dateInput && !dateInput.value && deadInput && deadInput.value !== '') {
                 const idx = parseInt(String(rowId).replace('t5-row-', ''), 10);
                 const p   = t5_plotData[idx];
-                dateInput.value = t5CullDateFor(p && p.transplantDate)
-                                  || new Date().toISOString().split('T')[0];
+                dateInput.value = t5PresetFor(p && p.transplantDate) || '';
             }
         }
 

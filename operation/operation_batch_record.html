@@ -1233,6 +1233,18 @@
             return _supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
         }
 
+        async function c2Verify(r) {
+            const key = 'cull_2::' + r.plot;
+            const { data: rows, error: selErr } = await _supabase.from('shared_inventory_logs')
+                .select('id').eq('batch_name', r.batch).eq('transaction_type', 'Row_Verification').eq('plot_name', key).limit(1);
+            if (selErr) throw selErr;
+            const payload = { batch_name: r.batch, transaction_type: 'Row_Verification', plot_name: key, quantity_change: 0, remark: `Row verified: ${r.plot}` };
+            const res = rows && rows[0]
+                ? await _supabase.from('shared_inventory_logs').update(payload).eq('id', rows[0].id)
+                : await _supabase.from('shared_inventory_logs').insert(payload);
+            if (res.error) throw res.error;
+        }
+
         async function saveCull2Row(idx) {
             const r = cull2Rows[idx];
             if (!r) return;
@@ -1269,7 +1281,14 @@
                     if (delErr) throw new Error('The new figure is saved, but the old record for this plot could not be removed: ' + delErr.message);
                     if ((gone || []).length !== oldIds.length) throw new Error('The new figure is saved, but the old record for this plot was not removed. Tell the office before saving again.');
                 }
-                c2Show(`2nd cull saved for batch ${r.batch}, ${r.plot}.`, 'success');
+                // Saving here is the sign-off for this plot's 2nd cull, the same as Verify on Tab 5.
+                // It marks the 2nd cull stage only.
+                try {
+                    await c2Verify(r);
+                    c2Show(`2nd cull saved and verified for batch ${r.batch}, ${r.plot}.`, 'success');
+                } catch (ve) {
+                    c2Show(`2nd cull saved for batch ${r.batch}, ${r.plot}, but it is not marked verified: ${ve.message || ve}`, 'warn');
+                }
             } catch (e) {
                 c2Show('Not saved: ' + (e.message || e), 'error');
             } finally {
@@ -1314,7 +1333,7 @@
                         <td class="font-bold text-[#3d2610]">${r.cullDate || '—'}</td>
                         <td>${c2MapCell(r, {})}</td>
                         <td class="whitespace-nowrap">
-                            <span class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e] mr-3">Already filled</span>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e] mr-3">Verified</span>
                             <button onclick="c2Edit(${r.idx})" class="h-9 px-4 rounded-xl border border-[#e8dcc8] bg-white text-[11px] font-black uppercase tracking-widest text-[#3d2610] hover:border-[#6aa83c]">Edit</button>
                         </td>
                     </tr>`);
