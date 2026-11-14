@@ -798,7 +798,10 @@
 
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
-                                <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seed Audit Report</h3>
+                                <div class="flex items-center gap-3">
+                                    <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seed Audit Report</h3>
+                                    <button type="button" onclick="printSeedAuditPdf()" title="Print Seed Audit Report" aria-label="Print Seed Audit Report" class="mjm-review-allow w-9 h-9 rounded-lg bg-white border-2 border-[#3d2610] text-[#3d2610] flex items-center justify-center hover:bg-[#fdfaf4] shadow-sm">🖨</button>
+                                </div>
                                 <div class="p-3.5 px-6 rounded-2xl bg-white flex items-center gap-4 shadow-sm border border-[#e8dcc8] shrink-0">
                                     <div class="completion-pie-container !w-9 !h-9">
                                         <div id="t8-pie-analysis" class="completion-pie completion-pie-fill" style="--percentage: 0"></div>
@@ -1064,7 +1067,10 @@
                             <div id="t2-adjust-bar" class="hidden mb-5"></div>
                             <!-- TAB 2 HEADER: title + completion status -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-200 pb-5">
-                                <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds Planting & Damage Report</h3>
+                                <div class="flex items-center gap-3">
+                                    <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds Planting & Damage Report</h3>
+                                    <button type="button" onclick="printPlantingDamagePdf()" title="Print Planting & Damage Report" aria-label="Print Planting & Damage Report" class="mjm-review-allow w-9 h-9 rounded-lg bg-white border-2 border-[#3d2610] text-[#3d2610] flex items-center justify-center hover:bg-[#fdfaf4] shadow-sm">🖨</button>
+                                </div>
                                 <div id="t2-status-box-header" class="p-3.5 px-6 rounded-2xl bg-white flex items-center gap-4 transition-colors shadow-sm border border-[#e8dcc8]">
                                     <div class="completion-pie-container !w-9 !h-9"><div id="t2-pie-analysis" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover !w-7 !h-7 flex items-center justify-center font-black text-xs text-[#1a150d]" id="t2-percent-text">0%</div></div>
                                     <div>
@@ -10785,7 +10791,16 @@ Thank you.`;
             }
         }
 
-        async function _buildSeedAuditDoc() {
+        /* ONE BUILDER, ONE SECTION PER PRINT.
+           `part` is 'audit' (the bag count and its analysis) or 'planting'
+           (the planting figures, Damage Control and the damaged seed photos).
+           The two used to share one sheet, which is why printing the audit
+           also printed the damage. Each icon now prints its own part, and
+           both are drawn from this one function so they cannot disagree on
+           the shared letterhead. */
+        async function _buildSeedAuditDoc(part = 'audit') {
+            const isAudit = part !== 'planting';
+            const isPlanting = !isAudit;
             const jsPDFNS = window.jspdf || window;
             if (!jsPDFNS || !jsPDFNS.jsPDF) {
                 showToast('PDF library not loaded. Refresh and try again.', 'error');
@@ -10864,7 +10879,7 @@ Thank you.`;
 
             const rx = pageW - margin;
             doc.setFont('times', 'bold'); doc.setFontSize(13); setText(INK);
-            doc.text('Seed Audit Report', rx, y - 4, { align: 'right' });
+            doc.text(isAudit ? 'Seed Audit Report' : 'Seeds Planting & Damage Report', rx, y - 4, { align: 'right' });
             doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK_SOFT);
             doc.text('Batch: ' + batchNo, rx, y + 14, { align: 'right' });
             doc.text('D/O No: ' + dono, rx, y + 28, { align: 'right' });
@@ -10879,7 +10894,7 @@ Thank you.`;
             // ── BATCH SUMMARY
             y = headerBottom + 28;
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-            doc.text('AUDIT SUMMARY', margin, y);
+            doc.text(isAudit ? 'AUDIT SUMMARY' : 'BATCH SUMMARY', margin, y);
             y += 14;
             doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
             doc.text('Supplier:  ', margin, y); doc.setFont('times', 'bold'); doc.text(supplier, margin + 60, y);
@@ -10889,6 +10904,7 @@ Thank you.`;
             doc.setFont('times', 'bold'); doc.text(expectedRaw.toLocaleString() + ' seeds', margin + 200, y);
             y += 8;
 
+            if (isAudit) {
             // ── BAG-BY-BAG TABLE
             const bagRows = [];
             let totalSupplier = 0, totalAudited = 0;
@@ -11003,7 +11019,9 @@ Thank you.`;
                 doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
                 doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
             }
+            }
 
+            if (isPlanting) {
             /* ── THE PHOTOS ARE MEASURED BEFORE THE DAMAGE BLOCK IS DRAWN,
                   because the two go on the page TOGETHER.
 
@@ -11090,6 +11108,94 @@ Thank you.`;
                 const short = opts.reduce((a, o) => (o.natural < a.natural ? o : a));
                 return { rows: short.rows, k: roomH / short.natural };
             }
+
+            /* ── PLANTING, read off the tab the way the damage block reads its
+                  own figures: the numbers already on the screen, not a second
+                  sum. Top to bottom: the planting date and trays, the Receive &
+                  Damage Analysis the tab draws as two bars, the seeds planted
+                  per tray, then Damage Control and the photos. */
+            const plantedRaw = (document.getElementById('t2-date') || {}).value || '';
+            const plantedStr = plantedRaw
+                ? (() => { const [py, pm, pd] = plantedRaw.split('-').map(Number);
+                           return new Date(py, pm - 1, pd).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }); })()
+                : '—';
+            const pTxt = id => ((document.getElementById(id) || {}).textContent || '').trim() || '—';
+            const labelValue = (k, v) => {
+                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
+                doc.text(k + ':', margin, y);
+                doc.setFont('times', 'bold');
+                doc.text(String(v), margin + 170, y);
+                y += 14;
+            };
+
+            const plantRows = [
+                ['Planted date', plantedStr],
+                ['Trays', pTxt('t2-tray-count')]
+            ];
+            _need(14 + plantRows.length * 14 + 10);
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+            doc.text('PLANTING', margin, y); y += 14;
+            plantRows.forEach(([k, v]) => labelValue(k, v));
+            y += 8;
+
+            /* RECEIVE & DAMAGE ANALYSIS — the two bars on the tab, as figures.
+               The damage figures repeat in Damage Control below on purpose:
+               this is the grid, that is the box the office checks against
+               the trays. */
+            const analysisRows = [
+                ['Total seeds expected', expectedRaw.toLocaleString()],
+                ['Seeds planted (actual)', pTxt('t2-chart-actual-text')],
+                ['Planted vs expected', pTxt('t2-acct-pct')],
+                ['Target', pTxt('t2-target-pct-label') + ' (' + pTxt('t2-chart-target-text') + ' seeds)'],
+                ['Damaged seeds', pTxt('t2-damage-actual-text')],
+                ['Damage rate', pTxt('t2-dmg-pct')],
+                ['FOC allowance used', pTxt('t2-dmg-used-pct')]
+            ];
+            _need(20 + analysisRows.length * 14 + 8);
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+            doc.text('RECEIVE & DAMAGE ANALYSIS', margin, y); y += 14;
+            analysisRows.forEach(([k, v]) => labelValue(k, v));
+            y += 8;
+
+            /* SEEDS PLANTED PER TRAY — one row per tray on the tab, the same
+               three figures the tray row shows, and the tray totals as the
+               foot. Read off the rows the tab holds, not re-derived. */
+            const trayBody = [];
+            let trayN = 0;
+            document.querySelectorAll('#tray-rows-container .tray-row').forEach(row => {
+                trayN++;
+                const sel = row.querySelector('select.t-select');
+                const opt = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+                const name = opt && opt.value ? opt.text.trim() : '—';
+                const planted = readNumericInput(row.querySelector('.t-planted'));
+                const empty = readNumericInput(row.querySelector('.t-empty'));
+                const actual = parseInt((row.querySelector('.t-actual') || {}).dataset?.raw || 0, 10) || 0;
+                trayBody.push([String(trayN), name,
+                               planted.toLocaleString(), empty.toLocaleString(), actual.toLocaleString()]);
+            });
+            if (trayBody.length === 0) trayBody.push(['—', 'No trays entered.', '0', '0', '0']);
+            _need(60);
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+            doc.text('SEEDS PLANTED PER TRAY', margin, y); y += 8;
+            doc.autoTable({
+                startY: y + 6,
+                head: [['#', 'Preset Tray', 'Total Planted', 'Empty Holes', 'Actual Planted']],
+                body: trayBody,
+                foot: [['', 'TOTAL', pTxt('t2-tot-planted'), pTxt('t2-tot-empty'), pTxt('t2-tot-actual')]],
+                margin: { top: margin + 20, bottom: FOOT_H, left: margin, right: margin },
+                styles: { font: 'times', fontSize: 10, cellPadding: 5, textColor: INK },
+                headStyles: { fillColor: OLIVE, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+                footStyles: { fillColor: [243, 239, 230], textColor: INK, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 30 },
+                    1: { halign: 'left' },
+                    2: { halign: 'center' },
+                    3: { halign: 'center' },
+                    4: { halign: 'center' }
+                },
+                alternateRowStyles: { fillColor: [251, 250, 246] }
+            });
+            y = doc.lastAutoTable.finalY + 14;
 
             /* ── DAMAGE CONTROL, which is Seed Planting's figure and not this
                   tab's.
@@ -11220,6 +11326,8 @@ Thank you.`;
                 y += 4;
             }
 
+            }
+
             /* ── FOOTER, on EVERY page.
                   It used to be drawn once and say "Page 1 of 1", which was
                   true for as long as the report could not run over — the
@@ -11237,7 +11345,7 @@ Thank you.`;
                 doc.text('Page ' + p + ' of ' + pages, pageW - margin, footerY, { align: 'right' });
             }
 
-            const filename = `Seed_Audit_${batchNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `${isAudit ? 'Seed_Audit' : 'Planting_Damage'}_${batchNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
             return { doc, filename };
         }
 
@@ -11255,7 +11363,7 @@ Thank you.`;
 
         function downloadSeedAuditPdf() {
             return _seedAuditPdfGuard('produced', async () => {
-                const built = await _buildSeedAuditDoc();
+                const built = await _buildSeedAuditDoc('audit');
                 if (!built) return;
                 built.doc.save(built.filename);
                 return built.filename;
@@ -11269,9 +11377,9 @@ Thank you.`;
            and `autoPrint` is what raises the dialog once the viewer has it.
            The frame is reused, so pressing Print twice does not leave a
            second copy of the file behind. */
-        function printSeedAuditPdf() {
+        function _printSeedDoc(part) {
             return _seedAuditPdfGuard('printed', async () => {
-                const built = await _buildSeedAuditDoc();
+                const built = await _buildSeedAuditDoc(part);
                 if (!built) return;
                 built.doc.autoPrint();
                 const url = built.doc.output('bloburl');
@@ -11287,6 +11395,13 @@ Thank you.`;
                 return built.filename;
             });
         }
+
+        /* The two print icons, one per report. Seed Audit prints only the
+           bag count and its analysis; Planting & Damage prints the planting,
+           the receive & damage analysis, the seeds per tray, Damage Control
+           and the damaged seed photos. */
+        function printSeedAuditPdf() { return _printSeedDoc('audit'); }
+        function printPlantingDamagePdf() { return _printSeedDoc('planting'); }
 
         async function loadSeedAuditData(batchId) {
             document.getElementById('t8-bag-rows-container').innerHTML = '';
