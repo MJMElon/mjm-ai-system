@@ -124,6 +124,12 @@
             </div>
 
             <!-- Top pagination bar (mirror of the bottom one, plus a "jump to page" input) -->
+            <div id="cull2-bar" class="hidden items-center gap-3 mb-4 flex-wrap">
+                <label for="cull2-month-input" class="text-[10px] font-black uppercase tracking-widest text-[#8a7a68]">Month due</label>
+                <input type="month" id="cull2-month-input" onchange="if (this.value) loadCull2Month(this.value)"
+                       class="h-9 rounded-xl border border-[#e8dcc8] bg-white px-3 text-sm font-black text-[#3d2610] outline-none focus:border-[#6aa83c]">
+                <span class="text-[11px] font-bold text-[#8a7a68]">Read-only for now. Key the 2nd cull on each batch's detail page.</span>
+            </div>
             <div id="ledger-pagination-top" class="hidden items-center justify-between gap-3 mb-4 flex-wrap">
                 <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest" id="ledger-page-summary-top">—</div>
                 <div class="flex items-center gap-2">
@@ -157,6 +163,7 @@
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">Completed</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Work waiting to be DONE on a batch: a report HQ sent back, or a figure the report itself is asking about — a drone map that does not tally, a planting gap with no reason against it. Open one and it lands on the tab that needs it. Once it is answered the batch moves to the To Check List.">To Do List</button>
                 <button id="tab-tocheck" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')" title="Reports that are filled in and still waiting for somebody to check them: Seeds In, Seed Audit, Planting &amp; Damage, Transplanting and 1st Culling. 2nd and 3rd Culling are not counted here.">To Check List</button>
+                <button id="tab-cull2" class="list-tab-btn list-tab-inactive" onclick="switchListTab('cull2')" title="Every batch and plot whose 2nd cull falls due in the month you pick: the fourth month after its first transplant into that plot. Read-only here; open a batch to key the 2nd cull.">2nd Cull</button>
                 <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">Tray Status</button>
             </div>
 
@@ -937,7 +944,7 @@
             currentPage = 1;
 
             // Update Button Styles
-            ['active', 'completed', 'amendment', 'tocheck', 'tray'].forEach(name => {
+            ['active', 'completed', 'amendment', 'tocheck', 'tray', 'cull2'].forEach(name => {
                 const el = document.getElementById('tab-' + name);
                 if (el) el.className = 'list-tab-btn ' + (tabName === name ? 'list-tab-active' : 'list-tab-inactive');
             });
@@ -964,8 +971,15 @@
                     : tabName === 'tocheck'
                         ? '<th>Batch</th><th>Breed</th><th style="min-width: 260px;">Waiting To Be Checked</th>'
                           + '<th style="min-width: 180px;">Current Stage</th><th>Survival %</th><th>Culling Rate %</th><th>Actions</th>'
+                    : tabName === 'cull2'
+                        ? '<th>Batch</th><th>Nursery</th><th>Plot</th><th>Due Date</th><th>2nd Cull</th><th>Open</th>'
                     : window._defaultLedgerHead;
             }
+
+            // The month bar shows only on this tab, and the list is read for the month on it.
+            const cull2Bar = document.getElementById('cull2-bar');
+            if (cull2Bar) cull2Bar.classList.toggle('hidden', tabName !== 'cull2');
+            if (tabName === 'cull2') loadCull2Month(cull2Month || c2CurrentMonth());
 
             renderLedgerTable();
         }
@@ -1000,6 +1014,159 @@
             el.classList.toggle('hidden', !text);
         }
 
+        /* ── 2nd Cull due list, read-only ─────────────────────────────────────
+           Which batch+plot is due its 2nd cull in a month. Same rule as the FC
+           Portal's secondCull.js dueItems: a batch+plot falls due in the fourth
+           month after its FIRST transplant into that plot. Candidates are the
+           transplants dated in the transplant month, plus earlier transplants of
+           those same batches so a batch first moved earlier is knocked out. -R
+           plots and Premium are left out. Plot to nursery follows the same
+           prefixes as the FC Portal (B to BNN, U to UNN1, N and V to UNN2).
+           Keep this in step with secondCull.js. */
+        const C2_TRANSPLANT_TYPES = ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'];
+        const C2_AFTER_MONTHS = 4;
+        const C2_NOT_A_PLOT = ['PREMIUM', 'PREMIUMCARE'];
+        let cull2Month = null;   // 'YYYY-MM' the list is for
+        let cull2Rows = null;    // null while reading, else the due items
+        let cull2Loading = false;
+        let cull2Error = '';
+
+        function c2MonthIndex(ym) { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); }
+        function c2YmOf(i) { return Math.floor(i / 12) + '-' + String((i % 12) + 1).padStart(2, '0'); }
+        function c2CurrentMonth(d = new Date()) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+        function c2MonthLabel(ym) { const [y, m] = ym.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' }); }
+        function c2PlotKey(p) { return String(p || '').trim().split(/\s+/)[0].toUpperCase(); }
+        function c2NurseryOf(plot) {
+            if (plot.startsWith('B')) return 'BNN';
+            if (plot.startsWith('U')) return 'UNN1';
+            if (plot.startsWith('N') || plot.startsWith('V')) return 'UNN2';
+            return '';
+        }
+        // PostgREST answers at most 1,000 rows, so every read is paged.
+        async function c2ReadAll(build) {
+            const out = [];
+            for (let from = 0; ; from += 1000) {
+                const { data, error } = await build().range(from, from + 999);
+                if (error) throw error;
+                out.push(...(data || []));
+                if (!data || data.length < 1000) break;
+            }
+            return out;
+        }
+
+        async function loadCull2Month(month) {
+            cull2Month = month;
+            const bar = document.getElementById('cull2-month-input');
+            if (bar && bar.value !== month) bar.value = month;
+            cull2Rows = null; cull2Error = ''; cull2Loading = true;
+            renderLedgerTable();
+            try {
+                const mi = c2MonthIndex(month) - C2_AFTER_MONTHS;
+                const from = c2YmOf(mi) + '-01';
+                const to = c2YmOf(mi + 1) + '-01';
+                const sel = 'plot_name, batch_name, transaction_date, created_at';
+                const inMonth = await c2ReadAll(() => _supabase.from('shared_inventory_logs').select(sel)
+                    .in('transaction_type', C2_TRANSPLANT_TYPES)
+                    .gte('transaction_date', from).lt('transaction_date', to)
+                    .order('id', { ascending: true }));
+                const batches = [...new Set(inMonth.map(r => String(r.batch_name || '').trim()).filter(Boolean))];
+                let earlier = [];
+                if (batches.length) {
+                    earlier = await c2ReadAll(() => _supabase.from('shared_inventory_logs').select(sel)
+                        .in('transaction_type', C2_TRANSPLANT_TYPES)
+                        .in('batch_name', batches)
+                        .lt('transaction_date', from)
+                        .order('id', { ascending: true }));
+                }
+
+                // The first transplant of each plot and batch decides the month.
+                const first = new Map();
+                for (const r of [...inMonth, ...earlier]) {
+                    const plot = c2PlotKey(r.plot_name), batch = String(r.batch_name || '').trim();
+                    if (!plot || !batch || /-R\d*$/.test(plot) || C2_NOT_A_PLOT.includes(plot)) continue;
+                    const ym = String(r.transaction_date || r.created_at || '').slice(0, 7);
+                    if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+                    const k = plot + '#' + batch;
+                    const prev = first.get(k);
+                    if (!prev || ym < prev.ym) first.set(k, { plot, batch, ym });
+                }
+
+                const due = [];
+                for (const e of first.values()) {
+                    if (c2YmOf(c2MonthIndex(e.ym) + C2_AFTER_MONTHS) !== month) continue;
+                    const nursery = c2NurseryOf(e.plot);
+                    if (!nursery) continue;   // not placed on a nursery; FC Portal names these, this list does not
+                    due.push({ plot: e.plot, batch: e.batch, nursery });
+                }
+
+                // Which of them already carry a 2nd culling log.
+                const dueBatches = [...new Set(due.map(d => d.batch))];
+                const logged = new Set();
+                if (dueBatches.length) {
+                    const logs = await c2ReadAll(() => _supabase.from('shared_inventory_logs')
+                        .select('plot_name, batch_name')
+                        .eq('transaction_type', '2nd_Culling')
+                        .in('batch_name', dueBatches)
+                        .order('id', { ascending: true }));
+                    logs.forEach(l => logged.add(String(l.batch_name || '').trim() + '#' + c2PlotKey(l.plot_name)));
+                }
+
+                const [y, m] = month.split('-').map(Number);
+                const dueText = new Date(y, m - 1, 14).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                due.forEach(d => { d.dueText = dueText; d.logged = logged.has(d.batch + '#' + d.plot); });
+                const numOf = s => parseInt(String(s).replace(/\D/g, ''), 10) || 0;
+                due.sort((a, b) => a.nursery.localeCompare(b.nursery)
+                    || a.plot.localeCompare(b.plot, undefined, { numeric: true })
+                    || numOf(a.batch) - numOf(b.batch));
+                cull2Rows = due;
+            } catch (e) {
+                console.error('[2nd cull] could not read the due list', e);
+                cull2Rows = [];
+                cull2Error = e.message || String(e);
+            } finally {
+                cull2Loading = false;
+                renderLedgerTable();
+            }
+        }
+
+        function renderCull2Table(body, query) {
+            if (cull2Loading || cull2Rows === null) {
+                body.innerHTML = `<tr><td colspan="6" class="text-center p-16 text-[#8a7a68] font-bold">Reading the 2nd cull for ${cull2Month ? c2MonthLabel(cull2Month) : 'this month'}…</td></tr>`;
+                updatePagination(0, 1);
+                return;
+            }
+            const rows = query
+                ? cull2Rows.filter(r => r.batch.toLowerCase().includes(query) || r.plot.toLowerCase().includes(query) || r.nursery.toLowerCase().includes(query))
+                : cull2Rows;
+            const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+            updatePagination(rows.length, totalPages);
+            if (cull2Error) {
+                body.innerHTML = `<tr><td colspan="6" class="text-center p-16 text-[#a83020] font-bold">The 2nd cull list could not be read: ${cull2Error}</td></tr>`;
+                return;
+            }
+            if (rows.length === 0) {
+                body.innerHTML = `<tr><td colspan="6" class="text-center p-16 text-[#8a7a68] font-bold">${query ? `Nothing matching "${query}".` : `Nothing is due for 2nd cull in ${c2MonthLabel(cull2Month)}.`}</td></tr>`;
+                return;
+            }
+            const start = (currentPage - 1) * PAGE_SIZE;
+            rows.slice(start, start + PAGE_SIZE).forEach(r => {
+                const href = `operation_batch_detail.html?id=${encodeURIComponent(r.batch)}&stage=cull_2`;
+                body.insertAdjacentHTML('beforeend', `
+                    <tr>
+                        <td><a href="${href}" class="font-black text-[#3a7ab4] hover:underline">${r.batch}</a></td>
+                        <td class="font-bold text-[#8a7a68]">${r.nursery}</td>
+                        <td class="font-black text-[#3d2610]">${r.plot}</td>
+                        <td class="font-bold text-[#3d2610]">${r.dueText}</td>
+                        <td>${r.logged
+                            ? '<span class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e]">Logged</span>'
+                            : '<span class="text-[10px] font-black uppercase tracking-widest text-[#c07820]">To fill</span>'}</td>
+                        <td><a href="${href}" class="text-[10px] font-black uppercase tracking-widest text-[#3a7ab4] hover:underline">Open 2nd Cull →</a></td>
+                    </tr>`);
+            });
+        }
+
         function renderLedgerTable() {
             const body = document.getElementById('ledger-body');
             body.innerHTML = '';
@@ -1007,6 +1174,11 @@
 
             // Filter by tab, then by search query, then paginate.
             const query = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+
+            if (currentListTab === 'cull2') {
+                renderCull2Table(body, query);
+                return;
+            }
 
             /* Tray Status — one row per tray, not per batch. What somebody
                standing in front of the pre-nursery wants to know: which trays
