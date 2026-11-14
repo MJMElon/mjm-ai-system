@@ -7572,26 +7572,34 @@ Control). It opens on **All reports**, a grid of report CARDS (each with the
 latest year's headline figures); every report is a card there, a tab beside
 All reports and a `<section data-view>`. **Seed Received Summary** is the first.
 
-**On SCREEN it is a dashboard** — KPI cards, two charts, and two tables with
-a row per batch (or month, year, breed, supplier) — with no company header
-and no signature. **On PAPER it is the office's own sheet**: Print builds
-`#print-area` at the moment it is pressed (Ctrl/Cmd+P too, through
-`beforeprint`), so the **Prepared and Verified by** block names whoever
-pressed it, carries that day's date, and has an empty box to sign in. The
-print area is `display:none` on screen and is the only thing on paper.
+**It was redesigned as one enterprise dashboard** (tokens on `:root`: green
+#246B4A, page #F4F6F8, ink #253247, line #DCE3E8; Inter; 12px radius, 40px
+controls, one 1440px content width). On SCREEN: header, tabs, the filter
+card (Print on the right), four equal summary cards, the Seed Comparison
+chart, the Seed Damage cards and chart, then ONE **Batch Details** table
+carrying every column the two old tables had — sticky header, zebra rows,
+figures right and text left, dates as 02 Sep 2026, and PAGES (10/20/50/100)
+whose foot still totals every row, not just the page.
 
-**The printed sheet is laid out like "Seed Received Summary (From
-Batch 189)"**: one report block per SUPPLIER + BREED, headed MEGA JUTAMAS SDN
-BHD / SEED RECEIVED SUMMARY REPORT, the batches going ACROSS (B.270 over its
-D/O number) and the measures going DOWN — Seed Purchased (`DO_Qty:`), Seed
-Purchased with N% FOC (the expected), Actual, Variance; Seed Damage, Maximum
-5%, Seed Damage %, in ONE table with the two charts side by side above it,
-so a supplier and breed is one A4 landscape page. It opens on the latest
-year, as the sheet is a year a tab.
-Shown by month, year, breed or supplier it is ONE block. The sheet's charts
-put Variance on a second axis; here it is a label on each bar instead, one
-axis per chart. The sheet's Delivery Note Quantity row has no ledger field
-and is not drawn.
+- **Every figure is in full with commas, never 10k** — cards, axes, labels,
+  tooltips, table and paper. Both charts title BOTH axes (Batch Number /
+  Seed Quantity (Seeds) / Seed Damage (%)); the X title follows Show by.
+- **One axis per chart.** The office sheet put Variance on a second axis;
+  here it is a label above each batch, and the expected figure is ONE
+  stepped orange dashed line across the columns.
+
+**PRINT ASKS FIRST**: chart + table, without table, or table only. The
+option builds `#print-area` at the press (Ctrl/Cmd+P builds chart + table
+through `beforeprint`), so **Prepared and Verified by** names whoever pressed
+it, that day, over an empty signature box. Paper keeps the office sheet's
+grouping — one block per SUPPLIER + BREED, headed MEGA JUTAMAS SDN BHD /
+SEED RECEIVED SUMMARY REPORT — with the filters written out, an eight-figure
+summary strip, and the COMPLETE table as rows (A4 landscape, the header
+repeated on every page, no row cut). It was the sheet's transposed table
+for a day; rows are what repeat a header and fit a long year on A4. The
+print area is `display:none` on screen. It opens on the latest year, as
+the sheet is a year a tab. The sheet's Delivery Note Quantity row has no
+ledger field and is not drawn.
 
 Every figure is `calcPlanting`'s own, off the same ledger rows: Expected is
 the `Seeds_Received` row (newest per batch wins), Actual is the batch's
