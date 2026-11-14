@@ -11128,57 +11128,16 @@ Thank you.`;
                 y += 17;
             };
 
-            y += 30;
+            y += 14;
             const plantRows = [
                 ['Planted date', plantedStr],
                 ['Trays', pTxt('t2-tray-count')]
             ];
             _need(14 + plantRows.length * 14 + 10);
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-            doc.text('PLANTING', margin, y); y += 14;
             plantRows.forEach(([k, v]) => labelValue(k, v));
             y += 18;
 
-            /* RECEIVE & DAMAGE ANALYSIS, drawn the way the tab draws its two
-               bars: one bar per measure on one scale, with the target and the
-               FOC allowance as dashed lines. Every figure is read off the tab,
-               so the picture cannot disagree with the grid beside it. The
-               damage numbers repeat in Damage Control below on purpose. */
-            const numOf = id => parseInt(pTxt(id).replace(/[^0-9]/g, ''), 10) || 0;
-            const aActual = numOf('t2-chart-actual-text');
-            const aTarget = numOf('t2-chart-target-text');
-            const aDamage = readNumericInput('t2-damaged');
-            const aFoc = parseInt((document.getElementById('display-foc-qty') || {}).dataset?.raw || 0, 10) || 0;
-            const anBarW = (pageW - margin * 2) - 150, anBarH = 14;
-            const drawBar = (title, value, max, marker, markerText, fill, valueText) => {
-                doc.setFont('times', 'bold'); doc.setFontSize(8); setText(INK_SOFT);
-                doc.text(title, margin, y); y += 13;
-                setFill([232, 220, 200]);
-                doc.roundedRect(margin, y, anBarW, anBarH, 3, 3, 'F');
-                const fw = Math.min(anBarW, (value / max) * anBarW);
-                if (fw > 0) { setFill(fill); doc.roundedRect(margin, y, Math.max(fw, 3), anBarH, 3, 3, 'F'); }
-                const mx = margin + Math.min(anBarW - 1, (marker / max) * anBarW);
-                setStroke(RED); doc.setLineWidth(1); doc.setLineDashPattern([2, 2], 0);
-                doc.line(mx, y - 3, mx, y + anBarH + 3);
-                doc.setLineDashPattern([], 0);
-                doc.setFont('times', 'bold'); doc.setFontSize(7); setText(RED);
-                doc.text(markerText, Math.min(mx + 3, margin + anBarW - 150), y + anBarH + 10);
-                doc.setFont('times', 'bold'); doc.setFontSize(10); setText(INK);
-                doc.text(valueText, margin + anBarW + 10, y + anBarH - 3);
-                y += anBarH + 30;
-            };
-            _need(14 + 14 + 6 + 2 * (anBarH + 34) + 8);
-            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-            doc.text('RECEIVE & DAMAGE ANALYSIS', margin, y); y += 14;
-            labelValue('Total seeds expected', expectedRaw.toLocaleString());
-            y += 14;
-            drawBar('PLANTED VS EXPECTED', aActual, Math.max(expectedRaw, aActual, 1) * 1.1,
-                    aTarget, 'TARGET ' + pTxt('t2-target-pct-label') + ' (' + aTarget.toLocaleString() + ' seeds)',
-                    [106, 168, 60], pTxt('t2-acct-pct'));
-            drawBar('DAMAGE VS FOC ALLOWANCE', aDamage, Math.max(aDamage, aFoc, 1) * 1.1,
-                    aFoc, 'FOC ' + pTxt('t2-foc-allowance-pct') + ' (' + aFoc.toLocaleString() + ' seeds)',
-                    aDamage > aFoc ? RED : [106, 168, 60], pTxt('t2-dmg-pct'));
-            y += 16;
 
             /* SEEDS PLANTED PER TRAY — one row per tray on the tab, the same
                three figures the tray row shows, and the tray totals as the
