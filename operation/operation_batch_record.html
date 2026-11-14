@@ -924,11 +924,13 @@
                 });
                 document.getElementById('sc2-cells').innerHTML = cells.join('');
                 err.innerText = '';
-                strip.classList.toggle('hidden', !cells.length);
+                window._sc2Visible = !!cells.length;
+                strip.classList.toggle('hidden', !cells.length || currentListTab === 'cull2');
             } catch (e) {
                 document.getElementById('sc2-cells').innerHTML = '';
                 err.innerText = '2nd cull status could not be read: ' + (e.message || e);
-                strip.classList.remove('hidden');
+                window._sc2Visible = true;
+                strip.classList.toggle('hidden', currentListTab === 'cull2');
             }
         }
         window.addEventListener('load', () => {
@@ -980,6 +982,10 @@
             const cull2Bar = document.getElementById('cull2-bar');
             if (cull2Bar) cull2Bar.classList.toggle('hidden', tabName !== 'cull2');
             if (tabName === 'cull2') loadCull2Month(cull2Month || c2CurrentMonth());
+            // The 2nd cull status line belongs to the other tabs; the 2nd Cull list has its own rows.
+            const sc2Strip = document.getElementById('sc2-strip');
+            if (sc2Strip && tabName === 'cull2') sc2Strip.classList.add('hidden');
+            else if (sc2Strip) sc2Strip.classList.toggle('hidden', !window._sc2Visible);
 
             renderLedgerTable();
         }
