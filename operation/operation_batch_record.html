@@ -1193,9 +1193,36 @@
         function c2Cancel(idx) { cull2Editing.delete(idx); cull2Draft.delete(idx); renderLedgerTable(); }
         function c2PickMap(idx, input) {
             const file = input.files && input.files[0];
-            c2Typed(idx, 'file', file || null);
-            const el = document.getElementById('c2-map-' + idx);
-            if (el) el.textContent = file ? '✓ ' + file.name : (cull2Rows[idx].mapUrl ? '✓ on file' : 'No map');
+            if (!file) return;
+            c2Typed(idx, 'file', file);
+            cull2Editing.add(idx);   // the row opens for Save; nothing is written yet
+            renderLedgerTable();
+        }
+        // The Map cell: a small picture that opens larger, or a + to add one.
+        function c2MapCell(r, dr) {
+            const input = `<input type="file" id="c2-file-${r.idx}" accept="image/*,application/pdf" class="hidden" onchange="c2PickMap(${r.idx}, this)">`;
+            const add = `<button type="button" onclick="document.getElementById('c2-file-${r.idx}').click()" title="Add drone map" class="h-10 w-10 rounded-full border-2 border-dashed border-[#c9b89a] text-[#8a7a68] text-xl font-black leading-none hover:border-[#6aa83c] hover:text-[#4a7a2e]">+</button>`;
+            if (dr.file) {
+                if (dr.file.type === 'application/pdf') return `${input}<span class="text-[11px] font-bold text-[#3d2610]">PDF · ${dr.file.name}</span> <button type="button" onclick="document.getElementById('c2-file-${r.idx}').click()" class="text-[10px] font-bold text-[#8a7a68] underline">Change</button>`;
+                const src = URL.createObjectURL(dr.file);
+                return `${input}<button type="button" onclick="c2Zoom('${src}')" title="Enlarge" class="block"><img src="${src}" alt="Drone map" class="h-12 w-16 object-cover rounded border border-[#e8dcc8] bg-white"></button><button type="button" onclick="document.getElementById('c2-file-${r.idx}').click()" class="text-[10px] font-bold text-[#8a7a68] underline mt-1">Change</button>`;
+            }
+            if (r.mapUrl) {
+                if (/\.pdf(\?|$)/i.test(r.mapUrl)) return `${input}<a href="${r.mapUrl}" target="_blank" rel="noopener" class="text-[11px] font-bold text-[#3a7ab4] underline">PDF map</a>`;
+                return `${input}<button type="button" onclick="c2Zoom('${r.mapUrl}')" title="Enlarge" class="block"><img src="${r.mapUrl}" alt="Drone map" class="h-12 w-16 object-cover rounded border border-[#e8dcc8] bg-white"></button>`;
+            }
+            return `${input}${add}`;
+        }
+        // Click a small map to see it large; click anywhere to close.
+        function c2Zoom(src) {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:fixed;inset:0;background:rgba(20,30,20,.82);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;padding:24px';
+            const img = document.createElement('img');
+            img.src = src;
+            img.style.cssText = 'max-width:100%;max-height:100%;border-radius:12px;background:#fff';
+            wrap.appendChild(img);
+            wrap.onclick = () => wrap.remove();
+            document.body.appendChild(wrap);
         }
         function c2Today() {
             const d = new Date();
@@ -1291,14 +1318,11 @@
                         <td class="font-bold text-[#3d2610]">${r.dueText}</td>
                         <td class="font-black text-[#3d2610]">${c2Group(r.transplanted)}</td>`;
                 if (r.logged && !cull2Editing.has(r.idx)) {
-                    const mapTxt = r.mapUrl
-                        ? `<a href="${r.mapUrl}" target="_blank" rel="noopener" class="font-bold text-[#3a7ab4] underline">Map</a>`
-                        : '<span class="text-[#8a7a68]">No map</span>';
                     body.insertAdjacentHTML('beforeend', `
                     <tr class="bg-[#f3f9ec]">${base}
                         <td class="font-black text-[#3d2610]">${c2Group(r.dead)}</td>
                         <td class="font-bold text-[#3d2610]">${r.cullDate || '—'}</td>
-                        <td class="text-[11px]">${mapTxt}</td>
+                        <td>${c2MapCell(r, {})}</td>
                         <td class="whitespace-nowrap">
                             <span class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e] mr-3">Already filled</span>
                             <button onclick="c2Edit(${r.idx})" class="h-9 px-4 rounded-xl border border-[#e8dcc8] bg-white text-[11px] font-black uppercase tracking-widest text-[#3d2610] hover:border-[#6aa83c]">Edit</button>
@@ -1309,17 +1333,11 @@
                 const dr = cull2Draft.get(r.idx) || {};
                 const deadVal = dr.dead !== undefined ? dr.dead : (r.dead === null ? '' : String(r.dead));
                 const dateVal = dr.date !== undefined ? dr.date : (r.cullDate || c2Today());
-                const mapLabel = dr.file ? '✓ ' + dr.file.name : (r.mapUrl ? '✓ on file' : 'No map');
                 body.insertAdjacentHTML('beforeend', `
                     <tr>${base}
                         <td><input type="number" min="0" max="${r.transplanted}" value="${deadVal}" oninput="c2Typed(${r.idx}, 'dead', this.value)" class="w-24 h-9 rounded-lg border border-[#e8dcc8] bg-white px-2 text-sm font-black outline-none focus:border-[#6aa83c]"></td>
                         <td><input type="date" value="${dateVal}" onchange="c2Typed(${r.idx}, 'date', this.value)" class="h-9 rounded-lg border border-[#e8dcc8] bg-white px-2 text-sm font-bold outline-none focus:border-[#6aa83c]"></td>
-                        <td>
-                            <label class="inline-flex items-center gap-2 cursor-pointer">
-                                <input type="file" accept="image/*,application/pdf" class="hidden" onchange="c2PickMap(${r.idx}, this)">
-                                <span id="c2-map-${r.idx}" class="text-[11px] font-bold text-[#3a7ab4] underline">${mapLabel}</span>
-                            </label>
-                        </td>
+                        <td>${c2MapCell(r, dr)}</td>
                         <td class="whitespace-nowrap">
                             <button id="c2-save-${r.idx}" onclick="saveCull2Row(${r.idx})" class="h-9 px-4 rounded-xl bg-[#6aa83c] text-white text-[11px] font-black uppercase tracking-widest hover:bg-[#4a7a2e]">Save</button>
                             ${r.logged ? `<button onclick="c2Cancel(${r.idx})" class="h-9 px-3 ml-2 text-[11px] font-black uppercase tracking-widest text-[#8a7a68]">Cancel</button>` : ''}
