@@ -1072,30 +1072,20 @@
             cull2Rows = null; cull2Error = ''; cull2Loading = true;
             renderLedgerTable();
             try {
-                const mi = c2MonthIndex(month) - C2_AFTER_MONTHS;
-                const from = c2YmOf(mi) + '-01';
-                const to = c2YmOf(mi + 1) + '-01';
-                const sel = 'plot_name, batch_name, transaction_date, created_at';
-                const inMonth = await c2ReadAll(() => _supabase.from('shared_inventory_logs').select(sel)
+                // Every transplant of these plots, dated the way Tab 5 dates it: the remark's Date
+                // first, then transaction_date, then created_at. A row with no transaction_date
+                // (B.264 U12 has none) must still count, or its 2nd cull never appears.
+                const allT = await c2ReadAll(() => _supabase.from('shared_inventory_logs')
+                    .select('id, plot_name, batch_name, transaction_date, created_at, remark')
                     .in('transaction_type', C2_TRANSPLANT_TYPES)
-                    .gte('transaction_date', from).lt('transaction_date', to)
                     .order('id', { ascending: true }));
-                const batches = [...new Set(inMonth.map(r => String(r.batch_name || '').trim()).filter(Boolean))];
-                let earlier = [];
-                if (batches.length) {
-                    earlier = await c2ReadAll(() => _supabase.from('shared_inventory_logs').select(sel)
-                        .in('transaction_type', C2_TRANSPLANT_TYPES)
-                        .in('batch_name', batches)
-                        .lt('transaction_date', from)
-                        .order('id', { ascending: true }));
-                }
-
                 // The first transplant of each plot and batch decides the month.
                 const first = new Map();
-                for (const r of [...inMonth, ...earlier]) {
+                for (const r of allT) {
                     const plot = c2PlotKey(r.plot_name), batch = String(r.batch_name || '').trim();
                     if (!plot || !batch || /-R\d*$/.test(plot) || C2_NOT_A_PLOT.includes(plot)) continue;
-                    const ym = String(r.transaction_date || r.created_at || '').slice(0, 7);
+                    const dm = String(r.remark || '').match(/Date:\s*(\d{4}-\d{2}-\d{2})/);
+                    const ym = String(dm ? dm[1] : (r.transaction_date || r.created_at || '')).slice(0, 7);
                     if (!/^\d{4}-\d{2}$/.test(ym)) continue;
                     const k = plot + '#' + batch;
                     const prev = first.get(k);
