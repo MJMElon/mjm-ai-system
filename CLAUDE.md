@@ -7413,6 +7413,23 @@ Loading Seedlings, Monthly Payroll) · Approval · Report · Settings.
 `tests/nursery_payroll_has_a_side_bar.cjs` (`SHOT=/dir` draws the three
 new pages).
 
+## Nursery Dashboard reads the batch report and writes nothing
+
+`reporting/nursery_dashboard.html`, a door on the Nursery Reporting System
+(same `npayroll` module, its own page tick `dashboard` on Module Assess
+Control). One tab per dashboard; **Seed Received Summary** is the first.
+
+Every figure is `calcPlanting`'s own, off the same ledger rows: Expected is
+the `Seeds_Received` row (newest per batch wins), Actual is the batch's
+`Planted` rows plus its `Damaged_Seeds`, Variance is (Actual − Expected) ÷
+Expected and Damage % is Damaged ÷ Expected against a 5% maximum. Grouped
+by month, year, breed or supplier, the percentages are worked on the SUMS,
+never averaged. A batch with no Seed Planting saved is left out and NAMED
+(its variance would read −100%), with a tick to show it. The read is paged,
+because PostgREST stops at 1,000 rows and a batch is a row per tray.
+`tests/the_seed_received_summary.cjs` holds it. Nothing to run in the
+database.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
