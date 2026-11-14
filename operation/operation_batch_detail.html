@@ -12894,7 +12894,12 @@ Thank you.`;
                     }));
                 }
 
-                if (logsToInsert.length === 0) throw new Error('No filled rows to save.');
+                /* Clearing a saved Dead box takes that plot's cull back. Nothing filled is
+                   refused, unless a row WAS saved and has been cleared, so a page that
+                   failed to load its saved rows cannot wipe the record. */
+                const clearedSaved = Array.from(document.querySelectorAll('.t5-plot-row')).some((row, i) =>
+                    row.querySelector('.t5-dead')?.value === '' && t5_plotData[i] && t5_plotData[i].savedDead != null);
+                if (logsToInsert.length === 0 && !clearedSaved) throw new Error('No filled rows to save.');
                 const { error } = await safeReplaceLogs(batchId, ['2nd_Culling'], logsToInsert);
                 if (error) throw error;
                 setEditMetaUI(5, new Date().toISOString(), window.currentUserEmail);
