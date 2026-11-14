@@ -147,7 +147,7 @@
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">Completed</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Work waiting to be DONE on a batch: a report HQ sent back, or a figure the report itself is asking about — a drone map that does not tally, a planting gap with no reason against it. Open one and it lands on the tab that needs it. Once it is answered the batch moves to the To Check List.">To Do List</button>
                 <button id="tab-tocheck" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')" title="Reports that are filled in and still waiting for somebody to check them: Seeds In, Seed Audit, Planting &amp; Damage, Transplanting and 1st Culling. 2nd and 3rd Culling are not counted here.">To Check List</button>
-                <button id="tab-cull2" class="list-tab-btn list-tab-inactive" onclick="switchListTab('cull2')" title="Every batch and plot whose 2nd cull falls due in the month you pick: the fourth month after its first transplant into that plot. Read-only here; open a batch to key the 2nd cull.">2nd Cull</button>
+                <button id="tab-cull2" class="list-tab-btn list-tab-inactive" onclick="switchListTab('cull2')" title="Every batch and plot whose 2nd cull falls due in the month you pick: the fourth month after its first transplant into that plot. Fill the figures, save, and it links back to the batch.">2nd Cull</button>
                 <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">Tray Status</button>
             </div>
 
@@ -167,7 +167,6 @@
                     <label for="cull2-month-input" class="text-[10px] font-black uppercase tracking-widest text-[#8a7a68]">Month due</label>
                     <input type="month" id="cull2-month-input" onchange="if (this.value) loadCull2Month(this.value)"
                            class="h-9 rounded-xl border border-[#e8dcc8] bg-white px-3 text-sm font-black text-[#3d2610] outline-none focus:border-[#6aa83c]">
-                    <span class="text-[11px] font-bold text-[#8a7a68]">Read-only for now. Key the 2nd cull on each batch's detail page.</span>
                 </div>
             </div>
 
