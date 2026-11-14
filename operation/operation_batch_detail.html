@@ -10902,6 +10902,18 @@ Thank you.`;
             y += 14;
             doc.setFont('times', 'normal'); doc.text('Total Seed Expected (D/O + FOC + Repl.):  ', margin, y);
             doc.setFont('times', 'bold'); doc.text(expectedRaw.toLocaleString() + ' seeds', margin + 200, y);
+            /* The planting sheet puts the planted date on the same line, in the
+               right-hand column the breed sits in above — the same two-column
+               pattern as the supplier line. Read off the tab's own date box. */
+            if (isPlanting) {
+                const plantedRaw = (document.getElementById('t2-date') || {}).value || '';
+                const plantedStr = plantedRaw
+                    ? (() => { const [py, pm, pd] = plantedRaw.split('-').map(Number);
+                               return new Date(py, pm - 1, pd).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }); })()
+                    : '—';
+                doc.setFont('times', 'normal'); doc.text('Planted date:  ', margin + 280, y);
+                doc.setFont('times', 'bold'); doc.text(plantedStr, margin + 380, y);
+            }
             y += 8;
 
             if (isAudit) {
@@ -11114,28 +11126,8 @@ Thank you.`;
                   sum. Top to bottom: the planting date and trays, the Receive &
                   Damage Analysis the tab draws as two bars, the seeds planted
                   per tray, then Damage Control and the photos. */
-            const plantedRaw = (document.getElementById('t2-date') || {}).value || '';
-            const plantedStr = plantedRaw
-                ? (() => { const [py, pm, pd] = plantedRaw.split('-').map(Number);
-                           return new Date(py, pm - 1, pd).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }); })()
-                : '—';
             const pTxt = id => ((document.getElementById(id) || {}).textContent || '').trim() || '—';
-            const labelValue = (k, v) => {
-                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
-                doc.text(k + ':', margin, y);
-                doc.setFont('times', 'bold');
-                doc.text(String(v), margin + 170, y);
-                y += 17;
-            };
-
             y += 14;
-            const plantRows = [
-                ['Planted date', plantedStr]
-            ];
-            _need(14 + plantRows.length * 14 + 10);
-            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-            plantRows.forEach(([k, v]) => labelValue(k, v));
-            y += 18;
 
 
             /* SEEDS PLANTED PER TRAY — one row per tray on the tab, the same
