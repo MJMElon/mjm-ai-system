@@ -16036,8 +16036,7 @@ Thank you.`;
         async function handleT6DocDrop(event, rowId) {
             _t6ReplaceAt = null; _t6ReplaceRow = '';
             const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
-            const at = await Promise.all(files.map(f => processT6Doc(f, rowId)));
-            _t6AskForRemark(rowId, at);
+            await Promise.all(files.map(f => processT6Doc(f, rowId)));
         }
 
         async function handleT6DocUpload(input, rowId) {
@@ -16046,50 +16045,19 @@ Thank you.`;
                named one map to swap, so four files would silently add three
                they did not ask for. */
             const replacing = (_t6ReplaceAt != null && _t6ReplaceRow === rowId);
-            let at = [];
             if (replacing) {
-                if (files[0]) at = [await processT6Doc(files[0], rowId)];
+                if (files[0]) await processT6Doc(files[0], rowId);
             } else {
-                at = await Promise.all(files.map(f => processT6Doc(f, rowId)));
+                await Promise.all(files.map(f => processT6Doc(f, rowId)));
             }
             input.value = '';
-            /* A REPLACE keeps the remark that was already there, deliberately,
-               so it is not offered for typing again — selecting it would
-               invite overwriting a sentence somebody meant to keep. */
-            if (!replacing) _t6AskForRemark(rowId, at);
         }
 
-        /* ── THE REMARK IS ASKED FOR WHEN THE MAP ARRIVES ───────────────────
+        /* ── A MAP THAT ARRIVES STAYS WHERE IT IS ───────────────────────────
 
-           The box has always existed, in the gallery panel. The panel only
-           opened when the CHIP was pressed with a map already behind it — so
-           on the first upload the picker closed, the chip went green, and
-           nothing anywhere offered a remark. The only way to one was to know
-           to press the chip a second time, which is not a thing a screen says.
-
-           So a map that ARRIVES opens the panel on its own and puts the
-           cursor in its remark. "North half, flown 21 Feb" is what tells two
-           pictures of one plot apart and it is not in a file name — and the
-           moment to write it is the moment somebody is holding the picture in
-           their head, not a press they have to discover.
-
-           Several files picked at once open on the FIRST of them: the panel
-           lists every one of them under it, so the rest are a tab away, and
-           scrolling to the last is the one that is never what you want. */
-        function _t6AskForRemark(rowId, at) {
-            const landed = (at || []).filter(i => i != null && i >= 0);
-            if (!landed.length) return;
-            openT6Gallery(rowId);
-            const first = Math.min.apply(null, landed);
-            /* After the panel has drawn. The box is focused and NOT selected:
-               there is nothing in it to replace, and a select on an empty box
-               is one more thing the next version could get wrong. */
-            setTimeout(() => {
-                const body = document.getElementById('t6-maps-body');
-                const box  = body && body.querySelectorAll('.t6-doc-note')[first];
-                if (box) { try { box.focus(); } catch (e) {} }
-            }, 0);
-        }
+           The gallery does not open by itself. The office uploads a map and
+           closes the picker; the remark is written when somebody presses the
+           map icon, which is the only place it is ever typed. */
 
         /* A file has arrived, or was already saved. Both end up in the same
            place — t6_plotDocs — and the chip is painted from that, so there
