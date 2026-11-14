@@ -11138,24 +11138,46 @@ Thank you.`;
             plantRows.forEach(([k, v]) => labelValue(k, v));
             y += 8;
 
-            /* RECEIVE & DAMAGE ANALYSIS — the two bars on the tab, as figures.
-               The damage figures repeat in Damage Control below on purpose:
-               this is the grid, that is the box the office checks against
-               the trays. */
-            const analysisRows = [
-                ['Total seeds expected', expectedRaw.toLocaleString()],
-                ['Seeds planted (actual)', pTxt('t2-chart-actual-text')],
-                ['Planted vs expected', pTxt('t2-acct-pct')],
-                ['Target', pTxt('t2-target-pct-label') + ' (' + pTxt('t2-chart-target-text') + ' seeds)'],
-                ['Damaged seeds', pTxt('t2-damage-actual-text')],
-                ['Damage rate', pTxt('t2-dmg-pct')],
-                ['FOC allowance used', pTxt('t2-dmg-used-pct')]
-            ];
-            _need(20 + analysisRows.length * 14 + 8);
+            /* RECEIVE & DAMAGE ANALYSIS, drawn the way the tab draws its two
+               bars: one bar per measure on one scale, with the target and the
+               FOC allowance as dashed lines. Every figure is read off the tab,
+               so the picture cannot disagree with the grid beside it. The
+               damage numbers repeat in Damage Control below on purpose. */
+            const numOf = id => parseInt(pTxt(id).replace(/[^0-9]/g, ''), 10) || 0;
+            const aActual = numOf('t2-chart-actual-text');
+            const aTarget = numOf('t2-chart-target-text');
+            const aDamage = readNumericInput('t2-damaged');
+            const aFoc = parseInt((document.getElementById('display-foc-qty') || {}).dataset?.raw || 0, 10) || 0;
+            const barW = (pageW - margin * 2) - 150, barH = 14;
+            const drawBar = (title, value, max, marker, markerText, fill, valueText) => {
+                doc.setFont('times', 'bold'); doc.setFontSize(8); setText(INK_SOFT);
+                doc.text(title, margin, y); y += 10;
+                setFill([232, 220, 200]);
+                doc.roundedRect(margin, y, barW, barH, 3, 3, 'F');
+                const fw = Math.min(barW, (value / max) * barW);
+                if (fw > 0) { setFill(fill); doc.roundedRect(margin, y, Math.max(fw, 3), barH, 3, 3, 'F'); }
+                const mx = margin + Math.min(barW - 1, (marker / max) * barW);
+                setStroke(RED); doc.setLineWidth(1); doc.setLineDashPattern([2, 2], 0);
+                doc.line(mx, y - 3, mx, y + barH + 3);
+                doc.setLineDashPattern([], 0);
+                doc.setFont('times', 'bold'); doc.setFontSize(7); setText(RED);
+                doc.text(markerText, Math.min(mx + 3, margin + barW - 150), y + barH + 10);
+                doc.setFont('times', 'bold'); doc.setFontSize(10); setText(INK);
+                doc.text(valueText, margin + barW + 10, y + barH - 3);
+                y += barH + 24;
+            };
+            _need(14 + 14 + 6 + 2 * (barH + 34) + 8);
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
             doc.text('RECEIVE & DAMAGE ANALYSIS', margin, y); y += 14;
-            analysisRows.forEach(([k, v]) => labelValue(k, v));
-            y += 8;
+            labelValue('Total seeds expected', expectedRaw.toLocaleString());
+            y += 6;
+            drawBar('PLANTED VS EXPECTED', aActual, Math.max(expectedRaw, aActual, 1) * 1.1,
+                    aTarget, 'TARGET ' + pTxt('t2-target-pct-label') + ' (' + aTarget.toLocaleString() + ' seeds)',
+                    [106, 168, 60], pTxt('t2-acct-pct'));
+            drawBar('DAMAGE VS FOC ALLOWANCE', aDamage, Math.max(aDamage, aFoc, 1) * 1.1,
+                    aFoc, 'FOC ' + pTxt('t2-foc-allowance-pct') + ' (' + aFoc.toLocaleString() + ' seeds)',
+                    aDamage > aFoc ? RED : [106, 168, 60], pTxt('t2-dmg-pct'));
+            y += 4;
 
             /* SEEDS PLANTED PER TRAY — one row per tray on the tab, the same
                three figures the tray row shows, and the tray totals as the
@@ -11166,7 +11188,9 @@ Thank you.`;
                 trayN++;
                 const sel = row.querySelector('select.t-select');
                 const opt = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
-                const name = opt && opt.value ? opt.text.trim() : '—';
+                /* The tray's name only. The option carries its vacancy after
+                   an em dash, which is not part of the tray's name. */
+                const name = opt && opt.value ? opt.text.split('—')[0].trim() : '—';
                 const planted = readNumericInput(row.querySelector('.t-planted'));
                 const empty = readNumericInput(row.querySelector('.t-empty'));
                 const actual = parseInt((row.querySelector('.t-actual') || {}).dataset?.raw || 0, 10) || 0;
@@ -11179,7 +11203,7 @@ Thank you.`;
             doc.text('SEEDS PLANTED PER TRAY', margin, y); y += 8;
             doc.autoTable({
                 startY: y + 6,
-                head: [['#', 'Preset Tray', 'Total Planted', 'Empty Holes', 'Actual Planted']],
+                head: [['#', 'Tray', 'Total Planted', 'Empty Holes', 'Actual Planted']],
                 body: trayBody,
                 foot: [['', 'TOTAL', pTxt('t2-tot-planted'), pTxt('t2-tot-empty'), pTxt('t2-tot-actual')]],
                 margin: { top: margin + 20, bottom: FOOT_H, left: margin, right: margin },
