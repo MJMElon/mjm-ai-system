@@ -203,6 +203,17 @@
   #print-area .p-chart { flex:1 1 0; min-height:0; overflow:hidden; }
   #print-area .p-chart svg { display:block; }
   #print-area .p-chart svg text { font-family:'Inter', system-ui, sans-serif; font-variant-numeric:tabular-nums; }
+  .scrim { position:fixed; inset:0; background:rgba(37,50,71,.38); z-index:70; display:grid; place-items:center; padding:16px; }
+  .dlg { background:#fff; border-radius:var(--radius); width:min(460px,100%); padding:20px; box-shadow:0 18px 48px rgba(37,50,71,.25); }
+  .dlg h3 { margin:0; font-size:16px; font-weight:700; }
+  .dlg p { margin:4px 0 16px; font-size:12px; color:var(--ink-2); }
+  .opt { display:flex; gap:12px; align-items:flex-start; width:100%; text-align:left; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+         background:#fff; cursor:pointer; font-family:inherit; color:var(--ink); margin-bottom:10px; }
+  .opt:hover { border-color:var(--green-2); background:var(--green-l); }
+  .opt b { display:block; font-size:14px; }
+  .opt span { display:block; font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .opt svg { width:20px; height:20px; color:var(--green); flex-shrink:0; margin-top:1px; }
+  .dlg-foot { display:flex; justify-content:flex-end; margin-top:6px; }
   #print-area .p-fit { transform-origin:top left; padding:0 1px 1px 0; }
   #print-area .p-fit { --pz:1; }
   #print-area table.pt { width:100%; border-collapse:collapse; font-size:calc(9px * var(--pz)); font-variant-numeric:tabular-nums; }
@@ -326,6 +337,17 @@
 </div></div>
 
 <div id="print-area"></div>
+
+<div class="scrim hidden" id="print-dlg" role="dialog" aria-modal="true" aria-labelledby="print-dlg-t">
+  <div class="dlg">
+    <h3 id="print-dlg-t">Print report</h3>
+    <p>Prints what the filters show now, on A4 portrait.</p>
+    <button class="opt" data-print="both"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7"/><rect x="3" y="21" width="18" height="0.01"/></svg><span><b>Print chart + table</b><span>Charts on page 1, the batch table and the signature on page 2</span></span></button>
+    <button class="opt" data-print="chart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span><b>Print chart only</b><span>Both charts and the signature, on one page</span></span></button>
+    <button class="opt" data-print="table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M3 14h18M9 4v16"/></svg><span><b>Print table only</b><span>The batch table and the signature, on one page</span></span></button>
+    <div class="dlg-foot"><button class="btn" id="print-cancel" type="button">Cancel</button></div>
+  </div>
+</div>
 
 <div class="tip hidden" id="tip"></div>
 
@@ -894,12 +916,13 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       : '';
   }
 
-  /* ON PAPER: ONE report on exactly TWO A4 portrait pages, whatever the
-     filters, the supplier, the breed or the number of batches.
-       Page 1 — the header (company, title, supplier, breed, period), the
-                comparison (its summary, then its chart) on the top half and
-                the damage (its summary, then its chart) on the bottom half.
-       Page 2 — the batch table, then Prepared and Verified by.
+  /* ON PAPER: ONE report, A4 portrait, in the shape Print was asked for.
+       Chart + table — page 1 the header and both charts (comparison on the
+                top half, damage on the bottom), page 2 the batch table and
+                Prepared and Verified by.
+       Chart only  — ONE page: header, both charts, the signature.
+       Table only  — ONE page: header, the batch table, the signature.
+     Every choice carries the signature, on its last page.
      No filter line is printed: the header names what the report is of.
      It is built off-screen first so it can be MEASURED: each chart is drawn
      to the exact height its half of page 1 has, and the table is scaled
@@ -910,7 +933,8 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const u = uniq(vals.filter(Boolean));
     return u.length === 1 ? u[0] : (u.length ? 'All ' + word + ' (' + u.length + ')' : '—');
   }
-  function buildPrint() {
+  function buildPrint(mode) {
+    mode = mode === 'chart' || mode === 'table' ? mode : 'both';
     const who = (window.MJMAccess && MJMAccess.user && MJMAccess.user()) || {};
     const d = new Date();
     PRINTED_BY = { name: who.full_name || who.email || '',
@@ -924,15 +948,14 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const area = $('print-area');
     const groups = groupRows(rows, by), t = totalsOf(rows), p = pctOf(t), overN = groups.filter(over).length;
     const k = (l, v) => `<div class="p-kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
-    const foot = n => `<div class="p-foot"><span>MEGA JUTAMAS SDN BHD · Seed Received Summary Report</span><span>Printed ${esc(PRINTED_BY.date)} · Page ${n} of 2</span></div>`;
+    const nPages = mode === 'both' ? 2 : 1;
+    const foot = n => `<div class="p-foot"><span>MEGA JUTAMAS SDN BHD · Seed Received Summary Report</span><span>Printed ${esc(PRINTED_BY.date)} · Page ${n} of ${nPages}</span></div>`;
     const headHtml = `<div class="p-head">
         <div><div class="p-co">MEGA JUTAMAS SDN BHD</div><div class="p-title">SEED RECEIVED SUMMARY REPORT</div></div>
         <div class="p-meta"><div>Supplier Name: <b class="pm-supplier">${esc(supplier)}</b></div><div>Breed: <b class="pm-breed">${esc(breed)}</b></div><div>Period: <b class="pm-period">${esc(period)}</b></div></div>
       </div>`;
     const empty = !rows.length ? '<div class="empty">Nothing matches these filters.</div>' : '';
-    area.innerHTML = `
-      <div class="pp" data-page="1">
-        ${headHtml}
+    const chartsHtml = `
         <section class="p-sec p-half" data-sec="compare">
           <h3 class="p-sec-t">Seed Expected vs Actual Seed Received
             <span class="p-legend"><span><i style="background:var(--green)"></i>Actual Seed Received</span><span><i class="ln"></i>Total Seed Expected (E)</span></span></h3>
@@ -945,22 +968,29 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
           <div class="p-kpis" style="--n:4">${k('Seed Damage', nf(t.damaged))}${k('Seed Damage (%)', pfu(p.d))}${k('Maximum Allowed', MAX_DAMAGE_PCT + '%')}${k('Over the Maximum', nf(overN) + ' of ' + nf(groups.length))}</div>
           <div class="p-chart chart c2">${empty}</div>
         </section>
-        ${foot(1)}
-      </div>
-      <div class="pp" data-page="2">
-        ${headHtml}
+`;
+    const tableHtmlP = `
         <section class="p-sec" data-sec="table">
           <h3 class="p-sec-t">${by === 'batch' ? 'Batch Details' : 'Details by ' + esc(head(by))}<span>${nf(groups.length)} ${by === 'batch' ? (groups.length === 1 ? 'batch' : 'batches') : (groups.length === 1 ? 'row' : 'rows')}</span></h3>
           <div class="p-fit">${rows.length ? tableHtml(groups, rows, by, 'pt') : empty}</div>
         </section>
+`;
+    const signHtml = `
         <div class="sign"><div class="sign-box">
           <div class="sign-cap">Prepared and Verified by</div>
           <div class="sign-sig"><span>Signature</span></div>
           <div class="sign-line"><span>Name</span><b class="sign-name">${esc(PRINTED_BY.name)}</b></div>
           <div class="sign-line"><span>Date</span><b class="sign-date">${esc(PRINTED_BY.date)}</b></div>
         </div></div>
-        ${foot(2)}
-      </div>`;
+`;
+    /* Every choice carries the signature, on the LAST page: chart + table is
+       charts on page 1 and the table with the signature on page 2; chart only
+       and table only are ONE page each, the signature under what was printed. */
+    const page = (n, inner) => `<div class="pp" data-page="${n}">${headHtml}${inner}${foot(n)}</div>`;
+    area.dataset.mode = mode;
+    area.innerHTML = mode === 'chart' ? page(1, chartsHtml + signHtml)
+                   : mode === 'table' ? page(1, tableHtmlP + signHtml)
+                   : page(1, chartsHtml) + page(2, tableHtmlP + signHtml);
     fitPrint(groups, by);
   }
   /* Lay the two pages out off-screen at their paper size and fit them. */
@@ -969,12 +999,14 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const keep = area.getAttribute('style') || '';
     area.style.cssText = 'display:block;position:fixed;left:-30000px;top:0;visibility:hidden';
     try {
-      if (groups.length) {
+      if (groups.length && area.querySelector('.c1')) {
         const h1 = area.querySelector('.c1').clientHeight, h2 = area.querySelector('.c2').clientHeight;
         drawPrintCharts(area, groups, by, Math.max(120, Math.min(h1, h2)));
       }
       // Page 2: shrink the table until the page holds it, the signature included.
-      const pg = area.querySelector('.pp[data-page="2"]'), fit = pg.querySelector('.p-fit');
+      const fit = area.querySelector('.p-fit');
+      if (!fit) { area.dataset.zoom = '1'; return; }
+      const pg = fit.closest('.pp');
       // The type and the padding are SHRUNK rather than the table zoomed:
       // Chrome's PDF output does not honour a CSS zoom the way the screen
       // layout measured it, so a zoomed table that fitted here ran under the
@@ -998,11 +1030,23 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
   }
   window.ndBuildPrint = buildPrint;
 
-  /* Print builds the report and prints it. Ctrl/Cmd + P builds it too,
-     signed by whoever pressed it. */
-  let _built = false;
-  $('btn-print').addEventListener('click', () => { buildPrint(); _built = true; window.print(); _built = false; });
-  addEventListener('beforeprint', () => { if (LOADED && !_built) buildPrint(); });
+  /* Print asks which report (chart + table, chart only, table only); the
+     choice builds the pages and prints them, signed by whoever pressed it. */
+  const dlg = $('print-dlg');
+  function openPrintDlg() { dlg.classList.remove('hidden'); dlg.querySelector('.opt').focus(); }
+  function closePrintDlg() { dlg.classList.add('hidden'); }
+  $('btn-print').addEventListener('click', openPrintDlg);
+  $('print-cancel').addEventListener('click', closePrintDlg);
+  dlg.addEventListener('click', e => { if (e.target === dlg) closePrintDlg(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !dlg.classList.contains('hidden')) closePrintDlg(); });
+  // An option builds the page for itself. Ctrl/Cmd + P rebuilds the LAST
+  // option chosen (chart + table before any), so printing again from the
+  // browser never turns a one-page chart-only report into two pages.
+  let _built = false, _lastMode = 'both';
+  dlg.querySelectorAll('[data-print]').forEach(b => b.addEventListener('click', () => {
+    closePrintDlg(); _lastMode = b.dataset.print; buildPrint(_lastMode); _built = true; window.print(); _built = false;
+  }));
+  addEventListener('beforeprint', () => { if (LOADED && !_built) buildPrint(_lastMode); });
 
   function refreshFilterOptions() {
     const years = uniq(BATCHES.map(x => x.year)).sort().reverse();

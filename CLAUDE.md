@@ -7588,16 +7588,22 @@ whose foot still totals every row, not just the page.
   here it is a label above each batch, and the expected figure is ONE
   stepped orange dashed line across the columns.
 
-**THE PRINTED REPORT IS ALWAYS EXACTLY TWO A4 PORTRAIT PAGES**, the
-office's own spec, whatever the filters or the batch count. Print builds it
-and prints it straight away — the three-option dialog is gone, and so is
-the one-block-per-supplier-and-breed split (it is ONE report; the header
-says *All suppliers (n)* where the rows span several). **Page 1**: a compact
-header (MEGA JUTAMAS SDN BHD, the title, Supplier Name, Breed, Period —
-**no filter line**), then the comparison (summary strip + chart) on the top
-half and the damage (summary strip + chart) on the bottom half. **Page 2**:
-the batch table, then Prepared and Verified by (whoever pressed Print, that
-day). How it holds:
+**PRINT ASKS WHICH: chart + table, chart only, or table only**, and EVERY
+choice carries the signature box (Prepared and Verified by, whoever pressed
+Print, that day) on its last page. **Chart + table is exactly two A4
+portrait pages**: page 1 a compact header (MEGA JUTAMAS SDN BHD, the title,
+Supplier Name, Breed, Period — **no filter line**), the comparison (summary
+strip + chart) on the top half and the damage (summary strip + chart) on the
+bottom half; page 2 the batch table, then the signature. **Chart only is ONE
+page**: header, both charts, the signature under them. **Table only is ONE
+page**: header, the table, the signature — page 2 on its own. It is ONE
+report whatever the filters (the header says *All suppliers (n)* where the
+rows span several). The dialog was taken out for a day in the name of
+"always two pages" and the office asked for it back. **Ctrl/Cmd + P
+rebuilds the LAST option chosen** (`_lastMode`, chart + table before any):
+`beforeprint` fires on every print, the PDF run included, and rebuilding as
+chart + table there turned a one-page chart-only print into two. How it
+holds:
 
 - **Each page is a fixed box** — `#print-area .pp`, 190 x 276mm (one short
   of the 277 a page holds, or it rounds over into a blank third page),
