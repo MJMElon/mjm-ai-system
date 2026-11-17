@@ -10,13 +10,19 @@
 <meta http-equiv="Expires" content="0"/>
 <title>PALMS Plot Status Map — Nursery Operation Manage</title>
 <!-- PALMS wears the plot map, not the module's leaf: the office asked for
-     "一个地图板块感 里面有蓝黄红绿板块", then "不规则形状的". So the parcels
-     are IRREGULAR quadrilaterals with lanes between them, the way plots sit
-     on the ground, and not a grid of four squares. The plate is still the
-     module's; what sits on it is this page. The RING is the office own
-     drawing, handed over as a picture when "和bnn boundry一样" could not be
-     read from here: ten plot segments round a centre, two blue, one red,
-     three green, four yellow, clockwise from the top. See CLAUDE.md. -->
+     "一个地图板块感 里面有蓝黄红绿板块", then "不规则形状的". The plate is
+     still the module's; what sits on it is this page.
+
+     THE RING IS THE OFFICE OWN DRAWING, handed over as a picture once
+     "整体形状要和bnn boundry一样" turned out not to be readable from here --
+     that outline lives in shared_plots.map_top, in a database this
+     environment cannot reach. Ten plot segments round a centre, two blue,
+     one red, three green, four yellow, clockwise from the top. Their
+     numbers are the specification, the way the papan tanda office drew.
+
+     AND IT IS THE ANSWER, not a stand-in for one: the office was offered a
+     tracing of the real BNN outline and said no -- 不用了. Do not trace it
+     onto this mark without being asked. See CLAUDE.md. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpath d='M33.13 6.02A26 26 0 0 1 46.35 10.32L38.35 22.41A11.5 11.5 0 0 0 32.50 20.51Z' fill='%233b82f6'/%3E%3Cpath d='M48.19 11.65A26 26 0 0 1 56.35 22.89L42.77 27.97A11.5 11.5 0 0 0 39.16 23.00Z' fill='%233b82f6'/%3E%3Cpath d='M57.05 25.05A26 26 0 0 1 57.05 38.95L43.08 35.07A11.5 11.5 0 0 0 43.08 28.93Z' fill='%23ef4444'/%3E%3Cpath d='M56.35 41.11A26 26 0 0 1 48.19 52.35L39.16 41.00A11.5 11.5 0 0 0 42.77 36.03Z' fill='%2322c55e'/%3E%3Cpath d='M46.35 53.68A26 26 0 0 1 33.13 57.98L32.50 43.49A11.5 11.5 0 0 0 38.35 41.59Z' fill='%2322c55e'/%3E%3Cpath d='M30.87 57.98A26 26 0 0 1 17.65 53.68L25.65 41.59A11.5 11.5 0 0 0 31.50 43.49Z' fill='%2322c55e'/%3E%3Cpath d='M15.81 52.35A26 26 0 0 1 7.65 41.11L21.23 36.03A11.5 11.5 0 0 0 24.84 41.00Z' fill='%23f5b324'/%3E%3Cpath d='M6.95 38.95A26 26 0 0 1 6.95 25.05L20.92 28.93A11.5 11.5 0 0 0 20.92 35.07Z' fill='%23f5b324'/%3E%3Cpath d='M7.65 22.89A26 26 0 0 1 15.81 11.65L24.84 23.00A11.5 11.5 0 0 0 21.23 27.97Z' fill='%23f5b324'/%3E%3Cpath d='M17.65 10.32A26 26 0 0 1 30.87 6.02L31.50 20.51A11.5 11.5 0 0 0 25.65 22.41Z' fill='%23f5b324'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
