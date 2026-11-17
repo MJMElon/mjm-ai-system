@@ -834,6 +834,97 @@ empty cell with the mark on it is not a question.
 To take a corrected field record's date, clear the cell — then it is a
 question again and the field answers it.
 
+## The audit's plot and batch list IS the Main Nursery Movement Report
+
+The office, over the two audit module cards: *"for the nursery audit's plot
+condition audit and seedling height audit's plot and batch link to the summary
+report (main nursery movement report). So if the plot shown in the report, it
+will shown for audit too."*
+
+**THE GATE WAS ALREADY THE REPORT AND THE ROSTER WAS NOT**, which is the whole
+fault in one line. Both modules built their batch roster from the LIFE-STAGE
+LOGS — `Planted` for a pre-nursery tray, `Transplanted*` for a main plot — and
+then used `shared_plot_batch_balance` only to grey out a batch that had since
+gone. That view IS the Movement Report: its own file opens by saying so, and it
+is `MOVE_COLS.main` column for column.
+
+So the two did not cover the same ground. **A batch that arrived by TRANSFER
+has no `Transplanted` log at all** — it arrives as a `Cull3_Transfer`, which is
+the report's *Transfer In* column — so it sat in the report, had a perfectly
+good row in `balanceByPB`, and was on NO grid, because nothing had ever put it
+in `plotBatches` for the gate to be asked about.
+
+**THAT IS EVERY "-R" PLOT IN THE COMPANY.** A replant plot is made by a
+3rd-culling transfer and is populated by nothing else, so the seedlings
+standing in it could be read off the Summary Report and could not be audited.
+The office could see the plot on the grid — `audit_plots.js` offers it — with
+no batch under it and nothing saying why. **It only became visible the day the
+plot list started carrying `-R` plots at all**, which is the section above:
+before that the plot was missing too, and one absence hid the other.
+
+`audit/audit_roster.js` is the rule and the view is a SOURCE now as well as the
+gate. Four things in it:
+
+- **IT IS PURELY ADDITIVE.** The logs and `audit_batches` are read exactly as
+  before and merged FIRST, so every batch on a grid today is on it tomorrow,
+  keeping its breed and its planted date — the view carries neither, and the
+  order is what stops a report row blanking a log row.
+- **`qty > 0`, never the report's own `closing !== 0`.** The report draws a row
+  that closed at nought if it moved during the period, because it is a movement
+  report and that row is the month's history. The audit asks a different
+  question — is there something standing to look at — and nothing standing is
+  nothing to audit, which is the judgement `isBatchNotRequired` has always
+  made.
+- **THE PRE NURSERY IS UNTOUCHED.** The view is the MAIN nursery movement and
+  holds no PN row, which `RUN_ME_plot_batch_balance_fix.sql` says in its own
+  words. PN keeps its `Planted` logs, the only thing that has ever placed a
+  tray.
+- **A PLOT THAT PLACES NOWHERE IS COUNTED, not dropped in silence.** A grid
+  with four tabs cannot draw a plot under no nursery, so it is left out and
+  `reportPlotsOnNoNursery` says how many — the shape this file keeps finding is
+  a list that is quietly short.
+
+**IT IS ONE FILE BECAUSE IT WAS ALREADY TWO COPIES.** The roster, the
+transaction-type list and `isBatchNotRequired` were each written out once per
+module and were already drifting — the two asked for different column sets —
+and this fix would have been the eleventh thing written down twice. It is PURE:
+rows in, rows out, no database and no screen, so the test drives the real one.
+**It is a HARD DEPENDENCY** like `audit_plots.js` beside it — both module
+scripts read `MJMAuditRoster` at their TOP LEVEL, so a page that cannot fetch
+it half-EVALUATES rather than half-working — so `audit_sw.js` precaches it
+(`VER` → `mjm-26111704`), both pages load it BEFORE the script that reads it,
+and the test asserts the order.
+
+**Nothing to run in the database.** Both versions of the view already carry
+`Cull3_Transfer`, so whichever has been run, the report half was always right;
+the whole of this is in the two modules.
+
+`shared/CHECK_what_the_audit_could_not_see.sql` is what answers *what does this
+actually move*: every standing plot and batch the audit could not see, per
+nursery and then named, and which of them still place under no nursery.
+**"nothing to report" is a real answer** and means every standing batch already
+had a life-stage log. Tested on the scratch Postgres against the transfer
+shape, against a database where the two already agreed, with no `shared_plots`
+(where a `-R` plot correctly reads as placing nowhere, because nothing else can
+place one), with no view at all, and twice in one session.
+
+`tests/the_audit_roster_is_the_movement_report.cjs` is 44 checks and **36 fail
+on the previous code**. It drives the SHIPPED `audit_roster.js` and both REAL
+pages in a real browser. Three things it had to learn:
+
+- **It names the missing file rather than dying on it.** The first run against
+  the previous code went down on an ENOENT for a file that does not exist
+  there — the house trap, met again — so `loadRoster()` answers null, that is
+  ONE named failure, and the forty-three underneath are still asked.
+- **`?admin=1` or the page leaves.** Both module pages bounce to the To Do list
+  unless the address names a plot, says admin, or came from manage
+  (`audit_script.js`'s own landing guard). Without it the section measures
+  `audit_home.html`, which loads no roster and reads exactly like the file
+  failing to evaluate.
+- **The login-guard stub has to DEFINE `MJMAuditLogin`**, not be blanked:
+  several module scripts reference it bare, so an absent one throws past
+  whatever runs next.
+
 ## A batch's height is a join, because the form never asked for the batch
 
 Seedling Height in the Pre-Nursery is audited **plot by plot** — the form has
