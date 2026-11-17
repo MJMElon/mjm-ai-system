@@ -9684,7 +9684,57 @@
 
         // Render the original photo with a red dot at every detected seed centre.
         // Returns a new JPEG data URL; falls back to the original if drawing fails.
-        function _seedDrawDotsOnImage(dataUrl, points) {
+        /* A point the AI gave is only kept if the photo itself is dark where
+           it points. An empty cell is white or grey tray, so a dot there is
+           the model guessing, not a seed. The threshold is a judgement from
+           looking at the trays, and the removed dots are drawn hollow so the
+           person can see what was taken out and why. */
+        const SEED_DARK_LUMA = 85;       // a pixel darker than this is seed
+        const SEED_DARK_MIN_FRAC = 0.25; // share of dark pixels in the disc to keep a point
+        function _seedFilterPoints(dataUrl, points) {
+            return new Promise(resolve => {
+                if (!points.length) return resolve({ kept: [], dropped: [] });
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const w = img.width, h = img.height;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w; canvas.height = h;
+                        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                        ctx.drawImage(img, 0, 0);
+                        const data = ctx.getImageData(0, 0, w, h).data;
+                        // A disc about the size of one seed, so the sample sits inside it.
+                        const r = Math.max(3, Math.round(Math.min(w, h) / 90));
+                        const kept = [], dropped = [];
+                        for (const p of points) {
+                            const cx = Math.round(Math.max(0, Math.min(w - 1, (p[1] / 1000) * w)));
+                            const cy = Math.round(Math.max(0, Math.min(h - 1, (p[0] / 1000) * h)));
+                            let dark = 0, total = 0;
+                            for (let dy = -r; dy <= r; dy++) {
+                                for (let dx = -r; dx <= r; dx++) {
+                                    if (dx * dx + dy * dy > r * r) continue;
+                                    const x = cx + dx, y = cy + dy;
+                                    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                                    const i = (y * w + x) * 4;
+                                    const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                                    total++;
+                                    if (luma < SEED_DARK_LUMA) dark++;
+                                }
+                            }
+                            (total && dark / total >= SEED_DARK_MIN_FRAC ? kept : dropped).push(p);
+                        }
+                        resolve({ kept, dropped });
+                    } catch (e) {
+                        console.warn('Seed pixel check failed:', e);
+                        resolve({ kept: points, dropped: [] });
+                    }
+                };
+                img.onerror = () => resolve({ kept: points, dropped: [] });
+                img.src = dataUrl;
+            });
+        }
+
+        function _seedDrawDotsOnImage(dataUrl, points, dropped = []) {
             return new Promise(resolve => {
                 const img = new Image();
                 img.onload = () => {
@@ -9706,6 +9756,16 @@
                             ctx.beginPath();
                             ctx.arc(px, py, dotR, 0, Math.PI * 2);
                             ctx.fill();
+                            ctx.stroke();
+                        }
+                        // Points the pixel check removed: hollow blue, not counted.
+                        ctx.strokeStyle = 'rgba(30, 110, 255, 0.95)';
+                        ctx.lineWidth = Math.max(2, dotR / 3);
+                        for (const [y, x] of dropped) {
+                            const py = Math.max(0, Math.min(img.height, (y / 1000) * img.height));
+                            const px = Math.max(0, Math.min(img.width,  (x / 1000) * img.width));
+                            ctx.beginPath();
+                            ctx.arc(px, py, dotR, 0, Math.PI * 2);
                             ctx.stroke();
                         }
                         resolve(canvas.toDataURL('image/jpeg', 0.9));
@@ -10219,13 +10279,15 @@
 
                 const result = await _seedCallGemini(source, SEED_COUNT_PROMPT);
                 const points = _parseSeedPoints(result.seeds);
-                const aiCount = points.length;
-                const annotated = points.length ? await _seedDrawDotsOnImage(source, points) : source;
+                const { kept, dropped } = await _seedFilterPoints(source, points);
+                const aiCount = kept.length;
+                const annotated = (kept.length || dropped.length) ? await _seedDrawDotsOnImage(source, kept, dropped) : source;
 
                 /* A new count is a new picture of it, so the stored one has to
                    go — leaving the old dots against a new figure is a row that
                    disagrees with itself. The URL is dropped and re-uploaded. */
                 st.aiCount = aiCount;
+                st.droppedCount = dropped.length;
                 st.confidence = result.confidence || null;
                 st.photoBase64 = annotated;
                 st.photoUrl = null;
@@ -10291,12 +10353,14 @@
                 dataUrl = await _seedCompressImage(dataUrl);
                 const result = await _seedCallGemini(dataUrl, SEED_COUNT_PROMPT);
                 const points = _parseSeedPoints(result.seeds);
-                const aiCount = points.length;
-                const annotated = points.length
-                    ? await _seedDrawDotsOnImage(dataUrl, points)
+                const { kept, dropped } = await _seedFilterPoints(dataUrl, points);
+                const aiCount = kept.length;
+                const annotated = (kept.length || dropped.length)
+                    ? await _seedDrawDotsOnImage(dataUrl, kept, dropped)
                     : dataUrl;
                 seedAuditPhotoState[rowId] = {
                     aiCount,
+                    droppedCount: dropped.length,
                     confidence: result.confidence || null,
                     photoBase64: annotated,
                     photoUrl: null,
