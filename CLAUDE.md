@@ -388,12 +388,16 @@ duplicate in it, which is exactly the kind of thing that gets lived with.
   additive and soft, so a browser holding yesterday's copy behaves exactly
   as it does today; it needs **one hard reload per machine** to pick the
   plots up.
-- **The audit MIRROR was a month behind** when this was written —
-  `MJMNurseryAudit` last synced 12 Oct against an office repository on 13
-  Nov — so none of this reaches audit.mjmnursery.com until its *sync audit
-  mirror* workflow runs. Its own README says GitHub pauses a scheduled
-  workflow after about 60 days and that the Actions tab is the fix. **Check
-  that before concluding an audit change did not work.**
+- **THE AUDIT MIRROR IS HOW THIS REACHES audit.mjmnursery.com**, and it
+  runs hourly: `MJMNurseryAudit` copies `audit/` and `shared/*.js` from
+  here, so nothing of this is live there until it has. **Check its last
+  commit before concluding an audit change did not work** — and check it on
+  the REMOTE. A local clone of that repository goes stale like any other,
+  and reading one here is how this paragraph first came to say the mirror
+  was a month behind when it had synced four days earlier. Its own README
+  has the rest: GitHub pauses a scheduled workflow after about 60 days
+  without a commit, and the Actions tab is where it is re-enabled and run
+  by hand.
 
 `shared/CHECK_which_plots_each_module_offers.sql` is what answers *what does
 this actually move*: every plot each side holds, how many are inside the
