@@ -1,42 +1,55 @@
 -- ============================================================================
--- WHICH PLOTS EACH MODULE OFFERS, AND WHICH ONE IS ON NO PICKER AT ALL
+-- WHICH PLOTS EACH MODULE OFFERS, WHICH ONE LEAVES, AND WHICH IS ON NO PICKER
 --
 -- A plot is added in ONE place: Seedling Stock Management, System Settings,
--- Add Plot, which inserts a row into shared_plots. Add Row on the Work
--- Maintenance schedule writes the other half, nops_maint_custom_plots.
+-- Add Plot, which inserts a row into shared_plots. The cross on that same
+-- page deletes one. Add Row on the Work Maintenance schedule writes the
+-- other half, nops_maint_custom_plots.
 --
--- Every module now reads both. What this file answers is the question that
+-- Every module reads both. What this file answers is the question that
 -- decides whether that is working: WHAT DOES IT ACTUALLY MOVE.
 --
--- Four fixed ranges are built into every picker as the FLOOR, so that a
--- failed read cannot empty one: P01 to P52, B01 to B14, U01 to U18 and N01
--- to N20. A plot inside one of those was always offered everywhere and is
--- not interesting. A plot OUTSIDE one is reachable only through the link,
--- and those are the rows to read.
+-- READ SECTION 4 BEFORE TRUSTING ANY OF IT. The four ranges built into the
+-- pickers -- P01 to P52, B01 to B14, U01 to U18, N01 to N20 -- used to be the
+-- FLOOR, so a plot was offered whether or not Seedling Stock had a row for
+-- it. That is what stopped a deletion biting. They are the FALLBACK now: a
+-- nursery Seedling Stock holds plots for is offered exactly those plots, and
+-- a nursery it holds none for keeps its whole range, because an absent answer
+-- is nobody having been asked. SO A RANGE PLOT THAT WAS NEVER KEYED NOW
+-- LEAVES EVERY PICKER, and section 4 is the list of them. If that list holds
+-- a plot the office never deleted, shared_plots is short of a row and the
+-- answer is to add the plot back on the settings page -- one press, and it
+-- returns everywhere.
 --
 -- WHAT TO LOOK FOR, in the order the result prints it:
 --
---   1  how many plots each side holds, and whether the two tables are there
---   2  one line per nursery: inside the ranges, and NEW
+--   1  how many plots each side holds, and whether the three tables are there
+--   2  one line per nursery: how many are keyed, how many are NEW, how many
+--      LEAVE, and whether that nursery is narrowed at all
 --   3  every NEW plot named. These are the ones the link carries. On a
 --      healthy system this is the transfer plots plus anything past the end
 --      of a range, and every one of them should now be on the Nelos raise
 --      form, the auditor grids and the Work Maintenance schedule.
---   4  every plot whose nursery is NOT one of the four. THESE ARE ON NO
+--   4  every plot that LEAVES, with what if anything puts it back. Three
+--      answers: a hand-added row keeps it on the schedule, a saved work
+--      record keeps it on the schedule, or it is gone from every picker.
+--      NOTHING IS DELETED either way -- the work records stay exactly where
+--      they are in nops_maint_records.
+--   5  every plot whose nursery is NOT one of the four. THESE ARE ON NO
 --      PICKER IN THE SYSTEM and nothing on any screen says so, because
 --      there is no tab or column to draw them under. Expect NOUGHT. A row
 --      here is either a nursery nobody has told the modules about or a
 --      misspelling in shared_plots.
---   5  every nursery spelling seen, with how many plots carry it, so a
+--   6  every nursery spelling seen, with how many plots carry it, so a
 --      stray spelling is visible rather than inferred.
 --
 -- Safe to run twice, creates nothing, changes nothing.
 -- ============================================================================
 
--- Both tables are collected in a DO block and parked in a session setting,
--- so the query at the foot names neither of them. A query naming a table
--- that is not on the database fails to PARSE however well the branch is
--- guarded, and nops_maint_custom_plots is not on every copy.
+-- All three tables are collected in a DO block and parked in session
+-- settings, so the query at the foot names none of them. A query naming a
+-- table that is not on the database fails to PARSE however well the branch
+-- is guarded, and nops_maint_custom_plots is not on every copy.
 DO $collect$
 DECLARE
   js   jsonb := '[]'::jsonb;
@@ -67,10 +80,33 @@ BEGIN
   -- Every piece COALESCEd: set_config with a NULL value BLANKS the setting,
   -- which would read as a database with no plots on it at all.
   PERFORM set_config('mjm.plots', COALESCE(js::text, '[]'), false);
+
+  -- THE PLOTS A SAVED WORK RECORD NAMES. The schedule puts one of these back
+  -- even when Seedling Stock has dropped it, because a row that is saved must
+  -- never be a row that cannot be seen. Its own EXCEPTION branch, because the
+  -- records column is JSONB on every copy that has it and this file must
+  -- still answer on one where it is not.
+  part := '[]'::jsonb;
+  IF to_regclass('public.nops_maint_records') IS NOT NULL THEN
+    BEGIN
+      EXECUTE $q$
+        SELECT COALESCE(jsonb_agg(DISTINCT e.value ->> 'plot'), '[]'::jsonb)
+          FROM public.nops_maint_records m,
+               jsonb_array_elements(COALESCE(m.records, '[]'::jsonb)) AS e
+         WHERE COALESCE(e.value ->> 'plot', '') <> ''
+      $q$ INTO part;
+    EXCEPTION WHEN others THEN
+      part := '[]'::jsonb;
+    END;
+  END IF;
+  PERFORM set_config('mjm.rowplots', COALESCE(part::text, '[]'), false);
+
   PERFORM set_config('mjm.has_stock',
     CASE WHEN to_regclass('public.shared_plots') IS NULL THEN 'no' ELSE 'yes' END, false);
   PERFORM set_config('mjm.has_custom',
     CASE WHEN to_regclass('public.nops_maint_custom_plots') IS NULL THEN 'no' ELSE 'yes' END, false);
+  PERFORM set_config('mjm.has_records',
+    CASE WHEN to_regclass('public.nops_maint_records') IS NULL THEN 'no' ELSE 'yes' END, false);
 END
 $collect$;
 
@@ -135,14 +171,54 @@ one AS (
 ),
 orphan AS (
   SELECT nurs_raw, plot_raw, src FROM placed WHERE nursery IS NULL
+),
+
+-- ── WHAT DECIDES A DELETION ────────────────────────────────────────────────
+-- SEEDLING STOCK ALONE narrows a picker. A hand-added plot is appended on
+-- top of whichever list won, so it can never be the thing that triggers the
+-- narrowing -- which is why this is asked of src rather than of `one`.
+stock_nurs AS (
+  SELECT DISTINCT nursery FROM placed
+   WHERE nursery IS NOT NULL AND src = 'Seedling Stock'
+),
+stock_in_range AS (
+  SELECT DISTINCT nursery, range_canon FROM placed
+   WHERE nursery IS NOT NULL AND src = 'Seedling Stock' AND range_canon IS NOT NULL
+),
+custom_in_range AS (
+  SELECT DISTINCT nursery, range_canon FROM placed
+   WHERE nursery IS NOT NULL AND src = 'Added by hand' AND range_canon IS NOT NULL
+),
+-- A saved work record names a PLOT and no nursery, so the range is what says
+-- whose plot it is -- the same evidence _narrowToStock uses when it puts one
+-- back. Matched against both spellings through `fixed`.
+row_in_range AS (
+  SELECT DISTINCT f.nursery, f.canon AS range_canon
+    FROM jsonb_array_elements_text(
+           COALESCE(current_setting('mjm.rowplots', true), '[]')::jsonb) AS rp
+    JOIN fixed f
+      ON f.code_key = translate(upper(btrim(rp.value)), ' -_./()', '')
+),
+leaving AS (
+  SELECT f.nursery, f.canon,
+         EXISTS (SELECT 1 FROM custom_in_range c
+                  WHERE c.nursery = f.nursery AND c.range_canon = f.canon) AS by_hand,
+         EXISTS (SELECT 1 FROM row_in_range w
+                  WHERE w.nursery = f.nursery AND w.range_canon = f.canon) AS has_row
+    FROM (SELECT DISTINCT nursery, canon FROM fixed) f
+    JOIN stock_nurs sn ON sn.nursery = f.nursery
+   WHERE NOT EXISTS (SELECT 1 FROM stock_in_range s
+                      WHERE s.nursery = f.nursery AND s.range_canon = f.canon)
 )
 
 SELECT 1 AS sort, 'TABLES' AS section,
        'shared_plots: ' || COALESCE(current_setting('mjm.has_stock',  true), 'no')
-       || ', nops_maint_custom_plots: '
-       || COALESCE(current_setting('mjm.has_custom', true), 'no') AS nursery,
+       || ', hand-added: ' || COALESCE(current_setting('mjm.has_custom', true), 'no')
+       || ', work records: ' || COALESCE(current_setting('mjm.has_records', true), 'no') AS nursery,
        (SELECT count(*)::text FROM keyed) || ' plot rows read' AS plot,
-       '' AS source,
+       (SELECT count(*)::text FROM jsonb_array_elements_text(
+          COALESCE(current_setting('mjm.rowplots', true), '[]')::jsonb))
+         || ' plots named by a saved record' AS source,
        CASE WHEN COALESCE(current_setting('mjm.has_stock', true), 'no') = 'no'
             THEN 'shared_plots is NOT on this database -- nothing below means anything'
             WHEN COALESCE(current_setting('mjm.has_custom', true), 'no') = 'no'
@@ -152,11 +228,22 @@ SELECT 1 AS sort, 'TABLES' AS section,
 UNION ALL
 SELECT 2, 'BY NURSERY', o.nursery,
        count(*)::text || CASE WHEN count(*) = 1 THEN ' plot' ELSE ' plots' END,
-       sum(CASE WHEN o.in_range THEN 1 ELSE 0 END)::text || ' inside the fixed ranges',
-       sum(CASE WHEN o.in_range THEN 0 ELSE 1 END)::text
-         || ' NEW -- offered only because every module reads Seedling Stock'
+       sum(CASE WHEN o.in_range THEN 0 ELSE 1 END)::text || ' NEW',
+       CASE WHEN NOT EXISTS (SELECT 1 FROM stock_nurs sn WHERE sn.nursery = o.nursery)
+            THEN 'NOT narrowed -- Seedling Stock holds no plot here, so the whole range stands'
+            ELSE (SELECT count(*)::text FROM leaving l WHERE l.nursery = o.nursery)
+                 || ' range plots LEAVE -- see section 4' END
   FROM one o
  GROUP BY o.nursery
+
+-- A nursery with no plot on either side is on no line above, and it is the
+-- one most worth saying out loud: it keeps its whole range and is narrowed
+-- by nothing.
+UNION ALL
+SELECT 2, 'BY NURSERY', r.code, '0 plots keyed', '0 NEW',
+       'NOT narrowed -- nothing keyed at all, so the whole range stands'
+  FROM ranges r
+ WHERE NOT EXISTS (SELECT 1 FROM one o WHERE o.nursery = r.code)
 
 UNION ALL
 SELECT 3, 'NEW PLOT', o.nursery, o.plot_raw, o.src,
@@ -170,18 +257,36 @@ SELECT 3, 'NEW PLOT', 'none', '-', '-',
  WHERE NOT EXISTS (SELECT 1 FROM one WHERE NOT in_range)
 
 UNION ALL
-SELECT 4, 'ON NO PICKER', COALESCE(NULLIF(x.nurs_raw, ''), 'no nursery keyed'),
+SELECT 4, 'LEAVES', l.nursery, l.canon,
+       CASE WHEN l.by_hand THEN 'Added by hand'
+            WHEN l.has_row THEN 'A saved work record'
+            ELSE 'nothing' END,
+       CASE WHEN l.by_hand
+            THEN 'off the pickers, kept on the schedule by its hand-added row'
+            WHEN l.has_row
+            THEN 'off the pickers, kept on the schedule because a saved record names it'
+            ELSE 'GONE from every picker -- if the office never deleted it, add it back'
+            END
+  FROM leaving l
+
+UNION ALL
+SELECT 4, 'LEAVES', 'none', '-', '-',
+       'nothing to report -- every range plot of a keyed nursery is in Seedling Stock'
+ WHERE NOT EXISTS (SELECT 1 FROM leaving)
+
+UNION ALL
+SELECT 5, 'ON NO PICKER', COALESCE(NULLIF(x.nurs_raw, ''), 'no nursery keyed'),
        x.plot_raw, x.src,
        'its nursery is not one of the four, so NO module can offer it'
   FROM orphan x
 
 UNION ALL
-SELECT 4, 'ON NO PICKER', 'none', '-', '-',
+SELECT 5, 'ON NO PICKER', 'none', '-', '-',
        'nothing to report -- every plot sits under one of the four nurseries'
  WHERE NOT EXISTS (SELECT 1 FROM orphan)
 
 UNION ALL
-SELECT 5, 'SPELLING', COALESCE(NULLIF(k.nurs_raw, ''), 'no nursery keyed'),
+SELECT 6, 'SPELLING', COALESCE(NULLIF(k.nurs_raw, ''), 'no nursery keyed'),
        count(*)::text || CASE WHEN count(*) = 1 THEN ' plot' ELSE ' plots' END, '',
        CASE WHEN EXISTS (SELECT 1 FROM ranges rr WHERE rr.code = k.nurs_key)
             THEN 'reads as ' || k.nurs_key

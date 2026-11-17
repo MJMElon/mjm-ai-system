@@ -43,22 +43,33 @@
       `canon()` is the one way in. Handing the module the office's spelling
       instead would silently orphan every audit ever saved.
 
-   2. THE RANGES AS THE FLOOR. The four ranges STAY, and whatever Seedling
-      Stock holds is added on top, deduped on letters and digits. So:
+   2. THE RANGES AS THE FALLBACK, which they were the FLOOR for a day. The
+      office asked for the other half the same afternoon — *"i deleted a
+      plot, make it remove from all modules too"* — and the floor was exactly
+      what stopped the ✕ on the settings page doing anything: B14 was offered
+      whether or not `shared_plots` had a row for it.
 
-        - a read that fails changes nothing, which is the fail-open rule
+      So the LIST is Seedling Stock's answer where the office has keyed one,
+      and the range answers for a nursery they have not. `MJMMaintPlots
+      .offered()` is the whole of that rule and this file keeps no second
+      copy of it. Three things hold it up:
+
+        - a read that FAILS changes nothing, which is the fail-open rule
           every other gate here follows. An empty plot list is a module
           nobody can use, and a plot picker that went blank because a table
           could not be read is worse than one that is a plot short.
-        - no plot that is on screen today can disappear.
-        - a plot added in the office appears everywhere in the module.
+        - it is asked PER NURSERY. A nursery Seedling Stock holds no plot for
+          keeps its whole range, because an absent answer is nobody having
+          been asked — and the Pre Nursery is counted in TRAYS, so a global
+          test would wipe P01 to P52 off every grid in the module.
+        - a plot added in the office appears everywhere in the module, and a
+          plot deleted leaves it.
 
-      WHAT IT DOES NOT DO, said plainly: a plot DELETED on the settings page
-      does not leave the four ranges. The ranges are the floor, so B14 is
-      offered whether or not `shared_plots` has a row for it. That is the
-      deliberate price of fail-open, and it is the safe direction — the day
-      the office wants a plot gone from the auditor's grid, the answer is to
-      stop writing the ranges, not to make a failed read empty the module.
+      WHAT IT COSTS, said plainly: this module has no saved-rows rule of its
+      own, so a plot the office deletes is off the auditor's grid and its
+      dropdown at once. The AUDITS are not touched — they are rows of
+      `audit_plot_audits` and the like, and `byPlot()` goes on placing them,
+      which is what the next paragraph is about.
 
    ── THE LIVE OBJECTS ──────────────────────────────────────────────────────
 
@@ -117,25 +128,35 @@
     return m ? m[1] + m[2].padStart(2, '0') + (m[3] || '') : s;
   }
 
-  /* The set of plots already in a nursery, by key, so a plot Seedling Stock
-     spells differently is not added twice. */
-  const SEEN = {};
-  NURSERIES.forEach(n => { SEEN[n] = new Set(LIST[n].map(key)); });
-
-  function add(nursery, rawPlot) {
-    if (!LIST[nursery]) return false;
-    const code = canon(rawPlot);
-    const k = key(code);
-    if (!k || SEEN[nursery].has(k)) return false;
-    LIST[nursery].push(code);
-    SEEN[nursery].add(k);
-    return true;
-  }
+  /* The ranges, kept apart from LIST so that LIST can be REPLACED by the
+     office's answer and the placing map below can still carry them. */
+  const RANGES = {};
+  NURSERIES.forEach(n => { RANGES[n] = LIST[n].slice(); });
 
   /* B10 sorts after B2, not before it — the same comparison every other
      plot picker in the portal uses. */
   const order = (a, b) => String(a).localeCompare(String(b), undefined,
                                                   { numeric: true, sensitivity: 'base' });
+
+  /* THE LIST IS SET IN PLACE, never reassigned, because `all()` hands the
+     same object out to five files and two of them hold an ARRAY off it.
+     Emptying and refilling each array is what lets a plot DISAPPEAR from a
+     grid already drawn, which is the whole of what the office asked for. */
+  function setList(nursery, plots) {
+    const arr = LIST[nursery];
+    if (!arr) return;
+    const seen = new Set();
+    const keep = [];
+    plots.forEach(p => {
+      const code = canon(p);
+      const k = key(code);
+      if (!k || seen.has(k)) return;
+      seen.add(k); keep.push(code);
+    });
+    keep.sort(order);
+    arr.length = 0;
+    arr.push.apply(arr, keep);
+  }
 
   /* The same question asked on letters and digits alone, for a plot keyed
      with a stray space — 'B 15'. canon() cannot help there: its pattern is
@@ -144,15 +165,27 @@
      after the two spellings above have both missed. */
   const BY_KEY = {};
 
+  /* THE PLACING MAP CARRIES THE RANGES AS WELL AS THE LIST, and that
+     asymmetry is deliberate: a plot the office DELETED is off every grid
+     and dropdown, and a saved audit or a maintenance record still naming it
+     must go on resolving to its nursery. Taking a plot off the pickers must
+     not take last month's work off the claim, or off the board that owes an
+     audit for it. `shared_maint_plots.js` says the same of its own
+     `index()`. */
   function reindex() {
     [BY_PLOT, BY_KEY].forEach(m => Object.keys(m).forEach(k => { delete m[k]; }));
-    NURSERIES.forEach(n => LIST[n].forEach(p => {
-      BY_PLOT[p] = n;
-      const stripped = p.replace(/^([A-Z]+)0+(\d)/, '$1$2');
-      if (stripped !== p) BY_PLOT[stripped] = n;
-      BY_KEY[key(p)] = n;
-      BY_KEY[key(stripped)] = n;
-    }));
+    NURSERIES.forEach(n => {
+      const seen = new Set();
+      [RANGES[n], LIST[n]].forEach(src => (src || []).forEach(p => {
+        if (seen.has(p)) return;
+        seen.add(p);
+        BY_PLOT[p] = n;
+        const stripped = p.replace(/^([A-Z]+)0+(\d)/, '$1$2');
+        if (stripped !== p) BY_PLOT[stripped] = n;
+        BY_KEY[key(p)] = n;
+        BY_KEY[key(stripped)] = n;
+      }));
+    });
   }
   reindex();
 
@@ -179,6 +212,7 @@
   let _promise = null;
   let _ready   = false;
   let _added   = [];          // ['BNN|B15', …] — what Seedling Stock added
+  let _gone    = [];          // ['BNN|B14', …] — what the office has deleted
 
   /* Idempotent: every one of the five callers may ask, and the read happens
      once per page. Never rejects — a module that cannot read the office's
@@ -198,11 +232,17 @@
              shared file — it simply keeps the ranges. */
           return;
         }
-        const extra = await MJMMaintPlots.loadAll(client);
-        Object.keys(extra || {}).forEach(n => {
-          (extra[n] || []).forEach(p => { if (add(n, p)) _added.push(n + '|' + canon(p)); });
+        /* `offer` is the office's list where they have keyed one and the
+           range where they have not — MJMMaintPlots.offered is the whole of
+           that rule and this file does not keep a second copy of it. */
+        const got = await MJMMaintPlots.loadLists(client);
+        NURSERIES.forEach(n => {
+          const was = new Set(LIST[n].map(key));
+          setList(n, (got.offer && got.offer[n]) || RANGES[n]);
+          const now = new Set(LIST[n].map(key));
+          LIST[n].forEach(p => { if (!was.has(key(p))) _added.push(n + '|' + p); });
+          RANGES[n].forEach(p => { if (!now.has(key(p))) _gone.push(n + '|' + p); });
         });
-        NURSERIES.forEach(n => LIST[n].sort(order));
         reindex();
       } catch (e) {
         console.warn('[audit-plots] Seedling Stock plot list unavailable, '
@@ -222,12 +262,15 @@
     nurseryOf: (p) => BY_PLOT[p] || BY_PLOT[canon(p)] || BY_KEY[key(p)] || null,
     canon, key, load,
     ready:  () => _ready,
-    /* What Seedling Stock added that the ranges did not have, as
-       'BNN|B15'. Nothing on a screen reads it; it is here so that "the
-       office added B15 and the auditor cannot see it" is answerable from
-       the console on the phone it is happening on, which is the one place
-       a check written here cannot reach. */
-    added:  () => _added.slice()
+    /* What Seedling Stock added that the ranges did not have, and what it
+       has TAKEN AWAY, as 'BNN|B15'. Nothing on a screen reads either;
+       they are here so that "the office added B15 and the auditor cannot
+       see it", and "we deleted B14 and it is still there", are both
+       answerable from the console on the phone it is happening on — which
+       is the one place a check written here cannot reach. */
+    added:  () => _added.slice(),
+    gone:   () => _gone.slice(),
+    ranges: (n) => (RANGES[n] || []).slice()
   };
 
 })(typeof window !== 'undefined' ? window : globalThis);

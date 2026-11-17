@@ -274,26 +274,81 @@ form would offer. Plots past the end of a range — B15, U19 — go the same way
 has always drawn is indistinguishable from a grid that is right, which is the
 shape this file keeps finding.
 
-**THE RANGES ARE THE FLOOR NOW, NEVER THE LIST.** Whatever `shared_plots`
-holds is added on top, deduped on letters and digits. Three things fall out
-and the first is why it is shaped that way:
+**THE RANGES ARE THE FALLBACK, AND THEY WERE THE FLOOR FOR A DAY.** Whatever
+`shared_plots` holds is what a picker offers; the ranges answer for a nursery
+Seedling Stock holds no plot for. That is the shape the office asked for in
+their next sentence and the paragraph below is why.
+
+### AND THEN A DELETION HAD TO BITE, which the floor was what stopped
+
+The office, the same day the adding half shipped: *"i deleted a plot, make it
+remove from all modules too. i added a plot, make it add for all modules
+too."*
+
+**THE FIRST HALF WORKED AND THE SECOND COULD NOT.** With the ranges as a
+FLOOR, B14 was offered whether or not `shared_plots` had a row for it, so the
+✕ on the settings page deleted a row and changed nothing anybody could see —
+and `loadSharedPlots` said so in its own words, as a feature: *"MERGED into
+NURSERY_PLOTS rather than replacing it … dropping it would take those rows
+off the screen."*
+
+**SO THE ANSWER IS THE LIST, AND THE RANGES ARE WHAT ANSWERS WITH NO SIGNAL.**
+`MJMMaintPlots.offered()` is the one place that says it and the four other
+copies read it or restate it. The sentence that comment was protecting is kept
+as a RULE of its own rather than as a side effect of never narrowing at all,
+and that is the whole of the difference:
 
 - **A READ THAT FAILS CHANGES NOTHING.** Every picker offers exactly what it
   offered before — the fail-open rule every gate here follows. **An empty
   plot list is a module nobody can use**, and a grid that went blank because
-  a table could not be read is far worse than one that is a plot short.
-- **No plot that is on screen today can disappear**, so nothing had to be
-  re-keyed and no screen moved for a plot that was already there.
-- **WHAT IT COSTS, said plainly: a plot DELETED on the settings page does
-  not leave the four ranges.** B14 is offered whether or not `shared_plots`
-  has a row for it. That is the price of fail-open and it is the safe
-  direction. The day the office wants a plot GONE from a picker, the answer
-  is to stop writing the ranges, not to let a failed read empty a module.
+  a table could not be read is far worse than one that is a plot short. So
+  `loadStockStrict` hands back an `ok` beside the plots, and **only a reply
+  that really arrived narrows anything**: `loadStock` returning an empty
+  object cannot be told from a refusal, which is exactly the shape that would
+  have emptied four modules at once.
+- **IT IS ASKED PER NURSERY, and the Pre Nursery is why.** A nursery
+  `shared_plots` holds no plot for keeps its whole range, because **an absent
+  answer is nobody having been asked** — the rule this file already follows
+  for a permission. PN is counted in TRAYS and may have no row at all, so a
+  global test would wipe P01–P52 off every picker in the company.
+- **A PLOT CARRYING SAVED ROWS IS PUT BACK**, on the schedule. That is
+  `_mergePlotsWithRows`' own sentence — *"a row that is saved must never be a
+  row that cannot be seen"* — and it is STRONGER than the deletion: a month of
+  keyed figures must not vanish because somebody tidied the plot list
+  afterwards. **The spelling comes off the RANGES and never off the list as it
+  stands**, because `_narrowToStock` runs at three call sites: a map built from
+  the list stops being able to place B13 the moment it has narrowed it away
+  once, and a month of records landing on the second pass would never bring it
+  back.
+- **A STALE CAPACITY CANNOT RESURRECT A DELETED PLOT.** A capacity has put a
+  plot on the schedule since the Setting grid was written, so without a guard
+  it hands B14 straight back and the ✕ does nothing. `_mergeCapacityPlots`
+  skips a nursery that was narrowed.
+- **AND IT FIXED THE ADDING HALF ON THE SCHEDULE TOO**, which nobody had
+  noticed: a plot the office added with no capacity and no saved row never
+  reached `NURSERY_PLOTS` at all, because only those two things ever put one
+  there. The previous-code run of the test names it — *B15 is there, the
+  office added it* fails.
+
+**WHAT IT COSTS, and both are named rather than buried:**
+
+- **A "-R" PLOT DELETED WHILE IT CARRIES KEYED ROWS LOSES THEM OFF THE
+  SCREEN.** Nothing left in the system says whose plot it is: it is in no
+  range, and Seedling Stock is the only thing that ever claimed it.
+  `_mergePlotsWithRows` refuses to guess a nursery from the plot LETTER, which
+  is right — the ZZ row in `maint_plot_with_rows.cjs` is that rule. **NOTHING
+  IS DELETED**: the records sit untouched in `nops_maint_records`, and putting
+  the plot back on the settings page is one press and brings every row back.
+- **IF `shared_plots` IS SHORT OF A ROW, A PLOT NOBODY DELETED DISAPPEARS.**
+  This environment cannot reach Supabase, so whether that list is complete is
+  not knowable from here — which is the whole reason section 4 of the check
+  below exists, and why it is the thing to run FIRST.
 
 **FOUR FILES MAY HOLD A COPY OF THE RANGES, and each says the same rules:**
 
 - `shared/shared_maint_plots.js` — the office repository's ONE read of
-  `shared_plots`. Unchanged by this work.
+  `shared_plots`, and **the one place that says which of the two answers** —
+  `offered()`, read by the audit module and restated by the other three.
 - `audit/audit_plots.js` — **NEW**, and the audit module's one list. See
   below.
 - `shared/shared_nelos_dock.js` — `loadPlots()`. A second copy of the read,
@@ -321,7 +376,11 @@ once, and it adds exactly two things to the shared list:
   four-line change in each of the five files rather than a rewrite of every
   reader: a grid that reads `NURSERY_PLOTS[tab]` on each draw picks up a plot
   that arrived after the first draw, and so does a lookup on
-  `PLOT_TO_NURSERY[p]`. **It also means nothing may SNAPSHOT them** — the
+  `PLOT_TO_NURSERY[p]`. **`setList` therefore EMPTIES AND REFILLS each array
+  rather than reassigning it** (`arr.length = 0`), which is the only reason a
+  plot the office DELETED can leave a grid that has already been drawn — the
+  deletion half needs the live objects even more than the adding half did.
+  **It also means nothing may SNAPSHOT them** — the
   reverse-lookup IIFE at the top of each of those five files was exactly
   that, and it is why this file owns `byPlot()`. The test forbids the IIFE
   coming back.
@@ -401,15 +460,27 @@ duplicate in it, which is exactly the kind of thing that gets lived with.
 
 `shared/CHECK_which_plots_each_module_offers.sql` is what answers *what does
 this actually move*: every plot each side holds, how many are inside the
-ranges and how many are NEW, every new plot named, and every plot whose
-nursery matches none of the four. **"0 NEW" is a real possible answer** and
-means the office has not yet keyed a plot outside a range — the link is then
-doing nothing visible, which is not the same as not working. Tested on the
-scratch Postgres against the office's own shapes, against a database with no
-hand-added-plots table, with no `shared_plots` at all, and with every plot
-inside a range, which draws the *nothing to report* lines.
+ranges and how many are NEW, every new plot named, **every plot that LEAVES**,
+and every plot whose nursery matches none of the four. **"0 NEW" is a real
+possible answer** and means the office has not yet keyed a plot outside a
+range — the link is then doing nothing visible, which is not the same as not
+working.
 
-`tests/a_plot_added_in_the_office_reaches_every_module.cjs` is 77 checks and
+**SECTION 4 IS THE ONE TO READ FIRST, and it is the handover this change
+cannot be trusted without.** It names every range plot of a keyed nursery
+that Seedling Stock has no row for, with what if anything puts it back — a
+hand-added row, a saved work record, or nothing — because **this environment
+cannot reach Supabase and whether that list is COMPLETE is not knowable from
+here.** A plot in it the office never deleted means `shared_plots` is short of
+a row, and the answer is to add the plot back on the settings page: one press,
+and it returns everywhere. Tested on the scratch Postgres against the
+office's own shapes with two deletions, against a database with no
+hand-added-plots table and no work records (which correctly flips the
+kept-by-a-record plot to *gone*), with no `shared_plots` at all, with every
+nursery keyed in full, which draws the *nothing to report* lines, and against
+a **sparse** BNN holding three plots, which names all eleven that leave.
+
+`tests/a_plot_added_in_the_office_reaches_every_module.cjs` is 89 checks and
 **50 fail on the previous code**. It drives the shipped `shared_maint_plots
 .js` and `audit_plots.js`, the REAL Plot Condition page and the REAL dock in
 a real browser, and ends with the section that stops this coming back: a
@@ -419,7 +490,17 @@ that the two phone copies are the same file, and that every page loads the
 plot list first. **Its first run against the previous code DIED** on an
 ENOENT for a file that does not exist there, which is the house trap again —
 it names the missing file as a failure now and asks the fifty checks
-underneath it.
+underneath it. Its fixture is built round a DELETION now (B14 keyed nowhere,
+B15 and B4-R added, the Pre Nursery deliberately never keyed), so the adding
+half and the deletion half are held by one file.
+
+`tests/a_deleted_plot_leaves_the_schedule.cjs` is the Work Maintenance half,
+which is the only module with a saved-rows rule: 24 checks, **7 of them
+failing on the previous code**, the first in the office's own terms. Its
+section 4 drives the ORDER that breaks a list-built spelling map — narrow with
+no records, then narrow again with the records back — because that is the one
+way to catch the second-pass bug, and a fixture that happens to load its
+records first passes over it.
 
 ## A month keeps its own work records
 
