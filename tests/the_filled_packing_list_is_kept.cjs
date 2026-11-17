@@ -17,6 +17,9 @@ const ok = (c, m) => { if (c) console.log('pass  ' + m); else { console.log('FAI
 
 const slice = (a, b) => { const i = SRC.indexOf(a), j = SRC.indexOf(b, i); return i < 0 || j < 0 ? null : SRC.slice(i, j); };
 const code = slice('let t8FilledDocs = [];', 'function calcSeedAudit()');
+const save = slice('async function saveSeedAudit()', '// ── Download Seed Audit Report as PDF');
+ok(!!save, 'the Seed Audit save is in the page');
+ok(/tabIdx === 8 && typeof window._t8FilledMissing === 'function' && window._t8FilledMissing\(\)/.test(SRC), 'a sign-off of Seed Audit asks for it too');
 const codec = slice('const T6_DOC_SEP', 'let t6_plotData');
 ok(!!code, 'the filled packing list code is in the page');
 ok(/id="t8-filled-input"[^>]*\bmultiple\b/.test(SRC), 'its picker takes several files');
@@ -32,7 +35,7 @@ if (!code || !codec) { console.log(`\n${failed} failure(s)`); process.exit(1); }
   const pg = await browser.newPage();
   await pg.setContent(`<div id="tab-8"><input id="f-batchno"><input id="f-brand" value="AA"><input id="f-datereceived" value="2026-11-10">
     <div id="t8-filled-wrap" class="hidden"><div id="t8-filled-zone"><input type="file" id="t8-filled-input" multiple><p id="t8-filled-hint"></p></div>
-    <div id="t8-filled-list"></div></div></div>`);
+    <div id="t8-filled-list"></div></div><button id="save-t8-btn">Save</button><div id="rowsbox"><div class="t8-bag-row" id="r1"><input class="t8-bag-no" value="14525"><input class="t8-supplier-qty" value="250"><input class="t8-received-qty" value="250"></div></div><textarea id="t8-batch-remark"></textarea></div>`);
   await pg.addScriptTag({ content: `
     window.rows = []; window.toasts = []; window.uploads = 0; window.viewed = null; window.ops = [];
     function showToast(m, t) { toasts.push({ m, t }); }
@@ -51,6 +54,11 @@ if (!code || !codec) { console.log(`\n${failed} failure(s)`); process.exit(1); }
       return b2; } };
     ${codec}
     ${code}
+    const seedAuditPhotoState = {}; let _seedAuditDirty = true;
+    function readNumericInput(el) { return Number(el.value) || 0; }
+    function setEditMetaUI() {}
+    ${save || ''}
+    window.save = typeof saveSeedAudit === 'function' ? saveSeedAudit : null;
     window.api = { load: loadFilledPackingList, up: uploadFilledPackingList, rm: removeFilledPackingList, open: openFilledPackingList, docs: () => t8FilledDocs };
     window.f = (n, t) => new File(['x'], n, { type: t || 'image/jpeg' });
     window.setBatch = v => { document.getElementById('f-batchno').value = v; };
@@ -63,6 +71,15 @@ if (!code || !codec) { console.log(`\n${failed} failure(s)`); process.exit(1); }
   let r = await pg.evaluate(() => ({ rows: rows.length, t: toasts.pop() }));
   ok(r.rows === 0 && /281/.test(r.t.m), 'batch 280: an upload is refused and nothing written');
 
+  await pg.evaluate(async () => { setBatch('280'); await save(); });
+  r = await pg.evaluate(() => ({ audits: rows.filter(x => x.transaction_type === 'Seed_Audit').length, t: toasts.pop() }));
+  ok(r.audits === 1 && r.t.t === 'success', 'batch 280: saves without it');
+  await pg.evaluate(() => { window.rows = []; });
+
+  await pg.evaluate(async () => { setBatch('281'); await api.load('281'); await save(); });
+  r = await pg.evaluate(() => ({ n: rows.length, t: toasts.pop() }));
+  ok(r.n === 0 && r.t.t === 'error' && /upload the filled packing list first/.test(r.t.m), 'batch 281 with no filled packing list: Save refuses and writes NOTHING -> ' + JSON.stringify(r.t));
+  ok(await pg.evaluate(() => window._t8FilledMissing && window._t8FilledMissing() === true), 'and a sign-off is told it is missing');
   await pg.evaluate(async () => { setBatch('281'); await api.load('281'); });
   ok(await pg.evaluate(() => shown('t8-filled-wrap') && shown('t8-filled-zone')), 'batch 281: the box is there');
   await pg.evaluate(async () => { await api.up([f('page 1.jpg'), f('page 2.pdf', 'application/pdf')]); });
@@ -71,17 +88,21 @@ if (!code || !codec) { console.log(`\n${failed} failure(s)`); process.exit(1); }
   ok(r.docs.length === 2 && r.docs[0].name === 'page 1.jpg', 'both files are on the record, names kept (a space included)');
   ok(r.t.t === 'success' && r.chips === 2, 'it says so and draws both');
 
+  await pg.evaluate(async () => { await save(); });
+  r = await pg.evaluate(() => ({ audits: rows.filter(x => x.transaction_type === 'Seed_Audit').length, t: toasts.pop() }));
+  ok(r.audits === 1 && r.t.t === 'success', 'with it attached, Save goes through');
+  ok(await pg.evaluate(() => window._t8FilledMissing() === false), 'and a sign-off is no longer refused');
   await pg.evaluate(async () => { api.docs().length = 0; await api.load('281'); });
   ok(await pg.evaluate(() => api.docs().length === 2), 'reopening the batch reads both back');
 
   await pg.evaluate(async () => { await api.up([f('page 3.jpg')]); });
-  ok(await pg.evaluate(() => api.docs().length === 3 && rows.length === 1), 'a later upload ADDS to the list, still one row');
+  ok(await pg.evaluate(() => api.docs().length === 3 && q('Seed_Audit_PackingList','281').length === 1), 'a later upload ADDS to the list, still one row');
 
   await pg.evaluate(() => api.open(1));
   ok(await pg.evaluate(() => viewed && /\.pdf$/.test(viewed.u) && viewed.n === 'page 2.pdf'), 'pressing a file opens it');
 
   await pg.evaluate(async () => { await api.rm(0); });
-  r = await pg.evaluate(() => ({ docs: api.docs().map(d => d.name), rows: rows.length }));
+  r = await pg.evaluate(() => ({ docs: api.docs().map(d => d.name), rows: q('Seed_Audit_PackingList','281').length }));
   ok(r.docs.join() === 'page 2.pdf,page 3.jpg' && r.rows === 1, 'the cross takes ONE file off and leaves the rest');
 
   await pg.evaluate(async () => { window.failSecond = true; await api.up([f('p4.jpg'), f('p5.jpg')]); window.failSecond = false; });
