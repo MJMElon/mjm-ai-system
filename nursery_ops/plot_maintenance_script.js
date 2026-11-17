@@ -8821,8 +8821,6 @@ function renderRecords() {
      counts as before (total, done, pending, repair cases and how many of
      those are repaired), worked out exactly as before, drawn as two lines of
      figures over two slim bars. Nothing here is counted differently. */
-  const _recMx = document.getElementById('rec-metrics');
-  if (_recMx) _recMx.innerHTML = _recProgressHtml({ total, done, pend, repair, fixed });
 
   // Repopulate plot filter — only plots from current nursery that have records
   const pSel = document.getElementById('rf-filter-plot');
