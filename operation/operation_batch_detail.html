@@ -10597,8 +10597,10 @@
                 ? `${t8FilledDocs.length} file(s) attached. Drop or pick more to add pages.`
                 : 'The packing list after the count, signed and with remarks. Photo or PDF, more than one page at a time.';
         }
-        /* REQUIRED, from batch 281 on: no filled packing list, no save and
-           no sign-off. The refusal is the only thing said about it. */
+        /* REQUIRED for the SIGN-OFF, from batch 281 on. The report SAVES
+           without it, because the counting is done before the sheet is
+           signed and photographed; what it cannot be is verified or
+           reviewed. The refusal is the only thing said about it. */
         window._t8FilledMissing = function () { return _t8FilledApplies() && !t8FilledDocs.length; };
         function openFilledPackingList(k) {
             const d = t8FilledDocs[k];
@@ -10977,14 +10979,6 @@ Thank you.`;
             try {
                 const batchId = document.getElementById('f-batchno').value.trim();
                 if (!batchId) throw new Error('Save Tab 1 (Seeds In) first to assign a batch number.');
-                /* Asked BEFORE anything is written, off the database rather
-                   than the screen, so a list still loading cannot read as
-                   empty and one somebody else just attached counts. */
-                if (_t8FilledApplies()) {
-                    t8FilledDocs = await _t8ReadFilled(batchId);
-                    renderFilledPackingList();
-                    if (!t8FilledDocs.length) throw new Error('Cannot save — upload the filled packing list first.');
-                }
                 const breed = document.getElementById('f-brand').value || null;
                 const dateReceived = document.getElementById('f-datereceived').value || null;
 
@@ -11054,7 +11048,7 @@ Thank you.`;
                 btn.innerText = originalText;
                 btn.disabled = false;
             } catch (e) {
-                showToast(/^Cannot save/.test(e.message) ? e.message : 'Error saving: ' + e.message, 'error');
+                showToast('Error saving: ' + e.message, 'error');
                 btn.innerText = originalText;
                 btn.disabled = false;
             }
