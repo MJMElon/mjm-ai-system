@@ -238,6 +238,189 @@ nursery its own way ("UNN 1"), so the match is on letters and digits.
 **When a new kind of plot appears, this file is the second place to change.**
 The orphan list on the claim is what says it has not been.
 
+### AND IT WAS THE ONLY MODULE THAT HAD BEEN TOLD
+
+The office, in one line: *"help to link the plot from system settings of
+nursery seedling stock management. I saw nelos, audit system all's plot data
+doesnt link from there. I want to link from system settings as if there are
+new plot added, all our modules will adding the new plots also."*
+
+**They were right about both modules, and about six more.** A plot is added
+in ONE place — **Seedling Stock Management → System Settings → Add Plot**,
+which inserts a row into `shared_plots` (`operation/operation_settings.html`,
+and a ✕ on that page deletes one). The section above is Work Maintenance and
+the salary claim reading it. **EIGHT other places carried the four ranges
+written out instead** — P01-P52, B01-B14, U01-U18, N01-N20 — and nothing
+else:
+
+| | |
+|---|---|
+| `shared/shared_nelos_dock.js` | the raise form on **52** office pages |
+| `audit/audit_script.js` | Plot Condition: the grid and its plot dropdown |
+| `audit/audit_height_script.js` | Seedling Height: the same two |
+| `audit/audit_papan_script.js` | Papan Tanda: the batch form |
+| `audit/audit_pending.js` | the home board's plot ORDER and plot list |
+| `audit/audit_home.html` | `_PLOT_NUR`, which nursery a plot is in |
+| `Barcode_Counter` `NelosNewCase.jsx` | the FC Portal's raise form |
+| `Mobile` `NelosNewCase.jsx` | the Admin Portal's raise form |
+
+So a plot the office added was on every other screen in the company and on
+none of those, and **the live case is the transfer plots**: a `-R` plot is
+made by a 3rd-culling transfer and is in no hardcoded range anywhere, so the
+one plot somebody most needs to raise a case about was the one plot no raise
+form would offer. Plots past the end of a range — B15, U19 — go the same way.
+
+**AND NOTHING ON ANY OF THEM SAID A WORD.** A grid that draws the plots it
+has always drawn is indistinguishable from a grid that is right, which is the
+shape this file keeps finding.
+
+**THE RANGES ARE THE FLOOR NOW, NEVER THE LIST.** Whatever `shared_plots`
+holds is added on top, deduped on letters and digits. Three things fall out
+and the first is why it is shaped that way:
+
+- **A READ THAT FAILS CHANGES NOTHING.** Every picker offers exactly what it
+  offered before — the fail-open rule every gate here follows. **An empty
+  plot list is a module nobody can use**, and a grid that went blank because
+  a table could not be read is far worse than one that is a plot short.
+- **No plot that is on screen today can disappear**, so nothing had to be
+  re-keyed and no screen moved for a plot that was already there.
+- **WHAT IT COSTS, said plainly: a plot DELETED on the settings page does
+  not leave the four ranges.** B14 is offered whether or not `shared_plots`
+  has a row for it. That is the price of fail-open and it is the safe
+  direction. The day the office wants a plot GONE from a picker, the answer
+  is to stop writing the ranges, not to let a failed read empty a module.
+
+**FOUR FILES MAY HOLD A COPY OF THE RANGES, and each says the same rules:**
+
+- `shared/shared_maint_plots.js` — the office repository's ONE read of
+  `shared_plots`. Unchanged by this work.
+- `audit/audit_plots.js` — **NEW**, and the audit module's one list. See
+  below.
+- `shared/shared_nelos_dock.js` — `loadPlots()`. A second copy of the read,
+  and deliberately: that file is loaded **bare on 52 pages** and depends on
+  nothing but itself, where `shared_maint_plots.js` is on four of them.
+  Adding it to the other 48 to save eight lines is the worse trade.
+- `src/lib/nurseryPlots.js` in **both** phone repositories, word for word.
+  Different repositories cannot import from each other, so the only thing
+  that keeps those two in step is a check, and section 5 of the test is it.
+
+#### audit_plots.js, and the two things the shared list cannot know
+
+The audit module had **five** copies of the ranges, five copies of
+`canonPlot` and five plot→nursery maps. `audit/audit_plots.js` is all of it
+once, and it adds exactly two things to the shared list:
+
+- **THE PADDED SPELLING.** This module has always written a plot as `B01`;
+  `shared_plots` holds what the office typed, which is `B1`. Every saved
+  audit, every grid key and every deep link in the module is in the padded
+  form, so `canon()` is the one way in and `B4-R` arrives as **`B04-R`**.
+  Handing the module the office's spelling instead would have silently
+  orphaned every audit ever saved.
+- **THE LIVE OBJECTS.** `all()` and `byPlot()` hand back the SAME objects
+  every time and `load()` fills them IN PLACE. That is what made this a
+  four-line change in each of the five files rather than a rewrite of every
+  reader: a grid that reads `NURSERY_PLOTS[tab]` on each draw picks up a plot
+  that arrived after the first draw, and so does a lookup on
+  `PLOT_TO_NURSERY[p]`. **It also means nothing may SNAPSHOT them** — the
+  reverse-lookup IIFE at the top of each of those five files was exactly
+  that, and it is why this file owns `byPlot()`. The test forbids the IIFE
+  coming back.
+
+Three more things in it:
+
+- **`audit_maintenance_script.js` was the first in the module to read the
+  shared list** and did it on its own — its own shim over the audit client,
+  its own index, its own copy of the ranges. It reads this file now, so there
+  is ONE shim and not two, and its four-answer ladder became three because
+  step 1 and step 2 are the same lookup. What survives all of it is still
+  **counted and named**: a job nobody can see is a job nobody does.
+- **IT IS A HARD DEPENDENCY, and that is a real failure mode worth knowing.**
+  All five scripts read `MJMAuditPlots` at their TOP LEVEL, so a page that
+  could not fetch it does not half-work — the script half-EVALUATES, every
+  function declaration exists and every `let` after the throw is left in its
+  temporal dead zone. That reads as *"Cannot access 'unplacedTasks' before
+  initialization"*, which is what `maintenance_list_survives_no_line.cjs`
+  said the moment its fixture was one script short. So: `audit_sw.js`
+  **precaches** it (`VER` → `mjm-26111701`), every page loads it BEFORE the
+  script that reads it, and the test asserts the order on all six pages.
+  `shared_maint_plots.js` is NOT a hard dependency — without it the module
+  keeps the four ranges — so it stays with the other `../shared` files,
+  outside the precache list.
+- **With no line it sends nothing.** Two requests to the service worker's own
+  synthetic 503 answer nothing and cost a round trip each; the ranges are the
+  right answer with no signal, the way every offline cache here works.
+
+#### LETTERS AND DIGITS WAS NOT ENOUGH, and a test is what said so
+
+The usual `plotKey` rule — letters and digits, upper-cased — is the one every
+crossing of this boundary uses, and **it is wrong wherever the ranges are
+written PADDED.** `B01` and `B1` are two different keys under it, so the
+office's `B1` was added BESIDE the range's `B01` and the picker offered one
+plot twice under two spellings. `B04-R` and `B4-R` go the same way.
+
+So the key in the dock and in both phone copies drops the leading zeros off
+the number as well. **`shared_maint_plots.js` is untouched** because its own
+base is written UNPADDED, so the office's spelling already dedupes against
+it — and `audit_plots.js` does not need it either, because `canon()` pads the
+office's plot before comparing. Three files, three different reasons, one
+answer; the day a fourth is written, that is the question to ask of it.
+
+**It took a test to see.** Nobody would have found a plot offered twice by
+reading the code, and on a real database it reads as a picker with a
+duplicate in it, which is exactly the kind of thing that gets lived with.
+
+#### What is NOT in this, and the one thing still owed
+
+- **A FIFTH NURSERY.** A plot in `shared_plots` filed under anything but
+  PN / BNN / UNN1 / UNN2 — the estate, `UNE` — is **left out of every
+  picker**, because there is no tab or column to draw it under. It is NOT
+  dropped silently: section 4 of the SQL check names every one. Giving the
+  modules a fifth nursery is its own change and a large one, since every
+  module keys on those four.
+- **`is_active`.** The PALMS board retires a plot with
+  `is_active: false` (`nursery_ops_palms_board.html`), and **no reader in
+  this change filters on it** — the same as every reader before it. A
+  retired plot is still offered. Deliberate for now: the ranges are the
+  floor anyway, so filtering would only ever hide a plot the pickers go on
+  offering from the range, which is two rules disagreeing rather than one.
+- **The dock carries no `?v=` on its 52 pages** — a documented exposure of
+  that file, the same one `shared_cf_select.js` has on 53. The change is
+  additive and soft, so a browser holding yesterday's copy behaves exactly
+  as it does today; it needs **one hard reload per machine** to pick the
+  plots up.
+- **THE AUDIT MIRROR IS HOW THIS REACHES audit.mjmnursery.com**, and it
+  runs hourly: `MJMNurseryAudit` copies `audit/` and `shared/*.js` from
+  here, so nothing of this is live there until it has. **Check its last
+  commit before concluding an audit change did not work** — and check it on
+  the REMOTE. A local clone of that repository goes stale like any other,
+  and reading one here is how this paragraph first came to say the mirror
+  was a month behind when it had synced four days earlier. Its own README
+  has the rest: GitHub pauses a scheduled workflow after about 60 days
+  without a commit, and the Actions tab is where it is re-enabled and run
+  by hand.
+
+`shared/CHECK_which_plots_each_module_offers.sql` is what answers *what does
+this actually move*: every plot each side holds, how many are inside the
+ranges and how many are NEW, every new plot named, and every plot whose
+nursery matches none of the four. **"0 NEW" is a real possible answer** and
+means the office has not yet keyed a plot outside a range — the link is then
+doing nothing visible, which is not the same as not working. Tested on the
+scratch Postgres against the office's own shapes, against a database with no
+hand-added-plots table, with no `shared_plots` at all, and with every plot
+inside a range, which draws the *nothing to report* lines.
+
+`tests/a_plot_added_in_the_office_reaches_every_module.cjs` is 77 checks and
+**50 fail on the previous code**. It drives the shipped `shared_maint_plots
+.js` and `audit_plots.js`, the REAL Plot Condition page and the REAL dock in
+a real browser, and ends with the section that stops this coming back: a
+sweep asserting the four owners each hold the ranges AND read Seedling
+Stock, that the eight freed files hold neither ranges nor a snapshot map,
+that the two phone copies are the same file, and that every page loads the
+plot list first. **Its first run against the previous code DIED** on an
+ENOENT for a file that does not exist there, which is the house trap again —
+it names the missing file as a failure now and asks the fifty checks
+underneath it.
+
 ## A month keeps its own work records
 
 The schedule has always been stored per (nursery, month) in `nops_maint_state`.
