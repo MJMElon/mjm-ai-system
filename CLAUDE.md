@@ -238,6 +238,270 @@ nursery its own way ("UNN 1"), so the match is on letters and digits.
 **When a new kind of plot appears, this file is the second place to change.**
 The orphan list on the claim is what says it has not been.
 
+### AND IT WAS THE ONLY MODULE THAT HAD BEEN TOLD
+
+The office, in one line: *"help to link the plot from system settings of
+nursery seedling stock management. I saw nelos, audit system all's plot data
+doesnt link from there. I want to link from system settings as if there are
+new plot added, all our modules will adding the new plots also."*
+
+**They were right about both modules, and about six more.** A plot is added
+in ONE place — **Seedling Stock Management → System Settings → Add Plot**,
+which inserts a row into `shared_plots` (`operation/operation_settings.html`,
+and a ✕ on that page deletes one). The section above is Work Maintenance and
+the salary claim reading it. **EIGHT other places carried the four ranges
+written out instead** — P01-P52, B01-B14, U01-U18, N01-N20 — and nothing
+else:
+
+| | |
+|---|---|
+| `shared/shared_nelos_dock.js` | the raise form on **52** office pages |
+| `audit/audit_script.js` | Plot Condition: the grid and its plot dropdown |
+| `audit/audit_height_script.js` | Seedling Height: the same two |
+| `audit/audit_papan_script.js` | Papan Tanda: the batch form |
+| `audit/audit_pending.js` | the home board's plot ORDER and plot list |
+| `audit/audit_home.html` | `_PLOT_NUR`, which nursery a plot is in |
+| `Barcode_Counter` `NelosNewCase.jsx` | the FC Portal's raise form |
+| `Mobile` `NelosNewCase.jsx` | the Admin Portal's raise form |
+
+So a plot the office added was on every other screen in the company and on
+none of those, and **the live case is the transfer plots**: a `-R` plot is
+made by a 3rd-culling transfer and is in no hardcoded range anywhere, so the
+one plot somebody most needs to raise a case about was the one plot no raise
+form would offer. Plots past the end of a range — B15, U19 — go the same way.
+
+**AND NOTHING ON ANY OF THEM SAID A WORD.** A grid that draws the plots it
+has always drawn is indistinguishable from a grid that is right, which is the
+shape this file keeps finding.
+
+**THE RANGES ARE THE FALLBACK, AND THEY WERE THE FLOOR FOR A DAY.** Whatever
+`shared_plots` holds is what a picker offers; the ranges answer for a nursery
+Seedling Stock holds no plot for. That is the shape the office asked for in
+their next sentence and the paragraph below is why.
+
+### AND THEN A DELETION HAD TO BITE, which the floor was what stopped
+
+The office, the same day the adding half shipped: *"i deleted a plot, make it
+remove from all modules too. i added a plot, make it add for all modules
+too."*
+
+**THE FIRST HALF WORKED AND THE SECOND COULD NOT.** With the ranges as a
+FLOOR, B14 was offered whether or not `shared_plots` had a row for it, so the
+✕ on the settings page deleted a row and changed nothing anybody could see —
+and `loadSharedPlots` said so in its own words, as a feature: *"MERGED into
+NURSERY_PLOTS rather than replacing it … dropping it would take those rows
+off the screen."*
+
+**SO THE ANSWER IS THE LIST, AND THE RANGES ARE WHAT ANSWERS WITH NO SIGNAL.**
+`MJMMaintPlots.offered()` is the one place that says it and the four other
+copies read it or restate it. The sentence that comment was protecting is kept
+as a RULE of its own rather than as a side effect of never narrowing at all,
+and that is the whole of the difference:
+
+- **A READ THAT FAILS CHANGES NOTHING.** Every picker offers exactly what it
+  offered before — the fail-open rule every gate here follows. **An empty
+  plot list is a module nobody can use**, and a grid that went blank because
+  a table could not be read is far worse than one that is a plot short. So
+  `loadStockStrict` hands back an `ok` beside the plots, and **only a reply
+  that really arrived narrows anything**: `loadStock` returning an empty
+  object cannot be told from a refusal, which is exactly the shape that would
+  have emptied four modules at once.
+- **IT IS ASKED PER NURSERY, and the Pre Nursery is why.** A nursery
+  `shared_plots` holds no plot for keeps its whole range, because **an absent
+  answer is nobody having been asked** — the rule this file already follows
+  for a permission. PN is counted in TRAYS and may have no row at all, so a
+  global test would wipe P01–P52 off every picker in the company.
+- **A PLOT CARRYING SAVED ROWS IS PUT BACK**, on the schedule. That is
+  `_mergePlotsWithRows`' own sentence — *"a row that is saved must never be a
+  row that cannot be seen"* — and it is STRONGER than the deletion: a month of
+  keyed figures must not vanish because somebody tidied the plot list
+  afterwards. **The spelling comes off the RANGES and never off the list as it
+  stands**, because `_narrowToStock` runs at three call sites: a map built from
+  the list stops being able to place B13 the moment it has narrowed it away
+  once, and a month of records landing on the second pass would never bring it
+  back.
+- **A STALE CAPACITY CANNOT RESURRECT A DELETED PLOT.** A capacity has put a
+  plot on the schedule since the Setting grid was written, so without a guard
+  it hands B14 straight back and the ✕ does nothing. `_mergeCapacityPlots`
+  skips a nursery that was narrowed.
+- **AND IT FIXED THE ADDING HALF ON THE SCHEDULE TOO**, which nobody had
+  noticed: a plot the office added with no capacity and no saved row never
+  reached `NURSERY_PLOTS` at all, because only those two things ever put one
+  there. The previous-code run of the test names it — *B15 is there, the
+  office added it* fails.
+
+**WHAT IT COSTS, and both are named rather than buried:**
+
+- **A "-R" PLOT DELETED WHILE IT CARRIES KEYED ROWS LOSES THEM OFF THE
+  SCREEN.** Nothing left in the system says whose plot it is: it is in no
+  range, and Seedling Stock is the only thing that ever claimed it.
+  `_mergePlotsWithRows` refuses to guess a nursery from the plot LETTER, which
+  is right — the ZZ row in `maint_plot_with_rows.cjs` is that rule. **NOTHING
+  IS DELETED**: the records sit untouched in `nops_maint_records`, and putting
+  the plot back on the settings page is one press and brings every row back.
+- **IF `shared_plots` IS SHORT OF A ROW, A PLOT NOBODY DELETED DISAPPEARS.**
+  This environment cannot reach Supabase, so whether that list is complete is
+  not knowable from here — which is the whole reason section 4 of the check
+  below exists, and why it is the thing to run FIRST.
+
+**FOUR FILES MAY HOLD A COPY OF THE RANGES, and each says the same rules:**
+
+- `shared/shared_maint_plots.js` — the office repository's ONE read of
+  `shared_plots`, and **the one place that says which of the two answers** —
+  `offered()`, read by the audit module and restated by the other three.
+- `audit/audit_plots.js` — **NEW**, and the audit module's one list. See
+  below.
+- `shared/shared_nelos_dock.js` — `loadPlots()`. A second copy of the read,
+  and deliberately: that file is loaded **bare on 52 pages** and depends on
+  nothing but itself, where `shared_maint_plots.js` is on four of them.
+  Adding it to the other 48 to save eight lines is the worse trade.
+- `src/lib/nurseryPlots.js` in **both** phone repositories, word for word.
+  Different repositories cannot import from each other, so the only thing
+  that keeps those two in step is a check, and section 5 of the test is it.
+
+#### audit_plots.js, and the two things the shared list cannot know
+
+The audit module had **five** copies of the ranges, five copies of
+`canonPlot` and five plot→nursery maps. `audit/audit_plots.js` is all of it
+once, and it adds exactly two things to the shared list:
+
+- **THE PADDED SPELLING.** This module has always written a plot as `B01`;
+  `shared_plots` holds what the office typed, which is `B1`. Every saved
+  audit, every grid key and every deep link in the module is in the padded
+  form, so `canon()` is the one way in and `B4-R` arrives as **`B04-R`**.
+  Handing the module the office's spelling instead would have silently
+  orphaned every audit ever saved.
+- **THE LIVE OBJECTS.** `all()` and `byPlot()` hand back the SAME objects
+  every time and `load()` fills them IN PLACE. That is what made this a
+  four-line change in each of the five files rather than a rewrite of every
+  reader: a grid that reads `NURSERY_PLOTS[tab]` on each draw picks up a plot
+  that arrived after the first draw, and so does a lookup on
+  `PLOT_TO_NURSERY[p]`. **`setList` therefore EMPTIES AND REFILLS each array
+  rather than reassigning it** (`arr.length = 0`), which is the only reason a
+  plot the office DELETED can leave a grid that has already been drawn — the
+  deletion half needs the live objects even more than the adding half did.
+  **It also means nothing may SNAPSHOT them** — the
+  reverse-lookup IIFE at the top of each of those five files was exactly
+  that, and it is why this file owns `byPlot()`. The test forbids the IIFE
+  coming back.
+
+Three more things in it:
+
+- **`audit_maintenance_script.js` was the first in the module to read the
+  shared list** and did it on its own — its own shim over the audit client,
+  its own index, its own copy of the ranges. It reads this file now, so there
+  is ONE shim and not two, and its four-answer ladder became three because
+  step 1 and step 2 are the same lookup. What survives all of it is still
+  **counted and named**: a job nobody can see is a job nobody does.
+- **IT IS A HARD DEPENDENCY, and that is a real failure mode worth knowing.**
+  All five scripts read `MJMAuditPlots` at their TOP LEVEL, so a page that
+  could not fetch it does not half-work — the script half-EVALUATES, every
+  function declaration exists and every `let` after the throw is left in its
+  temporal dead zone. That reads as *"Cannot access 'unplacedTasks' before
+  initialization"*, which is what `maintenance_list_survives_no_line.cjs`
+  said the moment its fixture was one script short. So: `audit_sw.js`
+  **precaches** it (`VER` → `mjm-26111701`), every page loads it BEFORE the
+  script that reads it, and the test asserts the order on all six pages.
+  `shared_maint_plots.js` is NOT a hard dependency — without it the module
+  keeps the four ranges — so it stays with the other `../shared` files,
+  outside the precache list.
+- **With no line it sends nothing.** Two requests to the service worker's own
+  synthetic 503 answer nothing and cost a round trip each; the ranges are the
+  right answer with no signal, the way every offline cache here works.
+
+#### LETTERS AND DIGITS WAS NOT ENOUGH, and a test is what said so
+
+The usual `plotKey` rule — letters and digits, upper-cased — is the one every
+crossing of this boundary uses, and **it is wrong wherever the ranges are
+written PADDED.** `B01` and `B1` are two different keys under it, so the
+office's `B1` was added BESIDE the range's `B01` and the picker offered one
+plot twice under two spellings. `B04-R` and `B4-R` go the same way.
+
+So the key in the dock and in both phone copies drops the leading zeros off
+the number as well. **`shared_maint_plots.js` is untouched** because its own
+base is written UNPADDED, so the office's spelling already dedupes against
+it — and `audit_plots.js` does not need it either, because `canon()` pads the
+office's plot before comparing. Three files, three different reasons, one
+answer; the day a fourth is written, that is the question to ask of it.
+
+**It took a test to see.** Nobody would have found a plot offered twice by
+reading the code, and on a real database it reads as a picker with a
+duplicate in it, which is exactly the kind of thing that gets lived with.
+
+#### What is NOT in this, and the one thing still owed
+
+- **A FIFTH NURSERY.** A plot in `shared_plots` filed under anything but
+  PN / BNN / UNN1 / UNN2 — the estate, `UNE` — is **left out of every
+  picker**, because there is no tab or column to draw it under. It is NOT
+  dropped silently: section 4 of the SQL check names every one. Giving the
+  modules a fifth nursery is its own change and a large one, since every
+  module keys on those four.
+- **`is_active`.** The PALMS board retires a plot with
+  `is_active: false` (`nursery_ops_palms_board.html`), and **no reader in
+  this change filters on it** — the same as every reader before it. A
+  retired plot is still offered. Deliberate for now: the ranges are the
+  floor anyway, so filtering would only ever hide a plot the pickers go on
+  offering from the range, which is two rules disagreeing rather than one.
+- **The dock carries no `?v=` on its 52 pages** — a documented exposure of
+  that file, the same one `shared_cf_select.js` has on 53. The change is
+  additive and soft, so a browser holding yesterday's copy behaves exactly
+  as it does today; it needs **one hard reload per machine** to pick the
+  plots up.
+- **THE AUDIT MIRROR IS HOW THIS REACHES audit.mjmnursery.com**, and it
+  runs hourly: `MJMNurseryAudit` copies `audit/` and `shared/*.js` from
+  here, so nothing of this is live there until it has. **Check its last
+  commit before concluding an audit change did not work** — and check it on
+  the REMOTE. A local clone of that repository goes stale like any other,
+  and reading one here is how this paragraph first came to say the mirror
+  was a month behind when it had synced four days earlier. Its own README
+  has the rest: GitHub pauses a scheduled workflow after about 60 days
+  without a commit, and the Actions tab is where it is re-enabled and run
+  by hand.
+
+`shared/CHECK_which_plots_each_module_offers.sql` is what answers *what does
+this actually move*: every plot each side holds, how many are inside the
+ranges and how many are NEW, every new plot named, **every plot that LEAVES**,
+and every plot whose nursery matches none of the four. **"0 NEW" is a real
+possible answer** and means the office has not yet keyed a plot outside a
+range — the link is then doing nothing visible, which is not the same as not
+working.
+
+**SECTION 4 IS THE ONE TO READ FIRST, and it is the handover this change
+cannot be trusted without.** It names every range plot of a keyed nursery
+that Seedling Stock has no row for, with what if anything puts it back — a
+hand-added row, a saved work record, or nothing — because **this environment
+cannot reach Supabase and whether that list is COMPLETE is not knowable from
+here.** A plot in it the office never deleted means `shared_plots` is short of
+a row, and the answer is to add the plot back on the settings page: one press,
+and it returns everywhere. Tested on the scratch Postgres against the
+office's own shapes with two deletions, against a database with no
+hand-added-plots table and no work records (which correctly flips the
+kept-by-a-record plot to *gone*), with no `shared_plots` at all, with every
+nursery keyed in full, which draws the *nothing to report* lines, and against
+a **sparse** BNN holding three plots, which names all eleven that leave.
+
+`tests/a_plot_added_in_the_office_reaches_every_module.cjs` is 89 checks and
+**50 fail on the previous code**. It drives the shipped `shared_maint_plots
+.js` and `audit_plots.js`, the REAL Plot Condition page and the REAL dock in
+a real browser, and ends with the section that stops this coming back: a
+sweep asserting the four owners each hold the ranges AND read Seedling
+Stock, that the eight freed files hold neither ranges nor a snapshot map,
+that the two phone copies are the same file, and that every page loads the
+plot list first. **Its first run against the previous code DIED** on an
+ENOENT for a file that does not exist there, which is the house trap again —
+it names the missing file as a failure now and asks the fifty checks
+underneath it. Its fixture is built round a DELETION now (B14 keyed nowhere,
+B15 and B4-R added, the Pre Nursery deliberately never keyed), so the adding
+half and the deletion half are held by one file.
+
+`tests/a_deleted_plot_leaves_the_schedule.cjs` is the Work Maintenance half,
+which is the only module with a saved-rows rule: 24 checks, **7 of them
+failing on the previous code**, the first in the office's own terms. Its
+section 4 drives the ORDER that breaks a list-built spelling map — narrow with
+no records, then narrow again with the records back — because that is the one
+way to catch the second-pass bug, and a fixture that happens to load its
+records first passes over it.
+
 ## A month keeps its own work records
 
 The schedule has always been stored per (nursery, month) in `nops_maint_state`.
@@ -5417,6 +5681,26 @@ every line of its own code inline, so the page IS the deploy — and a
 permission screen is the worst place in the system for a browser to be
 showing yesterday's rules while the office believes it has changed them.
 
+### More than one portal opens the DOORS, whoever holds them
+
+YM Chai was ticked for the FC, Worker, Admin and Auditor Portals with Worker
+Portal Manage left off, and saw only the FC Portal. The hub's Nursery 555
+Team tile asked ONE question, *is this person a scan admin*, and anybody
+who was not went straight to the FC Portal app, where the other three
+portals are nowhere. A tick saved and not reachable, the fault this file
+keeps finding.
+
+So the tile asks which portals the person HOLDS: Manage, or more than one
+portal, or the Admin or Auditor Portal opens `scan/scan_admin.html` (the
+page of doors); exactly one phone portal goes straight there, the Worker
+Portal to `#/worker`. `scan_admin.html` lets in anybody holding two
+portals, not only Manage, Admin or Auditor. **The hub does not load
+`shared_access.js`, so `portalsHeld()` in `index.html` is a COPY of
+`canScanArea()`'s fallbacks**, and section 4 of
+`tests/a_person_with_many_portals_sees_the_doors.cjs` compares the two.
+5 of its 12 checks fail on the previous pages. Nothing to run in the
+database.
+
 ### And then the Auditor Portal's two actions were read for the first time
 
 Putting the block on the screen is what made it worth asking whether anything
@@ -7588,26 +7872,52 @@ whose foot still totals every row, not just the page.
   here it is a label above each batch, and the expected figure is ONE
   stepped orange dashed line across the columns.
 
-**PRINT ASKS FIRST**: chart + table, without table, or table only. The
-option builds `#print-area` at the press (Ctrl/Cmd+P builds chart + table
-through `beforeprint`), so **Prepared and Verified by** names whoever pressed
-it, that day, over an empty signature box. Paper keeps the office sheet's
-grouping — one block per SUPPLIER + BREED, headed MEGA JUTAMAS SDN BHD /
-SEED RECEIVED SUMMARY REPORT — with the filters written out, an eight-figure
-summary strip, and the COMPLETE table as rows (A4 landscape, the header
-repeated on every page, no row cut). It was the sheet's transposed table
-for a day; rows are what repeat a header and fit a long year on A4. The
-print area is `display:none` on screen. It opens on the latest year, as
-the sheet is a year a tab. **A breed picked with no supplier prints ONE block**
-with every supplier of it together (`reportBlocks(..., byBreed)`); a
-supplier picked, or neither, keeps one per supplier + breed. **The
-signature sits at the foot of the page**: a printed block is a flex column
-at least 184mm tall (not 186, which rounds over into a blank page) and the
-signature takes `margin-top:auto`. **That only works if nothing is wider
-than the page** — the table's headings wrap for that reason; on one line it
-ran 1,280px on a 1,032px page and Chrome shrank the whole sheet, which is
-what left a band of empty paper under the signature. The test asks the
-width. Chart labels read 270, not B.270.
+**PRINT ASKS WHICH: chart + table, chart only, or table only**, and EVERY
+choice carries the signature box (Prepared and Verified by, whoever pressed
+Print, that day) on its last page. **Chart + table is exactly two A4
+portrait pages**: page 1 a compact header (MEGA JUTAMAS SDN BHD, the title,
+Supplier Name, Breed, Period — **no filter line**), the comparison (summary
+strip + chart) on the top half and the damage (summary strip + chart) on the
+bottom half; page 2 the batch table, then the signature. **Chart only is ONE
+page**: header, both charts, the signature under them. **Table only is ONE
+page**: header, the table, the signature — page 2 on its own. It is ONE
+report whatever the filters (the header says *All suppliers (n)* where the
+rows span several). The dialog was taken out for a day in the name of
+"always two pages" and the office asked for it back. **Ctrl/Cmd + P
+rebuilds the LAST option chosen** (`_lastMode`, chart + table before any):
+`beforeprint` fires on every print, the PDF run included, and rebuilding as
+chart + table there turned a one-page chart-only print into two. How it
+holds:
+
+- **Each page is a fixed box** — `#print-area .pp`, 190 x 276mm (one short
+  of the 277 a page holds, or it rounds over into a blank third page),
+  `overflow:hidden`, a `break-before:page` between them. A third page cannot
+  happen.
+- **Nothing is cut because everything is FITTED**, off-screen at the press
+  (`fitPrint`): each chart is drawn to the height its half of page 1 really
+  has, and the table's TYPE and padding shrink (`--pz`) until page 2 holds
+  it with the signature. It was a CSS `zoom` at first; the zoomed table
+  measured as fitting and ran under the signature on paper, and so did the
+  first version of this, because the table section could SHRINK — the table
+  then spilled under the signature INSIDE the page, where a page-overflow
+  test sees nothing. The section is `flex:0 0 auto` now and the test asks
+  that the signature starts below the table. 74 batches print at about
+  three quarters size. Measured, never trusted: render the PDF and look.
+- **Nothing but the report is printed**: `body > *:not(#print-area)` is
+  hidden on paper. The NELOS dock is `#nelos-dock`, and a rule naming
+  `#nelos-dock-root` (which does not exist) printed it over the signature.
+  `.p-fit` keeps 1px on its right so the table's right-hand line is not
+  clipped by the page box.
+- **The printed charts are their own drawing** (`drawPrintChart`), not the
+  screen's: actual received INSIDE the bar near its base (white), expected
+  inside at the top left marked **E** (peach), variance small above; damage
+  % near the base with the seeds damaged as a smaller line above it. A label
+  turns upright in a narrow bar, goes above a bar too short to hold it, and
+  the type shrinks with the column (down to 6px; a column thinner than 7px
+  carries none — the table has every figure).
+- **Every print rule is under `#print-area`.** The phone floor test skips
+  selectors containing *print*, and that matters: a portrait page is 718px
+  wide, so the page's own `max-width:767.98px` rules APPLY on paper.
 
 **The dashboard's navigation is a SIDEBAR drawn from a menu**, never written
 into the page. `reporting/report_menu.js` is the menu and nothing else —

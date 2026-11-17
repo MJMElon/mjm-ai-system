@@ -720,9 +720,111 @@ function _sortNurseryPlots() {
    plot. capacityOf() is the judge, so a Pre-Nursery plot counted in trays
    qualifies the same way. Matching is on letters-and-digits, upper-cased —
    the same rule every other crossing of this boundary uses. */
+/* ── A PLOT THE OFFICE DELETED LEAVES THE SCHEDULE ────────────────────
+   The office: *"i deleted a plot, make it remove from all modules too. i
+   added a plot, make it add for all modules too."*
+
+   The adding half has always worked, because the built-in list was the FLOOR
+   and shared_plots was merged on top — and that floor is exactly what stopped
+   a deletion biting. `loadSharedPlots` said so in its own words: *"MERGED
+   into NURSERY_PLOTS rather than replacing it … dropping it would take those
+   rows off the screen."*
+
+   SO IT NARROWS TO SEEDLING STOCK, and the sentence that comment was
+   protecting is kept as its own rule rather than as a side effect of never
+   narrowing at all:
+
+   1. ONLY WHERE THE READ ANSWERED WITH ROWS (`_sharedPlotsLoaded`). A failed
+      or empty read leaves every list exactly as it was — a schedule with no
+      plots on it is a page nobody can key.
+   2. ASKED PER NURSERY. A nursery Seedling Stock holds no plot for keeps its
+      built-in list: an absent answer is nobody having been asked. The Pre
+      Nursery is counted in trays and may have no row at all.
+   3. A PLOT CARRYING SAVED ROWS IS PUT BACK. That is the rule
+      `_mergePlotsWithRows` argues at length — *"a row that is saved must
+      never be a row that cannot be seen"* — and it is STRONGER than the
+      deletion: a month of keyed figures must not vanish because somebody
+      tidied the plot list afterwards.
+   4. A HAND-ADDED plot comes back too, through _mergeCustomPlots below.
+
+   It runs at the TOP of _mergeCapacityPlots so the order is always
+   narrow-then-add, whichever of the three call sites fired.
+
+   THE SPELLING COMES OFF THE RANGES, not off the list as it stands, and
+   that is what makes rule 3 hold however the page loaded. This function
+   runs at all THREE call sites, and after the first one the list no longer
+   holds the deleted plot — so a spelling map built from the list would stop
+   being able to place B14 the moment it had narrowed it away once, and a
+   month of records arriving on the second pass would never bring it back.
+   The ranges say B14 is BNN's whether or not anything else does. The list
+   as it stands is unioned in on top of them, which is what catches a
+   transfer plot an earlier pass had already placed.
+
+   WHAT IT COSTS, said plainly: a "-R" plot DELETED from Seedling Stock while
+   it still carries keyed rows loses them off the screen. Nothing left in the
+   system says whose plot it is — it is in no range, and Seedling Stock is
+   the only thing that ever claimed it (`_mergePlotsWithRows` reads exactly
+   that list, and refuses to guess a nursery from the plot letter, which is
+   right). NOTHING IS DELETED: the records are untouched in
+   `nops_maint_records`, and putting the plot back on the settings page is one
+   press and brings every row back with it. */
+function _narrowToStock(norm) {
+  if (!_sharedPlotsLoaded) return new Set();
+  const keyedRows = new Set();
+  try {
+    (records || []).forEach(r => { const k = norm(r && r.plot); if (k) keyedRows.add(k); });
+  } catch (_) { /* `let records` may still be below this */ }
+
+  const byKey = {};
+  Object.keys(stockPlots || {}).forEach(stockName => {
+    const n = schedKey(stockName);
+    if (!n) return;
+    (byKey[n] || (byKey[n] = [])).push(...(stockPlots[stockName] || []));
+  });
+
+  /* The ranges, which are what makes the put-back below survive the second
+     and third call — see the comment above. */
+  const ranges = MJMMaintPlots.base();
+
+  const narrowed = new Set();
+  Object.keys(NURSERY_PLOTS).forEach(n => {
+    const keyed = byKey[n];
+    if (!Array.isArray(keyed) || !keyed.length) return;   // nobody has been asked
+    const spelt = new Map();
+    [ranges[n] || [], NURSERY_PLOTS[n] || []].forEach(src =>
+      src.forEach(p => { const k = norm(p); if (k && !spelt.has(k)) spelt.set(k, p); }));
+
+    const have = new Set();
+    const next = [];
+    keyed.forEach(p => {
+      const k = norm(p);
+      if (!k || have.has(k)) return;
+      have.add(k); next.push(p);
+    });
+    /* Put back only what a saved row names — never the rest of the range. */
+    keyedRows.forEach(k => {
+      if (have.has(k) || !spelt.has(k)) return;
+      have.add(k); next.push(spelt.get(k));
+    });
+    NURSERY_PLOTS[n] = next;
+    narrowed.add(n);
+  });
+  _sortNurseryPlots();
+  return narrowed;
+}
+
 function _mergeCapacityPlots() {
   const norm = p => String(p || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+  const narrowed = _narrowToStock(norm);
   Object.keys(NURSERY_PLOTS).forEach(n => {
+    /* A NURSERY SEEDLING STOCK HAS ANSWERED FOR IS ALREADY ITS WHOLE LIST,
+       so nothing is added back to it here. Left in, a capacity row left
+       behind by a plot the office DELETED would put that plot straight back
+       on the schedule — leftover data undoing a decision somebody made,
+       which is the one thing narrowing must not allow. The plots this loop
+       exists for (a transfer plot outside every range) are in the office's
+       list by construction now. */
+    if (narrowed.has(n)) return;
     const have = new Set(NURSERY_PLOTS[n].map(norm));
     const candidates = new Set();
     const stock = qtyStockName(n);

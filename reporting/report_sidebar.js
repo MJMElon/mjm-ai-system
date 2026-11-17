@@ -133,7 +133,10 @@
     .rs-scrim.rs-on { opacity:1; pointer-events:auto; }
     .rs-menu-btn { display:grid; }
   }
-  @media print { .rs, .rs-scrim, .rs-tip, .rs-menu-btn { display:none !important; } .rs-shell { display:block; } }
+  /* The shell holds the screen and nothing printed: left at min-height:100vh
+     it prints as one EMPTY page ahead of the report, which is what the office
+     saw. On paper it takes no room at all. */
+  @media print { .rs, .rs-scrim, .rs-tip, .rs-menu-btn { display:none !important; } .rs-shell { display:block; min-height:0 !important; } }
   @media (prefers-reduced-motion: reduce) { .rs, .rs-sub, .rs-chev, .rs-scrim { transition:none !important; } }
   `;
 

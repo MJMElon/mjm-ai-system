@@ -204,10 +204,20 @@ const table = (page) => page.evaluate(() =>
 
     /* The list every other screen is built from — the four schedule editors,
        the Worker Record, the PDF — carries the same order, so a transfer plot
-       is beside its parent there too and not appended after B14. */
+       is beside its parent there too and not appended after B14.
+
+       IT IS THE WHOLE LIST, AND IT IS SIX PLOTS RATHER THAN FOURTEEN. This
+       fixture keys exactly six into `shared_plots`, and Seedling Stock is
+       the answer now where the office has keyed one — the four ranges are
+       the fallback for a nursery nobody has been asked about, not a floor
+       under the answer. So B4, B5 and B6, which this fixture never keyed,
+       are deliberately absent, and the plot filter below expects the same
+       six: the two screens agreeing is the point. What this check is about
+       is the ORDER — B3-R behind B3, B4-R where B4 would be, B10 sorted as
+       a number and not between B1 and B2 — and all three are still in it. */
     check('the nursery\'s own plot list is in order too', await page.evaluate(() =>
-      NURSERY_PLOTS.BNN.slice(0, 8)),
-      ['B1', 'B2', 'B3', 'B3-R', 'B4', 'B4-R', 'B5', 'B6']);
+      NURSERY_PLOTS.BNN.slice()),
+      ['B1', 'B2', 'B3', 'B3-R', 'B4-R', 'B10']);
 
     /* Two rows on 04 Sep: Round 1 Becker and Round 1 Antracol. Same job, same
        day, same round — they keep a settled order rather than swapping about

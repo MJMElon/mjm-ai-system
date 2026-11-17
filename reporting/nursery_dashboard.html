@@ -16,7 +16,7 @@
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="report_menu.js?v=1"></script>
-<script src="report_sidebar.js?v=1"></script>
+<script src="report_sidebar.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
@@ -145,19 +145,6 @@
   .rep-stat-v { font-size:17px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums; }
   .rep-open { font-size:12px; font-weight:600; color:var(--green); }
 
-  /* Print options dialog */
-  .scrim { position:fixed; inset:0; background:rgba(37,50,71,.38); z-index:70; display:grid; place-items:center; padding:16px; }
-  .dlg { background:#fff; border-radius:var(--radius); width:min(460px,100%); padding:20px; box-shadow:0 18px 48px rgba(37,50,71,.25); }
-  .dlg h3 { margin:0; font-size:16px; font-weight:700; }
-  .dlg p { margin:4px 0 16px; font-size:12px; color:var(--ink-2); }
-  .opt { display:flex; gap:12px; align-items:flex-start; width:100%; text-align:left; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
-         background:#fff; cursor:pointer; font-family:inherit; color:var(--ink); margin-bottom:10px; }
-  .opt:hover { border-color:var(--green-2); background:var(--green-l); }
-  .opt b { display:block; font-size:14px; }
-  .opt span { display:block; font-size:12px; color:var(--ink-2); margin-top:2px; }
-  .opt svg { width:20px; height:20px; color:var(--green); flex-shrink:0; margin-top:1px; }
-  .dlg-foot { display:flex; justify-content:flex-end; margin-top:6px; }
-
   /* ── Responsive: tablet, then phone ── */
   @media (max-width:1100px) {
     .filters { grid-template-columns:repeat(3, minmax(0,1fr)); }
@@ -178,56 +165,82 @@
     .pager .pg { justify-content:space-between; flex-wrap:wrap; }
   }
 
-  /* ── Print ── */
-  #print-area { display:none; }
-  .p-block { color:var(--ink); }
-  .p-head { display:flex; justify-content:space-between; gap:16px; border-bottom:2px solid var(--ink); padding-bottom:8px; margin-bottom:10px; }
-  .p-co { font-size:11px; font-weight:700; letter-spacing:.12em; color:var(--ink-2); }
-  .p-title { font-size:17px; font-weight:700; margin-top:2px; }
-  .p-meta { font-size:11px; color:var(--ink-2); text-align:right; line-height:1.55; }
-  .p-meta b { color:var(--ink); }
-  .p-filters { font-size:11px; color:var(--ink-2); margin-bottom:10px; }
-  .p-kpis { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); border:1px solid var(--line); border-radius:8px; margin-bottom:12px; }
-  .p-kpi { padding:6px 10px; border-left:1px solid var(--line); }
-  .p-kpi:first-child { border-left:0; }
-  .p-kpi .l { font-size:11px; color:var(--ink-2); }
-  .p-kpi .v { font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:1px; }
-  .p-charts { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px; }
-  .p-chart-t { font-size:12px; font-weight:700; margin-bottom:4px; }
-  .p-block .legend { font-size:11px; gap:12px; margin-bottom:2px; }
-  table.pt { width:100%; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
-  /* The headings WRAP. Left on one line the table ran 1,280px wide on a page
-     of 1,032, and the browser shrank the whole sheet to fit it — which is
-     what left the signature at four fifths of the page with a band of empty
-     paper under it. */
-  table.pt th, table.pt td { border:1px solid var(--line); padding:4px 5px; text-align:left; white-space:nowrap; }
-  table.pt thead th { white-space:normal; vertical-align:bottom; line-height:1.25; }
-  table.pt thead th { background:#F2F5F7; font-weight:700; color:var(--ink); }
-  table.pt th.num, table.pt td.num { text-align:right; }
-  table.pt tfoot td { font-weight:700; background:#F2F5F7; }
-  .sign { display:flex; justify-content:flex-end; margin-top:auto; padding-top:14px; break-inside:avoid; page-break-inside:avoid; }
-  .sign-box { width:300px; font-size:12px; color:var(--ink-2); }
-  .sign-cap { font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--ink); margin-bottom:6px; font-size:11px; }
-  .sign-sig { height:46px; border:1.5px solid #64748b; border-radius:4px; position:relative; }
-  .sign-sig span { position:absolute; left:8px; bottom:4px; font-size:11px; color:var(--muted); }
-  .sign-line { display:flex; gap:8px; margin-top:6px; }
-  .sign-line span:first-child { width:46px; font-weight:600; }
-  .sign-line b { flex:1; border-bottom:1px solid #94a3b8; color:var(--ink); font-weight:600; }
+  /* ── THE PRINTED REPORT: always TWO A4 portrait pages, whatever is picked.
+     Page 1 is the header and the two charts, a half page each; page 2 is
+     the batch table and the signature. Every rule is under #print-area, so
+     nothing here touches the screen. Each page is a fixed box the size of
+     the paper's printable area (190 x 276mm — one short of 277 so it can
+     never round over into a blank third page) with its overflow hidden, so
+     a third page cannot happen; and what could overflow is FITTED instead
+     of cut: the charts are drawn to the height their half of the page
+     really has, and the table is scaled down until it fits page 2. ── */
+  #print-area { display:none; color:var(--ink); }
+  #print-area .pp { width:190mm; height:276mm; overflow:hidden; display:flex; flex-direction:column; box-sizing:border-box; background:#fff; }
+  #print-area .pp + .pp { break-before:page; page-break-before:always; }
+  #print-area .p-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:8px; flex:0 0 auto; }
+  #print-area .p-co { font-size:9px; font-weight:700; letter-spacing:.12em; color:var(--ink-2); }
+  #print-area .p-title { font-size:15px; font-weight:700; margin-top:1px; }
+  #print-area .p-meta { font-size:9px; color:var(--ink-2); text-align:right; line-height:1.5; }
+  #print-area .p-meta b { color:var(--ink); }
+  #print-area .p-sec { display:flex; flex-direction:column; min-height:0; }
+  #print-area .p-half { flex:1 1 0; }
+  /* The table section never shrinks: allowed to, it squeezes and the table
+     spills under the signature INSIDE the page, where no overflow test sees it. */
+  #print-area .p-sec[data-sec="table"] { flex:0 0 auto; }
+  #print-area .p-half + .p-half { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+  #print-area .p-sec-t { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:11px; font-weight:700; color:var(--ink);
+                         border-left:3px solid var(--green); padding-left:6px; margin:0 0 5px; flex:0 0 auto; }
+  #print-area .p-sec-t span { font-weight:500; color:var(--ink-2); font-size:9px; }
+  #print-area .p-legend { display:flex; gap:12px; font-size:9px; font-weight:500; color:var(--ink-2); }
+  #print-area .p-legend i { display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:-1px; margin-right:4px; }
+  #print-area .p-legend .ln { width:14px; height:0; border-radius:0; border-top:2px dashed var(--warn); vertical-align:2px; }
+  #print-area .p-legend .ln.red { border-top-color:var(--neg); }
+  #print-area .p-kpis { display:grid; grid-template-columns:repeat(var(--n, 4), minmax(0,1fr)); border:1px solid var(--line); border-radius:6px; margin-bottom:4px; flex:0 0 auto; }
+  #print-area .p-kpi { padding:3px 8px; border-left:1px solid var(--line); }
+  #print-area .p-kpi:first-child { border-left:0; }
+  #print-area .p-kpi .l { font-size:8px; color:var(--ink-2); }
+  #print-area .p-kpi .v { font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+  #print-area .p-chart { flex:1 1 0; min-height:0; overflow:hidden; }
+  #print-area .p-chart svg { display:block; }
+  #print-area .p-chart svg text { font-family:'Inter', system-ui, sans-serif; font-variant-numeric:tabular-nums; }
+  .scrim { position:fixed; inset:0; background:rgba(37,50,71,.38); z-index:70; display:grid; place-items:center; padding:16px; }
+  .dlg { background:#fff; border-radius:var(--radius); width:min(460px,100%); padding:20px; box-shadow:0 18px 48px rgba(37,50,71,.25); }
+  .dlg h3 { margin:0; font-size:16px; font-weight:700; }
+  .dlg p { margin:4px 0 16px; font-size:12px; color:var(--ink-2); }
+  .opt { display:flex; gap:12px; align-items:flex-start; width:100%; text-align:left; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+         background:#fff; cursor:pointer; font-family:inherit; color:var(--ink); margin-bottom:10px; }
+  .opt:hover { border-color:var(--green-2); background:var(--green-l); }
+  .opt b { display:block; font-size:14px; }
+  .opt span { display:block; font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .opt svg { width:20px; height:20px; color:var(--green); flex-shrink:0; margin-top:1px; }
+  .dlg-foot { display:flex; justify-content:flex-end; margin-top:6px; }
+  #print-area .p-fit { transform-origin:top left; padding:0 1px 1px 0; }
+  #print-area .p-fit { --pz:1; }
+  #print-area table.pt { width:100%; border-collapse:collapse; font-size:calc(9px * var(--pz)); font-variant-numeric:tabular-nums; }
+  #print-area table.pt th, #print-area table.pt td { border:1px solid var(--line); padding:calc(2px * var(--pz)) calc(4px * var(--pz)); text-align:left; white-space:nowrap; line-height:1.3; }
+  #print-area table.pt thead th { white-space:normal; vertical-align:bottom; background:#F2F5F7; font-weight:600; color:var(--ink); }
+  #print-area table.pt th.num, #print-area table.pt td.num { text-align:right; }
+  #print-area table.pt th.c, #print-area table.pt td.c { text-align:center; }
+  #print-area table.pt tbody tr:nth-child(even) td { background:#FAFBFC; }
+  #print-area table.pt tfoot td { font-weight:700; background:#F2F5F7; }
+  #print-area table.pt .st { display:inline; height:auto; padding:0; background:none; white-space:nowrap; font-size:inherit; font-weight:600; }
+  #print-area table.pt .st.over { color:#A94444; } #print-area table.pt .st.ok { color:var(--green); }
+  #print-area table.pt tr { break-inside:avoid; page-break-inside:avoid; }
+  #print-area .sign { display:flex; justify-content:flex-end; margin-top:auto; padding-top:12px; flex:0 0 auto; }
+  #print-area .sign-box { width:270px; font-size:10px; color:var(--ink-2); }
+  #print-area .sign-cap { font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--ink); margin-bottom:5px; font-size:9px; }
+  #print-area .sign-sig { height:52px; border:1.5px solid #64748b; border-radius:4px; position:relative; }
+  #print-area .sign-sig span { position:absolute; left:6px; bottom:3px; font-size:8px; color:var(--muted); }
+  #print-area .sign-line { display:flex; gap:8px; margin-top:6px; }
+  #print-area .sign-line span:first-child { width:40px; font-weight:600; }
+  #print-area .sign-line b { flex:1; border-bottom:1px solid #94a3b8; color:var(--ink); font-weight:600; }
+  #print-area .p-foot { display:flex; justify-content:space-between; font-size:8px; color:var(--muted); border-top:1px solid var(--line); padding-top:3px; margin-top:6px; flex:0 0 auto; }
   @media print {
-    @page { size:A4 landscape; margin:12mm; }
-    body { background:#fff; }
-    #mjm-ribbon, #main, #loading, #forbidden, .tip, .scrim, #nelos-dock-root { display:none !important; }
-    #print-area { display:block; }
-    /* A block is at least one page tall and the signature takes the space
-       left (margin-top:auto), so it always sits at the foot of the page with
-       nothing under it. 184mm, not the full 186: a block exactly a page
-       tall would round over and print a blank page after it. */
-    .p-block { break-after:page; page-break-after:always; display:flex; flex-direction:column; min-height:184mm; }
-    .p-block:last-child { break-after:auto; page-break-after:auto; }
-    .p-charts, .p-kpis, .p-head { break-inside:avoid; page-break-inside:avoid; }
-    table.pt thead { display:table-header-group; }
-    table.pt tfoot { display:table-row-group; }
-    table.pt tr { break-inside:avoid; page-break-inside:avoid; }
+    @page { size:A4 portrait; margin:10mm; }
+    html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+    #mjm-ribbon, #shell, #main, #loading, #forbidden, .tip, #nelos-dock, #nelos-dock-root, [id^="nelos-"], body > *:not(#print-area) { display:none !important; }
+    #print-area { display:block !important; position:static !important; }
+    #print-area .pp:last-child { break-after:avoid; page-break-after:avoid; }
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }
 </style>
@@ -318,9 +331,8 @@
   </section>
 </div>
 
-<!-- The PRINTED report, built when a print option is pressed: one page (or
-     more) per supplier and breed, the company header, the filters, the
-     summary, then the chart and/or table the option asked for, and the
+<!-- The PRINTED report, built when Print is pressed: always two A4 portrait
+     pages — the header and both charts, then the batch table and the
      signature block naming whoever pressed Print, on that day. -->
 </div></div>
 
@@ -329,10 +341,10 @@
 <div class="scrim hidden" id="print-dlg" role="dialog" aria-modal="true" aria-labelledby="print-dlg-t">
   <div class="dlg">
     <h3 id="print-dlg-t">Print report</h3>
-    <p>Prints what the filters show now, on A4 landscape.</p>
-    <button class="opt" data-print="both"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7"/><rect x="3" y="21" width="18" height="0.01"/></svg><span><b>Print chart + table</b><span>Summary, charts and the complete batch table</span></span></button>
-    <button class="opt" data-print="chart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span><b>Print without table</b><span>Summary and charts only</span></span></button>
-    <button class="opt" data-print="table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M3 14h18M9 4v16"/></svg><span><b>Print table only</b><span>Summary and the complete batch table</span></span></button>
+    <p>Prints what the filters show now, on A4 portrait.</p>
+    <button class="opt" data-print="both"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7"/><rect x="3" y="21" width="18" height="0.01"/></svg><span><b>Print chart + table</b><span>Charts on page 1, the batch table and the signature on page 2</span></span></button>
+    <button class="opt" data-print="chart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span><b>Print chart only</b><span>Both charts and the signature, on one page</span></span></button>
+    <button class="opt" data-print="table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M3 14h18M9 4v16"/></svg><span><b>Print table only</b><span>The batch table and the signature, on one page</span></span></button>
     <div class="dlg-foot"><button class="btn" id="print-cancel" type="button">Cancel</button></div>
   </div>
 </div>
@@ -532,11 +544,6 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const all = BATCHES.filter(x => (!y || x.year === y) && (!m || x.month.slice(5, 7) === m) && (!br || x.breed === br) && (!sp || x.supplier === sp));
     return { rows: all.filter(x => incl || x.recorded), left: all.filter(x => !incl && !x.recorded) };
   }
-  function filterLine() {
-    const sel = id => { const s = $(id); return s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : 'All'; };
-    return [['Show by', sel('f-group')], ['Year', sel('f-year')], ['Month', sel('f-month')], ['Supplier', sel('f-supplier')], ['Breed', sel('f-breed')],
-            ['Batches not planted yet', $('f-unplanted').checked ? 'included' : 'excluded']];
-  }
 
   /* ── charts: hand-drawn SVG, ONE axis each, titled on both axes, every
      figure in full with commas (never 10k), a tooltip per column. ── */
@@ -566,12 +573,29 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
     const fixed = !!cfg.fixedW;
     const frameW = cfg.fixedW || Math.max(320, host.clientWidth || 900);
-    const L = 86, R = 16, T = 30, B = cfg.rotate ? 92 : 70, H = fixed ? 236 : 360, ph = H - T - B;
     const minCol = fixed ? 0 : 54;
+    const L = 86, R = 16;
     const W = fixed ? frameW : Math.max(frameW, L + R + minCol * groups.length);
     const cw = (W - L - R) / groups.length;
     const rot = cw < 64;
+    /* DATA LABELS: every quantity is written on the chart, not only in the
+       tooltip, because a printed chart has no tooltip. Wide columns stack
+       them over the column (bottom up, as cfg.labels lists them); a column
+       too narrow for a figure written across it turns the ones marked
+       'bar' inside the bar and 'top' over it, and drops the rest — the
+       table under the chart carries every figure anyway. The top margin
+       grows by what the labels need, so none is cut off. */
+    const narrow = cw < 52;
+    const nLines = cfg.labels ? Math.max(...groups.map(g => cfg.labels(g).length)) : 0;
     const hi = niceMax(cfg.max(groups));
+    // The top margin is only what the tallest column's labels lack: the
+    // scale already leaves room above the data, and padding every chart by
+    // the full stack is a chart squashed for nothing.
+    const B = fixed ? 58 : 70, H0 = fixed ? (cfg.fixedH || 236) : 360, ph0 = H0 - 30 - B;
+    const peak = Math.max(0, ...groups.map(g => Math.max(cfg.bar(g).v || 0, cfg.step ? cfg.step(g) : 0)));
+    const need = !nLines ? 0 : narrow ? 48 : 8 + (nLines - 1) * 15 + 14;
+    const room = 30 + ph0 * (1 - Math.min(peak, hi) / hi);
+    const T = 30 + Math.max(0, Math.ceil(need - room)), H = H0 + (T - 30), ph = H - T - B;
     const ys = v => T + ph - (Math.max(0, Math.min(v, hi)) / hi) * ph;
     let s = `<svg ${fixed ? `viewBox="0 0 ${W} ${H}" width="100%"` : `width="${W}" height="${H}"`} role="img" aria-label="${esc(cfg.aria)}">`;
     for (let i = 0; i <= 4; i++) {
@@ -582,7 +606,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     s += `<line x1="${L}" x2="${L}" y1="${T}" y2="${T + ph}" stroke="var(--line)" stroke-width="1"/>`;
     // Axis titles: the Y one turned up the side, the X one under the labels.
     s += `<text class="ytitle" x="18" y="${T + ph / 2}" transform="rotate(-90 18 ${T + ph / 2})" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.yTitle)}</text>`;
-    s += `<text class="xtitle" x="${L + (W - L - R) / 2}" y="${H - 10}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.xTitle)}</text>`;
+    s += `<text class="xtitle" x="${L + (W - L - R) / 2}" y="${H - (fixed ? 6 : 10)}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.xTitle)}</text>`;
     if (cfg.ref != null) {
       const y = ys(cfg.ref);
       s += `<line class="ref" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--neg)" stroke-width="2" stroke-dasharray="6 4"/>`;
@@ -599,9 +623,21 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       const x0 = L + i * cw, bw = Math.min(cw * 0.5, 44), bx = x0 + (cw - bw) / 2;
       const b = cfg.bar(g), y = ys(b.v || 0);
       s += `<path class="bar" d="${barPath(bx, y, bw, T + ph - y, 4)}" fill="${b.color}"/>`;
-      if (cfg.label) {
-        const lb = cfg.label(g), top = Math.min(y, cfg.step ? ys(cfg.step(g)) : y);
-        s += `<text class="vlabel" x="${x0 + cw / 2}" y="${top - 8}" text-anchor="middle" font-size="12" font-weight="600" fill="${lb.color}">${esc(lb.text)}</text>`;
+      if (cfg.labels) {
+        const top = Math.min(y, cfg.step ? ys(cfg.step(g)) : y), cx = x0 + cw / 2;
+        const lbl = (lb, attrs, txt) => `<text class="${lb.cls || 'dlabel'}" ${attrs} font-size="${lb.size || 12}" font-weight="${lb.weight || 600}" fill="${lb.color}">${esc(txt)}</text>`;
+        if (!narrow) {
+          cfg.labels(g).forEach((lb, k) => { s += lbl(lb, `x="${cx}" y="${top - 8 - k * 15}" text-anchor="middle"`, lb.text); });
+        } else {
+          cfg.labels(g).forEach(lb => {
+            const len = String(lb.text).length * 7 + 8, barH = T + ph - y;
+            if (lb.narrow === 'bar' && barH > len) {
+              s += lbl(Object.assign({}, lb, { color: '#fff' }), `x="${cx + 4}" y="${y + 6}" text-anchor="end" transform="rotate(-90 ${cx + 4} ${y + 6})"`, lb.text);
+            } else if (lb.narrow === 'top' || lb.narrow === 'bar') {
+              s += lbl(lb, `x="${cx + 4}" y="${top - 6}" text-anchor="start" transform="rotate(-90 ${cx + 4} ${top - 6})"`, lb.text);
+            }
+          });
+        }
       }
       const lx = x0 + cw / 2, ly = T + ph + 18, lab = esc(xLabel(g, cfg.by));
       s += rot ? `<text class="xtick" x="${lx}" y="${ly}" font-size="12" fill="var(--ink-2)" text-anchor="end" transform="rotate(-35 ${lx} ${ly})">${lab}</text>`
@@ -620,14 +656,20 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
   const tipHead = (g, by) => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${nf(g.n)} batch${g.n === 1 ? '' : 'es'}` : (g.src[0].doNo ? ` · D/O ${esc(g.src[0].doNo)}` : '')}`;
   const tipRow = (sw, l, v) => `<div class="row"><span>${sw ? `<span class="sw" style="background:${sw}"></span>` : ''}${l}</span><b>${v}</b></div>`;
 
-  function drawCharts(root, groups, by, fixedW) {
+  function drawCharts(root, groups, by, fixedW, fixedH) {
     drawChart(root.querySelector('.c1'), groups, {
-      by, fixedW, aria: 'Actual seed received against total seed expected', xTitle: xTitle(by), yTitle: 'Seed Quantity (Seeds)',
+      by, fixedW, fixedH, aria: 'Actual seed received against total seed expected', xTitle: xTitle(by), yTitle: 'Seed Quantity (Seeds)',
       yFmt: v => nf(Math.round(v)),
       max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.12,
       bar: g => ({ v: g.actual, color: 'var(--green)' }),
       step: g => g.expected,
-      label: g => ({ text: pf(g.variancePct), color: g.variancePct < 0 ? '#B65252' : g.variancePct > 0 ? 'var(--green)' : 'var(--ink-2)' }),
+      // Bottom up: the actual received (green), the expected (orange, the
+      // dashed line's figure), then the variance between them.
+      labels: g => [
+        { text: nf(g.actual), color: 'var(--green)', weight: 700, narrow: 'bar' },
+        { text: nf(g.expected), color: '#B8732A', narrow: 'skip' },
+        { text: pf(g.variancePct), cls: 'vlabel', color: g.variancePct < 0 ? '#B65252' : g.variancePct > 0 ? 'var(--green)' : 'var(--ink-2)', narrow: 'top' },
+      ],
       tipHtml: g => tipHead(g, by) + tipRow('var(--warn)', 'Total Seed Expected', nf(g.expected))
         + (g.purchasedKnown ? tipRow('', 'Seed Purchased', nf(g.purchased)) : '')
         + tipRow('var(--green)', 'Actual Seed Received', nf(g.actual))
@@ -635,14 +677,133 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         + tipRow('', 'Variance', pf(g.variancePct)),
     });
     drawChart(root.querySelector('.c2'), groups, {
-      by, fixedW, aria: 'Seed damage percentage against the 5% maximum', xTitle: xTitle(by), yTitle: 'Seed Damage (%)',
+      by, fixedW, fixedH, aria: 'Seed damage percentage against the 5% maximum', xTitle: xTitle(by), yTitle: 'Seed Damage (%)',
       yFmt: v => (Math.round(v * 10) / 10).toLocaleString('en-MY', { minimumFractionDigits: 1 }) + '%', ref: MAX_DAMAGE_PCT,
       max: gs => Math.max(MAX_DAMAGE_PCT * 1.2, ...gs.map(g => g.damagePct || 0)),
       bar: g => ({ v: g.damagePct || 0, color: over(g) ? 'var(--neg)' : 'var(--green)' }),
-      label: g => ({ text: pfu(g.damagePct), color: over(g) ? '#B65252' : 'var(--ink-2)' }),
+      labels: g => [
+        { text: nf(g.damaged) + ' seeds', color: 'var(--ink-2)', weight: 500, narrow: 'skip' },
+        { text: pfu(g.damagePct), cls: 'vlabel', color: over(g) ? '#B65252' : 'var(--ink)', narrow: 'top' },
+      ],
       tipHtml: g => tipHead(g, by) + tipRow('', 'Seed Damage', nf(g.damaged)) + tipRow('', 'Total Seed Expected', nf(g.expected))
         + tipRow(over(g) ? 'var(--neg)' : 'var(--green)', 'Seed Damage (%)', pfu(g.damagePct)) + tipRow('', 'Maximum', MAX_DAMAGE_PCT + '%')
         + `<div>${over(g) ? '▲ Over the maximum' : '✓ Within the maximum'}</div>`,
+    });
+  }
+
+  /* ── THE PRINTED CHARTS. A separate drawing from the screen's, because
+     paper has no tooltip and the office asked for the figures INSIDE the
+     bars: on the comparison chart the actual received near the base and
+     the expected (marked E, the dashed line's figure) at the top left of
+     the same bar; on the damage chart the % near the base with the seeds
+     damaged as a smaller line above it. A label goes inside where it fits,
+     turns upright inside a narrow bar, and only where the bar is too short
+     even for that is it set above the bar, dark. The variance stays a
+     small line above each column. Width and height are fixed in the units
+     of the page (718 = 190mm), so the paper is the same whatever is
+     selected — the two charts always fill the two halves of page 1. ── */
+  function drawPrintChart(host, groups, cfg) {
+    if (!host) return;
+    if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
+    const W = 718, H = cfg.h, L = 66, R = 10, B = 44, FS = 10;
+    const n = groups.length, cw = (W - L - R) / n;
+    const bw = Math.max(4, Math.min(cw * (cw < 24 ? 0.82 : 0.62), 72));
+    const hi = niceMax(cfg.max(groups));
+    const topNeed = cfg.top ? (cw < 44 ? 46 : 18) : 8;
+    const T = 10 + topNeed, ph = H - T - B;
+    const ys = v => T + ph - (Math.max(0, Math.min(v, hi)) / hi) * ph;
+    const tw = (t, f) => String(t).length * f * 0.58 + 6;   // a figure's width at font size f
+    const txt = (cls, x, y, t, f, fill, weight, anchor, rot) =>
+      `<text class="${cls}" x="${x}" y="${y}" font-size="${f}" font-weight="${weight || 600}" fill="${fill}" text-anchor="${anchor || 'middle'}"${rot ? ` transform="rotate(-90 ${x} ${y})"` : ''}>${esc(t)}</text>`;
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(cfg.aria)}">`;
+    for (let i = 0; i <= 4; i++) {
+      const v = hi * i / 4, y = ys(v);
+      s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${i ? '#E6EBEF' : '#C9D2DA'}" stroke-width="1"/>`;
+      s += txt('ytick', L - 6, y + 3, cfg.yFmt(v), FS - 1, '#6B7280', 400, 'end');
+    }
+    s += `<line x1="${L}" x2="${L}" y1="${T}" y2="${T + ph}" stroke="#C9D2DA" stroke-width="1"/>`;
+    s += txt('ytitle', 12, T + ph / 2, cfg.yTitle, FS - 1, '#253247', 600, 'middle', true);
+    s += txt('xtitle', L + (W - L - R) / 2, H - 4, cfg.xTitle, FS - 1, '#253247', 600);
+    if (cfg.ref != null) {
+      const y = ys(cfg.ref);
+      s += `<line class="ref" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#D46B6B" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+      s += txt('reflabel', W - R - 2, y - 4, 'Maximum ' + cfg.ref + '%', FS - 1, '#B65252', 600, 'end');
+    }
+    if (cfg.step) {
+      let d = '';
+      groups.forEach((g, i) => { const y = ys(cfg.step(g)), x0 = L + i * cw;
+        d += (i ? ` V${y}` : `M${x0 + cw * 0.06},${y}`) + ` H${x0 + cw * (i === n - 1 ? 0.94 : 1)}`; });
+      s += `<path class="step" d="${d}" fill="none" stroke="#E59A45" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+    }
+    // A column narrower than a line of type cannot carry one: the labels
+    // shrink with the column, down to 6px, and a column thinner than that
+    // carries none — every figure is on the table on page 2.
+    const F = Math.min(FS, Math.max(6, Math.floor(cw - 2))), labels = cw >= 7;
+    const xRot = groups.some(g => tw(xLabel(g, cfg.by), F - 1) > cw);
+    groups.forEach((g, i) => {
+      const x0 = L + i * cw, cx = x0 + cw / 2, bx = cx - bw / 2;
+      const b = cfg.bar(g), y = ys(b.v || 0), bh = T + ph - y, base = T + ph;
+      s += `<path class="bar" d="${barPath(bx, y, bw, bh, 2)}" fill="${b.color}"/>`;
+      const lb = labels ? cfg.inBar(g) : null;                    // { main, sub } — main near the base, sub above / to the left
+      let ceil = y;                               // the highest thing drawn on this column so far
+      if (lb) {
+      const flat = tw(lb.main.text, F) <= bw - 2 && (!lb.sub || tw(lb.sub.text, F - 1) <= bw - 2);
+      const needFlat = (F + 4) * (lb.sub ? 2 : 1) + 4;
+      if (flat && bh >= needFlat) {
+        s += txt('ilabel main', cx, base - 5, lb.main.text, F, '#fff', 700);
+        if (lb.sub) s += lb.sub.left
+          ? txt('ilabel sub', bx + 4, y + F + 3, lb.sub.text, F - 1, lb.sub.fill, 500, 'start')
+          : txt('ilabel sub', cx, base - 5 - (F + 4), lb.sub.text, F - 1, lb.sub.fill, 500);
+      } else {
+        // Upright: the main label up the right half of the bar from its base,
+        // the second up the left half. Needs the bar wide enough for two.
+        const two = lb.sub && bw >= (F + 2) * 2 + 2;
+        const len = Math.max(tw(lb.main.text, F), two ? tw(lb.sub.text, F - 1) : 0);
+        if (bh >= len + 4 && bw >= F + 1) {
+          const xm = two ? bx + bw * 0.72 : cx + F * 0.35, xs2 = bx + bw * 0.3;
+          s += txt('ilabel main', xm, base - 4, lb.main.text, F, '#fff', 700, 'start', true);
+          if (two) s += txt('ilabel sub', xs2, base - 4, lb.sub.text, F - 1, lb.sub.fill, 500, 'start', true);
+        } else {
+          // Too short to hold it: above the bar, dark — the main label, and
+          // the second one over it where the column is wide enough to read.
+          const up = tw(lb.main.text, F) > cw;
+          s += txt('ilabel main out', up ? cx + F * 0.35 : cx, y - 4, lb.main.text, F, lb.main.dark, 700, up ? 'start' : 'middle', up);
+          ceil = y - 4 - (up ? tw(lb.main.text, F) : F + 2);
+          if (lb.sub && !up && tw(lb.sub.text, F - 1) <= cw) {
+            s += txt('ilabel sub out', cx, ceil - 2, lb.sub.text, F - 1, '#6B7280', 500);
+            ceil -= F + 2;
+          }
+        }
+      }
+      }
+      if (cfg.top && labels) {
+        const tp = cfg.top(g), top = Math.min(ceil, cfg.step ? ys(cfg.step(g)) : ceil);
+        const up = tw(tp.text, F - 1) > cw;
+        s += txt('vlabel', up ? cx + 3 : cx, Math.max(F, top - 4), tp.text, F - 1, tp.color, 600, up ? 'start' : 'middle', up);
+      }
+      const lx = cx, ly = base + 12, lab = xLabel(g, cfg.by);
+      s += xRot ? txt('xtick', lx, ly, lab, F - 1, '#6B7280', 500, 'end').replace('<text ', `<text transform="rotate(-40 ${lx} ${ly})" `)
+                : txt('xtick', lx, ly, lab, F - 1, '#6B7280', 500);
+    });
+    s += '</svg>';
+    host.innerHTML = s;
+  }
+  function drawPrintCharts(root, groups, by, h) {
+    drawPrintChart(root.querySelector('.c1'), groups, {
+      by, h, aria: 'Actual seed received against total seed expected', xTitle: xTitle(by), yTitle: 'Seed Quantity (Seeds)',
+      yFmt: v => nf(Math.round(v)),
+      max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.08,
+      bar: g => ({ v: g.actual, color: '#246B4A' }),
+      step: g => g.expected,
+      inBar: g => ({ main: { text: nf(g.actual), dark: '#246B4A' }, sub: { text: 'E ' + nf(g.expected), fill: '#FCD9B0', left: true } }),
+      top: g => ({ text: pf(g.variancePct), color: g.variancePct < 0 ? '#B65252' : g.variancePct > 0 ? '#246B4A' : '#6B7280' }),
+    });
+    drawPrintChart(root.querySelector('.c2'), groups, {
+      by, h, aria: 'Seed damage percentage against the 5% maximum', xTitle: xTitle(by), yTitle: 'Seed Damage (%)',
+      yFmt: v => (Math.round(v * 10) / 10).toLocaleString('en-MY', { minimumFractionDigits: 1 }) + '%', ref: MAX_DAMAGE_PCT,
+      max: gs => Math.max(MAX_DAMAGE_PCT * 1.3, ...gs.map(g => (g.damagePct || 0) * 1.08)),
+      bar: g => ({ v: g.damagePct || 0, color: over(g) ? '#D46B6B' : '#246B4A' }),
+      inBar: g => ({ main: { text: pfu(g.damagePct), dark: over(g) ? '#B65252' : '#253247' }, sub: { text: nf(g.damaged), fill: '#E3EFE8' } }),
     });
   }
 
@@ -654,6 +815,8 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       { h: 'Received', c: g => fmtDate(g.src[0].date), f: () => '' },
       { h: 'Breed', c: g => esc(g.src[0].breed), f: () => '' },
       { h: 'Supplier', c: g => esc(g.src[0].supplier), f: () => '' },
+      // A D/O number stays on one line, on screen and on paper: the printed
+      // table is scaled to fit its page rather than wrapping a reference.
       { h: 'D/O No.', c: g => esc(g.src[0].doNo || '—'), f: () => '' },
     ] : [{ h: 'Batches', num: 1, c: g => nf(g.n), f: t => nf(t.n) }]),
     { h: 'Seed Purchased', num: 1, c: g => g.purchasedKnown ? nf(g.purchased) : '—', f: t => t.purchasedKnown ? nf(t.purchased) : '—' },
@@ -670,7 +833,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const cols = COLS(by), t = totalsOf(all);
     const al = c => c.num ? 'num' : c.cc ? 'c' : '';
     return `<table class="${cls}"><thead><tr>${cols.map(c => `<th class="${al(c)}">${c.h}</th>`).join('')}</tr></thead>
-      <tbody>${groups.map(g => `<tr>${cols.map(c => `<td class="${al(c)} ${c.key ? 'key' : ''}">${c.c(g)}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tbody>${groups.map(g => `<tr>${cols.map(c => `<td class="${al(c)} ${c.key ? 'key' : ''}">${c.c(g, cls === 'pt')}</td>`).join('')}</tr>`).join('')}</tbody>
       <tfoot><tr>${cols.map(c => `<td class="${al(c)}">${c.f(t)}</td>`).join('')}</tr></tfoot></table>`;
   }
 
@@ -753,57 +916,122 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       : '';
   }
 
-  /* ON PAPER: built when a print option is pressed. One block per supplier
-     and breed when shown by batch (the office's own sheet), the filters
-     written out, the summary, then the chart and/or the COMPLETE table —
-     its header repeats on every page and no row is cut — and the
-     signature block naming whoever pressed Print, on that day. */
+  /* ON PAPER: ONE report, A4 portrait, in the shape Print was asked for.
+       Chart + table — page 1 the header and both charts (comparison on the
+                top half, damage on the bottom), page 2 the batch table and
+                Prepared and Verified by.
+       Chart only  — ONE page: header, both charts, the signature.
+       Table only  — ONE page: header, the batch table, the signature.
+     Every choice carries the signature, on its last page.
+     No filter line is printed: the header names what the report is of.
+     It is built off-screen first so it can be MEASURED: each chart is drawn
+     to the exact height its half of page 1 has, and the table is scaled
+     down until it fits page 2, so nothing is cut and nothing spills. */
+  const PRINT_W = 718;               // 190mm at 96 dpi: the printable width of A4 at 10mm margins
+  function onlyOrAll(vals, picked, word) {
+    if (picked) return picked;
+    const u = uniq(vals.filter(Boolean));
+    return u.length === 1 ? u[0] : (u.length ? 'All ' + word + ' (' + u.length + ')' : '—');
+  }
   function buildPrint(mode) {
-    mode = mode || 'both';
+    mode = mode === 'chart' || mode === 'table' ? mode : 'both';
     const who = (window.MJMAccess && MJMAccess.user && MJMAccess.user()) || {};
     const d = new Date();
     PRINTED_BY = { name: who.full_name || who.email || '',
                    date: String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear() };
     const by = $('f-group').value;
     const { rows } = filtered();
-    const blocks = reportBlocks(rows, by, !!$('f-breed').value && !$('f-supplier').value);
-    const fl = filterLine().map(([k, v]) => `${k}: <b>${esc(v)}</b>`).join(' · ');
     const year = $('f-year').value, month = $('f-month').value;
     const period = year ? (month ? MONTHS[+month - 1] + ' ' + year : year) : (month ? MONTHS[+month - 1] + ', every year' : 'All years');
+    const supplier = onlyOrAll(rows.map(x => x.supplier), $('f-supplier').value, 'suppliers');
+    const breed = onlyOrAll(rows.map(x => x.breed), $('f-breed').value, 'breeds');
     const area = $('print-area');
-    area.dataset.mode = mode;
-    if (!rows.length) { area.innerHTML = '<div class="p-block"><div class="empty">Nothing matches these filters.</div></div>'; return; }
-    area.innerHTML = blocks.map((blk, bi) => {
-      const groups = groupRows(blk.batches, by), t = totalsOf(blk.batches), p = pctOf(t);
-      const meta = blk.supplier == null
-        ? `<div>Supplier: <b>${esc($('f-supplier').value || 'All')}</b> · Breed: <b>${esc($('f-breed').value || 'All')}</b></div>`
-        : `<div>Supplier Name: <b>${esc(blk.supplier)}</b></div><div>Breed: <b>${esc(blk.breed)}</b></div>`;
-      const k = (l, v) => `<div class="p-kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
-      return `<div class="p-block" data-block="${bi}">
-        <div class="p-head">
-          <div><div class="p-co">MEGA JUTAMAS SDN BHD</div><div class="p-title">SEED RECEIVED SUMMARY REPORT</div></div>
-          <div class="p-meta">${meta}<div>Period: <b>${esc(period)}</b></div><div>Printed: <b>${esc(PRINTED_BY.date)}</b></div></div>
-        </div>
-        <div class="p-filters">Filters — ${fl}</div>
-        <div class="p-kpis">${k('Batches', nf(t.n))}${k('Seed Purchased', t.purchasedKnown ? nf(t.purchased) : '—')}${k('Total Seed Expected', nf(t.expected))}${k('Actual Seed Received', nf(t.actual))}${k('Variance', pf(p.v))}${k('Seed Damage', nf(t.damaged))}${k('Seed Damage (%)', pfu(p.d))}${k('Maximum', MAX_DAMAGE_PCT + '%')}</div>
-        ${mode !== 'table' ? `<div class="p-charts">
-          <div><div class="p-chart-t">Seed Expected vs Actual Seed Received</div><div class="legend"><span><i style="background:var(--green)"></i>Actual Seed Received</span><span><i class="ln"></i>Total Seed Expected</span></div><div class="chart c1"></div></div>
-          <div><div class="p-chart-t">Seed Damage against the ${MAX_DAMAGE_PCT}% Maximum</div><div class="legend"><span><i style="background:var(--green)"></i>Within</span><span><i style="background:var(--neg)"></i>Over</span><span><i class="ln red"></i>Maximum ${MAX_DAMAGE_PCT}%</span></div><div class="chart c2"></div></div>
-        </div>` : ''}
-        ${mode !== 'chart' ? tableHtml(groups, blk.batches, by, 'pt') : ''}
+    const groups = groupRows(rows, by), t = totalsOf(rows), p = pctOf(t), overN = groups.filter(over).length;
+    const k = (l, v) => `<div class="p-kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+    const nPages = mode === 'both' ? 2 : 1;
+    const foot = n => `<div class="p-foot"><span>MEGA JUTAMAS SDN BHD · Seed Received Summary Report</span><span>Printed ${esc(PRINTED_BY.date)} · Page ${n} of ${nPages}</span></div>`;
+    const headHtml = `<div class="p-head">
+        <div><div class="p-co">MEGA JUTAMAS SDN BHD</div><div class="p-title">SEED RECEIVED SUMMARY REPORT</div></div>
+        <div class="p-meta"><div>Supplier Name: <b class="pm-supplier">${esc(supplier)}</b></div><div>Breed: <b class="pm-breed">${esc(breed)}</b></div><div>Period: <b class="pm-period">${esc(period)}</b></div></div>
+      </div>`;
+    const empty = !rows.length ? '<div class="empty">Nothing matches these filters.</div>' : '';
+    const chartsHtml = `
+        <section class="p-sec p-half" data-sec="compare">
+          <h3 class="p-sec-t">Seed Expected vs Actual Seed Received
+            <span class="p-legend"><span><i style="background:var(--green)"></i>Actual Seed Received</span><span><i class="ln"></i>Total Seed Expected (E)</span></span></h3>
+          <div class="p-kpis" style="--n:5">${k('Batches', nf(t.n))}${k('Seed Purchased', t.purchasedKnown ? nf(t.purchased) : '—')}${k('Total Seed Expected', nf(t.expected))}${k('Actual Seed Received', nf(t.actual))}${k('Variance', pf(p.v))}</div>
+          <div class="p-chart chart c1">${empty}</div>
+        </section>
+        <section class="p-sec p-half" data-sec="damage">
+          <h3 class="p-sec-t">Seed Damage
+            <span class="p-legend"><span><i style="background:var(--green)"></i>Within the maximum</span><span><i style="background:var(--neg)"></i>Over the maximum</span><span><i class="ln red"></i>Maximum ${MAX_DAMAGE_PCT}%</span></span></h3>
+          <div class="p-kpis" style="--n:4">${k('Seed Damage', nf(t.damaged))}${k('Seed Damage (%)', pfu(p.d))}${k('Maximum Allowed', MAX_DAMAGE_PCT + '%')}${k('Over the Maximum', nf(overN) + ' of ' + nf(groups.length))}</div>
+          <div class="p-chart chart c2">${empty}</div>
+        </section>
+`;
+    const tableHtmlP = `
+        <section class="p-sec" data-sec="table">
+          <h3 class="p-sec-t">${by === 'batch' ? 'Batch Details' : 'Details by ' + esc(head(by))}<span>${nf(groups.length)} ${by === 'batch' ? (groups.length === 1 ? 'batch' : 'batches') : (groups.length === 1 ? 'row' : 'rows')}</span></h3>
+          <div class="p-fit">${rows.length ? tableHtml(groups, rows, by, 'pt') : empty}</div>
+        </section>
+`;
+    const signHtml = `
         <div class="sign"><div class="sign-box">
           <div class="sign-cap">Prepared and Verified by</div>
           <div class="sign-sig"><span>Signature</span></div>
           <div class="sign-line"><span>Name</span><b class="sign-name">${esc(PRINTED_BY.name)}</b></div>
           <div class="sign-line"><span>Date</span><b class="sign-date">${esc(PRINTED_BY.date)}</b></div>
         </div></div>
-      </div>`;
-    }).join('');
-    if (mode !== 'table') area.querySelectorAll('.p-block[data-block]').forEach(el => drawCharts(el, groupRows(blocks[+el.dataset.block].batches, by), by, 640));
+`;
+    /* Every choice carries the signature, on the LAST page: chart + table is
+       charts on page 1 and the table with the signature on page 2; chart only
+       and table only are ONE page each, the signature under what was printed. */
+    const page = (n, inner) => `<div class="pp" data-page="${n}">${headHtml}${inner}${foot(n)}</div>`;
+    area.dataset.mode = mode;
+    area.innerHTML = mode === 'chart' ? page(1, chartsHtml + signHtml)
+                   : mode === 'table' ? page(1, tableHtmlP + signHtml)
+                   : page(1, chartsHtml) + page(2, tableHtmlP + signHtml);
+    fitPrint(groups, by);
+  }
+  /* Lay the two pages out off-screen at their paper size and fit them. */
+  function fitPrint(groups, by) {
+    const area = $('print-area');
+    const keep = area.getAttribute('style') || '';
+    area.style.cssText = 'display:block;position:fixed;left:-30000px;top:0;visibility:hidden';
+    try {
+      if (groups.length && area.querySelector('.c1')) {
+        const h1 = area.querySelector('.c1').clientHeight, h2 = area.querySelector('.c2').clientHeight;
+        drawPrintCharts(area, groups, by, Math.max(120, Math.min(h1, h2)));
+      }
+      // Page 2: shrink the table until the page holds it, the signature included.
+      const fit = area.querySelector('.p-fit');
+      if (!fit) { area.dataset.zoom = '1'; return; }
+      const pg = fit.closest('.pp');
+      // The type and the padding are SHRUNK rather than the table zoomed:
+      // Chrome's PDF output does not honour a CSS zoom the way the screen
+      // layout measured it, so a zoomed table that fitted here ran under the
+      // signature on paper. A smaller font is the same layout in both.
+      const setZ = v => fit.style.setProperty('--pz', String(v));
+      setZ(1);
+      let z = 1;
+      const tbl = fit.querySelector('table');
+      const room = () => fit.clientWidth - 1;   // its content box: .p-fit keeps 1px for the right-hand line
+      for (let i = 0; i < 16 && tbl && tbl.getBoundingClientRect().width > room() + 0.5 && z > 0.3; i++) { z = Math.max(0.3, z * 0.95); setZ(z); }
+      for (let i = 0; i < 40; i++) {
+        if (pg.scrollHeight - pg.clientHeight <= 0) break;
+        z = Math.max(0.3, z * 0.96); setZ(z);
+        if (z === 0.3) break;
+      }
+      area.dataset.zoom = String(Math.round(z * 1000) / 1000);
+    } finally {
+      area.setAttribute('style', keep);
+      if (!keep) area.removeAttribute('style');
+    }
   }
   window.ndBuildPrint = buildPrint;
 
-  /* Print asks which report; the choice builds the page and prints it. */
+  /* Print asks which report (chart + table, chart only, table only); the
+     choice builds the pages and prints them, signed by whoever pressed it. */
   const dlg = $('print-dlg');
   function openPrintDlg() { dlg.classList.remove('hidden'); dlg.querySelector('.opt').focus(); }
   function closePrintDlg() { dlg.classList.add('hidden'); }
@@ -811,13 +1039,14 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
   $('print-cancel').addEventListener('click', closePrintDlg);
   dlg.addEventListener('click', e => { if (e.target === dlg) closePrintDlg(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && !dlg.classList.contains('hidden')) closePrintDlg(); });
-  // An option builds the page for itself; Ctrl/Cmd + P with no option
-  // chosen prints chart + table, signed by whoever pressed it.
-  let _built = false;
+  // An option builds the page for itself. Ctrl/Cmd + P rebuilds the LAST
+  // option chosen (chart + table before any), so printing again from the
+  // browser never turns a one-page chart-only report into two pages.
+  let _built = false, _lastMode = 'both';
   dlg.querySelectorAll('[data-print]').forEach(b => b.addEventListener('click', () => {
-    closePrintDlg(); buildPrint(b.dataset.print); _built = true; window.print(); _built = false;
+    closePrintDlg(); _lastMode = b.dataset.print; buildPrint(_lastMode); _built = true; window.print(); _built = false;
   }));
-  addEventListener('beforeprint', () => { if (LOADED && !_built) buildPrint('both'); });
+  addEventListener('beforeprint', () => { if (LOADED && !_built) buildPrint(_lastMode); });
 
   function refreshFilterOptions() {
     const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
