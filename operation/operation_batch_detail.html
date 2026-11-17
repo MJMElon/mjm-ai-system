@@ -925,14 +925,14 @@
                                 <!-- AI Scan dropzone -->
                                 <div class="mx-6 mt-4">
                                     <div id="t8-dropzone" class="px-6 py-5 border-2 border-dashed border-[#4a7a2e] bg-[#f0f8ec] rounded-xl text-center cursor-pointer hover:bg-[#e8f5da] transition-colors">
-                                        <input type="file" id="t8-file-input" class="hidden" accept="image/*,application/pdf">
+                                        <input type="file" id="t8-file-input" class="hidden" accept="image/*,application/pdf" multiple>
                                         <div id="t8-dropzone-idle">
                                             <p class="text-[12px] font-black text-[#4a7a2e] uppercase tracking-widest mb-1">📎 AI Scan — Drop Supplier Packing List Here</p>
-                                            <p class="text-[10px] text-[#8a7a68]">Drag an image or PDF, or click to choose. Bag rows will be auto-filled — you can still edit each row manually afterwards.</p>
+                                            <p class="text-[10px] text-[#8a7a68]">Drag one or more images or PDFs (every page of the list at once), or click to choose. Bag rows will be auto-filled — you can still edit each row manually afterwards.</p>
                                         </div>
                                         <div id="t8-dropzone-busy" class="hidden">
                                             <p class="text-[12px] font-black text-[#c07820] uppercase tracking-widest">⏳ Scanning packing list… <span id="t8-dropzone-file" class="normal-case text-[#8a7a68]"></span></p>
-                                            <p class="text-[10px] text-[#8a7a68] mt-1">Usually 10–20 seconds. Rows will be added when ready.</p>
+                                            <p class="text-[10px] text-[#8a7a68] mt-1">Usually 10–20 seconds a page. Rows will be added as each page is read.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -10376,45 +10376,97 @@
             if (st && st.aiCount != null) renderBagVerify(rowId);
         }
 
-        async function scanPackingListFile(file) {
-            if (!file) return;
-            if (file.size > 20 * 1024 * 1024) {
-                showToast('File too large (max 20 MB).', 'error');
-                return;
-            }
-            _setSeedAuditDropzoneBusy(true, file.name);
+        /* Every page of a packing list in ONE drop, read one after the other.
+           A list arrives as Box 1/4 .. 4/4, so one file at a time was four
+           drops for one delivery.
+
+           AND A PAGE READ TWICE MUST NOT BECOME TWO PAGES OF BAGS. The bag
+           number is the one thing every page row carries, so it is the key:
+           a bag already on screen (keyed by hand, or off an earlier page or
+           an earlier drop) is not added again, and a page whose bags are ALL
+           already there is named as a page already scanned. The same file
+           picked twice in one drop is not even sent. Matched on letters and
+           digits, so a stray space cannot make 14525 a second bag. */
+        function _seedBagKey(v) {
+            return String(v == null ? '' : v).toUpperCase().split('').filter(ch => /[A-Z0-9]/.test(ch)).join('');
+        }
+
+        async function _scanOnePackingList(file) {
+            const base64 = await _fileToBase64(file);
+            const { data, error } = await _supabase.functions.invoke('scan-packing-list', {
+                body: { file_base64: base64, mime_type: file.type || 'application/octet-stream', filename: file.name }
+            });
+            if (error) throw new Error(error.message || 'Edge function error.');
+            const bags = (data && Array.isArray(data.bags)) ? data.bags : null;
+            if (!bags || bags.length === 0) throw new Error('No bags detected in the file.');
+            return bags;
+        }
+
+        async function scanPackingListFiles(fileList) {
+            const all = Array.from(fileList || []);
+            if (!all.length) return;
+            const files = [], sameFile = [], seenFile = new Set();
+            all.forEach(f => {
+                const k = f.name + '|' + f.size + '|' + (f.lastModified || '');
+                if (seenFile.has(k)) { sameFile.push(f.name); return; }
+                seenFile.add(k); files.push(f);
+            });
+            const tooBig = files.filter(f => f.size > 20 * 1024 * 1024).map(f => f.name);
+            const toScan = files.filter(f => f.size <= 20 * 1024 * 1024);
+
+            // Drop empty starter rows before appending scanned bags
+            document.querySelectorAll('.t8-bag-row').forEach(row => {
+                const bagNo  = row.querySelector('.t8-bag-no').value.trim();
+                const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
+                const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
+                if (!bagNo && supQty === 0 && recQty === 0) row.remove();
+            });
+            const onScreen = new Set();
+            document.querySelectorAll('.t8-bag-row .t8-bag-no').forEach(i => {
+                const k = _seedBagKey(i.value); if (k) onScreen.add(k);
+            });
+
+            let added = 0, dupBags = 0;
+            const dupPages = [], failed = [];
             try {
-                const base64 = await _fileToBase64(file);
-                const { data, error } = await _supabase.functions.invoke('scan-packing-list', {
-                    body: { file_base64: base64, mime_type: file.type || 'application/octet-stream', filename: file.name }
-                });
-                if (error) throw new Error(error.message || 'Edge function error.');
-                const bags = (data && Array.isArray(data.bags)) ? data.bags : null;
-                if (!bags || bags.length === 0) throw new Error('No bags detected in the file.');
-
-                // Drop empty starter rows before appending scanned bags
-                document.querySelectorAll('.t8-bag-row').forEach(row => {
-                    const bagNo  = row.querySelector('.t8-bag-no').value.trim();
-                    const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
-                    const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
-                    if (!bagNo && supQty === 0 && recQty === 0) row.remove();
-                });
-
-                bags.forEach(b => {
-                    const bagNo = (b.bag_no || b.bagNo || '').toString();
-                    const supQty = Number(b.supplier_qty || b.supplierQty || 0) || 0;
-                    addSeedAuditRow(bagNo, supQty);
-                });
-                showToast(`AI scan added ${bags.length} bag(s). Verify the rows and key in audited counts.`, 'success');
-            } catch (e) {
-                console.warn('Packing list scan failed:', e);
-                showToast('AI scan failed: ' + (e.message || e) + '. You can still add bag rows manually.', 'error');
+                for (let i = 0; i < toScan.length; i++) {
+                    const file = toScan[i];
+                    _setSeedAuditDropzoneBusy(true, toScan.length > 1 ? `${i + 1} of ${toScan.length} · ${file.name}` : file.name);
+                    let bags;
+                    try { bags = await _scanOnePackingList(file); }
+                    catch (e) { console.warn('Packing list scan failed:', file.name, e); failed.push(file.name + ' (' + (e.message || e) + ')'); continue; }
+                    let fresh = 0, repeat = 0;
+                    bags.forEach(b => {
+                        const bagNo = (b.bag_no || b.bagNo || '').toString();
+                        const supQty = Number(b.supplier_qty || b.supplierQty || 0) || 0;
+                        const k = _seedBagKey(bagNo);
+                        if (k && onScreen.has(k)) { repeat++; return; }
+                        if (k) onScreen.add(k);
+                        addSeedAuditRow(bagNo, supQty);
+                        fresh++;
+                    });
+                    added += fresh; dupBags += repeat;
+                    if (!fresh && repeat) dupPages.push(file.name);
+                }
             } finally {
                 _setSeedAuditDropzoneBusy(false);
                 const input = document.getElementById('t8-file-input');
                 if (input) input.value = '';
             }
+
+            const lines = [];
+            if (added) lines.push(`AI scan added ${added} bag(s)${toScan.length > 1 ? ` from ${toScan.length - failed.length} file(s)` : ''}. Verify the rows and key in audited counts.`);
+            if (dupPages.length) lines.push(`Already scanned, nothing added: ${dupPages.join(', ')}.`);
+            if (dupBags) lines.push(`${dupBags} bag number(s) were already on the list and were not added again.`);
+            if (sameFile.length) lines.push(`Same file picked twice: ${sameFile.join(', ')}.`);
+            if (tooBig.length) lines.push(`Too large (max 20 MB): ${tooBig.join(', ')}.`);
+            if (failed.length) lines.push(`Could not read: ${failed.join('; ')}. You can still add bag rows manually.`);
+            const bad = failed.length || tooBig.length;
+            const type = !added && bad ? 'error' : (bad || dupPages.length || dupBags || sameFile.length ? 'warn' : 'success');
+            showToast(lines.join(' ') || 'Nothing added.', type);
         }
+        // Kept for any caller that hands over one file.
+        function scanPackingListFile(file) { return scanPackingListFiles(file ? [file] : []); }
 
         function _wireSeedAuditDropzone() {
             const zone = document.getElementById('t8-dropzone');
@@ -10423,7 +10475,7 @@
             zone.dataset.wired = '1';
             zone.addEventListener('click', () => input.click());
             input.addEventListener('change', () => {
-                if (input.files && input.files[0]) scanPackingListFile(input.files[0]);
+                if (input.files && input.files.length) scanPackingListFiles(input.files);
             });
             ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
                 e.preventDefault(); e.stopPropagation();
@@ -10434,8 +10486,8 @@
                 zone.classList.remove('ring-2', 'ring-[#4a7a2e]', 'bg-[#e8f5da]');
             }));
             zone.addEventListener('drop', e => {
-                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    scanPackingListFile(e.dataTransfer.files[0]);
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                    scanPackingListFiles(e.dataTransfer.files);
                 }
             });
         }
