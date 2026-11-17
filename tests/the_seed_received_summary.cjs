@@ -281,6 +281,19 @@ const server = http.createServer((req, res) => {
       out['wide' + n] = pg.scrollWidth - pg.clientWidth;
       out['h' + n] = Math.round(r.height); out['w' + n] = Math.round(r.width);
     });
+    // the table's RIGHT border is inside the page box, not cut off by it
+    const pg2 = document.querySelector('#print-area .pp[data-page="2"]'), tb = pg2 && pg2.querySelector('table');
+    if (tb) {
+      const cells = [...tb.querySelectorAll('tr > :last-child')];
+      const right = Math.max(...cells.map(c => c.getBoundingClientRect().right));
+      out.tableRightGap = pg2.getBoundingClientRect().right - right;
+      out.rightBorder = cells.every(c => parseFloat(getComputedStyle(c).borderRightWidth) > 0);
+    }
+    // the signature starts BELOW the table: a table running under it is cut off
+    if (tb) out.signClear = pg2.querySelector('.sign').getBoundingClientRect().top - tb.getBoundingClientRect().bottom;
+    // nothing but the report is printed: a NELOS dock on the page stays off the paper
+    const dock = document.getElementById('nelos-dock');
+    out.dockShown = !!dock && getComputedStyle(dock).display !== 'none';
     // every in-bar label inside its bar, and no two labels on one column overlapping
     const inside = [], clash = [];
     document.querySelectorAll('#print-area .p-chart svg').forEach(svg => {
@@ -334,7 +347,11 @@ const server = http.createServer((req, res) => {
   ok(P.rows.length === 2 && P.rows[0][6] === '10,500' && P.yticks.join('|') === '0|5,000|10,000|15,000|20,000', 'printed figures are in full', [P.rows[0], P.yticks]);
   const today = (() => { const d = new Date(); return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear(); })();
   ok(P.signName === 'Esther' && P.signDate === today && P.sigBox, 'Prepared and Verified by whoever pressed Print, today, with a signature box', [P.signName, P.signDate]);
+  await page.evaluate(() => { const d = document.createElement('div'); d.id = 'nelos-dock'; d.style.cssText = 'position:fixed;right:18px;bottom:18px;width:58px;height:58px'; d.textContent = 'NELOS'; document.body.appendChild(d); });
   let K = await asPaper(paperCheck);
+  ok(!K.dockShown, 'on paper: the NELOS button is not printed', K.dockShown);
+  ok(K.signClear >= 0, 'on paper: the signature sits below the table, never over it', K.signClear);
+  ok(K.rightBorder && K.tableRightGap >= 0.5, 'on paper: the table keeps its right-hand line, inside the page', [K.rightBorder, K.tableRightGap]);
   ok(K.over1 <= 0 && K.over2 <= 0 && K.wide1 <= 0 && K.wide2 <= 0, 'on paper: nothing on either page is cut off', K);
   ok(K.notInside.length === 0, 'on paper: every in-bar label is inside its bar', K.notInside);
   ok(K.clash.length === 0, 'on paper: no two chart labels overlap', K.clash);
@@ -373,6 +390,8 @@ const server = http.createServer((req, res) => {
   ok(P.zoom < 1, '74 batches: the table is scaled down to fit page 2', P.zoom);
   K = await asPaper(paperCheck);
   ok(K.over1 <= 0 && K.over2 <= 0 && K.wide2 <= 0, '74 batches: nothing on either page is cut off', [K.over1, K.over2, K.wide2]);
+  ok(K.signClear >= 0, '74 batches: the signature sits below the table, never over it', K.signClear);
+  ok(K.tableRightGap >= 0.4, '74 batches: the scaled table keeps its right-hand line, inside the page', K.tableRightGap);
   ok(K.clash.length === 0 && K.notInside.length === 0, '74 batches: labels stay inside their bars and never overlap', [K.clash.slice(0, 3), K.notInside.slice(0, 3)]);
   D = await pdfPages();
   ok(D.n === 2 && D.a4p, '74 batches: the PDF is still exactly two A4 portrait pages', D);

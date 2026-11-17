@@ -7605,9 +7605,19 @@ day). How it holds:
   happen.
 - **Nothing is cut because everything is FITTED**, off-screen at the press
   (`fitPrint`): each chart is drawn to the height its half of page 1 really
-  has, and the table is `zoom`ed down until page 2 holds it with the
-  signature (zoom changes layout; a transform would not shorten the page).
-  74 batches print at about half size, on page 2.
+  has, and the table's TYPE and padding shrink (`--pz`) until page 2 holds
+  it with the signature. It was a CSS `zoom` at first; the zoomed table
+  measured as fitting and ran under the signature on paper, and so did the
+  first version of this, because the table section could SHRINK — the table
+  then spilled under the signature INSIDE the page, where a page-overflow
+  test sees nothing. The section is `flex:0 0 auto` now and the test asks
+  that the signature starts below the table. 74 batches print at about
+  three quarters size. Measured, never trusted: render the PDF and look.
+- **Nothing but the report is printed**: `body > *:not(#print-area)` is
+  hidden on paper. The NELOS dock is `#nelos-dock`, and a rule naming
+  `#nelos-dock-root` (which does not exist) printed it over the signature.
+  `.p-fit` keeps 1px on its right so the table's right-hand line is not
+  clipped by the page box.
 - **The printed charts are their own drawing** (`drawPrintChart`), not the
   screen's: actual received INSIDE the bar near its base (white), expected
   inside at the top left marked **E** (peach), variance small above; damage

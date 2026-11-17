@@ -184,6 +184,9 @@
   #print-area .p-meta b { color:var(--ink); }
   #print-area .p-sec { display:flex; flex-direction:column; min-height:0; }
   #print-area .p-half { flex:1 1 0; }
+  /* The table section never shrinks: allowed to, it squeezes and the table
+     spills under the signature INSIDE the page, where no overflow test sees it. */
+  #print-area .p-sec[data-sec="table"] { flex:0 0 auto; }
   #print-area .p-half + .p-half { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
   #print-area .p-sec-t { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:11px; font-weight:700; color:var(--ink);
                          border-left:3px solid var(--green); padding-left:6px; margin:0 0 5px; flex:0 0 auto; }
@@ -200,15 +203,16 @@
   #print-area .p-chart { flex:1 1 0; min-height:0; overflow:hidden; }
   #print-area .p-chart svg { display:block; }
   #print-area .p-chart svg text { font-family:'Inter', system-ui, sans-serif; font-variant-numeric:tabular-nums; }
-  #print-area .p-fit { transform-origin:top left; }
-  #print-area table.pt { width:100%; border-collapse:collapse; font-size:9px; font-variant-numeric:tabular-nums; }
-  #print-area table.pt th, #print-area table.pt td { border:1px solid var(--line); padding:2px 4px; text-align:left; white-space:nowrap; line-height:1.3; }
+  #print-area .p-fit { transform-origin:top left; padding:0 1px 1px 0; }
+  #print-area .p-fit { --pz:1; }
+  #print-area table.pt { width:100%; border-collapse:collapse; font-size:calc(9px * var(--pz)); font-variant-numeric:tabular-nums; }
+  #print-area table.pt th, #print-area table.pt td { border:1px solid var(--line); padding:calc(2px * var(--pz)) calc(4px * var(--pz)); text-align:left; white-space:nowrap; line-height:1.3; }
   #print-area table.pt thead th { white-space:normal; vertical-align:bottom; background:#F2F5F7; font-weight:600; color:var(--ink); }
   #print-area table.pt th.num, #print-area table.pt td.num { text-align:right; }
   #print-area table.pt th.c, #print-area table.pt td.c { text-align:center; }
   #print-area table.pt tbody tr:nth-child(even) td { background:#FAFBFC; }
   #print-area table.pt tfoot td { font-weight:700; background:#F2F5F7; }
-  #print-area table.pt .st { display:inline; height:auto; padding:0; background:none; white-space:nowrap; font-size:9px; font-weight:600; }
+  #print-area table.pt .st { display:inline; height:auto; padding:0; background:none; white-space:nowrap; font-size:inherit; font-weight:600; }
   #print-area table.pt .st.over { color:#A94444; } #print-area table.pt .st.ok { color:var(--green); }
   #print-area table.pt tr { break-inside:avoid; page-break-inside:avoid; }
   #print-area .sign { display:flex; justify-content:flex-end; margin-top:auto; padding-top:12px; flex:0 0 auto; }
@@ -223,7 +227,7 @@
   @media print {
     @page { size:A4 portrait; margin:10mm; }
     html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
-    #mjm-ribbon, #shell, #main, #loading, #forbidden, .tip, #nelos-dock-root { display:none !important; }
+    #mjm-ribbon, #shell, #main, #loading, #forbidden, .tip, #nelos-dock, #nelos-dock-root, [id^="nelos-"], body > *:not(#print-area) { display:none !important; }
     #print-area { display:block !important; position:static !important; }
     #print-area .pp:last-child { break-after:avoid; page-break-after:avoid; }
     * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -969,20 +973,22 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         const h1 = area.querySelector('.c1').clientHeight, h2 = area.querySelector('.c2').clientHeight;
         drawPrintCharts(area, groups, by, Math.max(120, Math.min(h1, h2)));
       }
-      // Page 2: scale the table until the page holds it, the signature
-      // included. zoom changes LAYOUT, not just paint, so the page really
-      // gets shorter — a transform would leave the page as tall as before.
+      // Page 2: shrink the table until the page holds it, the signature included.
       const pg = area.querySelector('.pp[data-page="2"]'), fit = pg.querySelector('.p-fit');
-      fit.style.zoom = '';
+      // The type and the padding are SHRUNK rather than the table zoomed:
+      // Chrome's PDF output does not honour a CSS zoom the way the screen
+      // layout measured it, so a zoomed table that fitted here ran under the
+      // signature on paper. A smaller font is the same layout in both.
+      const setZ = v => fit.style.setProperty('--pz', String(v));
+      setZ(1);
       let z = 1;
       const tbl = fit.querySelector('table');
-      if (tbl && tbl.scrollWidth > fit.clientWidth) z = Math.min(z, fit.clientWidth / tbl.scrollWidth);
-      for (let i = 0; i < 12; i++) {
-        fit.style.zoom = z === 1 ? '' : String(z);
-        const over = pg.scrollHeight - pg.clientHeight;
-        if (over <= 0) break;
-        const h = fit.getBoundingClientRect().height;
-        z = Math.max(0.2, z * Math.max(0.5, (h - over - 2) / h));
+      const room = () => fit.clientWidth - 1;   // its content box: .p-fit keeps 1px for the right-hand line
+      for (let i = 0; i < 16 && tbl && tbl.getBoundingClientRect().width > room() + 0.5 && z > 0.3; i++) { z = Math.max(0.3, z * 0.95); setZ(z); }
+      for (let i = 0; i < 40; i++) {
+        if (pg.scrollHeight - pg.clientHeight <= 0) break;
+        z = Math.max(0.3, z * 0.96); setZ(z);
+        if (z === 0.3) break;
       }
       area.dataset.zoom = String(Math.round(z * 1000) / 1000);
     } finally {
