@@ -9,7 +9,14 @@
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
 <title>PALMS Plot Status Map — Nursery Operation Manage</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpath d='M20 44C20 26 32 18 46 18C46 32 38 44 20 44Z' fill='%23d8f3dc'/%3E%3Cpath d='M20 44L32 32' stroke='%23d8f3dc' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<!-- PALMS wears the plot map, not the module's leaf: the office asked for
+     "一个地图板块感 里面有蓝黄红绿板块", then "不规则形状的". So the parcels
+     are IRREGULAR quadrilaterals with lanes between them, the way plots sit
+     on the ground, and not a grid of four squares. The plate is still the
+     module's; what sits on it is this page. The outer outline is a nursery
+     shape and NOT a tracing of BNN own boundary -- that lives in
+     shared_plots.map_top, which this environment cannot read. See CLAUDE.md. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpolygon points='8,13 30,10.25 34.5,32.1 9.5,30' fill='%233b82f6'/%3E%3Cpolygon points='30,10.25 56,7 56.6,34 34.5,32.1' fill='%23f5b324'/%3E%3Cpolygon points='9.5,30 34.5,32.1 39,54 12,57' fill='%23ef4444'/%3E%3Cpolygon points='34.5,32.1 56.6,34 57,52 39,54' fill='%2322c55e'/%3E%3Cpath d='M30 10.25L39 54M9.5 30L56.6 34' stroke='%231b4332' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
