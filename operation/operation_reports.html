@@ -4729,6 +4729,75 @@ async function runMovementReportCombined(withCull2) {
     push('pre', _logDate(l), 'DOUBLE-TONE', l.batch_name, 'trIn', Math.abs(Number(l.quantity_change) || 0));
   });
 
+  /* A SOURCE NAMING SEVERAL TRAYS IS THOSE TRAYS, never a tray of its own.
+     The Tab 3 source box takes free text, so some transplants were saved
+     "from tray [P1, P2]", "[P11-P13]" or "[P32, P33. P34]". Read as one
+     name, each became a row nothing was ever planted into, reading minus
+     the whole transplant, while P1 and P2 themselves were never reduced
+     and read high by exactly that much.
+
+     The record does not say how many came out of each tray, so the
+     transplant is taken off the trays it names IN THE ORDER NAMED, each
+     up to what that tray of this batch has standing, and anything left
+     over goes on the last one named. The batch total is exact either way;
+     only the split between the named trays is worked out. A source naming
+     no tray this batch was planted into is left exactly as it was. */
+  const _trayList = (raw) => {
+    const out = [];
+    String(raw || '').split(/[,;.&/]+|\s+and\s+|\s+/i).forEach(tok => {
+      const t = tok.trim().toUpperCase();
+      if (!t) return;
+      const rng = t.match(/^([A-Z]*)(\d+)-([A-Z]*)(\d+)$/);
+      if (rng && (!rng[3] || rng[3] === rng[1])) {
+        const a = +rng[2], b = +rng[4];
+        if (b >= a && b - a < 60) { for (let n = a; n <= b; n++) out.push(rng[1] + n); return; }
+      }
+      out.push(t);
+    });
+    return out;
+  };
+  {
+    const preEv = ev.filter(e => e.sc === 'pre');
+    // What each real tray of each batch holds, before any multi-tray source.
+    const planted = {};   // batchKey -> Map(trayKey -> real tray name)
+    const stand = {};     // place + SEP + batchKey -> balance
+    const SEPX = '\x01';
+    const isMulti = (place) => _trayList(place).length > 1;
+    preEv.forEach(e => {
+      const bk = _mvBatchKey(e.batch);
+      if (e.col === 'planted' || e.col === 'trIn') {
+        (planted[bk] = planted[bk] || new Map()).set(_mvPlotKey(e.place), e.place);
+      }
+    });
+    preEv.forEach(e => {
+      if (isMulti(e.place)) return;
+      const c = MOVE_COLS.pre.find(x => x.key === e.col);
+      if (!c || !c.sign) return;
+      const k = e.place + SEPX + _mvBatchKey(e.batch);
+      stand[k] = (stand[k] || 0) + c.sign * e.qty;
+    });
+    const multi = preEv.filter(e => e.col === 'transOut' && isMulti(e.place))
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    multi.forEach(e => {
+      const bk = _mvBatchKey(e.batch);
+      const known = planted[bk] || new Map();
+      const named = _trayList(e.place).map(t => known.get(_mvPlotKey(t))).filter(Boolean);
+      if (!named.length) return;
+      const idx = ev.indexOf(e);
+      if (idx >= 0) ev.splice(idx, 1);
+      let left = e.qty;
+      named.forEach((tray, n) => {
+        if (left <= 0) return;
+        const k = tray + SEPX + bk;
+        const take = n === named.length - 1 ? left : Math.max(0, Math.min(left, stand[k] || 0));
+        if (!take) return;
+        ev.push({ sc: 'pre', date: e.date, place: tray, batch: e.batch, col: 'transOut', qty: take });
+        stand[k] = (stand[k] || 0) - take;
+        left -= take;
+      });
+    });
+  }
+
   // ── Sales, only against a plot·batch the batch report already has ──
   // Only worth doing when the Main Nursery section is actually wanted.
   const unmatchedSales = [];

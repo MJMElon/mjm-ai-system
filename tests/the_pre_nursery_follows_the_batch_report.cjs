@@ -89,5 +89,26 @@ console.log('\nA Transplanted_DoubleTone fill is not counted on top of a keyed f
 const r2 = run(LOGS.concat([L('Transplanted_DoubleTone', 'DOUBLE-TONE', 15, 'from tray [P1]')]));
 check('Double-Tone still reads the keyed 40 in, not 55', r2.pre.filter(e => e.place === 'DOUBLE-TONE' && e.col === 'trIn').reduce((s, e) => s + e.qty, 0), 40);
 
+console.log('\nA transplant saved "from tray [P11-P13]" or "[P32, P33. P34]" is those trays');
+{
+  const B = (type, plot, qty, remark, batch) => ({ transaction_type: type, batch_name: batch, plot_name: plot,
+    transaction_date: '2026-10-05', created_at: '2026-10-05T08:00:00Z', quantity_change: qty, remark: remark || '' });
+  const logs = [
+    B('Planted', 'P11', 1000, '', '255'), B('Planted', 'P12', 1000, '', '255'), B('Planted', 'P13', 1000, '', '255'),
+    B('Transplanted', 'N5', 2500, 'Transplanted from tray [P11-P13] to Main Plot [N5]. Date: 2026-10-09', '255'),
+    B('Planted', 'P32', 500, '', '258'), B('Planted', 'P33', 500, '', '258'), B('Planted', 'P34', 500, '', '258'),
+    B('Transplanted', 'N5', 1600, 'Transplanted from tray [P32, P33. P34] to Main Plot [N5]. Date: 2026-10-09', '258'),
+    B('Planted', 'P1', 300, '', '239'),
+    B('Transplanted', 'N5', 100, 'Transplanted from tray [X9, X10] to Main Plot [N5]. Date: 2026-10-09', '239'),
+  ];
+  const r3 = run(logs);
+  const places = Object.keys(r3.bal);
+  check('no row is named after a list of trays', places.filter(p => /[,-]/.test(p) && p !== 'X9, X10'), []);
+  check('P11, P12 emptied in order and P13 keeps the rest', [r3.bal.P11, r3.bal.P12, r3.bal.P13], [0, 0, 500]);
+  check('more than was standing goes on the LAST tray named', [r3.bal.P32, r3.bal.P33, r3.bal.P34], [0, 0, -100]);
+  check('the batch total does not move', r3.bal.P11 + r3.bal.P12 + r3.bal.P13, 3000 - 2500);
+  check('a list naming no tray of the batch is left exactly as it was', r3.bal['X9, X10'], -100);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

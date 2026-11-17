@@ -8167,6 +8167,15 @@ naming it; Double-Tone is filled by the keyed `DTone_Nursery_Qty` (newest
 row per batch) and a `Transplanted_DoubleTone` fill counts only where no
 figure is keyed. Seed Damage is still shown on the home tray and moves no
 balance. The Main Nursery section is untouched.
+
+**A source naming several trays is those trays.** The Tab 3 box is free
+text, so transplants were saved `from tray [P1, P2]`, `[P11-P13]`,
+`[P32, P33. P34]`, and each drew as a tray of its own reading minus the
+whole transplant while the real trays were never reduced. The record does
+not say how many came from each, so it is taken off the named trays IN
+ORDER, each up to what that batch has standing there, the rest on the last;
+the batch total is exact, only the split is worked out. A list naming no
+tray the batch was planted into is left as it was.
 `tests/the_pre_nursery_follows_the_batch_report.cjs`; nothing to run in
 the database.
 
