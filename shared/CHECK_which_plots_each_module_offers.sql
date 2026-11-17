@@ -157,17 +157,26 @@ placed AS (
     FROM keyed k
 ),
 -- One row per plot per nursery, so a plot keyed on both sides, or keyed
--- padded on one and plain on the other, is counted once. The lowest source
--- name is kept only so the line has one to print.
+-- padded on one and plain on the other, is counted once.
+--
+-- GROUPED ON THE NURSERY KEY AND NEVER ON THE SPELLING, which the office own
+-- database is what proved. It holds 40 plots under "UNN 1" and one under
+-- "UNN1", and U12-R is keyed under BOTH -- once in Seedling Stock and once by
+-- hand. Grouped on the raw spelling those are two rows, so the plot printed
+-- TWICE in section 3 and UNN1 read 41 plots where it holds 40. The pickers
+-- were never wrong: every one of them matches on letters and digits, so they
+-- offer that plot once. It was this check over-counting, which is worse than
+-- a plain miss -- a count somebody can act on has to be the count the screens
+-- hold. Both sources are NAMED on the one line instead.
 one AS (
-  SELECT nursery, nurs_raw,
+  SELECT nursery,
          COALESCE(range_canon, plot_key) AS dedupe_key,
          (range_canon IS NOT NULL)       AS in_range,
          min(plot_raw) AS plot_raw,
-         min(src)      AS src
+         string_agg(DISTINCT src, ' + ' ORDER BY src) AS src
     FROM placed
    WHERE nursery IS NOT NULL
-   GROUP BY nursery, nurs_raw, COALESCE(range_canon, plot_key), (range_canon IS NOT NULL)
+   GROUP BY nursery, COALESCE(range_canon, plot_key), (range_canon IS NOT NULL)
 ),
 orphan AS (
   SELECT nurs_raw, plot_raw, src FROM placed WHERE nursery IS NULL
