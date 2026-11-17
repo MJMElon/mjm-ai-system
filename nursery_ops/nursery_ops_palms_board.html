@@ -105,15 +105,38 @@
      and a flex item's default is to shrink — so on a short window the photo
      was squeezed to nothing and the panel looked like it had no map at all.
      It keeps its height and the panel scrolls instead. */
-  .pv-map { position:relative; background:#0f172a; overflow:hidden;
-            flex:none; height:clamp(260px, 44vh, 420px); }
+  /* The height is a VARIABLE because the photo has to be capped in the same
+     units, and a second copy of this clamp is how the two come to disagree. */
+  .pv-map { --pv-h: clamp(260px, 44vh, 420px);
+            position:relative; background:#0f172a; overflow:hidden;
+            flex:none; height:var(--pv-h); }
   .pv-frame { position:absolute; inset:0; overflow:hidden;
               display:flex; align-items:center; justify-content:center; padding:8px; }
   .pv-inner { position:relative; display:inline-block; max-width:100%; max-height:100%; }
-  /* The photo is positioned and scaled so the plot's own bounding box fills
-     the frame — a crop, done with CSS, so no second image is needed and the
-     polygon percentages stay the percentages the database holds. */
-  .pv-img { display:block; max-width:100%; max-height:100%; width:auto; height:auto;
+  /* THE CAP ON THE PHOTO IS IN REAL UNITS AND MUST NOT GO BACK TO A PER CENT.
+
+     The overlay is pinned to .pv-inner, and .pv-inner shrinks to the photo —
+     so the two agree only while the photo is really inside the frame. It was
+     capped with `max-height:100%`, and a percentage height against a parent
+     whose own height is AUTO resolves to none: the photo therefore rendered
+     at its natural height, overflowed, and was quietly clipped by the frame,
+     while .pv-inner stayed clamped to the frame and took the overlay with it.
+
+     Measured on a 1600x900 aerial in a 920x396 panel: photo 509px tall,
+     overlay 380 — so every polygon was drawn at 75% of its height and every
+     plot sat about an eighth of the nursery ABOVE where it is. The office
+     said it in four words, over this modal: PALMS的地图跑掉了.
+
+     The one shape that was right is a photo WIDER than the frame, where
+     max-width binds first and the height follows the ratio — which is
+     presumably the picture this was built against.
+
+     `calc(var(--pv-h) - 16px)` resolves, so the photo fits, .pv-inner shrinks
+     to it and the overlay lands on it. 16px is the frame's 8px of padding,
+     top and bottom. Same answer shared_plot_map.js has always used, where its
+     own img carries `max-height:calc(<height> - 16px)` for this reason. */
+  .pv-img { display:block; max-width:100%; max-height:calc(var(--pv-h) - 16px);
+            width:auto; height:auto;
             object-fit:contain; user-select:none; -webkit-user-drag:none; }
   .pv-svg { position:absolute; inset:0; width:100%; height:100%; }
   .pv-tags { position:absolute; inset:0; pointer-events:none; }

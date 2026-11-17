@@ -8561,6 +8561,76 @@ B4-R2 both go; a split area is judged by its plot.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
 
+## The overlay is pinned to a WRAPPER, so the wrapper has to be the photo
+
+The office opened B11 on the PALMS board and said four words:
+*PALMS的地图跑掉了*. The blue boundary sat up in the trees, well above the
+plot it is drawn round.
+
+**EVERY MAP IN THIS SYSTEM IS BUILT THE SAME WAY**, and it is the only way
+the percentages in `shared_plots.map_top` can be drawn at all:
+
+    .wrap   position:relative, SHRINKS TO THE PHOTO
+      img   the nursery photo, at its own aspect
+      svg   position:absolute; inset:0 — a 0..100 box over the wrapper
+
+So the whole thing rests on one fact: **the wrapper box IS the photo box.**
+
+**IT STOPS BEING TRUE THE MOMENT THE PHOTO IS CAPPED WITH A PER CENT.** A
+percentage height against a parent whose own height is AUTO resolves to
+`none` (CSS 2.1 §10.7) — so the photo renders at its NATURAL height and
+overflows, quietly clipped by the frame, while the wrapper stays clamped by
+whatever clamps it and takes the overlay down with it. `.pv-img` on the
+plot modal carried `max-height:100%` and `.pv-inner` above it carried
+`max-height:100%` as well, which is the pair that does it: one of them
+resolved and the other did not.
+
+Measured on the shipped modal: a 1600×900 aerial in a 920×396 panel came
+out **509px tall with a 380px overlay**, so every polygon was drawn at
+**75% of its height** — about an eighth of the nursery too high — and the
+bottom eighth of the photo was cut off. That is the picture the office sent.
+
+**THE ONE SHAPE IT GOT RIGHT IS A PHOTO WIDER THAN THE FRAME**, where
+`max-width` binds first and the height follows the ratio. That is
+presumably the picture it was built against, and it is why a fixture of one
+photo proves nothing here: the test sweeps five aspects and the letterbox
+one passes on the broken code.
+
+`calc(var(--pv-h) - 16px)` resolves, so the photo fits, the wrapper shrinks
+to it and the overlay lands on it. **The frame height is a VARIABLE** —
+`--pv-h` on `.pv-map` — because the cap has to be in the same units as the
+frame and a second copy of that `clamp` is how the two come to disagree.
+16px is the frame's 8px of padding, top and bottom.
+
+**THE THREE OTHER MAPS WERE ALREADY RIGHT, and they are where this answer
+comes from**: `shared_plot_map.js` caps its img at `calc(<height> - 16px)`,
+`operation_inventory_all.html` at `388px` and `operation_inventory_map.html`
+at `calc(90vh - 266px)`. All three are real units. **The modal was the only
+per cent in the system.**
+
+**AND THE EDITOR — THE ONE THAT WRITES — WAS NEVER WRONG**, which is the
+half worth knowing before anybody goes looking for bad data. A polygon
+dragged over a misplaced overlay would be STORED wrong and no screen
+afterwards could tell, so it was measured first: `.pd-inner` carries no
+`max-height` at all, so the wrapper, the photo and the overlay move
+together on every aspect. **Nothing in `shared_plots.map_top` needs
+repairing.** What the editor does have is SPILL — a photo taller than about
+4:5 overflows the stage and is clipped, 785px of it on a portrait — which
+is a photo you cannot scroll to the bottom of while drawing, not a boundary
+in the wrong place. The aerials are landscape, the office has not asked,
+and the test PRINTS the number rather than failing on it, so it is a known
+quantity and not a surprise.
+
+`tests/the_boundary_sits_on_the_photo.cjs` puts five photo shapes through
+the REAL modal, the REAL board map and the REAL editor and compares the two
+boxes; **5 of its 16 checks fail on the previous code**, the headline one in
+the office's own numbers (*photo 904×509, overlay 904×380*). Its last
+section carries the rule to the two Seedling Stock maps, which are built
+the same way and are not booted there. **It needs Tailwind's two wrapper
+classes and its preflight `img{max-width:100%}` served in the CDN's place**,
+or the board map reads as this very fault and is not — the modal and the
+editor are styled by their own `<style>` and need none of it.
+
 ## Where each job is done is KEYED, and the circles are what say it
 
 The office asked for a Setting splitting the jobs between the **Pre Nursery**
