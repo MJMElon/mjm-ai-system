@@ -122,41 +122,44 @@ const PAGES = fs.readdirSync(DIR).filter(f => f.endsWith('.html')).sort();
   check('…and no two groups wear the same mark',
         new Set([MAP, SPAN, LEAF]).size, 3);
 
-  /* The office asked for the colours by name — 蓝黄红绿 — so they are asked
-     for by name, and in that order on the plate: blue and yellow across the
-     top, red and green under them. */
-  const shapes = [...MAP.matchAll(/%3Cpolygon points='([^']+)' fill='(%23[0-9a-f]{6})'/g)]
-    .map(m => ({ pts: m[1], fill: m[2] }));
-  check('the mark is four parcels, blue · yellow · red · green',
-        shapes.map(s => s.fill), ['%233b82f6', '%23f5b324', '%23ef4444', '%2322c55e']);
+  /* THE RING IS THE OFFICE'S OWN DRAWING, handed over as a picture once
+     "整体形状要和bnn boundry一样" turned out not to be readable from here —
+     shared_plots.map_top is in a database this environment cannot reach. So
+     the mark is their picture and not an invention: ten plot segments round a
+     centre, clockwise from the top, two blue, one red, three green, four
+     yellow. Their numbers are the specification, the same way the papan tanda
+     the office drew is the specification for that board.
+
+     Asked as the COUNT PER COLOUR rather than as a list of ten, because what
+     the picture says is how much of the ring each stage holds — a segment
+     moved one place round is the same drawing, a colour that lost a segment
+     is not. */
+  const seg = [...MAP.matchAll(/%3Cpath d='M[^']*A[^']*A[^']*Z' fill='(%23[0-9a-f]{6})'/g)]
+    .map(m => m[1]);
+  const tally = {};
+  seg.forEach((c) => { tally[c] = (tally[c] || 0) + 1; });
+  check('the mark is a ring of ten plot segments', seg.length, 10);
+  check('…two blue, one red, three green, four yellow',
+        tally, { '%233b82f6': 2, '%23ef4444': 1, '%2322c55e': 3, '%23f5b324': 4 });
+  /* 蓝黄红绿, in the office's own order round the ring. */
+  check('…laid out clockwise from the top as the office drew it',
+        seg.join(' ').replace(/%23/g, ''),
+        '3b82f6 3b82f6 ef4444 22c55e 22c55e 22c55e f5b324 f5b324 f5b324 f5b324');
   checkTrue('…and it is a map and not the leaf', !/M20 44C20 26/.test(MAP));
 
   /* 不规则形状的 — IRREGULAR, which is the whole difference between a plot map
-     and an app-launcher grid of four squares. A rect cannot be irregular, so
-     the first version of this mark could not satisfy it: every parcel is a
-     polygon, and none of them is an axis-aligned rectangle, which is what a
-     polygon of four points standing on two x values and two y values is. */
-  check('every parcel is a polygon and not a rectangle',
+     and an app-launcher grid of four squares. A rect cannot be irregular, and
+     the first version of this mark was four of them; every parcel is drawn as
+     an arc now, so nothing on the plate is square to the page. */
+  check('nothing on the plate but the plate itself is a rectangle',
         MAP.indexOf('%3Crect x=') >= 0, false);
-  const boxy = shapes.filter((s) => {
-    const pts = s.pts.split(' ').map(p => p.split(',').map(Number));
-    return new Set(pts.map(p => p[0])).size <= 2 && new Set(pts.map(p => p[1])).size <= 2;
-  });
-  check('…and none of the four is square to the page', boxy.map(s => s.fill), []);
-  /* No two parcels alike either, or four identical quads read as a grid that
-     has merely been tilted. Compared on their own shape — the points with the
-     parcel's own top-left taken off — so two parcels of one shape in two
-     places are still caught. */
-  const forms = shapes.map((s) => {
-    const pts = s.pts.split(' ').map(p => p.split(',').map(Number));
-    const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1]));
-    return pts.map(p => (p[0] - x0).toFixed(2) + ',' + (p[1] - y0).toFixed(2)).join(' ');
-  });
-  check('…and no two of them are the same shape', new Set(forms).size, 4);
-  /* The lanes between them, which are what make four shapes read as parcels
-     rather than as one block cut up. Drawn in the plate's own colour. */
-  checkTrue('…with lanes between the parcels',
-            /%3Cpath d='M[^']+' stroke='%231b4332' stroke-width='3'/.test(MAP));
+  /* A RING AND NOT A PIE: the segments stand off a centre, which is what the
+     office drew and what makes it read as plots round a nursery rather than
+     as a chart. Each one is bounded by TWO arcs — the outer edge and the
+     inner — so a pie slice, which has one, fails here. */
+  const twoArcs = seg.length > 0 &&
+    [...MAP.matchAll(/d='(M[^']*Z)' fill='%23/g)].every((m) => (m[1].match(/A/g) || []).length === 2);
+  checkTrue('…standing off a centre, so it is a ring and not a pie', twoArcs);
 
   checkTrue('the leaf is the leaf, and not the NO square',
             /M20 44C20 26/.test(LEAF) && !/>NO<\/text>/.test(LEAF));
