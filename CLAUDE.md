@@ -7588,38 +7588,36 @@ whose foot still totals every row, not just the page.
   here it is a label above each batch, and the expected figure is ONE
   stepped orange dashed line across the columns.
 
-**PRINT ASKS FIRST**: chart + table, without table, or table only. The
-option builds `#print-area` at the press (Ctrl/Cmd+P builds chart + table
-through `beforeprint`), so **Prepared and Verified by** names whoever pressed
-it, that day, over an empty signature box. Paper keeps the office sheet's
-grouping — one block per SUPPLIER + BREED, headed MEGA JUTAMAS SDN BHD /
-SEED RECEIVED SUMMARY REPORT — with the filters written out, an eight-figure
-summary strip, and the COMPLETE table as rows (A4 landscape, the header
-repeated on every page, no row cut). It was the sheet's transposed table
-for a day; rows are what repeat a header and fit a long year on A4. The
-print area is `display:none` on screen. It opens on the latest year, as
-the sheet is a year a tab. **THE PAPER IS A4 PORTRAIT, in three sections**:
-the comparison (its own summary, then its chart), the damage (its summary,
-then its chart), and the batch table LAST — stacked, the page is narrow
-enough to stand up. The table fits 718px (10mm margins) because its headings
-and text cells wrap, the status is plain text, and a D/O number breaks only
-after a slash (`<wbr>` on paper only). **No blank page**: the sidebar's
-`.rs-shell` kept `min-height:100vh` in print and went out as an empty first
-page — it is `min-height:0` on paper now, and the test prints a real PDF and
-counts its pages. **Every bar carries its figures** (`cfg.labels`, bottom
-up): actual, expected and variance over each column, seeds and % over each
-damage bar; a column too narrow turns them and drops the expected, and the
-top margin grows only by what the tallest column's labels lack.
-**A breed picked with no supplier prints ONE block**
-with every supplier of it together (`reportBlocks(..., byBreed)`); a
-supplier picked, or neither, keeps one per supplier + breed. **The
-signature sits at the foot of the page**: a printed block is a flex column
-at least 184mm tall (not 186, which rounds over into a blank page) and the
-signature takes `margin-top:auto` (274mm on portrait; not the full 277,
-which rounds over into a blank page). **That only works if nothing is wider
-than the page** — Chrome shrinks the whole sheet to fit, which once left a
-band of empty paper under the signature. The test asks the
-width. Chart labels read 270, not B.270.
+**THE PRINTED REPORT IS ALWAYS EXACTLY TWO A4 PORTRAIT PAGES**, the
+office's own spec, whatever the filters or the batch count. Print builds it
+and prints it straight away — the three-option dialog is gone, and so is
+the one-block-per-supplier-and-breed split (it is ONE report; the header
+says *All suppliers (n)* where the rows span several). **Page 1**: a compact
+header (MEGA JUTAMAS SDN BHD, the title, Supplier Name, Breed, Period —
+**no filter line**), then the comparison (summary strip + chart) on the top
+half and the damage (summary strip + chart) on the bottom half. **Page 2**:
+the batch table, then Prepared and Verified by (whoever pressed Print, that
+day). How it holds:
+
+- **Each page is a fixed box** — `#print-area .pp`, 190 x 276mm (one short
+  of the 277 a page holds, or it rounds over into a blank third page),
+  `overflow:hidden`, a `break-before:page` between them. A third page cannot
+  happen.
+- **Nothing is cut because everything is FITTED**, off-screen at the press
+  (`fitPrint`): each chart is drawn to the height its half of page 1 really
+  has, and the table is `zoom`ed down until page 2 holds it with the
+  signature (zoom changes layout; a transform would not shorten the page).
+  74 batches print at about half size, on page 2.
+- **The printed charts are their own drawing** (`drawPrintChart`), not the
+  screen's: actual received INSIDE the bar near its base (white), expected
+  inside at the top left marked **E** (peach), variance small above; damage
+  % near the base with the seeds damaged as a smaller line above it. A label
+  turns upright in a narrow bar, goes above a bar too short to hold it, and
+  the type shrinks with the column (down to 6px; a column thinner than 7px
+  carries none — the table has every figure).
+- **Every print rule is under `#print-area`.** The phone floor test skips
+  selectors containing *print*, and that matters: a portrait page is 718px
+  wide, so the page's own `max-width:767.98px` rules APPLY on paper.
 
 **The dashboard's navigation is a SIDEBAR drawn from a menu**, never written
 into the page. `reporting/report_menu.js` is the menu and nothing else —

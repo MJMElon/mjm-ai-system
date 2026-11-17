@@ -81,7 +81,7 @@ const server = http.createServer((req, res) => {
   const port = server.address().port;
   const browser = await chromium.launch();
 
-  async function open(perms) {
+  async function open(perms, ledger) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
@@ -120,13 +120,13 @@ const server = http.createServer((req, res) => {
         },
         channel: () => ({ on() { return this; }, subscribe() { return this; } }), removeChannel: () => {},
       }) };
-    }, { ledger: L, perms });
+    }, { ledger: ledger || L, perms });
     await page.goto(`http://localhost:${port}/${PAGE}`, { waitUntil: 'load' }).catch(() => {});
     await page.waitForTimeout(900);
     return { page, errors };
   }
 
-  const { page, errors } = await open({ modules: { npayroll: 'normal' } });
+  let { page, errors } = await open({ modules: { npayroll: 'normal' } });
   const vis = sel => page.evaluate(s => { const e = document.querySelector(s); return !!e && !e.classList.contains('hidden'); }, sel);
   ok(await vis('#dash-home') && !(await vis('#dash-seed')), 'the dashboard opens on All reports, with the cards');
   // ── the sidebar: drawn from report_menu.js, one component ──
@@ -246,61 +246,142 @@ const server = http.createServer((req, res) => {
   const tipTxt = await page.evaluate(() => { const t = document.getElementById('tip'); return t.classList.contains('hidden') ? '' : t.textContent; });
   ok(/1,250/.test(tipTxt) && !/k\b/i.test(tipTxt.replace(/Dec|batch/gi, '')), 'the tooltip gives exact figures', tipTxt);
 
-  // ── print: three options, each built at the press ──
-  await page.selectOption('#f-group', 'batch'); await page.selectOption('#f-year', '2026'); await page.waitForTimeout(100);
-  await page.click('#btn-print'); await page.waitForTimeout(60);
-  ok(await vis('#print-dlg'), 'Print asks which report first');
-  ok(await page.$$eval('#print-dlg [data-print]', b => b.map(x => x.querySelector('b').textContent).join('|')) === 'Print chart + table|Print without table|Print table only', 'three print options', await page.$$eval('#print-dlg [data-print] b', b => b.map(x => x.textContent)));
-  const readPrint = () => page.$$eval('#print-area .p-block[data-block]', bs => bs.map(r => ({
-    meta: r.querySelector('.p-meta').textContent.replace(/\s+/g, ' '), filters: r.querySelector('.p-filters').textContent,
-    company: /MEGA JUTAMAS SDN BHD/.test(r.textContent) && /SEED RECEIVED SUMMARY REPORT/.test(r.textContent),
-    charts: r.querySelectorAll('.p-chart svg').length, table: !!r.querySelector('table.pt'),
-    rows: [...r.querySelectorAll('table.pt tbody tr')].map(tr => [...tr.cells].map(td => td.textContent.trim())),
-    yticks: [...r.querySelectorAll('.c1 .ytick')].map(x => x.textContent),
-    signName: (r.querySelector('.sign-name') || {}).textContent, signDate: (r.querySelector('.sign-date') || {}).textContent, sigBox: !!r.querySelector('.sign-sig') })));
-  await page.click('#print-dlg [data-print="both"]'); await page.waitForTimeout(80);
-  ok(await page.evaluate(() => window.__printed) === 1 && !(await vis('#print-dlg')), 'an option closes the dialog and prints');
-  let P = await readPrint();
-  ok(await page.$$eval('#print-area .p-block[data-block]', bs => bs.every(b => [...b.querySelectorAll('[data-sec]')].map(x => x.dataset.sec).join() === 'compare,damage,table')), 'printed: comparison (summary + chart), then damage (summary + chart), then the table last');
-  ok(await page.$$eval('#print-area .p-block[data-block]', bs => bs.every(b => b.querySelector('[data-sec=compare] .p-kpis') && b.querySelector('[data-sec=compare] .c1') && b.querySelector('[data-sec=damage] .p-kpis') && b.querySelector('[data-sec=damage] .c2'))), 'printed: each chart sits in the section with its own summary');
-  await page.emulateMedia({ media: 'print' });
-  const shellH = await page.evaluate(() => document.getElementById('shell').getBoundingClientRect().height);
-  ok(shellH === 0, 'printed: the screen shell takes no room, so no blank page goes out ahead of the report', shellH);
-  const pdfPath = require('os').tmpdir() + '/seed_summary_print_' + process.pid + '.pdf';
-  await page.pdf({ path: pdfPath, preferCSSPageSize: true });
-  const pdfTxt = fs.readFileSync(pdfPath, 'latin1'); fs.unlinkSync(pdfPath);
-  const nPages = (pdfTxt.match(/\/Type\s*\/Page[^s]/g) || []).length;
-  ok(nPages === P.length, 'printed: one page per report and not one blank page', [nPages, P.length]);
-  ok(/\/MediaBox\s*\[\s*0 0 59[45](\.\d+)?\s+84[12]/.test(pdfTxt), 'printed: the pages are A4 portrait');
-  await page.emulateMedia({ media: 'screen' });
-  ok(P.length === 2 && /FGV/.test(P[0].meta) && /Sime Darby/.test(P[1].meta), 'printed: one block per supplier + breed', P.map(b => b.meta));
-  ok(P.every(b => b.company && /Year: 2026/.test(b.filters) && /Show by: Batch/.test(b.filters)), 'printed: company title and the filters on every block', P.map(b => b.filters));
-  ok(P.every(b => b.charts === 2 && b.table), 'chart + table: both charts and the table', P.map(b => [b.charts, b.table]));
-  ok(P[1].rows.length === 1 && P[1].rows[0][6] === '10,500' && P[1].yticks.join('|') === '0|5,000|10,000|15,000|20,000', 'printed figures are in full', [P[1].rows[0], P[1].yticks]);
-  const today = (() => { const d = new Date(); return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear(); })();
-  ok(P.every(b => b.signName === 'Esther' && b.signDate === today && b.sigBox), 'printed: Prepared and Verified by whoever pressed Print, today, with a signature box', P.map(b => [b.signName, b.signDate]));
-  await page.selectOption('#f-breed', 'Calix 600'); await page.waitForTimeout(80);
-  await page.click('#btn-print'); await page.click('#print-dlg [data-print="both"]'); await page.waitForTimeout(80);
-  const PB = await readPrint();
-  ok(PB.length === 1 && /Supplier: All/.test(PB[0].meta) && /Breed: Calix 600/.test(PB[0].meta) && PB[0].rows.length === 2, 'breed picked, no supplier: one printed report with FGV and Sime Darby together', PB.map(b => [b.meta, b.rows.length]));
-  await page.emulateMedia({ media: 'print' }); await page.setViewportSize({ width: 718, height: 1047 });
-  const fit = await page.evaluate(() => document.documentElement.scrollWidth);
-  ok(fit <= 718, 'printed: nothing is wider than the A4 page, so the browser does not shrink the sheet and leave paper under the signature', fit);
-  await page.emulateMedia({ media: 'screen' }); await page.setViewportSize({ width: 1280, height: 1000 });
-  await page.selectOption('#f-breed', ''); await page.waitForTimeout(80);
-  ok(/\.sign\s*\{[^}]*margin-top:auto/.test(html) && /\.p-block\s*\{[^}]*display:flex[^}]*min-height:274mm/.test(html), 'the signature is pushed to the foot of the printed page');
-  ok(/@page\s*\{\s*size:A4 portrait/.test(html) && /table\.pt thead\s*\{\s*display:table-header-group/.test(html) && /table\.pt tr\s*\{[^}]*break-inside:avoid/.test(html), 'A4 portrait, the header repeats, no row is cut');
+  // ── print: ONE report on EXACTLY two A4 portrait pages ──
+  // Page 1: header + both charts. Page 2: the batch table + the signature.
+  const readPrint = () => page.evaluate(() => {
+    const pg = n => document.querySelector(`#print-area .pp[data-page="${n}"]`);
+    const p1 = pg(1), p2 = pg(2);
+    const t = el => el ? el.textContent.replace(/\s+/g, ' ').trim() : '';
+    return {
+      pages: document.querySelectorAll('#print-area .pp').length,
+      text: t(document.getElementById('print-area')),
+      meta: t(p1 && p1.querySelector('.p-meta')),
+      p1secs: p1 ? [...p1.querySelectorAll('[data-sec]')].map(x => x.dataset.sec).join() : '',
+      p2secs: p2 ? [...p2.querySelectorAll('[data-sec]')].map(x => x.dataset.sec).join() : '',
+      p1charts: p1 ? p1.querySelectorAll('.p-chart svg').length : 0, p1table: !!(p1 && p1.querySelector('table')),
+      p2charts: p2 ? p2.querySelectorAll('svg').length : 0,
+      rows: p2 ? [...p2.querySelectorAll('table.pt tbody tr')].map(tr => [...tr.cells].map(td => td.textContent.trim())) : [],
+      signAfterTable: !!(p2 && p2.querySelector('[data-sec=table]') && p2.querySelector('.sign') && (p2.querySelector('[data-sec=table]').compareDocumentPosition(p2.querySelector('.sign')) & 4)),
+      yticks: [...document.querySelectorAll('#print-area .c1 .ytick')].map(x => x.textContent),
+      c1main: [...document.querySelectorAll('#print-area .c1 .ilabel.main')].map(x => x.textContent),
+      c1sub: [...document.querySelectorAll('#print-area .c1 .ilabel.sub')].map(x => x.textContent),
+      c2main: [...document.querySelectorAll('#print-area .c2 .ilabel.main')].map(x => x.textContent),
+      c2sub: [...document.querySelectorAll('#print-area .c2 .ilabel.sub')].map(x => x.textContent),
+      signName: t(document.querySelector('#print-area .sign-name')), signDate: t(document.querySelector('#print-area .sign-date')),
+      sigBox: !!document.querySelector('#print-area .sign-sig'),
+      zoom: +(document.getElementById('print-area').dataset.zoom || 1),
+    };
+  });
+  // Lay the paper out the way the printer will, and ask what lands where.
+  const paperCheck = () => page.evaluate(() => {
+    const out = {};
+    document.querySelectorAll('#print-area .pp').forEach(pg => {
+      const n = pg.dataset.page, r = pg.getBoundingClientRect();
+      out['over' + n] = pg.scrollHeight - pg.clientHeight;
+      out['wide' + n] = pg.scrollWidth - pg.clientWidth;
+      out['h' + n] = Math.round(r.height); out['w' + n] = Math.round(r.width);
+    });
+    // every in-bar label inside its bar, and no two labels on one column overlapping
+    const inside = [], clash = [];
+    document.querySelectorAll('#print-area .p-chart svg').forEach(svg => {
+      const bars = [...svg.querySelectorAll('.bar')].map(b => b.getBoundingClientRect());
+      const labs = [...svg.querySelectorAll('.ilabel:not(.out)')].map(l => l.getBoundingClientRect());
+      labs.forEach(l => { const b = bars.find(b => l.left >= b.left - 1 && l.right <= b.right + 1 && l.top >= b.top - 1 && l.bottom <= b.bottom + 1); if (!b) inside.push(Math.round(l.left)); });
+      const all = [...svg.querySelectorAll('.ilabel, .vlabel')].map(l => l.getBoundingClientRect());
+      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+        const a = all[i], c = all[j];
+        if (a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1) clash.push([Math.round(a.left), Math.round(c.left)]);
+      }
+    });
+    out.notInside = inside; out.clash = clash;
+    // the actual received sits near the BASE of its bar, the expected at the top left
+    const c1 = document.querySelector('#print-area .c1 svg');
+    if (c1 && c1.querySelector('.ilabel.main:not(.out)') && c1.querySelector('.ilabel.sub')) {
+      const bar = c1.querySelector('.bar').getBoundingClientRect(), m = c1.querySelector('.ilabel.main').getBoundingClientRect(), sb = c1.querySelector('.ilabel.sub').getBoundingClientRect();
+      out.mainNearBase = bar.bottom - m.bottom <= 8;
+      out.subLeftTop = sb.left - bar.left <= 8 && sb.top - bar.top <= 16;
+    }
+    return out;
+  });
+  const pdfPages = async () => {
+    const pdfPath = require('os').tmpdir() + '/seed_summary_print_' + process.pid + '.pdf';
+    await page.emulateMedia({ media: 'print' });
+    await page.pdf({ path: pdfPath, preferCSSPageSize: true });
+    await page.emulateMedia({ media: 'screen' });
+    const pdfTxt = fs.readFileSync(pdfPath, 'latin1'); fs.unlinkSync(pdfPath);
+    return { n: (pdfTxt.match(/\/Type\s*\/Page[^s]/g) || []).length, a4p: /\/MediaBox\s*\[\s*0 0 59[45](\.\d+)?\s+84[12]/.test(pdfTxt) };
+  };
+  const asPaper = async fn => {
+    await page.emulateMedia({ media: 'print' }); await page.setViewportSize({ width: 718, height: 1043 });
+    const r = await fn();
+    await page.emulateMedia({ media: 'screen' }); await page.setViewportSize({ width: 1280, height: 1000 });
+    return r;
+  };
 
-  await page.click('#btn-print'); await page.click('#print-dlg [data-print="chart"]'); await page.waitForTimeout(80);
-  P = await readPrint();
-  ok(P.every(b => b.charts === 2 && !b.table), 'without table: charts only', P.map(b => [b.charts, b.table]));
-  await page.click('#btn-print'); await page.click('#print-dlg [data-print="table"]'); await page.waitForTimeout(80);
-  P = await readPrint();
-  ok(P.every(b => b.charts === 0 && b.table), 'table only: no chart', P.map(b => [b.charts, b.table]));
-  ok(await page.evaluate(() => window.__printed) === 4, 'each option printed once');
-  await page.click('#btn-print'); await page.click('#print-cancel'); await page.waitForTimeout(40);
-  ok(!(await vis('#print-dlg')) && await page.evaluate(() => window.__printed) === 4, 'Cancel prints nothing');
+  await page.selectOption('#f-group', 'batch'); await page.selectOption('#f-year', '2026'); await page.waitForTimeout(100);
+  ok(!(await page.$('#print-dlg')), 'Print asks nothing: there is one printed report');
+  await page.click('#btn-print'); await page.waitForTimeout(120);
+  ok(await page.evaluate(() => window.__printed) === 1, 'Print builds the report and prints it, once');
+  let P = await readPrint();
+  ok(P.pages === 2, 'the printed report is TWO pages', P.pages);
+  ok(P.p1secs === 'compare,damage' && P.p1charts === 2 && !P.p1table, 'page 1: the comparison chart on top, the damage chart below, no table', [P.p1secs, P.p1charts, P.p1table]);
+  ok(P.p2secs === 'table' && P.p2charts === 0 && P.signAfterTable, 'page 2: the batch table, then Prepared and Verified by', [P.p2secs, P.signAfterTable]);
+  ok(/MEGA JUTAMAS SDN BHD/.test(P.text) && /SEED RECEIVED SUMMARY REPORT/.test(P.text), 'the company name and the report title');
+  ok(/Supplier Name: All suppliers \(2\)/.test(P.meta) && /Breed: Calix 600/.test(P.meta) && /Period: 2026/.test(P.meta), 'the header names the supplier, the breed and the period', P.meta);
+  ok(!/Filters|Show by|Batches not planted|Month:|Year:/.test(P.text), 'no filter details are printed', (P.text.match(/Filters|Show by|Batches not planted|Month:|Year:/) || [])[0]);
+  ok(P.c1main.join('|') === '10,427|9,900' && P.c1sub.join('|') === 'E 10,500|E 10,000', 'comparison chart: the actual received and the expected (E) written in each bar', [P.c1main, P.c1sub]);
+  ok(P.c2main.join('|') === '3.11%|6.00%' && P.c2sub.join('|') === '327|600', 'damage chart: the % and the seeds damaged written in each bar', [P.c2main, P.c2sub]);
+  ok(P.rows.length === 2 && P.rows[0][6] === '10,500' && P.yticks.join('|') === '0|5,000|10,000|15,000|20,000', 'printed figures are in full', [P.rows[0], P.yticks]);
+  const today = (() => { const d = new Date(); return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear(); })();
+  ok(P.signName === 'Esther' && P.signDate === today && P.sigBox, 'Prepared and Verified by whoever pressed Print, today, with a signature box', [P.signName, P.signDate]);
+  let K = await asPaper(paperCheck);
+  ok(K.over1 <= 0 && K.over2 <= 0 && K.wide1 <= 0 && K.wide2 <= 0, 'on paper: nothing on either page is cut off', K);
+  ok(K.notInside.length === 0, 'on paper: every in-bar label is inside its bar', K.notInside);
+  ok(K.clash.length === 0, 'on paper: no two chart labels overlap', K.clash);
+  ok(K.mainNearBase && K.subLeftTop, 'on paper: the actual received sits at the base, the expected at the top left of the bar', [K.mainNearBase, K.subLeftTop]);
+  let D = await pdfPages();
+  ok(D.n === 2 && D.a4p, 'the PDF is exactly two A4 portrait pages', D);
+  ok(await page.evaluate(() => document.getElementById('shell').getBoundingClientRect().height) >= 0 && /#shell[^{]*\{[^}]*display:none/.test(html.replace(/#mjm-ribbon,\s*/, '')), 'on paper: the screen is not printed, so no blank page goes out first');
   ok((await page.evaluate(() => getComputedStyle(document.getElementById('print-area')).display)) === 'none', 'the printed report is not on the screen');
+  ok(/@page\s*\{\s*size:A4 portrait/.test(html) && /\.pp \+ \.pp\s*\{[^}]*break-before:page/.test(html) && /\.pp\s*\{[^}]*height:276mm[^}]*overflow:hidden/.test(html), 'print CSS: A4 portrait, a page break between the two pages, each page a fixed box');
+
+  // A breed picked with no supplier: still one report, both suppliers on it.
+  await page.selectOption('#f-breed', 'Calix 600'); await page.waitForTimeout(80);
+  await page.click('#btn-print'); await page.waitForTimeout(120);
+  P = await readPrint();
+  ok(P.pages === 2 && /Breed: Calix 600/.test(P.meta) && P.rows.length === 2, 'breed picked, no supplier: FGV and Sime Darby on one report', [P.meta, P.rows.length]);
+  await page.selectOption('#f-breed', ''); await page.waitForTimeout(80);
+  await page.close();
+
+  // ── MANY batches: still exactly two pages, the table fitted, nothing cut ──
+  const BIG = L.slice();
+  let bid = 100000;
+  const sup = ['Sime Darby', 'FGV', 'Applied Agri', 'Felda Global'];
+  for (let b = 300; b < 372; b++) {
+    const d = `2026-${String(1 + (b % 12)).padStart(2, '0')}-0${1 + (b % 8)}`;
+    BIG.push({ id: bid++, created_at: d + 'T08:00:00Z', transaction_type: 'Seeds_Received', batch_name: String(b), breed_name: b % 3 ? 'Calix 600' : 'DxP Yangambi', quantity_change: 9000 + (b % 7) * 900, transaction_date: d, remark: `Seeds received. Supplier: ${sup[b % 4]}. D/O: SSO/2026/${b}/0${b % 9}. DO_Qty: 9000.` });
+    BIG.push({ id: bid++, created_at: d + 'T08:00:00Z', transaction_type: 'Planted', batch_name: String(b), quantity_change: 8500 + (b % 5) * 700, transaction_date: d, remark: '' });
+    BIG.push({ id: bid++, created_at: d + 'T08:00:00Z', transaction_type: 'Damaged_Seeds', batch_name: String(b), quantity_change: (b % 9) * 90, transaction_date: d, remark: '' });
+  }
+  const big = await open({ modules: { npayroll: 'normal' } }, BIG);
+  page = big.page;
+  await page.click('#card-seed'); await page.waitForTimeout(200);
+  await page.selectOption('#f-year', '2026'); await page.waitForTimeout(150);
+  await page.click('#btn-print'); await page.waitForTimeout(200);
+  P = await readPrint();
+  ok(P.pages === 2 && P.rows.length === 74, '74 batches: still two pages, every batch on the table', [P.pages, P.rows.length]);
+  ok(P.zoom < 1, '74 batches: the table is scaled down to fit page 2', P.zoom);
+  K = await asPaper(paperCheck);
+  ok(K.over1 <= 0 && K.over2 <= 0 && K.wide2 <= 0, '74 batches: nothing on either page is cut off', [K.over1, K.over2, K.wide2]);
+  ok(K.clash.length === 0 && K.notInside.length === 0, '74 batches: labels stay inside their bars and never overlap', [K.clash.slice(0, 3), K.notInside.slice(0, 3)]);
+  D = await pdfPages();
+  ok(D.n === 2 && D.a4p, '74 batches: the PDF is still exactly two A4 portrait pages', D);
+  ok(big.errors.length === 0, 'no page errors with 74 batches', big.errors);
+  await page.close();
+
+  // back to the ordinary ledger for the rest
+  ({ page } = await open({ modules: { npayroll: 'normal' } }));
+  await page.click('#card-seed'); await page.waitForTimeout(200);
 
   // ── the sidebar, collapsed and on a phone ──
   sb = await SB();
