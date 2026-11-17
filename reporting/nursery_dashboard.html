@@ -16,7 +16,7 @@
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="report_menu.js?v=1"></script>
-<script src="report_sidebar.js?v=1"></script>
+<script src="report_sidebar.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
@@ -187,20 +187,33 @@
   .p-meta { font-size:11px; color:var(--ink-2); text-align:right; line-height:1.55; }
   .p-meta b { color:var(--ink); }
   .p-filters { font-size:11px; color:var(--ink-2); margin-bottom:10px; }
-  .p-kpis { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); border:1px solid var(--line); border-radius:8px; margin-bottom:12px; }
+  /* Three sections, in this order: the comparison (its summary, then its
+     chart), the damage (its summary, then its chart), and the batch table
+     last. Stacked like that the page is narrow enough to stand up, so the
+     paper is A4 PORTRAIT. */
+  .p-sec { margin-bottom:14px; }
+  .p-sec-t { font-size:13px; font-weight:700; color:var(--ink); border-left:3px solid var(--green); padding-left:8px; margin:0 0 8px; break-after:avoid; page-break-after:avoid; }
+  .p-sec-t span { font-weight:500; color:var(--ink-2); font-size:11px; margin-left:6px; }
+  .p-kpis { display:grid; grid-template-columns:repeat(var(--n, 4), minmax(0,1fr)); border:1px solid var(--line); border-radius:8px; margin-bottom:8px; }
   .p-kpi { padding:6px 10px; border-left:1px solid var(--line); }
   .p-kpi:first-child { border-left:0; }
   .p-kpi .l { font-size:11px; color:var(--ink-2); }
   .p-kpi .v { font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:1px; }
-  .p-charts { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px; }
-  .p-chart-t { font-size:12px; font-weight:700; margin-bottom:4px; }
+  .p-chart { margin-top:2px; }
   .p-block .legend { font-size:11px; gap:12px; margin-bottom:2px; }
   table.pt { width:100%; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
   /* The headings WRAP. Left on one line the table ran 1,280px wide on a page
      of 1,032, and the browser shrank the whole sheet to fit it — which is
      what left the signature at four fifths of the page with a band of empty
      paper under it. */
-  table.pt th, table.pt td { border:1px solid var(--line); padding:4px 5px; text-align:left; white-space:nowrap; }
+  /* On a portrait page the text cells wrap too (a breed, a supplier, a D/O
+     number); the figures never do. */
+  table.pt th, table.pt td { border:1px solid var(--line); padding:3px 4px; text-align:left; white-space:nowrap; }
+  table.pt td:not(.num):not(.c) { white-space:normal; }
+  table.pt th, table.pt td { padding:3px 3px; }
+  table.pt thead th { font-weight:600; letter-spacing:-0.2px; }
+  table.pt .st { display:inline; height:auto; padding:0; background:none; white-space:normal; font-size:11px; }
+  table.pt .st.over { color:#A94444; } table.pt .st.ok { color:var(--green); }
   table.pt thead th { white-space:normal; vertical-align:bottom; line-height:1.25; }
   table.pt thead th { background:#F2F5F7; font-weight:700; color:var(--ink); }
   table.pt th.num, table.pt td.num { text-align:right; }
@@ -214,17 +227,18 @@
   .sign-line span:first-child { width:46px; font-weight:600; }
   .sign-line b { flex:1; border-bottom:1px solid #94a3b8; color:var(--ink); font-weight:600; }
   @media print {
-    @page { size:A4 landscape; margin:12mm; }
+    @page { size:A4 portrait; margin:10mm; }
     body { background:#fff; }
-    #mjm-ribbon, #main, #loading, #forbidden, .tip, .scrim, #nelos-dock-root { display:none !important; }
+    #mjm-ribbon, #shell, #main, #loading, #forbidden, .tip, .scrim, #nelos-dock-root { display:none !important; }
     #print-area { display:block; }
     /* A block is at least one page tall and the signature takes the space
        left (margin-top:auto), so it always sits at the foot of the page with
-       nothing under it. 184mm, not the full 186: a block exactly a page
-       tall would round over and print a blank page after it. */
-    .p-block { break-after:page; page-break-after:always; display:flex; flex-direction:column; min-height:184mm; }
+       nothing under it. 274mm, not the full 277 a portrait page holds: a
+       block exactly a page tall rounds over and prints a blank page after
+       it. */
+    .p-block { break-after:page; page-break-after:always; display:flex; flex-direction:column; min-height:274mm; }
     .p-block:last-child { break-after:auto; page-break-after:auto; }
-    .p-charts, .p-kpis, .p-head { break-inside:avoid; page-break-inside:avoid; }
+    .p-sec-chart, .p-kpis, .p-head { break-inside:avoid; page-break-inside:avoid; }
     table.pt thead { display:table-header-group; }
     table.pt tfoot { display:table-row-group; }
     table.pt tr { break-inside:avoid; page-break-inside:avoid; }
@@ -329,7 +343,7 @@
 <div class="scrim hidden" id="print-dlg" role="dialog" aria-modal="true" aria-labelledby="print-dlg-t">
   <div class="dlg">
     <h3 id="print-dlg-t">Print report</h3>
-    <p>Prints what the filters show now, on A4 landscape.</p>
+    <p>Prints what the filters show now, on A4 portrait.</p>
     <button class="opt" data-print="both"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7"/><rect x="3" y="21" width="18" height="0.01"/></svg><span><b>Print chart + table</b><span>Summary, charts and the complete batch table</span></span></button>
     <button class="opt" data-print="chart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span><b>Print without table</b><span>Summary and charts only</span></span></button>
     <button class="opt" data-print="table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M3 14h18M9 4v16"/></svg><span><b>Print table only</b><span>Summary and the complete batch table</span></span></button>
@@ -566,12 +580,29 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
     const fixed = !!cfg.fixedW;
     const frameW = cfg.fixedW || Math.max(320, host.clientWidth || 900);
-    const L = 86, R = 16, T = 30, B = cfg.rotate ? 92 : 70, H = fixed ? 236 : 360, ph = H - T - B;
     const minCol = fixed ? 0 : 54;
+    const L = 86, R = 16;
     const W = fixed ? frameW : Math.max(frameW, L + R + minCol * groups.length);
     const cw = (W - L - R) / groups.length;
     const rot = cw < 64;
+    /* DATA LABELS: every quantity is written on the chart, not only in the
+       tooltip, because a printed chart has no tooltip. Wide columns stack
+       them over the column (bottom up, as cfg.labels lists them); a column
+       too narrow for a figure written across it turns the ones marked
+       'bar' inside the bar and 'top' over it, and drops the rest — the
+       table under the chart carries every figure anyway. The top margin
+       grows by what the labels need, so none is cut off. */
+    const narrow = cw < 52;
+    const nLines = cfg.labels ? Math.max(...groups.map(g => cfg.labels(g).length)) : 0;
     const hi = niceMax(cfg.max(groups));
+    // The top margin is only what the tallest column's labels lack: the
+    // scale already leaves room above the data, and padding every chart by
+    // the full stack is a chart squashed for nothing.
+    const B = fixed ? 58 : 70, H0 = fixed ? (cfg.fixedH || 236) : 360, ph0 = H0 - 30 - B;
+    const peak = Math.max(0, ...groups.map(g => Math.max(cfg.bar(g).v || 0, cfg.step ? cfg.step(g) : 0)));
+    const need = !nLines ? 0 : narrow ? 48 : 8 + (nLines - 1) * 15 + 14;
+    const room = 30 + ph0 * (1 - Math.min(peak, hi) / hi);
+    const T = 30 + Math.max(0, Math.ceil(need - room)), H = H0 + (T - 30), ph = H - T - B;
     const ys = v => T + ph - (Math.max(0, Math.min(v, hi)) / hi) * ph;
     let s = `<svg ${fixed ? `viewBox="0 0 ${W} ${H}" width="100%"` : `width="${W}" height="${H}"`} role="img" aria-label="${esc(cfg.aria)}">`;
     for (let i = 0; i <= 4; i++) {
@@ -582,7 +613,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     s += `<line x1="${L}" x2="${L}" y1="${T}" y2="${T + ph}" stroke="var(--line)" stroke-width="1"/>`;
     // Axis titles: the Y one turned up the side, the X one under the labels.
     s += `<text class="ytitle" x="18" y="${T + ph / 2}" transform="rotate(-90 18 ${T + ph / 2})" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.yTitle)}</text>`;
-    s += `<text class="xtitle" x="${L + (W - L - R) / 2}" y="${H - 10}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.xTitle)}</text>`;
+    s += `<text class="xtitle" x="${L + (W - L - R) / 2}" y="${H - (fixed ? 6 : 10)}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.xTitle)}</text>`;
     if (cfg.ref != null) {
       const y = ys(cfg.ref);
       s += `<line class="ref" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--neg)" stroke-width="2" stroke-dasharray="6 4"/>`;
@@ -599,9 +630,21 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       const x0 = L + i * cw, bw = Math.min(cw * 0.5, 44), bx = x0 + (cw - bw) / 2;
       const b = cfg.bar(g), y = ys(b.v || 0);
       s += `<path class="bar" d="${barPath(bx, y, bw, T + ph - y, 4)}" fill="${b.color}"/>`;
-      if (cfg.label) {
-        const lb = cfg.label(g), top = Math.min(y, cfg.step ? ys(cfg.step(g)) : y);
-        s += `<text class="vlabel" x="${x0 + cw / 2}" y="${top - 8}" text-anchor="middle" font-size="12" font-weight="600" fill="${lb.color}">${esc(lb.text)}</text>`;
+      if (cfg.labels) {
+        const top = Math.min(y, cfg.step ? ys(cfg.step(g)) : y), cx = x0 + cw / 2;
+        const lbl = (lb, attrs, txt) => `<text class="${lb.cls || 'dlabel'}" ${attrs} font-size="${lb.size || 12}" font-weight="${lb.weight || 600}" fill="${lb.color}">${esc(txt)}</text>`;
+        if (!narrow) {
+          cfg.labels(g).forEach((lb, k) => { s += lbl(lb, `x="${cx}" y="${top - 8 - k * 15}" text-anchor="middle"`, lb.text); });
+        } else {
+          cfg.labels(g).forEach(lb => {
+            const len = String(lb.text).length * 7 + 8, barH = T + ph - y;
+            if (lb.narrow === 'bar' && barH > len) {
+              s += lbl(Object.assign({}, lb, { color: '#fff' }), `x="${cx + 4}" y="${y + 6}" text-anchor="end" transform="rotate(-90 ${cx + 4} ${y + 6})"`, lb.text);
+            } else if (lb.narrow === 'top' || lb.narrow === 'bar') {
+              s += lbl(lb, `x="${cx + 4}" y="${top - 6}" text-anchor="start" transform="rotate(-90 ${cx + 4} ${top - 6})"`, lb.text);
+            }
+          });
+        }
       }
       const lx = x0 + cw / 2, ly = T + ph + 18, lab = esc(xLabel(g, cfg.by));
       s += rot ? `<text class="xtick" x="${lx}" y="${ly}" font-size="12" fill="var(--ink-2)" text-anchor="end" transform="rotate(-35 ${lx} ${ly})">${lab}</text>`
@@ -620,14 +663,20 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
   const tipHead = (g, by) => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${nf(g.n)} batch${g.n === 1 ? '' : 'es'}` : (g.src[0].doNo ? ` · D/O ${esc(g.src[0].doNo)}` : '')}`;
   const tipRow = (sw, l, v) => `<div class="row"><span>${sw ? `<span class="sw" style="background:${sw}"></span>` : ''}${l}</span><b>${v}</b></div>`;
 
-  function drawCharts(root, groups, by, fixedW) {
+  function drawCharts(root, groups, by, fixedW, fixedH) {
     drawChart(root.querySelector('.c1'), groups, {
-      by, fixedW, aria: 'Actual seed received against total seed expected', xTitle: xTitle(by), yTitle: 'Seed Quantity (Seeds)',
+      by, fixedW, fixedH, aria: 'Actual seed received against total seed expected', xTitle: xTitle(by), yTitle: 'Seed Quantity (Seeds)',
       yFmt: v => nf(Math.round(v)),
       max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.12,
       bar: g => ({ v: g.actual, color: 'var(--green)' }),
       step: g => g.expected,
-      label: g => ({ text: pf(g.variancePct), color: g.variancePct < 0 ? '#B65252' : g.variancePct > 0 ? 'var(--green)' : 'var(--ink-2)' }),
+      // Bottom up: the actual received (green), the expected (orange, the
+      // dashed line's figure), then the variance between them.
+      labels: g => [
+        { text: nf(g.actual), color: 'var(--green)', weight: 700, narrow: 'bar' },
+        { text: nf(g.expected), color: '#B8732A', narrow: 'skip' },
+        { text: pf(g.variancePct), cls: 'vlabel', color: g.variancePct < 0 ? '#B65252' : g.variancePct > 0 ? 'var(--green)' : 'var(--ink-2)', narrow: 'top' },
+      ],
       tipHtml: g => tipHead(g, by) + tipRow('var(--warn)', 'Total Seed Expected', nf(g.expected))
         + (g.purchasedKnown ? tipRow('', 'Seed Purchased', nf(g.purchased)) : '')
         + tipRow('var(--green)', 'Actual Seed Received', nf(g.actual))
@@ -635,11 +684,14 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         + tipRow('', 'Variance', pf(g.variancePct)),
     });
     drawChart(root.querySelector('.c2'), groups, {
-      by, fixedW, aria: 'Seed damage percentage against the 5% maximum', xTitle: xTitle(by), yTitle: 'Seed Damage (%)',
+      by, fixedW, fixedH, aria: 'Seed damage percentage against the 5% maximum', xTitle: xTitle(by), yTitle: 'Seed Damage (%)',
       yFmt: v => (Math.round(v * 10) / 10).toLocaleString('en-MY', { minimumFractionDigits: 1 }) + '%', ref: MAX_DAMAGE_PCT,
       max: gs => Math.max(MAX_DAMAGE_PCT * 1.2, ...gs.map(g => g.damagePct || 0)),
       bar: g => ({ v: g.damagePct || 0, color: over(g) ? 'var(--neg)' : 'var(--green)' }),
-      label: g => ({ text: pfu(g.damagePct), color: over(g) ? '#B65252' : 'var(--ink-2)' }),
+      labels: g => [
+        { text: nf(g.damaged) + ' seeds', color: 'var(--ink-2)', weight: 500, narrow: 'skip' },
+        { text: pfu(g.damagePct), cls: 'vlabel', color: over(g) ? '#B65252' : 'var(--ink)', narrow: 'top' },
+      ],
       tipHtml: g => tipHead(g, by) + tipRow('', 'Seed Damage', nf(g.damaged)) + tipRow('', 'Total Seed Expected', nf(g.expected))
         + tipRow(over(g) ? 'var(--neg)' : 'var(--green)', 'Seed Damage (%)', pfu(g.damagePct)) + tipRow('', 'Maximum', MAX_DAMAGE_PCT + '%')
         + `<div>${over(g) ? '▲ Over the maximum' : '✓ Within the maximum'}</div>`,
@@ -654,7 +706,10 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       { h: 'Received', c: g => fmtDate(g.src[0].date), f: () => '' },
       { h: 'Breed', c: g => esc(g.src[0].breed), f: () => '' },
       { h: 'Supplier', c: g => esc(g.src[0].supplier), f: () => '' },
-      { h: 'D/O No.', c: g => esc(g.src[0].doNo || '—'), f: () => '' },
+      // On PAPER a D/O number may break after a slash (and only there), so
+      // the narrow portrait column wraps it into whole pieces. On screen
+      // the table scrolls and the number stays on one line.
+      { h: 'D/O No.', c: (g, pr) => pr ? esc(g.src[0].doNo || '—').split('/').join('/<wbr>') : esc(g.src[0].doNo || '—'), f: () => '' },
     ] : [{ h: 'Batches', num: 1, c: g => nf(g.n), f: t => nf(t.n) }]),
     { h: 'Seed Purchased', num: 1, c: g => g.purchasedKnown ? nf(g.purchased) : '—', f: t => t.purchasedKnown ? nf(t.purchased) : '—' },
     { h: 'Total Seed Expected', num: 1, c: g => nf(g.expected), f: t => nf(t.expected) },
@@ -670,7 +725,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const cols = COLS(by), t = totalsOf(all);
     const al = c => c.num ? 'num' : c.cc ? 'c' : '';
     return `<table class="${cls}"><thead><tr>${cols.map(c => `<th class="${al(c)}">${c.h}</th>`).join('')}</tr></thead>
-      <tbody>${groups.map(g => `<tr>${cols.map(c => `<td class="${al(c)} ${c.key ? 'key' : ''}">${c.c(g)}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tbody>${groups.map(g => `<tr>${cols.map(c => `<td class="${al(c)} ${c.key ? 'key' : ''}">${c.c(g, cls === 'pt')}</td>`).join('')}</tr>`).join('')}</tbody>
       <tfoot><tr>${cols.map(c => `<td class="${al(c)}">${c.f(t)}</td>`).join('')}</tr></tfoot></table>`;
   }
 
@@ -779,18 +834,27 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         ? `<div>Supplier: <b>${esc($('f-supplier').value || 'All')}</b> · Breed: <b>${esc($('f-breed').value || 'All')}</b></div>`
         : `<div>Supplier Name: <b>${esc(blk.supplier)}</b></div><div>Breed: <b>${esc(blk.breed)}</b></div>`;
       const k = (l, v) => `<div class="p-kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+      const overN = groups.filter(over).length;
       return `<div class="p-block" data-block="${bi}">
         <div class="p-head">
           <div><div class="p-co">MEGA JUTAMAS SDN BHD</div><div class="p-title">SEED RECEIVED SUMMARY REPORT</div></div>
           <div class="p-meta">${meta}<div>Period: <b>${esc(period)}</b></div><div>Printed: <b>${esc(PRINTED_BY.date)}</b></div></div>
         </div>
         <div class="p-filters">Filters — ${fl}</div>
-        <div class="p-kpis">${k('Batches', nf(t.n))}${k('Seed Purchased', t.purchasedKnown ? nf(t.purchased) : '—')}${k('Total Seed Expected', nf(t.expected))}${k('Actual Seed Received', nf(t.actual))}${k('Variance', pf(p.v))}${k('Seed Damage', nf(t.damaged))}${k('Seed Damage (%)', pfu(p.d))}${k('Maximum', MAX_DAMAGE_PCT + '%')}</div>
-        ${mode !== 'table' ? `<div class="p-charts">
-          <div><div class="p-chart-t">Seed Expected vs Actual Seed Received</div><div class="legend"><span><i style="background:var(--green)"></i>Actual Seed Received</span><span><i class="ln"></i>Total Seed Expected</span></div><div class="chart c1"></div></div>
-          <div><div class="p-chart-t">Seed Damage against the ${MAX_DAMAGE_PCT}% Maximum</div><div class="legend"><span><i style="background:var(--green)"></i>Within</span><span><i style="background:var(--neg)"></i>Over</span><span><i class="ln red"></i>Maximum ${MAX_DAMAGE_PCT}%</span></div><div class="chart c2"></div></div>
-        </div>` : ''}
-        ${mode !== 'chart' ? tableHtml(groups, blk.batches, by, 'pt') : ''}
+        <section class="p-sec p-sec-chart" data-sec="compare">
+          <h3 class="p-sec-t">Seed Expected vs Actual Seed Received</h3>
+          <div class="p-kpis" style="--n:5">${k('Batches', nf(t.n))}${k('Seed Purchased', t.purchasedKnown ? nf(t.purchased) : '—')}${k('Total Seed Expected', nf(t.expected))}${k('Actual Seed Received', nf(t.actual))}${k('Variance', pf(p.v))}</div>
+          ${mode !== 'table' ? `<div class="p-chart"><div class="legend"><span><i style="background:var(--green)"></i>Actual Seed Received</span><span><i class="ln"></i>Total Seed Expected</span></div><div class="chart c1"></div></div>` : ''}
+        </section>
+        <section class="p-sec p-sec-chart" data-sec="damage">
+          <h3 class="p-sec-t">Seed Damage</h3>
+          <div class="p-kpis" style="--n:4">${k('Seed Damage', nf(t.damaged))}${k('Seed Damage (%)', pfu(p.d))}${k('Maximum Allowed', MAX_DAMAGE_PCT + '%')}${k('Over the Maximum', nf(overN) + ' of ' + nf(groups.length))}</div>
+          ${mode !== 'table' ? `<div class="p-chart"><div class="legend"><span><i style="background:var(--green)"></i>Within the maximum</span><span><i style="background:var(--neg)"></i>Over the maximum</span><span><i class="ln red"></i>Maximum ${MAX_DAMAGE_PCT}%</span></div><div class="chart c2"></div></div>` : ''}
+        </section>
+        ${mode !== 'chart' ? `<section class="p-sec" data-sec="table">
+          <h3 class="p-sec-t">${by === 'batch' ? 'Batch Details' : 'Details by ' + esc(head(by))}<span>${nf(groups.length)} ${by === 'batch' ? (groups.length === 1 ? 'batch' : 'batches') : (groups.length === 1 ? 'row' : 'rows')}</span></h3>
+          ${tableHtml(groups, blk.batches, by, 'pt')}
+        </section>` : ''}
         <div class="sign"><div class="sign-box">
           <div class="sign-cap">Prepared and Verified by</div>
           <div class="sign-sig"><span>Signature</span></div>
@@ -799,7 +863,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         </div></div>
       </div>`;
     }).join('');
-    if (mode !== 'table') area.querySelectorAll('.p-block[data-block]').forEach(el => drawCharts(el, groupRows(blocks[+el.dataset.block].batches, by), by, 640));
+    if (mode !== 'table') area.querySelectorAll('.p-block[data-block]').forEach(el => drawCharts(el, groupRows(blocks[+el.dataset.block].batches, by), by, 700, 206));
   }
   window.ndBuildPrint = buildPrint;
 

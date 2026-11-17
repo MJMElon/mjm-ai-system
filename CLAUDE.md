@@ -7598,15 +7598,27 @@ summary strip, and the COMPLETE table as rows (A4 landscape, the header
 repeated on every page, no row cut). It was the sheet's transposed table
 for a day; rows are what repeat a header and fit a long year on A4. The
 print area is `display:none` on screen. It opens on the latest year, as
-the sheet is a year a tab. **A breed picked with no supplier prints ONE block**
+the sheet is a year a tab. **THE PAPER IS A4 PORTRAIT, in three sections**:
+the comparison (its own summary, then its chart), the damage (its summary,
+then its chart), and the batch table LAST — stacked, the page is narrow
+enough to stand up. The table fits 718px (10mm margins) because its headings
+and text cells wrap, the status is plain text, and a D/O number breaks only
+after a slash (`<wbr>` on paper only). **No blank page**: the sidebar's
+`.rs-shell` kept `min-height:100vh` in print and went out as an empty first
+page — it is `min-height:0` on paper now, and the test prints a real PDF and
+counts its pages. **Every bar carries its figures** (`cfg.labels`, bottom
+up): actual, expected and variance over each column, seeds and % over each
+damage bar; a column too narrow turns them and drops the expected, and the
+top margin grows only by what the tallest column's labels lack.
+**A breed picked with no supplier prints ONE block**
 with every supplier of it together (`reportBlocks(..., byBreed)`); a
 supplier picked, or neither, keeps one per supplier + breed. **The
 signature sits at the foot of the page**: a printed block is a flex column
 at least 184mm tall (not 186, which rounds over into a blank page) and the
-signature takes `margin-top:auto`. **That only works if nothing is wider
-than the page** — the table's headings wrap for that reason; on one line it
-ran 1,280px on a 1,032px page and Chrome shrank the whole sheet, which is
-what left a band of empty paper under the signature. The test asks the
+signature takes `margin-top:auto` (274mm on portrait; not the full 277,
+which rounds over into a blank page). **That only works if nothing is wider
+than the page** — Chrome shrinks the whole sheet to fit, which once left a
+band of empty paper under the signature. The test asks the
 width. Chart labels read 270, not B.270.
 
 **The dashboard's navigation is a SIDEBAR drawn from a menu**, never written

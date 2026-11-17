@@ -201,6 +201,14 @@ const server = http.createServer((req, res) => {
   ok(S.xticks.join('|') === '270|271', 'the X axis reads 270, 271 — no B.', S.xticks);
   ok(S.step && S.bars === 2, 'green bars and the dashed expected line', [S.step, S.bars]);
   ok(S.vlabels.join('|') === '-0.70%|-1.00%', 'the variance sits above each batch', S.vlabels);
+  const dl = await page.$$eval('#seed-body .c1 svg .dlabel', t => t.map(x => x.textContent));
+  ok(dl.join('|') === '10,427|10,500|9,900|10,000', 'data labels: every batch shows its actual and its expected seed, in full', dl);
+  const dl2 = await page.$$eval('#seed-body .c2 svg .dlabel', t => t.map(x => x.textContent));
+  ok(dl2.join('|') === '327 seeds|600 seeds', 'data labels: the damage chart shows the seeds damaged as well as the %', dl2);
+  ok(await page.$eval('#seed-body table.bd', t => [...t.querySelectorAll('tbody td')].some(td => td.textContent === 'SSO/2026/09/02') && !t.querySelector('wbr')), 'on screen the D/O number stays on one line');
+  const lblIn = await page.evaluate(() => { const svg = document.querySelector('#seed-body .c1 svg'), b = svg.getBoundingClientRect();
+    return [...svg.querySelectorAll('.dlabel,.vlabel')].every(t => { const r = t.getBoundingClientRect(); return r.top >= b.top && r.bottom <= b.bottom; }); });
+  ok(lblIn, 'no data label is cut off the top of the chart');
   ok(S.ref2 === 1 && S.y2title === 'Seed Damage (%)', 'the damage chart carries the 5% line and its own Y title', [S.ref2, S.y2title]);
   ok(!S.company, 'on screen: no company header — that is the print\'s');
   ok(S.sticky === 'sticky', 'the table header is sticky', S.sticky);
@@ -246,13 +254,25 @@ const server = http.createServer((req, res) => {
   const readPrint = () => page.$$eval('#print-area .p-block[data-block]', bs => bs.map(r => ({
     meta: r.querySelector('.p-meta').textContent.replace(/\s+/g, ' '), filters: r.querySelector('.p-filters').textContent,
     company: /MEGA JUTAMAS SDN BHD/.test(r.textContent) && /SEED RECEIVED SUMMARY REPORT/.test(r.textContent),
-    charts: r.querySelectorAll('.p-charts svg').length, table: !!r.querySelector('table.pt'),
+    charts: r.querySelectorAll('.p-chart svg').length, table: !!r.querySelector('table.pt'),
     rows: [...r.querySelectorAll('table.pt tbody tr')].map(tr => [...tr.cells].map(td => td.textContent.trim())),
     yticks: [...r.querySelectorAll('.c1 .ytick')].map(x => x.textContent),
     signName: (r.querySelector('.sign-name') || {}).textContent, signDate: (r.querySelector('.sign-date') || {}).textContent, sigBox: !!r.querySelector('.sign-sig') })));
   await page.click('#print-dlg [data-print="both"]'); await page.waitForTimeout(80);
   ok(await page.evaluate(() => window.__printed) === 1 && !(await vis('#print-dlg')), 'an option closes the dialog and prints');
   let P = await readPrint();
+  ok(await page.$$eval('#print-area .p-block[data-block]', bs => bs.every(b => [...b.querySelectorAll('[data-sec]')].map(x => x.dataset.sec).join() === 'compare,damage,table')), 'printed: comparison (summary + chart), then damage (summary + chart), then the table last');
+  ok(await page.$$eval('#print-area .p-block[data-block]', bs => bs.every(b => b.querySelector('[data-sec=compare] .p-kpis') && b.querySelector('[data-sec=compare] .c1') && b.querySelector('[data-sec=damage] .p-kpis') && b.querySelector('[data-sec=damage] .c2'))), 'printed: each chart sits in the section with its own summary');
+  await page.emulateMedia({ media: 'print' });
+  const shellH = await page.evaluate(() => document.getElementById('shell').getBoundingClientRect().height);
+  ok(shellH === 0, 'printed: the screen shell takes no room, so no blank page goes out ahead of the report', shellH);
+  const pdfPath = require('os').tmpdir() + '/seed_summary_print_' + process.pid + '.pdf';
+  await page.pdf({ path: pdfPath, preferCSSPageSize: true });
+  const pdfTxt = fs.readFileSync(pdfPath, 'latin1'); fs.unlinkSync(pdfPath);
+  const nPages = (pdfTxt.match(/\/Type\s*\/Page[^s]/g) || []).length;
+  ok(nPages === P.length, 'printed: one page per report and not one blank page', [nPages, P.length]);
+  ok(/\/MediaBox\s*\[\s*0 0 59[45](\.\d+)?\s+84[12]/.test(pdfTxt), 'printed: the pages are A4 portrait');
+  await page.emulateMedia({ media: 'screen' });
   ok(P.length === 2 && /FGV/.test(P[0].meta) && /Sime Darby/.test(P[1].meta), 'printed: one block per supplier + breed', P.map(b => b.meta));
   ok(P.every(b => b.company && /Year: 2026/.test(b.filters) && /Show by: Batch/.test(b.filters)), 'printed: company title and the filters on every block', P.map(b => b.filters));
   ok(P.every(b => b.charts === 2 && b.table), 'chart + table: both charts and the table', P.map(b => [b.charts, b.table]));
@@ -263,13 +283,13 @@ const server = http.createServer((req, res) => {
   await page.click('#btn-print'); await page.click('#print-dlg [data-print="both"]'); await page.waitForTimeout(80);
   const PB = await readPrint();
   ok(PB.length === 1 && /Supplier: All/.test(PB[0].meta) && /Breed: Calix 600/.test(PB[0].meta) && PB[0].rows.length === 2, 'breed picked, no supplier: one printed report with FGV and Sime Darby together', PB.map(b => [b.meta, b.rows.length]));
-  await page.emulateMedia({ media: 'print' }); await page.setViewportSize({ width: 1032, height: 703 });
+  await page.emulateMedia({ media: 'print' }); await page.setViewportSize({ width: 718, height: 1047 });
   const fit = await page.evaluate(() => document.documentElement.scrollWidth);
-  ok(fit <= 1032, 'printed: nothing is wider than the A4 page, so the browser does not shrink the sheet and leave paper under the signature', fit);
+  ok(fit <= 718, 'printed: nothing is wider than the A4 page, so the browser does not shrink the sheet and leave paper under the signature', fit);
   await page.emulateMedia({ media: 'screen' }); await page.setViewportSize({ width: 1280, height: 1000 });
   await page.selectOption('#f-breed', ''); await page.waitForTimeout(80);
-  ok(/\.sign\s*\{[^}]*margin-top:auto/.test(html) && /\.p-block\s*\{[^}]*display:flex[^}]*min-height:184mm/.test(html), 'the signature is pushed to the foot of the printed page');
-  ok(/@page\s*\{\s*size:A4 landscape/.test(html) && /table\.pt thead\s*\{\s*display:table-header-group/.test(html) && /table\.pt tr\s*\{[^}]*break-inside:avoid/.test(html), 'A4 landscape, the header repeats, no row is cut');
+  ok(/\.sign\s*\{[^}]*margin-top:auto/.test(html) && /\.p-block\s*\{[^}]*display:flex[^}]*min-height:274mm/.test(html), 'the signature is pushed to the foot of the printed page');
+  ok(/@page\s*\{\s*size:A4 portrait/.test(html) && /table\.pt thead\s*\{\s*display:table-header-group/.test(html) && /table\.pt tr\s*\{[^}]*break-inside:avoid/.test(html), 'A4 portrait, the header repeats, no row is cut');
 
   await page.click('#btn-print'); await page.click('#print-dlg [data-print="chart"]'); await page.waitForTimeout(80);
   P = await readPrint();
