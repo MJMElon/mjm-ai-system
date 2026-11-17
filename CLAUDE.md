@@ -6363,14 +6363,73 @@ NO. **A mark is the one thing on a tab that says which system this is**, so
 half of it changed is worse than either answer: the set stops reading as a
 set, which is the whole of what it is for.
 
-So the leaf is on all ten, **lifted out of the page that already had it**
+So the leaf went onto all ten, **lifted out of the page that already had it**
 rather than typed again — and `tests/the_nursery_module_wears_one_mark.cjs`
 compares the shipped pages against each other rather than against a data URI
 written into the test, because a second copy of the mark is the fault it is
 checking for. It also fails a page that declares TWO `rel="icon"` links,
-which is the browser picking rather than anybody deciding. **6 of its 13
-checks fail on the previous code**, the first of them being *it is the SAME
-one on all of them*.
+which is the browser picking rather than anybody deciding.
+
+### And then the office asked for the PALMS one, so the PLATE is the module
+
+*"PALMS 的icon我要一个地图板块感 里面有蓝黄红绿板块"*, and a minute later
+*"不规则形状的 整体形状要和bnn boundry一样"* — a map of parcels, blue, yellow,
+red and green, irregular, shaped like the BNN boundary.
+
+**THAT IS THE RULE ABOVE OVERRULED, and it is worth writing down WHY rather
+than deleting it.** The argument for ten identical marks was that a mark is
+what says which system this is, and the office is not disputing it — they
+are saying the mark has two jobs on a bar of ten tabs, and only the first
+was being done. So the rule splits in two, and the test splits with it:
+
+- **the PLATE is the MODULE.** Every nursery_ops page still carries the house
+  rounded square in `#1b4332`, so the set still reads as one system, and an
+  icon invented from scratch fails the test even if it is pretty.
+- **the MARK on it is the PAGE**, and only where the office has asked for one.
+
+**TWO PAGES HAVE BEEN NAMED, AND A PARALLEL SESSION NAMED THE SECOND ONE THE
+SAME MORNING** — `nursery_ops_maintenance.html` got a **spanner** while this
+was being written, which is the best evidence there is that the split rule is
+the right one rather than a concession about PALMS. So the groups are: the
+three pages whose own name begins `nursery_ops_palms_` (the plot map),
+Maintenance (the spanner), and **everything else, which wears the leaf**.
+There is deliberately no fourth: an eleventh page arriving with a bespoke icon
+fails the test until somebody writes down that the office asked for it.
+
+**THE PALMS HALF IS NAMED BY FILENAME**, not by a list somebody maintains, so
+a PALMS page written next year arrives wearing the right mark.
+**`nursery_ops_plot_life.html` is deliberately not in it**: it reads the same
+plot log and draws the same map component, but it is not a PALMS screen and
+the office did not name it. That is a judgement and the next person may be
+asked to change it.
+
+**THE SPANNER WAS DRAWN ON A PLATE OF ITS OWN SPELLING** — `viewBox='0 0 24
+24'` with `rx='5'` — which is the same plate to the eye (0.208 against 0.219)
+and a second spelling of it in the file, so the two would drift the day
+somebody changed one. It is re-expressed on the 64 plate with its proportions
+kept exactly (inset 15%, the mark 70% of the plate), so the mark is untouched
+and there is **one plate written one way**. That is what the test can then
+hold, and it is why it asks for the plate separately from the mark.
+
+**THE PARCELS ARE POLYGONS AND NOT RECTS, which is the whole of 不规则形状的.**
+The first version was four rounded rectangles in a 2×2 and read as an
+app-launcher grid; four irregular quadrilaterals with lanes between them read
+as land. A rect cannot satisfy that ask, so the test says it in those terms:
+every parcel is a polygon, none of the four stands on two x values and two y
+values, no two are the same shape, and the lanes are drawn in the plate's own
+colour.
+
+**WHAT IS NOT DONE, and it is not knowable from here:** the outer outline is a
+nursery shape and **not a tracing of BNN's own boundary**. That boundary lives
+in `shared_plots.map_top`, and this environment cannot reach Supabase — there
+is no copy of it in either repository, so drawing one would be inventing a
+shape and calling it BNN's. The answer is one screenshot of the BNN map off
+the Plot Status Map, which the outline can then be traced from; until then the
+comment in each page's head says so in as many words.
+
+**6 of the test own 24 checks fail on the previous pages**, the first of them
+being *every one of them is the house plate* — which is the two plate
+spellings, caught by a check written for a fault nobody had met yet.
 
 **THE RIBBON'S RIGHT CELL IS EMPTY NOW, and that is safe HERE and would not
 be on the left.** The bar is `1fr auto 1fr`, so both outer tracks are sized
@@ -6378,7 +6437,7 @@ by the free space rather than by what is in them and the module name holds
 the real centre with the third cell empty. Deleting the BACK pill would not
 be the same thing at all: the name would become the first grid item and
 slide left, which is the fault `audit_admin.html` keeps a `.fcr-spacer` for.
-Section 3 measures the rendered centre rather than trusting that paragraph.
+Section 4 measures the rendered centre rather than trusting that paragraph.
 
 **And the measurement needed Tailwind, which the harness cannot fetch** —
 without it the ribbon is a plain block and the name sits hard left, so a

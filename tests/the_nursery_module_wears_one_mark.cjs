@@ -1,4 +1,4 @@
-/* ONE MODULE, ONE MARK IN THE BROWSER TAB.
+/* THE PLATE IS THE MODULE. THE MARK ON IT IS THE PAGE.
 
    The office had the PALMS board open and said it twice, over a crop of the
    badge and then over the tab itself: 删掉, then icon改掉. What they were
@@ -10,13 +10,30 @@
    A leaf had already gone onto nursery_ops_maintenance.html that morning, so
    the module was wearing TWO marks: a leaf on one tab and NO on the other
    nine. That is the fault worth a test rather than the wording -- a mark
-   that is the module's identity cannot be half changed, because the whole
-   value of it is that every tab in the set looks like the same system.
+   that is half changed stops the set reading as one system, which is the
+   whole value of having one.
 
-   So: every nursery_ops page carries the SAME leaf, byte for byte, and the
-   NO badge is gone from every ribbon. The leaf is not restated here -- it is
-   lifted out of the shipped pages and compared against itself, because a data
-   URI typed into a test is a second copy of the thing under test.
+   SO THE FIRST VERSION OF THIS FILE ASKED FOR TEN IDENTICAL ICONS, and the
+   office then asked for the PALMS one specifically: "PALMS 的icon我要一个
+   地图板块感 里面有蓝黄红绿板块" -- a map of parcels, blue, yellow, red and
+   green. They are the ones who read these tabs; that is their call to make,
+   and it is a better rule than the one it replaces:
+
+     * the PLATE -- the house rounded square in #1b4332 -- is the module, and
+       every page in the set still carries it, so the set still reads as one
+       system;
+     * the MARK on it is the page, and only where the office has asked for
+       one. The three pages whose own name begins PALMS wear the plot map;
+       the other seven wear the module's leaf.
+
+   Named by FILENAME rather than by a list somebody maintains, so a PALMS
+   page written next year arrives wearing the right mark. Life of Plot is
+   deliberately not in it: it reads the same plot log, but it is not a PALMS
+   screen and the office did not name it.
+
+   Neither mark is restated here -- both are lifted out of the shipped pages
+   and compared against themselves, because a data URI typed into a test is a
+   second copy of the thing under test.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules \
         node tests/the_nursery_module_wears_one_mark.cjs
@@ -49,7 +66,7 @@ function stripComments(html) {
 const PAGES = fs.readdirSync(DIR).filter(f => f.endsWith('.html')).sort();
 
 (async () => {
-  console.log('\n1. Every page in the module carries the same tab icon');
+  console.log('\n1. Every page in the module declares exactly one tab icon');
   check('there are pages to check', PAGES.length > 0, true);
 
   const icons = {};
@@ -64,30 +81,99 @@ const PAGES = fs.readdirSync(DIR).filter(f => f.endsWith('.html')).sort();
      the browser picked, which is not a decision anybody made. */
   check('…and only one', twoIcons, []);
 
-  const distinct = [...new Set(PAGES.flatMap(f => icons[f]))];
-  check('…and it is the SAME one on all of them', distinct.length, 1);
-  if (distinct.length > 1) {
-    const by = {};
-    distinct.forEach((d, i) => { by['icon ' + (i + 1)] = PAGES.filter(f => icons[f][0] === d); });
-    console.log('       ' + JSON.stringify(by));
+  /* THE PLATE IS WHAT KEEPS THE SET ONE SET. Whatever a page draws on it,
+     the icon is still the house rounded square in the module's green — so
+     an icon invented from scratch fails here even if it is pretty. */
+  const noPlate = PAGES.filter(f => !/rx='14' fill='%231b4332'/.test(icons[f][0] || ''));
+  check('every one of them is the house plate', noPlate, []);
+
+  console.log('\n2. A page the office has named wears its own mark; the rest wear the leaf');
+  /* THE GROUPS, and there is deliberately no fourth. A page gets a mark of
+     its own because the office asked for one, never because somebody drawing
+     an icon felt like it — so an eleventh page arriving with a bespoke icon
+     fails here until that decision is made and written down. PALMS is matched
+     by FILENAME, so a PALMS page written next year arrives in the right
+     group without anybody adding it to a list. */
+  const GROUPS = [
+    ['PALMS',       (f) => /^nursery_ops_palms_/.test(f)],
+    ['Maintenance', (f) => f === 'nursery_ops_maintenance.html'],
+  ];
+  const named = new Set(PAGES.filter(f => GROUPS.some(g => g[1](f))));
+  const REST  = PAGES.filter(f => !named.has(f));
+  check('every page lands in exactly one group',
+        [named.size > 0, REST.length > 0], [true, true]);
+
+  function oneMark(label, list) {
+    const distinct = [...new Set(list.map(f => icons[f][0]))];
+    check(label + ': one mark across them', distinct.length, 1);
+    if (distinct.length > 1) {
+      const by = {};
+      distinct.forEach((d, i) => { by['icon ' + (i + 1)] = list.filter(f => icons[f][0] === d); });
+      console.log('       ' + JSON.stringify(by));
+    }
+    return distinct[0] || '';
   }
+  const MAP  = oneMark('PALMS', PAGES.filter(GROUPS[0][1]));
+  const SPAN = oneMark('Maintenance', PAGES.filter(GROUPS[1][1]));
+  const LEAF = oneMark('the rest', REST);
 
-  const ICON = distinct[0] || '';
-  checkTrue('it is a leaf and not the NO square', /M20 44C20 26/.test(ICON) && !/>NO<\/text>/.test(ICON));
-  checkTrue('…drawn in the house green', /%231b4332/.test(ICON) && /%23d8f3dc/.test(ICON));
+  /* A named page sharing the module's leaf is a mark nobody decided, and two
+     named pages sharing one is the same fault the other way round. */
+  check('…and no two groups wear the same mark',
+        new Set([MAP, SPAN, LEAF]).size, 3);
 
-  console.log('\n2. The NO badge is off every ribbon');
+  /* The office asked for the colours by name — 蓝黄红绿 — so they are asked
+     for by name, and in that order on the plate: blue and yellow across the
+     top, red and green under them. */
+  const shapes = [...MAP.matchAll(/%3Cpolygon points='([^']+)' fill='(%23[0-9a-f]{6})'/g)]
+    .map(m => ({ pts: m[1], fill: m[2] }));
+  check('the mark is four parcels, blue · yellow · red · green',
+        shapes.map(s => s.fill), ['%233b82f6', '%23f5b324', '%23ef4444', '%2322c55e']);
+  checkTrue('…and it is a map and not the leaf', !/M20 44C20 26/.test(MAP));
+
+  /* 不规则形状的 — IRREGULAR, which is the whole difference between a plot map
+     and an app-launcher grid of four squares. A rect cannot be irregular, so
+     the first version of this mark could not satisfy it: every parcel is a
+     polygon, and none of them is an axis-aligned rectangle, which is what a
+     polygon of four points standing on two x values and two y values is. */
+  check('every parcel is a polygon and not a rectangle',
+        MAP.indexOf('%3Crect x=') >= 0, false);
+  const boxy = shapes.filter((s) => {
+    const pts = s.pts.split(' ').map(p => p.split(',').map(Number));
+    return new Set(pts.map(p => p[0])).size <= 2 && new Set(pts.map(p => p[1])).size <= 2;
+  });
+  check('…and none of the four is square to the page', boxy.map(s => s.fill), []);
+  /* No two parcels alike either, or four identical quads read as a grid that
+     has merely been tilted. Compared on their own shape — the points with the
+     parcel's own top-left taken off — so two parcels of one shape in two
+     places are still caught. */
+  const forms = shapes.map((s) => {
+    const pts = s.pts.split(' ').map(p => p.split(',').map(Number));
+    const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1]));
+    return pts.map(p => (p[0] - x0).toFixed(2) + ',' + (p[1] - y0).toFixed(2)).join(' ');
+  });
+  check('…and no two of them are the same shape', new Set(forms).size, 4);
+  /* The lanes between them, which are what make four shapes read as parcels
+     rather than as one block cut up. Drawn in the plate's own colour. */
+  checkTrue('…with lanes between the parcels',
+            /%3Cpath d='M[^']+' stroke='%231b4332' stroke-width='3'/.test(MAP));
+
+  checkTrue('the leaf is the leaf, and not the NO square',
+            /M20 44C20 26/.test(LEAF) && !/>NO<\/text>/.test(LEAF));
+  checkTrue('…drawn in the house green', /%231b4332/.test(LEAF) && /%23d8f3dc/.test(LEAF));
+
+  console.log('\n3. The NO badge is off every ribbon');
   const left = PAGES.filter(f => />NO<\/div>/.test(stripComments(fs.readFileSync(path.join(DIR, f), 'utf8'))));
   check('no page draws it any more', left, []);
 
-  console.log('\n3. The ribbon still reads as a ribbon, with the name centred');
+  console.log('\n4. The ribbon still reads as a ribbon, with the name centred');
   /* The right cell is what the module name is centred against. Deleting the
      LEFT one would make the name the first grid item and slide it left --
      which is the fault audit_admin.html keeps a .fcr-spacer for -- so this is
      asked of the rendered box rather than of the markup. */
   let chromium;
   try { chromium = require('playwright').chromium; }
-  catch (e) { console.log('  (playwright not available — section 3 skipped)'); chromium = null; }
+  catch (e) { console.log('  (playwright not available — section 4 skipped)'); chromium = null; }
 
   if (chromium) {
     const MIME = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json' };
