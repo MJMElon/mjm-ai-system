@@ -125,11 +125,12 @@ checkTrue('…and names the stages once', /MJMPalms\.openActivities\(LOGS, unit\
 checkTrue('plot life says so too', /all \$\{open\.length\} open entries/.test(LIFE));
 checkTrue('…and names the stages once', /MJMPalms\.openActivities\(PALMS_LOGS, plotName\)\.map\(a => a\.name\)/.test(LIFE));
 
-console.log('\nThe detail views still show every row, which is where a duplicate is seen');
-checkTrue('the motion study lists the open entries themselves',
-          /const open = PLOT \? MJMPalms\.currentEntries\(LOGS, PLOT\) : \[\];/
-            .test(fs.readFileSync(path.join(ROOT, 'nursery_ops', 'nursery_ops_palms_motion.html'), 'utf8')));
-checkTrue('and the plot history does', /const open = MJMPalms\.currentEntries\(PALMS_LOGS, plotName\);/.test(LIFE));
+/* The motion study was the other detail view and its page is gone -- the
+   office: "Plot Motion Study也不需要存在". The plot history is what is left,
+   and it is where a duplicate is actually seen and dated. */
+console.log('\nThe detail view still shows every row, which is where a duplicate is seen');
+checkTrue('the plot history lists the open entries themselves',
+          /const open = MJMPalms\.currentEntries\(PALMS_LOGS, plotName\);/.test(LIFE));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

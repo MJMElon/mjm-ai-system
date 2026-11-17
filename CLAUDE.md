@@ -2514,21 +2514,38 @@ Four things in it, and three are a way this goes quietly wrong:
   **conductor's** work. Stamping the report under whoever acted makes the two
   agree by construction, rather than by changing `pickBy` under Plot Life as
   well.
-- **THE ✓ IS THE ROUTE THAT CAN ACTUALLY BE REACHED.** Picking the running
-  stage in the dropdown goes down the same path — some platforms do fire
-  `change` for it, and a gesture that means this must not be swallowed — but
-  the button beside Last update is the one that always works. It is offered
-  only where the plot HAS a log: `plotLine` answers null for a plot with no
-  entry, so a stamp against it would be invisible, and a button that visibly
-  does nothing is how a screen teaches people its buttons do nothing. On Plot
-  Life a SPLIT plot is offered none either, which is the rule the dropdown
-  beside it already follows — PALMS logs against a UNIT, and on a split plot
-  the unit is not the plot.
+- **IT SHIPPED AS A ✓ ON EVERY ROW, and the office took that off the next
+  day** — see below. The dropdown route survives it.
 
 **THE PANEL SAYS A DIFFERENT THING BECAUSE IT DOES A DIFFERENT THING**: no
 After box, no due date, and the sentence names the one column that moves. A
 panel promising a change over a save that makes none is how somebody comes to
 distrust the ones that do.
+
+### AND THE TICK CAME STRAIGHT BACK OFF: 不要打勾
+
+The gesture was a **✓ on every row** of Last update, on the board and on Plot
+Life, and the office answered it in three words the following day. **They are
+right about the screen**: a tick on fifty-two rows is a column of small
+targets over a cell nobody came to press, and the two pages had grown one
+each for a thing that happens occasionally.
+
+**WHAT IT COSTS IS NAMED RATHER THAN BURIED, because it undoes half of what
+the same office asked for the day before.** A native `<select>` fires no
+change event for the option already selected, so with the tick gone there is
+**no reliable route left for an unchanged plot**. What survives:
+
+- **the dropdown route is still wired** (`askChange` still takes `same`, the
+  panel still has its check wording, `stampSave` is still called) and is still
+  correct where a browser does fire that event — it is simply not something to
+  promise, and nothing on screen promises it;
+- **a real status CHANGE still stamps the day and the name**, which is the
+  half that never had a button and which nobody objected to. That is also the
+  half that fixes `pickBy`'s tie, so it is worth more than it looks.
+
+**THE DAY THE OFFICE WANTS THE UNCHANGED HALF BACK, it belongs in the PLOT
+POPUP** — one button on the plot somebody has opened, not a column of them.
+That was not built, because they asked for a removal and not a move.
 
 **Nothing to run in the database.** `fcportal_palms_history` has carried the
 unique key since `create_palms_tables.sql`, and `migration_palms_rls.sql`
@@ -2536,12 +2553,79 @@ already grants INSERT and UPDATE on it through the same `palms_has_access()`
 the plot-log writes use — which is what an upsert needs both of.
 
 `tests/a_plot_still_on_the_same_stage_is_an_answer.cjs` drives the shipped
-writer against a recording stub and then both real pages in a real browser;
-**7 of its 47 checks fail on the previous code**. Its first browser check is
-the office's own sentence, asked through the DROPDOWN rather than the ✓ on
-purpose: the dropdown is on both builds, so that one reports the fault
-instead of going unasked with everything else — on the previous code there is
-no button to press, and the file says so in one line rather than dying.
+writer against a recording stub and then both real pages in a real browser.
+Its first browser check is the office's own sentence, asked through the
+DROPDOWN rather than through any button — which is what let the file survive
+the tick being added and then removed without the write ever going unasked.
+The check beside it is the ABSENCE: no `[data-seen]`, no `.seen-tick`, so a
+half-removal that leaves the handler or the stylesheet behind is caught.
+**2 of its 28 checks fail on the build that had the tick**, and 7 failed on
+the build before the writer existed at all.
+
+## PALMS is the three main nurseries, and it is two pages
+
+Two sentences in one message, both removals, and the first was a list that
+was only ever handed over to a login somebody had narrowed by hand.
+
+### PN UNE不需要出现在这里
+
+`MJMPlotMap` draws **one tab per row of `operation_nurseries`**, which holds
+every place the company has — the Pre Nursery and the estate among them — and
+it narrows that list only when the caller passes one. The PALMS board passed
+one for a RESTRICTED login and not for an ordinary one:
+
+    MAP_SCOPE = allowed ? { nurseries: visible, skipReplant: true }
+                        : { skipReplant: true };
+
+So the office opened the Plot Status Map and found **PN and UNE tabs** on it,
+over maps with nothing drawn on them. The plot log is only ever keyed against
+the three main nurseries — `KEYS` has said so since the board was written and
+is what the table beside the map is scoped by — so those two tabs could never
+have held anything.
+
+**The list is always passed now**, and it is `visible` rather than `KEYS`:
+the permission NARROWS the three and must not widen them, so a login cut down
+to BNN still sees only BNN.
+
+**Life of Plot is deliberately untouched.** It shares the same map component
+and it is not PALMS — it is the history of every plot, `-R` plots included,
+which is exactly why `skipReplant` is opt-in there too. The office said 这里,
+and this is the board.
+
+### Plot Motion Study也不需要存在
+
+The page is **deleted, not hidden**. It wrote nothing — it read the plot log
+and drew cycle times — so nothing of the record goes with it, which is what
+made 不需要存在 safe to take literally.
+
+**What has to go with a page is everything that pointed AT it**, and there
+were three such things:
+
+- its entry in `shared/shared_palms_nav.js`, which would otherwise be a 404
+  on the one bar every PALMS page carries;
+- its row on `nursery_ops_user_access.html`, because a tick for a page nobody
+  can open is a permission that cannot be obeyed — the fault this file has a
+  heading about;
+- the two tests that read it, one of which lifted a line out of it.
+
+**A tick already saved under `palms_motion` is left alone.** Nothing reads
+it, and a file of SQL deleting somebody's saved answer is a worse thing than
+a dead key. **`motion` — *Motion Study Settings* — is a DIFFERENT row** on
+that screen and was left standing: it reads *standard timings used to plan
+the work*, which is the stage list, and it was already read by nothing before
+today. That is its own question.
+
+**`shared_palms_nav.js` was loaded BARE on its three pages**, which is the
+usual soft exposure — except here a browser holding yesterday's copy keeps a
+link to a page that no longer exists, which is a 404 somebody meets rather
+than a stale label. It carries a `?v=` now, and **Plot Life got the three
+no-cache metas** it had never had, or the number could not arrive.
+
+`tests/palms_is_the_three_nurseries.cjs` drives the real board against a
+fixture holding **all five** nurseries — a fixture of three passes just as
+green on a board that narrows nothing — and sweeps every page for anything
+still reaching for the deleted one. **8 of its 10 checks fail on the previous
+code**, the first in the office's own two names.
 
 ## Which nursery a record is in: the PLOT decides
 
