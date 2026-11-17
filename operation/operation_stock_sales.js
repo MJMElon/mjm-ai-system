@@ -4507,6 +4507,36 @@
         });
     }
 
+    // ── Orders the office has taken out of the analysis ──────────────
+    // An order still owed is not always coming — an overdue customer the
+    // office has stopped expecting. Unticking it on the Actual Order window
+    // takes it out of Actual Order, the gap and the forecast, for everybody:
+    // it is stored in operation_stock_analysis_excluded, keyed on the
+    // normalised order number (the key Customer Order Management matches
+    // on), so a "#" keyed on one side cannot split one order in two.
+    // Ticking it again deletes the row. Nothing about the order itself is
+    // touched. A table that cannot be read leaves every order counted and
+    // says so — an analysis must not quietly drop orders over a failed read.
+    let _saExcl = null;            // Map key -> row, once read
+    let _saExclErr = null;         // why it could not be read or written
+    async function _saLoadExcluded() {
+        if (_saExcl) return _saExcl;
+        _saExcl = new Map();
+        try {
+            const { data, error } = await _supabase.from('operation_stock_analysis_excluded')
+                .select('order_key,order_number,customer_name,excluded_by,excluded_at');
+            if (error) throw error;
+            (data || []).forEach(r => { if (r.order_key) _saExcl.set(r.order_key, r); });
+            _saExclErr = null;
+        } catch (e) {
+            console.warn('[StockAnalysis] excluded orders not read:', e);
+            _saExclErr = 'The list of unticked orders could not be read, so every order is counted. Run shared/RUN_ME_stock_analysis_excluded.sql.';
+        }
+        return _saExcl;
+    }
+    const _saOrderKey = o => _normOrderKey(o.orderNumber) || ('id:' + o.id);
+    const _saIsCounted = o => !(_saExcl && _saExcl.has(_saOrderKey(o)));
+
     function _saStockRows(now) {
         const thisMonth = monthKey(now);
         const nextD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -4588,10 +4618,12 @@
         const body = document.getElementById('invmap-analysis-body');
         if (!body) return;
         try {
-            const paceRows = await _saLoadPace();
+            const [paceRows] = await Promise.all([_saLoadPace(), _saLoadExcluded()]);
             const now = new Date();
             const nextD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            const orders = _saOpenOrders();
+            const openOrders = _saOpenOrders();
+            const orders = openOrders.filter(_saIsCounted);
+            const nExcl = openOrders.length - orders.length;
             const actual = orders.reduce((s, o) => s + (Number(o.balance) || 0), 0);
             const { avail, nextMature } = _saStockRows(now);
             const matured = avail.filter(r => r.why === 'matured').reduce((s, r) => s + r.balance, 0);
@@ -4603,7 +4635,7 @@
             const leftThis = available - fc.estRest;
             const nextAvail = Math.max(0, leftThis) + nextNew;
             const leftNext = nextAvail - fc.estNext;
-            _saData = { now, nextD, avail, nextMature, matured, tall, available, fc };
+            _saData = { now, nextD, avail, nextMature, matured, tall, available, fc, openOrders };
 
             const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + _saFmt(Math.abs(n));
             const verdict = n => n >= 0
@@ -4628,7 +4660,7 @@
 
             body.innerHTML = `
                 <div class="sa-cards">
-                    ${card('sa-order', 'Actual Order', _saFmt(actual), `Balance to deliver · ${orders.length} order${orders.length === 1 ? '' : 's'}`)}
+                    ${card('sa-order', 'Actual Order', _saFmt(actual), `Balance to deliver · ${orders.length} order${orders.length === 1 ? '' : 's'}${nExcl ? ` · ${nExcl} unticked` : ''} · tap for details`, 'onclick="openStockAnalysisWindow(\'orders\')" title="Show the orders behind this figure"')}
                     ${card('sa-stock', 'Available Stock', _saFmt(available), `Matured ${_saFmt(matured)} + Reached 1.5 m ${_saFmt(tall)} · tap for details`, 'onclick="openStockAnalysisWindow(\'stock\')" title="Show the plots behind this figure"')}
                     ${card(gap < 0 ? 'sa-gap-neg' : 'sa-gap-pos', 'Available − Actual Order', signed(gap), gap < 0 ? 'Not enough stock for every order' : 'Enough stock for every order')}
                 </div>
@@ -4653,6 +4685,64 @@
         }
     }
 
+    function renderStockAnalysisOrders() {
+        const d = _saData;
+        const tbody = document.getElementById('sa-order-rows');
+        if (!d || !tbody) return;
+        const q = String((document.getElementById('sa-order-search') || {}).value || '').trim().toLowerCase();
+        const all = (d.openOrders || []).slice().sort((a, b) =>
+            String(a.customer || '').localeCompare(String(b.customer || '')) ||
+            String(a.orderNumber || '').localeCompare(String(b.orderNumber || '')));
+        const shown = q ? all.filter(o => String(o.customer || '').toLowerCase().includes(q)) : all;
+        tbody.innerHTML = shown.length ? shown.map(o => {
+            const k = _saOrderKey(o);
+            const on = _saIsCounted(o);
+            return `<tr class="${on ? '' : 'sa-off'}">
+                <td class="c"><input type="checkbox" class="sa-tick" ${on ? 'checked' : ''} data-key="${escapeHtml(k)}"
+                    onchange="toggleStockAnalysisOrder(this.dataset.key, this.checked)" aria-label="Count ${escapeHtml(o.customer || '')} ${escapeHtml(o.orderNumber || '')}"></td>
+                <td class="b">${escapeHtml(o.customer || '—')}</td>
+                <td>${escapeHtml(o.orderNumber || '—')}</td>
+                <td class="r b">${_saFmt(o.balance)}</td></tr>`;
+        }).join('') : `<tr><td colspan="4" class="sa-empty">${q ? 'No customer matching “' + escapeHtml(q) + '”' : 'No open orders'}</td></tr>`;
+        const counted = all.filter(_saIsCounted);
+        const foot = document.getElementById('sa-order-foot');
+        if (foot) foot.innerHTML = `<tr><td colspan="3">Counted · ${counted.length} of ${all.length} orders</td>
+            <td class="r">${_saFmt(counted.reduce((s, o) => s + (Number(o.balance) || 0), 0))}</td></tr>`;
+        const note = document.getElementById('sa-order-note');
+        if (note) {
+            note.textContent = _saExclErr || '';
+            note.style.display = _saExclErr ? '' : 'none';
+        }
+    }
+
+    async function toggleStockAnalysisOrder(key, counted) {
+        const d = _saData;
+        if (!d || !_saExcl || !key) return;
+        const o = (d.openOrders || []).find(x => _saOrderKey(x) === key);
+        try {
+            if (counted) {
+                const { error } = await _supabase.from('operation_stock_analysis_excluded').delete().eq('order_key', key);
+                if (error) throw error;
+                _saExcl.delete(key);
+            } else {
+                let who = null;
+                try { const { data } = await _supabase.auth.getSession(); who = data?.session?.user?.email || null; } catch (e) {}
+                const row = { order_key: key, order_number: o ? o.orderNumber : null,
+                              customer_name: o ? o.customer : null, excluded_by: who, excluded_at: new Date().toISOString() };
+                const { error } = await _supabase.from('operation_stock_analysis_excluded').upsert(row, { onConflict: 'order_key' });
+                if (error) throw error;
+                _saExcl.set(key, row);
+            }
+            _saExclErr = null;
+        } catch (e) {
+            console.error('[StockAnalysis] could not save the tick:', e);
+            _saExclErr = 'Not saved — ' + (e.message || e) + '. Run shared/RUN_ME_stock_analysis_excluded.sql if it has not been run.';
+        }
+        // The tick on screen always shows what is stored, saved or not.
+        renderStockAnalysisOrders();
+        renderStockAnalysis();
+    }
+
     function openStockAnalysisWindow(which) {
         const d = _saData;
         if (!d) return;
@@ -4661,7 +4751,19 @@
         const body  = document.getElementById('sa-modal-body');
         const dt = v => v instanceof Date && !isNaN(v) ? v.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
         const hcm = v => v == null ? '—' : (Math.round(v * 10) / 10).toLocaleString('en-MY') + ' cm';
-        if (which === 'stock') {
+        if (which === 'orders') {
+            title.textContent = 'Actual Order';
+            sub.textContent = 'Untick an order to leave it out of the analysis';
+            body.innerHTML = `
+                <input type="search" id="sa-order-search" class="sa-search" placeholder="Search customer name" oninput="renderStockAnalysisOrders()" autocomplete="off">
+                <div id="sa-order-note" class="sa-note"></div>
+                <div class="sa-twrap"><table class="sa-table">
+                    <thead><tr><th class="c">Count</th><th>Customer</th><th>Order No.</th><th class="r">Quantity</th></tr></thead>
+                    <tbody id="sa-order-rows"></tbody>
+                    <tfoot id="sa-order-foot"></tfoot>
+                </table></div>`;
+            renderStockAnalysisOrders();
+        } else if (which === 'stock') {
             title.textContent = 'Available Stock';
             sub.textContent = _saFmt(d.available) + ' seedlings · as at ' + dt(d.now);
             const table = (rows, showHeight) => rows.length ? `
@@ -4706,6 +4808,8 @@
     }
     window.openStockAnalysisWindow  = openStockAnalysisWindow;
     window.closeStockAnalysisWindow = closeStockAnalysisWindow;
+    window.renderStockAnalysisOrders = renderStockAnalysisOrders;
+    window.toggleStockAnalysisOrder  = toggleStockAnalysisOrder;
 
     window.openInvmapModal     = openInvmapModal;
     window.toggleInvmapHeight  = toggleInvmapHeight;

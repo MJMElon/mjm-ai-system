@@ -209,7 +209,7 @@ const check = (name, got, want) => {
   check('the month columns are named', await txt('#invmap-analysis .sa-ftitle'), ['November 2026', 'December 2026']);
 
   console.log('4. the Available Stock window');
-  await page.evaluate(() => document.querySelector('#invmap-analysis button.sa-card').click());
+  await page.evaluate(() => document.querySelector('#invmap-analysis .sa-card.sa-stock').click());
   const heads = await txt('#sa-modal .sa-mhead');
   check('the window shows the two parts', heads, ['Matured by end of November 2026 2,500', 'Reached 1.5 m, not yet matured 2,700']);
   const plots = await page.evaluate(() => [...document.querySelectorAll('#sa-modal .sa-table')].map(t =>
@@ -228,6 +228,37 @@ const check = (name, got, want) => {
   check('Beta: no history, its Dec booking', fr[1], ['Beta', 'ORD2', '4,000', '0', '0', '0', '1,000', '1,000']);
   check('Gamma is not in it', fr.length, 2);
   await page.evaluate(() => closeStockAnalysisWindow());
+
+  console.log('6. the Actual Order window: tick, untick, search');
+  const hasOrderWin = await page.evaluate(() => typeof window.renderStockAnalysisOrders === 'function');
+  check('Actual Order opens a window of its own', hasOrderWin, true);
+  if (hasOrderWin) {
+    await page.evaluate(() => document.querySelector('#invmap-analysis .sa-card.sa-order').click());
+    const rows = () => page.evaluate(() => [...document.querySelectorAll('#sa-order-rows tr')].map(r =>
+      [...r.children].map((c, i) => i === 0 ? (c.querySelector('input') ? (c.querySelector('input').checked ? 'on' : 'off') : '') : c.textContent.trim())));
+    check('customer, order number and quantity, every order counted', await rows(),
+      [['on', 'Alpha', 'ORD1', '3,000'], ['on', 'Beta', 'ORD2', '4,000']]);
+    check('the foot counts them', (await txt('#sa-order-foot td')).join(' | '), 'Counted · 2 of 2 orders | 7,000');
+    await page.fill('#sa-order-search', 'alp');
+    check('the search narrows to the customer', (await rows()).map(r => r[1]), ['Alpha']);
+    await page.fill('#sa-order-search', '');
+    await page.evaluate(() => { const b = [...document.querySelectorAll('#sa-order-rows input')][1]; b.checked = false; b.dispatchEvent(new Event('change')); });
+    await page.waitForTimeout(300);
+    check('Beta is unticked', (await rows())[1][0], 'off');
+    check('the foot follows the tick', (await txt('#sa-order-foot td')).join(' | '), 'Counted · 1 of 2 orders | 3,000');
+      const v2 = await txt('#invmap-analysis .sa-card .sa-value');
+    check('Actual Order drops to Alpha alone', v2[0], '3,000');
+    check('and the gap follows', v2[2], '+2,200');
+    const f2 = await page.evaluate(() => [...document.querySelectorAll('#invmap-analysis .sa-fcol .sa-frow')]
+      .map(r => [...r.children].map(c => c.textContent.replace(/\s+/g, ' ').trim()).join(' ')));
+    check('Dec forecast leaves Beta out', f2[3], 'Estimated collection 600');
+    check('the card says one is unticked', (await txt('#invmap-analysis .sa-order .sa-sub'))[0].includes('1 unticked'), true);
+    await page.evaluate(() => { const b = [...document.querySelectorAll('#sa-order-rows input')][1]; b.checked = true; b.dispatchEvent(new Event('change')); });
+    await page.waitForTimeout(300);
+    check('ticking it again counts it again', (await txt('#invmap-analysis .sa-card .sa-value'))[0], '7,000');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace(/\.png$/, '') + '-orders.png' });
+    await page.evaluate(() => closeStockAnalysisWindow());
+  }
 
   if (process.env.SHOT) await page.locator('#invmap-analysis').screenshot({ path: process.env.SHOT });
   check('no page errors', errors, []);
