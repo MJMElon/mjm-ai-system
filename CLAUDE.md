@@ -7878,6 +7878,25 @@ because PostgREST stops at 1,000 rows and a batch is a row per tray.
 `tests/the_seed_received_summary.cjs` holds it. Nothing to run in the
 database.
 
+## The Pre-Nursery movement is the batch report's own trays
+
+The Nursery Report and the Summary Report share one Pre-Nursery section,
+and the office said what it must read: Planting & Damage, Transplanting
+(the Transplanted Out) and the 1st culled. It did, except at the two
+HOLDING trays. A transplant out of PREMIUM CARE or DOUBLE-TONE was sent
+back to the batch home tray, so a seedling moved into Premium Care came off
+its numbered tray TWICE and Premium Care never emptied.
+
+`srcTrayOf` now names the tray the remark names, letter for letter, which
+is how `calcTransplanting` on Tab 3 reads it: Premium Care is filled by
+`Transplanted_Premium` and emptied by the transplants and 1st cullings
+naming it; Double-Tone is filled by the keyed `DTone_Nursery_Qty` (newest
+row per batch) and a `Transplanted_DoubleTone` fill counts only where no
+figure is keyed. Seed Damage is still shown on the home tray and moves no
+balance. The Main Nursery section is untouched.
+`tests/the_pre_nursery_follows_the_batch_report.cjs`; nothing to run in
+the database.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
