@@ -47,6 +47,14 @@ window.sb = {
   async insert(){ return {ok:true}; }, async update(){ return {ok:true}; }, async delete(){ return {ok:true}; }
 };
 </script>
+<!-- The module's one plot list, and a HARD dependency: the file below reads
+     MJMAuditPlots at its top level, the way it reads sb, so without this
+     the script half-evaluates — every function declaration exists and every
+     let after the throw is left in its temporal dead zone, which is what
+     "Cannot access 'unplacedTasks' before initialization" means. Every page
+     that loads that script loads this one first, and audit_sw.js precaches
+     it; a fixture has to do the same. -->
+<script src="/audit/audit_plots.js"></script>
 <script src="/audit/audit_maintenance_script.js"></script>
 <script>
 /* The loader paints; this harness does not have a screen. Replace the

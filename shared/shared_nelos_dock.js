@@ -1557,10 +1557,28 @@
     return '../' + (MODULE_DIRS.indexOf(d) !== -1 ? d + '/' : '') + file + (location.search || '');
   }
 
-  /* The four nurseries and the plots each one has, copied from
-     audit/audit_pending.js — which itself copies the module scripts,
-     deliberately, because each runs on its own page. If a nursery gains
-     plots there, it gains them here. */
+  /* THE FOUR NURSERIES AND THE PLOTS EACH ONE HAS.
+
+     These four ranges are the FLOOR, not the list. The list is whatever
+     Seedling Stock Management → System Settings → Add Plot has put in
+     `shared_plots`, which loadPlots() reads and merges on top — so a plot
+     the office adds is on this form, on every one of the 52 pages the dock
+     sits on, without anybody keying it twice.
+
+     THIS READ IS THE SECOND COPY OF ONE IN shared/shared_maint_plots.js,
+     and that is deliberate rather than an oversight. This file is loaded
+     bare on 52 pages and depends on nothing but itself — its own header
+     says why — and `shared_maint_plots.js` is on four of them. Adding it
+     to the other 48 to save eight lines is a worse trade than the copy.
+     The rules are the ones that file states: letters and digits for the
+     comparison, the ranges kept as the floor so a failed read changes
+     nothing, and a nursery named any way the office spells it ("UNN 1")
+     matched on its letters and digits.
+
+     The ranges being the floor also means a plot DELETED in the office
+     does not leave this list. That is the price of a failed read being
+     harmless, and it is the safe direction on a form whose job is to let
+     somebody say where a problem is. */
   var NURSERY_PLOTS = {
     PN:   pad('P', 52), BNN: pad('B', 14), UNN1: pad('U', 18), UNN2: pad('N', 20)
   };
@@ -1670,6 +1688,94 @@
         return { key: m.key, label: m.handler_label || m.label };
       }));
     } catch (_) { return (_mods = FALLBACK_MODULES); }
+  }
+
+  /* THE PLOTS THE OFFICE HAS KEYED, merged onto the four ranges above.
+
+     `shared_plots` is Seedling Stock's own answer to "what plots are
+     there" — one row per plot, written by Add Plot on its System Settings
+     page. `nops_maint_custom_plots` is the other half: Add Row on the Work
+     Maintenance schedule writes there, and the schedule and the salary
+     claim have read both for months.
+
+     Soft in every direction, like the four reads above it: no table, a
+     refusal, no token, and the four ranges are what the form offers, which
+     is where this form was. It is never allowed to block the form.
+
+     A plot whose nursery is not one of the four is left out — there is no
+     column on this form to put it in. shared/CHECK_which_plots_each_module
+     _offers.sql names those, because a plot keyed under a fifth nursery is
+     on no picker in the system and nothing on a screen says so. */
+  var _plots = null;              // { PN: ['P01', …], … } — the extra ones
+
+  async function loadPlots() {
+    if (_plots) return _plots;
+    var token = await accessToken();
+    if (!token) return (_plots = {});
+    var out = {};
+    var reads = [
+      ['shared_plots',            'select=nursery_name,plot_name', 'nursery_name', 'plot_name'],
+      ['nops_maint_custom_plots', 'select=nursery,plot',           'nursery',      'plot']
+    ];
+    for (var i = 0; i < reads.length; i++) {
+      var r = reads[i];
+      try {
+        var res = await fetch(CFG.url + '/rest/v1/' + r[0] + '?' + r[1],
+                              { headers: authHeaders(token) });
+        if (!res.ok) continue;
+        var rows = await res.json();
+        if (!Array.isArray(rows)) continue;
+        rows.forEach(function (row) {
+          var n = nurseryCodeOf(row && row[r[2]]);
+          var p = String((row && row[r[3]]) || '').trim();
+          if (!n || !p) return;
+          (out[n] || (out[n] = [])).push(p);
+        });
+      } catch (_) { /* this table is simply not read */ }
+    }
+    return (_plots = out);
+  }
+
+  /* "UNN 1" is one of the four and so is "UNN1": letters and digits,
+     upper-cased, the same comparison every other crossing of this
+     boundary uses. Anything else is not one of the four. */
+  function nurseryCodeOf(name) {
+    var k = String(name == null ? '' : name).replace(/[^a-z0-9]/gi, '').toUpperCase();
+    return NURSERY_PLOTS[k] ? k : null;
+  }
+
+  /* The ranges plus whatever the office keyed, deduped on letters and
+     digits — Seedling Stock spells a plot 'B1' where these ranges spell it
+     'B01', and one plot offered twice is a picker somebody has to read
+     twice. The RANGE spelling wins where both have it, so nothing on the
+     form moves for a plot that was already there. */
+  function plotsOf(nursery) {
+    var base = (NURSERY_PLOTS[nursery] || []).slice();
+    var seen = {};
+    base.forEach(function (p) { seen[plotKeyOf(p)] = true; });
+    ((_plots || {})[nursery] || []).forEach(function (p) {
+      var k = plotKeyOf(p);
+      if (!k || seen[k]) return;
+      base.push(p); seen[k] = true;
+    });
+    /* B10 after B2, not before it. */
+    return base.sort(function (a, b) {
+      return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  /* LETTERS AND DIGITS, AND THEN THE LEADING ZEROS OFF THE NUMBER.
+
+     The usual letters-and-digits rule is not enough here and it took a
+     test to see it: these four ranges are PADDED ('B01') and Seedling
+     Stock holds what the office typed, which is 'B1'. On letters and
+     digits alone those are two different keys, so the office's B1 was
+     added BESIDE the range's B01 and the picker offered one plot twice
+     under two spellings. 'B04-R' and 'B4-R' are the same plot for the
+     same reason. */
+  function plotKeyOf(v) {
+    return String(v == null ? '' : v).replace(/[^a-z0-9]/gi, '').toUpperCase()
+             .replace(/([A-Z])0+(\d)/g, '$1$2');
   }
 
   /* Who can be named as PIC. nelos_handlers, not the nelos_people() RPC:
@@ -2410,12 +2516,14 @@
         Object.keys(NURSERY_PLOTS).map(function (n) { return opt(n, NURSERY_LABEL[n]); }).join('');
     }
 
-    /* Four reads, each failing on its own terms: no modules leaves the
+    /* Five reads, each failing on its own terms: no modules leaves the
        five as they stand, no case titles turns Work into a typed line, no
-       people leaves the case with the system rather than a person, and no
-       routing rules leave the destination where the person put it. None of
-       them is allowed to block the form. */
-    var all = await Promise.all([loadModules(), loadCategories(), loadPeople(), loadRoutes()]);
+       people leaves the case with the system rather than a person, no
+       routing rules leave the destination where the person put it, and no
+       plot list leaves the four fixed ranges, which is where this form
+       was. None of them is allowed to block the form. */
+    var all = await Promise.all([loadModules(), loadCategories(), loadPeople(), loadRoutes(),
+                                 loadPlots()]);
     var to = formEl.querySelector('#nd-f-to');
     if (to.options.length <= 1) {
       to.innerHTML = opt('', '— choose —') +
@@ -2610,8 +2718,8 @@
        gained by refusing to name one either — so all of them are offered,
        in nursery order. */
     var list = n === NURSERY_ALL
-      ? Object.keys(NURSERY_PLOTS).reduce(function (all, k) { return all.concat(NURSERY_PLOTS[k]); }, [])
-      : (NURSERY_PLOTS[n] || []);
+      ? Object.keys(NURSERY_PLOTS).reduce(function (all, k) { return all.concat(plotsOf(k)); }, [])
+      : plotsOf(n);
     plot.innerHTML = opt('', n ? '— none —' : 'Nursery first') +
       list.map(function (p) { return opt(p, p); }).join('');
   }
