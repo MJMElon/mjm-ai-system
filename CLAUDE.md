@@ -6345,6 +6345,48 @@ So a card on `operation/operation_stock_sales.html` is:
 card on the Customer pane to all of it, so a card added without the line,
 the header or its own colour fails by name.
 
+## A module's mark is on EVERY tab of it, or it is not a mark
+
+The office had the PALMS board open and said it twice, over a crop of the
+badge and then over the browser tab itself: *删掉*, then *icon改掉*.
+
+What they were looking at was **NO** — a teal square carrying the
+nursery-operations initials, which is the house favicon pattern every
+module wears (`AI` on 73 pages, then `NL`, `FC`, `SL`, `NP`, `SI`) — and it
+was on that screen TWICE: in the tab, and again in the right cell of the
+page's own ribbon.
+
+**WHAT MADE IT WORTH SAYING IS THAT THE MODULE HAD TWO MARKS BY THEN.** A
+leaf had gone onto `nursery_ops_maintenance.html` that morning and onto
+nothing else, so one nursery-ops tab read as a leaf and the other nine read
+NO. **A mark is the one thing on a tab that says which system this is**, so
+half of it changed is worse than either answer: the set stops reading as a
+set, which is the whole of what it is for.
+
+So the leaf is on all ten, **lifted out of the page that already had it**
+rather than typed again — and `tests/the_nursery_module_wears_one_mark.cjs`
+compares the shipped pages against each other rather than against a data URI
+written into the test, because a second copy of the mark is the fault it is
+checking for. It also fails a page that declares TWO `rel="icon"` links,
+which is the browser picking rather than anybody deciding. **6 of its 13
+checks fail on the previous code**, the first of them being *it is the SAME
+one on all of them*.
+
+**THE RIBBON'S RIGHT CELL IS EMPTY NOW, and that is safe HERE and would not
+be on the left.** The bar is `1fr auto 1fr`, so both outer tracks are sized
+by the free space rather than by what is in them and the module name holds
+the real centre with the third cell empty. Deleting the BACK pill would not
+be the same thing at all: the name would become the first grid item and
+slide left, which is the fault `audit_admin.html` keeps a `.fcr-spacer` for.
+Section 3 measures the rendered centre rather than trusting that paragraph.
+
+**And the measurement needed Tailwind, which the harness cannot fetch** —
+without it the ribbon is a plain block and the name sits hard left, so a
+centring check fails over nothing. The three declarations those classes
+stand for are served in the CDN's place, written out exactly as
+`nursery_ops_maintenance.html` has them inline; **that page is the control**,
+measured in the same section with no stand-in at all.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened four times in this codebase now. A screen writes a setting, the
