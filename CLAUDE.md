@@ -5600,6 +5600,26 @@ every line of its own code inline, so the page IS the deploy — and a
 permission screen is the worst place in the system for a browser to be
 showing yesterday's rules while the office believes it has changed them.
 
+### More than one portal opens the DOORS, whoever holds them
+
+YM Chai was ticked for the FC, Worker, Admin and Auditor Portals with Worker
+Portal Manage left off, and saw only the FC Portal. The hub's Nursery 555
+Team tile asked ONE question, *is this person a scan admin*, and anybody
+who was not went straight to the FC Portal app, where the other three
+portals are nowhere. A tick saved and not reachable, the fault this file
+keeps finding.
+
+So the tile asks which portals the person HOLDS: Manage, or more than one
+portal, or the Admin or Auditor Portal opens `scan/scan_admin.html` (the
+page of doors); exactly one phone portal goes straight there, the Worker
+Portal to `#/worker`. `scan_admin.html` lets in anybody holding two
+portals, not only Manage, Admin or Auditor. **The hub does not load
+`shared_access.js`, so `portalsHeld()` in `index.html` is a COPY of
+`canScanArea()`'s fallbacks**, and section 4 of
+`tests/a_person_with_many_portals_sees_the_doors.cjs` compares the two.
+5 of its 12 checks fail on the previous pages. Nothing to run in the
+database.
+
 ### And then the Auditor Portal's two actions were read for the first time
 
 Putting the block on the screen is what made it worth asking whether anything

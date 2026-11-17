@@ -548,6 +548,29 @@
      no row is Pending now, as a new signup always was. */
   function hasOpsAccess(profile) { return MJMStaffGate.hasStaffAccess(profile); }
 
+  /* canScanArea() in shared/shared_access.js, for the five portal doors.
+     This page does not load that file, so this is its COPY: change one,
+     change the other. A saved tick decides; with none, the rule that
+     governed the door before the tick existed answers. */
+  function portalsHeld(perms) {
+    const p = perms || {};
+    const mods = p.modules || {};
+    const lvl = (n) => mods[n] || 'none';
+    const area = (a) => {
+      const e = p.scan_areas && p.scan_areas[a];
+      if (e && e.view !== undefined) return !!e.view;
+      switch (a) {
+        case 'manage':       return lvl('scan') === 'admin';
+        case 'fc':           return lvl('scan') !== 'none';
+        case 'worker':       return false;
+        case 'admin_portal': return lvl('mobile') !== 'none';
+        case 'audit_portal': return lvl('audit') !== 'none';
+        default:             return false;
+      }
+    };
+    return { manage: area('manage'), doors: ['fc', 'worker', 'admin_portal', 'audit_portal'].filter(area) };
+  }
+
   function applyModuleVisibility(profile) {
     const perms = profile && profile.permissions;
     const mods  = (perms && perms.modules) || null;
@@ -590,13 +613,22 @@
        there, same as before. */
     const scanCard = document.querySelector('.module-card[data-module="scan"]');
     if (scanCard) {
-      const scanLvl = mods ? String(mods.scan || '').toLowerCase() : null;
-      const admin = scanLvl === 'admin';
+      /* WHICH PORTALS does this person hold? Not only "are they a scan
+         admin". YM Chai held the FC, Worker, Admin and Auditor Portals with
+         Worker Portal Manage unticked, and the tile sent her straight to the
+         FC Portal app, where the other three are nowhere: one portal goes
+         straight there, more than one opens the page of doors. */
+      const held = portalsHeld(perms);
+      const admin = held.manage || held.doors.length > 1
+                 || held.doors.indexOf('admin_portal') >= 0 || held.doors.indexOf('audit_portal') >= 0;
+      if (held.doors.length && perms) scanCard.style.display = '';
       scanCard.setAttribute('href', admin ? 'scan/scan_admin.html' : 'https://scan.mjmnursery.com');
       // The phone app is a PWA on another domain: a cached shell naming chunks
       // that no longer exist is how it comes up broken after a deploy.
+      const onlyWorker = !admin && held.doors.length === 1 && held.doors[0] === 'worker';
+      if (onlyWorker) scanCard.setAttribute('href', 'https://scan.mjmnursery.com/#/worker');
       scanCard.onclick = admin ? null : function () {
-        this.href = 'https://scan.mjmnursery.com/?cb=' + Date.now();
+        this.href = 'https://scan.mjmnursery.com/?cb=' + Date.now() + (onlyWorker ? '#/worker' : '');
       };
       if (admin) { scanCard.removeAttribute('target'); scanCard.removeAttribute('rel'); }
       else { scanCard.setAttribute('target', '_blank'); scanCard.setAttribute('rel', 'noopener'); }
