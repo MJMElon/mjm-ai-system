@@ -282,7 +282,15 @@ const server = http.createServer((req, res) => {
       out['h' + n] = Math.round(r.height); out['w' + n] = Math.round(r.width);
     });
     // the table's RIGHT border is inside the page box, not cut off by it
-    const pg2 = document.querySelector('#print-area .pp[data-page="2"]'), tb = pg2 && pg2.querySelector('table');
+    const tb = document.querySelector('#print-area table.pt'), pg2 = tb && tb.closest('.pp');
+    // the signature sits inside its page, below everything above it
+    const sg = document.querySelector('#print-area .sign');
+    if (sg) {
+      const pp = sg.closest('.pp').getBoundingClientRect(), r = sg.getBoundingClientRect();
+      const charts = [...sg.closest('.pp').querySelectorAll('.p-chart')].map(c => c.getBoundingClientRect().bottom);
+      out.signInPage = r.top >= pp.top && r.bottom <= pp.bottom + 0.5;
+      out.signBelowCharts = charts.every(b => b <= r.top + 0.5);
+    }
     if (tb) {
       const cells = [...tb.querySelectorAll('tr > :last-child')];
       const right = Math.max(...cells.map(c => c.getBoundingClientRect().right));
@@ -331,10 +339,18 @@ const server = http.createServer((req, res) => {
     return r;
   };
 
+  const printAs = async (mode, wait = 120) => {
+    await page.click('#btn-print'); await page.waitForTimeout(60);
+    const shown = await page.evaluate(() => { const d = document.getElementById('print-dlg'); return !!d && !d.classList.contains('hidden'); });
+    if (shown) { await page.click(`#print-dlg [data-print="${mode}"]`); await page.waitForTimeout(wait); }
+    return shown;
+  };
   await page.selectOption('#f-group', 'batch'); await page.selectOption('#f-year', '2026'); await page.waitForTimeout(100);
-  ok(!(await page.$('#print-dlg')), 'Print asks nothing: there is one printed report');
-  await page.click('#btn-print'); await page.waitForTimeout(120);
-  ok(await page.evaluate(() => window.__printed) === 1, 'Print builds the report and prints it, once');
+  const opts = await page.evaluate(() => [...document.querySelectorAll('#print-dlg [data-print]')].map(b => b.dataset.print).join());
+  ok(opts === 'both,chart,table', 'Print offers chart + table, chart only and table only', opts);
+  const before = await page.evaluate(() => window.__printed || 0);
+  ok(await printAs('both'), 'Print opens the choice first');
+  ok(await page.evaluate(() => window.__printed || 0) === before + 1, 'a choice builds the report and prints it, once');
   let P = await readPrint();
   ok(P.pages === 2, 'the printed report is TWO pages', P.pages);
   ok(P.p1secs === 'compare,damage' && P.p1charts === 2 && !P.p1table, 'page 1: the comparison chart on top, the damage chart below, no table', [P.p1secs, P.p1charts, P.p1table]);
@@ -362,9 +378,33 @@ const server = http.createServer((req, res) => {
   ok((await page.evaluate(() => getComputedStyle(document.getElementById('print-area')).display)) === 'none', 'the printed report is not on the screen');
   ok(/@page\s*\{\s*size:A4 portrait/.test(html) && /\.pp \+ \.pp\s*\{[^}]*break-before:page/.test(html) && /\.pp\s*\{[^}]*height:276mm[^}]*overflow:hidden/.test(html), 'print CSS: A4 portrait, a page break between the two pages, each page a fixed box');
 
+  // ── chart only: ONE page, both charts and the signature under them ──
+  await printAs('chart');
+  P = await readPrint();
+  ok(P.pages === 1 && P.p1secs === 'compare,damage' && P.p1charts === 2 && !P.p1table, 'chart only: ONE page carrying both charts and no table', [P.pages, P.p1secs, P.p1table]);
+  ok(P.sigBox && P.signName === 'Esther', 'chart only: the signature box is on it', [P.sigBox, P.signName]);
+  ok(/Page 1 of 1/.test(P.text), 'chart only: the foot says Page 1 of 1');
+  K = await asPaper(paperCheck);
+  ok(K.over1 <= 0 && K.signInPage && K.signBelowCharts, 'chart only on paper: charts and signature fit the one page, the signature under the charts', [K.over1, K.signInPage, K.signBelowCharts]);
+  ok(K.notInside.length === 0 && K.clash.length === 0, 'chart only on paper: labels inside their bars, none overlapping', [K.notInside, K.clash]);
+  D = await pdfPages();
+  ok(D.n === 1 && D.a4p, 'chart only: the PDF is exactly ONE A4 portrait page', D);
+
+  // ── table only: ONE page, the table and the signature, like page 2 ──
+  await printAs('table');
+  P = await readPrint();
+  ok(P.pages === 1 && P.p1secs === 'table' && P.p1charts === 0, 'table only: ONE page carrying the table and no chart', [P.pages, P.p1secs, P.p1charts]);
+  const tRows = await page.evaluate(() => document.querySelectorAll('#print-area table.pt tbody tr').length);
+  ok(tRows === 2 && P.sigBox && P.signName === 'Esther', 'table only: every batch and the signature box', [tRows, P.sigBox]);
+  ok(/Page 1 of 1/.test(P.text), 'table only: the foot says Page 1 of 1');
+  K = await asPaper(paperCheck);
+  ok(K.over1 <= 0 && K.signClear >= 0 && K.signInPage && K.rightBorder, 'table only on paper: fits, signature below the table, right-hand line kept', [K.over1, K.signClear, K.signInPage]);
+  D = await pdfPages();
+  ok(D.n === 1 && D.a4p, 'table only: the PDF is exactly ONE A4 portrait page', D);
+
   // A breed picked with no supplier: still one report, both suppliers on it.
   await page.selectOption('#f-breed', 'Calix 600'); await page.waitForTimeout(80);
-  await page.click('#btn-print'); await page.waitForTimeout(120);
+  await printAs('both');
   P = await readPrint();
   ok(P.pages === 2 && /Breed: Calix 600/.test(P.meta) && P.rows.length === 2, 'breed picked, no supplier: FGV and Sime Darby on one report', [P.meta, P.rows.length]);
   await page.selectOption('#f-breed', ''); await page.waitForTimeout(80);
@@ -384,7 +424,7 @@ const server = http.createServer((req, res) => {
   page = big.page;
   await page.click('#card-seed'); await page.waitForTimeout(200);
   await page.selectOption('#f-year', '2026'); await page.waitForTimeout(150);
-  await page.click('#btn-print'); await page.waitForTimeout(200);
+  await printAs('both', 200);
   P = await readPrint();
   ok(P.pages === 2 && P.rows.length === 74, '74 batches: still two pages, every batch on the table', [P.pages, P.rows.length]);
   ok(P.zoom < 1, '74 batches: the table is scaled down to fit page 2', P.zoom);
@@ -395,6 +435,16 @@ const server = http.createServer((req, res) => {
   ok(K.clash.length === 0 && K.notInside.length === 0, '74 batches: labels stay inside their bars and never overlap', [K.clash.slice(0, 3), K.notInside.slice(0, 3)]);
   D = await pdfPages();
   ok(D.n === 2 && D.a4p, '74 batches: the PDF is still exactly two A4 portrait pages', D);
+  await printAs('table', 200);
+  K = await asPaper(paperCheck);
+  ok(K.over1 <= 0 && K.signClear >= 0 && K.tableRightGap >= 0.4, '74 batches, table only: fitted to one page with the signature below it', [K.over1, K.signClear]);
+  D = await pdfPages();
+  ok(D.n === 1, '74 batches, table only: the PDF is ONE page', D);
+  await printAs('chart', 200);
+  K = await asPaper(paperCheck);
+  ok(K.over1 <= 0 && K.signBelowCharts && K.clash.length === 0, '74 batches, chart only: one page, signature under the charts, no label clashes', [K.over1, K.signBelowCharts, K.clash.slice(0, 3)]);
+  D = await pdfPages();
+  ok(D.n === 1, '74 batches, chart only: the PDF is ONE page', D);
   ok(big.errors.length === 0, 'no page errors with 74 batches', big.errors);
   await page.close();
 

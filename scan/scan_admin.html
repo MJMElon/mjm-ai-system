@@ -297,7 +297,12 @@ $('worker-portal-link').addEventListener('click', (e) => {
     const hasManage = MJMAccess.canScanArea('manage');
     const hasAdminPortal = MJMAccess.canScanArea('admin_portal');
     const hasAuditPortal = MJMAccess.canScanArea('audit_portal');
-    if (!hasManage && !hasAdminPortal && !hasAuditPortal) {
+    /* More than one portal is a reason to be here too: somebody holding
+       the FC and the Worker Portal with no Manage tick has two doors, and
+       sending them to the first one leaves the second with no way in. */
+    const portalCount = ['fc', 'worker', 'admin_portal', 'audit_portal']
+      .filter((a) => MJMAccess.canScanArea(a)).length;
+    if (!hasManage && !hasAdminPortal && !hasAuditPortal && portalCount < 2) {
       const home = MJMAccess.scanHome();
       window.location.replace(home || '../index.html');
       return;
