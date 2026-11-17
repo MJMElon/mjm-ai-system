@@ -2467,6 +2467,82 @@ nothing the office did not already know and it marked rows they are not going
 to re-walk, so: *也是不要 全部维持*. The diagnosis is the part worth keeping;
 the screens are as they were. Do not re-build it without being asked.
 
+## A plot still on the same stage is an ANSWER, and it had no way to say so
+
+The office, over the PALMS board: *"就算plot status一样， updater的名字也要
+update， last update的日期也要"*.
+
+**THE REASON IT COULD NOT IS WORTH READING TWICE, because nothing on the
+screen says it.** The Current Status cell is a `<select>` with the running
+stage drawn as `selected`, and **a native select fires NO change event when
+the same option is picked again.** So the single commonest outcome of an
+office round — *"I have looked at B11 and it really is still on Membesar"* —
+reached no screen and no table. The board then read as neglect where there
+was none, and the plots that genuinely have not been looked at are the ones
+you can no longer pick out, which is the exact fault `plotLine`'s own
+`lastDate` note was written to stop, one door along.
+
+**WHAT IT WRITES IS A DAILY REPORT AND NEVER A SECOND LOG ENTRY**, and that is
+the whole of the decision:
+
+- a second OPEN entry on one `act_n` is the duplicate this file has a heading
+  about — *one stage logged twice is not a plot doing it twice* — and
+  `RUN_ME_upkeep_is_membersih.sql` exists to clear them;
+- closing the old one and opening a new one **RESTARTS THE CLOCK**: a plot 57
+  days into a 270-day Membesar would read as starting today.
+
+The field app has had the right shape since it was written: a Field
+Conductor's Save records every plot in the nursery, changed or not, one row
+per unit per day in `fcportal_palms_history`. **An unchanged plot IS a plot
+somebody looked at.** `MJMPalms.stampSave` is the office making that same
+record about one plot, and it is the one writer both pages call.
+
+Four things in it, and three are a way this goes quietly wrong:
+
+- **ACTS IS EVERY OPEN STAGE, never the one a dropdown happened to show.**
+  `palms_history_latest_wins` is a trigger on that table: an arriving report
+  CLOSES every open entry that started before it and is **not** in its `acts`.
+  PALMS allows two stages at once, so a row naming one of them would silently
+  close the other. Naming them all closes nothing, which is the truth being
+  recorded.
+- **IT IS AN UPSERT**, because the table is `UNIQUE (unit_key, at_date)` and
+  says why in its own words: saving a nursery twice is a correction, not a
+  second report. A second look on the same day must not come back 23505.
+- **IT ALSO RUNS AFTER A REAL CHANGE, and that is not belt and braces.**
+  `pickBy` gives a tie on the day to the daily report, so an office
+  correction made on an afternoon the conductor had already saved read as the
+  **conductor's** work. Stamping the report under whoever acted makes the two
+  agree by construction, rather than by changing `pickBy` under Plot Life as
+  well.
+- **THE ✓ IS THE ROUTE THAT CAN ACTUALLY BE REACHED.** Picking the running
+  stage in the dropdown goes down the same path — some platforms do fire
+  `change` for it, and a gesture that means this must not be swallowed — but
+  the button beside Last update is the one that always works. It is offered
+  only where the plot HAS a log: `plotLine` answers null for a plot with no
+  entry, so a stamp against it would be invisible, and a button that visibly
+  does nothing is how a screen teaches people its buttons do nothing. On Plot
+  Life a SPLIT plot is offered none either, which is the rule the dropdown
+  beside it already follows — PALMS logs against a UNIT, and on a split plot
+  the unit is not the plot.
+
+**THE PANEL SAYS A DIFFERENT THING BECAUSE IT DOES A DIFFERENT THING**: no
+After box, no due date, and the sentence names the one column that moves. A
+panel promising a change over a save that makes none is how somebody comes to
+distrust the ones that do.
+
+**Nothing to run in the database.** `fcportal_palms_history` has carried the
+unique key since `create_palms_tables.sql`, and `migration_palms_rls.sql`
+already grants INSERT and UPDATE on it through the same `palms_has_access()`
+the plot-log writes use — which is what an upsert needs both of.
+
+`tests/a_plot_still_on_the_same_stage_is_an_answer.cjs` drives the shipped
+writer against a recording stub and then both real pages in a real browser;
+**7 of its 47 checks fail on the previous code**. Its first browser check is
+the office's own sentence, asked through the DROPDOWN rather than the ✓ on
+purpose: the dropdown is on both builds, so that one reports the fault
+instead of going unasked with everything else — on the previous code there is
+no button to press, and the file says so in one line rather than dying.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
@@ -6502,21 +6578,39 @@ kept exactly (inset 15%, the mark 70% of the plate), so the mark is untouched
 and there is **one plate written one way**. That is what the test can then
 hold, and it is why it asks for the plate separately from the mark.
 
-**THE PARCELS ARE POLYGONS AND NOT RECTS, which is the whole of 不规则形状的.**
-The first version was four rounded rectangles in a 2×2 and read as an
-app-launcher grid; four irregular quadrilaterals with lanes between them read
-as land. A rect cannot satisfy that ask, so the test says it in those terms:
-every parcel is a polygon, none of the four stands on two x values and two y
-values, no two are the same shape, and the lanes are drawn in the plate's own
-colour.
+**THE PARCELS ARE NOT RECTS, which is the whole of 不规则形状的.** The first
+version was four rounded rectangles in a 2×2 and read as an app-launcher grid.
+A rect cannot satisfy that ask at all, so nothing on the plate but the plate
+is square to the page.
 
-**WHAT IS NOT DONE, and it is not knowable from here:** the outer outline is a
-nursery shape and **not a tracing of BNN's own boundary**. That boundary lives
-in `shared_plots.map_top`, and this environment cannot reach Supabase — there
-is no copy of it in either repository, so drawing one would be inventing a
-shape and calling it BNN's. The answer is one screenshot of the BNN map off
-the Plot Status Map, which the outline can then be traced from; until then the
-comment in each page's head says so in as many words.
+**AND THE SHAPE IS THE OFFICE'S OWN DRAWING, because it could not be read from
+here.** *"整体形状要和bnn boundry一样"* names something that lives in
+`shared_plots.map_top`, in a database this environment cannot reach, with no
+copy in either repository — so drawing a BNN-ish outline would have been
+inventing a shape and calling it BNN's. The answer was to say so and ask, and
+the office **handed over a picture**: a ring of plot segments round a centre,
+two blue, one red, three green, four yellow, clockwise from the top.
+
+**THEIR NUMBERS ARE THE SPECIFICATION**, the same rule the papan tanda already
+follows — the office drew that board, so its margins and type sizes are named
+constants rather than taste. Ten segments is what they drew and ten is what is
+on the plate, even though eight reads a shade cleaner at 16px; a mark one
+segment different from the one they handed over is a mark somebody has to ask
+about. The test asks it as the COUNT PER COLOUR and the order round the ring,
+because that is what the picture says: a segment moved one place is the same
+drawing, a colour that lost one is not.
+
+**A RING AND NOT A PIE.** The segments stand off a centre, which is what makes
+it read as plots round a nursery rather than as a chart — each one is bounded
+by two arcs, the outer edge and the inner, and the test asks for both.
+
+**AND THE REAL BNN OUTLINE IS NOT OWED. The office was offered it and said
+no** — *不用了* — when told that one screenshot of the Plot Status Map would
+let the outline be traced exactly. So the ring is the ANSWER and not a stand-in
+for one, which is the whole reason this paragraph exists: a note saying a
+better version is still coming is a note the next person acts on, and they
+would be undoing a decision rather than finishing a job. **Do not trace the
+BNN boundary onto this mark without being asked.**
 
 **6 of the test own 24 checks fail on the previous pages**, the first of them
 being *every one of them is the house plate* — which is the two plate

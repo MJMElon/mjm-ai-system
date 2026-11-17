@@ -10,19 +10,26 @@
 <meta http-equiv="Expires" content="0"/>
 <title>PALMS Plot Status Map — Nursery Operation Manage</title>
 <!-- PALMS wears the plot map, not the module's leaf: the office asked for
-     "一个地图板块感 里面有蓝黄红绿板块", then "不规则形状的". So the parcels
-     are IRREGULAR quadrilaterals with lanes between them, the way plots sit
-     on the ground, and not a grid of four squares. The plate is still the
-     module's; what sits on it is this page. The outer outline is a nursery
-     shape and NOT a tracing of BNN own boundary -- that lives in
-     shared_plots.map_top, which this environment cannot read. See CLAUDE.md. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpolygon points='8,13 30,10.25 34.5,32.1 9.5,30' fill='%233b82f6'/%3E%3Cpolygon points='30,10.25 56,7 56.6,34 34.5,32.1' fill='%23f5b324'/%3E%3Cpolygon points='9.5,30 34.5,32.1 39,54 12,57' fill='%23ef4444'/%3E%3Cpolygon points='34.5,32.1 56.6,34 57,52 39,54' fill='%2322c55e'/%3E%3Cpath d='M30 10.25L39 54M9.5 30L56.6 34' stroke='%231b4332' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+     "一个地图板块感 里面有蓝黄红绿板块", then "不规则形状的". The plate is
+     still the module's; what sits on it is this page.
+
+     THE RING IS THE OFFICE OWN DRAWING, handed over as a picture once
+     "整体形状要和bnn boundry一样" turned out not to be readable from here --
+     that outline lives in shared_plots.map_top, in a database this
+     environment cannot reach. Ten plot segments round a centre, two blue,
+     one red, three green, four yellow, clockwise from the top. Their
+     numbers are the specification, the way the papan tanda office drew.
+
+     AND IT IS THE ANSWER, not a stand-in for one: the office was offered a
+     tracing of the real BNN outline and said no -- 不用了. Do not trace it
+     onto this mark without being asked. See CLAUDE.md. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpath d='M33.13 6.02A26 26 0 0 1 46.35 10.32L38.35 22.41A11.5 11.5 0 0 0 32.50 20.51Z' fill='%233b82f6'/%3E%3Cpath d='M48.19 11.65A26 26 0 0 1 56.35 22.89L42.77 27.97A11.5 11.5 0 0 0 39.16 23.00Z' fill='%233b82f6'/%3E%3Cpath d='M57.05 25.05A26 26 0 0 1 57.05 38.95L43.08 35.07A11.5 11.5 0 0 0 43.08 28.93Z' fill='%23ef4444'/%3E%3Cpath d='M56.35 41.11A26 26 0 0 1 48.19 52.35L39.16 41.00A11.5 11.5 0 0 0 42.77 36.03Z' fill='%2322c55e'/%3E%3Cpath d='M46.35 53.68A26 26 0 0 1 33.13 57.98L32.50 43.49A11.5 11.5 0 0 0 38.35 41.59Z' fill='%2322c55e'/%3E%3Cpath d='M30.87 57.98A26 26 0 0 1 17.65 53.68L25.65 41.59A11.5 11.5 0 0 0 31.50 43.49Z' fill='%2322c55e'/%3E%3Cpath d='M15.81 52.35A26 26 0 0 1 7.65 41.11L21.23 36.03A11.5 11.5 0 0 0 24.84 41.00Z' fill='%23f5b324'/%3E%3Cpath d='M6.95 38.95A26 26 0 0 1 6.95 25.05L20.92 28.93A11.5 11.5 0 0 0 20.92 35.07Z' fill='%23f5b324'/%3E%3Cpath d='M7.65 22.89A26 26 0 0 1 15.81 11.65L24.84 23.00A11.5 11.5 0 0 0 21.23 27.97Z' fill='%23f5b324'/%3E%3Cpath d='M17.65 10.32A26 26 0 0 1 30.87 6.02L31.50 20.51A11.5 11.5 0 0 0 25.65 22.41Z' fill='%23f5b324'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js?v=6"></script>
+<script src="../shared/shared_palms.js?v=7"></script>
 <script src="../shared/shared_plot_map.js?v=2"></script>
 <script src="../shared/shared_plot_draw.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -84,6 +91,15 @@
                font-weight:900; color:#0f172a; cursor:pointer; text-decoration:underline;
                text-decoration-color:#cbd5e1; text-underline-offset:3px; }
   .plot-link:hover { color:#0f766e; text-decoration-color:#14b8a6; }
+  /* "I looked at this plot and nothing has moved." Quiet until it is wanted:
+     the Last update cell is read as a date, not as a row of buttons, and a
+     solid control on every line of a 52-plot board is a field of targets over
+     a column nobody came to press. It is a real <button> and not a link, so
+     the keyboard reaches it. */
+  .seen-tick { margin-left:7px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:999px;
+               width:20px; height:20px; line-height:1; padding:0; font-size:11px; font-weight:900;
+               color:#94a3b8; cursor:pointer; vertical-align:middle; }
+  .seen-tick:hover, .seen-tick:focus-visible { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
   .pill { display:inline-block; font-size:9.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
           border-radius:999px; padding:2px 8px; border:1px solid; white-space:nowrap; }
   .p-late { background:#fff1f2; border-color:#fecdd3; color:#9f1239; }
@@ -341,22 +357,25 @@
 <div id="cf-modal" class="modal-bg hidden">
   <div class="modal-card" style="max-width:470px">
     <div class="px-5 py-4 border-b border-slate-100">
-      <div class="text-[10px] font-black text-teal-600 uppercase tracking-widest">Change plot status</div>
+      <div id="cf-head" class="text-[10px] font-black text-teal-600 uppercase tracking-widest">Change plot status</div>
       <div id="cf-plot" class="text-lg font-black text-slate-800">—</div>
     </div>
     <div class="px-5 py-4 space-y-2">
       <div class="cf-box cf-was">
-        <div class="cf-k">Before</div>
+        <div id="cf-was-k" class="cf-k">Before</div>
         <div id="cf-was-v" class="cf-v">—</div>
         <div id="cf-was-s" class="cf-s"></div>
       </div>
-      <div class="text-center text-slate-300 font-black text-lg leading-none">↓</div>
-      <div class="cf-box cf-now">
+      <!-- Hidden on a check, where there is no "after": the stage is not
+           moving, and an After box repeating the Before is the screen
+           inventing a change to describe. -->
+      <div id="cf-arrow" class="text-center text-slate-300 font-black text-lg leading-none">↓</div>
+      <div id="cf-after" class="cf-box cf-now">
         <div class="cf-k">After</div>
         <div id="cf-now-v" class="cf-v">—</div>
         <div id="cf-now-s" class="cf-s"></div>
       </div>
-      <p class="text-[11px] text-slate-500 leading-relaxed pt-1">
+      <p id="cf-note" class="text-[11px] text-slate-500 leading-relaxed pt-1">
         The stage running now is recorded as finished today and the new one starts today. This is the
         same record the Field Conductor's app writes, saved under your name.
       </p>
@@ -493,15 +512,12 @@ function renderTable() {
   $('rows').innerHTML = rows.map((r) => {
     const ln = r.ln;
     if (!ln || ln.state === 'none') {
-      const seen = ln
-        ? esc(MJMPalms.prettyD(ln.lastDate)) + (ln.lastBy ? ' · ' + esc(ln.lastBy) : '')
-        : '<span class="text-slate-300">—</span>';
       return '<tr>' +
         '<td><button class="plot-link" data-open="' + esc(r.plot) + '">' + esc(r.label) + '</button></td>' +
         statusCell(r.plot, ln) +
         '<td class="text-slate-300">—</td>' +
         '<td class="text-slate-300">—</td>' +
-        '<td class="text-slate-500">' + seen + '</td></tr>';
+        seenCell(r.plot, ln) + '</tr>';
     }
     const over = ln.state === 'overdue';
     const days = over ? (-ln.left) + 'd over' : ln.left + 'd left';
@@ -510,8 +526,7 @@ function renderTable() {
       statusCell(r.plot, ln) +
       '<td class="text-slate-500">' + esc(MJMPalms.prettyD(ln.due)) + '</td>' +
       '<td><span class="pill ' + (over ? 'p-late' : 'p-ok') + '">' + esc(days) + '</span></td>' +
-      '<td class="text-slate-500">' + esc(MJMPalms.prettyD(ln.lastDate)) +
-        (ln.lastBy ? ' · ' + esc(ln.lastBy) : '') + '</td>' +
+      seenCell(r.plot, ln) +
       '</tr>';
   }).join('');
 }
@@ -841,7 +856,26 @@ async function reloadMap() {
    answering when it corrects a status. */
 const MAX_AT_ONCE = 2;   // matches MAX_CONCURRENT in the field app's data.js
 
-let CF = null;   // { unit, fromN, toN } awaiting confirmation
+let CF = null;   // { unit, fromN, toN, same } awaiting confirmation
+
+/* THE LAST UPDATE CELL, and the ✓ that is the only way to move it when the
+   stage has not moved. The office: "就算plot status一样， updater的名字也要
+   update， last update的日期也要".
+
+   OFFERED ONLY WHERE THE PLOT HAS A LOG. `plotLine` answers null for a plot
+   with no entry at all, so such a row prints — in every column and a stamp
+   written against it would be invisible: a button that visibly does nothing
+   is how a screen teaches people its buttons do nothing. The field app is
+   where such a plot gets its first entry. */
+function seenCell(unitKey, ln) {
+  const txt = ln
+    ? esc(MJMPalms.prettyD(ln.lastDate)) + (ln.lastBy ? ' · ' + esc(ln.lastBy) : '')
+    : '<span class="text-slate-300">—</span>';
+  if (!CAN_UPDATE || !ln) return '<td class="text-slate-500">' + txt + '</td>';
+  return '<td class="text-slate-500">' + txt +
+    '<button class="seen-tick" data-seen="' + esc(unitKey) + '" ' +
+    'title="Nothing has changed — record that you looked at this plot today">✓</button></td>';
+}
 
 function statusCell(unitKey, ln) {
   const cur = ln && ln.state !== 'none' ? MJMPalms.currentEntries(LOGS, unitKey) : [];
@@ -908,15 +942,38 @@ $('rows').addEventListener('change', (e) => {
   const unit = sel.dataset.st;
   const toN = Number(sel.value);
   const fromN = sel.dataset.cur === '' ? null : Number(sel.dataset.cur);
-  if (!toN || toN === fromN) return;
-  askChange(unit, fromN, toN);
+  if (!toN) return;
+  /* PICKING THE STAGE THAT IS ALREADY RUNNING IS AN ANSWER, not a no-op. It
+     used to return here, so somebody saying "no, it really is still on
+     Membesar" wrote nothing and the plot went on reading as last touched
+     weeks ago. It is the same panel, in its check wording — the write is a
+     daily report rather than a log entry, which MJMPalms.stampSave explains
+     at length. The ✓ beside Last update is the route that can always be
+     reached; this one is here because a browser CAN fire change for the
+     selected option (arrow keys in a closed select do, on most platforms)
+     and a gesture that means this must not be swallowed. */
+  askChange(unit, fromN, toN, toN === fromN);
 });
 
-function askChange(unit, fromN, toN) {
-  CF = { unit: unit, fromN: fromN, toN: toN };
+/* The ✓ in the Last update cell. IT IS THE ROUTE THAT ACTUALLY WORKS, and
+   the dropdown is why: the Current Status cell draws the running stage as
+   `selected`, and a native <select> fires NO change event when the same
+   option is picked again. So before this there was no gesture anywhere on
+   the board that meant "I have looked at this plot and nothing has moved" —
+   the office asked for one, and this is it. */
+$('rows').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-seen]');
+  if (!b) return;
+  const unit = b.dataset.seen;
+  const open = MJMPalms.openActivities(LOGS, unit);
+  askChange(unit, open.length === 1 ? open[0].n : null, null, true);
+});
+
+function askChange(unit, fromN, toN, same) {
+  CF = { unit: unit, fromN: fromN, toN: toN, same: !!same };
   const today = MJMPalms.todayStr();
   const from = fromN == null ? null : MJMPalms.actByN(fromN);
-  const to = MJMPalms.actByN(toN);
+  const to = toN == null ? null : MJMPalms.actByN(toN);
   const ln = lineForPlot(unit);
 
   /* Every open entry, not just the one the dropdown was showing — on a plot
@@ -938,12 +995,32 @@ function askChange(unit, fromN, toN) {
         ? 'Started ' + MJMPalms.prettyD(ln.start) + ' · due ' + MJMPalms.prettyD(ln.due) +
           ' · ' + (ln.left < 0 ? (-ln.left) + 'd over' : ln.left + 'd left')
         : '');
-  // The new due date, worked out the same way the board will once it is
-  // saved — so what is promised here is what appears in the row.
-  const due = MJMPalms.addDays(today, to && to.days != null ? to.days : 0);
-  $('cf-now-v').textContent = to ? to.name : '—';
-  $('cf-now-s').textContent = 'Starts today · due ' + MJMPalms.prettyD(due) +
-    ' · ' + MJMPalms.diffDays(today, due) + 'd';
+
+  /* THE CHECK IS THE SAME PANEL AND SAYS A DIFFERENT THING, because it DOES a
+     different thing: no stage closes, no stage opens, and what moves is the
+     one column it names. A panel promising a change over a save that makes
+     none is how somebody comes to distrust the ones that do. */
+  const chk = CF.same;
+  $('cf-head').textContent = chk ? 'Confirm plot status' : 'Change plot status';
+  $('cf-was-k').textContent = chk ? 'Running now' : 'Before';
+  $('cf-arrow').classList.toggle('hidden', chk);
+  $('cf-after').classList.toggle('hidden', chk);
+  $('cf-note').textContent = chk
+    ? 'Nothing about the stage changes. Today’s date and your name go on this plot’s '
+      + 'last update, which is the same record the Field Conductor’s app writes for a plot '
+      + 'he has looked at and found unchanged.'
+    : 'The stage running now is recorded as finished today and the new one starts today. '
+      + 'This is the same record the Field Conductor’s app writes, saved under your name.';
+  $('cf-ok').textContent = chk ? 'Confirm check' : 'Confirm change';
+
+  if (!chk) {
+    // The new due date, worked out the same way the board will once it is
+    // saved — so what is promised here is what appears in the row.
+    const due = MJMPalms.addDays(today, to && to.days != null ? to.days : 0);
+    $('cf-now-v').textContent = to ? to.name : '—';
+    $('cf-now-s').textContent = 'Starts today · due ' + MJMPalms.prettyD(due) +
+      ' · ' + MJMPalms.diffDays(today, due) + 'd';
+  }
   $('cf-msg').textContent = '';
   $('cf-msg').className = 'text-[11px] font-bold text-slate-400';
   /* Confirm is disabled while a save is in flight and was only re-enabled
@@ -977,34 +1054,49 @@ $('cf-ok').addEventListener('click', async () => {
   $('cf-msg').textContent = 'Saving…';
   const today = MJMPalms.todayStr();
   const key = CF.unit;
+  const same = CF.same;
   const open = MJMPalms.currentEntries(LOGS, key);
-  const act = MJMPalms.actByN(CF.toN);
+  const act = CF.toN == null ? null : MJMPalms.actByN(CF.toN);
 
   try {
-    for (const e of open) {
-      if (!e.uid) continue;          // never synced — no server row to close
-      const res = await _supabase.from('fcportal_palms_plot_logs')
-        .update({ end_date: today, updated_at: new Date().toISOString() })
-        .eq('client_uid', e.uid);
+    if (!same) {
+      for (const e of open) {
+        if (!e.uid) continue;          // never synced — no server row to close
+        const res = await _supabase.from('fcportal_palms_plot_logs')
+          .update({ end_date: today, updated_at: new Date().toISOString() })
+          .eq('client_uid', e.uid);
+        if (res.error) throw res.error;
+      }
+
+      // seq_no orders a plot's log; the motion study reads it back in that
+      // order to tell one cycle from the next.
+      const seq = (LOGS[key] || []).reduce((m, e) => Math.max(m, e.no || 0), 0) + 1;
+      const res = await _supabase.from('fcportal_palms_plot_logs').insert([{
+        client_uid: newUid(),
+        nursery_name: MJMPalms.nurseryOfPlot(MJMPalms.plotOf(key)),
+        plot_name: key,
+        act_n: CF.toN,
+        start_date: today,
+        end_date: null,
+        ideal_days: act && act.days != null ? act.days : null,
+        recorded_by: ME || 'Office',
+        seq_no: seq,
+        updated_at: new Date().toISOString(),
+      }]);
       if (res.error) throw res.error;
     }
 
-    // seq_no orders a plot's log; the motion study reads it back in that
-    // order to tell one cycle from the next.
-    const seq = (LOGS[key] || []).reduce((m, e) => Math.max(m, e.no || 0), 0) + 1;
-    const res = await _supabase.from('fcportal_palms_plot_logs').insert([{
-      client_uid: newUid(),
-      nursery_name: MJMPalms.nurseryOfPlot(MJMPalms.plotOf(key)),
-      plot_name: key,
-      act_n: CF.toN,
-      start_date: today,
-      end_date: null,
-      ideal_days: act && act.days != null ? act.days : null,
-      recorded_by: ME || 'Office',
-      seq_no: seq,
-      updated_at: new Date().toISOString(),
-    }]);
-    if (res.error) throw res.error;
+    /* WHOEVER ACTED IS WHO LOOKED, on both routes — the office asked for the
+       name and the date to move "就算plot status一样". On a check this is the
+       only write there is; on a change it is what stops an afternoon
+       correction reading as the conductor's morning round, because pickBy
+       gives a tie on the day to the daily report. The stage it records is
+       what is running AFTER the save, and every one of them: the latest-wins
+       trigger closes any open entry a report does not name. See stampSave. */
+    await MJMPalms.stampSave(
+      _supabase, key,
+      same ? MJMPalms.openActivities(LOGS, key).map((a) => a.n) : [CF.toN],
+      ME || 'Office');
 
     /* Re-read rather than patch: last update, the new due date and the days
        left all come off the log, and the server is the record. */
