@@ -937,6 +937,21 @@
                                     </div>
                                 </div>
 
+                                <!-- The FILLED packing list: the supplier sheet after the
+                                     count, Checked By and Remarks written on it. It is the
+                                     paper the audit was done against, so it is kept with the
+                                     report. Saved the moment it is picked, like the census on
+                                     Transplanting, and removed off the record with the cross
+                                     while the file stays in storage. -->
+                                <div id="t8-filled-wrap" class="mx-6 mt-3 hidden">
+                                    <div id="t8-filled-zone" class="px-6 py-4 border-2 border-dashed border-[#c07820] bg-[#fdf6ea] rounded-xl text-center cursor-pointer hover:bg-[#fbeed6] transition-colors">
+                                        <input type="file" id="t8-filled-input" class="hidden" accept="image/*,application/pdf" multiple>
+                                        <p class="text-[12px] font-black text-[#c07820] uppercase tracking-widest mb-1">📄 Upload Filled Packing List</p>
+                                        <p id="t8-filled-hint" class="text-[10px] text-[#8a7a68]">The packing list after the count, signed and with remarks. Photo or PDF, more than one page at a time.</p>
+                                    </div>
+                                    <div id="t8-filled-list" class="mt-2 flex flex-wrap gap-2"></div>
+                                </div>
+
                                 <!-- Column headers -->
                                 <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 1fr 1fr 1.4fr 40px;">
                                     <span>Bag No / Seal No</span>
@@ -9313,7 +9328,7 @@
             4: ['1st_Culling'],
             5: ['2nd_Culling'],
             6: ['3rd_Culling'],
-            8: ['Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action']
+            8: ['Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action', 'Seed_Audit_PackingList']
         };
         function withEditMeta(payload) {
             // Stamp the user + timestamp so each saved row carries who/when it was last edited.
@@ -10433,6 +10448,180 @@
             _wireSeedAuditDropzone();
         }
 
+        /* ── The FILLED packing list ─────────────────────────────────────
+           The supplier sheet after the count, with Checked By and the
+           remarks written on it. One ledger row per batch,
+           `Seed_Audit_PackingList`, quantity nought, the files in the remark
+           as `DocList:` through tab 6 own codec, so a name with a space or a
+           separator in it cannot split a file in two.
+
+           WRITTEN THE MOMENT A FILE IS PICKED, not on Save Seed Audit Report:
+           an upload nobody remembered to save is a page that is in storage
+           and on no record. The list is RE-READ before every write, so a file
+           somebody else attached a minute ago is not written over. The cross
+           takes a file off the RECORD and leaves it in storage, the census
+           rule: a delete that cannot be undone over a mis-press is the worse
+           failure. A signed-off report refuses both, asked of the CLASS the
+           lock sets, because the stylesheet stops neither a key nor a call. */
+        let t8FilledDocs = [];
+        /* FROM BATCH 281 ON. The office asked for the box on the batches
+           received from 281 onwards; an earlier batch was audited before it
+           existed, and an empty box asking for a sheet nobody kept is a
+           prompt nobody can act on. The number is read off the leading
+           digits of the batch number. A batch before 281 that somehow holds
+           files still SHOWS them: a record is never hidden, only the box. */
+        const T8_FILLED_FROM_BATCH = 281;
+        function _t8FilledApplies() {
+            const raw = String(document.getElementById('f-batchno').value || '').trim();
+            let digits = '';
+            for (const ch of raw) { if (ch >= '0' && ch <= '9') digits += ch; else if (digits) break; }
+            const n = parseInt(digits, 10);
+            return !isNaN(n) && n >= T8_FILLED_FROM_BATCH;
+        }
+        function _t8Locked() {
+            const tab = document.getElementById('tab-8');
+            return !!(tab && tab.classList.contains('mjm-locked'));
+        }
+        async function _t8ReadFilled(batchId) {
+            const { data, error } = await _supabase.from('shared_inventory_logs')
+                .select('remark').eq('batch_name', batchId)
+                .eq('transaction_type', 'Seed_Audit_PackingList')
+                .order('created_at', { ascending: false }).limit(1);
+            if (error) throw error;
+            const rmk = (data && data[0] && data[0].remark) || '';
+            const i = rmk.indexOf('DocList:');
+            return i < 0 ? [] : t6DecodeDocs(rmk.slice(i + 8).trim());
+        }
+        async function _t8WriteFilled(batchId, list) {
+            await _supabase.from('shared_inventory_logs')
+                .delete().eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_PackingList');
+            if (!list.length) return;
+            const { error } = await safeInsertLogs([withEditMeta({
+                transaction_type: 'Seed_Audit_PackingList',
+                batch_name: batchId,
+                breed_name: document.getElementById('f-brand').value || null,
+                quantity_change: 0,
+                transaction_date: document.getElementById('f-datereceived').value || null,
+                remark: 'Filled packing list. DocList:' + t6EncodeDocs(list)
+            })]);
+            if (error) throw error;
+        }
+        function renderFilledPackingList() {
+            const box = document.getElementById('t8-filled-list');
+            if (!box) return;
+            const applies = _t8FilledApplies();
+            const wrap = document.getElementById('t8-filled-wrap');
+            if (wrap) wrap.classList.toggle('hidden', !applies && !t8FilledDocs.length);
+            const zone = document.getElementById('t8-filled-zone');
+            if (zone) zone.classList.toggle('hidden', !applies);
+            const locked = _t8Locked();
+            box.innerHTML = t8FilledDocs.map((d, k) => {
+                const isPdf = /\.pdf(\?|#|$)/i.test(d.base64);
+                const nm = d.name || ('page ' + (k + 1));
+                /* The cross is a SIBLING of the file, never inside it: the file
+                   opens on a click, so a cross inside it would open the page
+                   over the top of removing it. */
+                return `<span class="inline-flex items-stretch rounded-lg border border-[#e8dcc8] bg-white overflow-hidden">
+                    <button type="button" class="mjm-review-allow px-3 py-1.5 text-[11px] font-bold text-[#4a7a2e] hover:bg-[#f0f8ec] t8-filled-open"
+                            onclick="openFilledPackingList(${k})" title="Open ${_escAttr(nm)}">${isPdf ? '📄' : '🖼️'} ${_escAttr(nm)}</button>
+                    ${locked ? '' : `<button type="button" class="px-2 border-l border-[#e8dcc8] text-[#a83020] hover:bg-[#fdecea] t8-filled-x"
+                            onclick="removeFilledPackingList(${k})" title="Remove ${_escAttr(nm)} from this report" aria-label="Remove ${_escAttr(nm)}">✕</button>`}
+                </span>`;
+            }).join('');
+            const hint = document.getElementById('t8-filled-hint');
+            if (hint) hint.innerText = t8FilledDocs.length
+                ? `${t8FilledDocs.length} file(s) attached. Drop or pick more to add pages.`
+                : 'The packing list after the count, signed and with remarks. Photo or PDF, more than one page at a time.';
+        }
+        function openFilledPackingList(k) {
+            const d = t8FilledDocs[k];
+            if (d) _openDocViewer(d.base64, d.name || 'Filled packing list');
+        }
+        async function loadFilledPackingList(batchId) {
+            t8FilledDocs = [];
+            try { if (batchId) t8FilledDocs = await _t8ReadFilled(batchId); }
+            catch (e) { console.warn('Could not load the filled packing list:', e && e.message); }
+            renderFilledPackingList();
+        }
+        async function uploadFilledPackingList(fileList) {
+            const files = Array.from(fileList || []);
+            const input = document.getElementById('t8-filled-input');
+            if (!files.length) return;
+            try {
+                if (_t8Locked()) { showToast('This report is signed off — unverify it first to change the filled packing list.', 'error'); return; }
+                if (!_t8FilledApplies()) { showToast('The filled packing list is kept from batch ' + T8_FILLED_FROM_BATCH + ' onwards.', 'error'); return; }
+                const batchId = document.getElementById('f-batchno').value.trim();
+                if (!batchId) { showToast('Nothing saved — save Tab 1 (Seeds In) first to assign a batch number.', 'error'); return; }
+                const got = [];
+                let failed = 0;
+                for (let k = 0; k < files.length; k++) {
+                    const f = files[k];
+                    if (f.size > 20 * 1024 * 1024) { failed++; continue; }
+                    try {
+                        const dataUrl = await _t3ReadFile(f);
+                        const url = await _uploadBatchDoc('seed_audit_packing_list', batchId, `filled-${Date.now()}-${k}`, dataUrl);
+                        if (!url) { failed++; continue; }
+                        got.push({ base64: url, name: f.name || `page-${k + 1}`, note: '' });
+                    } catch (e) { failed++; }
+                }
+                if (!got.length) throw new Error(window._mjmLastUploadError || 'storage would not take the file');
+                const now = await _t8ReadFilled(batchId);
+                const list = now.concat(got);
+                await _t8WriteFilled(batchId, list);
+                t8FilledDocs = list;
+                renderFilledPackingList();
+                if (failed) showToast(`${got.length} file(s) attached — ${failed} would not upload. Attach those again.`, 'warn');
+                else showToast(`Filled packing list attached — ${got.length} file(s).`, 'success');
+            } catch (e) {
+                showToast('Nothing saved — the filled packing list could not be attached: ' + (e && e.message ? e.message : e), 'error');
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+        async function removeFilledPackingList(k) {
+            if (_t8Locked()) { showToast('This report is signed off — unverify it first to change the filled packing list.', 'error'); return; }
+            const d = t8FilledDocs[k];
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!d || !batchId) return;
+            if (!confirm(`Remove "${d.name || 'this file'}" from the filled packing list?\n\nThe bag rows are not touched.`)) return;
+            try {
+                /* By URL, never by position: the list is re-read first, and an
+                   index taken off the screen can point at another file by now. */
+                const now = await _t8ReadFilled(batchId);
+                const list = now.filter(x => x.base64 !== d.base64);
+                await _t8WriteFilled(batchId, list);
+                t8FilledDocs = list;
+                renderFilledPackingList();
+                showToast('File removed from the filled packing list.', 'success');
+            } catch (e) {
+                showToast('Nothing changed — the file could not be removed: ' + (e && e.message ? e.message : e), 'error');
+            }
+        }
+        function _wireFilledPackingList() {
+            const zone = document.getElementById('t8-filled-zone');
+            const input = document.getElementById('t8-filled-input');
+            if (!zone || !input || zone.dataset.wired === '1') return;
+            zone.dataset.wired = '1';
+            zone.addEventListener('click', () => input.click());
+            input.addEventListener('change', () => { if (input.files && input.files.length) uploadFilledPackingList(input.files); });
+            ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
+                e.preventDefault(); e.stopPropagation();
+                zone.classList.add('ring-2', 'ring-[#c07820]');
+            }));
+            ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => {
+                e.preventDefault(); e.stopPropagation();
+                zone.classList.remove('ring-2', 'ring-[#c07820]');
+            }));
+            zone.addEventListener('drop', e => {
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) uploadFilledPackingList(e.dataTransfer.files);
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', _wireFilledPackingList);
+        } else {
+            _wireFilledPackingList();
+        }
+
         function calcSeedAudit() {
             let totalSupplier = 0;
             let totalReceived = 0;
@@ -11435,6 +11624,7 @@ Thank you.`;
             document.getElementById('t8-batch-remark').value = '';
             seedAuditRowCount = 0;
             _seedAuditDirty = false;
+            loadFilledPackingList(batchId);
 
             try {
                 const [auditRes, emailRes, noteRes, actionRes] = await Promise.all([
