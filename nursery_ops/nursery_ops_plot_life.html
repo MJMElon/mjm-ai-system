@@ -10,7 +10,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_palms.js?v=6"></script>
+<script src="../shared/shared_palms.js?v=7"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -76,6 +76,13 @@
   .ps-table tbody tr.over { background:#fff1f2; }
   .ps-table tbody tr.over:hover { background:#ffe4e6; }
   .plot-link { font-weight:900; color:#0d9488; cursor:pointer; background:none; border:none; padding:0; font-size:13.5px; text-decoration:underline; text-underline-offset:3px; font-family:inherit; }
+  /* "I looked at this plot and nothing has moved." Quiet until it is wanted:
+     the Last Report cell is read as a date, not as a row of buttons. Written
+     to match the PALMS board's copy of it -- change one, change the other. */
+  .seen-tick { margin-left:7px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:999px;
+               width:20px; height:20px; line-height:1; padding:0; font-size:11px; font-weight:900;
+               color:#94a3b8; cursor:pointer; vertical-align:middle; font-family:inherit; }
+  .seen-tick:hover, .seen-tick:focus-visible { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
   .plot-link:hover { color:#0f766e; }
   .ps-hist-row { display:flex; align-items:baseline; gap:10px; padding:8px 4px; border-bottom:1px solid #f1f5f9; }
   .ps-hist-row:last-child { border-bottom:none; }
@@ -723,7 +730,7 @@ function renderStatusTable() {
             <td>${statusCell(p.plot_name, st)}</td>
             <td>${idealTxt}</td>
             <td class="${st.over ? 'text-rose-600 font-black' : ''}">${actualTxt}</td>
-            <td class="text-slate-500">${fmtDate(st.last)}${st.reported_by ? ' · ' + esc(st.reported_by) : ''}</td>
+            <td class="text-slate-500">${fmtDate(st.last)}${st.reported_by ? ' · ' + esc(st.reported_by) : ''}${seenTick(p.plot_name, st)}</td>
           </tr>`;
       }).join('')}</tbody>
     </table>`;
@@ -753,7 +760,23 @@ function renderStatusTable() {
                     one. Same rule the board uses.
 ────────────────────────────────────────────────────────────────────────── */
 let CAN_UPDATE = false;   // may this account write the plot log?
-let SF = null;            // { plot, unit, fromN, toN } awaiting confirmation
+let SF = null;            // { plot, unit, fromN, toN, same } awaiting confirmation
+
+/* "I looked at this plot and nothing has moved" — the office asked for the
+   name and the date to move 就算plot status一样, and a native <select> fires
+   no change event for the option already selected, so the dropdown could
+   never carry it. Same button, same reason, as the PALMS board.
+
+   A SPLIT PLOT IS OFFERED NOTHING, which is the rule the dropdown beside it
+   already follows: PALMS logs against a UNIT, and on a split plot the unit is
+   not the plot, so a stamp from this row would be filed against a key this
+   row does not stand for. That plot is answered on the board, where each area
+   has a row of its own. */
+function seenTick(plotName, st) {
+  if (!CAN_UPDATE || !st || st.unit !== plotName) return '';
+  return `<button class="seen-tick" data-seen="${esc(plotName)}" ` +
+    `title="Nothing has changed — record that you looked at this plot today">✓</button>`;
+}
 
 function statusCell(plotName, st) {
   const label = st ? st.stage_name : '— no status reported —';
@@ -799,14 +822,28 @@ document.addEventListener('change', (e) => {
   if (!sel) return;
   const toN = Number(sel.value);
   const fromN = sel.dataset.cur === '' ? null : Number(sel.dataset.cur);
-  if (!toN || toN === fromN) return;
-  askStatusChange(sel.dataset.st, fromN, toN);
+  if (!toN) return;
+  /* The board's rule, and the board's reason: picking the stage already
+     running is an answer and not a no-op. See MJMPalms.stampSave. */
+  askStatusChange(sel.dataset.st, fromN, toN, toN === fromN);
 });
 
-function askStatusChange(plotName, fromN, toN) {
-  const to = MJMPalms.actByN(toN);
-  if (!to) return;
-  SF = { plot: plotName, unit: plotName, fromN: fromN, toN: toN };
+/* The ✓ in the Last Report cell — the route that can always be reached,
+   because a native <select> fires no change for the option already selected.
+   Change one, change the other: the PALMS board carries the same button for
+   the same reason. */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-seen]');
+  if (!b) return;
+  const unit = b.dataset.seen;
+  const open = MJMPalms.openActivities(PALMS_LOGS, unit);
+  askStatusChange(unit, open.length === 1 ? open[0].n : null, null, true);
+});
+
+function askStatusChange(plotName, fromN, toN, same) {
+  const to = toN == null ? null : MJMPalms.actByN(toN);
+  if (!to && !same) return;
+  SF = { plot: plotName, unit: plotName, fromN: fromN, toN: toN, same: !!same };
   const today = MJMPalms.todayStr();
   /* Every open entry is closed, not just the one the dropdown was showing —
      on a plot carrying duplicates that is the whole point of the change, and
@@ -817,13 +854,22 @@ function askStatusChange(plotName, fromN, toN) {
   const names = MJMPalms.openActivities(PALMS_LOGS, plotName).map(a => a.name);
   const dupNote = open.length > names.length
     ? ` (all ${open.length} open entries)` : '';
-  $('sf-line').innerHTML =
-    `<strong>${esc(plotName)}</strong> — ` +
-    (names.length
-      ? `close <strong>${esc(names.join(' + '))}</strong>${esc(dupNote)} today and start `
-      : 'start ') +
-    `<strong>${esc(to.name)}</strong> on ${esc(MJMPalms.prettyD(today))}` +
-    (to.days != null ? `, due in ${to.days} day${to.days === 1 ? '' : 's'}` : '');
+  /* THE CHECK SAYS A DIFFERENT THING BECAUSE IT DOES A DIFFERENT THING: no
+     stage closes and none opens, and the one thing that moves is the column
+     it names. A sentence promising a change over a save that makes none is
+     how somebody comes to distrust the ones that do. */
+  $('sf-line').innerHTML = same
+    ? `<strong>${esc(plotName)}</strong> stays on ` +
+      `<strong>${esc(names.length ? names.join(' + ') : 'nothing')}</strong>. ` +
+      `Today’s date and your name go on its last report — the same record ` +
+      `the Field Conductor’s app writes for a plot he has looked at and found unchanged.`
+    : `<strong>${esc(plotName)}</strong> — ` +
+      (names.length
+        ? `close <strong>${esc(names.join(' + '))}</strong>${esc(dupNote)} today and start `
+        : 'start ') +
+      `<strong>${esc(to.name)}</strong> on ${esc(MJMPalms.prettyD(today))}` +
+      (to.days != null ? `, due in ${to.days} day${to.days === 1 ? '' : 's'}` : '');
+  $('sf-ok').textContent = same ? 'Confirm check' : 'Confirm';
   $('sf-msg').textContent = '';
   $('sf-ok').disabled = false;
   $('sf-back').classList.remove('hidden');
@@ -846,39 +892,52 @@ async function confirmStatusChange() {
   $('sf-msg').textContent = 'Saving…';
   const today = MJMPalms.todayStr();
   const unit = SF.unit;
+  const same = SF.same;
   const open = MJMPalms.currentEntries(PALMS_LOGS, unit);
-  const act = MJMPalms.actByN(SF.toN);
+  const act = SF.toN == null ? null : MJMPalms.actByN(SF.toN);
   const u = MJMAccess.user() || {};
+  const me = u.full_name || u.email || 'Office';
 
   try {
-    /* Close what is running, then open the chosen stage today — the same two
-       writes the board makes and the same the field app makes, so a status
-       set here is indistinguishable from one set there. */
-    for (const e of open) {
-      if (!e.uid) continue;              // never synced — no server row to close
-      const res = await _supabase.from('fcportal_palms_plot_logs')
-        .update({ end_date: today, updated_at: new Date().toISOString() })
-        .eq('client_uid', e.uid);
+    if (!same) {
+      /* Close what is running, then open the chosen stage today — the same two
+         writes the board makes and the same the field app makes, so a status
+         set here is indistinguishable from one set there. */
+      for (const e of open) {
+        if (!e.uid) continue;              // never synced — no server row to close
+        const res = await _supabase.from('fcportal_palms_plot_logs')
+          .update({ end_date: today, updated_at: new Date().toISOString() })
+          .eq('client_uid', e.uid);
+        if (res.error) throw res.error;
+      }
+      // seq_no orders a plot's log; the motion study reads it back in that order
+      // to tell one cycle from the next.
+      const seq = (PALMS_LOGS[unit] || []).reduce((m, e) => Math.max(m, e.no || 0), 0) + 1;
+      const res = await _supabase.from('fcportal_palms_plot_logs').insert([{
+        client_uid: (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'o' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
+        nursery_name: MJMPalms.nurseryOfPlot(MJMPalms.plotOf(unit)),
+        plot_name: unit,
+        act_n: SF.toN,
+        start_date: today,
+        end_date: null,
+        ideal_days: act && act.days != null ? act.days : null,
+        recorded_by: me,
+        seq_no: seq,
+        updated_at: new Date().toISOString(),
+      }]);
       if (res.error) throw res.error;
     }
-    // seq_no orders a plot's log; the motion study reads it back in that order
-    // to tell one cycle from the next.
-    const seq = (PALMS_LOGS[unit] || []).reduce((m, e) => Math.max(m, e.no || 0), 0) + 1;
-    const res = await _supabase.from('fcportal_palms_plot_logs').insert([{
-      client_uid: (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : 'o' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
-      nursery_name: MJMPalms.nurseryOfPlot(MJMPalms.plotOf(unit)),
-      plot_name: unit,
-      act_n: SF.toN,
-      start_date: today,
-      end_date: null,
-      ideal_days: act && act.days != null ? act.days : null,
-      recorded_by: u.full_name || u.email || 'Office',
-      seq_no: seq,
-      updated_at: new Date().toISOString(),
-    }]);
-    if (res.error) throw res.error;
+
+    /* WHOEVER ACTED IS WHO LOOKED, on both routes — the board's own rule and
+       the same one write. On a check it is the only write there is; on a
+       change it is what stops an afternoon correction reading as the
+       conductor's morning round. See MJMPalms.stampSave. */
+    await MJMPalms.stampSave(
+      _supabase, unit,
+      same ? MJMPalms.openActivities(PALMS_LOGS, unit).map((a) => a.n) : [SF.toN],
+      me);
 
     // Re-read rather than patch: the map, the alert board and the days-over
     // figures all come off the log, and the server is the record.
