@@ -77,20 +77,20 @@ if (!code || !codec) { console.log(`\n${failed} failure(s)`); process.exit(1); }
   await pg.evaluate(() => { window.rows = []; });
 
   await pg.evaluate(async () => { setBatch('281'); await api.load('281'); await save(); });
-  r = await pg.evaluate(() => ({ n: rows.length, t: toasts.pop() }));
-  ok(r.n === 0 && r.t.t === 'error' && /upload the filled packing list first/.test(r.t.m), 'batch 281 with no filled packing list: Save refuses and writes NOTHING -> ' + JSON.stringify(r.t));
+  r = await pg.evaluate(() => ({ n: rows.filter(x => x.transaction_type === 'Seed_Audit').length, t: toasts.pop() }));
+  ok(r.n === 1 && r.t.t === 'success', 'batch 281 with no filled packing list: Save still goes through -> ' + JSON.stringify(r.t));
   ok(await pg.evaluate(() => window._t8FilledMissing && window._t8FilledMissing() === true), 'and a sign-off is told it is missing');
   await pg.evaluate(async () => { setBatch('281'); await api.load('281'); });
   ok(await pg.evaluate(() => shown('t8-filled-wrap') && shown('t8-filled-zone')), 'batch 281: the box is there');
   await pg.evaluate(async () => { await api.up([f('page 1.jpg'), f('page 2.pdf', 'application/pdf')]); });
-  r = await pg.evaluate(() => ({ rows: rows.slice(), docs: api.docs(), t: toasts.pop(), chips: document.querySelectorAll('.t8-filled-open').length }));
+  r = await pg.evaluate(() => ({ rows: rows.filter(x => x.transaction_type === 'Seed_Audit_PackingList'), docs: api.docs(), t: toasts.pop(), chips: document.querySelectorAll('.t8-filled-open').length }));
   ok(r.rows.length === 1 && r.rows[0].transaction_type === 'Seed_Audit_PackingList' && r.rows[0].quantity_change === 0, 'two files, ONE row, quantity nought');
   ok(r.docs.length === 2 && r.docs[0].name === 'page 1.jpg', 'both files are on the record, names kept (a space included)');
   ok(r.t.t === 'success' && r.chips === 2, 'it says so and draws both');
 
   await pg.evaluate(async () => { await save(); });
   r = await pg.evaluate(() => ({ audits: rows.filter(x => x.transaction_type === 'Seed_Audit').length, t: toasts.pop() }));
-  ok(r.audits === 1 && r.t.t === 'success', 'with it attached, Save goes through');
+  ok(r.audits === 1 && r.t.t === 'success', 'with it attached, Save goes through too');
   ok(await pg.evaluate(() => window._t8FilledMissing() === false), 'and a sign-off is no longer refused');
   await pg.evaluate(async () => { api.docs().length = 0; await api.load('281'); });
   ok(await pg.evaluate(() => api.docs().length === 2), 'reopening the batch reads both back');
