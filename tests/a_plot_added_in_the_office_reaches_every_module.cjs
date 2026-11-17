@@ -79,33 +79,42 @@ async function settle(p) {
 }
 
 /* ══ THE OFFICE'S OWN FIXTURE ══════════════════════════════════════════
-   What somebody keyed on Seedling Stock Management → System Settings.
-   Every row is here for a reason:
+   What somebody keyed on Seedling Stock Management → System Settings. It is
+   the office's WHOLE list for the nurseries it covers, because that is what
+   the list now IS — see MJMMaintPlots.offered. Every part is here for a
+   reason:
 
-     B15      past the end of a range — the plainest version of the ask
+     BNN      keyed in full EXCEPT B14, which the office DELETED, so B14 has
+              to leave every grid, dropdown and schedule row in the company
+              while B01 to B13 stay exactly where they were.
+     B15      past the end of the range — the plainest version of the add.
      B4-R     a TRANSFER PLOT, which a 3rd-culling transfer makes and which
               is in no hardcoded range anywhere. The live case.
-     B1       ALREADY in the range, spelt unpadded the way the office types
-              it. Must not be offered twice.
-     U19      past the end of UNN 1, and its nursery is spelt "UNN 1" WITH
+     B1       spelt unpadded the way the office types it, against a range
+              that spells it B01. Must not be offered twice.
+     UNN 1    keyed in full plus U19, and its nursery is spelt "UNN 1" WITH
               THE SPACE, which is how shared_plots spells it everywhere.
-     P53      the pre nursery, which is counted in trays and so usually has
-              no rows here at all.
+     UNN2     keyed in full, so N21 can only arrive by the hand-added route.
+     PN       DELIBERATELY NOT KEYED. The pre nursery is counted in TRAYS, so
+              shared_plots may hold no PN row at all — and its 52 plots have
+              to survive that. This is the guard that stops the whole change
+              being a cliff.
      X7 / UNE the ESTATE, which is not one of the four nurseries. There is
               no column or tab to put it under, so it is left out — and
               shared/CHECK_which_plots_each_module_offers.sql is what names
               those, because a plot on no picker with nothing saying so is
               the fault this whole change is about. */
+const DELETED = 'B14';
+const range = (letter, n) => Array.from({ length: n }, (_, i) => letter + (i + 1));
 const SHARED_PLOTS = [
+  ...range('B', 14).filter((p) => p !== 'B14').map((p) => ({ nursery_name: 'BNN',   plot_name: p })),
   { nursery_name: 'BNN',   plot_name: 'B15'  },
   { nursery_name: 'BNN',   plot_name: 'B4-R' },
-  { nursery_name: 'BNN',   plot_name: 'B1'   },
+  ...range('U', 18).map((p) => ({ nursery_name: 'UNN 1', plot_name: p })),
   { nursery_name: 'UNN 1', plot_name: 'U19'  },
-  { nursery_name: 'PN',    plot_name: 'P53'  },
+  ...range('N', 20).map((p) => ({ nursery_name: 'UNN2',  plot_name: p })),
   { nursery_name: 'UNE',   plot_name: 'X7'   },
 ];
-/* Add Row on the Work Maintenance schedule writes here, and the schedule
-   and the salary claim have counted both tables for months. */
 const CUSTOM_PLOTS = [
   { nursery: 'UNN2', plot: 'N21' },
 ];
@@ -193,13 +202,18 @@ function code(src) {
 console.log('\n1. shared/shared_maint_plots.js — the one read');
 {
   const { MJMMaintPlots: MP } = loadShipped(['shared/shared_maint_plots.js']);
-  const by = MP.merged(await MP.loadAll(fakeSupa('ok')));
+  const got = await MP.loadLists(fakeSupa('ok'));
+  const by  = got.offer;
 
   check('the office B15 is in BNN', by.BNN.indexOf('B15') !== -1, true);
   check('the transfer plot B4-R is in BNN', by.BNN.indexOf('B4-R') !== -1, true);
   check('"UNN 1" with the space resolves to UNN1', by.UNN1.indexOf('U19') !== -1, true);
   check('a custom-plot row is in it too', by.UNN2.indexOf('N21') !== -1, true);
-  check('the pre nursery takes P53', by.PN.indexOf('P53') !== -1, true);
+  check('THE DELETED PLOT IS GONE — the whole of what the office asked for',
+        by.BNN.indexOf(DELETED), -1);
+  check('…and every plot either side of it stayed',
+        ['B1', 'B13', 'B15'].filter((p) => by.BNN.indexOf(p) === -1), []);
+  check('the pre nursery was never keyed, so its 52 plots stand', by.PN.length, 52);
   /* The ranges spell it B1 and so does the office. One plot, once. */
   check('B1 is not in the list twice', by.BNN.filter((p) => p === 'B1').length, 1);
   /* A fifth nursery has no column anywhere, so it is left out rather than
@@ -207,9 +221,21 @@ console.log('\n1. shared/shared_maint_plots.js — the one read');
   check('the estate plot is on no nursery', Object.keys(by).some((n) => by[n].indexOf('X7') !== -1), false);
   check('four nurseries and no more', Object.keys(by).sort(), ['BNN', 'PN', 'UNN1', 'UNN2']);
 
-  const down = MP.merged(await MP.loadAll(fakeSupa('down')));
+  const down = (await MP.loadLists(fakeSupa('down'))).offer;
   check('a read that fails leaves the ranges whole', down.BNN.length, 14);
   check('…and adds nothing', down.BNN.indexOf('B15'), -1);
+  check('…and a failed read puts the DELETED plot BACK, which is the point of '
+      + 'failing open: an empty picker is a module nobody can use',
+        down.BNN.indexOf(DELETED) !== -1, true);
+
+  /* PLACING IS NOT OFFERING, and this is the check that says so. A
+     maintenance record keyed on a plot the office has since deleted has to go
+     on resolving to its nursery, or taking a plot off the pickers takes last
+     month's work off the salary claim. */
+  check('a record on the DELETED plot still resolves to its nursery',
+        MP.nurseryOfPlot(DELETED, got.place), 'BNN');
+  check('…and so does one on a plot that was never keyed at all',
+        MP.nurseryOfPlot('P07', got.place), 'PN');
 }
 
 /* ══ 2. THE AUDIT MODULE'S ONE LIST ════════════════════════════════════ */
@@ -239,9 +265,16 @@ console.log('\n2. audit/audit_plots.js — the auditor portal\'s one list');
        () => AP.list('UNN1').indexOf('U19') !== -1, true);
   safe('a custom plot is on it too', () => AP.list('UNN2').indexOf('N21') !== -1, true);
   safe('B1 did not arrive beside B01', () => AP.list('BNN').filter((p) => p === 'B1').length, 0);
-  safe('the ranges are still all there', () => AP.list('BNN').length, 16);
-  safe('B15 sorts after B14, not between B1 and B2',
-       () => AP.list('BNN').slice(-2), ['B14', 'B15']);
+  safe('the office list IS the list — thirteen kept, two added',
+       () => AP.list('BNN').length, 15);
+  safe('B15 sorts last, not between B1 and B2',
+       () => AP.list('BNN').slice(-2), ['B13', 'B15']);
+  safe('THE DELETED PLOT IS OFF THE GRID AND THE DROPDOWN',
+       () => AP.list('BNN').indexOf('B14'), -1);
+  safe('…and the module can still PLACE it, so a saved audit and the board '
+     + 'that owes one are both untouched', () => AP.nurseryOf('B14'), 'BNN');
+  safe('the pre nursery was never keyed, so its 52 plots stand',
+       () => AP.list('PN').length, 52);
   safe('the estate plot is on no list',
        () => (AP.NURSERIES || []).some((n) => AP.list(n).indexOf('X7') !== -1), false);
 
@@ -254,7 +287,8 @@ console.log('\n2. audit/audit_plots.js — the auditor portal\'s one list');
   safe('nurseryOf takes either spelling', () => [AP.nurseryOf('B4-R'), AP.nurseryOf('b 15')],
        ['BNN', 'BNN']);
   safe('it says what the office added', () => AP.added().sort(),
-       ['BNN|B04-R', 'BNN|B15', 'PN|P53', 'UNN1|U19', 'UNN2|N21']);
+       ['BNN|B04-R', 'BNN|B15', 'UNN1|U19', 'UNN2|N21']);
+  safe('…and what the office took away', () => AP.gone(), ['BNN|B14']);
   safe('asking twice is one read', () => AP.load() === AP.load(), true);
 
   /* THE FAILURE MODES. Every one of them has to leave the module exactly
@@ -370,10 +404,16 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
         (got.opts || []).filter((p) => p === 'B15' || p === 'B04-R').sort(), ['B04-R', 'B15']);
   /* NOT /^B\d\d$/ — that matches B15 as well, so it counts 15 on a correct
      page and the first run of this check reported a fault that was its
-     own. The range is named instead. */
-  const BNN_RANGE = Array.from({ length: 14 }, (_, i) => 'B' + String(i + 1).padStart(2, '0'));
-  check('the fourteen it always offered are still offered',
-        BNN_RANGE.filter((p) => (got.opts || []).indexOf(p) === -1), []);
+     own. The plots are named instead.
+
+     THIRTEEN, not fourteen: B14 was deleted in the office and this is the
+     check that says the auditor's own grid followed. Asked as a PAIR, so a
+     page that simply drew nothing could not pass it. */
+  const KEPT = Array.from({ length: 13 }, (_, i) => 'B' + String(i + 1).padStart(2, '0'));
+  check('the thirteen the office kept are still offered',
+        KEPT.filter((p) => (got.opts || []).indexOf(p) === -1), []);
+  check('…and the one they DELETED is not',
+        (got.opts || []).indexOf('B' + DELETED.slice(1).padStart(2, '0')), -1);
   await ctx.close();
 }
 
@@ -442,10 +482,16 @@ console.log('\n4. the REAL Nelos dock — the raise form on 52 pages');
   check('the dock offers the office\'s new BNN plots',
         Array.isArray(bnn) ? bnn.filter((p) => p === 'B15' || p === 'B4-R').sort() : bnn,
         ['B15', 'B4-R']);
-  /* Named rather than counted with /^B\d\d$/, which matches B15 too. */
-  const RANGE14 = Array.from({ length: 14 }, (_, i) => 'B' + String(i + 1).padStart(2, '0'));
-  check('…and still every plot it offered before',
-        Array.isArray(bnn) ? RANGE14.filter((p) => bnn.indexOf(p) === -1) : bnn, []);
+  /* THE DOCK SHOWS THE OFFICE'S OWN SPELLING, which is what it offered for
+     a plot outside the ranges all along and is now what it offers for every
+     plot of a keyed nursery: 'B1', not the range's 'B01'. That is the case
+     log's spelling too — `nelos_dashboard.html` reads shared_plots straight
+     — so the two pickers now agree where they used to differ. */
+  const KEPT = Array.from({ length: 13 }, (_, i) => 'B' + (i + 1));
+  check('…and still every plot the office kept',
+        Array.isArray(bnn) ? KEPT.filter((p) => bnn.indexOf(p) === -1) : bnn, []);
+  check('…and NOT the one they deleted',
+        Array.isArray(bnn) ? bnn.filter((p) => p === DELETED || p === 'B14') : bnn, []);
   check('B1 is not offered twice under two spellings',
         Array.isArray(bnn) ? bnn.filter((p) => p === 'B1' || p === 'B01').length : bnn, 1);
   const unn1 = await plotsFor('UNN1');
@@ -456,8 +502,10 @@ console.log('\n4. the REAL Nelos dock — the raise form on 52 pages');
         Array.isArray(un2) ? un2.indexOf('N21') !== -1 : un2, true);
   const all = await plotsFor('All Nursery');
   check('All Nursery offers every one of them',
-        Array.isArray(all) ? ['B15', 'U19', 'N21', 'P53'].every((p) => all.indexOf(p) !== -1) : all,
-        true);
+        Array.isArray(all) ? ['B15', 'U19', 'N21'].filter((p) => all.indexOf(p) === -1) : all,
+        []);
+  check('…and the pre nursery, which the office never keyed, still has 52',
+        Array.isArray(all) ? all.filter((p) => /^P\d+$/.test(p)).length : all, 52);
   check('and never the estate plot, which has no nursery to sit under',
         Array.isArray(all) ? all.indexOf('X7') : all, -1);
   await ctx.close();

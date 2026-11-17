@@ -17,6 +17,11 @@
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
+  <!-- The spanner is this PAGE; the plate under it is the MODULE, and it is the
+       one the other nine carry -- 64 viewBox, rx 14, #1b4332. The mark keeps the
+       exact proportions it was drawn at (inset 15%, 70% of the plate). See the
+       note in CLAUDE.md on the plate being the module. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cg transform='translate(9.6 9.6) scale(1.8667)' fill='%23ffffff'%3E%3Cpath d='M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z'/%3E%3C/g%3E%3C/svg%3E">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="plot_maintenance_styles.css?v=117">
     <script src="../shared/shared_cf_select.js"></script>
@@ -24,14 +29,17 @@
 <body>
 
 <!-- The compact bar the Seeds Control page wears — Back pill, centred module
-     name, NO badge — asked for here and on the dashboard so the nursery-ops
-     pages read as one set. Inline styles, because this page loads no
-     Tailwind; the values are the Tailwind classes the Seeds bar uses,
-     written out. Sign Out lives on the portal the Back pill leads to. -->
+     name, nothing on the right — asked for here and on the dashboard so the
+     nursery-ops pages read as one set. Inline styles, because this page loads
+     no Tailwind; the values are the Tailwind classes the Seeds bar uses,
+     written out. Sign Out lives on the portal the Back pill leads to, and the
+     teal NO badge that stood in the right cell came off at the office's
+     request. The cell itself is still there: the grid is 1fr auto 1fr, so both
+     outer tracks are sized by the free space and the module name holds the
+     real centre whether or not anything sits in the third one. -->
 <div id="mjm-ribbon" style="background:#fff;border-bottom:1px solid #ccfbf1;padding:16px 24px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;position:sticky;top:0;z-index:30;box-shadow:0 1px 2px rgba(0,0,0,.05);font-family:'Outfit',system-ui,sans-serif;">
   <a href="nursery_ops_dashboard.html" style="justify-self:start;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.1em;background:#f8fafc;padding:8px 16px;border-radius:999px;border:1px solid #e2e8f0;text-decoration:none;white-space:nowrap;">&#8592; Back</a>
   <span style="justify-self:center;text-align:center;font-weight:900;color:#1e293b;text-transform:uppercase;letter-spacing:.1em;font-size:14px;padding:0 12px;">Nursery Maintenance Schedule &amp; Work Record</span>
-  <div style="justify-self:end;width:32px;height:32px;background:#0d9488;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:12px;">NO</div>
 </div>
 
 <!-- ═══ APP VIEW ═══ -->
@@ -198,7 +206,6 @@
     <!-- WORK RECORD (default) — headline metrics + List / Analytics sub-views -->
     <div id="tab-record" class="tab-panel active">
       <div class="page-hdr"><div class="page-hdr-title" id="record-nursery-line"></div></div>
-      <div id="rec-metrics" class="metrics-big"></div>
       <!-- The Monthly Records / Performance pair lives ONLY in the side
            bar's Work Records entry now — the office removed the duplicate
            bar that sat here. switchRecordView already guards the missing
@@ -1014,7 +1021,7 @@
 <script src="../shared/shared_plot_movement.js?v=10"></script>
 <!-- Which nursery a plot belongs to. Shared with the payroll module's salary
      claim, which has to put a work record back under its nursery. -->
-<script src="../shared/shared_maint_plots.js?v=3"></script>
+<script src="../shared/shared_maint_plots.js?v=4"></script>
 <!-- A worker is the register ROW, not the name on it: a tick saved under a
      name the register has since corrected still has to find its column.
      Read by this page AND by the one that prices it. -->
@@ -1041,7 +1048,7 @@
      page's own, and the office asked for it here; the rules are shared, so
      the file is shared. -->
 <script src="../shared/shared_npayroll_lock.js?v=3"></script>
-<script src="plot_maintenance_script.js?v=187"></script>
+<script src="plot_maintenance_script.js?v=189"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

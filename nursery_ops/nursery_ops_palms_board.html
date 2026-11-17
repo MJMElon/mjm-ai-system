@@ -9,7 +9,14 @@
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
 <title>PALMS Plot Status Map — Nursery Operation Manage</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
+<!-- PALMS wears the plot map, not the module's leaf: the office asked for
+     "一个地图板块感 里面有蓝黄红绿板块", then "不规则形状的". So the parcels
+     are IRREGULAR quadrilaterals with lanes between them, the way plots sit
+     on the ground, and not a grid of four squares. The plate is still the
+     module's; what sits on it is this page. The outer outline is a nursery
+     shape and NOT a tracing of BNN own boundary -- that lives in
+     shared_plots.map_top, which this environment cannot read. See CLAUDE.md. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpolygon points='8,13 30,10.25 34.5,32.1 9.5,30' fill='%233b82f6'/%3E%3Cpolygon points='30,10.25 56,7 56.6,34 34.5,32.1' fill='%23f5b324'/%3E%3Cpolygon points='9.5,30 34.5,32.1 39,54 12,57' fill='%23ef4444'/%3E%3Cpolygon points='34.5,32.1 56.6,34 57,52 39,54' fill='%2322c55e'/%3E%3Cpath d='M30 10.25L39 54M9.5 30L56.6 34' stroke='%231b4332' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
@@ -105,15 +112,38 @@
      and a flex item's default is to shrink — so on a short window the photo
      was squeezed to nothing and the panel looked like it had no map at all.
      It keeps its height and the panel scrolls instead. */
-  .pv-map { position:relative; background:#0f172a; overflow:hidden;
-            flex:none; height:clamp(260px, 44vh, 420px); }
+  /* The height is a VARIABLE because the photo has to be capped in the same
+     units, and a second copy of this clamp is how the two come to disagree. */
+  .pv-map { --pv-h: clamp(260px, 44vh, 420px);
+            position:relative; background:#0f172a; overflow:hidden;
+            flex:none; height:var(--pv-h); }
   .pv-frame { position:absolute; inset:0; overflow:hidden;
               display:flex; align-items:center; justify-content:center; padding:8px; }
   .pv-inner { position:relative; display:inline-block; max-width:100%; max-height:100%; }
-  /* The photo is positioned and scaled so the plot's own bounding box fills
-     the frame — a crop, done with CSS, so no second image is needed and the
-     polygon percentages stay the percentages the database holds. */
-  .pv-img { display:block; max-width:100%; max-height:100%; width:auto; height:auto;
+  /* THE CAP ON THE PHOTO IS IN REAL UNITS AND MUST NOT GO BACK TO A PER CENT.
+
+     The overlay is pinned to .pv-inner, and .pv-inner shrinks to the photo —
+     so the two agree only while the photo is really inside the frame. It was
+     capped with `max-height:100%`, and a percentage height against a parent
+     whose own height is AUTO resolves to none: the photo therefore rendered
+     at its natural height, overflowed, and was quietly clipped by the frame,
+     while .pv-inner stayed clamped to the frame and took the overlay with it.
+
+     Measured on a 1600x900 aerial in a 920x396 panel: photo 509px tall,
+     overlay 380 — so every polygon was drawn at 75% of its height and every
+     plot sat about an eighth of the nursery ABOVE where it is. The office
+     said it in four words, over this modal: PALMS的地图跑掉了.
+
+     The one shape that was right is a photo WIDER than the frame, where
+     max-width binds first and the height follows the ratio — which is
+     presumably the picture this was built against.
+
+     `calc(var(--pv-h) - 16px)` resolves, so the photo fits, .pv-inner shrinks
+     to it and the overlay lands on it. 16px is the frame's 8px of padding,
+     top and bottom. Same answer shared_plot_map.js has always used, where its
+     own img carries `max-height:calc(<height> - 16px)` for this reason. */
+  .pv-img { display:block; max-width:100%; max-height:calc(var(--pv-h) - 16px);
+            width:auto; height:auto;
             object-fit:contain; user-select:none; -webkit-user-drag:none; }
   .pv-svg { position:absolute; inset:0; width:100%; height:100%; }
   .pv-tags { position:absolute; inset:0; pointer-events:none; }
@@ -193,13 +223,16 @@
 <body>
 
 <!-- The compact bar the other nursery-ops pages wear: Back pill, centred
-     module name, NO badge. nursery_ops_seeds.html is the original; the big
-     shared ribbon came off at the office's request, so Sign Out lives on
-     the portal the Back pill leads to. -->
+     module name, and nothing on the right. nursery_ops_seeds.html is the
+     original; the big shared ribbon came off at the office's request, so
+     Sign Out lives on the portal the Back pill leads to -- and the teal NO
+     badge that stood in the right cell came off the same way. The cell
+     itself is still there: the grid is 1fr auto 1fr, so both outer tracks
+     are sized by the free space and the module name holds the real centre
+     whether or not anything sits in the third one. -->
 <div id="mjm-ribbon" class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-[1fr_auto_1fr] items-center sticky top-0 z-30 shadow-sm">
   <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
   <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm px-3">PALMS</span>
-  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
 </div>
 
 

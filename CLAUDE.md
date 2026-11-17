@@ -274,26 +274,81 @@ form would offer. Plots past the end of a range — B15, U19 — go the same way
 has always drawn is indistinguishable from a grid that is right, which is the
 shape this file keeps finding.
 
-**THE RANGES ARE THE FLOOR NOW, NEVER THE LIST.** Whatever `shared_plots`
-holds is added on top, deduped on letters and digits. Three things fall out
-and the first is why it is shaped that way:
+**THE RANGES ARE THE FALLBACK, AND THEY WERE THE FLOOR FOR A DAY.** Whatever
+`shared_plots` holds is what a picker offers; the ranges answer for a nursery
+Seedling Stock holds no plot for. That is the shape the office asked for in
+their next sentence and the paragraph below is why.
+
+### AND THEN A DELETION HAD TO BITE, which the floor was what stopped
+
+The office, the same day the adding half shipped: *"i deleted a plot, make it
+remove from all modules too. i added a plot, make it add for all modules
+too."*
+
+**THE FIRST HALF WORKED AND THE SECOND COULD NOT.** With the ranges as a
+FLOOR, B14 was offered whether or not `shared_plots` had a row for it, so the
+✕ on the settings page deleted a row and changed nothing anybody could see —
+and `loadSharedPlots` said so in its own words, as a feature: *"MERGED into
+NURSERY_PLOTS rather than replacing it … dropping it would take those rows
+off the screen."*
+
+**SO THE ANSWER IS THE LIST, AND THE RANGES ARE WHAT ANSWERS WITH NO SIGNAL.**
+`MJMMaintPlots.offered()` is the one place that says it and the four other
+copies read it or restate it. The sentence that comment was protecting is kept
+as a RULE of its own rather than as a side effect of never narrowing at all,
+and that is the whole of the difference:
 
 - **A READ THAT FAILS CHANGES NOTHING.** Every picker offers exactly what it
   offered before — the fail-open rule every gate here follows. **An empty
   plot list is a module nobody can use**, and a grid that went blank because
-  a table could not be read is far worse than one that is a plot short.
-- **No plot that is on screen today can disappear**, so nothing had to be
-  re-keyed and no screen moved for a plot that was already there.
-- **WHAT IT COSTS, said plainly: a plot DELETED on the settings page does
-  not leave the four ranges.** B14 is offered whether or not `shared_plots`
-  has a row for it. That is the price of fail-open and it is the safe
-  direction. The day the office wants a plot GONE from a picker, the answer
-  is to stop writing the ranges, not to let a failed read empty a module.
+  a table could not be read is far worse than one that is a plot short. So
+  `loadStockStrict` hands back an `ok` beside the plots, and **only a reply
+  that really arrived narrows anything**: `loadStock` returning an empty
+  object cannot be told from a refusal, which is exactly the shape that would
+  have emptied four modules at once.
+- **IT IS ASKED PER NURSERY, and the Pre Nursery is why.** A nursery
+  `shared_plots` holds no plot for keeps its whole range, because **an absent
+  answer is nobody having been asked** — the rule this file already follows
+  for a permission. PN is counted in TRAYS and may have no row at all, so a
+  global test would wipe P01–P52 off every picker in the company.
+- **A PLOT CARRYING SAVED ROWS IS PUT BACK**, on the schedule. That is
+  `_mergePlotsWithRows`' own sentence — *"a row that is saved must never be a
+  row that cannot be seen"* — and it is STRONGER than the deletion: a month of
+  keyed figures must not vanish because somebody tidied the plot list
+  afterwards. **The spelling comes off the RANGES and never off the list as it
+  stands**, because `_narrowToStock` runs at three call sites: a map built from
+  the list stops being able to place B13 the moment it has narrowed it away
+  once, and a month of records landing on the second pass would never bring it
+  back.
+- **A STALE CAPACITY CANNOT RESURRECT A DELETED PLOT.** A capacity has put a
+  plot on the schedule since the Setting grid was written, so without a guard
+  it hands B14 straight back and the ✕ does nothing. `_mergeCapacityPlots`
+  skips a nursery that was narrowed.
+- **AND IT FIXED THE ADDING HALF ON THE SCHEDULE TOO**, which nobody had
+  noticed: a plot the office added with no capacity and no saved row never
+  reached `NURSERY_PLOTS` at all, because only those two things ever put one
+  there. The previous-code run of the test names it — *B15 is there, the
+  office added it* fails.
+
+**WHAT IT COSTS, and both are named rather than buried:**
+
+- **A "-R" PLOT DELETED WHILE IT CARRIES KEYED ROWS LOSES THEM OFF THE
+  SCREEN.** Nothing left in the system says whose plot it is: it is in no
+  range, and Seedling Stock is the only thing that ever claimed it.
+  `_mergePlotsWithRows` refuses to guess a nursery from the plot LETTER, which
+  is right — the ZZ row in `maint_plot_with_rows.cjs` is that rule. **NOTHING
+  IS DELETED**: the records sit untouched in `nops_maint_records`, and putting
+  the plot back on the settings page is one press and brings every row back.
+- **IF `shared_plots` IS SHORT OF A ROW, A PLOT NOBODY DELETED DISAPPEARS.**
+  This environment cannot reach Supabase, so whether that list is complete is
+  not knowable from here — which is the whole reason section 4 of the check
+  below exists, and why it is the thing to run FIRST.
 
 **FOUR FILES MAY HOLD A COPY OF THE RANGES, and each says the same rules:**
 
 - `shared/shared_maint_plots.js` — the office repository's ONE read of
-  `shared_plots`. Unchanged by this work.
+  `shared_plots`, and **the one place that says which of the two answers** —
+  `offered()`, read by the audit module and restated by the other three.
 - `audit/audit_plots.js` — **NEW**, and the audit module's one list. See
   below.
 - `shared/shared_nelos_dock.js` — `loadPlots()`. A second copy of the read,
@@ -321,7 +376,11 @@ once, and it adds exactly two things to the shared list:
   four-line change in each of the five files rather than a rewrite of every
   reader: a grid that reads `NURSERY_PLOTS[tab]` on each draw picks up a plot
   that arrived after the first draw, and so does a lookup on
-  `PLOT_TO_NURSERY[p]`. **It also means nothing may SNAPSHOT them** — the
+  `PLOT_TO_NURSERY[p]`. **`setList` therefore EMPTIES AND REFILLS each array
+  rather than reassigning it** (`arr.length = 0`), which is the only reason a
+  plot the office DELETED can leave a grid that has already been drawn — the
+  deletion half needs the live objects even more than the adding half did.
+  **It also means nothing may SNAPSHOT them** — the
   reverse-lookup IIFE at the top of each of those five files was exactly
   that, and it is why this file owns `byPlot()`. The test forbids the IIFE
   coming back.
@@ -401,15 +460,27 @@ duplicate in it, which is exactly the kind of thing that gets lived with.
 
 `shared/CHECK_which_plots_each_module_offers.sql` is what answers *what does
 this actually move*: every plot each side holds, how many are inside the
-ranges and how many are NEW, every new plot named, and every plot whose
-nursery matches none of the four. **"0 NEW" is a real possible answer** and
-means the office has not yet keyed a plot outside a range — the link is then
-doing nothing visible, which is not the same as not working. Tested on the
-scratch Postgres against the office's own shapes, against a database with no
-hand-added-plots table, with no `shared_plots` at all, and with every plot
-inside a range, which draws the *nothing to report* lines.
+ranges and how many are NEW, every new plot named, **every plot that LEAVES**,
+and every plot whose nursery matches none of the four. **"0 NEW" is a real
+possible answer** and means the office has not yet keyed a plot outside a
+range — the link is then doing nothing visible, which is not the same as not
+working.
 
-`tests/a_plot_added_in_the_office_reaches_every_module.cjs` is 77 checks and
+**SECTION 4 IS THE ONE TO READ FIRST, and it is the handover this change
+cannot be trusted without.** It names every range plot of a keyed nursery
+that Seedling Stock has no row for, with what if anything puts it back — a
+hand-added row, a saved work record, or nothing — because **this environment
+cannot reach Supabase and whether that list is COMPLETE is not knowable from
+here.** A plot in it the office never deleted means `shared_plots` is short of
+a row, and the answer is to add the plot back on the settings page: one press,
+and it returns everywhere. Tested on the scratch Postgres against the
+office's own shapes with two deletions, against a database with no
+hand-added-plots table and no work records (which correctly flips the
+kept-by-a-record plot to *gone*), with no `shared_plots` at all, with every
+nursery keyed in full, which draws the *nothing to report* lines, and against
+a **sparse** BNN holding three plots, which names all eleven that leave.
+
+`tests/a_plot_added_in_the_office_reaches_every_module.cjs` is 89 checks and
 **50 fail on the previous code**. It drives the shipped `shared_maint_plots
 .js` and `audit_plots.js`, the REAL Plot Condition page and the REAL dock in
 a real browser, and ends with the section that stops this coming back: a
@@ -419,7 +490,17 @@ that the two phone copies are the same file, and that every page loads the
 plot list first. **Its first run against the previous code DIED** on an
 ENOENT for a file that does not exist there, which is the house trap again —
 it names the missing file as a failure now and asks the fifty checks
-underneath it.
+underneath it. Its fixture is built round a DELETION now (B14 keyed nowhere,
+B15 and B4-R added, the Pre Nursery deliberately never keyed), so the adding
+half and the deletion half are held by one file.
+
+`tests/a_deleted_plot_leaves_the_schedule.cjs` is the Work Maintenance half,
+which is the only module with a saved-rows rule: 24 checks, **7 of them
+failing on the previous code**, the first in the office's own terms. Its
+section 4 drives the ORDER that breaks a list-built spelling map — narrow with
+no records, then narrow again with the records back — because that is the one
+way to catch the second-pass bug, and a fixture that happens to load its
+records first passes over it.
 
 ## A month keeps its own work records
 
@@ -752,6 +833,97 @@ empty cell with the mark on it is not a question.
 
 To take a corrected field record's date, clear the cell — then it is a
 question again and the field answers it.
+
+## The audit's plot and batch list IS the Main Nursery Movement Report
+
+The office, over the two audit module cards: *"for the nursery audit's plot
+condition audit and seedling height audit's plot and batch link to the summary
+report (main nursery movement report). So if the plot shown in the report, it
+will shown for audit too."*
+
+**THE GATE WAS ALREADY THE REPORT AND THE ROSTER WAS NOT**, which is the whole
+fault in one line. Both modules built their batch roster from the LIFE-STAGE
+LOGS — `Planted` for a pre-nursery tray, `Transplanted*` for a main plot — and
+then used `shared_plot_batch_balance` only to grey out a batch that had since
+gone. That view IS the Movement Report: its own file opens by saying so, and it
+is `MOVE_COLS.main` column for column.
+
+So the two did not cover the same ground. **A batch that arrived by TRANSFER
+has no `Transplanted` log at all** — it arrives as a `Cull3_Transfer`, which is
+the report's *Transfer In* column — so it sat in the report, had a perfectly
+good row in `balanceByPB`, and was on NO grid, because nothing had ever put it
+in `plotBatches` for the gate to be asked about.
+
+**THAT IS EVERY "-R" PLOT IN THE COMPANY.** A replant plot is made by a
+3rd-culling transfer and is populated by nothing else, so the seedlings
+standing in it could be read off the Summary Report and could not be audited.
+The office could see the plot on the grid — `audit_plots.js` offers it — with
+no batch under it and nothing saying why. **It only became visible the day the
+plot list started carrying `-R` plots at all**, which is the section above:
+before that the plot was missing too, and one absence hid the other.
+
+`audit/audit_roster.js` is the rule and the view is a SOURCE now as well as the
+gate. Four things in it:
+
+- **IT IS PURELY ADDITIVE.** The logs and `audit_batches` are read exactly as
+  before and merged FIRST, so every batch on a grid today is on it tomorrow,
+  keeping its breed and its planted date — the view carries neither, and the
+  order is what stops a report row blanking a log row.
+- **`qty > 0`, never the report's own `closing !== 0`.** The report draws a row
+  that closed at nought if it moved during the period, because it is a movement
+  report and that row is the month's history. The audit asks a different
+  question — is there something standing to look at — and nothing standing is
+  nothing to audit, which is the judgement `isBatchNotRequired` has always
+  made.
+- **THE PRE NURSERY IS UNTOUCHED.** The view is the MAIN nursery movement and
+  holds no PN row, which `RUN_ME_plot_batch_balance_fix.sql` says in its own
+  words. PN keeps its `Planted` logs, the only thing that has ever placed a
+  tray.
+- **A PLOT THAT PLACES NOWHERE IS COUNTED, not dropped in silence.** A grid
+  with four tabs cannot draw a plot under no nursery, so it is left out and
+  `reportPlotsOnNoNursery` says how many — the shape this file keeps finding is
+  a list that is quietly short.
+
+**IT IS ONE FILE BECAUSE IT WAS ALREADY TWO COPIES.** The roster, the
+transaction-type list and `isBatchNotRequired` were each written out once per
+module and were already drifting — the two asked for different column sets —
+and this fix would have been the eleventh thing written down twice. It is PURE:
+rows in, rows out, no database and no screen, so the test drives the real one.
+**It is a HARD DEPENDENCY** like `audit_plots.js` beside it — both module
+scripts read `MJMAuditRoster` at their TOP LEVEL, so a page that cannot fetch
+it half-EVALUATES rather than half-working — so `audit_sw.js` precaches it
+(`VER` → `mjm-26111704`), both pages load it BEFORE the script that reads it,
+and the test asserts the order.
+
+**Nothing to run in the database.** Both versions of the view already carry
+`Cull3_Transfer`, so whichever has been run, the report half was always right;
+the whole of this is in the two modules.
+
+`shared/CHECK_what_the_audit_could_not_see.sql` is what answers *what does this
+actually move*: every standing plot and batch the audit could not see, per
+nursery and then named, and which of them still place under no nursery.
+**"nothing to report" is a real answer** and means every standing batch already
+had a life-stage log. Tested on the scratch Postgres against the transfer
+shape, against a database where the two already agreed, with no `shared_plots`
+(where a `-R` plot correctly reads as placing nowhere, because nothing else can
+place one), with no view at all, and twice in one session.
+
+`tests/the_audit_roster_is_the_movement_report.cjs` is 44 checks and **36 fail
+on the previous code**. It drives the SHIPPED `audit_roster.js` and both REAL
+pages in a real browser. Three things it had to learn:
+
+- **It names the missing file rather than dying on it.** The first run against
+  the previous code went down on an ENOENT for a file that does not exist
+  there — the house trap, met again — so `loadRoster()` answers null, that is
+  ONE named failure, and the forty-three underneath are still asked.
+- **`?admin=1` or the page leaves.** Both module pages bounce to the To Do list
+  unless the address names a plot, says admin, or came from manage
+  (`audit_script.js`'s own landing guard). Without it the section measures
+  `audit_home.html`, which loads no roster and reads exactly like the file
+  failing to evaluate.
+- **The login-guard stub has to DEFINE `MJMAuditLogin`**, not be blanked:
+  several module scripts reference it bare, so an absent one throws past
+  whatever runs next.
 
 ## A batch's height is a join, because the form never asked for the batch
 
@@ -6264,6 +6436,107 @@ So a card on `operation/operation_stock_sales.html` is:
 card on the Customer pane to all of it, so a card added without the line,
 the header or its own colour fails by name.
 
+## A module's mark is on EVERY tab of it, or it is not a mark
+
+The office had the PALMS board open and said it twice, over a crop of the
+badge and then over the browser tab itself: *删掉*, then *icon改掉*.
+
+What they were looking at was **NO** — a teal square carrying the
+nursery-operations initials, which is the house favicon pattern every
+module wears (`AI` on 73 pages, then `NL`, `FC`, `SL`, `NP`, `SI`) — and it
+was on that screen TWICE: in the tab, and again in the right cell of the
+page's own ribbon.
+
+**WHAT MADE IT WORTH SAYING IS THAT THE MODULE HAD TWO MARKS BY THEN.** A
+leaf had gone onto `nursery_ops_maintenance.html` that morning and onto
+nothing else, so one nursery-ops tab read as a leaf and the other nine read
+NO. **A mark is the one thing on a tab that says which system this is**, so
+half of it changed is worse than either answer: the set stops reading as a
+set, which is the whole of what it is for.
+
+So the leaf went onto all ten, **lifted out of the page that already had it**
+rather than typed again — and `tests/the_nursery_module_wears_one_mark.cjs`
+compares the shipped pages against each other rather than against a data URI
+written into the test, because a second copy of the mark is the fault it is
+checking for. It also fails a page that declares TWO `rel="icon"` links,
+which is the browser picking rather than anybody deciding.
+
+### And then the office asked for the PALMS one, so the PLATE is the module
+
+*"PALMS 的icon我要一个地图板块感 里面有蓝黄红绿板块"*, and a minute later
+*"不规则形状的 整体形状要和bnn boundry一样"* — a map of parcels, blue, yellow,
+red and green, irregular, shaped like the BNN boundary.
+
+**THAT IS THE RULE ABOVE OVERRULED, and it is worth writing down WHY rather
+than deleting it.** The argument for ten identical marks was that a mark is
+what says which system this is, and the office is not disputing it — they
+are saying the mark has two jobs on a bar of ten tabs, and only the first
+was being done. So the rule splits in two, and the test splits with it:
+
+- **the PLATE is the MODULE.** Every nursery_ops page still carries the house
+  rounded square in `#1b4332`, so the set still reads as one system, and an
+  icon invented from scratch fails the test even if it is pretty.
+- **the MARK on it is the PAGE**, and only where the office has asked for one.
+
+**TWO PAGES HAVE BEEN NAMED, AND A PARALLEL SESSION NAMED THE SECOND ONE THE
+SAME MORNING** — `nursery_ops_maintenance.html` got a **spanner** while this
+was being written, which is the best evidence there is that the split rule is
+the right one rather than a concession about PALMS. So the groups are: the
+three pages whose own name begins `nursery_ops_palms_` (the plot map),
+Maintenance (the spanner), and **everything else, which wears the leaf**.
+There is deliberately no fourth: an eleventh page arriving with a bespoke icon
+fails the test until somebody writes down that the office asked for it.
+
+**THE PALMS HALF IS NAMED BY FILENAME**, not by a list somebody maintains, so
+a PALMS page written next year arrives wearing the right mark.
+**`nursery_ops_plot_life.html` is deliberately not in it**: it reads the same
+plot log and draws the same map component, but it is not a PALMS screen and
+the office did not name it. That is a judgement and the next person may be
+asked to change it.
+
+**THE SPANNER WAS DRAWN ON A PLATE OF ITS OWN SPELLING** — `viewBox='0 0 24
+24'` with `rx='5'` — which is the same plate to the eye (0.208 against 0.219)
+and a second spelling of it in the file, so the two would drift the day
+somebody changed one. It is re-expressed on the 64 plate with its proportions
+kept exactly (inset 15%, the mark 70% of the plate), so the mark is untouched
+and there is **one plate written one way**. That is what the test can then
+hold, and it is why it asks for the plate separately from the mark.
+
+**THE PARCELS ARE POLYGONS AND NOT RECTS, which is the whole of 不规则形状的.**
+The first version was four rounded rectangles in a 2×2 and read as an
+app-launcher grid; four irregular quadrilaterals with lanes between them read
+as land. A rect cannot satisfy that ask, so the test says it in those terms:
+every parcel is a polygon, none of the four stands on two x values and two y
+values, no two are the same shape, and the lanes are drawn in the plate's own
+colour.
+
+**WHAT IS NOT DONE, and it is not knowable from here:** the outer outline is a
+nursery shape and **not a tracing of BNN's own boundary**. That boundary lives
+in `shared_plots.map_top`, and this environment cannot reach Supabase — there
+is no copy of it in either repository, so drawing one would be inventing a
+shape and calling it BNN's. The answer is one screenshot of the BNN map off
+the Plot Status Map, which the outline can then be traced from; until then the
+comment in each page's head says so in as many words.
+
+**6 of the test own 24 checks fail on the previous pages**, the first of them
+being *every one of them is the house plate* — which is the two plate
+spellings, caught by a check written for a fault nobody had met yet.
+
+**THE RIBBON'S RIGHT CELL IS EMPTY NOW, and that is safe HERE and would not
+be on the left.** The bar is `1fr auto 1fr`, so both outer tracks are sized
+by the free space rather than by what is in them and the module name holds
+the real centre with the third cell empty. Deleting the BACK pill would not
+be the same thing at all: the name would become the first grid item and
+slide left, which is the fault `audit_admin.html` keeps a `.fcr-spacer` for.
+Section 4 measures the rendered centre rather than trusting that paragraph.
+
+**And the measurement needed Tailwind, which the harness cannot fetch** —
+without it the ribbon is a plain block and the name sits hard left, so a
+centring check fails over nothing. The three declarations those classes
+stand for are served in the CDN's place, written out exactly as
+`nursery_ops_maintenance.html` has them inline; **that page is the control**,
+measured in the same section with no stand-in at all.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened four times in this codebase now. A screen writes a setting, the
@@ -8456,6 +8729,76 @@ B4-R2 both go; a split area is judged by its plot.
   because a phone can be holding a list cached before this.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
+
+## The overlay is pinned to a WRAPPER, so the wrapper has to be the photo
+
+The office opened B11 on the PALMS board and said four words:
+*PALMS的地图跑掉了*. The blue boundary sat up in the trees, well above the
+plot it is drawn round.
+
+**EVERY MAP IN THIS SYSTEM IS BUILT THE SAME WAY**, and it is the only way
+the percentages in `shared_plots.map_top` can be drawn at all:
+
+    .wrap   position:relative, SHRINKS TO THE PHOTO
+      img   the nursery photo, at its own aspect
+      svg   position:absolute; inset:0 — a 0..100 box over the wrapper
+
+So the whole thing rests on one fact: **the wrapper box IS the photo box.**
+
+**IT STOPS BEING TRUE THE MOMENT THE PHOTO IS CAPPED WITH A PER CENT.** A
+percentage height against a parent whose own height is AUTO resolves to
+`none` (CSS 2.1 §10.7) — so the photo renders at its NATURAL height and
+overflows, quietly clipped by the frame, while the wrapper stays clamped by
+whatever clamps it and takes the overlay down with it. `.pv-img` on the
+plot modal carried `max-height:100%` and `.pv-inner` above it carried
+`max-height:100%` as well, which is the pair that does it: one of them
+resolved and the other did not.
+
+Measured on the shipped modal: a 1600×900 aerial in a 920×396 panel came
+out **509px tall with a 380px overlay**, so every polygon was drawn at
+**75% of its height** — about an eighth of the nursery too high — and the
+bottom eighth of the photo was cut off. That is the picture the office sent.
+
+**THE ONE SHAPE IT GOT RIGHT IS A PHOTO WIDER THAN THE FRAME**, where
+`max-width` binds first and the height follows the ratio. That is
+presumably the picture it was built against, and it is why a fixture of one
+photo proves nothing here: the test sweeps five aspects and the letterbox
+one passes on the broken code.
+
+`calc(var(--pv-h) - 16px)` resolves, so the photo fits, the wrapper shrinks
+to it and the overlay lands on it. **The frame height is a VARIABLE** —
+`--pv-h` on `.pv-map` — because the cap has to be in the same units as the
+frame and a second copy of that `clamp` is how the two come to disagree.
+16px is the frame's 8px of padding, top and bottom.
+
+**THE THREE OTHER MAPS WERE ALREADY RIGHT, and they are where this answer
+comes from**: `shared_plot_map.js` caps its img at `calc(<height> - 16px)`,
+`operation_inventory_all.html` at `388px` and `operation_inventory_map.html`
+at `calc(90vh - 266px)`. All three are real units. **The modal was the only
+per cent in the system.**
+
+**AND THE EDITOR — THE ONE THAT WRITES — WAS NEVER WRONG**, which is the
+half worth knowing before anybody goes looking for bad data. A polygon
+dragged over a misplaced overlay would be STORED wrong and no screen
+afterwards could tell, so it was measured first: `.pd-inner` carries no
+`max-height` at all, so the wrapper, the photo and the overlay move
+together on every aspect. **Nothing in `shared_plots.map_top` needs
+repairing.** What the editor does have is SPILL — a photo taller than about
+4:5 overflows the stage and is clipped, 785px of it on a portrait — which
+is a photo you cannot scroll to the bottom of while drawing, not a boundary
+in the wrong place. The aerials are landscape, the office has not asked,
+and the test PRINTS the number rather than failing on it, so it is a known
+quantity and not a surprise.
+
+`tests/the_boundary_sits_on_the_photo.cjs` puts five photo shapes through
+the REAL modal, the REAL board map and the REAL editor and compares the two
+boxes; **5 of its 16 checks fail on the previous code**, the headline one in
+the office's own numbers (*photo 904×509, overlay 904×380*). Its last
+section carries the rule to the two Seedling Stock maps, which are built
+the same way and are not booted there. **It needs Tailwind's two wrapper
+classes and its preflight `img{max-width:100%}` served in the CDN's place**,
+or the board map reads as this very fault and is not — the modal and the
+editor are styled by their own `<style>` and need none of it.
 
 ## Where each job is done is KEYED, and the circles are what say it
 

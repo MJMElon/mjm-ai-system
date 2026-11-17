@@ -1706,16 +1706,16 @@
      column on this form to put it in. shared/CHECK_which_plots_each_module
      _offers.sql names those, because a plot keyed under a fifth nursery is
      on no picker in the system and nothing on a screen says so. */
-  var _plots = null;              // { PN: ['P01', …], … } — the extra ones
+  var _plots = null;              // { stock: {…}, custom: {…}, ok: bool }
 
   async function loadPlots() {
     if (_plots) return _plots;
     var token = await accessToken();
-    if (!token) return (_plots = {});
-    var out = {};
+    if (!token) return (_plots = { stock: {}, custom: {}, ok: false });
+    var stock = {}, custom = {}, ok = false;
     var reads = [
-      ['shared_plots',            'select=nursery_name,plot_name', 'nursery_name', 'plot_name'],
-      ['nops_maint_custom_plots', 'select=nursery,plot',           'nursery',      'plot']
+      ['shared_plots',            'select=nursery_name,plot_name', 'nursery_name', 'plot_name', stock],
+      ['nops_maint_custom_plots', 'select=nursery,plot',           'nursery',      'plot',      custom]
     ];
     for (var i = 0; i < reads.length; i++) {
       var r = reads[i];
@@ -1725,15 +1725,21 @@
         if (!res.ok) continue;
         var rows = await res.json();
         if (!Array.isArray(rows)) continue;
+        /* THE READ ANSWERED, which is what decides whether a plot the office
+           DELETED disappears or the built-in range stands. Set only for
+           shared_plots, and only on a reply that really came back — a
+           refusal or a throw leaves the ranges, which is where this form
+           was. See plotsOf below. */
+        if (r[0] === 'shared_plots') ok = true;
         rows.forEach(function (row) {
           var n = nurseryCodeOf(row && row[r[2]]);
           var p = String((row && row[r[3]]) || '').trim();
           if (!n || !p) return;
-          (out[n] || (out[n] = [])).push(p);
+          (r[4][n] || (r[4][n] = [])).push(p);
         });
       } catch (_) { /* this table is simply not read */ }
     }
-    return (_plots = out);
+    return (_plots = { stock: stock, custom: custom, ok: ok });
   }
 
   /* "UNN 1" is one of the four and so is "UNN1": letters and digits,
@@ -1744,22 +1750,40 @@
     return NURSERY_PLOTS[k] ? k : null;
   }
 
-  /* The ranges plus whatever the office keyed, deduped on letters and
-     digits — Seedling Stock spells a plot 'B1' where these ranges spell it
-     'B01', and one plot offered twice is a picker somebody has to read
-     twice. The RANGE spelling wins where both have it, so nothing on the
-     form moves for a plot that was already there. */
+  /* THE OFFICE'S LIST WINS, PER NURSERY — the same rule as
+     MJMMaintPlots.offered, which cannot be read here because this file is
+     loaded bare on 52 pages and depends on nothing but itself.
+
+     A plot is added AND DELETED in Seedling Stock Management → System
+     Settings, so for a nursery the office has keyed, that list IS the list:
+     delete B14 there and it is off this form. Three things keep it from
+     being a cliff, and each has to stay:
+
+       1. A READ THAT FAILED CHANGES NOTHING (`ok` false) — the ranges
+          stand. An empty plot picker is a form nobody can fill in.
+       2. ASKED PER NURSERY. The Pre Nursery is counted in TRAYS, so
+          `shared_plots` may hold no PN row at all, and a single global test
+          would wipe P01 to P52 off this form. A nursery the office has said
+          nothing about keeps its range.
+       3. A HAND-ADDED plot is still appended — that is the office saying it
+          exists by another route.
+
+     It does not reach `nurseryCodeOf`, which still answers for all four
+     nurseries whatever the plot list holds. */
   function plotsOf(nursery) {
-    var base = (NURSERY_PLOTS[nursery] || []).slice();
+    var loaded = _plots || { stock: {}, custom: {}, ok: false };
+    var keyed  = loaded.ok && Array.isArray(loaded.stock[nursery])
+                           && loaded.stock[nursery].length;
+    var list = (keyed ? loaded.stock[nursery] : (NURSERY_PLOTS[nursery] || [])).slice();
     var seen = {};
-    base.forEach(function (p) { seen[plotKeyOf(p)] = true; });
-    ((_plots || {})[nursery] || []).forEach(function (p) {
+    list.forEach(function (p) { seen[plotKeyOf(p)] = true; });
+    (loaded.custom[nursery] || []).forEach(function (p) {
       var k = plotKeyOf(p);
       if (!k || seen[k]) return;
-      base.push(p); seen[k] = true;
+      list.push(p); seen[k] = true;
     });
     /* B10 after B2, not before it. */
-    return base.sort(function (a, b) {
+    return list.sort(function (a, b) {
       return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
     });
   }
