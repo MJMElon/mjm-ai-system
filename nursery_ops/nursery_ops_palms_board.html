@@ -91,15 +91,6 @@
                font-weight:900; color:#0f172a; cursor:pointer; text-decoration:underline;
                text-decoration-color:#cbd5e1; text-underline-offset:3px; }
   .plot-link:hover { color:#0f766e; text-decoration-color:#14b8a6; }
-  /* "I looked at this plot and nothing has moved." Quiet until it is wanted:
-     the Last update cell is read as a date, not as a row of buttons, and a
-     solid control on every line of a 52-plot board is a field of targets over
-     a column nobody came to press. It is a real <button> and not a link, so
-     the keyboard reaches it. */
-  .seen-tick { margin-left:7px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:999px;
-               width:20px; height:20px; line-height:1; padding:0; font-size:11px; font-weight:900;
-               color:#94a3b8; cursor:pointer; vertical-align:middle; }
-  .seen-tick:hover, .seen-tick:focus-visible { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
   .pill { display:inline-block; font-size:9.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
           border-radius:999px; padding:2px 8px; border:1px solid; white-space:nowrap; }
   .p-late { background:#fff1f2; border-color:#fecdd3; color:#9f1239; }
@@ -257,7 +248,7 @@
 <div id="main" class="max-w-[1280px] mx-auto px-4 md:px-6 py-7 hidden palms-frame">
 
   <aside id="palms-nav" data-page="board" class="mb-5 md:mb-0"></aside>
-  <script src="../shared/shared_palms_nav.js"></script>
+  <script src="../shared/shared_palms_nav.js?v=2"></script>
 
   <div class="palms-body">
 
@@ -858,23 +849,27 @@ const MAX_AT_ONCE = 2;   // matches MAX_CONCURRENT in the field app's data.js
 
 let CF = null;   // { unit, fromN, toN, same } awaiting confirmation
 
-/* THE LAST UPDATE CELL, and the ✓ that is the only way to move it when the
-   stage has not moved. The office: "就算plot status一样， updater的名字也要
-   update， last update的日期也要".
+/* THE LAST UPDATE CELL. It carried a ✓ on every row -- the one gesture that
+   meant "I have looked at this plot and nothing has moved" -- and the office
+   took it off in three words: 不要打勾. A tick on all fifty-two rows is a
+   column of targets over a cell nobody came to press, and they are the ones
+   reading this board.
 
-   OFFERED ONLY WHERE THE PLOT HAS A LOG. `plotLine` answers null for a plot
-   with no entry at all, so such a row prints — in every column and a stamp
-   written against it would be invisible: a button that visibly does nothing
-   is how a screen teaches people its buttons do nothing. The field app is
-   where such a plot gets its first entry. */
+   WHAT THAT COSTS IS NAMED RATHER THAN BURIED, because it undoes half of
+   something the office themselves asked for the day before (就算plot status
+   一样， updater的名字也要update): a native <select> fires NO change event
+   when the stage already running is picked again, so with the tick gone
+   there is no RELIABLE route left for an unchanged plot. The dropdown route
+   is still wired (askChange takes `same`) and still correct where a browser
+   does fire it; it is simply not something to promise. A real status change
+   still stamps the day and the name, which is the half that never had a
+   button. The day the office wants the unchanged half back, the plot popup
+   is where ONE button belongs -- not a column of them. */
 function seenCell(unitKey, ln) {
   const txt = ln
     ? esc(MJMPalms.prettyD(ln.lastDate)) + (ln.lastBy ? ' · ' + esc(ln.lastBy) : '')
     : '<span class="text-slate-300">—</span>';
-  if (!CAN_UPDATE || !ln) return '<td class="text-slate-500">' + txt + '</td>';
-  return '<td class="text-slate-500">' + txt +
-    '<button class="seen-tick" data-seen="' + esc(unitKey) + '" ' +
-    'title="Nothing has changed — record that you looked at this plot today">✓</button></td>';
+  return '<td class="text-slate-500">' + txt + '</td>';
 }
 
 function statusCell(unitKey, ln) {
@@ -953,20 +948,6 @@ $('rows').addEventListener('change', (e) => {
      selected option (arrow keys in a closed select do, on most platforms)
      and a gesture that means this must not be swallowed. */
   askChange(unit, fromN, toN, toN === fromN);
-});
-
-/* The ✓ in the Last update cell. IT IS THE ROUTE THAT ACTUALLY WORKS, and
-   the dropdown is why: the Current Status cell draws the running stage as
-   `selected`, and a native <select> fires NO change event when the same
-   option is picked again. So before this there was no gesture anywhere on
-   the board that meant "I have looked at this plot and nothing has moved" —
-   the office asked for one, and this is it. */
-$('rows').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-seen]');
-  if (!b) return;
-  const unit = b.dataset.seen;
-  const open = MJMPalms.openActivities(LOGS, unit);
-  askChange(unit, open.length === 1 ? open[0].n : null, null, true);
 });
 
 function askChange(unit, fromN, toN, same) {
@@ -1212,8 +1193,20 @@ function render() {
       onNurseryChange: renderTable,
       onPlotClick: openPlot,
     });
-    // No -R plots on PALMS — see isReplantPlot in shared_palms.js.
-    MAP_SCOPE = allowed ? { nurseries: visible, skipReplant: true } : { skipReplant: true };
+    /* No -R plots on PALMS — see isReplantPlot in shared_palms.js.
+
+       AND THE NURSERY LIST IS ALWAYS PASSED. The office: "PN UNE不需要出现
+       在这里". The map draws a tab per row of `operation_nurseries`, which
+       holds every place the company has — the Pre Nursery and the estate
+       among them — and the list was handed over ONLY for a login somebody
+       had narrowed by hand, so an ordinary one got all of them. PALMS is the
+       three main nurseries and always has been: KEYS above is the same list
+       the table is scoped by, the plot log is only ever keyed against those,
+       and a PN tab opened on a map with nothing on it.
+
+       `visible` rather than KEYS, so a login narrowed to BNN still sees only
+       BNN — the permission narrows the three, it does not widen them. */
+    MAP_SCOPE = { nurseries: visible, skipReplant: true };
     await MAP.load(_supabase, MAP_SCOPE);
     await loadAreas();
     await loadHidden();

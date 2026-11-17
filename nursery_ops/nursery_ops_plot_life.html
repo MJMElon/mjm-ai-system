@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Every line of this page's code is inline, so the PAGE is the deploy: without
+     these a browser holding yesterday's copy keeps it -- and the side bar it
+     keeps still links to a page that has been DELETED, which is a 404 rather
+     than a stale label. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Life of Plot — Nursery Operation Manage</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpath d='M20 44C20 26 32 18 46 18C46 32 38 44 20 44Z' fill='%23d8f3dc'/%3E%3Cpath d='M20 44L32 32' stroke='%23d8f3dc' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -76,13 +83,6 @@
   .ps-table tbody tr.over { background:#fff1f2; }
   .ps-table tbody tr.over:hover { background:#ffe4e6; }
   .plot-link { font-weight:900; color:#0d9488; cursor:pointer; background:none; border:none; padding:0; font-size:13.5px; text-decoration:underline; text-underline-offset:3px; font-family:inherit; }
-  /* "I looked at this plot and nothing has moved." Quiet until it is wanted:
-     the Last Report cell is read as a date, not as a row of buttons. Written
-     to match the PALMS board's copy of it -- change one, change the other. */
-  .seen-tick { margin-left:7px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:999px;
-               width:20px; height:20px; line-height:1; padding:0; font-size:11px; font-weight:900;
-               color:#94a3b8; cursor:pointer; vertical-align:middle; font-family:inherit; }
-  .seen-tick:hover, .seen-tick:focus-visible { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
   .plot-link:hover { color:#0f766e; }
   .ps-hist-row { display:flex; align-items:baseline; gap:10px; padding:8px 4px; border-bottom:1px solid #f1f5f9; }
   .ps-hist-row:last-child { border-bottom:none; }
@@ -109,7 +109,7 @@
 <div id="main" class="max-w-[1390px] mx-auto px-4 md:px-6 py-8 hidden palms-frame">
 
   <aside id="palms-nav" data-page="life" class="mb-5 md:mb-0"></aside>
-  <script src="../shared/shared_palms_nav.js"></script>
+  <script src="../shared/shared_palms_nav.js?v=2"></script>
 
   <div class="palms-body">
 
@@ -730,7 +730,7 @@ function renderStatusTable() {
             <td>${statusCell(p.plot_name, st)}</td>
             <td>${idealTxt}</td>
             <td class="${st.over ? 'text-rose-600 font-black' : ''}">${actualTxt}</td>
-            <td class="text-slate-500">${fmtDate(st.last)}${st.reported_by ? ' · ' + esc(st.reported_by) : ''}${seenTick(p.plot_name, st)}</td>
+            <td class="text-slate-500">${fmtDate(st.last)}${st.reported_by ? ' · ' + esc(st.reported_by) : ''}</td>
           </tr>`;
       }).join('')}</tbody>
     </table>`;
@@ -762,21 +762,6 @@ function renderStatusTable() {
 let CAN_UPDATE = false;   // may this account write the plot log?
 let SF = null;            // { plot, unit, fromN, toN, same } awaiting confirmation
 
-/* "I looked at this plot and nothing has moved" — the office asked for the
-   name and the date to move 就算plot status一样, and a native <select> fires
-   no change event for the option already selected, so the dropdown could
-   never carry it. Same button, same reason, as the PALMS board.
-
-   A SPLIT PLOT IS OFFERED NOTHING, which is the rule the dropdown beside it
-   already follows: PALMS logs against a UNIT, and on a split plot the unit is
-   not the plot, so a stamp from this row would be filed against a key this
-   row does not stand for. That plot is answered on the board, where each area
-   has a row of its own. */
-function seenTick(plotName, st) {
-  if (!CAN_UPDATE || !st || st.unit !== plotName) return '';
-  return `<button class="seen-tick" data-seen="${esc(plotName)}" ` +
-    `title="Nothing has changed — record that you looked at this plot today">✓</button>`;
-}
 
 function statusCell(plotName, st) {
   const label = st ? st.stage_name : '— no status reported —';
@@ -826,18 +811,6 @@ document.addEventListener('change', (e) => {
   /* The board's rule, and the board's reason: picking the stage already
      running is an answer and not a no-op. See MJMPalms.stampSave. */
   askStatusChange(sel.dataset.st, fromN, toN, toN === fromN);
-});
-
-/* The ✓ in the Last Report cell — the route that can always be reached,
-   because a native <select> fires no change for the option already selected.
-   Change one, change the other: the PALMS board carries the same button for
-   the same reason. */
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-seen]');
-  if (!b) return;
-  const unit = b.dataset.seen;
-  const open = MJMPalms.openActivities(PALMS_LOGS, unit);
-  askStatusChange(unit, open.length === 1 ? open[0].n : null, null, true);
 });
 
 function askStatusChange(plotName, fromN, toN, same) {

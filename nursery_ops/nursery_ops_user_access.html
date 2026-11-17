@@ -99,11 +99,17 @@ MJMModuleAccess.init({
       actions:[
         { key:'manage', label:'Edit motion study timings', desc:'Change the standard time allowed for each job' }
       ]},
-    /* PALMS is recorded in the field on the 555 FC Portal; these two pages
-       READ that record. There is no action under either — the office does not
-       key plot status in, so open or closed is the whole question. */
-    { key:'palms_board', label:'PALMS Plot Status Map', desc:'What every plot is on today, and what is running late' },
-    { key:'palms_motion', label:'PALMS Plot Motion Study', desc:'What the work actually costs in days, off the field plot log' }
+    /* PALMS is recorded in the field on the 555 FC Portal; this page READS
+       that record. There is no action under it — the office does not key plot
+       status in, so open or closed is the whole question.
+
+       The Plot Motion Study sat beside it and its page is gone, so its row is
+       too: a tick for a page nobody can open is a permission that cannot be
+       obeyed, which this system has a heading about. A tick somebody already
+       saved under `palms_motion` is harmless and is deliberately not cleared
+       — nothing reads it, and a file of SQL deleting somebody's saved answer
+       is a worse thing than a dead key. */
+    { key:'palms_board', label:'PALMS Plot Status Map', desc:'What every plot is on today, and what is running late' }
   ]
 });
 </script>

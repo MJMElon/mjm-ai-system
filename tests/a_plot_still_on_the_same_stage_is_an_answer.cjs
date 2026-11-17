@@ -225,7 +225,7 @@ async function browserHalf() {
 
 async function drive(page, which, url) {
   const name = which === 'board' ? 'The PALMS board' : 'Life of Plot';
-  console.log('\n' + (which === 'board' ? '2' : '3') + '. ' + name + ': the ✓ beside the last update');
+  console.log('\n' + (which === 'board' ? '2' : '3') + '. ' + name + ': an unchanged stage still moves the last update');
 
   await page.goto('http://localhost:' + PORT + url, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1400);
@@ -256,76 +256,21 @@ async function drive(page, which, url) {
   check(name + ': …and writes nothing to the plot log',
         same.filter((x) => x.t === 'fcportal_palms_plot_logs').map((x) => x.v), []);
 
-  /* A ROW WITH A LOG GETS THE BUTTON AND A ROW WITH NONE DOES NOT. B3 has no
-     entry, so plotLine answers null and a stamp against it would be
-     invisible -- a button that visibly does nothing teaches people the
-     buttons do nothing. */
-  const ticks = await page.evaluate(() =>
-    [...document.querySelectorAll('[data-seen]')].map((b) => b.dataset.seen).sort());
-  check(name + ': the button is on the logged plots', ticks, ['B1', 'B2']);
-  if (!ticks.length) {
-    console.log('       (nothing to press — the checks under this are not asked)');
-    return;
-  }
+  /* AND THERE IS NO TICK ANYWHERE. It shipped as a ✓ on every row -- the
+     one gesture that meant "I looked and nothing moved" -- and the office
+     took it off the next day in three words: 不要打勾. A column of fifty-two
+     small targets over a cell nobody came to press, and they read this board.
 
-  /* IT IS A REAL BUTTON AND IT IS ON THE SCREEN. The tag matters because the
-     keyboard reaches a <button> and not a <span> with a handler on it; the box
-     matters because a control of nought by nought is not a control. */
-  const btn = await page.evaluate(() => {
-    const b = document.querySelector('[data-seen]');
-    const r = b.getBoundingClientRect();
-    return { tag: b.tagName, w: Math.round(r.width), h: Math.round(r.height) };
-  });
-  check(name + ': …and it is a real button', btn.tag, 'BUTTON');
-  checkTrue(name + ': …with a box somebody can hit', btn.w >= 16 && btn.h >= 16);
-
-  await page.evaluate(() => { window.__writes.length = 0; });
-  /* PRESSED IN THE PAGE, not through Playwright. Tailwind comes from a CDN
-     the harness cannot reach, so without its layout rules Life of Plot's map
-     placeholder sits over its own table and hit-tests every press — which is
-     the harness missing a stylesheet and not a dead button. A real
-     HTMLElement.click() runs the same handler by the same route; the two
-     checks above are what keep "it is reachable" from being lost with it. */
-  await page.evaluate(() => document.querySelector('[data-seen="B1"]').click());
-  await page.waitForTimeout(250);
-
-  /* THE PANEL SAYS WHAT IT IS ABOUT TO DO, and on a check that is not a
-     change: no After box, because repeating the Before is the screen
-     inventing a change to describe. */
-  const panel = await page.evaluate((w) => {
-    /* offsetParent is NULL for a position:fixed element, and both of these
-       modals are fixed — a visibility test written that way reads every one
-       of them as shut. The box it actually occupies is the honest question. */
-    const vis = (el) => !!el && !el.classList.contains('hidden')
-                     && el.getBoundingClientRect().height > 0;
-    const modal = document.getElementById(w === 'board' ? 'cf-modal' : 'sf-modal');
-    const ok = document.getElementById(w === 'board' ? 'cf-ok' : 'sf-ok');
-    return {
-      open: vis(modal),
-      ok: ok ? ok.textContent.trim() : '(none)',
-      after: w === 'board' ? vis(document.getElementById('cf-after')) : false,
-      says: (document.getElementById(w === 'board' ? 'cf-note' : 'sf-line') || {}).textContent || '',
-    };
-  }, which);
-  checkTrue(name + ': pressing it opens the confirm panel', panel.open);
-  check(name + ': …asking to confirm a CHECK, not a change', panel.ok, 'Confirm check');
-  if (which === 'board') check(name + ': …with no "After" box on it', panel.after, false);
-  checkTrue(name + ': …and it says nothing about the stage moving',
-            /stays on|Nothing about the stage changes/i.test(panel.says));
-
-  await page.evaluate((i) => document.getElementById(i).click(), which === 'board' ? 'cf-ok' : 'sf-ok');
-  await page.waitForTimeout(400);
-
-  const w = await page.evaluate(() => window.__writes.map((x) => ({ t: x.table, v: x.verb, rows: x.rows, opts: x.opts })));
-  const hist = w.filter((x) => x.t === 'fcportal_palms_history');
-  const logw = w.filter((x) => x.t === 'fcportal_palms_plot_logs');
-  check(name + ': confirming writes the daily report', hist.length, 1);
-  check(name + ': …and NOTHING to the plot log', logw.map((x) => x.v), []);
-  const row = ((hist[0] || {}).rows || [])[0] || {};
-  check(name + ': …naming the plot, today, and who looked',
-        [row.unit_key, row.at_date === new Date().toISOString().slice(0, 10) ? 'today' : row.at_date, row.recorded_by],
-        ['B1', 'today', 'Esther Wong']);
-  check(name + ': …and the stage that is still running', row.acts, [10]);
+     WHAT IS ASKED HERE IS THE ABSENCE, because a half-removal that leaves
+     the handler or the stylesheet behind is the kind that comes back: no
+     button, no listener wired to one, and no rule left styling it. The WRITE
+     above is asked first and separately, so this check cannot be mistaken
+     for the feature having gone with the button. */
+  const left = await page.evaluate(() => ({
+    btns: document.querySelectorAll('[data-seen]').length,
+    ticks: document.querySelectorAll('.seen-tick').length,
+  }));
+  check(name + ': no ✓ is drawn on any row', [left.btns, left.ticks], [0, 0]);
 
   /* AND A REAL CHANGE STAMPS IT TOO. pickBy gives a tie on the day to the
      daily report, so an office correction made on an afternoon the Field
