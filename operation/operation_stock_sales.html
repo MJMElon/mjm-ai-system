@@ -403,6 +403,46 @@
   .reserv-chip-qty,
   .reserv-empty { font-size:11px; }
 }
+
+    /* ── Stock Analysis Dashboard (Inventory Map pane, section 1) ── */
+    #invmap-analysis .sa-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    #invmap-analysis .sa-card { text-align:left; border-radius:12px; border:1px solid #e2e8f0; padding:12px 14px; background:#fff; font:inherit; }
+    #invmap-analysis button.sa-card { cursor:pointer; transition:box-shadow .15s, border-color .15s; }
+    #invmap-analysis button.sa-card:hover { border-color:#6366f1; box-shadow:0 2px 10px rgba(99,102,241,.15); }
+    #invmap-analysis .sa-label { font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#64748b; }
+    #invmap-analysis .sa-value { font-size:26px; font-weight:900; line-height:1.1; margin-top:4px; font-variant-numeric:tabular-nums; color:#1e293b; }
+    #invmap-analysis .sa-sub { font-size:11px; font-weight:700; color:#94a3b8; margin-top:4px; }
+    #invmap-analysis .sa-order { background:#fffbeb; } #invmap-analysis .sa-order .sa-value { color:#b45309; }
+    #invmap-analysis .sa-stock { background:#eef2ff; } #invmap-analysis .sa-stock .sa-value { color:#4338ca; }
+    #invmap-analysis .sa-gap-pos { background:#ecfdf5; } #invmap-analysis .sa-gap-pos .sa-value { color:#047857; }
+    #invmap-analysis .sa-gap-neg { background:#fef2f2; } #invmap-analysis .sa-gap-neg .sa-value { color:#b91c1c; }
+    #invmap-analysis .sa-forecast { margin-top:12px; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; }
+    #invmap-analysis .sa-fhead { display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#334155; margin-bottom:8px; }
+    .sa-link { font-size:11px; font-weight:800; color:#4f46e5; background:none; border:0; cursor:pointer; text-transform:none; letter-spacing:0; }
+    .sa-link:hover { text-decoration:underline; }
+    #invmap-analysis .sa-fcols { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    #invmap-analysis .sa-fcol { background:#f8fafc; border-radius:10px; padding:10px 12px; }
+    #invmap-analysis .sa-ftitle { font-size:12px; font-weight:900; color:#1e293b; margin-bottom:6px; }
+    #invmap-analysis .sa-frow { display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:13px; font-weight:800; color:#334155; padding-top:6px; font-variant-numeric:tabular-nums; }
+    #invmap-analysis .sa-frow.pos span:last-child { color:#047857; } #invmap-analysis .sa-frow.neg span:last-child { color:#b91c1c; }
+    #invmap-analysis .sa-frow.pos, #invmap-analysis .sa-frow.neg { border-top:1px solid #e2e8f0; margin-top:6px; }
+    .sa-fnote { font-size:11px; font-weight:600; color:#94a3b8; line-height:1.35; }
+    #invmap-analysis .sa-foot { margin-top:8px; }
+    .sa-ok, .sa-short { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; border-radius:999px; padding:2px 7px; margin-left:4px; vertical-align:middle; }
+    .sa-ok { background:#d1fae5; color:#047857; } .sa-short { background:#fee2e2; color:#b91c1c; }
+    #sa-modal .sa-mhead { display:flex; justify-content:space-between; font-size:12px; font-weight:900; color:#1e293b; text-transform:uppercase; letter-spacing:.08em; margin:4px 0 6px; }
+    #sa-modal .sa-mhead span { color:#4338ca; font-variant-numeric:tabular-nums; }
+    #sa-modal .sa-twrap { overflow-x:auto; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:14px; }
+    #sa-modal .sa-table { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
+    #sa-modal .sa-table th { background:#f8fafc; color:#64748b; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; text-align:left; padding:7px 10px; white-space:nowrap; }
+    #sa-modal .sa-table td { padding:6px 10px; border-top:1px solid #f1f5f9; color:#334155; white-space:nowrap; }
+    #sa-modal .sa-table .r { text-align:right; } #sa-modal .sa-table .b { font-weight:800; color:#1e293b; }
+    #sa-modal .sa-table tfoot td { font-weight:900; background:#f8fafc; border-top:1px solid #e2e8f0; }
+    #sa-modal .sa-empty { font-size:12px; font-weight:700; color:#94a3b8; padding:10px 0 16px; }
+    @media (max-width: 767px) {
+        #invmap-analysis .sa-cards, #invmap-analysis .sa-fcols { grid-template-columns:1fr; }
+        #invmap-analysis .sa-value { font-size:22px; }
+    }
 </style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
@@ -711,19 +751,19 @@
     <!-- ══════════════ INVENTORY MAP PANE ══════════════ -->
     <div id="ssm-pane-map" class="hidden space-y-5">
 
-        <!-- ── Section 1: Inventory Analysis (placeholder until the office
-             says what it analyses — nothing is computed here yet) ── -->
+        <!-- ── Section 1: Stock Analysis Dashboard — renderStockAnalysis()
+             in operation_stock_sales.js fills it ── -->
         <div id="invmap-analysis" class="metric-card border-l-4 border-indigo-500 relative overflow-hidden">
             <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                 <div class="flex items-center gap-2">
                     <div class="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                     </div>
-                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Inventory Analysis Dashboard</span>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Stock Analysis Dashboard</span>
                 </div>
             </div>
             <div id="invmap-analysis-body" class="p-4">
-                <div class="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-[11px] font-bold text-slate-400 uppercase tracking-widest">Analysis coming soon</div>
+                <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
             </div>
         </div>
 
@@ -808,6 +848,20 @@
     </div>
     <!-- /INVENTORY MAP PANE -->
 
+</div>
+
+<!-- ══════════════ Stock Analysis window ══════════════ -->
+<div id="sa-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4" onclick="if(event.target===this)closeStockAnalysisWindow()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div>
+                <div class="text-lg font-black text-slate-800" id="sa-modal-title">—</div>
+                <div class="text-[11px] font-bold text-slate-400" id="sa-modal-sub"></div>
+            </div>
+            <button onclick="closeStockAnalysisWindow()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+        </div>
+        <div class="p-5 overflow-y-auto" id="sa-modal-body"></div>
+    </div>
 </div>
 
 <!-- ══════════════ Plot details modal (Inventory Map) ══════════════ -->
@@ -917,7 +971,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js?v=22"></script>
+<script src="operation_stock_sales.js?v=23"></script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>
