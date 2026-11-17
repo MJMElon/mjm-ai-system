@@ -6604,6 +6604,14 @@ drawing, a colour that lost one is not.
 it read as plots round a nursery rather than as a chart — each one is bounded
 by two arcs, the outer edge and the inner, and the test asks for both.
 
+**AND THE REAL BNN OUTLINE IS NOT OWED. The office was offered it and said
+no** — *不用了* — when told that one screenshot of the Plot Status Map would
+let the outline be traced exactly. So the ring is the ANSWER and not a stand-in
+for one, which is the whole reason this paragraph exists: a note saying a
+better version is still coming is a note the next person acts on, and they
+would be undoing a decision rather than finishing a job. **Do not trace the
+BNN boundary onto this mark without being asked.**
+
 **6 of the test own 24 checks fail on the previous pages**, the first of them
 being *every one of them is the house plate* — which is the two plate
 spellings, caught by a check written for a fault nobody had met yet.
