@@ -8357,6 +8357,38 @@ tray the batch was planted into is left as it was.
 `tests/the_pre_nursery_follows_the_batch_report.cjs`; nothing to run in
 the database.
 
+## Mata Malam is set in the office, and the app only follows
+
+Mata Malam (the night check-in app, repository `MataMalam`) keeps its data
+in this database: a guard enters with the payroll PIN, the same session as
+the Worker Portal, and everything goes through the `mata_malam_*` functions
+in `shared/RUN_ME_mata_malam.sql`.
+
+**Its settings are a card on System Setting**, after Portal View &
+Function: the task timing, each location and its own check-in times, and
+where each location is pinned on a map. The office asked for the whole of
+the app's Settings moved there, because a guard only does the check-ins.
+
+- **ONE ROW, ONE WRITER.** `mata_malam_settings` id 1 holds
+  `{ locations: { CODE: { active, slots } }, timing, pins }`, written by
+  that card as a signed in staff account under the same policy as the
+  portal switches. The app has no Settings screen, and
+  `mata_malam_save_settings` (what the app used to save with) refuses
+  everybody, so a phone on an older copy cannot write over the office.
+- **The locations are `operation_nurseries`**, the register the Location
+  card lists. BNN and UNN are on unless switched off; anything else is off
+  until switched on.
+- **Times are two lists, hour and minute, never a time box.** A time box is
+  drawn in the machine's own clock format, and the app is 24-hour only.
+- **The pin map draws the stored boundaries behind the pins**, not
+  interactive, so a click inside one still places the pin.
+- **Nothing saved is nobody having been asked**: until the first Save the
+  phones keep the times they have, and the card says so.
+
+`tests/mata_malam_is_set_in_the_office.cjs` drives the card. It needs a
+`leaflet/dist` folder (`LEAFLET_DIST`) for the map half and says so rather
+than passing without it.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the

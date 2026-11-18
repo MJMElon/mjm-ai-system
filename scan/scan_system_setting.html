@@ -13,7 +13,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>System Setting — 555 Worker Portal</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
@@ -129,6 +131,50 @@
          transition:background .15s, opacity .15s; }
   .btn:hover { background:#6d28d9; }
   .btn:disabled { opacity:.5; cursor:not-allowed; }
+
+  /* ── Mata Malam ── */
+  .mm-h { margin:18px 0 8px; font-size:11px; font-weight:900; color:#475569;
+          text-transform:uppercase; letter-spacing:.08em; }
+  .mm-h:first-child { margin-top:0; }
+  .mm-timing { display:flex; flex-wrap:wrap; gap:14px; }
+  .mm-timing label { display:flex; flex-direction:column; gap:4px; font-size:11.5px;
+                     font-weight:700; color:#475569; }
+  .mm-timing input { width:120px; }
+  .mm-in { padding:8px 10px; border:1.5px solid #ede9fe; border-radius:10px;
+           font-size:13px; font-weight:700; color:#1e293b; background:white; }
+  .mm-in:disabled { background:#f8fafc; color:#94a3b8; }
+  .mm-loc { border:1px solid #ede9fe; border-radius:14px; padding:12px 14px; margin-bottom:8px; }
+  .mm-loc.off { background:#f8fafc; }
+  .mm-loc-head { display:flex; align-items:center; gap:10px; }
+  .mm-loc-name { font-size:13px; font-weight:900; color:#1e293b; flex:1; }
+  .mm-loc.off .mm-loc-name { color:#94a3b8; }
+  .mm-times { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; align-items:center; }
+  .mm-time { display:inline-flex; align-items:center; gap:2px; border:1.5px solid #ede9fe;
+             border-radius:10px; padding:2px 2px 2px 6px; background:white; }
+  .mm-time select { border:0; font-size:13px; font-weight:800; color:#1e293b; background:transparent;
+                    padding:5px 1px; cursor:pointer; font-variant-numeric:tabular-nums; }
+  .mm-time b { color:#94a3b8; }
+  .mm-time.bad { border-color:#dc2626; }
+  .mm-x { border:0; background:none; cursor:pointer; color:#94a3b8; font-size:15px;
+          line-height:1; padding:4px 6px; border-radius:8px; }
+  .mm-x:hover { color:#dc2626; background:#fef2f2; }
+  .mm-add { border:1.5px dashed #c4b5fd; background:#faf5ff; color:#6d28d9; border-radius:10px;
+            padding:6px 12px; font-size:12px; font-weight:800; cursor:pointer; }
+  .mm-add:disabled { opacity:.45; cursor:not-allowed; }
+  .mm-pins { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .mm-pin { border:1.5px solid #ede9fe; background:white; border-radius:10px; padding:6px 12px;
+            font-size:12px; font-weight:800; color:#475569; cursor:pointer; }
+  .mm-pin.on { border-color:#6d28d9; background:#6d28d9; color:white; }
+  .mm-pin small { display:block; font-size:10px; font-weight:600; opacity:.8; }
+  #mm-map { height:380px; border:1px solid #ede9fe; border-radius:14px; background:#f8fafc;
+            display:grid; place-items:center; font-size:12px; color:#94a3b8; z-index:0; }
+  .mm-pin-mark span { display:inline-block; transform:translate(-50%,-100%); background:#6d28d9;
+            color:white; font-size:11px; font-weight:900; padding:3px 8px; border-radius:8px;
+            white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.35); }
+  .mm-pin-mark.on span { background:#dc2626; }
+  .mm-out-label span { display:inline-block; transform:translate(-50%,-50%); font-size:10px;
+            font-weight:800; color:#1e293b; background:rgba(255,255,255,.8); padding:1px 6px;
+            border-radius:999px; white-space:nowrap; pointer-events:none; }
   .btn-ghost { background:white; border:1.5px solid #ede9fe; color:#6d28d9; }
   .btn-ghost:hover { background:#f5f3ff; }
 
@@ -218,6 +264,50 @@
       <div class="flex items-center gap-3" style="margin-top:14px;">
         <button class="btn" id="m-save" onclick="savePortals()">Save switches</button>
         <span id="m-status" class="muted"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ MATA MALAM ═══════════
+       The night check-in app's settings, moved here from the app itself.
+       A guard enters Mata Malam with a PIN and only ever does the check-ins;
+       when they are due, where, and how long each stays open is the office's
+       to say, so it is said on the page that says everything else the phones
+       are given. The phones take it on their next sync. -->
+  <div class="card" id="mm-card">
+    <div class="card-head">
+      <span class="card-ico">🌙</span>
+      <span>
+        <span class="card-name">Mata Malam</span>
+        <div class="card-sub">Night check-in: the timing, each location's own times, and where each location is pinned. The phones follow on their next sync.</div>
+      </span>
+    </div>
+    <div class="card-body">
+      <div id="mm-note" class="muted" style="margin-bottom:10px;"></div>
+
+      <div class="mm-h">Task timing</div>
+      <div class="mm-timing">
+        <label>Appears early (minutes)
+          <input class="mm-in" type="number" id="mm-opens" min="0" max="120" step="5" oninput="mmDirty()"></label>
+        <label>Time limit (minutes)
+          <input class="mm-in" type="number" id="mm-window" min="5" max="240" step="5" oninput="mmDirty()"></label>
+      </div>
+      <div id="mm-timing-eg" class="muted" style="margin-top:6px;"></div>
+
+      <div class="mm-h">Location &amp; time</div>
+      <div id="mm-locs"></div>
+
+      <div class="mm-h">Map pins</div>
+      <div class="muted" style="margin-bottom:8px;">Choose a location, then click the map to place its pin. The coloured outlines are the boundaries uploaded below.</div>
+      <div class="mm-pins" id="mm-pins"></div>
+      <div id="mm-map">The map is loading…</div>
+      <div style="margin-top:8px;">
+        <button class="btn btn-ghost" id="mm-pin-clear" type="button" onclick="mmClearPin()">Remove this pin</button>
+      </div>
+
+      <div class="flex items-center gap-3" style="margin-top:16px;">
+        <button class="btn" id="mm-save" onclick="mmSave()">Save Mata Malam</button>
+        <span id="mm-status" class="muted"></span>
       </div>
     </div>
   </div>
@@ -901,6 +991,295 @@ async function clearBoundary() {
   }
 }
 
+/* ══════════════ MATA MALAM ══════════════
+   One row, mata_malam_settings id 1, holding everything the night check-in
+   app is told:
+
+     { locations: { BNN: { active, slots: ['18:00', …] }, … },
+       timing:    { opensBeforeMinutes, windowMinutes },
+       pins:      { BNN: [lat, lng], … } }
+
+   It is the shape the app has read since it was linked to this database, so
+   the phones need nothing new to follow it. THIS PAGE IS THE ONLY WRITER:
+   the app's own Settings screen is gone, and the database refuses the save
+   it used to make.
+
+   The locations are operation_nurseries, the same register the Location
+   card above lists. A location nobody has decided about follows the app's
+   own default, which is the main nursery on and everything else off. */
+const MM_DEFAULT_SLOTS = ['18:00', '21:00', '00:00', '03:00', '06:00'];
+const MM_DEFAULT_TIMING = { opensBeforeMinutes: 15, windowMinutes: 60 };
+const MM_MAX_SLOTS = 12;
+const MM_COLORS = ['#16a34a', '#d97706', '#7c3aed', '#db2777', '#2563eb'];
+let mm = null;            // the draft on screen
+let mmLocs = [];          // [{ code, name }]
+let mmSel = null;         // the location whose pin a click places
+let mmMap = null, mmLayers = [];
+let mmUnsaved = false, mmCanSave = true;
+
+const mmCode = (name) => String(name || '').replace(/\s+/g, '').toUpperCase();
+const mmIsMain = (code) => /^(BNN|UNN)\d*$/.test(code);
+/* A night shift runs evening to morning, so 00:00 sorts AFTER 21:00. */
+const mmOrder = (t) => { const [h, m] = t.split(':').map(Number); return (h < 12 ? h + 24 : h) * 60 + m; };
+const mmSort = (a) => a.slice().sort((x, y) => mmOrder(x) - mmOrder(y));
+const mmSlotsOk = (a) => Array.isArray(a) && a.length > 0 && a.every(t => /^\d{2}:\d{2}$/.test(t));
+
+function mmDirty() {
+  mmUnsaved = true;
+  $('mm-status').textContent = 'Not saved yet.';
+  mmTimingExample();
+}
+
+function mmTimingExample() {
+  const o = Number($('mm-opens').value), w = Number($('mm-window').value);
+  const box = $('mm-timing-eg');
+  if (!Number.isFinite(o) || !Number.isFinite(w)) { box.textContent = ''; return; }
+  const at = (min) => { const t = ((18 * 60 + min) % 1440 + 1440) % 1440;
+                        return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+  box.textContent = `Example: an 18:00 check-in appears at ${at(-o)} and must be submitted by ${at(-o + w)}.`;
+}
+
+function mmRenderLocs() {
+  $('mm-locs').innerHTML = mmLocs.map((l, i) => {
+    const d = mm.locations[l.code];
+    /* Two plain lists rather than a time box: a time box is drawn in whatever the machine's own
+       clock format is, so 18:00 read "06:00 PM" on one desk and 18:00 on the next. Mata Malam shows
+       24-hour time and nothing else, and the card that sets it has to read the same way. */
+    const pad = (n) => String(n).padStart(2, '0');
+    const opts = (vals, sel) => vals.map(v => `<option value="${pad(v)}"${pad(v) === sel ? ' selected' : ''}>${pad(v)}</option>`).join('');
+    const times = d.slots.map((t, j) => {
+      const [hh, mi] = t.split(':');
+      const mins = []; for (let m = 0; m < 60; m += 5) mins.push(m);
+      if (!mins.includes(Number(mi))) { mins.push(Number(mi)); mins.sort((a, b) => a - b); }
+      const dis = d.active && mmCanSave ? '' : 'disabled';
+      return `
+      <span class="mm-time" data-time="${esc(t)}">
+        <select class="mm-hh" aria-label="${esc(l.name)} time ${j + 1}, hour" onchange="mmSetTime(${i}, ${j}, this)" ${dis}>${opts([...Array(24).keys()], hh)}</select>
+        <b>:</b>
+        <select class="mm-mi" aria-label="${esc(l.name)} time ${j + 1}, minute" onchange="mmSetTime(${i}, ${j}, this)" ${dis}>${opts(mins, mi)}</select>
+        <button type="button" class="mm-x" title="Remove this time" aria-label="Remove ${esc(t)}"
+          onclick="mmRemoveTime(${i}, ${j})" ${d.active && mmCanSave && d.slots.length > 1 ? '' : 'disabled'}>×</button></span>`;
+    }).join('');
+    return `<div class="mm-loc${d.active ? '' : ' off'}" data-loc="${esc(l.code)}">
+      <div class="mm-loc-head">
+        <span class="mm-loc-name">${esc(l.name)}</span>
+        <label class="muted" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" ${d.active ? 'checked' : ''} ${mmCanSave ? '' : 'disabled'}
+                 onchange="mmSetActive(${i}, this.checked)"> ${d.active ? 'On' : 'Off — no check-ins'}</label>
+      </div>
+      ${d.active ? `<div class="mm-times">${times}
+        <button type="button" class="mm-add" onclick="mmAddTime(${i})"
+          ${mmCanSave && d.slots.length < MM_MAX_SLOTS ? '' : 'disabled'}>+ Add time</button></div>` : ''}
+    </div>`;
+  }).join('') || '<div class="muted">No location is listed yet. They come from the Location card above.</div>';
+}
+
+function mmSetActive(i, on) { mm.locations[mmLocs[i].code].active = !!on; mmDirty(); mmRenderLocs(); mmRenderPins(); }
+function mmSetTime(i, j, el) {
+  const box = el.closest('.mm-time');
+  const v = box.querySelector('.mm-hh').value + ':' + box.querySelector('.mm-mi').value;
+  if (!/^\d{2}:\d{2}$/.test(v)) return;
+  mm.locations[mmLocs[i].code].slots[j] = v;
+  box.dataset.time = v;
+  mmDirty();
+}
+function mmRemoveTime(i, j) {
+  const d = mm.locations[mmLocs[i].code];
+  if (d.slots.length <= 1) return;
+  d.slots.splice(j, 1); mmDirty(); mmRenderLocs();
+}
+function mmAddTime(i) {
+  const d = mm.locations[mmLocs[i].code];
+  if (d.slots.length >= MM_MAX_SLOTS) return;
+  /* An hour after the last one, as somewhere to start from; never a copy of a time already there. */
+  let [h, m] = d.slots[d.slots.length - 1].split(':').map(Number);
+  let next;
+  for (let k = 0; k < 24; k++) {
+    h = (h + 1) % 24;
+    next = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    if (!d.slots.includes(next)) break;
+  }
+  d.slots.push(next); mmDirty(); mmRenderLocs();
+}
+
+/* ── the pin map ── */
+function mmActive() { return mmLocs.filter(l => mm.locations[l.code].active); }
+
+function mmRenderPins() {
+  const act = mmActive();
+  if (!act.some(l => l.code === mmSel)) mmSel = act.length ? act[0].code : null;
+  $('mm-pins').innerHTML = act.map(l => `
+    <button type="button" class="mm-pin${l.code === mmSel ? ' on' : ''}" onclick="mmPick('${esc(l.code)}')">
+      ${esc(l.name)}<small>${mm.pins[l.code] ? 'Pinned' : 'Not set'}</small></button>`).join('');
+  $('mm-pin-clear').disabled = !mmCanSave || !mmSel || !mm.pins[mmSel];
+  mmDrawMap();
+}
+
+function mmOutline(code) {
+  const row = (typeof bRows === 'object' && bRows) ? bRows[code] : null;
+  return row && row.geojson && row.geojson.features ? row.geojson : null;
+}
+
+function mmPick(code) {
+  mmSel = code;
+  mmRenderPins();
+  if (!mmMap) return;
+  if (mm.pins[code]) mmMap.panTo(mm.pins[code]);
+  else if (mmOutline(code)) mmMap.fitBounds(L.geoJSON(mmOutline(code)).getBounds(), { padding: [24, 24], maxZoom: 18 });
+}
+
+function mmInitMap() {
+  if (mmMap) return true;
+  if (typeof L === 'undefined') { $('mm-map').textContent = 'The map could not be loaded. The pins already saved are kept.'; return false; }
+  $('mm-map').textContent = '';
+  mmMap = L.map('mm-map');
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(mmMap);
+  mmMap.on('click', (e) => {
+    if (!mmCanSave || !mmSel) return;
+    mm.pins[mmSel] = [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))];
+    mmDirty(); mmRenderPins();
+  });
+  mmFitMap();
+  return true;
+}
+
+function mmFitMap() {
+  if (!mmMap) return;
+  const pts = [];
+  mmActive().forEach(l => { if (mm.pins[l.code]) pts.push(mm.pins[l.code]); });
+  mmLocs.forEach(l => { const g = mmOutline(l.code); if (g) { const b = L.geoJSON(g).getBounds(); if (b.isValid()) { pts.push(b.getSouthWest()); pts.push(b.getNorthEast()); } } });
+  if (pts.length) mmMap.fitBounds(L.latLngBounds(pts), { padding: [24, 24], maxZoom: 18 });
+  else mmMap.setView([3.73, 113.78], 13);
+}
+
+function mmDrawMap() {
+  if (!mm || !mmInitMap()) return;
+  mmLayers.forEach(x => x.remove());
+  mmLayers = [];
+  mmLocs.forEach((l, i) => {
+    const g = mmOutline(l.code);
+    if (!g) return;
+    const on = l.code === mmSel, color = MM_COLORS[i % MM_COLORS.length];
+    /* Not interactive, or a click inside an outline would never reach the map to place the pin. */
+    const lay = L.geoJSON(g, { interactive: false,
+      style: { color, weight: on ? 3 : 1.5, opacity: on ? 1 : .7, fillColor: color, fillOpacity: on ? .18 : .06 } }).addTo(mmMap);
+    mmLayers.push(lay);
+    if (!mm.pins[l.code] || !mm.locations[l.code].active) {
+      const b = lay.getBounds();
+      if (b.isValid()) mmLayers.push(L.marker(b.getCenter(), { interactive: false, keyboard: false,
+        icon: L.divIcon({ className: 'mm-out-label', html: `<span>${esc(l.name)}</span>`, iconSize: [0, 0] }) }).addTo(mmMap));
+    }
+  });
+  mmActive().forEach(l => {
+    const p = mm.pins[l.code];
+    if (!p) return;
+    const mk = L.marker(p, { draggable: mmCanSave, zIndexOffset: l.code === mmSel ? 1000 : 0,
+      icon: L.divIcon({ className: 'mm-pin-mark' + (l.code === mmSel ? ' on' : ''), html: `<span>${esc(l.name)}</span>`, iconSize: [0, 0] }) }).addTo(mmMap);
+    mk.on('click', () => mmPick(l.code));
+    mk.on('dragend', () => { const q = mk.getLatLng(); mm.pins[l.code] = [Number(q.lat.toFixed(6)), Number(q.lng.toFixed(6))]; mmSel = l.code; mmDirty(); mmRenderPins(); });
+    mmLayers.push(mk);
+  });
+}
+
+function mmClearPin() {
+  if (!mmSel || !mm.pins[mmSel]) return;
+  delete mm.pins[mmSel];
+  mmDirty(); mmRenderPins();
+}
+
+/* ── read and write ── */
+async function loadMataMalam() {
+  const note = $('mm-note');
+  try {
+    const [nur, set] = await Promise.all([
+      _supabase.from('operation_nurseries').select('name').order('name'),
+      _supabase.from('mata_malam_settings').select('*').eq('id', 1).maybeSingle()
+    ]);
+    if (set.error) throw set.error;
+    const seen = new Set();
+    mmLocs = [];
+    ((nur && nur.data) || []).forEach(n => {
+      const code = mmCode(n.name);
+      if (!code || seen.has(code)) return;
+      seen.add(code); mmLocs.push({ code, name: String(n.name).trim() });
+    });
+    /* The app's own three, when the register cannot be read: a card with no location on it cannot be filled in. */
+    if (!mmLocs.length) mmLocs = [{ code: 'BNN', name: 'BNN' }, { code: 'UNN1', name: 'UNN 1' }, { code: 'UNN2', name: 'UNN 2' }];
+    mmLocs.sort((a, b) => (mmIsMain(a.code) ? 0 : 1) - (mmIsMain(b.code) ? 0 : 1) || a.code.localeCompare(b.code, 'en', { numeric: true }));
+
+    const saved = (set.data && set.data.settings) || {};
+    mm = { locations: {}, timing: { ...MM_DEFAULT_TIMING }, pins: {} };
+    mmLocs.forEach(l => {
+      const s = (saved.locations || {})[l.code] || {};
+      mm.locations[l.code] = {
+        active: typeof s.active === 'boolean' ? s.active : mmIsMain(l.code),
+        slots: mmSlotsOk(s.slots) ? mmSort(s.slots) : MM_DEFAULT_SLOTS.slice()
+      };
+    });
+    const t = saved.timing || {};
+    if (Number.isFinite(t.opensBeforeMinutes) && Number.isFinite(t.windowMinutes)) mm.timing = { opensBeforeMinutes: t.opensBeforeMinutes, windowMinutes: t.windowMinutes };
+    Object.entries(saved.pins || {}).forEach(([code, p]) => {
+      if (Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)) mm.pins[code] = [p[0], p[1]];
+    });
+    $('mm-opens').value = mm.timing.opensBeforeMinutes;
+    $('mm-window').value = mm.timing.windowMinutes;
+    mmCanSave = true;
+    mmUnsaved = false;
+    note.textContent = set.data && set.data.updated_at
+      ? `Last saved ${String(set.data.updated_at).slice(0, 16).replace('T', ' ')}${set.data.updated_by ? ' by ' + set.data.updated_by : ''}.`
+      : 'Nothing has been saved yet, so the phones are on the starting times shown here. Press Save Mata Malam to make them the company\'s.';
+    $('mm-status').textContent = '';
+    mmTimingExample();
+    mmRenderLocs();
+    mmRenderPins();
+  } catch (e) {
+    mmCanSave = false;
+    note.innerHTML = '<span style="color:#92400e">Could not read the Mata Malam settings. ' +
+      'Run <b>shared/RUN_ME_mata_malam.sql</b> if this is the first time.</span>';
+    $('mm-save').disabled = true;
+  }
+}
+
+async function mmSave() {
+  if (!mm || !mmCanSave) return;
+  const status = $('mm-status');
+  const opens = Number($('mm-opens').value), win = Number($('mm-window').value);
+  let problem = '';
+  if (!Number.isInteger(opens) || opens < 0 || opens > 120) problem = 'Appears early must be between 0 and 120 minutes.';
+  else if (!Number.isInteger(win) || win < 5 || win > 240) problem = 'Time limit must be between 5 and 240 minutes.';
+  else if (win <= opens) problem = 'Time limit must be longer than Appears early, so the deadline falls after the check-in time.';
+  else if (!mmActive().length) problem = 'At least one location must be On.';
+  else {
+    const dup = mmActive().find(l => new Set(mm.locations[l.code].slots).size !== mm.locations[l.code].slots.length);
+    if (dup) problem = `${dup.name} has the same time twice.`;
+  }
+  if (problem) { status.innerHTML = `<span style="color:#b91c1c">${esc(problem)}</span>`; return; }
+
+  const settings = { locations: {}, timing: { opensBeforeMinutes: opens, windowMinutes: win }, pins: {} };
+  mmLocs.forEach(l => {
+    const d = mm.locations[l.code];
+    settings.locations[l.code] = { active: d.active, slots: mmSort(d.slots) };
+    if (mm.pins[l.code]) settings.pins[l.code] = mm.pins[l.code];
+  });
+  const btn = $('mm-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const { error } = await _supabase.from('mata_malam_settings').upsert({
+      id: 1, settings, updated_at: new Date().toISOString(), updated_by: userEmail || null
+    }, { onConflict: 'id' });
+    if (error) throw error;
+    await loadMataMalam();
+    $('mm-status').textContent = 'Saved. The phones follow on their next sync, within a few minutes.';
+  } catch (e) {
+    status.innerHTML = `<span style="color:#b91c1c">Not saved. ${esc(e.message || e)}</span>`;
+  } finally {
+    btn.disabled = !mmCanSave; btn.textContent = 'Save Mata Malam';
+  }
+}
+
+window.addEventListener('beforeunload', (e) => { if (mmUnsaved) { e.preventDefault(); e.returnValue = ''; } });
+
 /* ══════════════ START ══════════════ */
 (async () => {
   try {
@@ -928,7 +1307,9 @@ async function clearBoundary() {
        piece rather than one catch swallowing the page. */
     loadLocations();
     loadPortals();
-    loadBoundary();
+    /* Mata Malam draws the stored outlines behind its pins, so it is read once the boundaries are in.
+       A boundary read that fails has already said so on its own card and must not hold this one back. */
+    loadBoundary().catch(() => {}).then(loadMataMalam);
   } catch (e) {
     if (e && e.message === 'NO_OPS_ACCESS') return;
     console.warn(e);

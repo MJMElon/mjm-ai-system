@@ -23,9 +23,8 @@
 --                         nowhere else, and only with a live ticket
 --
 -- WHO MAY CHANGE THE SETTINGS
---   Admin, Estate Manager, Field Conductor and Assistant Field Conductor,
---   and anybody the office has given Settings on the Worker Portal.
---   Everybody else reads them.
+--   The office, on System Setting - Mata Malam, signed in as staff. The app
+--   has no Settings screen and a guard changes nothing.
 --
 -- THE LOCATIONS are the names in operation_nurseries, which is the list on
 -- Operation - Settings. Nothing is copied. A nursery added there turns up
@@ -77,6 +76,27 @@ ALTER TABLE public.mata_malam_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mata_malam_logs     ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.mata_malam_settings FROM anon;
 REVOKE ALL ON public.mata_malam_logs     FROM anon;
+
+
+-- The office page reads and writes the settings row as a signed in staff
+-- account, under the same rule as the portal switches beside it on System
+-- Setting. A guard is anon and still reaches nothing here. Guarded, because
+-- a scratch database has no staff function.
+DO $do$
+BEGIN
+  IF to_regprocedure('public._mjm_ops_staff()') IS NULL THEN
+    RAISE NOTICE 'no staff function here, skipping the office policies';
+    RETURN;
+  END IF;
+  EXECUTE $p$DROP POLICY IF EXISTS "Staff read mata malam settings" ON public.mata_malam_settings$p$;
+  EXECUTE $p$CREATE POLICY "Staff read mata malam settings" ON public.mata_malam_settings
+             FOR SELECT TO authenticated USING ((SELECT public._mjm_ops_staff()))$p$;
+  EXECUTE $p$DROP POLICY IF EXISTS "Staff write mata malam settings" ON public.mata_malam_settings$p$;
+  EXECUTE $p$CREATE POLICY "Staff write mata malam settings" ON public.mata_malam_settings
+             FOR ALL TO authenticated USING ((SELECT public._mjm_ops_staff()))
+             WITH CHECK ((SELECT public._mjm_ops_staff()))$p$;
+END
+$do$;
 
 
 -- May this worker change the locations and the times
@@ -140,6 +160,11 @@ END;
 $$;
 
 
+-- The settings are changed on the office page now, System Setting - Mata
+-- Malam, and nowhere else. This function is what the app itself used to
+-- save with. It is kept so that a phone still holding an older copy of the
+-- app gets a plain answer rather than a missing function, and it refuses
+-- everybody, so there is one writer and not two.
 CREATE OR REPLACE FUNCTION public.mata_malam_save_settings(p_token UUID, p_settings JSONB)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -148,24 +173,10 @@ SET search_path = public
 AS $$
 DECLARE
   w public.mjmnpayroll_workers;
-  v_at TIMESTAMPTZ := now();
 BEGIN
   w := public.worker_from_token(p_token);
-  IF NOT public.mata_malam_can_edit(w) THEN
-    RAISE EXCEPTION 'you may not change the Mata Malam settings' USING ERRCODE = '42501';
-  END IF;
-  IF p_settings IS NULL OR jsonb_typeof(p_settings) <> 'object' THEN
-    RAISE EXCEPTION 'settings must be an object' USING ERRCODE = '22023';
-  END IF;
-
-  INSERT INTO public.mata_malam_settings (id, settings, updated_at, updated_by)
-  VALUES (1, p_settings, v_at, w.full_name)
-  ON CONFLICT (id) DO UPDATE
-    SET settings = EXCLUDED.settings,
-        updated_at = EXCLUDED.updated_at,
-        updated_by = EXCLUDED.updated_by;
-
-  RETURN jsonb_build_object('settings_at', v_at, 'settings_by', w.full_name);
+  RAISE EXCEPTION 'the Mata Malam settings are changed on System Setting in the office now'
+    USING ERRCODE = '42501';
 END;
 $$;
 
@@ -405,10 +416,12 @@ SELECT 6, 'locations offered: ' || COALESCE((SELECT string_agg(n.name::TEXT, ', 
                                               WHERE n.name IS NOT NULL AND btrim(n.name::TEXT) <> ''), 'none'),
        CASE WHEN EXISTS (SELECT 1 FROM public.operation_nurseries) THEN 'OK' ELSE 'NOT OK -- no nursery listed' END
 UNION ALL
-SELECT 7, 'who may change the settings: ' || (SELECT count(*) FROM public.mjmnpayroll_workers w
-                                               WHERE w.active AND public.mata_malam_can_edit(w))::TEXT || ' active workers',
-       CASE WHEN EXISTS (SELECT 1 FROM public.mjmnpayroll_workers w WHERE w.active AND public.mata_malam_can_edit(w))
-            THEN 'OK' ELSE 'NOT OK -- nobody can' END
+SELECT 7, 'the office page can read and save the settings',
+       CASE WHEN to_regprocedure('public._mjm_ops_staff()') IS NULL THEN 'OK (no staff function here)'
+            WHEN (SELECT count(*) FROM pg_policies WHERE schemaname = 'public'
+                     AND tablename = 'mata_malam_settings'
+                     AND policyname IN ('Staff read mata malam settings', 'Staff write mata malam settings')) = 2
+            THEN 'OK' ELSE 'NOT OK -- the staff policies are missing' END
 UNION ALL
 SELECT 8, 'settings: ' || COALESCE((SELECT 'saved by ' || COALESCE(s.updated_by, 'unknown')
                                       FROM public.mata_malam_settings s WHERE s.id = 1), 'not set yet'), 'OK'

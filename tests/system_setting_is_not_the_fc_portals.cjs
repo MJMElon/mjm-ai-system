@@ -232,9 +232,12 @@ console.log('\n── 5. The rows carry the office\'s own words ──');
          'maintenance:photos', 'maintenance:record', 'maintenance:remark',
          'maintenance:schedule', 'maintenance:workers', 'palms', 'scan', 'settings'].sort());
 
-  check('and the three cards of the outline are all still on the page',
+  /* Mata Malam joined them when the night check-in app's own Settings moved
+     here: a fourth card, after Portal View & Function, and the three of the
+     outline are untouched and in their order. */
+  check('and the three cards of the outline are all still on the page, with Mata Malam beside them',
         await page.locator('.card-name').evaluateAll(els => els.map(e => e.textContent.trim())),
-        ['Location', 'Portal View & Function', 'Boundary']);
+        ['Location', 'Portal View & Function', 'Mata Malam', 'Boundary']);
   checkTrue('with the Save button the outline names',
             await page.locator('#m-save').count() > 0);
   await page.close();
