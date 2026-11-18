@@ -149,7 +149,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.mata_malam_access(public.mjmnpayroll_workers) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.mata_malam_access(public.mjmnpayroll_workers) FROM PUBLIC, anon, authenticated;
 
 
 -- Everything the phone needs in one round trip
