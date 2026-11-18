@@ -155,6 +155,8 @@
                     padding:5px 1px; cursor:pointer; font-variant-numeric:tabular-nums; }
   .mm-time b { color:#94a3b8; }
   .mm-time.bad { border-color:#dc2626; }
+  .mm-time.blank { border-style:dashed; border-color:#7c3aed; background:#faf5ff; }
+  .mm-time.blank select { color:#7c3aed; }
   .mm-x { border:0; background:none; cursor:pointer; color:#94a3b8; font-size:15px;
           line-height:1; padding:4px 6px; border-radius:8px; }
   .mm-x:hover { color:#dc2626; background:#fef2f2; }
@@ -1054,18 +1056,23 @@ function mmRenderLocs() {
        clock format is, so 18:00 read "06:00 PM" on one desk and 18:00 on the next. Mata Malam shows
        24-hour time and nothing else, and the card that sets it has to read the same way. */
     const pad = (n) => String(n).padStart(2, '0');
-    const opts = (vals, sel) => vals.map(v => `<option value="${pad(v)}"${pad(v) === sel ? ' selected' : ''}>${pad(v)}</option>`).join('');
+    /* A time just added is BLANK ("--:--") until somebody picks it. It used to arrive as an hour
+       after the last one, and a tag reading 07:00 that nobody chose looks exactly like one that
+       was already there, so the office could not tell whether Add time had done anything. The
+       "--" is offered only while a half is still blank. */
+    const opts = (vals, sel) => (sel === '' ? '<option value="" selected>--</option>' : '') +
+      vals.map(v => `<option value="${pad(v)}"${pad(v) === sel ? ' selected' : ''}>${pad(v)}</option>`).join('');
     const times = d.slots.map((t, j) => {
-      const [hh, mi] = t.split(':');
+      const [hh = '', mi = ''] = t.split(':');
       const mins = []; for (let m = 0; m < 60; m += 5) mins.push(m);
-      if (!mins.includes(Number(mi))) { mins.push(Number(mi)); mins.sort((a, b) => a - b); }
+      if (mi !== '' && !mins.includes(Number(mi))) { mins.push(Number(mi)); mins.sort((a, b) => a - b); }
       const dis = d.active && mmCanSave ? '' : 'disabled';
       return `
-      <span class="mm-time" data-time="${esc(t)}">
+      <span class="mm-time${mmTimeOk(t) ? '' : ' blank'}" data-time="${esc(t)}">
         <select class="mm-hh" aria-label="${esc(l.name)} time ${j + 1}, hour" onchange="mmSetTime(${i}, ${j}, this)" ${dis}>${opts([...Array(24).keys()], hh)}</select>
         <b>:</b>
         <select class="mm-mi" aria-label="${esc(l.name)} time ${j + 1}, minute" onchange="mmSetTime(${i}, ${j}, this)" ${dis}>${opts(mins, mi)}</select>
-        <button type="button" class="mm-x" title="Remove this time" aria-label="Remove ${esc(t)}"
+        <button type="button" class="mm-x" title="Remove this time" aria-label="Remove ${esc(mmTimeOk(t) ? t : 'the new time')}"
           onclick="mmRemoveTime(${i}, ${j})" ${d.active && mmCanSave && d.slots.length > 1 ? '' : 'disabled'}>×</button></span>`;
     }).join('');
     return `<div class="mm-loc${d.active ? '' : ' off'}" data-loc="${esc(l.code)}">
@@ -1086,11 +1093,14 @@ function mmSetActive(i, on) { mm.locations[mmLocs[i].code].active = !!on; mmDirt
 function mmSetTime(i, j, el) {
   const box = el.closest('.mm-time');
   const v = box.querySelector('.mm-hh').value + ':' + box.querySelector('.mm-mi').value;
-  if (!/^\d{2}:\d{2}$/.test(v)) return;
+  const was = mm.locations[mmLocs[i].code].slots[j];
   mm.locations[mmLocs[i].code].slots[j] = v;
   box.dataset.time = v;
   mmDirty();
+  /* The moment a new time is whole it is drawn again, which takes the "--" out of its two lists. */
+  if (mmTimeOk(v) && !mmTimeOk(was)) mmRenderLocs();
 }
+function mmTimeOk(t) { return /^\d{2}:\d{2}$/.test(String(t || '')); }
 function mmRemoveTime(i, j) {
   const d = mm.locations[mmLocs[i].code];
   if (d.slots.length <= 1) return;
@@ -1099,15 +1109,12 @@ function mmRemoveTime(i, j) {
 function mmAddTime(i) {
   const d = mm.locations[mmLocs[i].code];
   if (d.slots.length >= MM_MAX_SLOTS) return;
-  /* An hour after the last one, as somewhere to start from; never a copy of a time already there. */
-  let [h, m] = d.slots[d.slots.length - 1].split(':').map(Number);
-  let next;
-  for (let k = 0; k < 24; k++) {
-    h = (h + 1) % 24;
-    next = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    if (!d.slots.includes(next)) break;
-  }
-  d.slots.push(next); mmDirty(); mmRenderLocs();
+  /* One blank at a time: a second press while the first is still "--:--" goes back to that one. */
+  let at = d.slots.findIndex(t => !mmTimeOk(t));
+  if (at < 0) { d.slots.push(':'); at = d.slots.length - 1; mmDirty(); mmRenderLocs(); }
+  const box = document.querySelectorAll('#mm-locs .mm-loc')[i];
+  const hh = box && box.querySelectorAll('.mm-hh')[at];
+  if (hh) hh.focus();
 }
 
 /* ── the pin map ──
@@ -1330,6 +1337,10 @@ async function mmSave() {
   else if (!Number.isInteger(win) || win < 5 || win > 240) problem = 'Time limit must be between 5 and 240 minutes.';
   else if (win <= opens) problem = 'Time limit must be longer than Appears early, so the deadline falls after the check-in time.';
   else if (!mmActive().length) problem = 'At least one location must be On.';
+  else if (mmActive().some(l => mm.locations[l.code].slots.some(t => !mmTimeOk(t)))) {
+    const l = mmActive().find(l => mm.locations[l.code].slots.some(t => !mmTimeOk(t)));
+    problem = `${l.name} has a new time that is still blank. Pick its hour and minute, or remove it with the ×.`;
+  }
   else {
     const dup = mmActive().find(l => new Set(mm.locations[l.code].slots).size !== mm.locations[l.code].slots.length);
     if (dup) problem = `${dup.name} has the same time twice.`;

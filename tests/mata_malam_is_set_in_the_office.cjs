@@ -132,7 +132,18 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
 
   console.log('\n── 2. Add a time, remove times, change one, and save ──');
   await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-add').click().catch(() => {});
-  check('Add time adds a sixth, an hour after the last', ((await locs(page))[1] || {}).times, ['18:00', '21:00', '00:00', '03:00', '06:00', '07:00']);
+  check('Add time adds a sixth, and it is BLANK', ((await locs(page))[1] || {}).times, ['18:00', '21:00', '00:00', '03:00', '06:00', ':']);
+  check('the blank one reads --:-- and is marked',
+        await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-time').nth(5).evaluate(e => [e.classList.contains('blank'), e.querySelector('.mm-hh').selectedOptions[0].textContent, e.querySelector('.mm-mi').selectedOptions[0].textContent]).catch(() => ''), [true, '--', '--']);
+  await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-add').click().catch(() => {});
+  check('a second press adds no second blank', (((await locs(page))[1] || {}).times || []).length, 6);
+  await page.click('#mm-save').catch(() => {});
+  checkTrue('a blank time is refused at Save, by name', /still blank/.test(await page.textContent('#mm-status').catch(() => '')));
+  check('and nothing was written', await page.evaluate(() => window.__writes.length), 0);
+  await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-hh').nth(5).selectOption('07').catch(() => {});
+  await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-mi').nth(5).selectOption('00').catch(() => {});
+  check('picked, it is an ordinary time with no -- left',
+        await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-time').nth(5).evaluate(e => [e.classList.contains('blank'), e.querySelector('.mm-hh').options.length, e.querySelector('.mm-hh').value + ':' + e.querySelector('.mm-mi').value]).catch(() => ''), [false, 24, '07:00']);
   for (let i = 0; i < 5; i++) await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-x').first().click().catch(() => {});
   check('times can be taken away down to one', ((await locs(page))[1] || {}).times, ['07:00']);
   checkTrue('and the last one cannot be removed', await page.locator('#mm-locs .mm-loc').nth(1).locator('.mm-x').first().isDisabled().catch(() => false));
