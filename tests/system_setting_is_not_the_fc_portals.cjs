@@ -207,6 +207,13 @@ console.log('\n── 5. The rows carry the office\'s own words ──');
     '— GPS track record',
     '— Upload photo',
     '— Remark',
+    /* The night check-in app, under Maintenance, with its own five. */
+    'Mata Malam',
+    'Main task (home)',
+    '— Capture photo',
+    '— GPS track record',
+    'History',
+    'Report',
     'PALMS',
     'Culling Calculator',
     /* Not on the outline, because that outline is the FC PORTAL column and
@@ -230,7 +237,8 @@ console.log('\n── 5. The rows carry the office\'s own words ──');
         keys.sort(),
         ['culling', 'do', 'maintenance', 'maintenance:batches', 'maintenance:gps',
          'maintenance:photos', 'maintenance:record', 'maintenance:remark',
-         'maintenance:schedule', 'maintenance:workers', 'palms', 'scan', 'settings'].sort());
+         'maintenance:schedule', 'maintenance:workers',
+         'mata_malam', 'mata_malam:gps', 'mata_malam:history', 'mata_malam:home', 'mata_malam:photo', 'mata_malam:report', 'palms', 'scan', 'settings'].sort());
 
   /* Mata Malam joined them when the night check-in app's own Settings moved
      here: a fourth card, after Portal View & Function, and the three of the

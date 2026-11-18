@@ -8391,6 +8391,18 @@ the app's Settings moved there, because a guard only does the check-ins.
 - **Nothing saved is nobody having been asked**: until the first Save the
   phones keep the times they have, and the card says so.
 
+**What each person may USE is on Portal View & Function**, a Mata Malam
+row under Maintenance with five switches: `home` (main task), `photo`
+(capture photo), `gps` (GPS track record), `history`, `report`. It is ONE
+app and two columns: a Field Conductor, Assistant Field Conductor, Admin or
+Estate Manager reads the FC Portal column, everybody else the Worker Portal
+column. `mata_malam_access(w)` in the SQL file decides which and
+`mata_malam_state` hands the answer over as `access`; `can(fn)` in the
+app obeys it. The keys are spelled in `MATA_MALAM_FUNCTIONS` here and
+`ACCESS_FUNCTIONS` in the app. Absent is on, and a phone with no answer
+keeps the last one it had. Photo off is a check-in with no picture; gps
+off is no road track, the check-in still records where it was made.
+
 `tests/mata_malam_is_set_in_the_office.cjs` drives the card. It needs a
 `leaflet/dist` folder (`LEAFLET_DIST`) for the map half and says so rather
 than passing without it.

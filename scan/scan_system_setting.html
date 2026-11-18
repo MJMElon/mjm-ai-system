@@ -483,6 +483,24 @@ const MAINT_FUNCTIONS = [
   { key:'remark',   name:'— Remark' }
 ];
 
+/* The functions inside Mata Malam, the night check-in app.
+
+   It has ONE build and two kinds of people: the Field Conductor side (Field
+   Conductor, Assistant Field Conductor, Admin, Estate Manager) reads the FC
+   Portal column and everybody else reads the Worker Portal column, so the two
+   see different versions of the same app. Which column a person reads is
+   decided in the database (mata_malam_access in shared/RUN_ME_mata_malam.sql)
+   and the app obeys what mata_malam_state hands it. THE KEYS are spelled in
+   that app too (ACCESS_FUNCTIONS in MataMalam app.js). Change one, change
+   the other. */
+const MATA_MALAM_FUNCTIONS = [
+  { key:'home',    name:'Main task (home)' },
+  { key:'photo',   name:'— Capture photo' },
+  { key:'gps',     name:'— GPS track record' },
+  { key:'history', name:'History' },
+  { key:'report',  name:'Report' }
+];
+
 /* Switches whose ON is not yet worth anything, and saying so on the switch
    itself is better than either hiding it — which decides for you — or leaving
    it to be discovered on a phone in a plot.
@@ -531,6 +549,7 @@ const PORTAL_MODULES = {
     { key:'scan',        name:'Scan Barcode Counter' },
     { key:'do',          name:'Issue Collection DO' },
     { key:'maintenance', name:'Maintenance', functions: MAINT_FUNCTIONS },
+    { key:'mata_malam',  name:'Mata Malam', functions: MATA_MALAM_FUNCTIONS },
     { key:'palms',       name:'PALMS' },
     { key:'culling',     name:'Culling Calculator' }
   ],
@@ -544,6 +563,7 @@ const PORTAL_MODULES = {
     { key:'scan',        name:'Scan Barcode Counter' },
     { key:'do',          name:'Issue Collection DO' },
     { key:'maintenance', name:'Maintenance', functions: MAINT_FUNCTIONS },
+    { key:'mata_malam',  name:'Mata Malam', functions: MATA_MALAM_FUNCTIONS },
     { key:'palms',       name:'PALMS' },
     { key:'culling',     name:'Culling Calculator' },
     /* Not on the office outline, because that outline is the FC PORTAL
@@ -613,7 +633,7 @@ function drawPortals() {
         moduleOff ? ['pt-dim'] : [],
         warn ? ['m-cant'] : []).join(' ');
       const tip = warn || (moduleOff
-        ? 'Maintenance is off for this portal, so this does nothing until it is switched back on.'
+        ? `${(PORTAL_MODULES[portal].find(m => m.key === r.module) || {}).name || 'This module'} is off for this portal, so this does nothing until it is switched back on.`
         : '');
 
       return `<td class="pt-p">

@@ -111,6 +111,47 @@ AS $$
 $$;
 
 
+-- What this person may use in the app. It is switched on System Setting, in
+-- Portal View and Function, under Mata Malam, and saved in
+-- shared_portal_settings like every other switch there. That table has one
+-- row per portal. A Field Conductor, Assistant Field Conductor, Admin or
+-- Estate Manager reads the FC Portal column and everybody else reads the
+-- Worker Portal column. A switch nobody has saved is ON, the same rule as
+-- the rest of that table, and a table that cannot be read is everything on.
+CREATE OR REPLACE FUNCTION public.mata_malam_access(w public.mjmnpayroll_workers)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_portal TEXT := CASE WHEN upper(replace(COALESCE(w.role, ''), ' ', '')) IN
+                             ('ADMIN', 'ESTATEMANAGER', 'FIELDCONDUCTOR', 'ASSISTANTFIELDCONDUCTOR')
+                        THEN 'fc' ELSE 'worker' END;
+  v_mod JSONB;
+  v_act JSONB;
+BEGIN
+  BEGIN
+    IF to_regclass('public.shared_portal_settings') IS NOT NULL THEN
+      EXECUTE 'SELECT modules, actions FROM public.shared_portal_settings WHERE portal = $1'
+         INTO v_mod, v_act USING v_portal;
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    v_mod := NULL;
+    v_act := NULL;
+  END;
+  RETURN jsonb_build_object(
+    'portal', v_portal,
+    'on', COALESCE(v_mod -> 'mata_malam', 'true'::jsonb) <> 'false'::jsonb,
+    'fn', CASE WHEN jsonb_typeof(v_act -> 'mata_malam') = 'object'
+               THEN v_act -> 'mata_malam' ELSE '{}'::jsonb END);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.mata_malam_access(public.mjmnpayroll_workers) FROM PUBLIC;
+
+
 -- Everything the phone needs in one round trip
 CREATE OR REPLACE FUNCTION public.mata_malam_state(p_token UUID, p_from DATE DEFAULT NULL)
 RETURNS JSONB
@@ -129,6 +170,7 @@ BEGIN
   RETURN jsonb_build_object(
     'worker', jsonb_build_object('id', w.id, 'name', w.full_name, 'role', w.role),
     'can_edit', public.mata_malam_can_edit(w),
+    'access', public.mata_malam_access(w),
     'locations', COALESCE((
       SELECT jsonb_agg(n.name::TEXT ORDER BY n.name::TEXT)
         FROM public.operation_nurseries n
