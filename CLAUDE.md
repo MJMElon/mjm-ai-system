@@ -7904,6 +7904,24 @@ chosen for the office -- both are offered, marked before and after.
 
 `tests/seal_dashboard.cjs` holds the office page.
 
+## A consent downloads as a PDF, built from the saved row
+
+The Admin Portal's Customer Consent history carries a **PDF** button on every
+record (`Mobile/src/pages/Consent.jsx`, `buildConsentPdf` in
+`Mobile/src/lib/pdf.js`): the DO's letterhead, customer, AL, order, consent
+qty, AI count, every seal range, the sticker photo, the signature, the terms
+in BOTH languages (the row does not record which one was on screen) and the
+seal receipt photo.
+
+**No file is stored.** The row already holds everything the paper says, so a
+PDF kept beside it would be a second copy that a corrected seal range leaves
+behind; built on demand it is always the record as it is now, and every
+consent ever signed has one. The terms are read off the form's own
+`CONSENT_STRINGS`. A photo that will not load is named in its box rather than
+failing the download. `Mobile/tests/a_consent_downloads_as_a_pdf.cjs` drives
+the real jsPDF and reads the file back with `pdftotext`. Nothing to run in
+the database.
+
 ## Coming back to the portal is not signing in again
 
 `index.html` shows the sign-in screen until `onAuthStateChange` has read the
