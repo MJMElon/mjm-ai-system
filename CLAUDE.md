@@ -8380,6 +8380,12 @@ the app's Settings moved there, because a guard only does the check-ins.
   until switched on.
 - **Times are two lists, hour and minute, never a time box.** A time box is
   drawn in the machine's own clock format, and the app is 24-hour only.
+- **A location has as many pins as it has places to check**, and it had one
+  for a day. `pins` is a LIST, `[{ name, location, lat, lng }]`: each click
+  on the map adds one to the location selected, a pin is dragged to move
+  it, and renamed or removed in the list under the map. The app shows the
+  distance to the NEAREST of a location's pins, by name. The one-pin shape
+  (`{ BNN: [lat, lng] }`) is still read by both sides.
 - **The pin map draws the stored boundaries behind the pins**, not
   interactive, so a click inside one still places the pin.
 - **Nothing saved is nobody having been asked**: until the first Save the

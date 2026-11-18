@@ -147,7 +147,7 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
   check('nothing is written until Save', await page.evaluate(() => window.__writes.length), 0);
 
   if (LEAFLET) {
-    console.log('\n── 3. The map: boundaries behind, a click places the pin ──');
+    console.log('\n── 3. The map: boundaries behind, and as many pins as are clicked ──');
     const m = await page.evaluate(() => ({ outlines: document.querySelectorAll('#mm-map .leaflet-overlay-pane svg path').length,
       interactive: document.querySelectorAll('#mm-map path.leaflet-interactive').length,
       chips: [...document.querySelectorAll('#mm-pins .mm-pin')].map(b => b.childNodes[0].textContent.trim()),
@@ -157,11 +157,27 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
     await page.evaluate(() => mmPick('BNN')); await page.waitForTimeout(500);
     await page.locator('#mm-map').scrollIntoViewIfNeeded();
     const b = await page.locator('#mm-map').boundingBox();
-    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await page.waitForTimeout(300);
-    const pin = await page.evaluate(() => mm.pins.BNN);
-    checkTrue('a click inside the BNN boundary places the BNN pin inside it',
-      Array.isArray(pin) && pin[1] > 113.77761 && pin[1] < 113.7809224 && pin[0] > 3.7369647 && pin[0] < 3.7397372);
-    check('the chip says Pinned', await page.$eval('#mm-pins .mm-pin.on small', e => e.textContent), 'Pinned');
+    const inBNN = (p) => p && p.lng > 113.77761 && p.lng < 113.7809224 && p.lat > 3.7369647 && p.lat < 3.7397372;
+    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await page.waitForTimeout(250);
+    await page.mouse.click(b.x + b.width / 2 + 40, b.y + b.height / 2 - 30); await page.waitForTimeout(250);
+    await page.mouse.click(b.x + b.width / 2 - 50, b.y + b.height / 2 + 35); await page.waitForTimeout(250);
+    let pins = await page.evaluate(() => mm.pins);
+    check('three clicks are THREE pins for BNN, each named', pins.map(p => p.location + '|' + p.name), ['BNN|BNN Pin 1', 'BNN|BNN Pin 2', 'BNN|BNN Pin 3']);
+    checkTrue('each where it was clicked, inside the BNN boundary', pins.length === 3 && pins.every(inBNN) && new Set(pins.map(p => p.lat + ',' + p.lng)).size === 3);
+    check('the chip counts them', await page.$eval('#mm-pins .mm-pin.on small', e => e.textContent), '3 pins');
+    check('and each has a row in the list', await page.$$eval('#mm-pin-list .mm-pin-row', e => e.length), 3);
+    // another location takes pins of its own
+    await page.evaluate(() => mmPick('UNN1')); await page.waitForTimeout(500);
+    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await page.waitForTimeout(250);
+    pins = await page.evaluate(() => mm.pins);
+    check('a click with UNN 1 selected adds a UNN 1 pin and leaves BNN its three', pins.map(p => p.location), ['BNN', 'BNN', 'BNN', 'UNN1']);
+    // rename one, remove one
+    await page.locator('#mm-pin-list .mm-pin-row').nth(0).locator('.mm-pin-name').fill('Main Gate');
+    await page.locator('#mm-pin-list .mm-pin-row').nth(1).locator('.mm-x').click(); await page.waitForTimeout(200);
+    pins = await page.evaluate(() => mm.pins);
+    check('a pin is renamed in the list, and one is removed by its own cross', pins.map(p => p.name), ['Main Gate', 'BNN Pin 3', 'UNN 1 Pin 1']);
+    check('the name on the map follows', await page.$$eval('#mm-map .mm-pin-mark span', e => e.map(x => x.textContent)), ['Main Gate', 'BNN Pin 3', 'UNN 1 Pin 1']);
+    await page.locator('#mm-locs').scrollIntoViewIfNeeded();
   } else {
     fail++; console.log('  FAIL the map checks were NOT ASKED: no leaflet/dist found (set LEAFLET_DIST)');
   }
@@ -175,7 +191,7 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
         [{ active: true, slots: ['19:30'] }, ['18:00', '21:00', '00:00', '03:00', '06:00']]);
   check('every location is stored with its switch', Object.entries(st.locations || {}).map(([k, v]) => k + ':' + v.active), ['BNN:true', 'UNN1:true', 'UNN2:true', 'PN:false', 'UNE:true']);
   check('the timing', st.timing, { opensBeforeMinutes: 10, windowMinutes: 60 });
-  if (LEAFLET) checkTrue('and the pin', Array.isArray((st.pins || {}).BNN));
+  if (LEAFLET) check('and the pins as a list, each with its name and location', (st.pins || []).map(p => p.location + '|' + p.name + '|' + (Number.isFinite(p.lat) && Number.isFinite(p.lng))), ['BNN|Main Gate|true', 'BNN|BNN Pin 3|true', 'UNN1|UNN 1 Pin 1|true']);
   check('signed with who saved it', (w[0] || { row: {} }).row.updated_by, 'ruth@mjmnursery.com');
   checkTrue('the card says it is saved and the phones follow', /Saved\. The phones follow/.test(await page.textContent('#mm-status').catch(() => '')));
   check('reading it back shows what was saved', ((await locs(page))[1] || {}).times, ['19:30']);
@@ -199,13 +215,24 @@ console.log('\n── 6. Saved settings are what the card opens on ──');
 {
   const saved = { id: 1, updated_at: '2026-11-18T03:04:00Z', updated_by: 'ruth@mjmnursery.com', settings: {
     locations: { BNN: { active: false, slots: ['20:00'] }, UNN1: { active: true, slots: ['02:00', '19:00'] } },
-    timing: { opensBeforeMinutes: 30, windowMinutes: 90 }, pins: { UNN1: [3.7265, 113.7832] } } };
+    timing: { opensBeforeMinutes: 30, windowMinutes: 90 }, pins: [{ name: 'Store', location: 'UNN1', lat: 3.7265, lng: 113.7832 }, { name: 'Pump', location: 'UNN1', lat: 3.7270, lng: 113.7840 }, { name: 'Ghost', location: 'NOWHERE', lat: 1, lng: 1 }] } };
   const { page } = await open(browser, { operation_nurseries: NURSERIES, shared_site_boundary: BOUNDS, mata_malam_settings: [saved] });
   const l = await locs(page);
   check('BNN is off as saved, UNN1 has its two times in night order', Array.isArray(l) ? [l[0].on, l[1].times] : l, [false, ['19:00', '02:00']]);
   check('a location the saved row does not name follows the default', Array.isArray(l) ? [l[2].on, l[2].times.length, l[3].on] : l, [true, 5, false]);
   check('the timing as saved', [await page.inputValue('#mm-opens').catch(() => ''), await page.inputValue('#mm-window').catch(() => '')], ['30', '90']);
+  check('the saved pins open as a list, and one for a location that no longer exists is left out',
+        await page.$$eval('#mm-pin-list .mm-pin-name', e => e.map(x => x.value)).catch(() => []), ['Store', 'Pump']);
   checkTrue('and it says who saved it and when', /Last saved 2026-11-18 03:04 by ruth@mjmnursery.com/.test(await page.textContent('#mm-note').catch(() => '')));
+  await page.close();
+}
+
+console.log('\n── 6b. A row saved while a location had ONE pin still opens with it ──');
+{
+  const saved = { id: 1, updated_at: '2026-11-18T03:04:00Z', settings: { pins: { BNN: [3.7383, 113.7792] } } };
+  const { page } = await open(browser, { operation_nurseries: NURSERIES, shared_site_boundary: BOUNDS, mata_malam_settings: [saved] });
+  check('the old shape is read as one pin for that location', await page.evaluate(() => (typeof mm === 'object' && mm ? mm.pins : 'no mm')).catch(() => 'no mm'),
+        [{ name: 'BNN', location: 'BNN', lat: 3.7383, lng: 113.7792 }]);
   await page.close();
 }
 

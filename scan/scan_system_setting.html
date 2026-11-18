@@ -172,6 +172,14 @@
             color:white; font-size:11px; font-weight:900; padding:3px 8px; border-radius:8px;
             white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.35); }
   .mm-pin-mark.on span { background:#dc2626; }
+  .mm-pin-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid #ede9fe;
+                border-radius:12px; margin-bottom:6px; }
+  .mm-pin-row.on { border-color:#dc2626; background:#fef2f2; }
+  .mm-pin-row.off { opacity:.6; }
+  .mm-pin-go { border:0; background:#f5f3ff; color:#6d28d9; font-size:11px; font-weight:900;
+               border-radius:8px; padding:6px 10px; cursor:pointer; white-space:nowrap; }
+  .mm-pin-name { flex:1; min-width:0; padding:6px 10px; }
+  .mm-pin-at { font-size:11px; color:#64748b; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .mm-out-label span { display:inline-block; transform:translate(-50%,-50%); font-size:10px;
             font-weight:800; color:#1e293b; background:rgba(255,255,255,.8); padding:1px 6px;
             border-radius:999px; white-space:nowrap; pointer-events:none; }
@@ -298,12 +306,11 @@
       <div id="mm-locs"></div>
 
       <div class="mm-h">Map pins</div>
-      <div class="muted" style="margin-bottom:8px;">Choose a location, then click the map to place its pin. The coloured outlines are the boundaries uploaded below.</div>
+      <div class="muted" style="margin-bottom:8px;">A location can have as many pins as it has places to check. The coloured outlines are the boundaries uploaded below.</div>
       <div class="mm-pins" id="mm-pins"></div>
+      <div class="muted" id="mm-pin-hint" style="margin-bottom:8px;"></div>
       <div id="mm-map">The map is loading…</div>
-      <div style="margin-top:8px;">
-        <button class="btn btn-ghost" id="mm-pin-clear" type="button" onclick="mmClearPin()">Remove this pin</button>
-      </div>
+      <div id="mm-pin-list" style="margin-top:10px;"></div>
 
       <div class="flex items-center gap-3" style="margin-top:16px;">
         <button class="btn" id="mm-save" onclick="mmSave()">Save Mata Malam</button>
@@ -997,7 +1004,7 @@ async function clearBoundary() {
 
      { locations: { BNN: { active, slots: ['18:00', …] }, … },
        timing:    { opensBeforeMinutes, windowMinutes },
-       pins:      { BNN: [lat, lng], … } }
+       pins:      [ { name, location: 'BNN', lat, lng }, … ] }     any number per location
 
    It is the shape the app has read since it was linked to this database, so
    the phones need nothing new to follow it. THIS PAGE IS THE ONLY WRITER:
@@ -1013,7 +1020,8 @@ const MM_MAX_SLOTS = 12;
 const MM_COLORS = ['#16a34a', '#d97706', '#7c3aed', '#db2777', '#2563eb'];
 let mm = null;            // the draft on screen
 let mmLocs = [];          // [{ code, name }]
-let mmSel = null;         // the location whose pin a click places
+let mmSel = null;         // the location a click on the map adds a pin to
+let mmPinSel = -1;        // the pin that is highlighted, as an index into mm.pins
 let mmMap = null, mmLayers = [];
 let mmUnsaved = false, mmCanSave = true;
 
@@ -1102,17 +1110,50 @@ function mmAddTime(i) {
   d.slots.push(next); mmDirty(); mmRenderLocs();
 }
 
-/* ── the pin map ── */
+/* ── the pin map ──
+   A location has AS MANY PINS AS IT HAS PLACES TO CHECK: a gate, a pump house, a store. It had
+   one, chosen from a row of three chips, and the office asked for it free. So a pin is a row of
+   its own — a name, the location it belongs to, and where it is — and the map takes a click
+   anywhere: each click ADDS a pin to the location that is selected. A pin is dragged to move
+   it, renamed in the list underneath, and taken off with its own cross. */
 function mmActive() { return mmLocs.filter(l => mm.locations[l.code].active); }
+const mmPinsOf = (code) => mm.pins.filter(p => p.location === code);
+const mmLocName = (code) => (mmLocs.find(l => l.code === code) || { name: code }).name;
+
+function mmNextName(code) {
+  const used = new Set(mmPinsOf(code).map(p => p.name));
+  for (let n = 1; ; n++) { const name = `${mmLocName(code)} Pin ${n}`; if (!used.has(name)) return name; }
+}
 
 function mmRenderPins() {
   const act = mmActive();
   if (!act.some(l => l.code === mmSel)) mmSel = act.length ? act[0].code : null;
-  $('mm-pins').innerHTML = act.map(l => `
-    <button type="button" class="mm-pin${l.code === mmSel ? ' on' : ''}" onclick="mmPick('${esc(l.code)}')">
-      ${esc(l.name)}<small>${mm.pins[l.code] ? 'Pinned' : 'Not set'}</small></button>`).join('');
-  $('mm-pin-clear').disabled = !mmCanSave || !mmSel || !mm.pins[mmSel];
+  $('mm-pins').innerHTML = act.map(l => {
+    const n = mmPinsOf(l.code).length;
+    return `<button type="button" class="mm-pin${l.code === mmSel ? ' on' : ''}" onclick="mmPick('${esc(l.code)}')">
+      ${esc(l.name)}<small>${n ? n + (n === 1 ? ' pin' : ' pins') : 'No pin yet'}</small></button>`;
+  }).join('');
+  $('mm-pin-hint').textContent = mmSel
+    ? `Click the map to add a pin for ${mmLocName(mmSel)}. Drag a pin to move it.`
+    : 'Switch a location on above to place pins for it.';
+  mmRenderPinList();
   mmDrawMap();
+}
+
+function mmRenderPinList() {
+  const rows = mm.pins.map((p, i) => ({ p, i }))
+    .sort((x, y) => mmLocs.findIndex(l => l.code === x.p.location) - mmLocs.findIndex(l => l.code === y.p.location) || x.i - y.i);
+  $('mm-pin-list').innerHTML = rows.length ? rows.map(({ p, i }) => {
+    const off = !(mm.locations[p.location] && mm.locations[p.location].active);
+    return `<div class="mm-pin-row${i === mmPinSel ? ' on' : ''}${off ? ' off' : ''}" data-pin="${i}">
+      <button type="button" class="mm-pin-go" title="Show this pin on the map" onclick="mmShowPin(${i})">${esc(mmLocName(p.location))}</button>
+      <input class="mm-in mm-pin-name" value="${esc(p.name)}" maxlength="40" aria-label="Pin name"
+             oninput="mmRenamePin(${i}, this.value)" onfocus="mmSelectPin(${i})" ${mmCanSave ? '' : 'disabled'}>
+      <span class="mm-pin-at">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}${off ? ' · location is off' : ''}</span>
+      <button type="button" class="mm-x" title="Remove this pin" aria-label="Remove ${esc(p.name)}"
+              onclick="mmRemovePin(${i})" ${mmCanSave ? '' : 'disabled'}>×</button>
+    </div>`;
+  }).join('') : '<div class="muted">No pin placed yet.</div>';
 }
 
 function mmOutline(code) {
@@ -1122,10 +1163,43 @@ function mmOutline(code) {
 
 function mmPick(code) {
   mmSel = code;
+  mmPinSel = -1;
   mmRenderPins();
   if (!mmMap) return;
-  if (mm.pins[code]) mmMap.panTo(mm.pins[code]);
-  else if (mmOutline(code)) mmMap.fitBounds(L.geoJSON(mmOutline(code)).getBounds(), { padding: [24, 24], maxZoom: 18 });
+  const mine = mmPinsOf(code).map(p => [p.lat, p.lng]);
+  const g = mmOutline(code);
+  if (g) mmMap.fitBounds(L.geoJSON(g).getBounds(), { padding: [24, 24], maxZoom: 18 });
+  else if (mine.length) mmMap.fitBounds(L.latLngBounds(mine), { padding: [60, 60], maxZoom: 18 });
+}
+
+function mmSelectPin(i) {
+  if (mmPinSel === i) return;
+  mmPinSel = i;
+  document.querySelectorAll('#mm-pin-list .mm-pin-row').forEach(r => r.classList.toggle('on', Number(r.dataset.pin) === i));
+  mmDrawMap();
+}
+
+function mmShowPin(i) {
+  const p = mm.pins[i];
+  if (!p) return;
+  mmSel = p.location;
+  mmPinSel = i;
+  mmRenderPins();
+  if (mmMap) mmMap.setView([p.lat, p.lng], Math.max(mmMap.getZoom(), 17));
+}
+
+function mmRenamePin(i, name) {
+  if (!mm.pins[i]) return;
+  mm.pins[i].name = name;
+  mmDirty();
+  mmDrawMap();
+}
+
+function mmRemovePin(i) {
+  if (!mm.pins[i]) return;
+  mm.pins.splice(i, 1);
+  mmPinSel = -1;
+  mmDirty(); mmRenderPins();
 }
 
 function mmInitMap() {
@@ -1137,7 +1211,9 @@ function mmInitMap() {
               { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(mmMap);
   mmMap.on('click', (e) => {
     if (!mmCanSave || !mmSel) return;
-    mm.pins[mmSel] = [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))];
+    mm.pins.push({ name: mmNextName(mmSel), location: mmSel,
+                   lat: Number(e.latlng.lat.toFixed(6)), lng: Number(e.latlng.lng.toFixed(6)) });
+    mmPinSel = mm.pins.length - 1;
     mmDirty(); mmRenderPins();
   });
   mmFitMap();
@@ -1146,8 +1222,7 @@ function mmInitMap() {
 
 function mmFitMap() {
   if (!mmMap) return;
-  const pts = [];
-  mmActive().forEach(l => { if (mm.pins[l.code]) pts.push(mm.pins[l.code]); });
+  const pts = mm.pins.map(p => [p.lat, p.lng]);
   mmLocs.forEach(l => { const g = mmOutline(l.code); if (g) { const b = L.geoJSON(g).getBounds(); if (b.isValid()) { pts.push(b.getSouthWest()); pts.push(b.getNorthEast()); } } });
   if (pts.length) mmMap.fitBounds(L.latLngBounds(pts), { padding: [24, 24], maxZoom: 18 });
   else mmMap.setView([3.73, 113.78], 13);
@@ -1165,27 +1240,20 @@ function mmDrawMap() {
     const lay = L.geoJSON(g, { interactive: false,
       style: { color, weight: on ? 3 : 1.5, opacity: on ? 1 : .7, fillColor: color, fillOpacity: on ? .18 : .06 } }).addTo(mmMap);
     mmLayers.push(lay);
-    if (!mm.pins[l.code] || !mm.locations[l.code].active) {
+    if (!mmPinsOf(l.code).length) {
       const b = lay.getBounds();
       if (b.isValid()) mmLayers.push(L.marker(b.getCenter(), { interactive: false, keyboard: false,
         icon: L.divIcon({ className: 'mm-out-label', html: `<span>${esc(l.name)}</span>`, iconSize: [0, 0] }) }).addTo(mmMap));
     }
   });
-  mmActive().forEach(l => {
-    const p = mm.pins[l.code];
-    if (!p) return;
-    const mk = L.marker(p, { draggable: mmCanSave, zIndexOffset: l.code === mmSel ? 1000 : 0,
-      icon: L.divIcon({ className: 'mm-pin-mark' + (l.code === mmSel ? ' on' : ''), html: `<span>${esc(l.name)}</span>`, iconSize: [0, 0] }) }).addTo(mmMap);
-    mk.on('click', () => mmPick(l.code));
-    mk.on('dragend', () => { const q = mk.getLatLng(); mm.pins[l.code] = [Number(q.lat.toFixed(6)), Number(q.lng.toFixed(6))]; mmSel = l.code; mmDirty(); mmRenderPins(); });
+  mm.pins.forEach((p, i) => {
+    const on = i === mmPinSel;
+    const mk = L.marker([p.lat, p.lng], { draggable: mmCanSave, zIndexOffset: on ? 1000 : 0,
+      icon: L.divIcon({ className: 'mm-pin-mark' + (on ? ' on' : ''), html: `<span>${esc(p.name || mmLocName(p.location))}</span>`, iconSize: [0, 0] }) }).addTo(mmMap);
+    mk.on('click', () => { mmSel = p.location; mmPinSel = i; mmRenderPins(); });
+    mk.on('dragend', () => { const q = mk.getLatLng(); p.lat = Number(q.lat.toFixed(6)); p.lng = Number(q.lng.toFixed(6)); mmPinSel = i; mmDirty(); mmRenderPins(); });
     mmLayers.push(mk);
   });
-}
-
-function mmClearPin() {
-  if (!mmSel || !mm.pins[mmSel]) return;
-  delete mm.pins[mmSel];
-  mmDirty(); mmRenderPins();
 }
 
 /* ── read and write ── */
@@ -1209,7 +1277,8 @@ async function loadMataMalam() {
     mmLocs.sort((a, b) => (mmIsMain(a.code) ? 0 : 1) - (mmIsMain(b.code) ? 0 : 1) || a.code.localeCompare(b.code, 'en', { numeric: true }));
 
     const saved = (set.data && set.data.settings) || {};
-    mm = { locations: {}, timing: { ...MM_DEFAULT_TIMING }, pins: {} };
+    mm = { locations: {}, timing: { ...MM_DEFAULT_TIMING }, pins: [] };
+    mmPinSel = -1;
     mmLocs.forEach(l => {
       const s = (saved.locations || {})[l.code] || {};
       mm.locations[l.code] = {
@@ -1219,9 +1288,20 @@ async function loadMataMalam() {
     });
     const t = saved.timing || {};
     if (Number.isFinite(t.opensBeforeMinutes) && Number.isFinite(t.windowMinutes)) mm.timing = { opensBeforeMinutes: t.opensBeforeMinutes, windowMinutes: t.windowMinutes };
-    Object.entries(saved.pins || {}).forEach(([code, p]) => {
-      if (Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)) mm.pins[code] = [p[0], p[1]];
-    });
+    /* A list now. The one-pin-per-location shape it had for a day, { BNN: [lat, lng] }, is still
+       read, so a row saved in it opens with its pins rather than without them. */
+    const known = new Set(mmLocs.map(l => l.code));
+    if (Array.isArray(saved.pins)) {
+      saved.pins.forEach(p => {
+        if (p && known.has(p.location) && Number.isFinite(p.lat) && Number.isFinite(p.lng))
+          mm.pins.push({ name: String(p.name || '').slice(0, 40), location: p.location, lat: p.lat, lng: p.lng });
+      });
+    } else {
+      Object.entries(saved.pins || {}).forEach(([code, p]) => {
+        if (known.has(code) && Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))
+          mm.pins.push({ name: mmLocName(code), location: code, lat: p[0], lng: p[1] });
+      });
+    }
     $('mm-opens').value = mm.timing.opensBeforeMinutes;
     $('mm-window').value = mm.timing.windowMinutes;
     mmCanSave = true;
@@ -1256,11 +1336,12 @@ async function mmSave() {
   }
   if (problem) { status.innerHTML = `<span style="color:#b91c1c">${esc(problem)}</span>`; return; }
 
-  const settings = { locations: {}, timing: { opensBeforeMinutes: opens, windowMinutes: win }, pins: {} };
+  const settings = { locations: {}, timing: { opensBeforeMinutes: opens, windowMinutes: win }, pins: [] };
   mmLocs.forEach(l => {
     const d = mm.locations[l.code];
     settings.locations[l.code] = { active: d.active, slots: mmSort(d.slots) };
-    if (mm.pins[l.code]) settings.pins[l.code] = mm.pins[l.code];
+    mmPinsOf(l.code).forEach(p => settings.pins.push({
+      name: String(p.name || '').trim() || l.name, location: l.code, lat: p.lat, lng: p.lng }));
   });
   const btn = $('mm-save');
   btn.disabled = true; btn.textContent = 'Saving…';
