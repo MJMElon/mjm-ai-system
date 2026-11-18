@@ -17,7 +17,8 @@
 --                         own check-in times, and the task timing.
 --   mata_malam_logs       one row per check-in, with who, where, when, the
 --                         photo link and the road track.
---   five functions        state, save settings, submit, route, photo ticket
+--   six functions         state, save settings, submit, route, photo ticket,
+--                         and the site outlines for the Map Pins map
 --   one storage rule      photos go to documents / mata_malam_photos and
 --                         nowhere else, and only with a live ticket
 --
@@ -287,6 +288,35 @@ END;
 $$;
 
 
+-- The site outlines, one per nursery, exactly as uploaded on System Setting -
+-- Boundary. Mata Malam draws them on its Map Pins map so whoever is placing a
+-- pin can see where each nursery is. Every nursery is handed over, whatever
+-- nursery the guard is filed under, because a guard patrols all of them.
+CREATE OR REPLACE FUNCTION public.mata_malam_boundaries(p_token UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  w public.mjmnpayroll_workers;
+  v JSONB;
+BEGIN
+  w := public.worker_from_token(p_token);
+  IF to_regclass('public.shared_site_boundary') IS NULL THEN
+    RETURN '[]'::jsonb;
+  END IF;
+  EXECUTE $q$
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'nursery', b.nursery, 'geojson', b.geojson, 'updated_at', b.updated_at)
+             ORDER BY b.nursery), '[]'::jsonb)
+      FROM public.shared_site_boundary b
+     WHERE b.geojson IS NOT NULL $q$ INTO v;
+  RETURN v;
+END;
+$$;
+
+
 REVOKE ALL ON FUNCTION public.mata_malam_state(UUID, DATE)          FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.mata_malam_save_settings(UUID, JSONB) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.mata_malam_submit(UUID, JSONB)        FROM PUBLIC;
@@ -297,6 +327,8 @@ GRANT EXECUTE ON FUNCTION public.mata_malam_save_settings(UUID, JSONB) TO anon, 
 GRANT EXECUTE ON FUNCTION public.mata_malam_submit(UUID, JSONB)        TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.mata_malam_route(UUID, TEXT)          TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.mata_malam_photo_ticket(UUID)         TO anon, authenticated;
+REVOKE ALL ON FUNCTION public.mata_malam_boundaries(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.mata_malam_boundaries(UUID) TO anon, authenticated;
 
 
 -- The storage rule. A policy of its own, so the Worker Portal rule beside
@@ -325,6 +357,22 @@ $do$;
 
 NOTIFY pgrst, 'reload schema';
 
+-- Which nurseries have an outline. Worked out here into a session setting so
+-- the closing query names no table that might not be there.
+DO $do$
+DECLARE v TEXT := '';
+BEGIN
+  IF to_regclass('public.shared_site_boundary') IS NOT NULL THEN
+    EXECUTE $q$SELECT COALESCE(string_agg(b.nursery, ', ' ORDER BY b.nursery), '')
+                 FROM public.shared_site_boundary b WHERE b.geojson IS NOT NULL$q$ INTO v;
+  ELSE
+    v := 'no boundary table';
+  END IF;
+  PERFORM set_config('mm.outlines', COALESCE(v, ''), false);
+END
+$do$;
+
+
 SELECT 1 AS n, 'table mata_malam_settings' AS item,
        CASE WHEN to_regclass('public.mata_malam_settings') IS NOT NULL THEN 'OK' ELSE 'NOT OK -- missing' END AS result
 UNION ALL
@@ -336,12 +384,13 @@ SELECT 3, 'a guard cannot read the tables directly',
               OR has_table_privilege('anon', 'public.mata_malam_settings', 'SELECT')
             THEN 'NOT OK -- anon holds a grant' ELSE 'OK' END
 UNION ALL
-SELECT 4, 'the five functions answer a guard',
+SELECT 4, 'the six functions answer a guard',
        CASE WHEN has_function_privilege('anon', 'public.mata_malam_state(uuid, date)', 'EXECUTE')
              AND has_function_privilege('anon', 'public.mata_malam_save_settings(uuid, jsonb)', 'EXECUTE')
              AND has_function_privilege('anon', 'public.mata_malam_submit(uuid, jsonb)', 'EXECUTE')
              AND has_function_privilege('anon', 'public.mata_malam_route(uuid, text)', 'EXECUTE')
              AND has_function_privilege('anon', 'public.mata_malam_photo_ticket(uuid)', 'EXECUTE')
+             AND has_function_privilege('anon', 'public.mata_malam_boundaries(uuid)', 'EXECUTE')
             THEN 'OK' ELSE 'NOT OK -- a grant is missing' END
 UNION ALL
 SELECT 5, 'photo upload rule',
@@ -365,4 +414,6 @@ SELECT 8, 'settings: ' || COALESCE((SELECT 'saved by ' || COALESCE(s.updated_by,
                                       FROM public.mata_malam_settings s WHERE s.id = 1), 'not set yet'), 'OK'
 UNION ALL
 SELECT 9, 'check-ins stored: ' || (SELECT count(*) FROM public.mata_malam_logs)::TEXT, 'OK'
+UNION ALL
+SELECT 10, 'site outlines for the map: ' || COALESCE(NULLIF(current_setting('mm.outlines', true), ''), 'none uploaded'), 'OK'
 ORDER BY n;
