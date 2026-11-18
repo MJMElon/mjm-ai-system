@@ -806,6 +806,35 @@
     }
     window.setMatLocFilter = setMatLocFilter;
 
+    // ONE row's balance arithmetic, read by renderMaturityTable (and its
+    // flow-back pass) and by the Stock Analysis Dashboard. r.isPR is the
+    // row's own tab: a Plot-R row only ever shows on the Plot-R tab.
+    function matRowFigures(r) {
+        const collected = r.doDeducted || 0;
+        const culledQty = r.culledQty || 0;
+        const xferOut   = r.transferredOut || 0;
+        const xferIn    = r.transferredIn  || 0;
+        const otherDed  = culledQty + xferOut;
+        const fullBalance = r.afterCulling + xferIn - collected - otherDed;
+        const culled = culledQty > 0 && fullBalance <= 0;
+        const rawBalance = r.isPR ? fullBalance : r.afterCulling - collected;
+        const plotBalance = culled ? 0 : rawBalance;
+        const soldOut = !culled && plotBalance <= 0;
+        // SOLD OUT IS NOT CLOSED. Sold Out is the 10%-culling ESTIMATE
+        // used up, and seedlings really can still be standing in that
+        // 10%, so a sold-out row keeps taking customers against
+        // Qty Transplanted - DO Deducted — the office's exact sum — and
+        // only closes once that reaches nought (or the plot is Culled).
+        const left = r.isPR ? fullBalance : r.qty - collected;
+        const closedOut = soldOut && left <= 0;
+        // What a customer may be reserved against: the plot balance, or
+        // on a sold-out row the seedlings left. ONE figure, read by
+        // buildRow (After Deduct Reserve, the drop gate) and by
+        // releaseOverReserved (the flow-back budget) alike.
+        const room = soldOut ? Math.max(0, left) : plotBalance;
+        return { collected, culledQty, xferOut, xferIn, otherDed, rawBalance, fullBalance, culled, plotBalance, soldOut, left, closedOut, room };
+    }
+
     function renderMaturityTable() {
         updateMaturityHeaders();
         const tbody = document.getElementById('maturity-rows');
@@ -847,31 +876,9 @@
         // PLOT-R IS UNCHANGED. It has no 10% column — After Culling IS the
         // quantity transferred in — and a Plot-R row's whole balance is what
         // has moved on or been culled off it, so the full arithmetic stays.
-        function rowFigures(r) {
-            const collected = r.doDeducted || 0;
-            const culledQty = r.culledQty || 0;
-            const xferOut   = r.transferredOut || 0;
-            const xferIn    = r.transferredIn  || 0;
-            const otherDed  = culledQty + xferOut;
-            const fullBalance = r.afterCulling + xferIn - collected - otherDed;
-            const culled = culledQty > 0 && fullBalance <= 0;
-            const rawBalance = isPR ? fullBalance : r.afterCulling - collected;
-            const plotBalance = culled ? 0 : rawBalance;
-            const soldOut = !culled && plotBalance <= 0;
-            // SOLD OUT IS NOT CLOSED. Sold Out is the 10%-culling ESTIMATE
-            // used up, and seedlings really can still be standing in that
-            // 10%, so a sold-out row keeps taking customers against
-            // Qty Transplanted - DO Deducted — the office's exact sum — and
-            // only closes once that reaches nought (or the plot is Culled).
-            const left = isPR ? fullBalance : r.qty - collected;
-            const closedOut = soldOut && left <= 0;
-            // What a customer may be reserved against: the plot balance, or
-            // on a sold-out row the seedlings left. ONE figure, read by
-            // buildRow (After Deduct Reserve, the drop gate) and by
-            // releaseOverReserved (the flow-back budget) alike.
-            const room = soldOut ? Math.max(0, left) : plotBalance;
-            return { collected, culledQty, xferOut, xferIn, otherDed, rawBalance, fullBalance, culled, plotBalance, soldOut, left, closedOut, room };
-        }
+        // The arithmetic is matRowFigures() at file scope, so the Stock
+        // Analysis Dashboard reads the same Plot Balance this table prints.
+        const rowFigures = matRowFigures;
 
         // ── A customer the plot can no longer cover FLOWS BACK to the
         //    Allocate Orders pool ──────────────────────────────────────
@@ -2616,7 +2623,13 @@
         } else if (tab === 'map') {
             if (mapPane) mapPane.classList.remove('hidden');
             if (mapBtn) mapBtn.classList.add('active');
-            if (!_ssmMapLoaded) { _ssmMapLoaded = true; loadInventoryMap(); }
+            if (!_ssmMapLoaded) {
+                _ssmMapLoaded = true;
+                // The analysis reads the maturity rows, the orders and the
+                // map's heights, so it draws once all three are in.
+                const mapReady = loadInventoryMap();
+                Promise.all([mapReady, _saMatReady, _saCustReady]).then(renderStockAnalysis);
+            }
         } else {
             customerPane.classList.remove('hidden');
             customerBtn.classList.add('active');
@@ -4433,6 +4446,371 @@
     window.switchInvmapNursery = switchInvmapNursery;
     window.selectInvmapBreed   = selectInvmapBreed;
     window.clearInvmapBreed    = clearInvmapBreed;
+    // ══════════════════════════════════════════════════════════════════
+    // ── Stock Analysis Dashboard (Inventory Map pane, section 1) ──────
+    // ══════════════════════════════════════════════════════════════════
+    //
+    // Three questions, every figure READ off what this page already loads
+    // rather than worked out a second way:
+    //
+    //   1. ACTUAL ORDER — what is still owed to customers. The Pending
+    //      Collection card's own rule (AL qty − DO qty, cash-unpaid and
+    //      cancelled left out), so the two figures cannot disagree.
+    //   2. AVAILABLE STOCK — the Plot Balance of every Monthly Maturity
+    //      row (matRowFigures, the table's own arithmetic) that is
+    //      matured by the end of this month, OR whose latest height audit
+    //      averages 1.5 m or more. A row is counted once: matured wins.
+    //      Culled, Sold Out and Closed rows hold nothing to sell.
+    //   3. FORECAST — how much will actually go out this month and next.
+    //      An order with a balance does not all come at once, so each
+    //      order is projected on its OWN customer's pace: the bookings
+    //      collected through collect.mjmnursery.com over the last 90 days,
+    //      per month. Bookings already made for a month count as a floor.
+    //      An order is never projected past its balance.
+    const SA_HEIGHT_CM   = 150;   // 1.5 m
+    const SA_PACE_DAYS   = 90;    // how far back a customer's pace is read
+    // Settled when the page's own two loads finish, however early the map
+    // tab is opened — a tab opened before the session answers waits rather
+    // than drawing an analysis of nothing.
+    let _saMatDone, _saCustDone;
+    const _saMatReady  = new Promise(r => { _saMatDone  = r; });
+    const _saCustReady = new Promise(r => { _saCustDone = r; });
+    let _saData = null;           // the last figures drawn — the windows read it
+    let _saPaceRows = null;       // bookings over the pace window, read once
+
+    const _saFmt = n => (Number(n) || 0).toLocaleString('en-MY');
+    const _saMonthLbl = d => d.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
+    const _saDayKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+    async function _saLoadPace() {
+        if (_saPaceRows) return _saPaceRows;
+        const since = new Date(); since.setDate(since.getDate() - SA_PACE_DAYS);
+        const res = await fetchAllRows(() => _supabase.from('shared_collection_bookings')
+            .select('id,order_number,customer_name,booking_date,collection_qty,status')
+            .gte('booking_date', _saDayKey(since))
+            .neq('status', 'cancelled')
+            .order('id', { ascending: true }))
+            .then(r => r, e => ({ data: null, error: e }));
+        if (res && res.error) console.warn('[StockAnalysis] bookings for pace not loaded:', res.error);
+        _saPaceRows = (res && res.data) || [];
+        return _saPaceRows;
+    }
+
+    // The orders still owed, by the Pending Collection card's own rule.
+    function _saOpenOrders() {
+        return (allCustomerOrders || []).filter(o => {
+            const isCash   = (o.paymentMethod || 'cash') === 'cash';
+            const isUnpaid = o.rawStatus === 'Pending Payment' || o.derivedStatus === 'Pending Payment';
+            if (isCash && isUnpaid) return false;
+            if (o.rawStatus === 'Cancelled') return false;
+            return (Number(o.balance) || 0) > 0;
+        });
+    }
+
+    // ── Orders the office has taken out of the analysis ──────────────
+    // An order still owed is not always coming — an overdue customer the
+    // office has stopped expecting. Unticking it on the Actual Order window
+    // takes it out of Actual Order, the gap and the forecast, for everybody:
+    // it is stored in operation_stock_analysis_excluded, keyed on the
+    // normalised order number (the key Customer Order Management matches
+    // on), so a "#" keyed on one side cannot split one order in two.
+    // Ticking it again deletes the row. Nothing about the order itself is
+    // touched. A table that cannot be read leaves every order counted and
+    // says so — an analysis must not quietly drop orders over a failed read.
+    let _saExcl = null;            // Map key -> row, once read
+    let _saExclErr = null;         // why it could not be read or written
+    async function _saLoadExcluded() {
+        if (_saExcl) return _saExcl;
+        _saExcl = new Map();
+        try {
+            const { data, error } = await _supabase.from('operation_stock_analysis_excluded')
+                .select('order_key,order_number,customer_name,excluded_by,excluded_at');
+            if (error) throw error;
+            (data || []).forEach(r => { if (r.order_key) _saExcl.set(r.order_key, r); });
+            _saExclErr = null;
+        } catch (e) {
+            console.warn('[StockAnalysis] excluded orders not read:', e);
+            _saExclErr = 'The list of unticked orders could not be read, so every order is counted. Run shared/RUN_ME_stock_analysis_excluded.sql.';
+        }
+        return _saExcl;
+    }
+    const _saOrderKey = o => _normOrderKey(o.orderNumber) || ('id:' + o.id);
+    const _saIsCounted = o => !(_saExcl && _saExcl.has(_saOrderKey(o)));
+
+    function _saStockRows(now) {
+        const thisMonth = monthKey(now);
+        const nextD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const nextMonth = monthKey(nextD);
+        const heights = (_invmap && _invmap.heights) || {};
+        const avail = [], nextMature = [];
+        (allMatGroups || []).forEach(r => {
+            const f = matRowFigures(r);
+            const alloc = plotAllocations[r.key] || {};
+            if (f.culled || f.soldOut || alloc.plot_status === 'finished') return;
+            const bal = Math.max(0, f.plotBalance);
+            if (!bal) return;
+            const h = heights[_invHeightKey(r.plot, r.batch)];
+            const tall = !!(h && h.avg != null && h.avg >= SA_HEIGHT_CM);
+            const mk = monthKey(r.matureDate);
+            const row = {
+                plot: r.plot, batch: r.batch, breed: r.breed, location: r.location,
+                matureDate: r.matureDate, height: h && h.avg != null ? h.avg : null,
+                heightDate: h ? h.date : null, balance: bal
+            };
+            if (mk <= thisMonth)  avail.push(Object.assign(row, { why: 'matured' }));
+            else if (tall)        avail.push(Object.assign(row, { why: 'tall' }));
+            else if (mk === nextMonth) nextMature.push(Object.assign(row, { why: 'next' }));
+        });
+        const byDate = (a, b) => (a.matureDate - b.matureDate) || String(a.plot).localeCompare(String(b.plot));
+        avail.sort(byDate); nextMature.sort(byDate);
+        return { avail, nextMature };
+    }
+
+    function _saForecast(now, orders, paceRows) {
+        const todayKey  = _saDayKey(now);
+        const thisMonth = monthKey(now);
+        const nextMonth = monthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+        const dim  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const left = (dim - now.getDate() + 1) / dim;   // share of this month still to come
+
+        // Pace: what each order actually collected (bookings dated before
+        // today) over the window, per 30 days. Keyed on the normalised
+        // order number, the same key Customer Order Management matches on.
+        const done = {};
+        (paceRows || []).forEach(b => {
+            const d = String(b.booking_date || '').slice(0, 10);
+            if (!d || d >= todayKey) return;
+            const k = _normOrderKey(b.order_number);
+            if (!k) return;
+            done[k] = (done[k] || 0) + (Number(b.collection_qty) || 0);
+        });
+
+        let estRest = 0, estNext = 0, noPace = 0;
+        const rows = orders.map(o => {
+            const bal = Number(o.balance) || 0;
+            const pace = Math.round((done[_normOrderKey(o.orderNumber)] || 0) * 30 / SA_PACE_DAYS);
+            let bookedRest = 0, bookedNext = 0;
+            Object.entries(o.bookingsByDay || {}).forEach(([d, q]) => {
+                if (d >= todayKey && d.slice(0, 7) === thisMonth) bookedRest += Number(q) || 0;
+                if (d.slice(0, 7) === nextMonth) bookedNext += Number(q) || 0;
+            });
+            const rest = Math.min(bal, Math.max(bookedRest, Math.round(pace * left)));
+            const next = Math.min(bal - rest, Math.max(bookedNext, pace));
+            if (!pace && !bookedRest && !bookedNext) noPace++;
+            estRest += rest; estNext += next;
+            return { customer: o.customer, orderNumber: o.orderNumber, alNumber: o.alNumber,
+                     balance: bal, pace, bookedRest, bookedNext, rest, next };
+        }).sort((a, b) => (b.rest + b.next) - (a.rest + a.next) || b.balance - a.balance);
+
+        // Already out this month — the month Collection card's own figure:
+        // non-cancelled DOs delivered this month, calibration DOs and DOs on
+        // a cancelled AL left out.
+        const cancelled = _cancelledAlSet();
+        const outSoFar = (allDoRecords || []).reduce((s, d) => {
+            if (!d.delivery_date || _isCalibrationDo(d) || cancelled.has(d.al_number)) return s;
+            return String(d.delivery_date).slice(0, 7) === thisMonth ? s + (Number(d.total_qty) || 0) : s;
+        }, 0);
+
+        return { rows, estRest, estNext, outSoFar, noPace };
+    }
+
+    async function renderStockAnalysis() {
+        const body = document.getElementById('invmap-analysis-body');
+        if (!body) return;
+        try {
+            const [paceRows] = await Promise.all([_saLoadPace(), _saLoadExcluded()]);
+            const now = new Date();
+            const nextD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            const openOrders = _saOpenOrders();
+            const orders = openOrders.filter(_saIsCounted);
+            const nExcl = openOrders.length - orders.length;
+            const actual = orders.reduce((s, o) => s + (Number(o.balance) || 0), 0);
+            const { avail, nextMature } = _saStockRows(now);
+            const matured = avail.filter(r => r.why === 'matured').reduce((s, r) => s + r.balance, 0);
+            const tall    = avail.filter(r => r.why === 'tall').reduce((s, r) => s + r.balance, 0);
+            const available = matured + tall;
+            const gap = available - actual;
+            const fc = _saForecast(now, orders, paceRows);
+            const nextNew = nextMature.reduce((s, r) => s + r.balance, 0);
+            const leftThis = available - fc.estRest;
+            const nextAvail = Math.max(0, leftThis) + nextNew;
+            const leftNext = nextAvail - fc.estNext;
+            _saData = { now, nextD, avail, nextMature, matured, tall, available, fc, openOrders };
+
+            const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + _saFmt(Math.abs(n));
+            const verdict = n => n >= 0
+                ? '<span class="sa-ok">Enough</span>'
+                : '<span class="sa-short">Short</span>';
+            const card = (cls, label, value, sub, attrs) => `
+                <${attrs ? 'button type="button"' : 'div'} class="sa-card ${cls}" ${attrs || ''}>
+                    <div class="sa-label">${label}</div>
+                    <div class="sa-value">${value}</div>
+                    <div class="sa-sub">${sub}</div>
+                </${attrs ? 'button' : 'div'}>`;
+            const fRow = (label, value, cls) => `<div class="sa-frow ${cls || ''}"><span>${label}</span><span>${value}</span></div>`;
+            const fcCol = (title, est, estSub, stock, stockSub, after) => `
+                <div class="sa-fcol">
+                    <div class="sa-ftitle">${title}</div>
+                    ${fRow('Estimated collection', _saFmt(est))}
+                    <div class="sa-fnote">${estSub}</div>
+                    ${fRow('Stock available', _saFmt(stock))}
+                    <div class="sa-fnote">${stockSub}</div>
+                    ${fRow('Balance after', signed(after) + ' ' + verdict(after), after < 0 ? 'neg' : 'pos')}
+                </div>`;
+
+            body.innerHTML = `
+                <div class="sa-cards">
+                    ${card('sa-order', 'Actual Order', _saFmt(actual), `Balance to deliver · ${orders.length} order${orders.length === 1 ? '' : 's'}${nExcl ? ` · ${nExcl} unticked` : ''} · tap for details`, 'onclick="openStockAnalysisWindow(\'orders\')" title="Show the orders behind this figure"')}
+                    ${card('sa-stock', 'Available Stock', _saFmt(available), `Matured ${_saFmt(matured)} + Reached 1.5 m ${_saFmt(tall)} · tap for details`, 'onclick="openStockAnalysisWindow(\'stock\')" title="Show the plots behind this figure"')}
+                    ${card(gap < 0 ? 'sa-gap-neg' : 'sa-gap-pos', 'Available − Actual Order', signed(gap), gap < 0 ? 'Not enough stock for every order' : 'Enough stock for every order')}
+                </div>
+                <div class="sa-forecast">
+                    <div class="sa-fhead">
+                        <span>Collection forecast</span>
+                        <button type="button" class="sa-link" onclick="openStockAnalysisWindow('forecast')">By customer ›</button>
+                    </div>
+                    <div class="sa-fcols">
+                        ${fcCol(_saMonthLbl(now), fc.outSoFar + fc.estRest,
+                                `${_saFmt(fc.outSoFar)} already collected + ${_saFmt(fc.estRest)} expected for the rest of the month`,
+                                available, 'Available stock now', leftThis)}
+                        ${fcCol(_saMonthLbl(nextD), fc.estNext,
+                                'From each customer’s collection pace and bookings',
+                                nextAvail, `Left from this month ${_saFmt(Math.max(0, leftThis))} + maturing in ${nextD.toLocaleString('en-MY', { month: 'short' })} ${_saFmt(nextNew)}`, leftNext)}
+                    </div>
+                    ${fc.noPace ? `<div class="sa-fnote sa-foot">${fc.noPace} order${fc.noPace === 1 ? ' has' : 's have'} no collection in the last ${SA_PACE_DAYS} days and no booking, so ${fc.noPace === 1 ? 'it is' : 'they are'} not in the estimate.</div>` : ''}
+                </div>`;
+        } catch (e) {
+            console.error('[StockAnalysis] failed:', e);
+            body.innerHTML = `<div class="text-center py-6 text-[11px] font-bold text-rose-500">Could not build the analysis: ${escapeHtml(e.message || String(e))}</div>`;
+        }
+    }
+
+    function renderStockAnalysisOrders() {
+        const d = _saData;
+        const tbody = document.getElementById('sa-order-rows');
+        if (!d || !tbody) return;
+        const q = String((document.getElementById('sa-order-search') || {}).value || '').trim().toLowerCase();
+        const all = (d.openOrders || []).slice().sort((a, b) =>
+            String(a.customer || '').localeCompare(String(b.customer || '')) ||
+            String(a.orderNumber || '').localeCompare(String(b.orderNumber || '')));
+        const shown = q ? all.filter(o => String(o.customer || '').toLowerCase().includes(q)) : all;
+        tbody.innerHTML = shown.length ? shown.map(o => {
+            const k = _saOrderKey(o);
+            const on = _saIsCounted(o);
+            return `<tr class="${on ? '' : 'sa-off'}">
+                <td class="c"><input type="checkbox" class="sa-tick" ${on ? 'checked' : ''} data-key="${escapeHtml(k)}"
+                    onchange="toggleStockAnalysisOrder(this.dataset.key, this.checked)" aria-label="Count ${escapeHtml(o.customer || '')} ${escapeHtml(o.orderNumber || '')}"></td>
+                <td class="b">${escapeHtml(o.customer || '—')}</td>
+                <td>${escapeHtml(o.orderNumber || '—')}</td>
+                <td class="r b">${_saFmt(o.balance)}</td></tr>`;
+        }).join('') : `<tr><td colspan="4" class="sa-empty">${q ? 'No customer matching “' + escapeHtml(q) + '”' : 'No open orders'}</td></tr>`;
+        const counted = all.filter(_saIsCounted);
+        const foot = document.getElementById('sa-order-foot');
+        if (foot) foot.innerHTML = `<tr><td colspan="3">Counted · ${counted.length} of ${all.length} orders</td>
+            <td class="r">${_saFmt(counted.reduce((s, o) => s + (Number(o.balance) || 0), 0))}</td></tr>`;
+        const note = document.getElementById('sa-order-note');
+        if (note) {
+            note.textContent = _saExclErr || '';
+            note.style.display = _saExclErr ? '' : 'none';
+        }
+    }
+
+    async function toggleStockAnalysisOrder(key, counted) {
+        const d = _saData;
+        if (!d || !_saExcl || !key) return;
+        const o = (d.openOrders || []).find(x => _saOrderKey(x) === key);
+        try {
+            if (counted) {
+                const { error } = await _supabase.from('operation_stock_analysis_excluded').delete().eq('order_key', key);
+                if (error) throw error;
+                _saExcl.delete(key);
+            } else {
+                let who = null;
+                try { const { data } = await _supabase.auth.getSession(); who = data?.session?.user?.email || null; } catch (e) {}
+                const row = { order_key: key, order_number: o ? o.orderNumber : null,
+                              customer_name: o ? o.customer : null, excluded_by: who, excluded_at: new Date().toISOString() };
+                const { error } = await _supabase.from('operation_stock_analysis_excluded').upsert(row, { onConflict: 'order_key' });
+                if (error) throw error;
+                _saExcl.set(key, row);
+            }
+            _saExclErr = null;
+        } catch (e) {
+            console.error('[StockAnalysis] could not save the tick:', e);
+            _saExclErr = 'Not saved — ' + (e.message || e) + '. Run shared/RUN_ME_stock_analysis_excluded.sql if it has not been run.';
+        }
+        // The tick on screen always shows what is stored, saved or not.
+        renderStockAnalysisOrders();
+        renderStockAnalysis();
+    }
+
+    function openStockAnalysisWindow(which) {
+        const d = _saData;
+        if (!d) return;
+        const title = document.getElementById('sa-modal-title');
+        const sub   = document.getElementById('sa-modal-sub');
+        const body  = document.getElementById('sa-modal-body');
+        const dt = v => v instanceof Date && !isNaN(v) ? v.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+        const hcm = v => v == null ? '—' : (Math.round(v * 10) / 10).toLocaleString('en-MY') + ' cm';
+        if (which === 'orders') {
+            title.textContent = 'Actual Order';
+            sub.textContent = 'Untick an order to leave it out of the analysis';
+            body.innerHTML = `
+                <input type="search" id="sa-order-search" class="sa-search" placeholder="Search customer name" oninput="renderStockAnalysisOrders()" autocomplete="off">
+                <div id="sa-order-note" class="sa-note"></div>
+                <div class="sa-twrap"><table class="sa-table">
+                    <thead><tr><th class="c">Count</th><th>Customer</th><th>Order No.</th><th class="r">Quantity</th></tr></thead>
+                    <tbody id="sa-order-rows"></tbody>
+                    <tfoot id="sa-order-foot"></tfoot>
+                </table></div>`;
+            renderStockAnalysisOrders();
+        } else if (which === 'stock') {
+            title.textContent = 'Available Stock';
+            sub.textContent = _saFmt(d.available) + ' seedlings · as at ' + dt(d.now);
+            const table = (rows, showHeight) => rows.length ? `
+                <div class="sa-twrap"><table class="sa-table">
+                    <thead><tr><th>Plot</th><th>Batch</th><th>Breed</th><th>Nursery</th><th>Maturity</th><th class="r">Height</th><th class="r">Balance</th></tr></thead>
+                    <tbody>${rows.map(r => `<tr>
+                        <td class="b">${escapeHtml(r.plot)}</td><td>${escapeHtml(r.batch)}</td><td>${escapeHtml(r.breed || '—')}</td>
+                        <td>${escapeHtml(r.location || '—')}</td><td>${dt(r.matureDate)}</td>
+                        <td class="r">${hcm(r.height)}</td><td class="r b">${_saFmt(r.balance)}</td></tr>`).join('')}</tbody>
+                    <tfoot><tr><td colspan="6">Total</td><td class="r">${_saFmt(rows.reduce((s, r) => s + r.balance, 0))}</td></tr></tfoot>
+                </table></div>` : '<div class="sa-empty">None</div>';
+            const m = d.avail.filter(r => r.why === 'matured'), t = d.avail.filter(r => r.why === 'tall');
+            body.innerHTML = `
+                <div class="sa-mhead">Matured by end of ${_saMonthLbl(d.now)} <span>${_saFmt(d.matured)}</span></div>
+                ${table(m)}
+                <div class="sa-mhead">Reached 1.5 m, not yet matured <span>${_saFmt(d.tall)}</span></div>
+                ${table(t)}
+                <div class="sa-fnote">Balance is the Plot Balance on Stock Allocation (after 10% culling, less DOs). Height is the latest Seedling Height audit of that plot and batch. Culled, Sold Out and Closed plots are left out.</div>`;
+        } else {
+            const fc = d.fc;
+            title.textContent = 'Collection forecast by customer';
+            sub.textContent = `Pace = bookings collected in the last ${SA_PACE_DAYS} days, per month`;
+            body.innerHTML = fc.rows.length ? `
+                <div class="sa-twrap"><table class="sa-table">
+                    <thead><tr><th>Customer</th><th>Order</th><th class="r">Balance</th><th class="r">Pace / month</th><th class="r">Booked rest of ${d.now.toLocaleString('en-MY', { month: 'short' })}</th><th class="r">Est. rest of ${d.now.toLocaleString('en-MY', { month: 'short' })}</th><th class="r">Booked ${d.nextD.toLocaleString('en-MY', { month: 'short' })}</th><th class="r">Est. ${d.nextD.toLocaleString('en-MY', { month: 'short' })}</th></tr></thead>
+                    <tbody>${fc.rows.map(r => `<tr>
+                        <td class="b">${escapeHtml(r.customer || '—')}</td><td>${escapeHtml(r.alNumber || r.orderNumber || '—')}</td>
+                        <td class="r">${_saFmt(r.balance)}</td><td class="r">${_saFmt(r.pace)}</td>
+                        <td class="r">${_saFmt(r.bookedRest)}</td><td class="r b">${_saFmt(r.rest)}</td>
+                        <td class="r">${_saFmt(r.bookedNext)}</td><td class="r b">${_saFmt(r.next)}</td></tr>`).join('')}</tbody>
+                    <tfoot><tr><td colspan="2">Total</td><td class="r">${_saFmt(fc.rows.reduce((s, r) => s + r.balance, 0))}</td><td></td><td></td><td class="r">${_saFmt(fc.estRest)}</td><td></td><td class="r">${_saFmt(fc.estNext)}</td></tr></tfoot>
+                </table></div>
+                <div class="sa-fnote">Rest of this month = the larger of what is booked from today and the customer’s pace for the days left. Next month = the larger of what is booked and the pace. Never more than the order balance.</div>`
+                : '<div class="sa-empty">No open orders</div>';
+        }
+        const m = document.getElementById('sa-modal');
+        m.classList.remove('hidden'); m.classList.add('flex');
+    }
+    function closeStockAnalysisWindow() {
+        const m = document.getElementById('sa-modal');
+        m.classList.add('hidden'); m.classList.remove('flex');
+    }
+    window.openStockAnalysisWindow  = openStockAnalysisWindow;
+    window.closeStockAnalysisWindow = closeStockAnalysisWindow;
+    window.renderStockAnalysisOrders = renderStockAnalysisOrders;
+    window.toggleStockAnalysisOrder  = toggleStockAnalysisOrder;
+
     window.openInvmapModal     = openInvmapModal;
     window.toggleInvmapHeight  = toggleInvmapHeight;
     window.toggleInvmapSamples = toggleInvmapSamples;
@@ -4444,12 +4822,12 @@
 
     _supabase.auth.getSession().then(({ data: { session } }) => {
         if (!session) { window.location.href = 'operation_dashboard.html'; return; }
-        loadMaturity();
+        loadMaturity().then(_saMatDone, _saMatDone);
         // The maturity table hides SPENT allocations (allocIsSpent reads the
         // order balances), and the three loads race — redraw it once the
         // orders are in, or a spent chip drawn by the earlier render stands
         // until something else touches the table.
-        loadCustomerOrders().then(() => { renderMaturityTable(); renderAllocDrawer(); });
+        loadCustomerOrders().then(() => { renderMaturityTable(); renderAllocDrawer(); }).then(_saCustDone, _saCustDone);
         loadScheduledCollection();
         // loadAgingReport removed — Aging Report block deleted from UI.
         loadBatchAllocations().then(() => { renderMaturityTable(); renderAllocDrawer(); });

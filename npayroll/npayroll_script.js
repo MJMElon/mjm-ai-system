@@ -207,7 +207,7 @@ function maintExtraNurseries() {
   const m = monthValue();
   return MAINT_NURSERIES.filter(c => {
     if (CLAIM_NURSERIES.includes(c)) return false;
-    try { return maintWorkerNames(c, m).length > 0; } catch (_) { return false; }
+    try { return maintClaimNames(c, m).length > 0; } catch (_) { return false; }
   });
 }
 
@@ -420,15 +420,40 @@ function resolveMaintWorkers() {
    already on the register, which for anybody typed up from an older paper
    list is years after they actually started — dropping them off those months
    on the strength of a guess is worse than carrying them. */
-function maintWorkerNames(nursery, ym) {
-  const rows = maint.rows && maint.rows[nursery];
-  if (!rows || !rows.length) return maint.workers[nursery] || [];
+function _rowsOnMonth(rows, ym) {
   const monthStart = `${ym}-01`;
   return rows.filter(w => {
     if (w.active !== false) return true;
     const last = w.last_day ? String(w.last_day).slice(0, 10) : '';
     return !!last && last >= monthStart;
   }).map(w => String(w.full_name).trim());
+}
+function maintWorkerNames(nursery, ym) {
+  const rows = maint.rows && maint.rows[nursery];
+  if (!rows || !rows.length) return maint.workers[nursery] || [];
+  return _rowsOnMonth(rows, ym);
+}
+
+/* WHO IS ON ONE JOB'S SHEET. Settings → Worker List for Each Job on Work
+   Maintenance can give a job, in a nursery, the people of any Team Board
+   group. SHARED RULE: jobWorkers() in nursery_ops/plot_maintenance_script.js
+   asks the same file, shared/shared_job_crew.js, for the same answer — a
+   sheet with eight columns and a claim pricing seven is one plot divided
+   among different numbers of people. Nothing keyed is the old list. */
+function maintJobNames(nursery, ym, code) {
+  const k = `${nursery}:${code}`;
+  const groups = (maint.crews && Object.prototype.hasOwnProperty.call(maint.crews, k)) ? maint.crews[k] : null;
+  if (!groups || !window.MJMJobCrew || !workers || !workers.length) return maintWorkerNames(nursery, ym);
+  return _rowsOnMonth(MJMJobCrew.crewRows(workers, groups, {
+    isGeneral: (w, named) => isGeneralWorker(w, named), sectionKey: registerNurseryKey }), ym);
+}
+/* Everybody on ANY job of this nursery: the people a claim has a line for. */
+function maintClaimNames(nursery, ym) {
+  const out = maintWorkerNames(nursery, ym).slice();
+  MAINT_TYPES.forEach(t => maintJobNames(nursery, ym, t.code).forEach(w => {
+    if (!out.includes(w)) out.push(w);
+  }));
+  return out;
 }
 
 /* "RM 1,000.00", not "RM 1000.00". A payroll sheet is read down a column at
@@ -3418,7 +3443,8 @@ function maintRateTxt(t, rate) {
 function _maintInMonth(r, m) { return !!r && r._month === m; }
 
 function maintTotals(nursery, month, ym) {
-  const wk = maintWorkerNames(nursery, ym || monthValue());
+  const wkYm = ym || monthValue();
+  const wk = maintClaimNames(nursery, wkYm);
   const per = {};                       // worker → { code: capacity }
   wk.forEach(w => { per[w] = {}; MAINT_TYPES.forEach(t => per[w][t.code] = 0); });
   const why = {};
@@ -3432,6 +3458,9 @@ function maintTotals(nursery, month, ym) {
   let fromField = 0;
 
   MAINT_TYPES.forEach(t => {
+    /* This job's own columns. A tick under a name the job's list does not
+       hold is not paid here, exactly as it has no column on the sheet. */
+    const wk = maintJobNames(nursery, wkYm, t.code);
     const store = maint.ticks[`${nursery}_${month}_${t.code}`] || {};
     const d = why[t.code] = {
       label: t.label,
@@ -3547,6 +3576,7 @@ function maintTotals(nursery, month, ym) {
       stray: new Set(), orphanTicks: 0, fromField: 0, noTaker: new Set(), tickRows: 0
     };
     const wantYm = ym || monthValue();
+    const wkLoad = maintJobNames(nursery, wantYm, code);
     (maint.doRecords || []).forEach(do_ => {
       if (!_doIsLoadingWork(do_)) return; // a CAL- correction or a cancelled DO loaded no lorry
       if (String(do_.delivery_date || '').slice(0, 7) !== wantYm) {
@@ -3561,8 +3591,8 @@ function maintTotals(nursery, month, ym) {
       d.tickRows++;
       d.capAll += qty;
       const cells = (do_.worked_by_by_nursery || {})[nursery] || [];
-      const ticked = wk.filter(w => cells.includes(w));
-      cells.forEach(name => { if (!wk.includes(name)) d.stray.add(name); });
+      const ticked = wkLoad.filter(w => cells.includes(w));
+      cells.forEach(name => { if (!wkLoad.includes(name)) d.stray.add(name); });
       if (!ticked.length) return;
       d.ticked++;
       d.paid++;
@@ -3757,7 +3787,7 @@ function maintViewFromSnapshot(s) {
 }
 
 function maintLiveView(n, ym, monthTxt) {
-  const wk = maintWorkerNames(n, ym);
+  const wk = maintClaimNames(n, ym);
   const rateOf = c => maintRateOf(n, c);
   const per = maintTotals(n, monthTxt, ym);
   // Money from the capacity AS SHOWN, so the printed row multiplies out.
@@ -4845,7 +4875,7 @@ function monthlyRows(sec) {
   workers.forEach(w => { if (w.full_name) byName.set(w.full_name.trim().toLowerCase(), w); });
 
   ['PN','BNN','UNN1','UNN2'].forEach(n => {
-    const wk = maintWorkerNames(n, month);
+    const wk = maintClaimNames(n, month);
     if (!wk.length) return;
     const per = maintTotals(n, monthTxt, month);
     const rateOf = c => maintRateOf(n, c);
@@ -6866,7 +6896,7 @@ function flagSetup(msg) {
 
 /* Work Maintenance lives in the Nursery Operation module; read it as-is. */
 async function loadMaint() {
-  const [recRes, tickRes, rateRes, wkRes, doRes, fieldRes] = await Promise.all([
+  const [recRes, tickRes, rateRes, wkRes, doRes, fieldRes, crewRes] = await Promise.all([
     _supabase.from('nops_maint_records').select('records').eq('id', 1).maybeSingle().then(r => r, () => ({ data: null })),
     _supabase.from('nops_maint_payroll').select('nursery, month, work_type, data').then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_piece_rates').select('nursery, work_type, rate').then(r => r, () => ({ data: [] })),
@@ -6891,8 +6921,14 @@ async function loadMaint() {
     PlotMovement.fetchAll(() => _supabase.from('nops_maint_field_records')
       .select('id, work_date, plot_name, work_type, jenis, chemical, qty, batch_name, week_no, schedule_month, worked_by, reported_by')
       .not('verified_at', 'is', null)
-      .order('id', { ascending: true })).then(r => r, () => ({ data: [] }))
+      .order('id', { ascending: true })).then(r => r, () => ({ data: [] })),
+    /* Each job's worker list (Settings → Worker List for Each Job). Soft:
+       a database that cannot answer leaves every job on its old list. */
+    _supabase.from('nops_maint_config').select('key, txt_value').like('key', 'job_crew:%')
+      .then(r => r, () => ({ data: [] }))
   ]);
+  try { maint.crews = window.MJMJobCrew ? MJMJobCrew.readConfig((crewRes && !crewRes.error && crewRes.data) || []) : {}; }
+  catch (e) { maint.crews = {}; }
 
   // The maintenance module's own old list — only the fallback now.
   maint.localWorkers = {};

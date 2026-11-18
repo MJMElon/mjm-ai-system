@@ -12,7 +12,7 @@
 <meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Module Assess Control — Nursery Operation Manage</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cpath d='M20 44C20 26 32 18 46 18C46 32 38 44 20 44Z' fill='%23d8f3dc'/%3E%3Cpath d='M20 44L32 32' stroke='%23d8f3dc' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
@@ -99,11 +99,17 @@ MJMModuleAccess.init({
       actions:[
         { key:'manage', label:'Edit motion study timings', desc:'Change the standard time allowed for each job' }
       ]},
-    /* PALMS is recorded in the field on the 555 FC Portal; these two pages
-       READ that record. There is no action under either — the office does not
-       key plot status in, so open or closed is the whole question. */
-    { key:'palms_board', label:'PALMS Plot Status Map', desc:'What every plot is on today, and what is running late' },
-    { key:'palms_motion', label:'PALMS Plot Motion Study', desc:'What the work actually costs in days, off the field plot log' }
+    /* PALMS is recorded in the field on the 555 FC Portal; this page READS
+       that record. There is no action under it — the office does not key plot
+       status in, so open or closed is the whole question.
+
+       The Plot Motion Study sat beside it and its page is gone, so its row is
+       too: a tick for a page nobody can open is a permission that cannot be
+       obeyed, which this system has a heading about. A tick somebody already
+       saved under `palms_motion` is harmless and is deliberately not cleared
+       — nothing reads it, and a file of SQL deleting somebody's saved answer
+       is a worse thing than a dead key. */
+    { key:'palms_board', label:'PALMS Plot Status Map', desc:'What every plot is on today, and what is running late' }
   ]
 });
 </script>

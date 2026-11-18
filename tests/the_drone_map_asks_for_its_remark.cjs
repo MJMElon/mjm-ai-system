@@ -182,7 +182,7 @@ function check(name, ok) {
     console.log('\n' + pass + ' passed, ' + (fail + 1) + ' failed'); process.exit(1);
   }
 
-  console.log('\n── 1 · THE FIRST MAP OPENS THE PANEL AND ASKS ──');
+  console.log('\n── 1 · A MAP THAT ARRIVES DOES NOT OPEN THE PANEL; THE ICON DOES ──');
   /* Before: the panel is shut and there is no box anywhere on screen. */
   check('the panel starts closed',
         await page.evaluate(() => document.getElementById('t6-maps-panel').classList.contains('hidden')));
@@ -191,29 +191,40 @@ function check(name, ok) {
 
   await page.setInputFiles(`#${rowId}-doc-input`, [map('u4-north.png')]);
   await page.waitForTimeout(900);
+  /* A map that arrives STAYS where it is: the gallery does not open on its
+     own and no remark box takes the cursor. The remark is written from the
+     map icon, which is the only place it is typed. */
+  const arrived = await page.evaluate(() => ({
+    open: !document.getElementById('t6-maps-panel').classList.contains('hidden'),
+    focusedNote: !!(document.activeElement && document.activeElement.classList &&
+                    document.activeElement.classList.contains('t6-doc-note')),
+    chipCount: (document.querySelectorAll('[id$="-doc-chip"], .t6-doc-chip') || []).length
+  }));
+  check('the panel stays shut when a map arrives', !arrived.open);
+  check('…and no remark box takes the cursor', !arrived.focusedNote);
+
+  /* The icon opens the panel, and that is where the remark is written. */
+  await page.evaluate((r) => onT6DocChip(r), rowId);
+  await page.waitForTimeout(300);
   const first = await page.evaluate(() => {
     const panel = document.getElementById('t6-maps-panel');
     const boxes = document.querySelectorAll('#t6-maps-body .t6-doc-note');
     return {
       open: !panel.classList.contains('hidden'),
       boxes: boxes.length,
-      focused: boxes.length ? document.activeElement === boxes[0] : false,
       empty: boxes.length ? boxes[0].value === '' : null,
       title: (document.getElementById('t6-maps-title') || {}).innerText || '',
       placeholder: boxes.length ? boxes[0].placeholder : ''
     };
   });
-  check('the panel opened on its own', first.open);
-  check('…with a remark box for the map that just arrived', first.boxes === 1);
-  check('…and the cursor is IN it', first.focused);
+  check('the icon opens the panel', first.open);
+  check('…with a remark box for the map that arrived', first.boxes === 1);
   check('…empty, because there is nothing yet to replace', first.empty === true);
   check('…and it says what a remark is for', /which part of the plot/i.test(first.placeholder));
   check('…under a heading naming the plot', /U4/i.test(first.title));
 
-  /* On the previous code nothing opens, so there is no box to type in and the
-     rest of this would report a stack instead of a finding. */
   if (!first.boxes) {
-    check('a map that arrives is offered a remark — on the previous code the panel never opened', false);
+    check('the map icon offers a remark box', false);
     await browser.close(); server.close();
     console.log('\n' + pass + ' passed, ' + fail + ' failed');
     process.exit(1);
@@ -241,6 +252,10 @@ function check(name, ok) {
      and scrolling to the last is the one that is never what you want. */
   await page.setInputFiles(`#${rowId}-doc-input`, [map('u4-south.png'), map('u4-reflown.png')]);
   await page.waitForTimeout(1200);
+  const manyArrived = await page.evaluate(() => !document.getElementById('t6-maps-panel').classList.contains('hidden'));
+  check('two more maps arriving does not open the panel', manyArrived === false);
+  await page.evaluate((r) => onT6DocChip(r), rowId);
+  await page.waitForTimeout(300);
   const many = await page.evaluate(() => {
     const boxes = Array.from(document.querySelectorAll('#t6-maps-body .t6-doc-note'));
     return {
@@ -252,7 +267,7 @@ function check(name, ok) {
   });
   check('all three maps are on the plot', many.boxes === 3);
   check('…the panel is open', many.open);
-  check('…the cursor is on the FIRST of the two that just arrived', many.at === 1);
+  check('…the cursor is not taken by a box', many.at === -1);
   check('…and the one already written is untouched', many.kept === 'North half, flown 21 Feb');
 
   console.log('\n── 3 · A REPLACE KEEPS THE REMARK AND DOES NOT ASK AGAIN ──');

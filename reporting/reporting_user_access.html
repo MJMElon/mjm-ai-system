@@ -41,6 +41,8 @@ MJMModuleAccess.init({
            This module decides what people are paid, so tick with care — anyone who can open a sheet can see
            every worker's earnings on it.`,
   pages: [
+    { key:'dashboard', label:'Nursery Dashboard', desc:'Seed Received Summary — charts and tables read off the batch report. Read only',
+      actions:[] },
     { key:'maint', label:'Payroll · Work Maintenance', desc:'The salary claim, priced from the Worker Record',
       actions:[
         { key:'export', label:'Download the salary claim form', desc:'Produce the PDF that goes for payment' },

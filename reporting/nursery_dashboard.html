@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Every line of this page's code is inline, so the PAGE is the deploy.
+     GitHub Pages has no headers to set, so these three metas are the lever. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Nursery Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23246B4A%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
+<script src="../shared/shared_access.js"></script>
+<script src="report_menu.js?v=1"></script>
+<script src="report_sidebar.js?v=2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
+<style>
+  /* ── Design tokens. Everything below reads these and nothing else. ── */
+  :root {
+    --green: #246B4A; --green-2: #438A68; --green-l: #EAF3ED;
+    --bg: #F4F6F8; --card: #FFFFFF;
+    --ink: #253247; --ink-2: #6B7280; --muted: #9AA3AE;
+    --line: #DCE3E8; --grid: #EDF1F4; --zebra: #F9FAFB;
+    --warn: #E59A45; --neg: #D46B6B; --neg-l: #FBEFEF; --warn-l: #FDF4EA;
+    --radius: 12px; --h: 40px;
+    --gap: 16px; --sec: 24px;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font-family:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size:14px; }
+  .hidden { display:none !important; }
+  .num, .tnum { font-variant-numeric: tabular-nums; }
+
+  /* One content width for every section. */
+  .wrap { max-width:1440px; margin:0 auto; padding:24px 32px 48px; }
+  .stack > * + * { margin-top:var(--sec); }
+
+  /* 1. Header */
+  .page-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+  .ph-l { display:flex; align-items:flex-end; gap:12px; min-width:0; }
+  .crumb { font-size:12px; font-weight:600; color:var(--green); }
+  .h1 { font-size:24px; font-weight:700; color:var(--ink); margin:6px 0 2px; letter-spacing:-.01em; }
+  .h-sub { font-size:13px; color:var(--ink-2); }
+  .head-meta { font-size:12px; color:var(--ink-2); text-align:right; }
+
+  /* 2. Navigation is the sidebar (report_sidebar.js), drawn from report_menu.js. */
+
+  /* Cards */
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
+  .card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .card-title { font-size:15px; font-weight:700; color:var(--ink); margin:0; }
+  .card-sub { font-size:12px; color:var(--ink-2); margin-top:4px; }
+
+  /* 3. Filters — one row on a desk, Print on the right. */
+  .filters { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)) auto auto; gap:12px 16px; align-items:end; }
+  .field { display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .field > span { font-size:12px; font-weight:600; color:var(--ink-2); }
+  .field select { height:var(--h); width:100%; border:1px solid var(--line); border-radius:8px; background:#fff;
+                  padding:0 32px 0 12px; font-size:14px; font-weight:500; font-family:inherit; color:var(--ink); }
+  .field select:focus, .btn:focus-visible, .chk input:focus-visible { outline:2px solid var(--green-2); outline-offset:1px; }
+  .chk { display:flex; align-items:center; gap:8px; height:var(--h); font-size:13px; color:var(--ink); white-space:nowrap; cursor:pointer; }
+  .chk input { width:16px; height:16px; accent-color:var(--green); }
+  .btn { height:var(--h); padding:0 18px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink);
+         font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
+  .btn:hover { border-color:var(--green-2); color:var(--green); }
+  .btn-primary { background:var(--green); border-color:var(--green); color:#fff; }
+  .btn-primary:hover { background:var(--green-2); border-color:var(--green-2); color:#fff; }
+  .btn svg { width:16px; height:16px; }
+  .btn:disabled { opacity:.45; cursor:default; }
+
+  /* 4. Summary cards — four equal cells. */
+  .kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:var(--gap); }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; min-height:112px;
+         display:flex; flex-direction:column; justify-content:space-between; }
+  .kpi-l { font-size:12px; font-weight:600; color:var(--ink-2); }
+  .kpi-v { font-size:26px; font-weight:700; color:var(--ink); margin-top:8px; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+  .kpi-n { font-size:12px; color:var(--ink-2); margin-top:6px; display:flex; align-items:center; gap:6px; }
+  .chip { white-space:nowrap; display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 8px; border-radius:11px; font-size:11px; font-weight:600; }
+  .chip.pos { background:var(--green-l); color:var(--green); }
+  .chip.neg { background:var(--neg-l); color:#A94444; }
+  .chip.neu { background:var(--grid); color:var(--ink-2); }
+  .chip.warn { background:var(--warn-l); color:#9A5B12; }
+  .kpi.pos .kpi-v { color:var(--green); }
+  .kpi.neg .kpi-v { color:#B65252; }
+
+  .sec-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .sec-title { font-size:16px; font-weight:700; color:var(--ink); margin:0; }
+  .sec-sub { font-size:12px; color:var(--ink-2); }
+
+  /* 5. Charts */
+  .legend { display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); align-items:center; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:6px; }
+  .legend .ln { width:20px; height:0; border-radius:0; border-top:2px dashed var(--warn); vertical-align:3px; }
+  .legend .ln.red { border-top-color:var(--neg); }
+  .chart { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .chart svg { display:block; }
+  .chart svg text { font-family:'Inter', system-ui, sans-serif; }
+  .empty { padding:48px 12px; text-align:center; color:var(--ink-2); font-size:13px; }
+
+  .tip { position:fixed; pointer-events:none; z-index:60; background:var(--ink); color:#fff; border-radius:8px; padding:10px 12px;
+         font-size:12px; line-height:1.6; box-shadow:0 6px 18px rgba(37,50,71,.18); font-variant-numeric:tabular-nums; max-width:300px; }
+  .tip b { font-weight:700; }
+  .tip .sw { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; }
+  .tip .row { display:flex; justify-content:space-between; gap:16px; }
+
+  /* 6. Batch details table */
+  .tbl-wrap { border:1px solid var(--line); border-radius:10px; overflow:auto; max-height:640px; }
+  table.bd { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
+  table.bd th, table.bd td { height:44px; padding:0 10px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:left; }
+  table.bd thead th { position:sticky; top:0; z-index:2; background:#F7F9FA; font-size:12px; font-weight:600; color:var(--ink-2); }
+  table.bd tbody tr:nth-child(even) td { background:var(--zebra); }
+  table.bd tbody tr:hover td { background:var(--green-l); }
+  table.bd th.num, table.bd td.num { text-align:right; }
+  table.bd th.c, table.bd td.c { text-align:center; }
+  table.bd td.key { font-weight:600; color:var(--ink); }
+  table.bd tfoot td { position:sticky; bottom:0; background:#F7F9FA; font-weight:700; border-top:1px solid var(--line); border-bottom:0; }
+  .v-pos { color:var(--green); } .v-neg { color:#B65252; }
+  .st { display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .st.ok { background:var(--green-l); color:var(--green); }
+  .st.over { background:var(--neg-l); color:#A94444; }
+  .pager { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:12px; color:var(--ink-2); }
+  .pager .pg { display:flex; gap:8px; align-items:center; }
+  .pager select { height:32px; border:1px solid var(--line); border-radius:6px; padding:0 6px; font:inherit; color:var(--ink); background:#fff; }
+  .pager .btn { height:32px; padding:0 12px; }
+  .note { font-size:12px; color:var(--ink-2); }
+
+  /* Report cards on All reports */
+  .rep-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:var(--gap); }
+  .rep-card { appearance:none; text-align:left; font-family:inherit; color:inherit; cursor:pointer; display:flex; flex-direction:column; gap:16px;
+              background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; transition:border-color .15s, box-shadow .15s; }
+  .rep-card:hover { border-color:var(--green-2); box-shadow:0 4px 14px rgba(36,107,74,.08); }
+  .rep-top { display:flex; gap:14px; align-items:flex-start; }
+  .rep-ico { width:44px; height:44px; border-radius:10px; background:var(--green-l); color:var(--green); display:grid; place-items:center; flex-shrink:0; }
+  .rep-ico svg { width:22px; height:22px; }
+  .rep-cat { display:block; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); margin-bottom:2px; }
+  .rep-name { font-size:15px; font-weight:700; color:var(--ink); }
+  .rep-sub { font-size:12px; color:var(--ink-2); line-height:1.5; margin-top:4px; }
+  .rep-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; border-top:1px solid var(--line); padding-top:14px; }
+  .rep-stat-l { font-size:11px; font-weight:600; color:var(--ink-2); }
+  .rep-stat-v { font-size:17px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .rep-open { font-size:12px; font-weight:600; color:var(--green); }
+
+  /* ── Responsive: tablet, then phone ── */
+  @media (max-width:1100px) {
+    .filters { grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .filters .chk { grid-column:span 2; }
+    .filters .print-cell { justify-self:end; }
+  }
+  @media (max-width:900px) { .kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media (max-width:767.98px) {
+    .wrap { padding:16px 16px 40px; }
+    .filters { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .filters .chk { grid-column:1 / -1; }
+    .filters .print-cell { grid-column:1 / -1; justify-self:stretch; }
+    .filters .print-cell .btn { width:100%; justify-content:center; }
+    .kpi-v { font-size:22px; }
+    .card { padding:16px; }
+    .head-meta { text-align:left; }
+    .pager { flex-direction:column; align-items:stretch; }
+    .pager .pg { justify-content:space-between; flex-wrap:wrap; }
+  }
+
+  /* ── THE PRINTED REPORT: always TWO A4 portrait pages, whatever is picked.
+     Page 1 is the header and the two charts, a half page each; page 2 is
+     the batch table and the signature. Every rule is under #print-area, so
+     nothing here touches the screen. Each page is a fixed box the size of
+     the paper's printable area (190 x 276mm — one short of 277 so it can
+     never round over into a blank third page) with its overflow hidden, so
+     a third page cannot happen; and what could overflow is FITTED instead
+     of cut: the charts are drawn to the height their half of the page
+     really has, and the table is scaled down until it fits page 2. ── */
+  #print-area { display:none; color:var(--ink); }
+  #print-area .pp { width:190mm; height:276mm; overflow:hidden; display:flex; flex-direction:column; box-sizing:border-box; background:#fff; }
+  #print-area .pp + .pp { break-before:page; page-break-before:always; }
+  #print-area .p-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; border-bottom:2px solid var(--ink); padding-bottom:5px; margin-bottom:8px; flex:0 0 auto; }
+  #print-area .p-co { font-size:9px; font-weight:700; letter-spacing:.12em; color:var(--ink-2); }
+  #print-area .p-title { font-size:15px; font-weight:700; margin-top:1px; }
+  #print-area .p-meta { font-size:9px; color:var(--ink-2); text-align:right; line-height:1.5; }
+  #print-area .p-meta b { color:var(--ink); }
+  #print-area .p-sec { display:flex; flex-direction:column; min-height:0; }
+  #print-area .p-half { flex:1 1 0; }
+  /* The table section never shrinks: allowed to, it squeezes and the table
+     spills under the signature INSIDE the page, where no overflow test sees it. */
+  #print-area .p-sec[data-sec="table"] { flex:0 0 auto; }
+  #print-area .p-half + .p-half { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+  #print-area .p-sec-t { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:11px; font-weight:700; color:var(--ink);
+                         border-left:3px solid var(--green); padding-left:6px; margin:0 0 5px; flex:0 0 auto; }
+  #print-area .p-sec-t span { font-weight:500; color:var(--ink-2); font-size:9px; }
+  #print-area .p-legend { display:flex; gap:12px; font-size:9px; font-weight:500; color:var(--ink-2); }
+  #print-area .p-legend i { display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:-1px; margin-right:4px; }
+  #print-area .p-legend .ln { width:14px; height:0; border-radius:0; border-top:2px dashed var(--warn); vertical-align:2px; }
+  #print-area .p-legend .ln.red { border-top-color:var(--neg); }
+  #print-area .p-kpis { display:grid; grid-template-columns:repeat(var(--n, 4), minmax(0,1fr)); border:1px solid var(--line); border-radius:6px; margin-bottom:4px; flex:0 0 auto; }
+  #print-area .p-kpi { padding:3px 8px; border-left:1px solid var(--line); }
+  #print-area .p-kpi:first-child { border-left:0; }
+  #print-area .p-kpi .l { font-size:8px; color:var(--ink-2); }
+  #print-area .p-kpi .v { font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+  #print-area .p-chart { flex:1 1 0; min-height:0; overflow:hidden; }
+  #print-area .p-chart svg { display:block; }
+  #print-area .p-chart svg text { font-family:'Inter', system-ui, sans-serif; font-variant-numeric:tabular-nums; }
+  .scrim { position:fixed; inset:0; background:rgba(37,50,71,.38); z-index:70; display:grid; place-items:center; padding:16px; }
+  .dlg { background:#fff; border-radius:var(--radius); width:min(460px,100%); padding:20px; box-shadow:0 18px 48px rgba(37,50,71,.25); }
+  .dlg h3 { margin:0; font-size:16px; font-weight:700; }
+  .dlg p { margin:4px 0 16px; font-size:12px; color:var(--ink-2); }
+  .opt { display:flex; gap:12px; align-items:flex-start; width:100%; text-align:left; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+         background:#fff; cursor:pointer; font-family:inherit; color:var(--ink); margin-bottom:10px; }
+  .opt:hover { border-color:var(--green-2); background:var(--green-l); }
+  .opt b { display:block; font-size:14px; }
+  .opt span { display:block; font-size:12px; color:var(--ink-2); margin-top:2px; }
+  .opt svg { width:20px; height:20px; color:var(--green); flex-shrink:0; margin-top:1px; }
+  .dlg-foot { display:flex; justify-content:flex-end; margin-top:6px; }
+  #print-area .p-fit { transform-origin:top left; padding:0 1px 1px 0; }
+  #print-area .p-fit { --pz:1; }
+  #print-area table.pt { width:100%; border-collapse:collapse; font-size:calc(9px * var(--pz)); font-variant-numeric:tabular-nums; }
+  #print-area table.pt th, #print-area table.pt td { border:1px solid var(--line); padding:calc(2px * var(--pz)) calc(4px * var(--pz)); text-align:left; white-space:nowrap; line-height:1.3; }
+  #print-area table.pt thead th { white-space:normal; vertical-align:bottom; background:#F2F5F7; font-weight:600; color:var(--ink); }
+  #print-area table.pt th.num, #print-area table.pt td.num { text-align:right; }
+  #print-area table.pt th.c, #print-area table.pt td.c { text-align:center; }
+  #print-area table.pt tbody tr:nth-child(even) td { background:#FAFBFC; }
+  #print-area table.pt tfoot td { font-weight:700; background:#F2F5F7; }
+  #print-area table.pt .st { display:inline; height:auto; padding:0; background:none; white-space:nowrap; font-size:inherit; font-weight:600; }
+  #print-area table.pt .st.over { color:#A94444; } #print-area table.pt .st.ok { color:var(--green); }
+  #print-area table.pt tr { break-inside:avoid; page-break-inside:avoid; }
+  #print-area .sign { display:flex; justify-content:flex-end; margin-top:auto; padding-top:12px; flex:0 0 auto; }
+  #print-area .sign-box { width:270px; font-size:10px; color:var(--ink-2); }
+  #print-area .sign-cap { font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--ink); margin-bottom:5px; font-size:9px; }
+  #print-area .sign-sig { height:52px; border:1.5px solid #64748b; border-radius:4px; position:relative; }
+  #print-area .sign-sig span { position:absolute; left:6px; bottom:3px; font-size:8px; color:var(--muted); }
+  #print-area .sign-line { display:flex; gap:8px; margin-top:6px; }
+  #print-area .sign-line span:first-child { width:40px; font-weight:600; }
+  #print-area .sign-line b { flex:1; border-bottom:1px solid #94a3b8; color:var(--ink); font-weight:600; }
+  #print-area .p-foot { display:flex; justify-content:space-between; font-size:8px; color:var(--muted); border-top:1px solid var(--line); padding-top:3px; margin-top:6px; flex:0 0 auto; }
+  @media print {
+    @page { size:A4 portrait; margin:10mm; }
+    html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+    #mjm-ribbon, #shell, #main, #loading, #forbidden, .tip, #nelos-dock, #nelos-dock-root, [id^="nelos-"], body > *:not(#print-area) { display:none !important; }
+    #print-area { display:block !important; position:static !important; }
+    #print-area .pp:last-child { break-after:avoid; page-break-after:avoid; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+
+<div id="mjm-ribbon"></div>
+<script src="../shared/shared_ribbon.js"></script>
+
+<!-- The sidebar is mounted into this shell once access is granted, so the
+     loading and refusal screens have no menu to offer. -->
+<div class="rs-shell" id="shell"><div class="rs-content">
+<div id="loading" class="wrap"><div class="empty">Checking access…</div></div>
+
+<div id="forbidden" class="wrap hidden">
+  <div class="card" style="max-width:560px;margin:40px auto;text-align:center">
+    <div class="card-title">Access denied</div>
+    <p class="card-sub">You do not have access to the Nursery Dashboard.</p>
+    <a href="reporting_admin.html" class="btn" style="margin-top:12px;text-decoration:none">Back to Nursery Reporting System</a>
+  </div>
+</div>
+
+<div id="main" class="wrap stack hidden">
+  <!-- 1. Header -->
+  <header class="page-head">
+    <div class="ph-l">
+      <span id="menu-btn-slot"></span>
+      <div>
+        <div class="crumb" id="page-crumb">Nursery Management</div>
+        <h1 class="h1" id="page-title">Dashboard</h1>
+        <div class="h-sub" id="page-sub">Every report at a glance. Open one from its card or from the menu.</div>
+      </div>
+    </div>
+    <div class="head-meta" id="head-meta"></div>
+  </header>
+
+  <section id="dash-home" data-view="home">
+    <div class="rep-grid">
+      <button class="rep-card" id="card-seed" data-open="seed">
+        <span class="rep-top">
+          <span class="rep-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-4-2-7-5.5-7-10a7 7 0 0 1 14 0c0 4.5-3 8-7 10z"/><path d="M12 21V9"/><path d="M12 13l-3-3M12 11l3-3"/></svg></span>
+          <span>
+            <span class="rep-cat">Seed Procurement &amp; Receiving</span>
+            <span class="rep-name" style="display:block">Seed Summary</span>
+            <span class="rep-sub" style="display:block">Seed expected against actual seed received, and seed damage against the 5% maximum, by supplier and breed.</span>
+          </span>
+        </span>
+        <span class="rep-stats">
+          <span><span class="rep-stat-l">Batches</span><br><span class="rep-stat-v" id="card-seed-n">…</span></span>
+          <span><span class="rep-stat-l">Variance</span><br><span class="rep-stat-v" id="card-seed-var">…</span></span>
+          <span><span class="rep-stat-l">Seed damage</span><br><span class="rep-stat-v" id="card-seed-dmg">…</span></span>
+        </span>
+        <span class="rep-open" id="card-seed-scope">Open report →</span>
+      </button>
+    </div>
+  </section>
+
+  <section id="dash-seed" data-view="seed" class="stack hidden">
+    <!-- 3. Filters -->
+    <div class="card">
+      <div class="filters">
+        <label class="field"><span>Show by</span>
+          <select id="f-group">
+            <option value="batch">Batch</option>
+            <option value="month">Month received</option>
+            <option value="year">Year received</option>
+            <option value="breed">Breed</option>
+            <option value="supplier">Supplier</option>
+          </select>
+        </label>
+        <label class="field"><span>Year</span><select id="f-year"></select></label>
+        <label class="field"><span>Month</span><select id="f-month"></select></label>
+        <label class="field"><span>Supplier</span><select id="f-supplier"></select></label>
+        <label class="field"><span>Breed</span><select id="f-breed"></select></label>
+        <label class="chk"><input type="checkbox" id="f-unplanted"> Include batches not planted yet</label>
+        <div class="print-cell">
+          <button class="btn btn-primary" id="btn-print" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/></svg>
+            Print
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="load-msg" class="card"><div class="empty">Loading the batch report…</div></div>
+    <div id="seed-body" class="stack hidden"></div>
+    <div class="note" id="foot-note"></div>
+  </section>
+</div>
+
+<!-- The PRINTED report, built when Print is pressed: always two A4 portrait
+     pages — the header and both charts, then the batch table and the
+     signature block naming whoever pressed Print, on that day. -->
+</div></div>
+
+<div id="print-area"></div>
+
+<div class="scrim hidden" id="print-dlg" role="dialog" aria-modal="true" aria-labelledby="print-dlg-t">
+  <div class="dlg">
+    <h3 id="print-dlg-t">Print report</h3>
+    <p>Prints what the filters show now, on A4 portrait.</p>
+    <button class="opt" data-print="both"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7"/><rect x="3" y="21" width="18" height="0.01"/></svg><span><b>Print chart + table</b><span>Charts on page 1, the batch table and the signature on page 2</span></span></button>
+    <button class="opt" data-print="chart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span><b>Print chart only</b><span>Both charts and the signature, on one page</span></span></button>
+    <button class="opt" data-print="table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M3 14h18M9 4v16"/></svg><span><b>Print table only</b><span>The batch table and the signature, on one page</span></span></button>
+    <div class="dlg-foot"><button class="btn" id="print-cancel" type="button">Cancel</button></div>
+  </div>
+</div>
+
+<div class="tip hidden" id="tip"></div>
+
+<script>
+/* ═══ Seed Received Summary ════════════════════════════════════════════
+   Laid out the way the office's own sheet "Seed Received Summary (From
+   Batch 189)" is: one report per SUPPLIER and BREED, the batches going
+   across, and the measures going down.
+
+   Every figure is the BATCH REPORT's own, off the same ledger rows:
+     Seed Purchased       = DO_Qty: in the Seeds_Received remark
+     Total Seed Expected  = Seeds_Received.quantity_change (D/O + FOC + replacement)
+     Planted              = sum of the batch's Planted rows (per tray)
+     Damaged              = the batch's Damaged_Seeds row
+     Actual Received      = Planted + Damaged   (calcPlanting's accountedTotal)
+     Damage %             = Damaged / Expected  (calcPlanting's dmgRatePct)
+   One reception per batch, the NEWEST row wins — the rule the Seeds In
+   form and the batch list follow (a batch has had 95 copies of its row).
+   The ledger is PAGED: PostgREST stops at 1,000 rows and says nothing. */
+const MAX_DAMAGE_PCT = 5;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const RE_SUPPLIER = /Supplier:\s*(.*?)\s*\.?\s*(?=MPOB:|D\/O:|DO_Qty:|Incl\.|Replacement:|$)/i;
+const RE_DO = /D\/O:\s*(.*?)\s*\.?\s*(?=DO_Qty:|Incl\.|Replacement:|$)/i;
+const RE_DOQTY = /DO_Qty:\s*(\d+)/i;
+const RE_FOC = /Incl\.\s*([\d.]+)%\s*FOC/i;
+
+const nf = n => Number(n || 0).toLocaleString('en-MY');
+const pf = (n, d = 2) => (n == null || !isFinite(n)) ? '—' : (n > 0 ? '+' : '') + n.toFixed(d) + '%';
+const pfu = (n, d = 2) => (n == null || !isFinite(n)) ? '—' : n.toFixed(d) + '%';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dayOf = r => String(r.transaction_date || r.created_at || '').slice(0, 10);
+
+/* Pure: ledger rows in, one record per batch out. Exported for the test. */
+function buildBatches(rows) {
+  const recv = {}, planted = {}, damaged = {}, hasPlant = {};
+  for (const r of rows || []) {
+    const b = String(r.batch_name || '').trim(); if (!b) continue;
+    const q = Number(r.quantity_change) || 0;
+    if (r.transaction_type === 'Seeds_Received') {
+      const cur = recv[b];
+      const key = String(r.created_at || '') + '|' + String(r.id).padStart(12, '0');
+      if (!cur || key > cur._k) recv[b] = Object.assign({ _k: key }, r);
+    } else if (r.transaction_type === 'Planted') {
+      planted[b] = (planted[b] || 0) + q; hasPlant[b] = true;
+    } else if (r.transaction_type === 'Damaged_Seeds') {
+      damaged[b] = (damaged[b] || 0) + q; hasPlant[b] = true;
+    }
+  }
+  return Object.keys(recv).map(b => {
+    const r = recv[b];
+    const d = dayOf(r);
+    const rem = r.remark || '';
+    const m = rem.match(RE_SUPPLIER), dm = rem.match(RE_DO), qm = rem.match(RE_DOQTY), fm = rem.match(RE_FOC);
+    const expected = Number(r.quantity_change) || 0;
+    const pl = planted[b] || 0, dmg = damaged[b] || 0;
+    return {
+      batch: b, date: d, year: d.slice(0, 4), month: d.slice(0, 7),
+      breed: (r.breed_name || '').trim() || 'No breed',
+      supplier: (m && m[1].trim()) || 'No supplier',
+      doNo: (dm && dm[1].trim()) || '',
+      purchased: qm ? Number(qm[1]) : null,
+      focPct: fm ? Number(fm[1]) : null,
+      expected, planted: pl, damaged: dmg, actual: pl + dmg, recorded: !!hasPlant[b],
+    };
+  });
+}
+
+/* Pure: batches + a group key in, one row per group out, percentages
+   worked out on the SUMS (never an average of percentages). */
+function groupRows(batches, by) {
+  const g = {};
+  for (const x of batches) {
+    const k = by === 'batch' ? x.batch : by === 'month' ? x.month : by === 'year' ? x.year : by === 'breed' ? x.breed : x.supplier;
+    const o = g[k] || (g[k] = { key: k, n: 0, purchased: 0, purchasedKnown: true, expected: 0, planted: 0, damaged: 0, actual: 0, src: [] });
+    o.n++; o.expected += x.expected; o.planted += x.planted; o.damaged += x.damaged; o.actual += x.actual; o.src.push(x);
+    if (x.purchased == null) o.purchasedKnown = false; else o.purchased += x.purchased;
+  }
+  const out = Object.values(g).map(o => Object.assign(o, {
+    variancePct: o.expected > 0 ? (o.actual - o.expected) / o.expected * 100 : null,
+    damagePct:   o.expected > 0 ? o.damaged / o.expected * 100 : null,
+  }));
+  const numKey = s => { const m = String(s).match(/\d+/); return m ? Number(m[0]) : Infinity; };
+  out.sort((a, b) => by === 'batch' ? (numKey(a.key) - numKey(b.key)) || String(a.key).localeCompare(b.key)
+                   : String(a.key).localeCompare(b.key));
+  return out;
+}
+
+/* Pure: which report blocks to draw. Shown by batch, it is the office's
+   sheet: one block per supplier + breed. Shown by anything else, it is ONE
+   block, because a month or a supplier already spans the blocks.
+   byBreed: a breed is picked and no supplier, so every supplier of that
+   breed is ONE block — the office asked for the breed all together. */
+function reportBlocks(batches, by, byBreed) {
+  if (by !== 'batch') return [{ supplier: null, breed: null, batches }];
+  if (byBreed) return [{ supplier: null, breed: null, batches }];
+  const m = {};
+  for (const x of batches) {
+    const k = x.supplier + '\u0000' + x.breed;
+    (m[k] || (m[k] = { supplier: x.supplier, breed: x.breed, batches: [] })).batches.push(x);
+  }
+  return Object.values(m).sort((a, b) => a.supplier.localeCompare(b.supplier) || a.breed.localeCompare(b.breed));
+}
+
+function labelOf(key, by) {
+  if (by === 'month' && /^\d{4}-\d{2}$/.test(key)) return MONTHS[+key.slice(5, 7) - 1] + ' ' + key.slice(0, 4);
+  return key || '—';
+}
+
+if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, reportBlocks, labelOf, MAX_DAMAGE_PCT };
+</script>
+<script>
+(function () {
+  if (typeof window === 'undefined' || !window.supabase) return;
+  const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+  const $ = id => document.getElementById(id);
+  let BATCHES = [];
+  let LOADED = false;
+  let PAGE = 0, PAGE_SIZE = 20;
+  let PRINTED_BY = null;
+
+  /* Dates read the same everywhere: 02 Sep 2026. */
+  const fmtDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d.slice(8, 10) + ' ' + MONTHS[+d.slice(5, 7) - 1] + ' ' + d.slice(0, 4) : (d || '—');
+  const over = g => (g.damagePct || 0) > MAX_DAMAGE_PCT;
+  const vcls = v => v == null ? '' : v > 0 ? 'v-pos' : v < 0 ? 'v-neg' : '';
+  const head = by => ({ batch: 'Batch', month: 'Month', year: 'Year', breed: 'Breed', supplier: 'Supplier' }[by]);
+  const xTitle = by => ({ batch: 'Batch Number', month: 'Month Received', year: 'Year Received', breed: 'Breed', supplier: 'Supplier' }[by]);
+  const xLabel = (g, by) => labelOf(g.key, by);
+  const totalsOf = rows => rows.reduce((a, g) => ({
+    n: a.n + 1, expected: a.expected + g.expected, actual: a.actual + g.actual, damaged: a.damaged + g.damaged,
+    planted: a.planted + g.planted, purchased: a.purchased + (g.purchased || 0), purchasedKnown: a.purchasedKnown && g.purchased != null,
+  }), { n: 0, expected: 0, actual: 0, damaged: 0, planted: 0, purchased: 0, purchasedKnown: true });
+  const pctOf = t => ({ v: t.expected > 0 ? (t.actual - t.expected) / t.expected * 100 : null,
+                        d: t.expected > 0 ? t.damaged / t.expected * 100 : null });
+
+  /* ── views: the Dashboard (the cards) and one per report. Which view is
+     open lives in the address (#seed), so a reload or Back keeps it; the
+     sidebar is told so it highlights the same thing. The heading is read
+     off the MENU, so a report is named in one place. ── */
+  const MENU = window.MJM_REPORT_MENU;
+  const VIEWS = { home: { sub: 'Every report at a glance. Open one from its card or from the menu.' },
+                  seed: { sub: 'Seed expected against actual seed received, and seed damage against the 5% maximum, read off the batch report.' } };
+  function menuEntry(v) {
+    const main = (MENU.main || []).find(i => i.view === v);
+    if (main) return { item: main, cat: null };
+    for (const c of MENU.categories || []) { const i = (c.items || []).find(x => x.view === v); if (i) return { item: i, cat: c }; }
+    return null;
+  }
+  function showView(v) {
+    if (!VIEWS[v]) v = 'home';
+    document.querySelectorAll('section[data-view]').forEach(s => s.classList.toggle('hidden', s.dataset.view !== v));
+    if (location.hash.slice(1) !== v) history.replaceState(null, '', v === 'home' ? location.pathname + location.search : '#' + v);
+    const m = menuEntry(v);
+    $('page-crumb').textContent = m && m.cat ? m.cat.label : (MENU.brand.title + ' · ' + MENU.brand.sub);
+    $('page-title').textContent = m ? m.item.label : 'Dashboard';
+    $('page-sub').textContent = VIEWS[v].sub;
+    document.title = (m ? m.item.label : 'Dashboard') + ' — Nursery Management Reporting';
+    if (window.MJMReportSidebar && SIDEBAR && m) MJMReportSidebar.setActive(m.item.id);
+    if (v === 'seed' && LOADED) render();
+  }
+  let SIDEBAR = null;
+  function mountSidebar(v) {
+    const m = menuEntry(v) || menuEntry('home');
+    SIDEBAR = MJMReportSidebar.mount({ host: $('shell'), menu: MENU, active: m.item.id, onSelect: it => showView(it.view) });
+    $('menu-btn-slot').outerHTML = MJMReportSidebar.menuButton();
+  }
+  addEventListener('hashchange', () => showView(location.hash.slice(1) || 'home'));
+  document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => showView(b.dataset.open)));
+
+  async function loadLedger() {
+    const out = [], seen = new Set(), PG = 1000;
+    for (let p = 0; p < 50; p++) {
+      const { data, error } = await _supabase.from('shared_inventory_logs')
+        .select('id,batch_name,breed_name,transaction_type,quantity_change,transaction_date,created_at,remark')
+        .in('transaction_type', ['Seeds_Received', 'Planted', 'Damaged_Seeds'])
+        .order('id', { ascending: true })
+        .range(p * PG, p * PG + PG - 1);
+      if (error) throw error;
+      for (const r of data || []) if (!seen.has(r.id)) { seen.add(r.id); out.push(r); }
+      if (!data || data.length < PG) break;
+    }
+    return out;
+  }
+
+  function fillSelect(id, values, fmt) {
+    const sel = $(id), cur = sel.value;
+    sel.innerHTML = '<option value="">All</option>' + values.map(v => `<option value="${esc(v)}">${esc(fmt ? fmt(v) : v)}</option>`).join('');
+    if (values.includes(cur)) sel.value = cur;
+  }
+  const uniq = a => [...new Set(a)].filter(Boolean);
+
+  function filtered() {
+    const y = $('f-year').value, m = $('f-month').value, br = $('f-breed').value, sp = $('f-supplier').value;
+    const incl = $('f-unplanted').checked;
+    const all = BATCHES.filter(x => (!y || x.year === y) && (!m || x.month.slice(5, 7) === m) && (!br || x.breed === br) && (!sp || x.supplier === sp));
+    return { rows: all.filter(x => incl || x.recorded), left: all.filter(x => !incl && !x.recorded) };
+  }
+
+  /* ── charts: hand-drawn SVG, ONE axis each, titled on both axes, every
+     figure in full with commas (never 10k), a tooltip per column. ── */
+  function niceMax(v) {
+    if (!(v > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 4 ? 4 : f <= 5 ? 5 : 10) * p;
+  }
+  function barPath(x, y, w, h, r) {
+    if (h <= 0) return '';
+    r = Math.min(r, w / 2, h);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+  const tip = $('tip');
+  function showTip(e, html) {
+    tip.innerHTML = html; tip.classList.remove('hidden');
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + 14, y = e.clientY - h - 12;
+    if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+    if (y < 8) y = e.clientY + 16;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function hideTip() { tip.classList.add('hidden'); }
+
+  function drawChart(host, groups, cfg) {
+    if (!host) return;
+    if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
+    const fixed = !!cfg.fixedW;
+    const frameW = cfg.fixedW || Math.max(320, host.clientWidth || 900);
+    const minCol = fixed ? 0 : 54;
+    const L = 86, R = 16;
+    const W = fixed ? frameW : Math.max(frameW, L + R + minCol * groups.length);
+    const cw = (W - L - R) / groups.length;
+    const rot = cw < 64;
+    /* DATA LABELS: every quantity is written on the chart, not only in the
+       tooltip, because a printed chart has no tooltip. Wide columns stack
+       them over the column (bottom up, as cfg.labels lists them); a column
+       too narrow for a figure written across it turns the ones marked
+       'bar' inside the bar and 'top' over it, and drops the rest — the
+       table under the chart carries every figure anyway. The top margin
+       grows by what the labels need, so none is cut off. */
+    const narrow = cw < 52;
+    const nLines = cfg.labels ? Math.max(...groups.map(g => cfg.labels(g).length)) : 0;
+    const hi = niceMax(cfg.max(groups));
+    // The top margin is only what the tallest column's labels lack: the
+    // scale already leaves room above the data, and padding every chart by
+    // the full stack is a chart squashed for nothing.
+    const B = fixed ? 58 : 70, H0 = fixed ? (cfg.fixedH || 236) : 360, ph0 = H0 - 30 - B;
+    const peak = Math.max(0, ...groups.map(g => Math.max(cfg.bar(g).v || 0, cfg.step ? cfg.step(g) : 0)));
+    const need = !nLines ? 0 : narrow ? 48 : 8 + (nLines - 1) * 15 + 14;
+    const room = 30 + ph0 * (1 - Math.min(peak, hi) / hi);
+    const T = 30 + Math.max(0, Math.ceil(need - room)), H = H0 + (T - 30), ph = H - T - B;
+    const ys = v => T + ph - (Math.max(0, Math.min(v, hi)) / hi) * ph;
+    let s = `<svg ${fixed ? `viewBox="0 0 ${W} ${H}" width="100%"` : `width="${W}" height="${H}"`} role="img" aria-label="${esc(cfg.aria)}">`;
+    for (let i = 0; i <= 4; i++) {
+      const v = hi * i / 4, y = ys(v);
+      s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${i ? 'var(--grid)' : 'var(--line)'}" stroke-width="1"/>`;
+      s += `<text class="ytick" x="${L - 10}" y="${y + 4}" text-anchor="end" font-size="12" fill="var(--ink-2)">${cfg.yFmt(v)}</text>`;
+    }
+    s += `<line x1="${L}" x2="${L}" y1="${T}" y2="${T + ph}" stroke="var(--line)" stroke-width="1"/>`;
+    // Axis titles: the Y one turned up the side, the X one under the labels.
+    s += `<text class="ytitle" x="18" y="${T + ph / 2}" transform="rotate(-90 18 ${T + ph / 2})" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.yTitle)}</text>`;
+    s += `<text class="xtitle" x="${L + (W - L - R) / 2}" y="${H - (fixed ? 6 : 10)}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(cfg.xTitle)}</text>`;
+    if (cfg.ref != null) {
+      const y = ys(cfg.ref);
+      s += `<line class="ref" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--neg)" stroke-width="2" stroke-dasharray="6 4"/>`;
+      s += `<text x="${W - R}" y="${y - 6}" text-anchor="end" font-size="12" font-weight="600" fill="var(--neg)">Maximum ${cfg.ref}%</text>`;
+    }
+    // The expected figure as ONE stepped dashed line across the columns.
+    if (cfg.step) {
+      let d = '';
+      groups.forEach((g, i) => { const y = ys(cfg.step(g)), x0 = L + i * cw;
+        d += (i ? ` V${y}` : `M${x0 + cw * 0.08},${y}`) + ` H${x0 + cw * (i === groups.length - 1 ? 0.92 : 1)}`; });
+      s += `<path class="step" d="${d}" fill="none" stroke="var(--warn)" stroke-width="2" stroke-dasharray="6 4"/>`;
+    }
+    groups.forEach((g, i) => {
+      const x0 = L + i * cw, bw = Math.min(cw * 0.5, 44), bx = x0 + (cw - bw) / 2;
+      const b = cfg.bar(g), y = ys(b.v || 0);
+      s += `<path class="bar" d="${barPath(bx, y, bw, T + ph - y, 4)}" fill="${b.color}"/>`;
+      if (cfg.labels) {
+        const top = Math.min(y, cfg.step ? ys(cfg.step(g)) : y), cx = x0 + cw / 2;
+        const lbl = (lb, attrs, txt) => `<text class="${lb.cls || 'dlabel'}" ${attrs} font-size="${lb.size || 12}" font-weight="${lb.weight || 600}" fill="${lb.color}">${esc(txt)}</text>`;
+        if (!narrow) {
+          cfg.labels(g).forEach((lb, k) => { s += lbl(lb, `x="${cx}" y="${top - 8 - k * 15}" text-anchor="middle"`, lb.text); });
+        } else {
+          cfg.labels(g).forEach(lb => {
+            const len = String(lb.text).length * 7 + 8, barH = T + ph - y;
+            if (lb.narrow === 'bar' && barH > len) {
+              s += lbl(Object.assign({}, lb, { color: '#fff' }), `x="${cx + 4}" y="${y + 6}" text-anchor="end" transform="rotate(-90 ${cx + 4} ${y + 6})"`, lb.text);
+            } else if (lb.narrow === 'top' || lb.narrow === 'bar') {
+              s += lbl(lb, `x="${cx + 4}" y="${top - 6}" text-anchor="start" transform="rotate(-90 ${cx + 4} ${top - 6})"`, lb.text);
+            }
+          });
+        }
+      }
+      const lx = x0 + cw / 2, ly = T + ph + 18, lab = esc(xLabel(g, cfg.by));
+      s += rot ? `<text class="xtick" x="${lx}" y="${ly}" font-size="12" fill="var(--ink-2)" text-anchor="end" transform="rotate(-35 ${lx} ${ly})">${lab}</text>`
+               : `<text class="xtick" x="${lx}" y="${ly}" font-size="12" fill="var(--ink-2)" text-anchor="middle">${lab}</text>`;
+      if (!fixed) s += `<rect class="hit" data-i="${i}" x="${x0}" y="${T}" width="${cw}" height="${ph}" fill="transparent"/>`;
+    });
+    s += '</svg>';
+    host.innerHTML = s;
+    host.querySelectorAll('.hit').forEach(r => {
+      const g = groups[+r.dataset.i];
+      r.addEventListener('mousemove', e => { r.setAttribute('fill', 'rgba(36,107,74,.06)'); showTip(e, cfg.tipHtml(g)); });
+      r.addEventListener('mouseleave', () => { r.setAttribute('fill', 'transparent'); hideTip(); });
+    });
+  }
+
+  const tipHead = (g, by) => `<b>${esc(head(by))} ${esc(labelOf(g.key, by))}</b>${by !== 'batch' ? ` · ${nf(g.n)} batch${g.n === 1 ? '' : 'es'}` : (g.src[0].doNo ? ` · D/O ${esc(g.src[0].doNo)}` : '')}`;
+  const tipRow = (sw, l, v) => `<div class="row"><span>${sw ? `<span class="sw" style="background:${sw}"></span>` : ''}${l}</span><b>${v}</b></div>`;
+
+  function drawCharts(root, groups, by, fixedW, fixedH) {
+    drawChart(root.querySelector('.c1'), groups, {
+      by, fixedW, fixedH, aria: 'Actual seed received against total seed expected', xTitle: xTitle(by), yTitle: 'Seed Quantity (Seeds)',
+      yFmt: v => nf(Math.round(v)),
+      max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.12,
+      bar: g => ({ v: g.actual, color: 'var(--green)' }),
+      step: g => g.expected,
+      // Bottom up: the actual received (green), the expected (orange, the
+      // dashed line's figure), then the variance between them.
+      labels: g => [
+        { text: nf(g.actual), color: 'var(--green)', weight: 700, narrow: 'bar' },
+        { text: nf(g.expected), color: '#B8732A', narrow: 'skip' },
+        { text: pf(g.variancePct), cls: 'vlabel', color: g.variancePct < 0 ? '#B65252' : g.variancePct > 0 ? 'var(--green)' : 'var(--ink-2)', narrow: 'top' },
+      ],
+      tipHtml: g => tipHead(g, by) + tipRow('var(--warn)', 'Total Seed Expected', nf(g.expected))
+        + (g.purchasedKnown ? tipRow('', 'Seed Purchased', nf(g.purchased)) : '')
+        + tipRow('var(--green)', 'Actual Seed Received', nf(g.actual))
+        + tipRow('', '&nbsp;&nbsp;Planted', nf(g.planted)) + tipRow('', '&nbsp;&nbsp;Damaged', nf(g.damaged))
+        + tipRow('', 'Variance', pf(g.variancePct)),
+    });
+    drawChart(root.querySelector('.c2'), groups, {
+      by, fixedW, fixedH, aria: 'Seed damage percentage against the 5% maximum', xTitle: xTitle(by), yTitle: 'Seed Damage (%)',
+      yFmt: v => (Math.round(v * 10) / 10).toLocaleString('en-MY', { minimumFractionDigits: 1 }) + '%', ref: MAX_DAMAGE_PCT,
+      max: gs => Math.max(MAX_DAMAGE_PCT * 1.2, ...gs.map(g => g.damagePct || 0)),
+      bar: g => ({ v: g.damagePct || 0, color: over(g) ? 'var(--neg)' : 'var(--green)' }),
+      labels: g => [
+        { text: nf(g.damaged) + ' seeds', color: 'var(--ink-2)', weight: 500, narrow: 'skip' },
+        { text: pfu(g.damagePct), cls: 'vlabel', color: over(g) ? '#B65252' : 'var(--ink)', narrow: 'top' },
+      ],
+      tipHtml: g => tipHead(g, by) + tipRow('', 'Seed Damage', nf(g.damaged)) + tipRow('', 'Total Seed Expected', nf(g.expected))
+        + tipRow(over(g) ? 'var(--neg)' : 'var(--green)', 'Seed Damage (%)', pfu(g.damagePct)) + tipRow('', 'Maximum', MAX_DAMAGE_PCT + '%')
+        + `<div>${over(g) ? '▲ Over the maximum' : '✓ Within the maximum'}</div>`,
+    });
+  }
+
+  /* ── THE PRINTED CHARTS. A separate drawing from the screen's, because
+     paper has no tooltip and the office asked for the figures INSIDE the
+     bars: on the comparison chart the actual received near the base and
+     the expected (marked E, the dashed line's figure) at the top left of
+     the same bar; on the damage chart the % near the base with the seeds
+     damaged as a smaller line above it. A label goes inside where it fits,
+     turns upright inside a narrow bar, and only where the bar is too short
+     even for that is it set above the bar, dark. The variance stays a
+     small line above each column. Width and height are fixed in the units
+     of the page (718 = 190mm), so the paper is the same whatever is
+     selected — the two charts always fill the two halves of page 1. ── */
+  function drawPrintChart(host, groups, cfg) {
+    if (!host) return;
+    if (!groups.length) { host.innerHTML = '<div class="empty">Nothing matches these filters.</div>'; return; }
+    const W = 718, H = cfg.h, L = 66, R = 10, B = 44, FS = 10;
+    const n = groups.length, cw = (W - L - R) / n;
+    const bw = Math.max(4, Math.min(cw * (cw < 24 ? 0.82 : 0.62), 72));
+    const hi = niceMax(cfg.max(groups));
+    const topNeed = cfg.top ? (cw < 44 ? 46 : 18) : 8;
+    const T = 10 + topNeed, ph = H - T - B;
+    const ys = v => T + ph - (Math.max(0, Math.min(v, hi)) / hi) * ph;
+    const tw = (t, f) => String(t).length * f * 0.58 + 6;   // a figure's width at font size f
+    const txt = (cls, x, y, t, f, fill, weight, anchor, rot) =>
+      `<text class="${cls}" x="${x}" y="${y}" font-size="${f}" font-weight="${weight || 600}" fill="${fill}" text-anchor="${anchor || 'middle'}"${rot ? ` transform="rotate(-90 ${x} ${y})"` : ''}>${esc(t)}</text>`;
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(cfg.aria)}">`;
+    for (let i = 0; i <= 4; i++) {
+      const v = hi * i / 4, y = ys(v);
+      s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${i ? '#E6EBEF' : '#C9D2DA'}" stroke-width="1"/>`;
+      s += txt('ytick', L - 6, y + 3, cfg.yFmt(v), FS - 1, '#6B7280', 400, 'end');
+    }
+    s += `<line x1="${L}" x2="${L}" y1="${T}" y2="${T + ph}" stroke="#C9D2DA" stroke-width="1"/>`;
+    s += txt('ytitle', 12, T + ph / 2, cfg.yTitle, FS - 1, '#253247', 600, 'middle', true);
+    s += txt('xtitle', L + (W - L - R) / 2, H - 4, cfg.xTitle, FS - 1, '#253247', 600);
+    if (cfg.ref != null) {
+      const y = ys(cfg.ref);
+      s += `<line class="ref" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#D46B6B" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+      s += txt('reflabel', W - R - 2, y - 4, 'Maximum ' + cfg.ref + '%', FS - 1, '#B65252', 600, 'end');
+    }
+    if (cfg.step) {
+      let d = '';
+      groups.forEach((g, i) => { const y = ys(cfg.step(g)), x0 = L + i * cw;
+        d += (i ? ` V${y}` : `M${x0 + cw * 0.06},${y}`) + ` H${x0 + cw * (i === n - 1 ? 0.94 : 1)}`; });
+      s += `<path class="step" d="${d}" fill="none" stroke="#E59A45" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+    }
+    // A column narrower than a line of type cannot carry one: the labels
+    // shrink with the column, down to 6px, and a column thinner than that
+    // carries none — every figure is on the table on page 2.
+    const F = Math.min(FS, Math.max(6, Math.floor(cw - 2))), labels = cw >= 7;
+    const xRot = groups.some(g => tw(xLabel(g, cfg.by), F - 1) > cw);
+    groups.forEach((g, i) => {
+      const x0 = L + i * cw, cx = x0 + cw / 2, bx = cx - bw / 2;
+      const b = cfg.bar(g), y = ys(b.v || 0), bh = T + ph - y, base = T + ph;
+      s += `<path class="bar" d="${barPath(bx, y, bw, bh, 2)}" fill="${b.color}"/>`;
+      const lb = labels ? cfg.inBar(g) : null;                    // { main, sub } — main near the base, sub above / to the left
+      let ceil = y;                               // the highest thing drawn on this column so far
+      if (lb) {
+      const flat = tw(lb.main.text, F) <= bw - 2 && (!lb.sub || tw(lb.sub.text, F - 1) <= bw - 2);
+      const needFlat = (F + 4) * (lb.sub ? 2 : 1) + 4;
+      if (flat && bh >= needFlat) {
+        s += txt('ilabel main', cx, base - 5, lb.main.text, F, '#fff', 700);
+        if (lb.sub) s += lb.sub.left
+          ? txt('ilabel sub', bx + 4, y + F + 3, lb.sub.text, F - 1, lb.sub.fill, 500, 'start')
+          : txt('ilabel sub', cx, base - 5 - (F + 4), lb.sub.text, F - 1, lb.sub.fill, 500);
+      } else {
+        // Upright: the main label up the right half of the bar from its base,
+        // the second up the left half. Needs the bar wide enough for two.
+        const two = lb.sub && bw >= (F + 2) * 2 + 2;
+        const len = Math.max(tw(lb.main.text, F), two ? tw(lb.sub.text, F - 1) : 0);
+        if (bh >= len + 4 && bw >= F + 1) {
+          const xm = two ? bx + bw * 0.72 : cx + F * 0.35, xs2 = bx + bw * 0.3;
+          s += txt('ilabel main', xm, base - 4, lb.main.text, F, '#fff', 700, 'start', true);
+          if (two) s += txt('ilabel sub', xs2, base - 4, lb.sub.text, F - 1, lb.sub.fill, 500, 'start', true);
+        } else {
+          // Too short to hold it: above the bar, dark — the main label, and
+          // the second one over it where the column is wide enough to read.
+          const up = tw(lb.main.text, F) > cw;
+          s += txt('ilabel main out', up ? cx + F * 0.35 : cx, y - 4, lb.main.text, F, lb.main.dark, 700, up ? 'start' : 'middle', up);
+          ceil = y - 4 - (up ? tw(lb.main.text, F) : F + 2);
+          if (lb.sub && !up && tw(lb.sub.text, F - 1) <= cw) {
+            s += txt('ilabel sub out', cx, ceil - 2, lb.sub.text, F - 1, '#6B7280', 500);
+            ceil -= F + 2;
+          }
+        }
+      }
+      }
+      if (cfg.top && labels) {
+        const tp = cfg.top(g), top = Math.min(ceil, cfg.step ? ys(cfg.step(g)) : ceil);
+        const up = tw(tp.text, F - 1) > cw;
+        s += txt('vlabel', up ? cx + 3 : cx, Math.max(F, top - 4), tp.text, F - 1, tp.color, 600, up ? 'start' : 'middle', up);
+      }
+      const lx = cx, ly = base + 12, lab = xLabel(g, cfg.by);
+      s += xRot ? txt('xtick', lx, ly, lab, F - 1, '#6B7280', 500, 'end').replace('<text ', `<text transform="rotate(-40 ${lx} ${ly})" `)
+                : txt('xtick', lx, ly, lab, F - 1, '#6B7280', 500);
+    });
+    s += '</svg>';
+    host.innerHTML = s;
+  }
+  function drawPrintCharts(root, groups, by, h) {
+    drawPrintChart(root.querySelector('.c1'), groups, {
+      by, h, aria: 'Actual seed received against total seed expected', xTitle: xTitle(by), yTitle: 'Seed Quantity (Seeds)',
+      yFmt: v => nf(Math.round(v)),
+      max: gs => Math.max(...gs.map(g => Math.max(g.expected, g.actual))) * 1.08,
+      bar: g => ({ v: g.actual, color: '#246B4A' }),
+      step: g => g.expected,
+      inBar: g => ({ main: { text: nf(g.actual), dark: '#246B4A' }, sub: { text: 'E ' + nf(g.expected), fill: '#FCD9B0', left: true } }),
+      top: g => ({ text: pf(g.variancePct), color: g.variancePct < 0 ? '#B65252' : g.variancePct > 0 ? '#246B4A' : '#6B7280' }),
+    });
+    drawPrintChart(root.querySelector('.c2'), groups, {
+      by, h, aria: 'Seed damage percentage against the 5% maximum', xTitle: xTitle(by), yTitle: 'Seed Damage (%)',
+      yFmt: v => (Math.round(v * 10) / 10).toLocaleString('en-MY', { minimumFractionDigits: 1 }) + '%', ref: MAX_DAMAGE_PCT,
+      max: gs => Math.max(MAX_DAMAGE_PCT * 1.3, ...gs.map(g => (g.damagePct || 0) * 1.08)),
+      bar: g => ({ v: g.damagePct || 0, color: over(g) ? '#D46B6B' : '#246B4A' }),
+      inBar: g => ({ main: { text: pfu(g.damagePct), dark: over(g) ? '#B65252' : '#253247' }, sub: { text: nf(g.damaged), fill: '#E3EFE8' } }),
+    });
+  }
+
+  /* ── the batch details table: one row per batch (or group), every column
+     the two old tables had, numbers right, text left. ── */
+  const COLS = by => [
+    { h: head(by), c: g => `<b>${esc(by === 'batch' ? g.key : labelOf(g.key, by))}</b>`, f: () => 'Total' },
+    ...(by === 'batch' ? [
+      { h: 'Received', c: g => fmtDate(g.src[0].date), f: () => '' },
+      { h: 'Breed', c: g => esc(g.src[0].breed), f: () => '' },
+      { h: 'Supplier', c: g => esc(g.src[0].supplier), f: () => '' },
+      // A D/O number stays on one line, on screen and on paper: the printed
+      // table is scaled to fit its page rather than wrapping a reference.
+      { h: 'D/O No.', c: g => esc(g.src[0].doNo || '—'), f: () => '' },
+    ] : [{ h: 'Batches', num: 1, c: g => nf(g.n), f: t => nf(t.n) }]),
+    { h: 'Seed Purchased', num: 1, c: g => g.purchasedKnown ? nf(g.purchased) : '—', f: t => t.purchasedKnown ? nf(t.purchased) : '—' },
+    { h: 'Total Seed Expected', num: 1, c: g => nf(g.expected), f: t => nf(t.expected) },
+    { h: 'Planted', num: 1, c: g => nf(g.planted), f: t => nf(t.planted) },
+    { h: 'Seed Damage', num: 1, c: g => nf(g.damaged), f: t => nf(t.damaged) },
+    { h: 'Actual Seed Received', num: 1, key: 1, c: g => nf(g.actual), f: t => nf(t.actual) },
+    { h: 'Variance (%)', num: 1, key: 1, c: g => `<span class="${vcls(g.variancePct)}">${pf(g.variancePct)}</span>`, f: t => `<span class="${vcls(pctOf(t).v)}">${pf(pctOf(t).v)}</span>` },
+    { h: 'Seed Damage (%)', num: 1, c: g => `<span class="${over(g) ? 'v-neg' : ''}">${pfu(g.damagePct)}</span>`, f: t => pfu(pctOf(t).d) },
+    { h: 'Maximum (%)', num: 1, c: () => MAX_DAMAGE_PCT + '%', f: () => MAX_DAMAGE_PCT + '%' },
+    { h: 'Status', cc: 1, c: g => over(g) ? '<span class="st over">▲ Over maximum</span>' : '<span class="st ok">✓ Within</span>', f: () => '' },
+  ];
+  function tableHtml(groups, all, by, cls) {
+    const cols = COLS(by), t = totalsOf(all);
+    const al = c => c.num ? 'num' : c.cc ? 'c' : '';
+    return `<table class="${cls}"><thead><tr>${cols.map(c => `<th class="${al(c)}">${c.h}</th>`).join('')}</tr></thead>
+      <tbody>${groups.map(g => `<tr>${cols.map(c => `<td class="${al(c)} ${c.key ? 'key' : ''}">${c.c(g, cls === 'pt')}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tfoot><tr>${cols.map(c => `<td class="${al(c)}">${c.f(t)}</td>`).join('')}</tr></tfoot></table>`;
+  }
+
+  function kpiHtml(l, v, note, tone) {
+    return `<div class="kpi ${tone || ''}"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div><div class="kpi-n">${note || '&nbsp;'}</div></div>`;
+  }
+  function varianceChip(v) {
+    if (v == null) return '<span class="chip neu">No data</span>';
+    return v > 0 ? '<span class="chip pos">▲ Above expected</span>' : v < 0 ? '<span class="chip neg">▼ Below expected</span>' : '<span class="chip neu">● On target</span>';
+  }
+
+  /* ON SCREEN: header, tabs, filters, then the cards, the charts and the
+     batch details table, all at the one content width. */
+  function render() {
+    hideTip();
+    const by = $('f-group').value;
+    const { rows, left } = filtered();
+    const body = $('seed-body');
+    if (!rows.length) {
+      body.innerHTML = '<div class="card"><div class="empty">Nothing matches these filters.</div></div>';
+    } else {
+      const groups = groupRows(rows, by);
+      const t = totalsOf(rows), p = pctOf(t);
+      const overN = groups.filter(over).length, unit = by === 'batch' ? (overN === 1 ? 'batch' : 'batches') : (overN === 1 ? 'group' : 'groups');
+      const pages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+      if (PAGE >= pages) PAGE = pages - 1;
+      const slice = groups.slice(PAGE * PAGE_SIZE, PAGE * PAGE_SIZE + PAGE_SIZE);
+      body.innerHTML = `
+        <section class="stack" style="--sec:16px">
+          <div class="sec-head"><h2 class="sec-title">Seed Expected vs Actual Seed Received</h2>
+            <span class="sec-sub">Actual Seed Received = Planted + Seed Damage · Variance = (Actual − Expected) ÷ Expected</span></div>
+          <div class="kpis" id="k1">
+            ${kpiHtml('Total Batches', nf(rows.length), by === 'batch' ? 'In the filters above' : `${nf(groups.length)} ${esc(head(by).toLowerCase())} groups`)}
+            ${kpiHtml('Total Seed Expected', nf(t.expected), t.purchasedKnown ? `Seed purchased ${nf(t.purchased)}` : 'D/O + FOC + replacement')}
+            ${kpiHtml('Actual Seed Received', nf(t.actual), `Planted ${nf(t.planted)} · Damage ${nf(t.damaged)}`)}
+            ${kpiHtml('Variance', pf(p.v), varianceChip(p.v), p.v == null || p.v === 0 ? '' : p.v > 0 ? 'pos' : 'neg')}
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3 class="card-title">Seed Comparison</h3><div class="card-sub">Variance above each ${by === 'batch' ? 'batch' : 'column'}. Hover a column for the exact figures.</div></div>
+              <div class="legend"><span><i style="background:var(--green)"></i>Actual Seed Received</span><span><i class="ln"></i>Total Seed Expected</span></div></div>
+            <div class="chart c1"></div>
+          </div>
+        </section>
+        <section class="stack" style="--sec:16px">
+          <div class="sec-head"><h2 class="sec-title">Seed Damage</h2>
+            <span class="sec-sub">Seed Damage (%) = Seed Damage ÷ Total Seed Expected · Maximum allowed ${MAX_DAMAGE_PCT}%</span></div>
+          <div class="kpis" id="k2">
+            ${kpiHtml('Seed Damage', nf(t.damaged), 'Seeds damaged at planting')}
+            ${kpiHtml('Seed Damage (%)', pfu(p.d), (p.d || 0) > MAX_DAMAGE_PCT ? '<span class="chip neg">▲ Over the maximum</span>' : '<span class="chip pos">✓ Within the maximum</span>', (p.d || 0) > MAX_DAMAGE_PCT ? 'neg' : '')}
+            ${kpiHtml('Maximum Allowed', MAX_DAMAGE_PCT + '%', 'Of total seed expected')}
+            ${kpiHtml('Over the Maximum', `${nf(overN)} of ${nf(groups.length)}`, overN ? `<span class="chip warn">${nf(overN)} ${unit} to review</span>` : '<span class="chip pos">None over</span>', overN ? 'neg' : '')}
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3 class="card-title">Seed Damage against the Maximum</h3><div class="card-sub">Red columns are over the ${MAX_DAMAGE_PCT}% maximum.</div></div>
+              <div class="legend"><span><i style="background:var(--green)"></i>Within the maximum</span><span><i style="background:var(--neg)"></i>Over the maximum</span><span><i class="ln red"></i>Maximum ${MAX_DAMAGE_PCT}%</span></div></div>
+            <div class="chart c2"></div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><div><h3 class="card-title">${by === 'batch' ? 'Batch Details' : 'Details by ' + esc(head(by))}</h3>
+            <div class="card-sub">${nf(groups.length)} ${by === 'batch' ? 'batches' : 'rows'} · totals cover every row, not only this page</div></div></div>
+          <div class="tbl-wrap">${tableHtml(slice, rows, by, 'bd')}</div>
+          <div class="pager">
+            <span id="pg-info">Showing ${nf(PAGE * PAGE_SIZE + 1)}–${nf(PAGE * PAGE_SIZE + slice.length)} of ${nf(groups.length)}</span>
+            <span class="pg">Rows per page
+              <select id="pg-size">${[10, 20, 50, 100].map(n => `<option value="${n}" ${n === PAGE_SIZE ? 'selected' : ''}>${n}</option>`).join('')}</select>
+              <button class="btn" id="pg-prev" ${PAGE === 0 ? 'disabled' : ''}>‹ Previous</button>
+              <span>Page ${PAGE + 1} of ${pages}</span>
+              <button class="btn" id="pg-next" ${PAGE >= pages - 1 ? 'disabled' : ''}>Next ›</button>
+            </span>
+          </div>
+        </section>`;
+      drawCharts(body, groups, by);
+      $('pg-prev').onclick = () => { PAGE--; render(); };
+      $('pg-next').onclick = () => { PAGE++; render(); };
+      $('pg-size').onchange = e => { PAGE_SIZE = +e.target.value; PAGE = 0; render(); };
+    }
+    $('foot-note').textContent = left.length
+      ? `${left.length} batch${left.length === 1 ? ' has' : 'es have'} no Seed Planting saved yet and ${left.length === 1 ? 'is' : 'are'} left out (${left.map(x => x.batch).slice(0, 12).join(', ')}${left.length > 12 ? '…' : ''}). Tick “Include batches not planted yet” to show ${left.length === 1 ? 'it' : 'them'}.`
+      : '';
+  }
+
+  /* ON PAPER: ONE report, A4 portrait, in the shape Print was asked for.
+       Chart + table — page 1 the header and both charts (comparison on the
+                top half, damage on the bottom), page 2 the batch table and
+                Prepared and Verified by.
+       Chart only  — ONE page: header, both charts, the signature.
+       Table only  — ONE page: header, the batch table, the signature.
+     Every choice carries the signature, on its last page.
+     No filter line is printed: the header names what the report is of.
+     It is built off-screen first so it can be MEASURED: each chart is drawn
+     to the exact height its half of page 1 has, and the table is scaled
+     down until it fits page 2, so nothing is cut and nothing spills. */
+  const PRINT_W = 718;               // 190mm at 96 dpi: the printable width of A4 at 10mm margins
+  function onlyOrAll(vals, picked, word) {
+    if (picked) return picked;
+    const u = uniq(vals.filter(Boolean));
+    return u.length === 1 ? u[0] : (u.length ? 'All ' + word + ' (' + u.length + ')' : '—');
+  }
+  function buildPrint(mode) {
+    mode = mode === 'chart' || mode === 'table' ? mode : 'both';
+    const who = (window.MJMAccess && MJMAccess.user && MJMAccess.user()) || {};
+    const d = new Date();
+    PRINTED_BY = { name: who.full_name || who.email || '',
+                   date: String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear() };
+    const by = $('f-group').value;
+    const { rows } = filtered();
+    const year = $('f-year').value, month = $('f-month').value;
+    const period = year ? (month ? MONTHS[+month - 1] + ' ' + year : year) : (month ? MONTHS[+month - 1] + ', every year' : 'All years');
+    const supplier = onlyOrAll(rows.map(x => x.supplier), $('f-supplier').value, 'suppliers');
+    const breed = onlyOrAll(rows.map(x => x.breed), $('f-breed').value, 'breeds');
+    const area = $('print-area');
+    const groups = groupRows(rows, by), t = totalsOf(rows), p = pctOf(t), overN = groups.filter(over).length;
+    const k = (l, v) => `<div class="p-kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+    const nPages = mode === 'both' ? 2 : 1;
+    const foot = n => `<div class="p-foot"><span>MEGA JUTAMAS SDN BHD · Seed Received Summary Report</span><span>Printed ${esc(PRINTED_BY.date)} · Page ${n} of ${nPages}</span></div>`;
+    const headHtml = `<div class="p-head">
+        <div><div class="p-co">MEGA JUTAMAS SDN BHD</div><div class="p-title">SEED RECEIVED SUMMARY REPORT</div></div>
+        <div class="p-meta"><div>Supplier Name: <b class="pm-supplier">${esc(supplier)}</b></div><div>Breed: <b class="pm-breed">${esc(breed)}</b></div><div>Period: <b class="pm-period">${esc(period)}</b></div></div>
+      </div>`;
+    const empty = !rows.length ? '<div class="empty">Nothing matches these filters.</div>' : '';
+    const chartsHtml = `
+        <section class="p-sec p-half" data-sec="compare">
+          <h3 class="p-sec-t">Seed Expected vs Actual Seed Received
+            <span class="p-legend"><span><i style="background:var(--green)"></i>Actual Seed Received</span><span><i class="ln"></i>Total Seed Expected (E)</span></span></h3>
+          <div class="p-kpis" style="--n:5">${k('Batches', nf(t.n))}${k('Seed Purchased', t.purchasedKnown ? nf(t.purchased) : '—')}${k('Total Seed Expected', nf(t.expected))}${k('Actual Seed Received', nf(t.actual))}${k('Variance', pf(p.v))}</div>
+          <div class="p-chart chart c1">${empty}</div>
+        </section>
+        <section class="p-sec p-half" data-sec="damage">
+          <h3 class="p-sec-t">Seed Damage
+            <span class="p-legend"><span><i style="background:var(--green)"></i>Within the maximum</span><span><i style="background:var(--neg)"></i>Over the maximum</span><span><i class="ln red"></i>Maximum ${MAX_DAMAGE_PCT}%</span></span></h3>
+          <div class="p-kpis" style="--n:4">${k('Seed Damage', nf(t.damaged))}${k('Seed Damage (%)', pfu(p.d))}${k('Maximum Allowed', MAX_DAMAGE_PCT + '%')}${k('Over the Maximum', nf(overN) + ' of ' + nf(groups.length))}</div>
+          <div class="p-chart chart c2">${empty}</div>
+        </section>
+`;
+    const tableHtmlP = `
+        <section class="p-sec" data-sec="table">
+          <h3 class="p-sec-t">${by === 'batch' ? 'Batch Details' : 'Details by ' + esc(head(by))}<span>${nf(groups.length)} ${by === 'batch' ? (groups.length === 1 ? 'batch' : 'batches') : (groups.length === 1 ? 'row' : 'rows')}</span></h3>
+          <div class="p-fit">${rows.length ? tableHtml(groups, rows, by, 'pt') : empty}</div>
+        </section>
+`;
+    const signHtml = `
+        <div class="sign"><div class="sign-box">
+          <div class="sign-cap">Prepared and Verified by</div>
+          <div class="sign-sig"><span>Signature</span></div>
+          <div class="sign-line"><span>Name</span><b class="sign-name">${esc(PRINTED_BY.name)}</b></div>
+          <div class="sign-line"><span>Date</span><b class="sign-date">${esc(PRINTED_BY.date)}</b></div>
+        </div></div>
+`;
+    /* Every choice carries the signature, on the LAST page: chart + table is
+       charts on page 1 and the table with the signature on page 2; chart only
+       and table only are ONE page each, the signature under what was printed. */
+    const page = (n, inner) => `<div class="pp" data-page="${n}">${headHtml}${inner}${foot(n)}</div>`;
+    area.dataset.mode = mode;
+    area.innerHTML = mode === 'chart' ? page(1, chartsHtml + signHtml)
+                   : mode === 'table' ? page(1, tableHtmlP + signHtml)
+                   : page(1, chartsHtml) + page(2, tableHtmlP + signHtml);
+    fitPrint(groups, by);
+  }
+  /* Lay the two pages out off-screen at their paper size and fit them. */
+  function fitPrint(groups, by) {
+    const area = $('print-area');
+    const keep = area.getAttribute('style') || '';
+    area.style.cssText = 'display:block;position:fixed;left:-30000px;top:0;visibility:hidden';
+    try {
+      if (groups.length && area.querySelector('.c1')) {
+        const h1 = area.querySelector('.c1').clientHeight, h2 = area.querySelector('.c2').clientHeight;
+        drawPrintCharts(area, groups, by, Math.max(120, Math.min(h1, h2)));
+      }
+      // Page 2: shrink the table until the page holds it, the signature included.
+      const fit = area.querySelector('.p-fit');
+      if (!fit) { area.dataset.zoom = '1'; return; }
+      const pg = fit.closest('.pp');
+      // The type and the padding are SHRUNK rather than the table zoomed:
+      // Chrome's PDF output does not honour a CSS zoom the way the screen
+      // layout measured it, so a zoomed table that fitted here ran under the
+      // signature on paper. A smaller font is the same layout in both.
+      const setZ = v => fit.style.setProperty('--pz', String(v));
+      setZ(1);
+      let z = 1;
+      const tbl = fit.querySelector('table');
+      const room = () => fit.clientWidth - 1;   // its content box: .p-fit keeps 1px for the right-hand line
+      for (let i = 0; i < 16 && tbl && tbl.getBoundingClientRect().width > room() + 0.5 && z > 0.3; i++) { z = Math.max(0.3, z * 0.95); setZ(z); }
+      for (let i = 0; i < 40; i++) {
+        if (pg.scrollHeight - pg.clientHeight <= 0) break;
+        z = Math.max(0.3, z * 0.96); setZ(z);
+        if (z === 0.3) break;
+      }
+      area.dataset.zoom = String(Math.round(z * 1000) / 1000);
+    } finally {
+      area.setAttribute('style', keep);
+      if (!keep) area.removeAttribute('style');
+    }
+  }
+  window.ndBuildPrint = buildPrint;
+
+  /* Print asks which report (chart + table, chart only, table only); the
+     choice builds the pages and prints them, signed by whoever pressed it. */
+  const dlg = $('print-dlg');
+  function openPrintDlg() { dlg.classList.remove('hidden'); dlg.querySelector('.opt').focus(); }
+  function closePrintDlg() { dlg.classList.add('hidden'); }
+  $('btn-print').addEventListener('click', openPrintDlg);
+  $('print-cancel').addEventListener('click', closePrintDlg);
+  dlg.addEventListener('click', e => { if (e.target === dlg) closePrintDlg(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !dlg.classList.contains('hidden')) closePrintDlg(); });
+  // An option builds the page for itself. Ctrl/Cmd + P rebuilds the LAST
+  // option chosen (chart + table before any), so printing again from the
+  // browser never turns a one-page chart-only report into two pages.
+  let _built = false, _lastMode = 'both';
+  dlg.querySelectorAll('[data-print]').forEach(b => b.addEventListener('click', () => {
+    closePrintDlg(); _lastMode = b.dataset.print; buildPrint(_lastMode); _built = true; window.print(); _built = false;
+  }));
+  addEventListener('beforeprint', () => { if (LOADED && !_built) buildPrint(_lastMode); });
+
+  function refreshFilterOptions() {
+    const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
+    fillSelect('f-year', years);
+    fillSelect('f-month', ['01','02','03','04','05','06','07','08','09','10','11','12'], m => MONTHS[+m - 1]);
+    fillSelect('f-breed', uniq(BATCHES.map(x => x.breed)).sort());
+    fillSelect('f-supplier', uniq(BATCHES.map(x => x.supplier)).sort());
+    if (years.length && !$('f-year').dataset.touched) $('f-year').value = years[0];
+  }
+
+  function fillCard() {
+    const years = uniq(BATCHES.map(x => x.year)).sort().reverse();
+    const y = years[0] || '';
+    const rows = BATCHES.filter(x => x.recorded && (!y || x.year === y));
+    const t = totalsOf(rows), p = pctOf(t);
+    $('card-seed-n').textContent = nf(t.n);
+    $('card-seed-var').textContent = pf(p.v);
+    $('card-seed-dmg').textContent = pfu(p.d);
+    $('card-seed-dmg').style.color = (p.d || 0) > MAX_DAMAGE_PCT ? '#B65252' : '';
+    $('card-seed-scope').textContent = (y ? y + ' · ' : '') + 'Open report →';
+  }
+
+  (async () => {
+    try {
+      await MJMAccess.load(_supabase);
+      if (!MJMAccess.user()) { location.href = '../index.html'; return; }
+      if (!MJMAccess.canAccess('npayroll') || !MJMAccess.canOpenPage('npayroll', 'dashboard')) {
+        $('loading').classList.add('hidden'); $('forbidden').classList.remove('hidden'); return;
+      }
+      $('loading').classList.add('hidden'); $('main').classList.remove('hidden');
+      mountSidebar(location.hash.slice(1) || 'home');
+      showView(location.hash.slice(1) || 'home');
+    } catch (e) { console.warn(e); location.href = '../index.html'; return; }
+
+    try {
+      BATCHES = buildBatches(await loadLedger());
+      LOADED = true;
+      const now = new Date();
+      $('head-meta').textContent = 'Loaded ' + fmtDate(now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'))
+        + ', ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' · ' + nf(BATCHES.length) + ' batches on record';
+      refreshFilterOptions();
+      fillCard();
+      $('load-msg').classList.add('hidden'); $('seed-body').classList.remove('hidden');
+      ['f-group', 'f-year', 'f-month', 'f-breed', 'f-supplier', 'f-unplanted'].forEach(id => $(id).addEventListener('change', () => { $(id).dataset.touched = '1'; PAGE = 0; render(); }));
+      let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (!$('dash-seed').classList.contains('hidden')) render(); }, 150); });
+      render();
+    } catch (e) {
+      console.warn(e);
+      $('load-msg').innerHTML = '<div class="empty">Could not read the batch report: ' + esc(e.message || e) + '</div>';
+      ['card-seed-n', 'card-seed-var', 'card-seed-dmg'].forEach(id => $(id).textContent = '—');
+    }
+  })();
+})();
+</script>
+
+<script src="../shared/shared_nelos_dock.js"></script>
+</body>
+</html>

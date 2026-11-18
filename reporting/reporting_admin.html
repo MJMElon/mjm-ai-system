@@ -77,6 +77,21 @@
       <span class="door-name">Nursery Payroll</span>
       <span class="door-sub">Worker register, pay periods, payslips</span>
     </a>
+    <!-- Nursery Dashboard — charts and tables read off the batch report.
+         Same module key; its own page tick ('dashboard') on Module Assess
+         Control can close it for one person. -->
+    <a class="door hidden" id="door-dashboard" href="nursery_dashboard.html">
+      <span class="door-ico" style="background:#dcfce7;color:#15803d;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 28h22"/>
+          <rect x="8" y="17" width="4" height="9" rx="1"/>
+          <rect x="15" y="11" width="4" height="15" rx="1"/>
+          <rect x="22" y="6" width="4" height="20" rx="1"/>
+        </svg>
+      </span>
+      <span class="door-name">Nursery Dashboard</span>
+      <span class="door-sub">Seed Received Summary — expected, received and damage, by batch, month, breed or supplier</span>
+    </a>
   </div>
 
   <!-- Shown only to users who may change other people's access -- the
@@ -112,6 +127,9 @@ const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
       return;
     }
 
+    if (MJMAccess.canOpenPage('npayroll', 'dashboard')) {
+      document.getElementById('door-dashboard').classList.remove('hidden');
+    }
     if (MJMAccess.isAdminOf('npayroll') || MJMAccess.canManageUsers()) {
       document.getElementById('door-user-access').classList.remove('hidden');
     }

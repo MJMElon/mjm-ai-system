@@ -4,12 +4,12 @@
 ================================================================ */
 'use strict';
 
-const NURSERY_PLOTS = {
-  PN:   Array.from({length:52}, (_,i)=>'P'+String(i+1).padStart(2,'0')),
-  BNN:  Array.from({length:14}, (_,i)=>'B'+String(i+1).padStart(2,'0')),
-  UNN1: Array.from({length:18}, (_,i)=>'U'+String(i+1).padStart(2,'0')),
-  UNN2: Array.from({length:20}, (_,i)=>'N'+String(i+1).padStart(2,'0'))
-};
+/* THE PLOTS, FROM SEEDLING STOCK — see audit_plots.js for the whole of why.
+   This is the LIVE object that file fills in place, so the grid and the plot
+   dropdown pick up a plot the office added without either of them knowing
+   where the list came from. The four ranges are still the floor, so a page
+   that cannot read shared_plots draws exactly what it always drew. */
+const NURSERY_PLOTS = MJMAuditPlots.all();
 const NURSERY_LABELS = {PN:'PN',BNN:'BNN',UNN1:'UNN 1',UNN2:'UNN 2'};
 const WARNA_BG  = {'1':'#1e3d0f','2':'#2d6a1f','3':'#5a8a2a','4':'#b5a800','5':'#d4c200'};
 const WARNA_LBL = {'1':'Very Green','2':'Green','3':'Light Green','4':'Yellowish','5':'Very Yellow'};
@@ -133,28 +133,21 @@ function selectTab(nursery){
    ('B01', 'U09'), but the operation ledger and shared_plots store the
    unpadded form ('B1', 'U9'). Left alone the two never matched and
    every log was silently dropped from the grid. Preserves the '-R'
-   suffix used for reserve plots (e.g. 'B4-R'). */
-function _canonicalPlot(raw){
-  const s = String(raw || '').trim().toUpperCase();
-  const m = s.match(/^([A-Z]+)(\d+)(-R)?$/);
-  if (!m) return s;
-  return m[1] + m[2].padStart(2, '0') + (m[3] || '');
-}
+   suffix used for reserve plots (e.g. 'B4-R').
+
+   SHARED RULE: it is MJMAuditPlots.canon, read from there rather than
+   written out again, because the list it canonicalises against is that
+   file's. */
+const _canonicalPlot = MJMAuditPlots.canon;
 /* PLOT_TO_NURSERY is a reverse lookup of NURSERY_PLOTS keyed by
    BOTH the padded ('B01') and the unpadded ('B1') form, so lookups
    from either source resolve without a canonicalise-then-lookup
-   two-step. */
-const PLOT_TO_NURSERY = (function(){
-  const m = {};
-  Object.keys(NURSERY_PLOTS).forEach(n => NURSERY_PLOTS[n].forEach(p => {
-    m[p] = n;
-    // Unpadded variant of the same plot (B01 → B1) also maps to the
-    // same nursery, so a raw log spelling matches without pre-work.
-    const stripped = p.replace(/^([A-Z]+)0+(\d)/, '$1$2');
-    if (stripped !== p) m[stripped] = n;
-  }));
-  return m;
-})();
+   two-step.
+
+   BUILT IN audit_plots.js AND HANDED BACK LIVE, never with an IIFE here:
+   a map built once at script load is a snapshot, and a plot the office
+   added lands after that. This was the IIFE. */
+const PLOT_TO_NURSERY = MJMAuditPlots.byPlot();
 /* ── OFFLINE CACHE ──
    Five live reads below, and the first (audit_plot_audits) has no
    .catch of its own — a failure there throws past the whole function,
@@ -220,7 +213,7 @@ async function loadRecords(){
       // and later Transplanted OUT to a main nursery plot).
       sb.select('shared_inventory_logs',
                 'select=batch_name,plot_name,transaction_type,breed_name'
-              + '&transaction_type=in.(Planted,Transplanted,Transplanted_Premium,Transplanted_DoubleTone)')
+              + '&' + MJMAuditRoster.LOG_FILTER)
         .catch(e => { console.warn('[plot-audit] life-stage logs load failed:', e); return []; }),
       sb.select('audit_batches', 'select=nursery,plot,batch_no,breed')
         .catch(e => { console.warn('[plot-audit] audit_batches load failed:', e); return []; }),
@@ -246,49 +239,21 @@ async function loadRecords(){
     const breedByBatch = {};
     (bMetaRows || []).forEach(b => { if (b && b.name) breedByBatch[b.name] = b.breed_name || ''; });
 
-    // Build (nursery, plot, batch) triples from BOTH sources, deduped
-    // so the same batch on the same plot doesn't produce multiple dots
-    // (Transplanted + Transplanted_Premium for one plot, or the same
-    // row appearing in both sources).
-    const seen = new Set();
-    plotBatches = [];
-    const addBatch = (nursery, plot, batch, breed) => {
-      if (!nursery || !plot || !batch) return;
-      const key = nursery + '|' + plot + '|' + batch;
-      if (seen.has(key)) return;
-      seen.add(key);
-      plotBatches.push({ nursery, plot, batch, breed: breed || breedByBatch[batch] || '' });
-    };
-    (tRows || []).forEach(l => {
-      // Canonicalise the plot as it comes off the ledger — logs use
-      // 'B1' but the audit grid iterates 'B01'.
-      const plot  = _canonicalPlot(l.plot_name);
-      const batch = String(l.batch_name || '').trim();
-      const nursery = plot ? PLOT_TO_NURSERY[plot] : null;
-      addBatch(nursery, plot, batch, l.breed_name);
+    /* THE ROSTER AND THE BALANCE, BOTH FROM audit_roster.js — the Movement
+       Report is a SOURCE of plot·batch pairs and not only the gate over
+       them, which is the whole of what the office asked for. That file is
+       the one place it is written; this module and Seedling Height had a
+       copy each and were already drifting apart on their column lists. */
+    const roster = MJMAuditRoster.build({
+      logs:         tRows,
+      auditBatches: abRows,
+      balance:      balRows,
+      canon:        _canonicalPlot,
+      nurseryOf:    p => PLOT_TO_NURSERY[p] || null,
+      breedOf:      b => breedByBatch[b] || ''
     });
-    (abRows || []).forEach(r => {
-      // audit_batches carries `nursery` directly, but re-check via
-      // PLOT_TO_NURSERY so a stale nursery label can't sneak a plot
-      // into the wrong grid.
-      const plot = _canonicalPlot(r.plot);
-      const batch = String(r.batch_no || '').trim();
-      const nursery = plot ? PLOT_TO_NURSERY[plot] : null;
-      addBatch(nursery, plot, batch, r.breed);
-    });
-    // Build the balance lookup. Plot / batch keys are upper-cased, since
-    // the view keeps them in their original spelling and audit_batches
-    // and logs both cased. The 'not required' rule fires on missing key
-    // OR value ≤ 0 (see batchesOnPlot()).
-    balanceByPB = {};
-    (balRows || []).forEach(r => {
-      // Same canonical form as the audit grid uses, so isBatchNotRequired
-      // matches without a second normalisation step.
-      const plot  = _canonicalPlot(r.plot_name);
-      const batch = String(r.batch_name || '').trim();
-      if (!plot || !batch) return;
-      balanceByPB[plot + '|' + batch] = Number(r.qty || 0);
-    });
+    plotBatches = roster.plotBatches;
+    balanceByPB = roster.balanceByPB;
 
     _saveOfflineCache();
     console.log('[plot-audit] loaded', {
@@ -296,7 +261,12 @@ async function loadRecords(){
       fromLogs: (tRows || []).length,
       fromAuditBatches: (abRows || []).length,
       totalPlotBatches: plotBatches.length,
-      balanceRows: (balRows || []).length
+      balanceRows: (balRows || []).length,
+      // What ONLY the Movement Report knew about — a batch that arrived by
+      // transfer, which is every -R plot. Nought is a real answer and means
+      // the logs already covered everything standing.
+      onlyInReport: roster.fromBalance,
+      reportPlotsOnNoNursery: roster.unplaced
     });
     renderList();
   }catch(e){showToast(t('err_load'));console.error(e);}
@@ -405,11 +375,11 @@ function syncBatchField(){
    When we don't have any balance data at all (view unreadable /
    Supabase blip), fall CLOSED to 'required' so we never accidentally
    mark a real batch as done — the auditor can decide by eye. */
+/* The one rule, in audit_roster.js — Seedling Height asks the same one.
+   Missing key OR nothing standing is a batch that has gone, and an empty
+   map fails OPEN so a refused balance read cannot empty an auditor day. */
 function isBatchNotRequired(plot, batch){
-  if (!Object.keys(balanceByPB).length) return false;   // no data → don't skip
-  const key = _canonicalPlot(plot) + '|' + String(batch || '').trim();
-  const qty = balanceByPB[key];
-  return qty === undefined || qty <= 0;
+  return MJMAuditRoster.notRequired(balanceByPB, _canonicalPlot, plot, batch);
 }
 window.isBatchNotRequired = isBatchNotRequired;
 
@@ -1457,7 +1427,12 @@ function init(){
      Landing on the grid would make the auditor find in fifty-two icons
      the plot they just tapped. After loadRecords(), because the detail
      is built from the records it fetches. */
-  loadRecords().then(() => {
+  /* The office's plot list first, because it fills NURSERY_PLOTS and
+     PLOT_TO_NURSERY in place and loadRecords builds the grid off both — a
+     plot that landed after the first draw would not be on the grid until
+     something else redrew it. It never rejects: with no line, or on a
+     database that cannot be read, the four ranges are what is drawn. */
+  MJMAuditPlots.load().then(loadRecords).then(() => {
     MJMAuditDeepLink.openPlot(NURSERY_PLOTS[activeTab] || [], openPlot);
   });
 }

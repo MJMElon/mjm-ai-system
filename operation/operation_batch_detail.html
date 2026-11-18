@@ -798,7 +798,10 @@
 
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
-                                <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seed Audit Report</h3>
+                                <div class="flex items-center gap-3">
+                                    <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seed Audit Report</h3>
+                                    <button type="button" onclick="printSeedAuditPdf()" title="Print Seed Audit Report" aria-label="Print Seed Audit Report" class="mjm-review-allow w-9 h-9 rounded-lg bg-white border-2 border-[#3d2610] text-[#3d2610] flex items-center justify-center hover:bg-[#fdfaf4] shadow-sm">🖨</button>
+                                </div>
                                 <div class="p-3.5 px-6 rounded-2xl bg-white flex items-center gap-4 shadow-sm border border-[#e8dcc8] shrink-0">
                                     <div class="completion-pie-container !w-9 !h-9">
                                         <div id="t8-pie-analysis" class="completion-pie completion-pie-fill" style="--percentage: 0"></div>
@@ -922,16 +925,31 @@
                                 <!-- AI Scan dropzone -->
                                 <div class="mx-6 mt-4">
                                     <div id="t8-dropzone" class="px-6 py-5 border-2 border-dashed border-[#4a7a2e] bg-[#f0f8ec] rounded-xl text-center cursor-pointer hover:bg-[#e8f5da] transition-colors">
-                                        <input type="file" id="t8-file-input" class="hidden" accept="image/*,application/pdf">
+                                        <input type="file" id="t8-file-input" class="hidden" accept="image/*,application/pdf" multiple>
                                         <div id="t8-dropzone-idle">
                                             <p class="text-[12px] font-black text-[#4a7a2e] uppercase tracking-widest mb-1">📎 AI Scan — Drop Supplier Packing List Here</p>
-                                            <p class="text-[10px] text-[#8a7a68]">Drag an image or PDF, or click to choose. Bag rows will be auto-filled — you can still edit each row manually afterwards.</p>
+                                            <p class="text-[10px] text-[#8a7a68]">Drag one or more images or PDFs (every page of the list at once), or click to choose. Bag rows will be auto-filled — you can still edit each row manually afterwards.</p>
                                         </div>
                                         <div id="t8-dropzone-busy" class="hidden">
                                             <p class="text-[12px] font-black text-[#c07820] uppercase tracking-widest">⏳ Scanning packing list… <span id="t8-dropzone-file" class="normal-case text-[#8a7a68]"></span></p>
-                                            <p class="text-[10px] text-[#8a7a68] mt-1">Usually 10–20 seconds. Rows will be added when ready.</p>
+                                            <p class="text-[10px] text-[#8a7a68] mt-1">Usually 10–20 seconds a page. Rows will be added as each page is read.</p>
                                         </div>
                                     </div>
+                                </div>
+
+                                <!-- The FILLED packing list: the supplier sheet after the
+                                     count, Checked By and Remarks written on it. It is the
+                                     paper the audit was done against, so it is kept with the
+                                     report. Saved the moment it is picked, like the census on
+                                     Transplanting, and removed off the record with the cross
+                                     while the file stays in storage. -->
+                                <div id="t8-filled-wrap" class="mx-6 mt-3 hidden">
+                                    <div id="t8-filled-zone" class="px-6 py-4 border-2 border-dashed border-[#c07820] bg-[#fdf6ea] rounded-xl text-center cursor-pointer hover:bg-[#fbeed6] transition-colors">
+                                        <input type="file" id="t8-filled-input" class="hidden" accept="image/*,application/pdf" multiple>
+                                        <p class="text-[12px] font-black text-[#c07820] uppercase tracking-widest mb-1">📄 Upload Filled Packing List</p>
+                                        <p id="t8-filled-hint" class="text-[10px] text-[#8a7a68]">The packing list after the count, signed and with remarks. Photo or PDF, more than one page at a time.</p>
+                                    </div>
+                                    <div id="t8-filled-list" class="mt-2 flex flex-wrap gap-2"></div>
                                 </div>
 
                                 <!-- Column headers -->
@@ -946,7 +964,7 @@
                                 <!-- Sort control sits directly above the rows it sorts, so it is seen where the bags are. -->
                                 <div class="px-6 pt-2 pb-2 flex items-center justify-between gap-3">
                                     <span></span>
-                                    <button type="button" id="t8-sort-btn" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="toggleSeedAuditSort()" title="Sort the bags by Bag No / Seal No, small to large. Press again to go back to the order they were added.">
+                                    <button type="button" id="t8-sort-btn" class="mjm-review-allow px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2" onclick="toggleSeedAuditSort()" title="Sort the bags by Bag No / Seal No, small to large. Press again to go back to the order they were added.">
                                         <span aria-hidden="true">↑</span> <span id="t8-sort-label">Sort small → large</span>
                                     </button>
                                 </div>
@@ -1064,7 +1082,10 @@
                             <div id="t2-adjust-bar" class="hidden mb-5"></div>
                             <!-- TAB 2 HEADER: title + completion status -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-200 pb-5">
-                                <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds Planting & Damage Report</h3>
+                                <div class="flex items-center gap-3">
+                                    <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds Planting & Damage Report</h3>
+                                    <button type="button" onclick="printPlantingDamagePdf()" title="Print Planting & Damage Report" aria-label="Print Planting & Damage Report" class="mjm-review-allow w-9 h-9 rounded-lg bg-white border-2 border-[#3d2610] text-[#3d2610] flex items-center justify-center hover:bg-[#fdfaf4] shadow-sm">🖨</button>
+                                </div>
                                 <div id="t2-status-box-header" class="p-3.5 px-6 rounded-2xl bg-white flex items-center gap-4 transition-colors shadow-sm border border-[#e8dcc8]">
                                     <div class="completion-pie-container !w-9 !h-9"><div id="t2-pie-analysis" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover !w-7 !h-7 flex items-center justify-center font-black text-xs text-[#1a150d]" id="t2-percent-text">0%</div></div>
                                     <div>
@@ -9307,7 +9328,7 @@
             4: ['1st_Culling'],
             5: ['2nd_Culling'],
             6: ['3rd_Culling'],
-            8: ['Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action']
+            8: ['Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action', 'Seed_Audit_PackingList']
         };
         function withEditMeta(payload) {
             // Stamp the user + timestamp so each saved row carries who/when it was last edited.
@@ -9663,7 +9684,57 @@
 
         // Render the original photo with a red dot at every detected seed centre.
         // Returns a new JPEG data URL; falls back to the original if drawing fails.
-        function _seedDrawDotsOnImage(dataUrl, points) {
+        /* A point the AI gave is only kept if the photo itself is dark where
+           it points. An empty cell is white or grey tray, so a dot there is
+           the model guessing, not a seed. The threshold is a judgement from
+           looking at the trays, and the removed dots are drawn hollow so the
+           person can see what was taken out and why. */
+        const SEED_DARK_LUMA = 85;       // a pixel darker than this is seed
+        const SEED_DARK_MIN_FRAC = 0.25; // share of dark pixels in the disc to keep a point
+        function _seedFilterPoints(dataUrl, points) {
+            return new Promise(resolve => {
+                if (!points.length) return resolve({ kept: [], dropped: [] });
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const w = img.width, h = img.height;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w; canvas.height = h;
+                        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                        ctx.drawImage(img, 0, 0);
+                        const data = ctx.getImageData(0, 0, w, h).data;
+                        // A disc about the size of one seed, so the sample sits inside it.
+                        const r = Math.max(3, Math.round(Math.min(w, h) / 90));
+                        const kept = [], dropped = [];
+                        for (const p of points) {
+                            const cx = Math.round(Math.max(0, Math.min(w - 1, (p[1] / 1000) * w)));
+                            const cy = Math.round(Math.max(0, Math.min(h - 1, (p[0] / 1000) * h)));
+                            let dark = 0, total = 0;
+                            for (let dy = -r; dy <= r; dy++) {
+                                for (let dx = -r; dx <= r; dx++) {
+                                    if (dx * dx + dy * dy > r * r) continue;
+                                    const x = cx + dx, y = cy + dy;
+                                    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                                    const i = (y * w + x) * 4;
+                                    const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                                    total++;
+                                    if (luma < SEED_DARK_LUMA) dark++;
+                                }
+                            }
+                            (total && dark / total >= SEED_DARK_MIN_FRAC ? kept : dropped).push(p);
+                        }
+                        resolve({ kept, dropped });
+                    } catch (e) {
+                        console.warn('Seed pixel check failed:', e);
+                        resolve({ kept: points, dropped: [] });
+                    }
+                };
+                img.onerror = () => resolve({ kept: points, dropped: [] });
+                img.src = dataUrl;
+            });
+        }
+
+        function _seedDrawDotsOnImage(dataUrl, points, dropped = []) {
             return new Promise(resolve => {
                 const img = new Image();
                 img.onload = () => {
@@ -9685,6 +9756,16 @@
                             ctx.beginPath();
                             ctx.arc(px, py, dotR, 0, Math.PI * 2);
                             ctx.fill();
+                            ctx.stroke();
+                        }
+                        // Points the pixel check removed: hollow blue, not counted.
+                        ctx.strokeStyle = 'rgba(30, 110, 255, 0.95)';
+                        ctx.lineWidth = Math.max(2, dotR / 3);
+                        for (const [y, x] of dropped) {
+                            const py = Math.max(0, Math.min(img.height, (y / 1000) * img.height));
+                            const px = Math.max(0, Math.min(img.width,  (x / 1000) * img.width));
+                            ctx.beginPath();
+                            ctx.arc(px, py, dotR, 0, Math.PI * 2);
                             ctx.stroke();
                         }
                         resolve(canvas.toDataURL('image/jpeg', 0.9));
@@ -10198,13 +10279,15 @@
 
                 const result = await _seedCallGemini(source, SEED_COUNT_PROMPT);
                 const points = _parseSeedPoints(result.seeds);
-                const aiCount = points.length;
-                const annotated = points.length ? await _seedDrawDotsOnImage(source, points) : source;
+                const { kept, dropped } = await _seedFilterPoints(source, points);
+                const aiCount = kept.length;
+                const annotated = (kept.length || dropped.length) ? await _seedDrawDotsOnImage(source, kept, dropped) : source;
 
                 /* A new count is a new picture of it, so the stored one has to
                    go — leaving the old dots against a new figure is a row that
                    disagrees with itself. The URL is dropped and re-uploaded. */
                 st.aiCount = aiCount;
+                st.droppedCount = dropped.length;
                 st.confidence = result.confidence || null;
                 st.photoBase64 = annotated;
                 st.photoUrl = null;
@@ -10270,12 +10353,14 @@
                 dataUrl = await _seedCompressImage(dataUrl);
                 const result = await _seedCallGemini(dataUrl, SEED_COUNT_PROMPT);
                 const points = _parseSeedPoints(result.seeds);
-                const aiCount = points.length;
-                const annotated = points.length
-                    ? await _seedDrawDotsOnImage(dataUrl, points)
+                const { kept, dropped } = await _seedFilterPoints(dataUrl, points);
+                const aiCount = kept.length;
+                const annotated = (kept.length || dropped.length)
+                    ? await _seedDrawDotsOnImage(dataUrl, kept, dropped)
                     : dataUrl;
                 seedAuditPhotoState[rowId] = {
                     aiCount,
+                    droppedCount: dropped.length,
                     confidence: result.confidence || null,
                     photoBase64: annotated,
                     photoUrl: null,
@@ -10306,45 +10391,97 @@
             if (st && st.aiCount != null) renderBagVerify(rowId);
         }
 
-        async function scanPackingListFile(file) {
-            if (!file) return;
-            if (file.size > 20 * 1024 * 1024) {
-                showToast('File too large (max 20 MB).', 'error');
-                return;
-            }
-            _setSeedAuditDropzoneBusy(true, file.name);
+        /* Every page of a packing list in ONE drop, read one after the other.
+           A list arrives as Box 1/4 .. 4/4, so one file at a time was four
+           drops for one delivery.
+
+           AND A PAGE READ TWICE MUST NOT BECOME TWO PAGES OF BAGS. The bag
+           number is the one thing every page row carries, so it is the key:
+           a bag already on screen (keyed by hand, or off an earlier page or
+           an earlier drop) is not added again, and a page whose bags are ALL
+           already there is named as a page already scanned. The same file
+           picked twice in one drop is not even sent. Matched on letters and
+           digits, so a stray space cannot make 14525 a second bag. */
+        function _seedBagKey(v) {
+            return String(v == null ? '' : v).toUpperCase().split('').filter(ch => /[A-Z0-9]/.test(ch)).join('');
+        }
+
+        async function _scanOnePackingList(file) {
+            const base64 = await _fileToBase64(file);
+            const { data, error } = await _supabase.functions.invoke('scan-packing-list', {
+                body: { file_base64: base64, mime_type: file.type || 'application/octet-stream', filename: file.name }
+            });
+            if (error) throw new Error(error.message || 'Edge function error.');
+            const bags = (data && Array.isArray(data.bags)) ? data.bags : null;
+            if (!bags || bags.length === 0) throw new Error('No bags detected in the file.');
+            return bags;
+        }
+
+        async function scanPackingListFiles(fileList) {
+            const all = Array.from(fileList || []);
+            if (!all.length) return;
+            const files = [], sameFile = [], seenFile = new Set();
+            all.forEach(f => {
+                const k = f.name + '|' + f.size + '|' + (f.lastModified || '');
+                if (seenFile.has(k)) { sameFile.push(f.name); return; }
+                seenFile.add(k); files.push(f);
+            });
+            const tooBig = files.filter(f => f.size > 20 * 1024 * 1024).map(f => f.name);
+            const toScan = files.filter(f => f.size <= 20 * 1024 * 1024);
+
+            // Drop empty starter rows before appending scanned bags
+            document.querySelectorAll('.t8-bag-row').forEach(row => {
+                const bagNo  = row.querySelector('.t8-bag-no').value.trim();
+                const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
+                const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
+                if (!bagNo && supQty === 0 && recQty === 0) row.remove();
+            });
+            const onScreen = new Set();
+            document.querySelectorAll('.t8-bag-row .t8-bag-no').forEach(i => {
+                const k = _seedBagKey(i.value); if (k) onScreen.add(k);
+            });
+
+            let added = 0, dupBags = 0;
+            const dupPages = [], failed = [];
             try {
-                const base64 = await _fileToBase64(file);
-                const { data, error } = await _supabase.functions.invoke('scan-packing-list', {
-                    body: { file_base64: base64, mime_type: file.type || 'application/octet-stream', filename: file.name }
-                });
-                if (error) throw new Error(error.message || 'Edge function error.');
-                const bags = (data && Array.isArray(data.bags)) ? data.bags : null;
-                if (!bags || bags.length === 0) throw new Error('No bags detected in the file.');
-
-                // Drop empty starter rows before appending scanned bags
-                document.querySelectorAll('.t8-bag-row').forEach(row => {
-                    const bagNo  = row.querySelector('.t8-bag-no').value.trim();
-                    const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
-                    const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
-                    if (!bagNo && supQty === 0 && recQty === 0) row.remove();
-                });
-
-                bags.forEach(b => {
-                    const bagNo = (b.bag_no || b.bagNo || '').toString();
-                    const supQty = Number(b.supplier_qty || b.supplierQty || 0) || 0;
-                    addSeedAuditRow(bagNo, supQty);
-                });
-                showToast(`AI scan added ${bags.length} bag(s). Verify the rows and key in audited counts.`, 'success');
-            } catch (e) {
-                console.warn('Packing list scan failed:', e);
-                showToast('AI scan failed: ' + (e.message || e) + '. You can still add bag rows manually.', 'error');
+                for (let i = 0; i < toScan.length; i++) {
+                    const file = toScan[i];
+                    _setSeedAuditDropzoneBusy(true, toScan.length > 1 ? `${i + 1} of ${toScan.length} · ${file.name}` : file.name);
+                    let bags;
+                    try { bags = await _scanOnePackingList(file); }
+                    catch (e) { console.warn('Packing list scan failed:', file.name, e); failed.push(file.name + ' (' + (e.message || e) + ')'); continue; }
+                    let fresh = 0, repeat = 0;
+                    bags.forEach(b => {
+                        const bagNo = (b.bag_no || b.bagNo || '').toString();
+                        const supQty = Number(b.supplier_qty || b.supplierQty || 0) || 0;
+                        const k = _seedBagKey(bagNo);
+                        if (k && onScreen.has(k)) { repeat++; return; }
+                        if (k) onScreen.add(k);
+                        addSeedAuditRow(bagNo, supQty);
+                        fresh++;
+                    });
+                    added += fresh; dupBags += repeat;
+                    if (!fresh && repeat) dupPages.push(file.name);
+                }
             } finally {
                 _setSeedAuditDropzoneBusy(false);
                 const input = document.getElementById('t8-file-input');
                 if (input) input.value = '';
             }
+
+            const lines = [];
+            if (added) lines.push(`AI scan added ${added} bag(s)${toScan.length > 1 ? ` from ${toScan.length - failed.length} file(s)` : ''}. Verify the rows and key in audited counts.`);
+            if (dupPages.length) lines.push(`Already scanned, nothing added: ${dupPages.join(', ')}.`);
+            if (dupBags) lines.push(`${dupBags} bag number(s) were already on the list and were not added again.`);
+            if (sameFile.length) lines.push(`Same file picked twice: ${sameFile.join(', ')}.`);
+            if (tooBig.length) lines.push(`Too large (max 20 MB): ${tooBig.join(', ')}.`);
+            if (failed.length) lines.push(`Could not read: ${failed.join('; ')}. You can still add bag rows manually.`);
+            const bad = failed.length || tooBig.length;
+            const type = !added && bad ? 'error' : (bad || dupPages.length || dupBags || sameFile.length ? 'warn' : 'success');
+            showToast(lines.join(' ') || 'Nothing added.', type);
         }
+        // Kept for any caller that hands over one file.
+        function scanPackingListFile(file) { return scanPackingListFiles(file ? [file] : []); }
 
         function _wireSeedAuditDropzone() {
             const zone = document.getElementById('t8-dropzone');
@@ -10353,7 +10490,7 @@
             zone.dataset.wired = '1';
             zone.addEventListener('click', () => input.click());
             input.addEventListener('change', () => {
-                if (input.files && input.files[0]) scanPackingListFile(input.files[0]);
+                if (input.files && input.files.length) scanPackingListFiles(input.files);
             });
             ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
                 e.preventDefault(); e.stopPropagation();
@@ -10364,8 +10501,8 @@
                 zone.classList.remove('ring-2', 'ring-[#4a7a2e]', 'bg-[#e8f5da]');
             }));
             zone.addEventListener('drop', e => {
-                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    scanPackingListFile(e.dataTransfer.files[0]);
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                    scanPackingListFiles(e.dataTransfer.files);
                 }
             });
         }
@@ -10373,6 +10510,185 @@
             document.addEventListener('DOMContentLoaded', _wireSeedAuditDropzone);
         } else {
             _wireSeedAuditDropzone();
+        }
+
+        /* ── The FILLED packing list ─────────────────────────────────────
+           The supplier sheet after the count, with Checked By and the
+           remarks written on it. One ledger row per batch,
+           `Seed_Audit_PackingList`, quantity nought, the files in the remark
+           as `DocList:` through tab 6 own codec, so a name with a space or a
+           separator in it cannot split a file in two.
+
+           WRITTEN THE MOMENT A FILE IS PICKED, not on Save Seed Audit Report:
+           an upload nobody remembered to save is a page that is in storage
+           and on no record. The list is RE-READ before every write, so a file
+           somebody else attached a minute ago is not written over. The cross
+           takes a file off the RECORD and leaves it in storage, the census
+           rule: a delete that cannot be undone over a mis-press is the worse
+           failure. A signed-off report refuses both, asked of the CLASS the
+           lock sets, because the stylesheet stops neither a key nor a call. */
+        let t8FilledDocs = [];
+        /* FROM BATCH 281 ON. The office asked for the box on the batches
+           received from 281 onwards; an earlier batch was audited before it
+           existed, and an empty box asking for a sheet nobody kept is a
+           prompt nobody can act on. The number is read off the leading
+           digits of the batch number. A batch before 281 that somehow holds
+           files still SHOWS them: a record is never hidden, only the box. */
+        const T8_FILLED_FROM_BATCH = 281;
+        function _t8FilledApplies() {
+            const raw = String(document.getElementById('f-batchno').value || '').trim();
+            let digits = '';
+            for (const ch of raw) { if (ch >= '0' && ch <= '9') digits += ch; else if (digits) break; }
+            const n = parseInt(digits, 10);
+            return !isNaN(n) && n >= T8_FILLED_FROM_BATCH;
+        }
+        function _t8Locked() {
+            const tab = document.getElementById('tab-8');
+            return !!(tab && tab.classList.contains('mjm-locked'));
+        }
+        async function _t8ReadFilled(batchId) {
+            const { data, error } = await _supabase.from('shared_inventory_logs')
+                .select('remark').eq('batch_name', batchId)
+                .eq('transaction_type', 'Seed_Audit_PackingList')
+                .order('created_at', { ascending: false }).limit(1);
+            if (error) throw error;
+            const rmk = (data && data[0] && data[0].remark) || '';
+            const i = rmk.indexOf('DocList:');
+            return i < 0 ? [] : t6DecodeDocs(rmk.slice(i + 8).trim());
+        }
+        async function _t8WriteFilled(batchId, list) {
+            await _supabase.from('shared_inventory_logs')
+                .delete().eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_PackingList');
+            if (!list.length) return;
+            const { error } = await safeInsertLogs([withEditMeta({
+                transaction_type: 'Seed_Audit_PackingList',
+                batch_name: batchId,
+                breed_name: document.getElementById('f-brand').value || null,
+                quantity_change: 0,
+                transaction_date: document.getElementById('f-datereceived').value || null,
+                remark: 'Filled packing list. DocList:' + t6EncodeDocs(list)
+            })]);
+            if (error) throw error;
+        }
+        function renderFilledPackingList() {
+            const box = document.getElementById('t8-filled-list');
+            if (!box) return;
+            const applies = _t8FilledApplies();
+            const wrap = document.getElementById('t8-filled-wrap');
+            if (wrap) wrap.classList.toggle('hidden', !applies && !t8FilledDocs.length);
+            const zone = document.getElementById('t8-filled-zone');
+            if (zone) zone.classList.toggle('hidden', !applies);
+            const locked = _t8Locked();
+            box.innerHTML = t8FilledDocs.map((d, k) => {
+                const isPdf = /\.pdf(\?|#|$)/i.test(d.base64);
+                const nm = d.name || ('page ' + (k + 1));
+                /* The cross is a SIBLING of the file, never inside it: the file
+                   opens on a click, so a cross inside it would open the page
+                   over the top of removing it. */
+                return `<span class="inline-flex items-stretch rounded-lg border border-[#e8dcc8] bg-white overflow-hidden">
+                    <button type="button" class="mjm-review-allow px-3 py-1.5 text-[11px] font-bold text-[#4a7a2e] hover:bg-[#f0f8ec] t8-filled-open"
+                            onclick="openFilledPackingList(${k})" title="Open ${_escAttr(nm)}">${isPdf ? '📄' : '🖼️'} ${_escAttr(nm)}</button>
+                    ${locked ? '' : `<button type="button" class="px-2 border-l border-[#e8dcc8] text-[#a83020] hover:bg-[#fdecea] t8-filled-x"
+                            onclick="removeFilledPackingList(${k})" title="Remove ${_escAttr(nm)} from this report" aria-label="Remove ${_escAttr(nm)}">✕</button>`}
+                </span>`;
+            }).join('');
+            const hint = document.getElementById('t8-filled-hint');
+            if (hint) hint.innerText = t8FilledDocs.length
+                ? `${t8FilledDocs.length} file(s) attached. Drop or pick more to add pages.`
+                : 'The packing list after the count, signed and with remarks. Photo or PDF, more than one page at a time.';
+        }
+        /* REQUIRED for the SIGN-OFF, from batch 281 on. The report SAVES
+           without it, because the counting is done before the sheet is
+           signed and photographed; what it cannot be is verified or
+           reviewed. The refusal is the only thing said about it. */
+        window._t8FilledMissing = function () { return _t8FilledApplies() && !t8FilledDocs.length; };
+        function openFilledPackingList(k) {
+            const d = t8FilledDocs[k];
+            if (d) _openDocViewer(d.base64, d.name || 'Filled packing list');
+        }
+        async function loadFilledPackingList(batchId) {
+            t8FilledDocs = [];
+            try { if (batchId) t8FilledDocs = await _t8ReadFilled(batchId); }
+            catch (e) { console.warn('Could not load the filled packing list:', e && e.message); }
+            renderFilledPackingList();
+        }
+        async function uploadFilledPackingList(fileList) {
+            const files = Array.from(fileList || []);
+            const input = document.getElementById('t8-filled-input');
+            if (!files.length) return;
+            try {
+                if (_t8Locked()) { showToast('This report is signed off — unverify it first to change the filled packing list.', 'error'); return; }
+                if (!_t8FilledApplies()) { showToast('The filled packing list is kept from batch ' + T8_FILLED_FROM_BATCH + ' onwards.', 'error'); return; }
+                const batchId = document.getElementById('f-batchno').value.trim();
+                if (!batchId) { showToast('Nothing saved — save Tab 1 (Seeds In) first to assign a batch number.', 'error'); return; }
+                const got = [];
+                let failed = 0;
+                for (let k = 0; k < files.length; k++) {
+                    const f = files[k];
+                    if (f.size > 20 * 1024 * 1024) { failed++; continue; }
+                    try {
+                        const dataUrl = await _t3ReadFile(f);
+                        const url = await _uploadBatchDoc('seed_audit_packing_list', batchId, `filled-${Date.now()}-${k}`, dataUrl);
+                        if (!url) { failed++; continue; }
+                        got.push({ base64: url, name: f.name || `page-${k + 1}`, note: '' });
+                    } catch (e) { failed++; }
+                }
+                if (!got.length) throw new Error(window._mjmLastUploadError || 'storage would not take the file');
+                const now = await _t8ReadFilled(batchId);
+                const list = now.concat(got);
+                await _t8WriteFilled(batchId, list);
+                t8FilledDocs = list;
+                renderFilledPackingList();
+                if (failed) showToast(`${got.length} file(s) attached — ${failed} would not upload. Attach those again.`, 'warn');
+                else showToast(`Filled packing list attached — ${got.length} file(s).`, 'success');
+            } catch (e) {
+                showToast('Nothing saved — the filled packing list could not be attached: ' + (e && e.message ? e.message : e), 'error');
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+        async function removeFilledPackingList(k) {
+            if (_t8Locked()) { showToast('This report is signed off — unverify it first to change the filled packing list.', 'error'); return; }
+            const d = t8FilledDocs[k];
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!d || !batchId) return;
+            if (!confirm(`Remove "${d.name || 'this file'}" from the filled packing list?\n\nThe bag rows are not touched.`)) return;
+            try {
+                /* By URL, never by position: the list is re-read first, and an
+                   index taken off the screen can point at another file by now. */
+                const now = await _t8ReadFilled(batchId);
+                const list = now.filter(x => x.base64 !== d.base64);
+                await _t8WriteFilled(batchId, list);
+                t8FilledDocs = list;
+                renderFilledPackingList();
+                showToast('File removed from the filled packing list.', 'success');
+            } catch (e) {
+                showToast('Nothing changed — the file could not be removed: ' + (e && e.message ? e.message : e), 'error');
+            }
+        }
+        function _wireFilledPackingList() {
+            const zone = document.getElementById('t8-filled-zone');
+            const input = document.getElementById('t8-filled-input');
+            if (!zone || !input || zone.dataset.wired === '1') return;
+            zone.dataset.wired = '1';
+            zone.addEventListener('click', () => input.click());
+            input.addEventListener('change', () => { if (input.files && input.files.length) uploadFilledPackingList(input.files); });
+            ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
+                e.preventDefault(); e.stopPropagation();
+                zone.classList.add('ring-2', 'ring-[#c07820]');
+            }));
+            ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => {
+                e.preventDefault(); e.stopPropagation();
+                zone.classList.remove('ring-2', 'ring-[#c07820]');
+            }));
+            zone.addEventListener('drop', e => {
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) uploadFilledPackingList(e.dataTransfer.files);
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', _wireFilledPackingList);
+        } else {
+            _wireFilledPackingList();
         }
 
         function calcSeedAudit() {
@@ -10785,7 +11101,16 @@ Thank you.`;
             }
         }
 
-        async function _buildSeedAuditDoc() {
+        /* ONE BUILDER, ONE SECTION PER PRINT.
+           `part` is 'audit' (the bag count and its analysis) or 'planting'
+           (the planting figures, Damage Control and the damaged seed photos).
+           The two used to share one sheet, which is why printing the audit
+           also printed the damage. Each icon now prints its own part, and
+           both are drawn from this one function so they cannot disagree on
+           the shared letterhead. */
+        async function _buildSeedAuditDoc(part = 'audit') {
+            const isAudit = part !== 'planting';
+            const isPlanting = !isAudit;
             const jsPDFNS = window.jspdf || window;
             if (!jsPDFNS || !jsPDFNS.jsPDF) {
                 showToast('PDF library not loaded. Refresh and try again.', 'error');
@@ -10864,7 +11189,7 @@ Thank you.`;
 
             const rx = pageW - margin;
             doc.setFont('times', 'bold'); doc.setFontSize(13); setText(INK);
-            doc.text('Seed Audit Report', rx, y - 4, { align: 'right' });
+            doc.text(isAudit ? 'Seed Audit Report' : 'Seeds Planting & Damage Report', rx, y - 4, { align: 'right' });
             doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK_SOFT);
             doc.text('Batch: ' + batchNo, rx, y + 14, { align: 'right' });
             doc.text('D/O No: ' + dono, rx, y + 28, { align: 'right' });
@@ -10879,7 +11204,7 @@ Thank you.`;
             // ── BATCH SUMMARY
             y = headerBottom + 28;
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-            doc.text('AUDIT SUMMARY', margin, y);
+            doc.text(isAudit ? 'AUDIT SUMMARY' : 'BATCH SUMMARY', margin, y);
             y += 14;
             doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
             doc.text('Supplier:  ', margin, y); doc.setFont('times', 'bold'); doc.text(supplier, margin + 60, y);
@@ -10887,8 +11212,21 @@ Thank you.`;
             y += 14;
             doc.setFont('times', 'normal'); doc.text('Total Seed Expected (D/O + FOC + Repl.):  ', margin, y);
             doc.setFont('times', 'bold'); doc.text(expectedRaw.toLocaleString() + ' seeds', margin + 200, y);
+            /* The planting sheet puts the planted date on the same line, in the
+               right-hand column the breed sits in above — the same two-column
+               pattern as the supplier line. Read off the tab's own date box. */
+            if (isPlanting) {
+                const plantedRaw = (document.getElementById('t2-date') || {}).value || '';
+                const plantedStr = plantedRaw
+                    ? (() => { const [py, pm, pd] = plantedRaw.split('-').map(Number);
+                               return new Date(py, pm - 1, pd).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }); })()
+                    : '—';
+                doc.setFont('times', 'normal'); doc.text('Planted date:  ', margin + 280, y);
+                doc.setFont('times', 'bold'); doc.text(plantedStr, margin + 380, y);
+            }
             y += 8;
 
+            if (isAudit) {
             // ── BAG-BY-BAG TABLE
             const bagRows = [];
             let totalSupplier = 0, totalAudited = 0;
@@ -11003,7 +11341,9 @@ Thank you.`;
                 doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
                 doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
             }
+            }
 
+            if (isPlanting) {
             /* ── THE PHOTOS ARE MEASURED BEFORE THE DAMAGE BLOCK IS DRAWN,
                   because the two go on the page TOGETHER.
 
@@ -11090,6 +11430,57 @@ Thank you.`;
                 const short = opts.reduce((a, o) => (o.natural < a.natural ? o : a));
                 return { rows: short.rows, k: roomH / short.natural };
             }
+
+            /* ── PLANTING, read off the tab the way the damage block reads its
+                  own figures: the numbers already on the screen, not a second
+                  sum. Top to bottom: the planting date and trays, the Receive &
+                  Damage Analysis the tab draws as two bars, the seeds planted
+                  per tray, then Damage Control and the photos. */
+            const pTxt = id => ((document.getElementById(id) || {}).textContent || '').trim() || '—';
+            y += 14;
+
+
+            /* SEEDS PLANTED PER TRAY — one row per tray on the tab, the same
+               three figures the tray row shows, and the tray totals as the
+               foot. Read off the rows the tab holds, not re-derived. */
+            const trayBody = [];
+            let trayN = 0;
+            document.querySelectorAll('#tray-rows-container .tray-row').forEach(row => {
+                trayN++;
+                const sel = row.querySelector('select.t-select');
+                const opt = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+                /* The tray's name only. The option carries its vacancy after
+                   an em dash, which is not part of the tray's name. */
+                const name = opt && opt.value ? opt.text.split('—')[0].trim() : '—';
+                const planted = readNumericInput(row.querySelector('.t-planted'));
+                const empty = readNumericInput(row.querySelector('.t-empty'));
+                const actual = parseInt((row.querySelector('.t-actual') || {}).dataset?.raw || 0, 10) || 0;
+                trayBody.push([String(trayN), name,
+                               planted.toLocaleString(), empty.toLocaleString(), actual.toLocaleString()]);
+            });
+            if (trayBody.length === 0) trayBody.push(['—', 'No trays entered.', '0', '0', '0']);
+            _need(60);
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+            doc.text('SEEDS PLANTED PER TRAY', margin, y); y += 12;
+            doc.autoTable({
+                startY: y + 6,
+                head: [['#', 'Tray', 'Total Planted', 'Empty Holes', 'Actual Planted']],
+                body: trayBody,
+                foot: [['', 'TOTAL', pTxt('t2-tot-planted'), pTxt('t2-tot-empty'), pTxt('t2-tot-actual')]],
+                margin: { top: margin + 20, bottom: FOOT_H, left: margin, right: margin },
+                styles: { font: 'times', fontSize: 10, cellPadding: 5, textColor: INK },
+                headStyles: { fillColor: OLIVE, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+                footStyles: { fillColor: [243, 239, 230], textColor: INK, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 30 },
+                    1: { halign: 'left' },
+                    2: { halign: 'center' },
+                    3: { halign: 'center' },
+                    4: { halign: 'center' }
+                },
+                alternateRowStyles: { fillColor: [251, 250, 246] }
+            });
+            y = doc.lastAutoTable.finalY + 14;
 
             /* ── DAMAGE CONTROL, which is Seed Planting's figure and not this
                   tab's.
@@ -11220,6 +11611,8 @@ Thank you.`;
                 y += 4;
             }
 
+            }
+
             /* ── FOOTER, on EVERY page.
                   It used to be drawn once and say "Page 1 of 1", which was
                   true for as long as the report could not run over — the
@@ -11237,7 +11630,7 @@ Thank you.`;
                 doc.text('Page ' + p + ' of ' + pages, pageW - margin, footerY, { align: 'right' });
             }
 
-            const filename = `Seed_Audit_${batchNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            const filename = `${isAudit ? 'Seed_Audit' : 'Planting_Damage'}_${batchNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
             return { doc, filename };
         }
 
@@ -11255,7 +11648,7 @@ Thank you.`;
 
         function downloadSeedAuditPdf() {
             return _seedAuditPdfGuard('produced', async () => {
-                const built = await _buildSeedAuditDoc();
+                const built = await _buildSeedAuditDoc('audit');
                 if (!built) return;
                 built.doc.save(built.filename);
                 return built.filename;
@@ -11269,9 +11662,9 @@ Thank you.`;
            and `autoPrint` is what raises the dialog once the viewer has it.
            The frame is reused, so pressing Print twice does not leave a
            second copy of the file behind. */
-        function printSeedAuditPdf() {
+        function _printSeedDoc(part) {
             return _seedAuditPdfGuard('printed', async () => {
-                const built = await _buildSeedAuditDoc();
+                const built = await _buildSeedAuditDoc(part);
                 if (!built) return;
                 built.doc.autoPrint();
                 const url = built.doc.output('bloburl');
@@ -11288,11 +11681,19 @@ Thank you.`;
             });
         }
 
+        /* The two print icons, one per report. Seed Audit prints only the
+           bag count and its analysis; Planting & Damage prints the planting,
+           the receive & damage analysis, the seeds per tray, Damage Control
+           and the damaged seed photos. */
+        function printSeedAuditPdf() { return _printSeedDoc('audit'); }
+        function printPlantingDamagePdf() { return _printSeedDoc('planting'); }
+
         async function loadSeedAuditData(batchId) {
             document.getElementById('t8-bag-rows-container').innerHTML = '';
             document.getElementById('t8-batch-remark').value = '';
             seedAuditRowCount = 0;
             _seedAuditDirty = false;
+            loadFilledPackingList(batchId);
 
             try {
                 const [auditRes, emailRes, noteRes, actionRes] = await Promise.all([
@@ -12403,7 +12804,7 @@ Thank you.`;
                                      Save — the box is still a box. A plot with no transplant
                                      date to count from keeps whatever it has. -->
                                 <input type="date" class="input-style !text-[#3d2610] font-black t5-cull-date text-xs"
-                                    value="${t5CullDateFor(p.transplantDate) || p.savedCullDate || ''}"
+                                    value="${p.savedCullDate || t5PresetFor(p.transplantDate) || ''}"
                                     placeholder="${due.text}"
                                     data-due-date="${p.transplantDate ? (() => { const d = new Date(p.transplantDate); d.setMonth(d.getMonth()+4); return d.toISOString().split('T')[0]; })() : ''}">
                                 <div class="text-[9px] font-bold ${due.cls} mt-0.5" id="${rowId}-due-status">${due.status}</div>
@@ -12514,6 +12915,17 @@ Thank you.`;
            Fixing the day at 14 first makes that impossible: every month has
            a 14th. Month arithmetic is done 0-based and the year carried, so
            November + 4 is March of the next year. */
+        /* The 14th is a PRESET only for a due month that has already passed. From the
+           current month on, the cull date is whatever was keyed (here or on the 2nd Cull
+           list in the batch report), and a row with no date stays blank for somebody to fill. */
+        function t5PresetFor(transplantDateStr) {
+            const due = t5CullDateFor(transplantDateStr);
+            if (!due) return '';
+            const now = new Date();
+            const nowYm = now.getFullYear() * 12 + now.getMonth();
+            const dueYm = parseInt(due.slice(0, 4), 10) * 12 + (parseInt(due.slice(5, 7), 10) - 1);
+            return dueYm < nowYm ? due : '';
+        }
         function t5CullDateFor(transplantDateStr) {
             const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(transplantDateStr || ''));
             if (!m) return '';
@@ -12538,8 +12950,7 @@ Thank you.`;
             if (dateInput && !dateInput.value && deadInput && deadInput.value !== '') {
                 const idx = parseInt(String(rowId).replace('t5-row-', ''), 10);
                 const p   = t5_plotData[idx];
-                dateInput.value = t5CullDateFor(p && p.transplantDate)
-                                  || new Date().toISOString().split('T')[0];
+                dateInput.value = t5PresetFor(p && p.transplantDate) || '';
             }
         }
 
@@ -12794,7 +13205,12 @@ Thank you.`;
                     }));
                 }
 
-                if (logsToInsert.length === 0) throw new Error('No filled rows to save.');
+                /* Clearing a saved Dead box takes that plot's cull back. Nothing filled is
+                   refused, unless a row WAS saved and has been cleared, so a page that
+                   failed to load its saved rows cannot wipe the record. */
+                const clearedSaved = Array.from(document.querySelectorAll('.t5-plot-row')).some((row, i) =>
+                    row.querySelector('.t5-dead')?.value === '' && t5_plotData[i] && t5_plotData[i].savedDead != null);
+                if (logsToInsert.length === 0 && !clearedSaved) throw new Error('No filled rows to save.');
                 const { error } = await safeReplaceLogs(batchId, ['2nd_Culling'], logsToInsert);
                 if (error) throw error;
                 setEditMetaUI(5, new Date().toISOString(), window.currentUserEmail);
@@ -16050,8 +16466,7 @@ Thank you.`;
         async function handleT6DocDrop(event, rowId) {
             _t6ReplaceAt = null; _t6ReplaceRow = '';
             const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
-            const at = await Promise.all(files.map(f => processT6Doc(f, rowId)));
-            _t6AskForRemark(rowId, at);
+            await Promise.all(files.map(f => processT6Doc(f, rowId)));
         }
 
         async function handleT6DocUpload(input, rowId) {
@@ -16060,50 +16475,19 @@ Thank you.`;
                named one map to swap, so four files would silently add three
                they did not ask for. */
             const replacing = (_t6ReplaceAt != null && _t6ReplaceRow === rowId);
-            let at = [];
             if (replacing) {
-                if (files[0]) at = [await processT6Doc(files[0], rowId)];
+                if (files[0]) await processT6Doc(files[0], rowId);
             } else {
-                at = await Promise.all(files.map(f => processT6Doc(f, rowId)));
+                await Promise.all(files.map(f => processT6Doc(f, rowId)));
             }
             input.value = '';
-            /* A REPLACE keeps the remark that was already there, deliberately,
-               so it is not offered for typing again — selecting it would
-               invite overwriting a sentence somebody meant to keep. */
-            if (!replacing) _t6AskForRemark(rowId, at);
         }
 
-        /* ── THE REMARK IS ASKED FOR WHEN THE MAP ARRIVES ───────────────────
+        /* ── A MAP THAT ARRIVES STAYS WHERE IT IS ───────────────────────────
 
-           The box has always existed, in the gallery panel. The panel only
-           opened when the CHIP was pressed with a map already behind it — so
-           on the first upload the picker closed, the chip went green, and
-           nothing anywhere offered a remark. The only way to one was to know
-           to press the chip a second time, which is not a thing a screen says.
-
-           So a map that ARRIVES opens the panel on its own and puts the
-           cursor in its remark. "North half, flown 21 Feb" is what tells two
-           pictures of one plot apart and it is not in a file name — and the
-           moment to write it is the moment somebody is holding the picture in
-           their head, not a press they have to discover.
-
-           Several files picked at once open on the FIRST of them: the panel
-           lists every one of them under it, so the rest are a tab away, and
-           scrolling to the last is the one that is never what you want. */
-        function _t6AskForRemark(rowId, at) {
-            const landed = (at || []).filter(i => i != null && i >= 0);
-            if (!landed.length) return;
-            openT6Gallery(rowId);
-            const first = Math.min.apply(null, landed);
-            /* After the panel has drawn. The box is focused and NOT selected:
-               there is nothing in it to replace, and a select on an empty box
-               is one more thing the next version could get wrong. */
-            setTimeout(() => {
-                const body = document.getElementById('t6-maps-body');
-                const box  = body && body.querySelectorAll('.t6-doc-note')[first];
-                if (box) { try { box.focus(); } catch (e) {} }
-            }, 0);
-        }
+           The gallery does not open by itself. The office uploads a map and
+           closes the picker; the remark is written when somebody presses the
+           map icon, which is the only place it is ever typed. */
 
         /* A file has arrived, or was already saved. Both end up in the same
            place — t6_plotDocs — and the chip is painted from that, so there
@@ -17435,6 +17819,12 @@ Thank you.`;
          all: there is then nothing to be out of step with, and refusing
          every sign-off over a missing helper would shut the review flow. */
       function _denySignOffUnsaved(tabIdx, done, doIt) {
+        /* The filled packing list is REQUIRED on Seed Audit from batch 281
+           on, so a signature over a report without it is refused too. */
+        if (tabIdx === 8 && typeof window._t8FilledMissing === 'function' && window._t8FilledMissing()) {
+          showToast('Nothing ' + done + ' — upload the filled packing list first.', 'error');
+          return true;
+        }
         if (typeof window._unsavedOnTab !== 'function') return false;
         if (!window._unsavedOnTab(tabIdx)) return false;
         const name = (typeof TAB_TITLES !== 'undefined' && TAB_TITLES[tabIdx])

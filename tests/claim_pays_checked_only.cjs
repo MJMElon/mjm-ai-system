@@ -31,7 +31,10 @@ MAINT_TYPES.forEach(t => { ticks[`BNN_Sep 2026_${t.code}`] =
 const maint = { records, ticks, why: {}, rows: {}, workers: {}, linked: {}, field: [] };
 const fn = new Function('maint', 'MAINT_TYPES', 'PlotMovement',
   'maintWorkerNames', 'cap2', 'maintFieldCredits',
-  body + '\nreturn maintTotals(arguments[6], arguments[7], arguments[8]);');
+  /* Nothing keyed on Settings -> Worker List for Each Job, so every job
+     reads the nursery's own list. */
+  'const maintClaimNames = maintWorkerNames, maintJobNames = maintWorkerNames;\n'
+  + body + '\nreturn maintTotals(arguments[6], arguments[7], arguments[8]);');
 
 const per = fn(maint, MAINT_TYPES,
   { recQty: (r) => ({ value: r.qty }), ready: () => true },
