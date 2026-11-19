@@ -4856,7 +4856,34 @@ async function runMovementReportCombined(withCull2) {
     });
   }
 
-  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, saleDetails, colDetails };
+  /* APPROVED CALIBRATIONS BY BATCH, for the Pre-Nursery rows they explain.
+     A tray reading -1 or 6 with nothing on its row is usually a holding tray
+     a Transplanting adjustment settled: the adjustment moves the plot, not
+     the tray, so the tray goes on reading the difference. 224 and 234 are
+     that (224 和234 都是以为calibration 导致的 加虚线). Read here once; the
+     section dots the figure and the hover names the calibration. */
+  const batchCals = {};
+  logs.forEach(l => {
+    if (l.transaction_type !== 'Stock_Calibration') return;
+    const ap = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/);
+    const q = Number(l.quantity_change) || 0;
+    if (!ap || !q) return;
+    const body = (l.remark || '').replace(ap[0], '');
+    const noTx = body.replace(/TxTray:\s*([^.]+?)\s*\.\s*/i, '');
+    const tray = noTx.match(/Tray:\s*([^.]+?)\s*\.\s*/i);
+    let reason = noTx.replace(/Report:\s*[^.]+?\s*\.\s*/i, '')
+                     .replace(/Plot:\s*[^.]+?\s*\.\s*/i, '')
+                     .replace(/Side:\s*(seed|plot)\s*\.\s*/i, '')
+                     .replace(/Tray:\s*[^.]+?\s*\.\s*/i, '').trim();
+    const k = _mvBatchKey(l.batch_name);
+    (batchCals[k] = batchCals[k] || []).push({
+      date: _logDate(l), qty: q,
+      tray: tray ? tray[1].trim().toUpperCase() : '',
+      plot: String(l.plot_name || '').trim().toUpperCase(),
+      label: [l.plot_name ? 'Plot ' + l.plot_name : '', tray ? 'Tray ' + tray[1].trim() : '', reason].filter(Boolean).join(' · ')
+    });
+  });
+  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, saleDetails, colDetails, batchCals };
   const sections = [];
   if (wantPre)  sections.push(buildMovementSection('pre',  ev.filter(e => e.sc === 'pre'),  { ...ctx, unmatchedSales: [] }));
   // The Summary Report's main section draws with the cull2 column ('main2');
@@ -5006,6 +5033,29 @@ function buildMovementSection(scope, ev, ctx) {
       onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(n)}</span></td>`;
   };
 
+  /* A Pre-Nursery figure a CALIBRATION explains is DOTTED, and the hover
+     names it. Matched first on the tray the calibration names (or the plot
+     it is keyed against); failing that, on a calibration total EXACTLY the
+     size of the figure -- exactly, never nearly, the house rule for a
+     difference being called explained. */
+  const calsFor = (r) => {
+    if (scope !== 'pre') return null;
+    const all = (ctx.batchCals || {})[_mvBatchKey(r.batch)] || [];
+    if (!all.length) return null;
+    const place = String(r.place || '').trim().toUpperCase();
+    const named = all.filter(c => c.tray === place || c.plot === place);
+    if (named.length) return named;
+    const sum = all.reduce((t, c) => t + c.qty, 0);
+    const fig = r.closing || r.bf || 0;
+    return fig && Math.abs(sum) === Math.abs(fig) ? all : null;
+  };
+  const calCell = (n, cls, cals) => {
+    if (!cals || !n) return fmtCell(n, cls);
+    const idx = _mvDetailPool.push({ title: 'Stock Calibration', rows: cals }) - 1;
+    return `<td class="${cls || ''}"><span class="t3-cal-dot cursor-help border-b border-dotted border-current"
+      onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(n)}</span></td>`;
+  };
+
   // ── Body: a section per nursery, a group per tray/plot ──
   // Grouped by whichever the reader asked for. By batch, a batch that has
   // been transferred shows every plot it now sits in under one heading —
@@ -5036,7 +5086,10 @@ function buildMovementSection(scope, ev, ctx) {
     // Alternating band per ROW (not per group) — every line gets its own
     // dark/light step, so a batch with several tray/plot rows still shows
     // each one distinctly instead of one solid block of colour.
+    const gCals = [];
+    g.list.forEach(r => (calsFor(r) || []).forEach(c => { if (!gCals.includes(c)) gCals.push(c); }));
     g.list.forEach((r, i) => {
+      const rCals = calsFor(r);
       band = !band;
       const zebra = band ? ' style="background:#f0e6d2"' : '';
       // The group key and the group's Balance are shown once per group, not
@@ -5052,10 +5105,10 @@ function buildMovementSection(scope, ev, ctx) {
         ${i === 0 ? `<td rowspan="${g.list.length}" class="col-label font-black text-[#8a7a68] align-middle" style="background:#fff">${g.key}</td>` : ''}
         <td class="col-label">${otherOf(r) || '—'}</td>
         <td class="col-label text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
-        ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
+        ${calCell(r.bf, 'text-[#8a7a68] font-black', rCals)}
         ${cols.map(c => fmtDetailCell(r, c)).join('')}
-        ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-balance-total font-black text-[#8a7a68] align-middle" style="background:#fff">${fmtNum(bal)}</td>` : ''}
+        ${calCell(r.closing, 'text-[#4a7a2e] font-black', rCals)}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-balance-total font-black text-[#8a7a68] align-middle" style="background:#fff">${gCals.length && bal ? (() => { const gi = _mvDetailPool.push({ title: 'Stock Calibration', rows: gCals }) - 1; return `<span class="t3-cal-dot cursor-help border-b border-dotted border-current" onmouseenter="mvShowDetailTip(this, ${gi})" onmouseleave="mvHideDetailTip()">${fmtNum(bal)}</span>`; })() : fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
