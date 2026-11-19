@@ -207,6 +207,13 @@ console.log('\n── 5. The rows carry the office\'s own words ──');
     '— GPS track record',
     '— Upload photo',
     '— Remark',
+    /* The night check-in app, under Maintenance, with its own five. */
+    'Mata Malam',
+    'Main task (home)',
+    '— Capture photo',
+    '— GPS track record',
+    'History',
+    'Report',
     'PALMS',
     'Culling Calculator',
     /* Not on the outline, because that outline is the FC PORTAL column and
@@ -230,11 +237,15 @@ console.log('\n── 5. The rows carry the office\'s own words ──');
         keys.sort(),
         ['culling', 'do', 'maintenance', 'maintenance:batches', 'maintenance:gps',
          'maintenance:photos', 'maintenance:record', 'maintenance:remark',
-         'maintenance:schedule', 'maintenance:workers', 'palms', 'scan', 'settings'].sort());
+         'maintenance:schedule', 'maintenance:workers',
+         'mata_malam', 'mata_malam:gps', 'mata_malam:history', 'mata_malam:home', 'mata_malam:photo', 'mata_malam:report', 'palms', 'scan', 'settings'].sort());
 
-  check('and the three cards of the outline are all still on the page',
+  /* Mata Malam joined them when the night check-in app's own Settings moved
+     here: a fourth card, after Portal View & Function, and the three of the
+     outline are untouched and in their order. */
+  check('and the three cards of the outline are all still on the page, with Mata Malam beside them',
         await page.locator('.card-name').evaluateAll(els => els.map(e => e.textContent.trim())),
-        ['Location', 'Portal View & Function', 'Boundary']);
+        ['Location', 'Portal View & Function', 'Mata Malam', 'Boundary']);
   checkTrue('with the Save button the outline names',
             await page.locator('#m-save').count() > 0);
   await page.close();

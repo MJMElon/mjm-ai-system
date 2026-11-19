@@ -197,7 +197,14 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   const rows = Array.from(document.querySelectorAll(`#transplant-draft-${n}-trays .transplant-row`));
   rows.forEach((r, k) => {
     const t = r.querySelector('select.t3-source-tray');
-    const opts = Array.from(t.options).map(o => o.value).filter(Boolean);
+    // A pre-nursery tray: PREMIUM CARE can only be drawn from once something
+    // has been moved into it, which this fixture never does (section 7c).
+    const all = Array.from(t.options).map(o => o.value).filter(Boolean);
+    const pn = all.filter(v => v !== 'PREMIUM CARE' && v !== 'DOUBLE-TONE');
+    // The fixture plants no tray, so the dropdown offers only the two
+    // holding trays; the ledger own source tray P2 is offered by hand.
+    if (!pn.length) { const o = document.createElement('option'); o.value = o.textContent = 'P2'; t.appendChild(o); pn.push('P2'); }
+    const opts = pn;
     if (opts.length) t.value = opts[Math.min(k, opts.length - 1)];
     r.querySelector('input.t3-qty').value = String(qtys[k] || 0);
   });
@@ -346,25 +353,12 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   console.log('\nThe running total is the figure the checker will compare');
   check('680 + 377, said on the card as it is keyed', two.total, '1,057');
 
-  console.log('\n── 3 · NO CENSUS, NO SAVE ──');
-  await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.__DELETED = []; window.__UPLOADS = []; });
-  await page.evaluate(async () => { await window.saveTransplantTab(); });
-  await page.waitForTimeout(600);
-  const refused = await page.evaluate(() => ({
-    toasts: window.__TOASTS,
-    rows: (window.__INSERTED || []).filter(r => r && /^Transplanted/.test(String(r.transaction_type || ''))).length,
-    cards: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplant_Card').length,
-    deleted: (window.__DELETED || []).filter(d => d.table === 'shared_inventory_logs').length,
-    uploads: (window.__UPLOADS || []).length,
-    btn: (document.getElementById('save-transplant-btn') || {}).disabled
-  }));
-  checkTrue('it says no census, and says WHICH record',
-            refused.toasts.some(t => t.t === 'error' && /no census/i.test(t.m)));
-  check('…and NOTHING is written — not a row, not a card, not even the delete',
-        [refused.rows, refused.cards, refused.deleted], [0, 0, 0]);
-  check('…nor is a census uploaded for a save that refused', refused.uploads, 0);
-  checkFalse('…and the button comes back, so it can be pressed again', refused.btn);
-  check('…and it says nothing else — no explaining line, just the refusal', refused.toasts.length, 1);
+  console.log('\n── 3 · THE CENSUS IS OPTIONAL (没有census也可以save) ──');
+  /* It was compulsory and the office took that off. The save without one is
+     driven in section 9, on a card of its own, so this record keeps its
+     census for section 4. Here only the label: no asterisk. */
+  checkFalse('the census label no longer carries an asterisk',
+             await page.evaluate((n) => /Census\s*\*/.test(document.getElementById(`transplant-draft-${n}-head`).textContent), N));
 
   console.log('\n── 4 · WITH A CENSUS IT SAVES, AND THE CENSUS GOES WITH IT ──');
   await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.__DELETED = []; window.__UPLOADS = []; });
@@ -658,6 +652,158 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
               return !!el && /N15\.jpg/.test(el.innerHTML);
             }));
 
+  console.log('\n── 7b · + ADD TRAY ON A SAVED CARD LANDS IN THE SAME CARD ──');
+  /* 我要add tray, over a saved U3 card. The button opens a new record with the
+     card plot and day already set, so the save lands it in that card. */
+  /* October is auto-locked by the time this runs (the lock calendar is live),
+     so the month is opened for the section and asked about on its own below. */
+  await page.evaluate(() => {
+    window.__TOASTS = []; window.__INSERTED = []; window.__UPLOADS = [];
+    window.__realIsDateLocked = MJMMonthLock.isDateLocked;
+    MJMMonthLock.isDateLocked = () => false;
+    document.querySelectorAll('#transplant-rows-container .t3-draft-card').forEach(el => el.remove());
+  });
+  const addTray = await page.evaluate(() => {
+    const card = Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-saved-row')).find(el => el.dataset.reviewKey === 'B07|2026-10-11');
+    if (!card) return { err: 'no B07 card' };
+    const btn = card.querySelector('.t3-card-addtray');
+    if (!btn) return { err: 'no Add Tray on the card' };
+    btn.click();
+    const inCard = card.querySelectorAll('.t3-draft-card');
+    const d = inCard[0];
+    if (!d) return { err: 'no row opened inside the card' };
+    const head = d.querySelector('[id$="-head"]');
+    const row = d.querySelector('.transplant-row');
+    btn.click();   // a second press adds another row to the same record, not a second record
+    return {
+      drafts: inCard.length,
+      elsewhere: document.querySelectorAll('#transplant-rows-container .t3-draft-card').length,
+      headHidden: head.style.display === 'none',
+      rowsAfterSecond: d.querySelectorAll('.transplant-row').length,
+      hasSave: !!d.querySelector('.t3-inline-save'),
+      day: head.querySelector('.t3-date').value,
+      type: head.querySelector('.t3-dest-type').value,
+      plot: head.querySelector('.t3-dest-plot').value,
+      mirrored: [row.querySelector('input.t3-date').value, row.querySelector('input.t3-dest-plot').value],
+      n: Number(d.id.replace('transplant-draft-', ''))
+    };
+  });
+  check('+ Add Tray opens ONE row INSIDE the card, not a record further down', addTray.err || [addTray.drafts, addTray.elsewhere], [1, 0]);
+  checkTrue('…as a plain row: the date, category and plot are the card own and not asked again', addTray.headHidden);
+  check('…a second press adds another row to the same record', addTray.rowsAfterSecond, 2);
+  checkTrue('…and the row carries its own Save', addTray.hasSave);
+  check('…with the card day, Main Plot and the card plot already set',
+        [addTray.day, addTray.type, addTray.plot], ['2026-10-11', 'main', 'B07']);
+  check('…mirrored onto the tray line every reader asks', addTray.mirrored, ['2026-10-11', 'B07']);
+  if (!addTray.err) {
+    await page.evaluate((n) => {
+      const all = document.querySelectorAll(`#transplant-draft-${n}-trays .transplant-row`);
+      if (all[1]) window.removeTransplantTray(all[1].id, n);
+      const r = all[0];
+      const t = r.querySelector('select.t3-source-tray');
+      const opts = Array.from(t.options).map(o => o.value).filter(Boolean);
+      t.value = opts[0];
+      r.querySelector('input.t3-qty').value = '25';
+      window.calcTransplanting();
+    }, addTray.n);
+    /* 根本都没超过: a tray the SAVED rows already over-draw must not block a
+       new row on another tray. One saved row is pushed far past its tray. */
+    const pushed = await page.evaluate((n) => {
+      // Two trays the batch planted: PX1 the saved records over-draw, PX2 the new row uses.
+      preNurseryTrayData.push({ name: 'PX1', initialQty: 100, currentQty: 100 },
+                              { name: 'PX2', initialQty: 5000, currentQty: 5000 });
+      window.calcTransplanting();
+      const saved = document.querySelector('#transplant-rows-container .transplant-row');
+      const draftRow = document.querySelector(`#transplant-draft-${n} .transplant-row`);
+      if (!saved || !draftRow) return null;
+      saved.querySelector('.t3-source-tray').value = 'PX1';
+      saved.querySelector('.t3-qty').value = '999';
+      draftRow.querySelector('.t3-source-tray').value = 'PX2';
+      window.__TOASTS = [];
+      return saved.querySelector('.t3-source-tray').value === 'PX1' ? 'PX1' : null;
+    }, addTray.n);
+    await page.evaluate((n) => { const b = document.querySelector(`#transplant-draft-${n} .t3-inline-save`); if (b) b.click(); }, addTray.n);
+    await page.waitForTimeout(1500);
+    if (pushed) {
+      const t = await page.evaluate(() => window.__TOASTS || []);
+      checkFalse('an over-drawn tray the new row does not touch does not block the save',
+                 t.some(x => x.t === 'error' && /over-drawn/i.test(x.m)));
+      checkTrue('…it is said as a warning, naming the tray',
+                t.some(x => x.t === 'warn' && x.m.indexOf(pushed) >= 0));
+    } else {
+      check('the fixture has a saved row on another tray to over-draw', 'none', 'one');
+    }
+    const added = await page.evaluate(() => (window.__INSERTED || [])
+      .filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 25)
+      .map(r => ({ plot: r.plot_name, day: r.transaction_date })));
+    check('saving it writes the tray under the SAME plot and day, so it joins the card',
+          added, [{ plot: 'B07', day: '2026-10-11' }]);
+  }
+  const lockedAdd = await page.evaluate(() => {
+    const tab = document.getElementById('tab-3'); tab.classList.add('mjm-locked');
+    window.__TOASTS = [];
+    const before = document.querySelectorAll('.t3-draft-card').length;
+    const card = document.querySelector('#t3-saved-rows-list .t3-saved-row');
+    const i = Number(card.dataset.cardIndex);
+    window.addTrayToT3Card(i);
+    const after = document.querySelectorAll('.t3-draft-card').length;
+    tab.classList.remove('mjm-locked');
+    return { opened: after - before, said: window.__TOASTS.some(t => t.t === 'error') };
+  });
+  check('a signed-off report opens nothing and says so', [lockedAdd.opened, lockedAdd.said], [0, true]);
+  const monthShut = await page.evaluate(() => {
+    MJMMonthLock.isDateLocked = () => true;
+    window.__TOASTS = [];
+    const before = document.querySelectorAll('.t3-draft-card').length;
+    const card = document.querySelector('#t3-saved-rows-list .t3-saved-row');
+    window.addTrayToT3Card(Number(card.dataset.cardIndex));
+    const after = document.querySelectorAll('.t3-draft-card').length;
+    MJMMonthLock.isDateLocked = window.__realIsDateLocked;
+    return { opened: after - before, said: window.__TOASTS.some(t => t.t === 'error' && /locked/i.test(t.m)) };
+  });
+  check('a locked month opens nothing and says so', [monthShut.opened, monthShut.said], [0, true]);
+
+  console.log('\n── 7c · PREMIUM CARE IS FILLED BEFORE IT IS EMPTIED ──');
+  /* 要能够transplant from premium care to main plot, 一定要有transaction from
+     pre tray to premium care first. A new row drawing from PREMIUM CARE is
+     refused until some row moves seedlings INTO it on or before its day. */
+  const premTry = async (fillDay) => {
+    await page.evaluate((fillDay) => {
+      window.__TOASTS = []; window.__INSERTED = [];
+      document.querySelectorAll('#transplant-rows-container .t3-draft-card, .t3-fake-fill').forEach(el => el.remove());
+      if (fillDay) {
+        // a SAVED fill row, the shape the sync rebuilds: P2 into PREMIUM CARE
+        const r = document.createElement('div');
+        r.className = 'action-row transplant-row t3-fake-fill'; r.id = 'fake-fill';
+        r.style.display = 'none';
+        r.innerHTML = `<input class="t3-date" value="${fillDay}"><select class="t3-source-tray"><option value="P2" selected>P2</option></select>
+          <select class="t3-dest-type"><option value="premium" selected>premium</option></select><input class="t3-dest-plot" value="PREMIUM CARE"><input class="t3-qty" value="50">`;
+        document.getElementById('transplant-rows-container').appendChild(r);
+      }
+      window.addTransplantRow();
+    }, fillDay);
+    const n = await liveDraft(page);
+    await fillDraft(page, n, '2026-10-22', [30]);
+    await page.evaluate((n) => {
+      const t = document.querySelector(`#transplant-draft-${n}-trays .transplant-row select.t3-source-tray`);
+      t.value = 'PREMIUM CARE';
+    }, n);
+    await page.evaluate(async () => { await window.saveTransplantTab(); });
+    await page.waitForTimeout(800);
+    const out = await page.evaluate(() => ({
+      refused: (window.__TOASTS || []).some(t => t.t === 'error' && /PREMIUM CARE/.test(t.m) && /first/.test(t.m)),
+      wrote: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 30).length
+    }));
+    await page.evaluate(() => document.querySelectorAll('#transplant-rows-container .t3-draft-card, .t3-fake-fill').forEach(el => el.remove()));
+    return out;
+  };
+  const noFill = await premTry(null);
+  check('a row from PREMIUM CARE with nothing ever moved into it is refused, and nothing is written', [noFill.refused, noFill.wrote], [true, 0]);
+  const lateFill = await premTry('2026-10-25');
+  check('…and so is one whose only fill is dated AFTER it', [lateFill.refused, lateFill.wrote], [true, 0]);
+  const goodFill = await premTry('2026-10-20');
+  check('a fill from a pre tray on or before its day lets it save', [goodFill.refused, goodFill.wrote], [false, 1]);
+
   console.log('\n── 8 · A CENSUS THAT WILL NOT UPLOAD IS A WARNING, NEVER AN ERROR ──');
   /* The report is in the database by the time the census goes up. Saying
      error over stored work is what leaves a tab dirty by its own success, and
@@ -707,15 +853,23 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   await page.waitForTimeout(300);
   checkFalse('the card went with its last tray',
              await page.evaluate((n) => !!document.getElementById(`transplant-draft-${n}`), N3));
-  /* And the proof the census went with it: a brand-new card refuses to save,
-     which it could not do if the old census had been left lying about. */
-  await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.addTransplantRow(); });
+  /* And the proof the census went with it: a brand-new card with nothing
+     attached SAVES -- the census is optional now -- and uploads nothing,
+     which it would if the old census had been left lying about. */
+  await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.__UPLOADS = []; window.addTransplantRow(); });
   const N4 = await liveDraft(page);
   await fillDraft(page, N4, '2026-10-22', [55]);
   await page.evaluate(async () => { await window.saveTransplantTab(); });
-  await page.waitForTimeout(700);
-  checkTrue('…and the next record is asked for its own census, not given the last one',
-            await page.evaluate(() => (window.__TOASTS || []).some(t => t.t === 'error' && /no census/i.test(t.m))));
+  await page.waitForTimeout(1200);
+  const plain = await page.evaluate(() => ({
+    toasts: window.__TOASTS,
+    rows: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 55).length,
+    cards: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplant_Card').length,
+    uploads: (window.__UPLOADS || []).length
+  }));
+  check('a record with NO census saves', plain.rows, 1);
+  checkFalse('…with no error and nothing said about a census', plain.toasts.some(t => t.t === 'error' || /census/i.test(t.m)));
+  check('…and nothing is uploaded, so the last card census did not ride onto it', [plain.uploads, plain.cards], [0, 0]);
 
   await browser.close();
   server.close();

@@ -70,7 +70,11 @@ check('withoutReplant leaves them out', Object.keys(logs).sort(), ['B4', 'U10'])
 check('…without changing the log it was given', Object.keys(raw).length, 4);
 check('…so a PALMS page built off it lists none', P.unitsOf(logs, 'all').sort(), ['B4', 'U10']);
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
-const PALMS_PAGES = ['nursery_ops/nursery_ops_palms_board.html', 'nursery_ops/nursery_ops_palms_motion.html'];
+/* The Plot Motion Study was the second of these and the office took the
+   whole page off -- "Plot Motion Study也不需要存在". One page is still a
+   list rather than a literal, because the next PALMS page has to arrive
+   into a check that already asks this of every one of them. */
+const PALMS_PAGES = ['nursery_ops/nursery_ops_palms_board.html'];
 PALMS_PAGES.forEach(f => {
   const src = read(f);
   const all = (src.match(/LOGS = [^;]*loadLogs\(/g) || []);

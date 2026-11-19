@@ -2467,6 +2467,166 @@ nothing the office did not already know and it marked rows they are not going
 to re-walk, so: *也是不要 全部维持*. The diagnosis is the part worth keeping;
 the screens are as they were. Do not re-build it without being asked.
 
+## A plot still on the same stage is an ANSWER, and it had no way to say so
+
+The office, over the PALMS board: *"就算plot status一样， updater的名字也要
+update， last update的日期也要"*.
+
+**THE REASON IT COULD NOT IS WORTH READING TWICE, because nothing on the
+screen says it.** The Current Status cell is a `<select>` with the running
+stage drawn as `selected`, and **a native select fires NO change event when
+the same option is picked again.** So the single commonest outcome of an
+office round — *"I have looked at B11 and it really is still on Membesar"* —
+reached no screen and no table. The board then read as neglect where there
+was none, and the plots that genuinely have not been looked at are the ones
+you can no longer pick out, which is the exact fault `plotLine`'s own
+`lastDate` note was written to stop, one door along.
+
+**WHAT IT WRITES IS A DAILY REPORT AND NEVER A SECOND LOG ENTRY**, and that is
+the whole of the decision:
+
+- a second OPEN entry on one `act_n` is the duplicate this file has a heading
+  about — *one stage logged twice is not a plot doing it twice* — and
+  `RUN_ME_upkeep_is_membersih.sql` exists to clear them;
+- closing the old one and opening a new one **RESTARTS THE CLOCK**: a plot 57
+  days into a 270-day Membesar would read as starting today.
+
+The field app has had the right shape since it was written: a Field
+Conductor's Save records every plot in the nursery, changed or not, one row
+per unit per day in `fcportal_palms_history`. **An unchanged plot IS a plot
+somebody looked at.** `MJMPalms.stampSave` is the office making that same
+record about one plot, and it is the one writer both pages call.
+
+Four things in it, and three are a way this goes quietly wrong:
+
+- **ACTS IS EVERY OPEN STAGE, never the one a dropdown happened to show.**
+  `palms_history_latest_wins` is a trigger on that table: an arriving report
+  CLOSES every open entry that started before it and is **not** in its `acts`.
+  PALMS allows two stages at once, so a row naming one of them would silently
+  close the other. Naming them all closes nothing, which is the truth being
+  recorded.
+- **IT IS AN UPSERT**, because the table is `UNIQUE (unit_key, at_date)` and
+  says why in its own words: saving a nursery twice is a correction, not a
+  second report. A second look on the same day must not come back 23505.
+- **IT ALSO RUNS AFTER A REAL CHANGE, and that is not belt and braces.**
+  `pickBy` gives a tie on the day to the daily report, so an office
+  correction made on an afternoon the conductor had already saved read as the
+  **conductor's** work. Stamping the report under whoever acted makes the two
+  agree by construction, rather than by changing `pickBy` under Plot Life as
+  well.
+- **IT SHIPPED AS A ✓ ON EVERY ROW, and the office took that off the next
+  day** — see below. The dropdown route survives it.
+
+**THE PANEL SAYS A DIFFERENT THING BECAUSE IT DOES A DIFFERENT THING**: no
+After box, no due date, and the sentence names the one column that moves. A
+panel promising a change over a save that makes none is how somebody comes to
+distrust the ones that do.
+
+### AND THE TICK CAME STRAIGHT BACK OFF: 不要打勾
+
+The gesture was a **✓ on every row** of Last update, on the board and on Plot
+Life, and the office answered it in three words the following day. **They are
+right about the screen**: a tick on fifty-two rows is a column of small
+targets over a cell nobody came to press, and the two pages had grown one
+each for a thing that happens occasionally.
+
+**WHAT IT COSTS IS NAMED RATHER THAN BURIED, because it undoes half of what
+the same office asked for the day before.** A native `<select>` fires no
+change event for the option already selected, so with the tick gone there is
+**no reliable route left for an unchanged plot**. What survives:
+
+- **the dropdown route is still wired** (`askChange` still takes `same`, the
+  panel still has its check wording, `stampSave` is still called) and is still
+  correct where a browser does fire that event — it is simply not something to
+  promise, and nothing on screen promises it;
+- **a real status CHANGE still stamps the day and the name**, which is the
+  half that never had a button and which nobody objected to. That is also the
+  half that fixes `pickBy`'s tie, so it is worth more than it looks.
+
+**THE DAY THE OFFICE WANTS THE UNCHANGED HALF BACK, it belongs in the PLOT
+POPUP** — one button on the plot somebody has opened, not a column of them.
+That was not built, because they asked for a removal and not a move.
+
+**Nothing to run in the database.** `fcportal_palms_history` has carried the
+unique key since `create_palms_tables.sql`, and `migration_palms_rls.sql`
+already grants INSERT and UPDATE on it through the same `palms_has_access()`
+the plot-log writes use — which is what an upsert needs both of.
+
+`tests/a_plot_still_on_the_same_stage_is_an_answer.cjs` drives the shipped
+writer against a recording stub and then both real pages in a real browser.
+Its first browser check is the office's own sentence, asked through the
+DROPDOWN rather than through any button — which is what let the file survive
+the tick being added and then removed without the write ever going unasked.
+The check beside it is the ABSENCE: no `[data-seen]`, no `.seen-tick`, so a
+half-removal that leaves the handler or the stylesheet behind is caught.
+**2 of its 28 checks fail on the build that had the tick**, and 7 failed on
+the build before the writer existed at all.
+
+## PALMS is the three main nurseries, and it is two pages
+
+Two sentences in one message, both removals, and the first was a list that
+was only ever handed over to a login somebody had narrowed by hand.
+
+### PN UNE不需要出现在这里
+
+`MJMPlotMap` draws **one tab per row of `operation_nurseries`**, which holds
+every place the company has — the Pre Nursery and the estate among them — and
+it narrows that list only when the caller passes one. The PALMS board passed
+one for a RESTRICTED login and not for an ordinary one:
+
+    MAP_SCOPE = allowed ? { nurseries: visible, skipReplant: true }
+                        : { skipReplant: true };
+
+So the office opened the Plot Status Map and found **PN and UNE tabs** on it,
+over maps with nothing drawn on them. The plot log is only ever keyed against
+the three main nurseries — `KEYS` has said so since the board was written and
+is what the table beside the map is scoped by — so those two tabs could never
+have held anything.
+
+**The list is always passed now**, and it is `visible` rather than `KEYS`:
+the permission NARROWS the three and must not widen them, so a login cut down
+to BNN still sees only BNN.
+
+**Life of Plot is deliberately untouched.** It shares the same map component
+and it is not PALMS — it is the history of every plot, `-R` plots included,
+which is exactly why `skipReplant` is opt-in there too. The office said 这里,
+and this is the board.
+
+### Plot Motion Study也不需要存在
+
+The page is **deleted, not hidden**. It wrote nothing — it read the plot log
+and drew cycle times — so nothing of the record goes with it, which is what
+made 不需要存在 safe to take literally.
+
+**What has to go with a page is everything that pointed AT it**, and there
+were three such things:
+
+- its entry in `shared/shared_palms_nav.js`, which would otherwise be a 404
+  on the one bar every PALMS page carries;
+- its row on `nursery_ops_user_access.html`, because a tick for a page nobody
+  can open is a permission that cannot be obeyed — the fault this file has a
+  heading about;
+- the two tests that read it, one of which lifted a line out of it.
+
+**A tick already saved under `palms_motion` is left alone.** Nothing reads
+it, and a file of SQL deleting somebody's saved answer is a worse thing than
+a dead key. **`motion` — *Motion Study Settings* — is a DIFFERENT row** on
+that screen and was left standing: it reads *standard timings used to plan
+the work*, which is the stage list, and it was already read by nothing before
+today. That is its own question.
+
+**`shared_palms_nav.js` was loaded BARE on its three pages**, which is the
+usual soft exposure — except here a browser holding yesterday's copy keeps a
+link to a page that no longer exists, which is a 404 somebody meets rather
+than a stale label. It carries a `?v=` now, and **Plot Life got the three
+no-cache metas** it had never had, or the number could not arrive.
+
+`tests/palms_is_the_three_nurseries.cjs` drives the real board against a
+fixture holding **all five** nurseries — a fixture of three passes just as
+green on a board that narrows nothing — and sweeps every page for anything
+still reaching for the deleted one. **8 of its 10 checks fail on the previous
+code**, the first in the office's own two names.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
@@ -6502,21 +6662,39 @@ kept exactly (inset 15%, the mark 70% of the plate), so the mark is untouched
 and there is **one plate written one way**. That is what the test can then
 hold, and it is why it asks for the plate separately from the mark.
 
-**THE PARCELS ARE POLYGONS AND NOT RECTS, which is the whole of 不规则形状的.**
-The first version was four rounded rectangles in a 2×2 and read as an
-app-launcher grid; four irregular quadrilaterals with lanes between them read
-as land. A rect cannot satisfy that ask, so the test says it in those terms:
-every parcel is a polygon, none of the four stands on two x values and two y
-values, no two are the same shape, and the lanes are drawn in the plate's own
-colour.
+**THE PARCELS ARE NOT RECTS, which is the whole of 不规则形状的.** The first
+version was four rounded rectangles in a 2×2 and read as an app-launcher grid.
+A rect cannot satisfy that ask at all, so nothing on the plate but the plate
+is square to the page.
 
-**WHAT IS NOT DONE, and it is not knowable from here:** the outer outline is a
-nursery shape and **not a tracing of BNN's own boundary**. That boundary lives
-in `shared_plots.map_top`, and this environment cannot reach Supabase — there
-is no copy of it in either repository, so drawing one would be inventing a
-shape and calling it BNN's. The answer is one screenshot of the BNN map off
-the Plot Status Map, which the outline can then be traced from; until then the
-comment in each page's head says so in as many words.
+**AND THE SHAPE IS THE OFFICE'S OWN DRAWING, because it could not be read from
+here.** *"整体形状要和bnn boundry一样"* names something that lives in
+`shared_plots.map_top`, in a database this environment cannot reach, with no
+copy in either repository — so drawing a BNN-ish outline would have been
+inventing a shape and calling it BNN's. The answer was to say so and ask, and
+the office **handed over a picture**: a ring of plot segments round a centre,
+two blue, one red, three green, four yellow, clockwise from the top.
+
+**THEIR NUMBERS ARE THE SPECIFICATION**, the same rule the papan tanda already
+follows — the office drew that board, so its margins and type sizes are named
+constants rather than taste. Ten segments is what they drew and ten is what is
+on the plate, even though eight reads a shade cleaner at 16px; a mark one
+segment different from the one they handed over is a mark somebody has to ask
+about. The test asks it as the COUNT PER COLOUR and the order round the ring,
+because that is what the picture says: a segment moved one place is the same
+drawing, a colour that lost one is not.
+
+**A RING AND NOT A PIE.** The segments stand off a centre, which is what makes
+it read as plots round a nursery rather than as a chart — each one is bounded
+by two arcs, the outer edge and the inner, and the test asks for both.
+
+**AND THE REAL BNN OUTLINE IS NOT OWED. The office was offered it and said
+no** — *不用了* — when told that one screenshot of the Plot Status Map would
+let the outline be traced exactly. So the ring is the ANSWER and not a stand-in
+for one, which is the whole reason this paragraph exists: a note saying a
+better version is still coming is a note the next person acts on, and they
+would be undoing a decision rather than finishing a job. **Do not trace the
+BNN boundary onto this mark without being asked.**
 
 **6 of the test own 24 checks fail on the previous pages**, the first of them
 being *every one of them is the house plate* — which is the two plate
@@ -7414,10 +7592,12 @@ download."* So the census hangs off the TOTAL and nowhere else: the checker is
 looking at that figure, comparing it against a drone count, and the census is
 the paper behind it. Photo or PDF, more than one file.
 
-**No census, no save** — *"c 一定要有才可以 save"* — and the refusal is the
-only thing said about it: *"只是没 census 的话按 save 会 pop out 不能 save 因为
-没 census."* No line on the form explaining the rule, no green tick saying it
-is satisfied.
+**THE CENSUS IS OPTIONAL NOW.** It was *no census, no save* — *"c 一定要有
+才可以 save"* — and the office then took the refusal off: *"现在没有census也可
+以save"*. The box stays (labelled Census, no asterisk) and a census picked
+still goes up with the save; a record with none simply has none, and Add
+Census on its card is the door later. What follows is how the census is
+carried when there is one.
 
 **IT REACHES ONLY WHAT IS KEYED NOW.** 以前填的就不需要 — every existing
 record, any batch, 271's N15 included, and a card already on the list whether
@@ -7726,6 +7906,24 @@ chosen for the office -- both are offered, marked before and after.
 
 `tests/seal_dashboard.cjs` holds the office page.
 
+## A consent downloads as a PDF, built from the saved row
+
+The Admin Portal's Customer Consent history carries a **PDF** button on every
+record (`Mobile/src/pages/Consent.jsx`, `buildConsentPdf` in
+`Mobile/src/lib/pdf.js`): the DO's letterhead, customer, AL, order, consent
+qty, AI count, every seal range, the sticker photo, the signature, the terms
+in BOTH languages (the row does not record which one was on screen) and the
+seal receipt photo.
+
+**No file is stored.** The row already holds everything the paper says, so a
+PDF kept beside it would be a second copy that a corrected seal range leaves
+behind; built on demand it is always the record as it is now, and every
+consent ever signed has one. The terms are read off the form's own
+`CONSENT_STRINGS`. A photo that will not load is named in its box rather than
+failing the download. `Mobile/tests/a_consent_downloads_as_a_pdf.cjs` drives
+the real jsPDF and reads the file back with `pdftotext`. Nothing to run in
+the database.
+
 ## Coming back to the portal is not signing in again
 
 `index.html` shows the sign-in screen until `onAuthStateChange` has read the
@@ -7738,6 +7936,56 @@ still shows the sign-in when the session has gone. A session with nothing
 remembered shows neither screen rather than the login.
 `tests/portal_back_is_not_a_sign_in.cjs` holds it against a database that
 never answers.
+
+## A Nelos case can carry a LOCATION, and it is optional
+
+The office: *"help me add location coordinate in nelos case form. and this
+is optional. make it can auto detect the location, and can manual key in
+location."* A plot is a hectare, and "the broken pipe in N12" is a walk
+round it.
+
+It is ONE box that takes `latitude, longitude` and a **Detect** button that
+fills it from the device, on all four raise forms: the dock
+(`shared/shared_nelos_dock.js`, 52 pages), the hub drawer
+(`nelos/nelos_dashboard.html`), and `NelosNewCase.jsx` in the FC Portal and
+the Admin Portal. The dock detail, the case page and the hub list show it
+as a link that opens the map. `shared/RUN_ME_nelos_case_location.sql` adds
+`nelos_cases.location_lat` / `location_lng`.
+
+- **EMPTY IS ALLOWED, A WRONG ONE IS NOT.** `parseLatLng` answers three
+  ways and all three are used: `null` is an empty box, `false` is something
+  typed that is not two numbers in range (refused before anything is
+  uploaded, by name), an object is a position. A coordinate saved wrong is
+  a pin in the sea that reads exactly like a real one.
+- **THE BOX IS NOT DRAWN UNTIL THE DATABASE HAS THE COLUMNS**, the rule the
+  document picker already follows: naming a column a table has not got is
+  the whole insert refused, so the case would be lost over its location.
+  The columns are named on a write only when there is a location.
+- **DETECT IS A PRESS, never something the form does on opening.** Asking
+  for a position puts a permission prompt on the screen, and this form is
+  on 52 office pages where most cases are raised from a desk, whose
+  position is the office and not where the problem is.
+- **A detected reading is still the person's to correct**, and every
+  failure (no permission, weak signal, no GPS) says the same thing: key it
+  in.
+- **THE DATABASE HOLDS THE RULE TOO** (`nelos_cases_location_whole`): both
+  numbers or neither, both in range. **Both `IS NOT NULL` tests are spelled
+  out**, because a comparison against an empty value answers unknown and a
+  CHECK lets unknown through. The first version accepted a latitude with no
+  longitude, and it was the scratch Postgres that said so.
+- **`parseLatLng` IS FOUR COPIES in three repositories**: the dock (loaded
+  bare, depends on nothing), `MJMNelos.parseLatLng`, and `src/lib/latLng.js`
+  in `Barcode_Counter` and `Mobile`, word for word. Change one, change the
+  others.
+- **`shared_nelos.js` carries a `?v=` on the hub and the case page now**,
+  and the case page gained the three no-cache metas. Both pages call
+  `MJMNelos.fmtLatLng`, so a new page over a cached old script would throw
+  on every case. It is still loaded bare on the other two Nelos pages,
+  which do not call it.
+
+`tests/a_case_can_carry_a_location.cjs` drives the real dock with a mocked
+geolocation and runs all four parsers over the same inputs; **31 of its 43
+checks fail on the previous code**, each by name.
 
 ## A category nothing raises is a feature somebody stopped halfway
 
@@ -8203,6 +8451,74 @@ and `shared/shared_collection_slots.js` is the one rule.
 
 `tests/the_collection_slots_are_the_setting.cjs` drives the real booking
 page and the real settings card.
+## Mata Malam is set in the office, and the app only follows
+
+Mata Malam (the night check-in app, repository `MataMalam`) keeps its data
+in this database: a guard enters with the payroll PIN, the same session as
+the Worker Portal, and everything goes through the `mata_malam_*` functions
+in `shared/RUN_ME_mata_malam.sql`.
+
+**Its settings are a card on System Setting**, after Portal View &
+Function: the task timing, each location and its own check-in times, and
+where each location is pinned on a map. The office asked for the whole of
+the app's Settings moved there, because a guard only does the check-ins.
+
+- **ONE ROW, ONE WRITER.** `mata_malam_settings` id 1 holds
+  `{ locations: { CODE: { active, slots } }, timing, pins }`, written by
+  that card as a signed in staff account under the same policy as the
+  portal switches. The app has no Settings screen, and
+  `mata_malam_save_settings` (what the app used to save with) refuses
+  everybody, so a phone on an older copy cannot write over the office.
+- **The locations are `operation_nurseries`**, the register the Location
+  card lists. BNN and UNN are on unless switched off; anything else is off
+  until switched on.
+- **Times are two lists, hour and minute, never a time box.** A time box is
+  drawn in the machine's own clock format, and the app is 24-hour only.
+- **A location has as many pins as it has places to check**, and it had one
+  for a day. `pins` is a LIST, `[{ name, location, lat, lng }]`: each click
+  on the map adds one to the location selected, a pin is dragged to move
+  it, and renamed or removed in the list under the map. The app shows the
+  distance to the NEAREST of a location's pins, by name. The one-pin shape
+  (`{ BNN: [lat, lng] }`) is still read by both sides.
+- **The pin map draws the stored boundaries behind the pins**, not
+  interactive, so a click inside one still places the pin.
+- **Nothing saved is nobody having been asked**: until the first Save the
+  phones keep the times they have, and the card says so.
+
+**ONE TASK A CHECK-IN TIME, AND ITS PINS ARE INSIDE IT.** It was a task per
+pin for a day and the office asked for it back: the To-Do List shows ONE
+task for a location at each time, and opening it (the round sheet,
+`openRoundSheet` in the app) shows a map with the location boundary and
+every pin, the pins to visit, and Check In on each, which takes one photo
+for that pin and comes back. The RECORD is still one per pin, carrying the
+pin name as `point` (a column on `mata_malam_logs`), so the office sees
+which pins were visited. A location with no pin has one check-in a time and
+no point, as before. A record with no point answers every pin of its
+location and time (`logCoversPoint`), so nothing old is marked missed. A pin
+is told apart by its NAME, so the card refuses two pins of one location
+sharing one, and a pin renamed is a new pin from that night on.
+
+**AND ONE ROAD TRACK FOR THE TASK**, started and stopped on that screen,
+running while every pin is checked in. It is stored on the task's first
+check-in made on that phone (`attachRoundRoute`); a track stopped before
+any check-in waits for the first one. The task stays in the To-Do List
+while its track is still recording, so Stop can always be reached.
+
+**What each person may USE is on Portal View & Function**, a Mata Malam
+row under Maintenance with five switches: `home` (main task), `photo`
+(capture photo), `gps` (GPS track record), `history`, `report`. It is ONE
+app and two columns: a Field Conductor, Assistant Field Conductor, Admin or
+Estate Manager reads the FC Portal column, everybody else the Worker Portal
+column. `mata_malam_access(w)` in the SQL file decides which and
+`mata_malam_state` hands the answer over as `access`; `can(fn)` in the
+app obeys it. The keys are spelled in `MATA_MALAM_FUNCTIONS` here and
+`ACCESS_FUNCTIONS` in the app. Absent is on, and a phone with no answer
+keeps the last one it had. Photo off is a check-in with no picture; gps
+off is no road track, the check-in still records where it was made.
+
+`tests/mata_malam_is_set_in_the_office.cjs` drives the card. It needs a
+`leaflet/dist` folder (`LEAFLET_DIST`) for the map half and says so rather
+than passing without it.
 
 ## Two repositories, one system
 
@@ -9743,3 +10059,94 @@ heading and cell alignment, the icons against their handlers, and a Delete
 that still confirms. **23 of its 25 checks fail on the previous page**, each
 by name. `SHOT=/dir` draws it, `VW=400` at phone width. **Nothing to run in
 the database.**
+
+## The Sales Web publishes what the Monthly Maturity Allocation says is left
+
+February 2027 read **29,042** After Deduct Reserve on Stock & Sales →
+Monthly Maturity Allocation, and the Sales Web's Publish to Sales Web
+dialog read a raw maturity of 35,027, a customer allocation of **0** and
+*"only 2,938 is currently available"*. The dialog had its own rule, and
+it was different in three places:
+
+- **The date.** It dated a transplant off the remark, then `created_at`,
+  and never `transaction_date`, so a row keyed against the wrong save day
+  matured into the wrong month.
+- **A DO came off the PLOT, whatever the batch.** Every sale ever made out
+  of U3, last year's crop included, came off February's U3. That is the
+  2,938. The office matches a DO line on the batch AND the plot.
+- **The reservation was a column nothing writes.** It read
+  `shared_plot_allocations.reserved_qty`. The customers are the chips in
+  `shared_batch_customer_allocations`, each capped at what its order still
+  owes (AL quantity less the DOs against that AL; nought for a cancelled or
+  closed AL; a spent order reserves nothing).
+
+`shared/shared_month_maturity.js` is the office rule written down, pure,
+and **`public/month-maturity.js` in MJMNursery-Sales-Web is its copy, word
+for word**. The stock, the allocation, the suitable-for-sales figure and
+Sync from Batches all read it there, so a month's product stock IS After
+Deduct Reserve (less what was moved to another product, plus what was moved
+in), and the dialog's *After deducting customer allocation* is that figure.
+
+**The office page does not read the shared file.** Its own code in
+`operation_stock_sales.js` stays the original, and
+`tests/the_sales_web_reads_the_maturity_table.cjs` is what keeps them
+together: one ledger carrying all three traps, the REAL office page's Feb
+2027 foot, the shared file, and the REAL Sales Web `computeProductStock` /
+`computeCustomerAllocation`, all compared, plus the two copies compared.
+**3 of its checks fail on the previous Sales Web code**, in the shape the
+office saw: raw low, allocation 0, available a fraction. A change to the
+office table's arithmetic is a change to this file and to its copy.
+
+Not copied, deliberately: Plot-R rows (the web sells by month), the
+location filter (it cuts the list, never the totals) and the flow-back of
+chips that no longer fit (the office page deletes those itself, so the
+database already holds the result). **Nothing to run in the database.**
+
+## The boss's AI agent reaches the system through ONE Edge Function
+
+`supabase/functions/mjm-mcp` is the MJM AI System as an MCP server (Streamable
+HTTP, JSON responses, no session), added to Claude as a custom connector. Five
+tools and nothing more: **check_stock**, **list_products**, **create_quotation**,
+**find_quotations**, **confirm_order**.
+
+- **THE LINK IS THE KEY.** A Claude connector takes a URL and nothing else, so
+  the secret rides in the path: `…/functions/v1/mjm-mcp/<MCP_SECRET>`. A wrong
+  or missing key is a plain 404. Changing `MCP_SECRET` switches the old link off.
+  It is deployed with `--no-verify-jwt` because Claude sends no Supabase login.
+- **IT RUNS AS THE SERVICE ROLE**, so row level security does not stand behind
+  it — the tools ARE the permission. It writes to `shared_quotations` and to
+  nothing else, and never deletes; the test asserts both off every request.
+- **check_stock IS THE DASHBOARD, BY CONSTRUCTION.** The Stock Analysis rule is
+  `shared/shared_stock_analysis.js`, read by the page (`classify`) and by the
+  function (`buildStockRows`, `orderBalances`, `openOrders`). The function
+  bundles only what is under `supabase/functions`, so
+  `supabase/functions/_shared/stock_analysis.js` is the SAME FILE, byte for
+  byte. Change one, copy it to the other — the test fails on a single byte.
+  `buildStockRows` is `loadMaturity()` written down; change one, change the other.
+- **A quotation is a DRAFT** numbered QOPS<n>/MM/YY the way the Quotation page
+  numbers them, and a number taken a moment ago (23505) moves to the next.
+  Only a PUBLISHED Sales Web product can be quoted at its price.
+- **confirm_order marks a quotation ACCEPTED and nothing else** — no Sales Web
+  order, no AL; the office raises those as today. That was the boss's choice
+  and is the safe first step.
+- **Dates are Malaysian.** The Edge runtime is UTC, which is the day before for
+  eight hours of every day; `myNow` / `myLocalDay` in `tools.mjs` are why.
+
+`tests/the_mcp_reads_the_dashboard.cjs` runs the REAL `index.ts` in Deno against
+a fake of Supabase's REST API serving the dashboard test's own ledger: 5,200
+available and 7,000 owed on both. It needs Deno (`npm install deno` anywhere and
+point `DENO=` at it); run it with `--node-modules-dir=none` semantics already
+built in, because the repository's `package.json` otherwise sends Deno looking
+for a local `node_modules`. It kills its function by PROCESS GROUP — the npm
+wrapper starts the real binary as a child, and killing the wrapper alone left a
+stale function answering on port 8000 for the next run.
+
+## A scan point is a phone, and a reset clears only its own seals
+
+The FC Portal lets two places scan one order at once and reset their own
+part. `shared/RUN_ME_scan_points.sql` is the database half: the
+`scan_point` columns on `fcportal_scan_records`, the ONE deleting function
+`fcportal_reset_scans` (by point id; never a row already on a DO; the
+rows naming no point only when asked), a `fcportal_scan_resets` log of who
+reset what, and the DO press-id index again. Its check names suspected
+twin DOs. The rules are in `FC-Portal/CLAUDE.md`.

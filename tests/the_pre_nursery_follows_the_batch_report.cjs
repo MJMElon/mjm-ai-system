@@ -110,5 +110,56 @@ console.log('\nA transplant saved "from tray [P11-P13]" or "[P32, P33. P34]" is 
   check('a list naming no tray of the batch is left exactly as it was', r3.bal['X9, X10'], -100);
 }
 
+console.log('\nA tray figure an approved calibration explains is DOTTED (224 DOUBLE-TONE, 234 PREMIUM CARE)');
+{
+  const a = src.indexOf('  const batchCals = {};');
+  const b = src.indexOf('  const ctx = {', a);
+  if (a < 0 || b < 0) { check('the page collects approved calibrations by batch', 'no batchCals block', 'present'); }
+  else {
+    const calBlock = src.slice(a, b);
+    const B = (type, plot, qty, remark, batch) => ({ transaction_type: type, batch_name: batch, plot_name: plot,
+      transaction_date: '2026-10-05', created_at: '2026-10-05T08:00:00Z', quantity_change: qty, remark: remark || '' });
+    const logs = [
+      // 224: the d-tone tray reads -1, its calibration names the tray
+      B('DTone_Nursery_Qty', 'DOUBLE-TONE', 10, '', '224'),
+      B('Transplanted', 'N5', 11, 'Transplanted from tray [DOUBLE-TONE] to Main Plot [N5]. Date: 2026-10-09', '224'),
+      B('Stock_Calibration', 'N5', -1, 'Report: Transplanting. Plot: N5. Tray: DOUBLE-TONE. Over allocated [APPROVED by Esther on 2026-10-20]', '224'),
+      // 234: premium care reads 6, its calibration names NO tray -- matched on the exact size
+      B('Planted', 'P7', 100, '', '234'),
+      B('Transplanted_Premium', 'PREMIUM CARE', 6, 'Moved from tray [P7] to PREMIUM CARE tray. Date: 2026-10-06', '234'),
+      B('Stock_Calibration', 'N5', 6, 'Report: Transplanting. Plot: N5. Found 6 more [APPROVED by Esther on 2026-10-20]', '234'),
+      // a second calibration on the same batch, so the SUM is not the figure
+      B('Stock_Calibration', 'N9', -20, 'Report: Transplanting. Plot: N9. Count short [APPROVED by Esther on 2026-10-21]', '234'),
+      // 300: a tray reading 7 with an unapproved calibration and one of another size -- not dotted
+      B('Planted', 'P9', 7, '', '300'),
+      B('Stock_Calibration', 'N5', 3, 'Report: Transplanting. Plot: N5. Pending', '300'),
+    ];
+    const code = helpers + `
+      const passMain = (plot) => plot === 'N5';
+    ` + eventBlock + calBlock + `
+      const pre = ev.filter(e => e.sc === 'pre');
+      _mvDetailPool = [];
+      const html = buildMovementSection('pre', pre, { fromMs: -Infinity, toMs: Infinity, fromStr: '', toStr: '',
+        groupBy: 'plot', plotToLoc: {}, trayNursery: {}, batchPlantedAt: {}, saleDetails: {}, colDetails, unmatchedSales: [], batchCals });
+      return { html, pool: _mvDetailPool };
+    `;
+    const out = new Function('logs', code)(logs);
+    const rowOf = (place, batch) => {
+      return out.html.split('<tr').find(t => t.indexOf('>' + place + '<') >= 0 && t.indexOf('>' + batch + '<') >= 0) || '';
+    };
+    const dotted = (place, batch) => (rowOf(place, batch).match(/t3-cal-dot/g) || []).length;
+    check('224 DOUBLE-TONE -1 is dotted', dotted('DOUBLE-TONE', '224') > 0, true);
+    check('234 PREMIUM CARE 6 is dotted, matched on its exact size', dotted('PREMIUM CARE', '234') > 0, true);
+    check('a tray with no approved calibration of its size is NOT dotted', dotted('P9', '300'), 0);
+    const tip = out.pool.find(p => p.title === 'Stock Calibration' && p.rows.some(r => r.qty === -1));
+    check('the hover names the calibration: its qty and its reason', !!tip && /Over allocated/.test(tip.rows[0].label), true);
+    check('the hover leaves the approval marker out', !!tip && !/APPROVED/.test(tip.rows[0].label), true);
+    check('the calibration hover is drawn in FULL (show full), never cut to an ellipsis', !!tip && tip.full === true, true);
+    const fs = require('fs');
+    const page = fs.readFileSync(require('path').join(__dirname, '..', 'operation', 'operation_reports.html'), 'utf8');
+    check('a full entry wraps its label instead of truncating it', /entry\.full[\s\S]{0,400}whitespace-normal/.test(page), true);
+  }
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
