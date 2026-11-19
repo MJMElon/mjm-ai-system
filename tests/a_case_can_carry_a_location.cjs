@@ -314,6 +314,58 @@ async function pickWorkAndSave(page) {
           /RUN_ME_nelos_case_location\.sql/.test(read('tests/sql_pastes_into_the_editor.cjs')), true);
   }
 
+  console.log('\n8. THE LOCATION OPENS IN GAIA, and Maps always stands beside it');
+  {
+    /* The office: "if i saw the case and click the location, can it bring
+       me to there by gaia?" On a phone it is the app link, which does
+       nothing where the app is not installed -- so it is a SECOND door
+       and the Maps one is never taken away. On a desk there is no app, so
+       it is the Gaia web map, whose address is zoom / LONGITUDE /
+       latitude: the order is the thing to get wrong. */
+    const liftG = (file, re, ua) => {
+      let src;
+      try { src = fs.readFileSync(file, 'utf8'); } catch (_) { return null; }
+      const m = re.exec(src);
+      if (!m) return null;
+      let i = src.indexOf('{', src.indexOf(')', m.index)), depth = 0, j = i;
+      for (; j < src.length; j++) {
+        if (src[j] === '{') depth++;
+        else if (src[j] === '}' && --depth === 0) break;
+      }
+      const body = src.slice(m.index, j + 1).replace(/^export\s+/, '');
+      return vm.runInNewContext('(' + body + ')', { navigator: { userAgent: ua } });
+    };
+    const PHONE = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile';
+    const DESK  = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+    const files = {
+      dock:   [path.join(ROOT, 'shared/shared_nelos_dock.js'), /function gaiaHref\(/],
+      nelos:  [path.join(ROOT, 'shared/shared_nelos.js'), /function gaiaHref\(/],
+      fc:     [path.join(ROOT, '../Barcode_Counter/src/lib/latLng.js'), /export function gaiaHref\(/],
+      mobile: [path.join(ROOT, '../Mobile/src/lib/latLng.js'), /export function gaiaHref\(/],
+    };
+    for (const k of Object.keys(files)) {
+      const onPhone = liftG(files[k][0], files[k][1], PHONE);
+      const onDesk  = liftG(files[k][0], files[k][1], DESK);
+      if (!onPhone) {
+        if (k === 'dock' || k === 'nelos') check('the ' + k + ' copy has a Gaia link', 'not found', 'found');
+        else console.log('  --   ' + k + ' copy not checked out here, not compared');
+        continue;
+      }
+      check(k + ': a phone opens the Gaia app at the spot',
+            onPhone(4.123457, 117.876543), 'gaiagps://map?lat=4.123457&lng=117.876543&z=17');
+      check(k + ': a desk opens the Gaia web map, longitude first',
+            onDesk(4.123457, 117.876543), 'https://www.gaiagps.com/map/?loc=17.0/117.876543/4.123457');
+    }
+    const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const dock = read('shared/shared_nelos_dock.js');
+    check('the dock detail offers Gaia', /nd-d-gaia/.test(dock), true);
+    check('and still offers Maps beside it', />Maps<\/a>/.test(dock), true);
+    check('the case page offers Gaia', /c-gaia-link/.test(read('nelos/nelos_case.html')), true);
+    check('and still offers Maps', /c-loc-link/.test(read('nelos/nelos_case.html')), true);
+    check('the hub sheet offers both', /Open the location in Gaia GPS/.test(read('nelos/nelos_dashboard.html')) &&
+          /Open the location in Maps/.test(read('nelos/nelos_dashboard.html')), true);
+  }
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

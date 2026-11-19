@@ -15,7 +15,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_nelos.js?v=20261119a"></script>
+<script src="../shared/shared_nelos.js?v=20261119b"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -143,6 +143,15 @@
               border-radius:12px;background:#fefafd;font-size:12.5px;font-weight:800;color:#511f41;
               text-decoration:none;overflow-wrap:anywhere;">
       <span aria-hidden="true">📍</span><span id="c-loc-label"></span>
+    </a>
+    <!-- …and the same spot in Gaia GPS, which is the map the nursery walks
+         by. A second door and never the only one: on a phone without the
+         app this link does nothing. -->
+    <a id="c-gaia-link" class="hidden mt-2"
+       style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #d1fae5;
+              border-radius:12px;background:#f0fdf4;font-size:12.5px;font-weight:800;color:#1b4332;
+              text-decoration:none;">
+      <span aria-hidden="true">🧭</span><span>Open in Gaia GPS</span>
     </a>
 
     <div class="grid grid-cols-3 gap-3 mt-4 p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
@@ -292,8 +301,11 @@ function renderCase() {
     $('c-loc-link').href = MJMNelos.mapsHref(c.location_lat, c.location_lng);
     $('c-loc-label').textContent = locText + ' — open in Maps';
     $('c-loc-link').classList.remove('hidden');
+    $('c-gaia-link').href = MJMNelos.gaiaHref(c.location_lat, c.location_lng);
+    $('c-gaia-link').classList.remove('hidden');
   } else {
     $('c-loc-link').classList.add('hidden');
+    $('c-gaia-link').classList.add('hidden');
   }
 
   const pending = c.status === 'open' || c.status === 'in_progress';

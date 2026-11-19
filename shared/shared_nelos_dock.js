@@ -779,6 +779,8 @@
   .nd-loc-msg:empty { display:none; }
   .nd-loc-msg.bad { color:#b91c1c; }
   .nd-d-loc { color:#913673; font-weight:800; text-decoration:underline; }
+  .nd-d-go { display:flex; gap:10px; margin-top:3px; }
+  .nd-d-gaia { color:#1b4332; }
   .nd-err { font-size:10.5px; font-weight:800; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca;
             border-radius:9px; padding:8px 10px; margin-bottom:10px; line-height:1.5; }
   .nd-err[hidden] { display:none; }
@@ -2119,9 +2121,15 @@
                 nothing on most of them. Opens the map, which is the only
                 thing anybody does with two numbers. */
              (fmtLatLng(f.location_lat, f.location_lng)
-               ? fact('Location', '<a class="nd-d-loc" target="_blank" rel="noopener" href="' +
-                      esc(mapsHref(f.location_lat, f.location_lng)) + '">&#128205; ' +
-                      esc(fmtLatLng(f.location_lat, f.location_lng)) + '</a>')
+               ? fact('Location', '&#128205; ' + esc(fmtLatLng(f.location_lat, f.location_lng)) +
+                      /* Two doors, never one: the Gaia link does nothing
+                         on a phone without the app. No target on it — an
+                         app link in a new tab leaves an empty tab behind. */
+                      '<span class="nd-d-go">' +
+                      '<a class="nd-d-loc nd-d-gaia" href="' +
+                        esc(gaiaHref(f.location_lat, f.location_lng)) + '">Gaia</a>' +
+                      '<a class="nd-d-loc" target="_blank" rel="noopener" href="' +
+                        esc(mapsHref(f.location_lat, f.location_lng)) + '">Maps</a></span>')
                : '') +
            '</div>' +
            body +
@@ -2898,6 +2906,24 @@
     return 'https://www.google.com/maps?q=' + encodeURIComponent(Number(lat) + ',' + Number(lng));
   }
 
+  /* OPEN IT IN GAIA GPS, which is the map the nursery walks by.
+
+     On a PHONE this is the app's own link, which opens Gaia GPS on the spot
+     if it is installed and does nothing at all if it is not — which is why
+     the Maps link always stands beside it and is never replaced by it. On a
+     desk there is no app to open, so it is the Gaia web map, where the
+     address is zoom / longitude / latitude, in that order.
+
+     It CENTRES the map on the spot. It does not drop a waypoint: the link
+     has no word for one. */
+  function gaiaHref(lat, lng) {
+    var a = Number(lat), b = Number(lng);
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) {
+      return 'gaiagps://map?lat=' + a + '&lng=' + b + '&z=17';
+    }
+    return 'https://www.gaiagps.com/map/?loc=17.0/' + b + '/' + a;
+  }
+
   /* DETECT. Writes into the box it was pressed beside and nothing else,
      so a reading that arrives after the form was rebuilt lands in markup
      nobody is looking at rather than on the next case. Every failure says
@@ -3448,7 +3474,7 @@ async function uploadPhoto(token) {
      it raises a case of its own: window.NelosDock.refresh() */
   window.NelosDock = {
     /* The location rules, so a test drives the shipped ones. */
-    _loc: { parse: parseLatLng, fmt: fmtLatLng, href: mapsHref },
+    _loc: { parse: parseLatLng, fmt: fmtLatLng, href: mapsHref, gaia: gaiaHref },
     refresh: function () { if (dock) refresh(); },
     open:    function () { if (dock) setOpen(true); },
     close:   function () { if (dock) setOpen(false); },

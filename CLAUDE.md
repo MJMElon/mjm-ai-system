@@ -7983,6 +7983,25 @@ as a link that opens the map. `shared/RUN_ME_nelos_case_location.sql` adds
   on every case. It is still loaded bare on the other two Nelos pages,
   which do not call it.
 
+**AND IT OPENS IN GAIA GPS**, which the office asked for next: *"if i saw
+the case and click the location, can it bring me to there by gaia?"* Every
+screen that shows a location offers **Gaia** and **Maps** side by side: the
+dock detail, the case page, the hub sheet, and the case view on both phone
+apps (`NelosWindow.jsx`, `NelosCase.jsx`), which had not been showing the
+location at all. `gaiaHref` is the rule, in the same four files as
+`parseLatLng`.
+
+- **TWO DOORS, NEVER ONE.** On a phone the link is the app's own
+  (`gaiagps://map?lat=…&lng=…&z=17`), which does NOTHING where Gaia GPS is
+  not installed, so Maps is never replaced by it.
+- **On a desk it is the Gaia web map**, whose address is zoom / LONGITUDE /
+  latitude. The order is the thing to get wrong.
+- **No `target` on the app link**: opened in a new tab it leaves an empty
+  tab behind.
+- **It CENTRES the map and drops no waypoint**, the link having no word for
+  one. **Neither link could be tried against a real Gaia install from
+  here**, so the first press on a phone is the proof.
+
 `tests/a_case_can_carry_a_location.cjs` drives the real dock with a mocked
 geolocation and runs all four parsers over the same inputs; **31 of its 43
 checks fail on the previous code**, each by name.

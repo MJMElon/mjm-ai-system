@@ -723,9 +723,27 @@
     return 'https://www.google.com/maps?q=' + encodeURIComponent(Number(lat) + ',' + Number(lng));
   }
 
+  /* OPEN IT IN GAIA GPS, which is the map the nursery walks by.
+
+     On a PHONE this is the app's own link, which opens Gaia GPS on the spot
+     if it is installed and does nothing at all if it is not — which is why
+     the Maps link always stands beside it and is never replaced by it. On a
+     desk there is no app to open, so it is the Gaia web map, where the
+     address is zoom / longitude / latitude, in that order.
+
+     It CENTRES the map on the spot. It does not drop a waypoint: the link
+     has no word for one. */
+  function gaiaHref(lat, lng) {
+    const a = Number(lat), b = Number(lng);
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) {
+      return 'gaiagps://map?lat=' + a + '&lng=' + b + '&z=17';
+    }
+    return 'https://www.gaiagps.com/map/?loc=17.0/' + b + '/' + a;
+  }
+
   const api = {
     init, raise, pending, countPending, mountTodo,
-    parseLatLng, fmtLatLng, mapsHref,
+    parseLatLng, fmtLatLng, mapsHref, gaiaHref,
     handOff, takeHandOff,
     scope, inScope, applyScope,
     homeHref, caseHref,

@@ -15,7 +15,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_nelos.js?v=20261119a"></script>
+<script src="../shared/shared_nelos.js?v=20261119b"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -1543,7 +1543,8 @@ function caseBlockHtml(c) {
      a row in the block below; this is the door. */
   const locLink = MJMNelos.fmtLatLng(c.location_lat, c.location_lng)
     ? `<a class="s-case-doc" href="${esc(MJMNelos.mapsHref(c.location_lat, c.location_lng))}"
-         target="_blank" rel="noopener">📍 Open the location in Maps</a>`
+         target="_blank" rel="noopener">📍 Open the location in Maps</a>
+       <a class="s-case-doc" href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">🧭 Open the location in Gaia GPS</a>`
     : '';
 
   return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot + doc + locLink +
