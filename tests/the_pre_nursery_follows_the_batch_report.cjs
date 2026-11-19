@@ -128,6 +128,8 @@ console.log('\nA tray figure an approved calibration explains is DOTTED (224 DOU
       B('Planted', 'P7', 100, '', '234'),
       B('Transplanted_Premium', 'PREMIUM CARE', 6, 'Moved from tray [P7] to PREMIUM CARE tray. Date: 2026-10-06', '234'),
       B('Stock_Calibration', 'N5', 6, 'Report: Transplanting. Plot: N5. Found 6 more [APPROVED by Esther on 2026-10-20]', '234'),
+      // a second calibration on the same batch, so the SUM is not the figure
+      B('Stock_Calibration', 'N9', -20, 'Report: Transplanting. Plot: N9. Count short [APPROVED by Esther on 2026-10-21]', '234'),
       // 300: a tray reading 7 with an unapproved calibration and one of another size -- not dotted
       B('Planted', 'P9', 7, '', '300'),
       B('Stock_Calibration', 'N5', 3, 'Report: Transplanting. Plot: N5. Pending', '300'),
