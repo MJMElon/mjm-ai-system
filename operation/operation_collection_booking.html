@@ -18,6 +18,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
+<script src="../shared/shared_collection_slots.js?v=20261119a"></script>
 <script>
 window.MJM_PAGE_GATE = (async () => {
   try {
@@ -656,8 +657,8 @@ async function applyFullyBookedFlag(flag) {
     return;
   }
   var d = new Date(ds + 'T00:00:00');
-  var defOpen = existing.open_hour || (d.getDay() === 6 ? 8 : 8);
-  var defClose = existing.close_hour || (d.getDay() === 6 ? 12 : 17);
+  var defOpen = existing.open_hour || MJMCollectionSlots.opening(d.getDay() === 6 ? 6 : 1);
+  var defClose = existing.close_hour || MJMCollectionSlots.closing(d.getDay() === 6 ? 6 : 1);
   // Preserve any remark currently in the banner inputs (the operator may
   // have just typed one and clicked Mark Fully Booked without saving).
   var extEl = document.getElementById('ovr-ext-note');
@@ -771,8 +772,8 @@ async function saveFullyBookedNotes() {
     date_str: ds,
     is_open: true,
     is_fully_booked: true,
-    open_hour: existing.open_hour || (d.getDay() === 6 ? 8 : 8),
-    close_hour: existing.close_hour || (d.getDay() === 6 ? 12 : 17),
+    open_hour: existing.open_hour || MJMCollectionSlots.opening(d.getDay() === 6 ? 6 : 1),
+    close_hour: existing.close_hour || MJMCollectionSlots.closing(d.getDay() === 6 ? 6 : 1),
     note: (existing && existing.note) || 'Fully booked remark',
     external_note: ext,
     internal_note: intl,
@@ -899,24 +900,25 @@ function buildOverrideBanner(ds) {
   } else if (override && !override.is_open) {
     statusCls = 'closed';
     statusText = '🚫 <b>Override:</b> Manually Closed' + (defaultReason ? '' : ' (was open by default)');
-    controls = '<select id="ovr-open-h">' + buildHourOptions(8) + '</select>' +
+    controls = '<select id="ovr-open-h">' + buildHourOptions(MJMCollectionSlots.opening(1)) + '</select>' +
                '<span style="color:white;font-weight:900;">→</span>' +
-               '<select id="ovr-close-h">' + buildHourOptions(17) + '</select>' +
+               '<select id="ovr-close-h">' + buildHourOptions(MJMCollectionSlots.closing(1)) + '</select>' +
                '<button class="override-btn" onclick="saveOverrideOpen()">✅ Open</button>' +
                '<button class="override-btn" onclick="resetDateOverride()">↩ Reset</button>';
     showNotes = true;
   } else if (defaultReason) {
     statusCls = 'default-closed';
     statusText = '🚫 <b>Closed:</b> ' + defaultReason + ' (default)';
-    controls = '<select id="ovr-open-h">' + buildHourOptions(8) + '</select>' +
+    controls = '<select id="ovr-open-h">' + buildHourOptions(MJMCollectionSlots.opening(1)) + '</select>' +
                '<span style="font-weight:900;">→</span>' +
-               '<select id="ovr-close-h">' + buildHourOptions(17) + '</select>' +
+               '<select id="ovr-close-h">' + buildHourOptions(MJMCollectionSlots.closing(1)) + '</select>' +
                '<button class="override-btn" onclick="saveOverrideOpen()">✅ Open this Day</button>';
     showNotes = true;
   } else {
     statusCls = 'open';
     var d = new Date(ds + 'T00:00:00');
-    var defHrs = d.getDay() === 6 ? '8 AM – 12 PM' : '8 AM – 5 PM';
+    var _dw = d.getDay() === 6 ? 6 : 1;
+    var defHrs = formatHour(MJMCollectionSlots.opening(_dw)) + ' – ' + formatHour(MJMCollectionSlots.closing(_dw));
     statusText = '✅ <b>Open</b> (default ' + defHrs + ')';
     controls = '<button class="override-btn" onclick="applyFullyBookedFlag(true)">🔒 Mark Fully Booked</button>' +
                '<button class="override-btn danger" onclick="applyDateOverride(false)">🚫 Close this Day</button>';
@@ -931,8 +933,21 @@ function buildOverrideBanner(ds) {
 
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const HOURS_WEEKDAY = [8,9,10,11,12,13,14,15,16];
-const HOURS_SAT = [8,9,10,11];
+// The slots are the System Settings ones (Seedling Stock Management ->
+// System Settings -> Collection Time Slot), filled IN PLACE by
+// applySlotSettings() so every reader of these two arrays follows the
+// setting. What is written here is only the default, which is exactly the
+// setting's own default.
+const HOURS_WEEKDAY = MJMCollectionSlots.hours(1);
+const HOURS_SAT = MJMCollectionSlots.hours(6);
+function slotHoursOf(d) { return d.getDay() === 6 ? HOURS_SAT : HOURS_WEEKDAY; }
+function applySlotSettings() {
+  var S = MJMCollectionSlots, st = S.get();
+  HOURS_WEEKDAY.splice.apply(HOURS_WEEKDAY, [0, HOURS_WEEKDAY.length].concat(S.hours(1)));
+  HOURS_SAT.splice.apply(HOURS_SAT, [0, HOURS_SAT.length].concat(S.hours(6)));
+  RATE = st.rate_per_hour;
+  MAX_LOAD_PER_HOUR = st.max_load_per_hour;
+}
 
 function getMonday(d) {
   const dt = new Date(d);
@@ -1037,7 +1052,8 @@ async function loadMonthBookings() {
 
 async function loadAll() {
   try {
-    await Promise.all([loadALData(), loadDateOverrides(), calView === 'month' ? loadMonthBookings() : loadBookings()]);
+    await Promise.all([loadALData(), loadDateOverrides(), MJMCollectionSlots.load(_supabase), calView === 'month' ? loadMonthBookings() : loadBookings()]);
+    applySlotSettings();
     renderCalendar();
   } catch(err) {
     console.error('loadAll error:', err);
@@ -1110,8 +1126,9 @@ function isPast(d) {
 }
 
 // CAPACITY CONFIG
-var RATE = 350;              // seedlings processed per hour per booking
-var MAX_LOAD_PER_HOUR = 600; // max total seedling load per hour
+// Both come off System Settings -> Collection Time Slot (applySlotSettings).
+var RATE = MJMCollectionSlots.get().rate_per_hour;              // seedlings processed per hour per booking
+var MAX_LOAD_PER_HOUR = MJMCollectionSlots.get().max_load_per_hour; // max total seedling load per hour
 
 function hoursNeeded(qty) { return Math.ceil(qty / RATE); }
 function hourlyLoad(qty) { var hrs = hoursNeeded(qty); return qty / hrs; }
@@ -1140,8 +1157,7 @@ function isSlotFull(date, hour) {
 
 function getDayBookedSlotCount(date) {
   const ds = formatDate(date);
-  const dow = date.getDay();
-  const hours = dow === 6 ? HOURS_SAT : HOURS_WEEKDAY;
+  const hours = slotHoursOf(date);
   var count = 0;
   hours.forEach(h => { if (getBookingsFor(date, h).length > 0) count++; });
   return count;
@@ -1164,14 +1180,15 @@ function renderDesktop() {
     html += '<div class="cal-header' + todayCls + holidayCls + '" style="cursor:pointer;" onclick="openDayModal(\'' + formatDate(d) + '\')">' + DAYS[i] + '<br>' + formatDateDisplay(d) + countBadge + holidayTag + '</div>';
   }
 
-  const allHours = HOURS_WEEKDAY;
+  // Every hour EITHER day type offers, so a Saturday longer than a weekday
+  // still has rows to draw on; a cell outside its own day's hours is Closed.
+  const allHours = Array.from(new Set(HOURS_WEEKDAY.concat(HOURS_SAT))).sort((a, b) => a - b);
   allHours.forEach(h => {
     html += '<div class="cal-time">' + formatHour(h) + '</div>';
     for (let i = 0; i < 6; i++) {
       const d = new Date(currentWeekStart);
       d.setDate(d.getDate() + i);
-      const isSat = i === 5;
-      const isClosed = isSat && h >= 12;
+      const isClosed = slotHoursOf(d).indexOf(h) < 0;
       const todayCls = isToday(d) ? ' today-col' : '';
       const holidayColCls = getHoliday(formatDate(d)) ? ' holiday-col' : '';
       const past = isPast(d);
@@ -1351,8 +1368,7 @@ let bookingDayBookings = [];
 function closingHour(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const dow = d.getDay();
-  if (dow === 0) return 0;
-  return dow === 6 ? 12 : 17;
+  return MJMCollectionSlots.closing(dow);
 }
 
 function bkCanFit(dateStr, startH, qty) {

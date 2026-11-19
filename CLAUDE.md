@@ -8179,6 +8179,31 @@ tray the batch was planted into is left as it was.
 `tests/the_pre_nursery_follows_the_batch_report.cjs`; nothing to run in
 the database.
 
+## Collection time slots are a SYSTEM SETTING
+
+Seedling Stock Management -> System Settings -> **Collection Time Slot**
+sets the hours a collection can be booked in (Monday to Friday, Saturday;
+Sunday stays closed) and the two load figures (seedlings one booking loads
+in an hour, and the most one hour slot may take). It is the one row of
+`shared_collection_slot_settings` (`shared/RUN_ME_collection_slot_settings.sql`)
+and `shared/shared_collection_slots.js` is the one rule.
+
+- **The defaults are the hours the page had written in** (8-5, Sat 8-12,
+  350, 600), so a database without the table books exactly as before.
+- **A date override still wins**: Close / Open / Fully Booked on one date
+  keeps its own hours. The setting is the default for every other day.
+- `operation_collection_booking.html` fills `HOURS_WEEKDAY` / `HOURS_SAT`
+  IN PLACE (`applySlotSettings`) so every reader of them follows it.
+- **NOT YET FOLLOWING IT, each with its own copy of 8-5 / 350 / 600:**
+  `mobile/mobile_booking.html` here, `Mobile/src/pages/Booking.jsx` (Admin
+  Portal), the Sales Web customer booking (`_BE_HRS_WD` in
+  `src/pages/shop/main.js`) and `CollectionTimeBooking/index.html`. Change
+  the setting and those still offer the old hours until they read the
+  same row.
+
+`tests/the_collection_slots_are_the_setting.cjs` drives the real booking
+page and the real settings card.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
