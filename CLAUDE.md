@@ -7680,6 +7680,56 @@ remembered shows neither screen rather than the login.
 `tests/portal_back_is_not_a_sign_in.cjs` holds it against a database that
 never answers.
 
+## A Nelos case can carry a LOCATION, and it is optional
+
+The office: *"help me add location coordinate in nelos case form. and this
+is optional. make it can auto detect the location, and can manual key in
+location."* A plot is a hectare, and "the broken pipe in N12" is a walk
+round it.
+
+It is ONE box that takes `latitude, longitude` and a **Detect** button that
+fills it from the device, on all four raise forms: the dock
+(`shared/shared_nelos_dock.js`, 52 pages), the hub drawer
+(`nelos/nelos_dashboard.html`), and `NelosNewCase.jsx` in the FC Portal and
+the Admin Portal. The dock detail, the case page and the hub list show it
+as a link that opens the map. `shared/RUN_ME_nelos_case_location.sql` adds
+`nelos_cases.location_lat` / `location_lng`.
+
+- **EMPTY IS ALLOWED, A WRONG ONE IS NOT.** `parseLatLng` answers three
+  ways and all three are used: `null` is an empty box, `false` is something
+  typed that is not two numbers in range (refused before anything is
+  uploaded, by name), an object is a position. A coordinate saved wrong is
+  a pin in the sea that reads exactly like a real one.
+- **THE BOX IS NOT DRAWN UNTIL THE DATABASE HAS THE COLUMNS**, the rule the
+  document picker already follows: naming a column a table has not got is
+  the whole insert refused, so the case would be lost over its location.
+  The columns are named on a write only when there is a location.
+- **DETECT IS A PRESS, never something the form does on opening.** Asking
+  for a position puts a permission prompt on the screen, and this form is
+  on 52 office pages where most cases are raised from a desk, whose
+  position is the office and not where the problem is.
+- **A detected reading is still the person's to correct**, and every
+  failure (no permission, weak signal, no GPS) says the same thing: key it
+  in.
+- **THE DATABASE HOLDS THE RULE TOO** (`nelos_cases_location_whole`): both
+  numbers or neither, both in range. **Both `IS NOT NULL` tests are spelled
+  out**, because a comparison against an empty value answers unknown and a
+  CHECK lets unknown through. The first version accepted a latitude with no
+  longitude, and it was the scratch Postgres that said so.
+- **`parseLatLng` IS FOUR COPIES in three repositories**: the dock (loaded
+  bare, depends on nothing), `MJMNelos.parseLatLng`, and `src/lib/latLng.js`
+  in `Barcode_Counter` and `Mobile`, word for word. Change one, change the
+  others.
+- **`shared_nelos.js` carries a `?v=` on the hub and the case page now**,
+  and the case page gained the three no-cache metas. Both pages call
+  `MJMNelos.fmtLatLng`, so a new page over a cached old script would throw
+  on every case. It is still loaded bare on the other two Nelos pages,
+  which do not call it.
+
+`tests/a_case_can_carry_a_location.cjs` drives the real dock with a mocked
+geolocation and runs all four parsers over the same inputs; **31 of its 43
+checks fail on the previous code**, each by name.
+
 ## A category nothing raises is a feature somebody stopped halfway
 
 Automate Cases lists exactly the `nelos_categories` rows carrying an
