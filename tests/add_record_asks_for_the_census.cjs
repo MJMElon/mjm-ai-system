@@ -346,25 +346,12 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   console.log('\nThe running total is the figure the checker will compare');
   check('680 + 377, said on the card as it is keyed', two.total, '1,057');
 
-  console.log('\n── 3 · NO CENSUS, NO SAVE ──');
-  await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.__DELETED = []; window.__UPLOADS = []; });
-  await page.evaluate(async () => { await window.saveTransplantTab(); });
-  await page.waitForTimeout(600);
-  const refused = await page.evaluate(() => ({
-    toasts: window.__TOASTS,
-    rows: (window.__INSERTED || []).filter(r => r && /^Transplanted/.test(String(r.transaction_type || ''))).length,
-    cards: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplant_Card').length,
-    deleted: (window.__DELETED || []).filter(d => d.table === 'shared_inventory_logs').length,
-    uploads: (window.__UPLOADS || []).length,
-    btn: (document.getElementById('save-transplant-btn') || {}).disabled
-  }));
-  checkTrue('it says no census, and says WHICH record',
-            refused.toasts.some(t => t.t === 'error' && /no census/i.test(t.m)));
-  check('…and NOTHING is written — not a row, not a card, not even the delete',
-        [refused.rows, refused.cards, refused.deleted], [0, 0, 0]);
-  check('…nor is a census uploaded for a save that refused', refused.uploads, 0);
-  checkFalse('…and the button comes back, so it can be pressed again', refused.btn);
-  check('…and it says nothing else — no explaining line, just the refusal', refused.toasts.length, 1);
+  console.log('\n── 3 · THE CENSUS IS OPTIONAL (没有census也可以save) ──');
+  /* It was compulsory and the office took that off. The save without one is
+     driven in section 9, on a card of its own, so this record keeps its
+     census for section 4. Here only the label: no asterisk. */
+  checkFalse('the census label no longer carries an asterisk',
+             await page.evaluate((n) => /Census\s*\*/.test(document.getElementById(`transplant-draft-${n}-head`).textContent), N));
 
   console.log('\n── 4 · WITH A CENSUS IT SAVES, AND THE CENSUS GOES WITH IT ──');
   await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.__DELETED = []; window.__UPLOADS = []; });
@@ -707,15 +694,23 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   await page.waitForTimeout(300);
   checkFalse('the card went with its last tray',
              await page.evaluate((n) => !!document.getElementById(`transplant-draft-${n}`), N3));
-  /* And the proof the census went with it: a brand-new card refuses to save,
-     which it could not do if the old census had been left lying about. */
-  await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.addTransplantRow(); });
+  /* And the proof the census went with it: a brand-new card with nothing
+     attached SAVES -- the census is optional now -- and uploads nothing,
+     which it would if the old census had been left lying about. */
+  await page.evaluate(() => { window.__TOASTS = []; window.__INSERTED = []; window.__UPLOADS = []; window.addTransplantRow(); });
   const N4 = await liveDraft(page);
   await fillDraft(page, N4, '2026-10-22', [55]);
   await page.evaluate(async () => { await window.saveTransplantTab(); });
-  await page.waitForTimeout(700);
-  checkTrue('…and the next record is asked for its own census, not given the last one',
-            await page.evaluate(() => (window.__TOASTS || []).some(t => t.t === 'error' && /no census/i.test(t.m))));
+  await page.waitForTimeout(1200);
+  const plain = await page.evaluate(() => ({
+    toasts: window.__TOASTS,
+    rows: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 55).length,
+    cards: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplant_Card').length,
+    uploads: (window.__UPLOADS || []).length
+  }));
+  check('a record with NO census saves', plain.rows, 1);
+  checkFalse('…with no error and nothing said about a census', plain.toasts.some(t => t.t === 'error' || /census/i.test(t.m)));
+  check('…and nothing is uploaded, so the last card census did not ride onto it', [plain.uploads, plain.cards], [0, 0]);
 
   await browser.close();
   server.close();

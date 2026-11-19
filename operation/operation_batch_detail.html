@@ -6727,7 +6727,7 @@
                             </div>
                         </div>
                         <div>
-                            <label class="label-style !text-[#c07820]">Census *</label>
+                            <label class="label-style !text-[#c07820]">Census</label>
                             <div id="${id}-censuszone" class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#f3efe6] transition-colors"
                                  onclick="document.getElementById('${id}-censuspick').click()">
                                 <span class="text-[11px] font-bold text-[#8a7a68] uppercase tracking-wider pointer-events-none">+ Photo or PDF</span>
@@ -7484,45 +7484,20 @@
 
                 if (!batchId) throw new Error("No batch number found. Please complete Tab 1 first.");
 
-                /* ══ NO CENSUS, NO SAVE — AND ONLY FOR WHAT IS KEYED NOW ═════
-
-                   The office asked for the census to be compulsory in one line:
-                   *"c 一定要有才可以 save"*, and then for the refusal to be the
-                   only thing said about it — *"只是没 census 的话按 save 会 pop
-                   out 不能 save 因为没 census"*. So there is no sentence on the
-                   form explaining the rule and no green tick saying it is
-                   satisfied; the toast is the whole of it.
-
-                   IT REACHES ONLY THE RECORDS BEING KEYED TODAY. 以前填的就不需
-                   要 — every existing record, any batch, 271's N15 included,
-                   and a card already on the list whether or not anybody has
-                   verified it. The test is not a date and not a batch: it is
-                   whether the tray line sits inside a DRAFT CARD. A line a sync
-                   rebuilt from the ledger is in no card, so the rule cannot
-                   reach back over it — and it cannot be got round either, since
-                   the only way to key a new line is to open a card.
-
-                   It is refused BEFORE anything is written. A save that stored
-                   the rows and then complained would leave the record in the
-                   ledger with no census and nothing asking for one again. */
+                /* THE CENSUS IS OPTIONAL. It was compulsory (no census, no
+                   save) and the office took that off: 没有census也可以save.
+                   The box stays, and a census picked still goes up with the
+                   save below. */
                 const _draftsToSave = {};
                 for (const row of Array.from(document.querySelectorAll('.t3-draft-card .transplant-row'))) {
                     const tray = (row.querySelector('.t3-source-tray') || {}).value || '';
                     const plot = (row.querySelector('input.t3-dest-plot') || {}).value || '';
                     const qty  = parseInt((row.querySelector('.t3-qty') || {}).value) || 0;
-                    if (!tray || !plot || qty <= 0) continue;     // the same test the save below applies
+                    if (!tray || !plot || qty <= 0) continue;
                     const n = _t3DraftOfRow(row);
                     if (n === null) continue;
                     const day = (row.querySelector('input.t3-date') || {}).value || '';
                     _draftsToSave[n] = { plot, day };
-                }
-                const _noCensus = Object.keys(_draftsToSave)
-                    .filter(n => !((t3DraftCensus[n] || []).length))
-                    .map(n => _draftsToSave[n].plot || 'a new record');
-                if (_noCensus.length) {
-                    showToast(`Nothing saved — no census on ${_noCensus.join(', ')}. Attach the census on that record first.`, 'error');
-                    btn.innerText = originalText; btn.disabled = false;
-                    return;
                 }
 
                 let logsToInsert = [];
