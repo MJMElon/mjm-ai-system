@@ -662,13 +662,18 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
     const btn = card.querySelector('.t3-card-addtray');
     if (!btn) return { err: 'no Add Tray on the card' };
     btn.click();
-    const drafts = document.querySelectorAll('#transplant-rows-container .t3-draft-card');
-    const d = drafts[drafts.length - 1];
-    if (!d) return { err: 'no draft opened ' + JSON.stringify(window.__TOASTS) + ' locked=' + document.getElementById('tab-3').classList.contains('mjm-locked') };
+    const inCard = card.querySelectorAll('.t3-draft-card');
+    const d = inCard[0];
+    if (!d) return { err: 'no row opened inside the card' };
     const head = d.querySelector('[id$="-head"]');
     const row = d.querySelector('.transplant-row');
+    btn.click();   // a second press adds another row to the same record, not a second record
     return {
-      drafts: drafts.length,
+      drafts: inCard.length,
+      elsewhere: document.querySelectorAll('#transplant-rows-container .t3-draft-card').length,
+      headHidden: head.style.display === 'none',
+      rowsAfterSecond: d.querySelectorAll('.transplant-row').length,
+      hasSave: !!d.querySelector('.t3-inline-save'),
       day: head.querySelector('.t3-date').value,
       type: head.querySelector('.t3-dest-type').value,
       plot: head.querySelector('.t3-dest-plot').value,
@@ -676,20 +681,25 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
       n: Number(d.id.replace('transplant-draft-', ''))
     };
   });
-  check('the card offers + Add Tray and it opens ONE new record', addTray.err || addTray.drafts, 1);
+  check('+ Add Tray opens ONE row INSIDE the card, not a record further down', addTray.err || [addTray.drafts, addTray.elsewhere], [1, 0]);
+  checkTrue('…as a plain row: the date, category and plot are the card own and not asked again', addTray.headHidden);
+  check('…a second press adds another row to the same record', addTray.rowsAfterSecond, 2);
+  checkTrue('…and the row carries its own Save', addTray.hasSave);
   check('…with the card day, Main Plot and the card plot already set',
         [addTray.day, addTray.type, addTray.plot], ['2026-10-11', 'main', 'B07']);
   check('…mirrored onto the tray line every reader asks', addTray.mirrored, ['2026-10-11', 'B07']);
   if (!addTray.err) {
     await page.evaluate((n) => {
-      const r = document.querySelector(`#transplant-draft-${n}-trays .transplant-row`);
+      const all = document.querySelectorAll(`#transplant-draft-${n}-trays .transplant-row`);
+      if (all[1]) window.removeTransplantTray(all[1].id, n);
+      const r = all[0];
       const t = r.querySelector('select.t3-source-tray');
       const opts = Array.from(t.options).map(o => o.value).filter(Boolean);
       t.value = opts[0];
       r.querySelector('input.t3-qty').value = '25';
       window.calcTransplanting();
     }, addTray.n);
-    await page.evaluate(async () => { await window.saveTransplantTab(); });
+    await page.evaluate((n) => { const b = document.querySelector(`#transplant-draft-${n} .t3-inline-save`); if (b) b.click(); }, addTray.n);
     await page.waitForTimeout(1500);
     const added = await page.evaluate(() => (window.__INSERTED || [])
       .filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 25)
@@ -700,11 +710,11 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   const lockedAdd = await page.evaluate(() => {
     const tab = document.getElementById('tab-3'); tab.classList.add('mjm-locked');
     window.__TOASTS = [];
-    const before = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    const before = document.querySelectorAll('.t3-draft-card').length;
     const card = document.querySelector('#t3-saved-rows-list .t3-saved-row');
     const i = Number(card.dataset.cardIndex);
     window.addTrayToT3Card(i);
-    const after = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    const after = document.querySelectorAll('.t3-draft-card').length;
     tab.classList.remove('mjm-locked');
     return { opened: after - before, said: window.__TOASTS.some(t => t.t === 'error') };
   });
@@ -712,10 +722,10 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   const monthShut = await page.evaluate(() => {
     MJMMonthLock.isDateLocked = () => true;
     window.__TOASTS = [];
-    const before = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    const before = document.querySelectorAll('.t3-draft-card').length;
     const card = document.querySelector('#t3-saved-rows-list .t3-saved-row');
     window.addTrayToT3Card(Number(card.dataset.cardIndex));
-    const after = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    const after = document.querySelectorAll('.t3-draft-card').length;
     MJMMonthLock.isDateLocked = window.__realIsDateLocked;
     return { opened: after - before, said: window.__TOASTS.some(t => t.t === 'error' && /locked/i.test(t.m)) };
   });
