@@ -11399,17 +11399,29 @@ Thank you.`;
             const GAP = 10, HEAD_H = 14, MIN_USEFUL = 90, MIN_K = 0.8;
             const availW = pageW - margin * 2;
 
+            /* EVERY PHOTO IS THE SAME SIZE — 图片的大小要一致. Each is drawn
+               into ONE box, the same width and height for every photo on the
+               sheet, and fitted inside it whole (never stretched, never
+               cropped: the edge of a seed is evidence). The box takes the
+               tallest shape among the photos, within reason, so a portrait
+               fills it and a landscape sits centred in the same frame. */
+            const BOX_R = (function () {
+                let r = 0;
+                shown.forEach(ph => { r = Math.max(r, ph.h / ph.w); });
+                return Math.min(1.4, Math.max(0.75, r || 0.75));
+            })();
             function _fitPhotos(list, roomH) {
                 const opts = [];
                 for (let perRow = 1; perRow <= 3; perRow++) {
                     const cellW = (availW - GAP * (perRow - 1)) / perRow;
+                    const boxH = cellW * BOX_R;
                     const rows = [];
                     for (let i = 0; i < list.length; i += perRow) {
                         const sized = list.slice(i, i + perRow).map(ph => {
-                            const sc = cellW / ph.w;
-                            return { ph, w: ph.w * sc, h: ph.h * sc };
+                            const sc = Math.min(cellW / ph.w, boxH / ph.h);
+                            return { ph, w: ph.w * sc, h: ph.h * sc, bw: cellW, bh: boxH };
                         });
-                        rows.push({ sized, h: Math.max.apply(null, sized.map(z => z.h)) });
+                        rows.push({ sized, h: boxH });
                     }
                     opts.push({ rows: rows,
                                 natural: rows.reduce((t, r) => t + r.h, 0) + GAP * (rows.length - 1) });
@@ -11591,15 +11603,21 @@ Thank you.`;
                 doc.text('DAMAGED SEED PHOTOS', margin, y); y += HEAD_H;
 
                 if (lay) lay.rows.forEach(r => {
-                    const hs = r.sized.map(z => ({ z: z, w: z.w * lay.k, h: z.h * lay.k }));
-                    const rowH = Math.max.apply(null, hs.map(z => z.h));
-                    const rowW = hs.reduce((t, z) => t + z.w, 0) + GAP * (hs.length - 1);
+                    const hs = r.sized.map(z => ({ z: z, w: z.w * lay.k, h: z.h * lay.k,
+                                                    bw: z.bw * lay.k, bh: z.bh * lay.k }));
+                    const rowH = Math.max.apply(null, hs.map(z => z.bh));
+                    const rowW = hs.reduce((t, z) => t + z.bw, 0) + GAP * (hs.length - 1);
                     // Centred, so a row narrower than the page reads as laid
                     // out rather than as pushed into the left margin.
                     let x = margin + Math.max(0, (availW - rowW) / 2);
                     hs.forEach(z => {
-                        doc.addImage(z.z.ph.dataUrl, 'JPEG', x, y, z.w, z.h);
-                        x += z.w + GAP;
+                        // One frame per photo, all the same size, the
+                        // picture centred whole inside it.
+                        setStroke(RULE_SOFT); doc.setLineWidth(0.5);
+                        doc.rect(x, y, z.bw, z.bh);
+                        doc.addImage(z.z.ph.dataUrl, 'JPEG',
+                                     x + (z.bw - z.w) / 2, y + (z.bh - z.h) / 2, z.w, z.h);
+                        x += z.bw + GAP;
                     });
                     y += rowH + GAP;
                 });
