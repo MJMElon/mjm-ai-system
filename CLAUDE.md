@@ -10066,3 +10066,13 @@ built in, because the repository's `package.json` otherwise sends Deno looking
 for a local `node_modules`. It kills its function by PROCESS GROUP — the npm
 wrapper starts the real binary as a child, and killing the wrapper alone left a
 stale function answering on port 8000 for the next run.
+
+## A scan point is a phone, and a reset clears only its own seals
+
+The FC Portal lets two places scan one order at once and reset their own
+part. `shared/RUN_ME_scan_points.sql` is the database half: the
+`scan_point` columns on `fcportal_scan_records`, the ONE deleting function
+`fcportal_reset_scans` (by point id; never a row already on a DO; the
+rows naming no point only when asked), a `fcportal_scan_resets` log of who
+reset what, and the DO press-id index again. Its check names suspected
+twin DOs. The rules are in `FC-Portal/CLAUDE.md`.
