@@ -8449,12 +8449,13 @@ and `shared/shared_collection_slots.js` is the one rule.
   the two columns still saves the hours while no lunch is set.
 - `operation_collection_booking.html` fills `HOURS_WEEKDAY` / `HOURS_SAT`
   IN PLACE (`applySlotSettings`) so every reader of them follows it.
-- **NOT YET FOLLOWING IT, each with its own copy of 8-5 / 350 / 600:**
-  `mobile/mobile_booking.html` here, `Mobile/src/pages/Booking.jsx` (Admin
-  Portal), the Sales Web customer booking (`_BE_HRS_WD` in
-  `src/pages/shop/main.js`) and `CollectionTimeBooking/index.html`. Change
-  the setting and those still offer the old hours until they read the
-  same row.
+- **The customer booking page (`CollectionTimeBooking/index.html`) and the
+  Sales Web change-booking window (`_BE_*` in `src/pages/shop/main.js`)
+  read the row too**, each through a small COPY of this rule (another site
+  cannot be imported). Change one, change all three.
+- **NOT YET FOLLOWING IT:** `mobile/mobile_booking.html` here and
+  `Mobile/src/pages/Booking.jsx` (Admin Portal), each with its own 8-5 and
+  no lunch.
 
 `tests/the_collection_slots_are_the_setting.cjs` drives the real booking
 page and the real settings card.
