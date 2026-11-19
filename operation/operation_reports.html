@@ -4865,12 +4865,12 @@ async function runMovementReportCombined(withCull2) {
   const batchCals = {};
   logs.forEach(l => {
     if (l.transaction_type !== 'Stock_Calibration') return;
-    const ap = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/);
+    const ap = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/i);
     const q = Number(l.quantity_change) || 0;
     if (!ap || !q) return;
     const body = (l.remark || '').replace(ap[0], '');
     const noTx = body.replace(/TxTray:\s*([^.]+?)\s*\.\s*/i, '');
-    const tray = noTx.match(/Tray:\s*([^.]+?)\s*\.\s*/i);
+    const tray = noTx.match(/Tray:\s*([^.]+?)\s*(?:\.|$)/i);
     let reason = noTx.replace(/Report:\s*[^.]+?\s*\.\s*/i, '')
                      .replace(/Plot:\s*[^.]+?\s*\.\s*/i, '')
                      .replace(/Side:\s*(seed|plot)\s*\.\s*/i, '')
@@ -5042,12 +5042,19 @@ function buildMovementSection(scope, ev, ctx) {
     if (scope !== 'pre') return null;
     const all = (ctx.batchCals || {})[_mvBatchKey(r.batch)] || [];
     if (!all.length) return null;
-    const place = String(r.place || '').trim().toUpperCase();
-    const named = all.filter(c => c.tray === place || c.plot === place);
+    const kk = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const place = kk(r.place);
+    const named = all.filter(c => (c.tray && kk(c.tray) === place) || (c.plot && kk(c.plot) === place));
     if (named.length) return named;
-    const sum = all.reduce((t, c) => t + c.qty, 0);
-    const fig = r.closing || r.bf || 0;
-    return fig && Math.abs(sum) === Math.abs(fig) ? all : null;
+    /* A batch usually carries more than one calibration -- a seed-side one
+       beside the tray-named one -- so the SUM is rarely the figure. One of
+       them exactly the figure's size is (234 PREMIUM CARE 6). */
+    const figs = [r.closing, r.bf].map(n => Math.abs(Number(n) || 0)).filter(Boolean);
+    if (!figs.length) return null;
+    const one = all.filter(c => figs.includes(Math.abs(c.qty)));
+    if (one.length) return one;
+    const sum = Math.abs(all.reduce((t, c) => t + c.qty, 0));
+    return figs.includes(sum) ? all : null;
   };
   const calCell = (n, cls, cals) => {
     if (!cals || !n) return fmtCell(n, cls);
