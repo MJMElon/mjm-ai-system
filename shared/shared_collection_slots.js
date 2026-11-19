@@ -17,7 +17,15 @@
      re-hours ONE day; this is the default for every day nobody overrode.
 
    A slot is one hour, labelled by its start: hours(dow) for 8 to 17 is
-   [8 .. 16], the 8-9 slot through the 4-5 slot. */
+   [8 .. 16], the 8-9 slot through the 4-5 slot.
+
+   LUNCH is one break for every open day, OFF until somebody sets it (both
+   hours empty), so a database that predates it books exactly as before.
+   Its hours are taken out of hours(dow), and crossesLunch() refuses a
+   booking that would run INTO it: one booking of several hours is one
+   lorry being loaded, and the gang is not there at lunch. A day whose
+   open hours do not reach the break (a Saturday closing at 12 with lunch
+   at 12) simply has no lunch. */
 (function (g) {
   'use strict';
 
@@ -26,8 +34,11 @@
     weekday_open: 8, weekday_close: 17,
     sat_open: 8, sat_close: 12,
     rate_per_hour: 350,       // seedlings one booking loads in an hour
-    max_load_per_hour: 600    // seedlings all bookings together may load in one hour
+    max_load_per_hour: 600,   // seedlings all bookings together may load in one hour
+    lunch_start: null,        // no lunch break until somebody sets one
+    lunch_end: null
   });
+  var LUNCH_KEYS = { lunch_start: 1, lunch_end: 1 };
 
   var cur = Object.assign({}, DEFAULTS);
   var state = { source: 'default', error: null, row: null };
@@ -51,12 +62,28 @@
     if (sc <= so) return 'Saturday must close after it opens.';
     if (!(Number(s.rate_per_hour) > 0)) return 'Seedlings loaded per hour must be more than 0.';
     if (!(Number(s.max_load_per_hour) > 0)) return 'Maximum seedlings per hour slot must be more than 0.';
+    var ls = s.lunch_start, le = s.lunch_end;
+    var lsSet = !(ls === null || ls === undefined || ls === ''), leSet = !(le === null || le === undefined || le === '');
+    if (lsSet || leSet) {
+      var lo = intIn(ls, 0, 23), lc = intIn(le, 1, 24);
+      if (lo === null || lc === null) return 'Lunch needs a start and an end, or neither.';
+      if (lc <= lo) return 'Lunch must end after it starts.';
+    }
     return '';
+  }
+
+  /* A lunch hour left empty is NULL and stays NULL: Number(null) is 0,
+     which would be a break at midnight rather than no break at all. A
+     row from before the lunch columns has no such key either, which is
+     the same answer. */
+  function val(k, v) {
+    if (LUNCH_KEYS[k]) return (v === null || v === undefined || v === '') ? null : Number(v);
+    return Number(v);
   }
 
   function apply(row) {
     if (!row || problem(row)) return false;
-    Object.keys(DEFAULTS).forEach(function (k) { cur[k] = Number(row[k]); });
+    Object.keys(DEFAULTS).forEach(function (k) { cur[k] = val(k, row[k]); });
     return true;
   }
 
@@ -75,19 +102,39 @@
     var why = problem(s);
     if (why) return { error: { message: why } };
     var row = { id: 1, updated_at: new Date().toISOString(), updated_by: who || null };
-    Object.keys(DEFAULTS).forEach(function (k) { row[k] = Number(s[k]); });
+    Object.keys(DEFAULTS).forEach(function (k) { row[k] = val(k, s[k]); });
     var r = await supa.from(TABLE).upsert(row, { onConflict: 'id' }).select().maybeSingle();
+    /* A database that has the table and not yet the lunch columns refuses
+       the whole row over them. With no lunch set there is nothing to lose
+       by leaving them off, so the hours still save. With a lunch set the
+       refusal stands, and the page names the file to run. */
+    if (r.error && row.lunch_start === null && row.lunch_end === null &&
+        /lunch_(start|end)/.test(String(r.error.message || ''))) {
+      delete row.lunch_start; delete row.lunch_end;
+      r = await supa.from(TABLE).upsert(row, { onConflict: 'id' }).select().maybeSingle();
+    }
     if (!r.error) { state.row = r.data || row; state.source = 'saved'; apply(row); }
     return r;
   }
 
   function range(a, b) { var out = []; for (var h = a; h < b; h++) out.push(h); return out; }
+  function lunch() {
+    return (cur.lunch_start === null || cur.lunch_end === null) ? null
+      : { start: cur.lunch_start, end: cur.lunch_end };
+  }
+  function isLunch(h) { var L = lunch(); return !!L && h >= L.start && h < L.end; }
+  /* A booking from startH to endH (end exclusive) touches the break. */
+  function crossesLunch(startH, endH) {
+    var L = lunch();
+    return !!L && startH < L.end && endH > L.start;
+  }
+  function withoutLunch(hs) { return hs.filter(function (h) { return !isLunch(h); }); }
 
   /* The slots of a day of the week (0 Sunday .. 6 Saturday). Sunday is
      closed, as it has always been. */
   function hours(dow) {
     if (dow === 0) return [];
-    return dow === 6 ? range(cur.sat_open, cur.sat_close) : range(cur.weekday_open, cur.weekday_close);
+    return withoutLunch(dow === 6 ? range(cur.sat_open, cur.sat_close) : range(cur.weekday_open, cur.weekday_close));
   }
   function closing(dow) {
     if (dow === 0) return 0;
@@ -104,6 +151,7 @@
     TABLE: TABLE, DEFAULTS: DEFAULTS,
     load: load, save: save, get: get, problem: problem,
     hours: hours, opening: opening, closing: closing,
+    lunch: lunch, isLunch: isLunch, crossesLunch: crossesLunch, withoutLunch: withoutLunch,
     source: function () { return state.source; },
     error: function () { return state.error; },
     row: function () { return state.row; }

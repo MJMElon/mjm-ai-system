@@ -18,9 +18,14 @@
 --
 -- Safe to run twice.
 --
+-- LUNCH is one break for every open day, two hours that are both empty
+-- until somebody sets them, so adding the columns moves nothing. This
+-- file adds them to a table made by the first version of it as well.
+--
 -- WHAT A GOOD RESULT LOOKS LIKE: one row. Read across it, the hours and
 -- the two figures are what the settings page shows, slots reads 9 and 4
--- on a fresh install, and policies reads 2.
+-- on a fresh install (a lunch hour inside the day takes one off), lunch
+-- reads none until one is saved, and policies reads 2.
 -- ════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS public.shared_collection_slot_settings (
@@ -38,6 +43,23 @@ CREATE TABLE IF NOT EXISTS public.shared_collection_slot_settings (
   CONSTRAINT shared_collection_slot_settings_sat CHECK (sat_open >= 0 AND sat_close <= 24 AND sat_close > sat_open),
   CONSTRAINT shared_collection_slot_settings_load CHECK (rate_per_hour > 0 AND max_load_per_hour > 0)
 );
+
+ALTER TABLE public.shared_collection_slot_settings ADD COLUMN IF NOT EXISTS lunch_start INTEGER;
+ALTER TABLE public.shared_collection_slot_settings ADD COLUMN IF NOT EXISTS lunch_end INTEGER;
+
+DO $$
+BEGIN
+  -- Both hours or neither, and the break ends after it starts. Both NOT NULL
+  -- tests are spelled out, because a CHECK lets an unknown answer through.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                  WHERE conname = 'shared_collection_slot_settings_lunch') THEN
+    ALTER TABLE public.shared_collection_slot_settings
+      ADD CONSTRAINT shared_collection_slot_settings_lunch CHECK (
+        (lunch_start IS NULL AND lunch_end IS NULL)
+        OR (lunch_start IS NOT NULL AND lunch_end IS NOT NULL
+            AND lunch_start >= 0 AND lunch_end <= 24 AND lunch_end > lunch_start));
+  END IF;
+END $$;
 
 ALTER TABLE public.shared_collection_slot_settings ENABLE ROW LEVEL SECURITY;
 
@@ -82,7 +104,16 @@ SELECT
   to_char(make_time(s.sat_open, 0, 0), 'HH12 AM') || ' to ' ||
     CASE WHEN s.sat_close = 24 THEN '12 AM' ELSE to_char(make_time(s.sat_close, 0, 0), 'HH12 AM') END AS saturday,
   'closed' AS sunday,
-  (s.weekday_close - s.weekday_open) || ' weekday, ' || (s.sat_close - s.sat_open) || ' Saturday' AS slots,
+  CASE WHEN s.lunch_start IS NULL THEN 'none'
+       ELSE to_char(make_time(s.lunch_start, 0, 0), 'HH12 AM') || ' to ' ||
+            CASE WHEN s.lunch_end = 24 THEN '12 AM' ELSE to_char(make_time(s.lunch_end, 0, 0), 'HH12 AM') END
+  END AS lunch,
+  ((s.weekday_close - s.weekday_open)
+     - coalesce(greatest(0, least(s.weekday_close, s.lunch_end) - greatest(s.weekday_open, s.lunch_start)), 0))
+   || ' weekday, ' ||
+  ((s.sat_close - s.sat_open)
+     - coalesce(greatest(0, least(s.sat_close, s.lunch_end) - greatest(s.sat_open, s.lunch_start)), 0))
+   || ' Saturday' AS slots,
   s.rate_per_hour AS seedlings_per_hour_one_booking,
   s.max_load_per_hour AS max_seedlings_per_slot,
   s.updated_at,

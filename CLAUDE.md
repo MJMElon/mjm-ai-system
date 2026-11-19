@@ -8440,6 +8440,13 @@ and `shared/shared_collection_slots.js` is the one rule.
   350, 600), so a database without the table books exactly as before.
 - **A date override still wins**: Close / Open / Fully Booked on one date
   keeps its own hours. The setting is the default for every other day.
+- **LUNCH is one break for every open day**, two hours both empty until
+  somebody sets them (`lunch_start` / `lunch_end`, NULL meaning no break,
+  never 0). Its hours are taken out of `hours(dow)`, drawn as a Lunch break
+  row nobody can pick, and `crossesLunch` refuses a booking that would run
+  INTO it, because one booking is one lorry loaded straight through. A day
+  opened by hand on the calendar still breaks for it. A database without
+  the two columns still saves the hours while no lunch is set.
 - `operation_collection_booking.html` fills `HOURS_WEEKDAY` / `HOURS_SAT`
   IN PLACE (`applySlotSettings`) so every reader of them follows it.
 - **NOT YET FOLLOWING IT, each with its own copy of 8-5 / 350 / 600:**

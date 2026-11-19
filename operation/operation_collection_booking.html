@@ -18,7 +18,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_collection_slots.js?v=20261119a"></script>
+<script src="../shared/shared_collection_slots.js?v=20261119b"></script>
 <script>
 window.MJM_PAGE_GATE = (async () => {
   try {
@@ -597,7 +597,8 @@ function getEffectiveHours(ds) {
     if (!ovr.is_open) return [];
     var arr = [];
     for (var h = ovr.open_hour; h < ovr.close_hour; h++) arr.push(h);
-    return arr;
+    // A day opened by hand still breaks for lunch (System Settings).
+    return MJMCollectionSlots.withoutLunch(arr);
   }
   var d = new Date(ds + 'T00:00:00'), dow = d.getDay();
   if (dow === 0 || MY_HOLIDAYS[ds]) return [];
@@ -1372,7 +1373,10 @@ function closingHour(dateStr) {
 }
 
 function bkCanFit(dateStr, startH, qty) {
-  return (startH + hoursNeeded(qty)) <= closingHour(dateStr);
+  const endH = startH + hoursNeeded(qty);
+  // A booking is one lorry loaded straight through, so it may not run into
+  // the lunch break any more than past closing.
+  return endH <= closingHour(dateStr) && !MJMCollectionSlots.crossesLunch(startH, endH);
 }
 
 async function openNewBooking(dateStr) {
@@ -1423,7 +1427,21 @@ function renderBkTimeSlots() {
   const nowH = isToday ? new Date().getHours() : -1;
 
   const list = document.getElementById('bk-time-slots-list');
-  list.innerHTML = hours.map(h => {
+  // The lunch hours that fall inside this day are drawn as a row of their
+  // own that cannot be picked, so the gap in the list says what it is.
+  const dw = isSat ? 6 : 1;
+  const shown = hours.slice();
+  for (let h = MJMCollectionSlots.opening(dw); h < MJMCollectionSlots.closing(dw); h++) {
+    if (MJMCollectionSlots.isLunch(h) && shown.indexOf(h) < 0) shown.push(h);
+  }
+  shown.sort((a, b) => a - b);
+  list.innerHTML = shown.map(h => {
+    if (MJMCollectionSlots.isLunch(h)) {
+      return '<div class="time-slot-row full-slot lunch-slot" data-lunch="1">' +
+               '<div><div class="ts-time">' + timeSlotLabel(h) + '</div></div>' +
+               '<div class="ts-meta">Lunch break</div>' +
+             '</div>';
+    }
     const timeStr = String(h).padStart(2,'0') + ':00';
     const slotBks = bookingDayBookings.filter(b => {
       const sH = parseInt((b.start_time || '00').substring(0,2));
@@ -1470,7 +1488,8 @@ function updateBkAnalysis() {
   const hrs = hoursNeeded(bookingQty);
   const endH = startH + hrs;
   const cl = closingHour(dateStr);
-  const fits = endH <= cl;
+  const intoLunch = MJMCollectionSlots.crossesLunch(startH, endH);
+  const fits = endH <= cl && !intoLunch;
 
   let html;
   if (fits) {
@@ -1478,6 +1497,13 @@ function updateBkAnalysis() {
            '<div class="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-1">⏱ Estimated collection time</div>' +
            '<div class="text-base font-black text-blue-800">' + bookingQty.toLocaleString() + ' seedlings → ' + hrs + ' hr (≈ ' + RATE.toLocaleString() + '/hr)</div>' +
            '<div class="text-xs font-bold text-blue-700 mt-1">' + formatHour(startH) + ' → ' + formatHour(endH) + ' — closes at ' + formatHour(cl) + '</div>' +
+           '</div>';
+  } else if (intoLunch) {
+    const L = MJMCollectionSlots.lunch();
+    html = '<div class="est-box warn">' +
+           '<div class="text-[10px] font-black text-red-700 uppercase tracking-widest mb-1">⚠️ Runs into lunch</div>' +
+           '<div class="text-base font-black text-red-800">' + bookingQty.toLocaleString() + ' seedlings need ' + hrs + ' hr (' + formatHour(startH) + ' → ' + formatHour(endH) + ')</div>' +
+           '<div class="text-xs font-bold text-red-700 mt-1">Lunch is ' + formatHour(L.start) + ' – ' + formatHour(L.end) + '. Pick another time, reduce qty, or split the booking.</div>' +
            '</div>';
   } else {
     const overflowHrs = endH - cl;
