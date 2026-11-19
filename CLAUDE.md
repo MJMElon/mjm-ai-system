@@ -10155,6 +10155,6 @@ The FC Portal lets two places scan one order at once and reset their own
 part. `shared/RUN_ME_scan_points.sql` is the database half: the
 `scan_point` columns on `fcportal_scan_records`, the ONE deleting function
 `fcportal_reset_scans` (by point id; never a row already on a DO; the
-rows naming no point only when asked), a `fcportal_scan_resets` log of who
+rows naming no point only when asked), the per-AL cap trigger `fcportal_scan_cap`, a one-off clear of Imbok BB0RS8, a `fcportal_scan_resets` log of who
 reset what, and the DO press-id index again. Its check names suspected
 twin DOs. The rules are in `FC-Portal/CLAUDE.md`.
