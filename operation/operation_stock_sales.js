@@ -4467,7 +4467,6 @@
     //      collected through collect.mjmnursery.com over the last 90 days,
     //      per month. Bookings already made for a month count as a floor.
     //      An order is never projected past its balance.
-    const SA_HEIGHT_CM   = 150;   // 1.5 m
     const SA_PACE_DAYS   = 90;    // how far back a customer's pace is read
     // Settled when the page's own two loads finish, however early the map
     // tab is opened — a tab opened before the session answers waits rather
@@ -4537,33 +4536,16 @@
     const _saOrderKey = o => _normOrderKey(o.orderNumber) || ('id:' + o.id);
     const _saIsCounted = o => !(_saExcl && _saExcl.has(_saOrderKey(o)));
 
+    // The classification is shared/shared_stock_analysis.js, the rule the
+    // boss's AI agent reads too (supabase/functions/mjm-mcp). This page
+    // hands it the rows it has already built.
     function _saStockRows(now) {
-        const thisMonth = monthKey(now);
-        const nextD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const nextMonth = monthKey(nextD);
-        const heights = (_invmap && _invmap.heights) || {};
-        const avail = [], nextMature = [];
-        (allMatGroups || []).forEach(r => {
-            const f = matRowFigures(r);
-            const alloc = plotAllocations[r.key] || {};
-            if (f.culled || f.soldOut || alloc.plot_status === 'finished') return;
-            const bal = Math.max(0, f.plotBalance);
-            if (!bal) return;
-            const h = heights[_invHeightKey(r.plot, r.batch)];
-            const tall = !!(h && h.avg != null && h.avg >= SA_HEIGHT_CM);
-            const mk = monthKey(r.matureDate);
-            const row = {
-                plot: r.plot, batch: r.batch, breed: r.breed, location: r.location,
-                matureDate: r.matureDate, height: h && h.avg != null ? h.avg : null,
-                heightDate: h ? h.date : null, balance: bal
-            };
-            if (mk <= thisMonth)  avail.push(Object.assign(row, { why: 'matured' }));
-            else if (tall)        avail.push(Object.assign(row, { why: 'tall' }));
-            else if (mk === nextMonth) nextMature.push(Object.assign(row, { why: 'next' }));
-        });
-        const byDate = (a, b) => (a.matureDate - b.matureDate) || String(a.plot).localeCompare(String(b.plot));
-        avail.sort(byDate); nextMature.sort(byDate);
-        return { avail, nextMature };
+        const rows = (allMatGroups || []).map(r => Object.assign({}, r, {
+            figures: matRowFigures(r),
+            status: (plotAllocations[r.key] || {}).plot_status || 'no_status'
+        }));
+        const c = MJMStockAnalysis.classify(rows, { now, heights: (_invmap && _invmap.heights) || {} });
+        return { avail: c.avail, nextMature: c.nextMature };
     }
 
     function _saForecast(now, orders, paceRows) {
