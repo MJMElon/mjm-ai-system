@@ -8411,22 +8411,24 @@ the app's Settings moved there, because a guard only does the check-ins.
 - **Nothing saved is nobody having been asked**: until the first Save the
   phones keep the times they have, and the card says so.
 
-**ONE PIN IS ONE CHECK-IN AND ONE PHOTO.** At every check-in time the app
-raises a task per pin of the location (`getTaskPoints` in the app), named
-after the pin, and the record carries it as `point` (a column on
-`mata_malam_logs`). A location with no pin has one task a time and no
-point, as before. A record with no point is from before this and answers
-every pin of its location and time (`logCoversPoint`), so nothing old is
-marked missed. A pin is told apart by its NAME, so the card refuses two
-pins of one location sharing one, and a pin renamed is a new task from
-that night on.
+**ONE TASK A CHECK-IN TIME, AND ITS PINS ARE INSIDE IT.** It was a task per
+pin for a day and the office asked for it back: the To-Do List shows ONE
+task for a location at each time, and opening it (the round sheet,
+`openRoundSheet` in the app) shows a map with the location boundary and
+every pin, the pins to visit, and Check In on each, which takes one photo
+for that pin and comes back. The RECORD is still one per pin, carrying the
+pin name as `point` (a column on `mata_malam_logs`), so the office sees
+which pins were visited. A location with no pin has one check-in a time and
+no point, as before. A record with no point answers every pin of its
+location and time (`logCoversPoint`), so nothing old is marked missed. A pin
+is told apart by its NAME, so the card refuses two pins of one location
+sharing one, and a pin renamed is a new pin from that night on.
 
-**AND ONE ROAD TRACK RUNS THROUGH ALL OF A ROUND'S PINS.** A round is one
-location at one check-in time. The track is started once, carries on while
-every pin is checked in, and is stopped after the last; it is stored on
-the round's FIRST check-in (`roundAnchor` in the app), which is the one
-card that waits in the To-Do List. The other pins' records carry no
-route of their own.
+**AND ONE ROAD TRACK FOR THE TASK**, started and stopped on that screen,
+running while every pin is checked in. It is stored on the task's first
+check-in made on that phone (`attachRoundRoute`); a track stopped before
+any check-in waits for the first one. The task stays in the To-Do List
+while its track is still recording, so Stop can always be reached.
 
 **What each person may USE is on Portal View & Function**, a Mata Malam
 row under Maintenance with five switches: `home` (main task), `photo`
