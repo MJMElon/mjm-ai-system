@@ -8453,9 +8453,11 @@ and `shared/shared_collection_slots.js` is the one rule.
   Sales Web change-booking window (`_BE_*` in `src/pages/shop/main.js`)
   read the row too**, each through a small COPY of this rule (another site
   cannot be imported). Change one, change all three.
-- **NOT YET FOLLOWING IT:** `mobile/mobile_booking.html` here and
-  `Mobile/src/pages/Booking.jsx` (Admin Portal), each with its own 8-5 and
-  no lunch.
+- **The Admin Portal booking (`Mobile/src/pages/Booking.jsx`) reads it
+  through `Mobile/src/lib/collectionSlots.js`**, a fourth copy; it also
+  refuses a booking that runs past closing.
+- **NOT YET FOLLOWING IT:** `mobile/mobile_booking.html` here, with its own
+  8-5 and no lunch.
 
 `tests/the_collection_slots_are_the_setting.cjs` drives the real booking
 page and the real settings card.
