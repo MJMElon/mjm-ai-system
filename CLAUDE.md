@@ -7592,10 +7592,12 @@ download."* So the census hangs off the TOTAL and nowhere else: the checker is
 looking at that figure, comparing it against a drone count, and the census is
 the paper behind it. Photo or PDF, more than one file.
 
-**No census, no save** — *"c 一定要有才可以 save"* — and the refusal is the
-only thing said about it: *"只是没 census 的话按 save 会 pop out 不能 save 因为
-没 census."* No line on the form explaining the rule, no green tick saying it
-is satisfied.
+**THE CENSUS IS OPTIONAL NOW.** It was *no census, no save* — *"c 一定要有
+才可以 save"* — and the office then took the refusal off: *"现在没有census也可
+以save"*. The box stays (labelled Census, no asterisk) and a census picked
+still goes up with the save; a record with none simply has none, and Add
+Census on its card is the door later. What follows is how the census is
+carried when there is one.
 
 **IT REACHES ONLY WHAT IS KEYED NOW.** 以前填的就不需要 — every existing
 record, any batch, 271's N15 included, and a card already on the list whether
