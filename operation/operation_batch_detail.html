@@ -11399,18 +11399,29 @@ Thank you.`;
             const GAP = 10, HEAD_H = 14, MIN_USEFUL = 90, MIN_K = 0.8;
             const availW = pageW - margin * 2;
 
+            /* EVERY PHOTO IS THE SAME HEIGHT — 图片的大小要一致, then 右边的图
+               压缩. A frame of one size with each picture fitted inside it
+               left a landscape photo small in the middle of an empty box
+               beside a portrait one filling its own, which is two sizes
+               again. So every photo on the sheet is drawn at ONE height and
+               its width follows its own shape — never stretched, never
+               cropped. For each layout the height is the largest that lets
+               every row fit the page width, and the SAME height is used on
+               every row, so a short last row does not come out bigger. */
             function _fitPhotos(list, roomH) {
                 const opts = [];
                 for (let perRow = 1; perRow <= 3; perRow++) {
-                    const cellW = (availW - GAP * (perRow - 1)) / perRow;
-                    const rows = [];
-                    for (let i = 0; i < list.length; i += perRow) {
-                        const sized = list.slice(i, i + perRow).map(ph => {
-                            const sc = cellW / ph.w;
-                            return { ph, w: ph.w * sc, h: ph.h * sc };
-                        });
-                        rows.push({ sized, h: Math.max.apply(null, sized.map(z => z.h)) });
-                    }
+                    const groups = [];
+                    for (let i = 0; i < list.length; i += perRow) groups.push(list.slice(i, i + perRow));
+                    let H = Infinity;
+                    groups.forEach(g => {
+                        const aspect = g.reduce((t, ph) => t + ph.w / ph.h, 0);
+                        H = Math.min(H, (availW - GAP * (g.length - 1)) / aspect);
+                    });
+                    const rows = groups.map(g => ({
+                        sized: g.map(ph => ({ ph, w: H * ph.w / ph.h, h: H })),
+                        h: H
+                    }));
                     opts.push({ rows: rows,
                                 natural: rows.reduce((t, r) => t + r.h, 0) + GAP * (rows.length - 1) });
                 }
