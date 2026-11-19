@@ -154,6 +154,10 @@ console.log('\nA tray figure an approved calibration explains is DOTTED (224 DOU
     const tip = out.pool.find(p => p.title === 'Stock Calibration' && p.rows.some(r => r.qty === -1));
     check('the hover names the calibration: its qty and its reason', !!tip && /Over allocated/.test(tip.rows[0].label), true);
     check('the hover leaves the approval marker out', !!tip && !/APPROVED/.test(tip.rows[0].label), true);
+    check('the calibration hover is drawn in FULL (show full), never cut to an ellipsis', !!tip && tip.full === true, true);
+    const fs = require('fs');
+    const page = fs.readFileSync(require('path').join(__dirname, '..', 'operation', 'operation_reports.html'), 'utf8');
+    check('a full entry wraps its label instead of truncating it', /entry\.full[\s\S]{0,400}whitespace-normal/.test(page), true);
   }
 }
 

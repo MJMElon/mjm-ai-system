@@ -4430,9 +4430,13 @@ function mvShowDetailTip(anchorEl, idx) {
         <span class="font-bold text-[#3d2610] uppercase truncate max-w-[140px]">${esc(r.customer)}</span>
         <span class="ml-auto font-black text-[#3a7ab4]">${fmtNum(r.qty)}</span>
       </div>` : `
-      <div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
-        <span class="font-bold text-[#8a7a68]">${fmtDate(r.date)}</span>
-        ${r.label ? `<span class="font-bold text-[#3d2610] truncate max-w-[160px]">${esc(r.label)}</span>` : ''}
+      <div class="flex items-baseline gap-2 py-0.5 text-[11px] ${entry.full ? '' : 'whitespace-nowrap'}">
+        <span class="font-bold text-[#8a7a68] whitespace-nowrap">${fmtDate(r.date)}</span>
+        ${r.label ? (entry.full
+          /* A calibration's reason IS the explanation the hover exists for,
+             so it is shown whole and wraps (show full), never cut to "…". */
+          ? `<span class="font-bold text-[#3d2610] flex-1 min-w-0 whitespace-normal break-words">${esc(r.label)}</span>`
+          : `<span class="font-bold text-[#3d2610] truncate max-w-[160px]">${esc(r.label)}</span>`) : ''}
         <span class="ml-auto font-black text-[#3a7ab4]">${fmtNum(r.qty)}</span>
       </div>`;
   });
@@ -5058,7 +5062,7 @@ function buildMovementSection(scope, ev, ctx) {
   };
   const calCell = (n, cls, cals) => {
     if (!cals || !n) return fmtCell(n, cls);
-    const idx = _mvDetailPool.push({ title: 'Stock Calibration', rows: cals }) - 1;
+    const idx = _mvDetailPool.push({ title: 'Stock Calibration', full: true, rows: cals }) - 1;
     return `<td class="${cls || ''}"><span class="t3-cal-dot cursor-help border-b border-dotted border-current"
       onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(n)}</span></td>`;
   };
@@ -5115,7 +5119,7 @@ function buildMovementSection(scope, ev, ctx) {
         ${calCell(r.bf, 'text-[#8a7a68] font-black', rCals)}
         ${cols.map(c => fmtDetailCell(r, c)).join('')}
         ${calCell(r.closing, 'text-[#4a7a2e] font-black', rCals)}
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-balance-total font-black text-[#8a7a68] align-middle" style="background:#fff">${gCals.length && bal ? (() => { const gi = _mvDetailPool.push({ title: 'Stock Calibration', rows: gCals }) - 1; return `<span class="t3-cal-dot cursor-help border-b border-dotted border-current" onmouseenter="mvShowDetailTip(this, ${gi})" onmouseleave="mvHideDetailTip()">${fmtNum(bal)}</span>`; })() : fmtNum(bal)}</td>` : ''}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-balance-total font-black text-[#8a7a68] align-middle" style="background:#fff">${gCals.length && bal ? (() => { const gi = _mvDetailPool.push({ title: 'Stock Calibration', full: true, rows: gCals }) - 1; return `<span class="t3-cal-dot cursor-help border-b border-dotted border-current" onmouseenter="mvShowDetailTip(this, ${gi})" onmouseleave="mvHideDetailTip()">${fmtNum(bal)}</span>`; })() : fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
