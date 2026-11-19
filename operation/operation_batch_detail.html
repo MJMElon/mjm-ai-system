@@ -5634,6 +5634,14 @@
                                         <span></span>
                                     </div>
                                     <div id="t3-cardbody-${c.i}"></div>
+                                    <!-- ADD TRAY ON A SAVED CARD opens a new record with this
+                                         card's plot and day already set, so it is saved into
+                                         the SAME card -- a card is one plot on one day. No
+                                         .mjm-review-allow: a signed-off report greys it. -->
+                                    <div class="px-4 py-2 border-t border-[#e8dcc8]">
+                                        <button type="button" onclick="addTrayToT3Card(${c.i})"
+                                                class="t3-card-addtray px-3 py-1.5 bg-white border border-[#c07820] text-[#c07820] text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdf6ec] transition-colors">+ Add Tray</button>
+                                    </div>
                                 </div>
                             `);
                             /* The key, the plot and the day, kept where the save
@@ -6118,6 +6126,44 @@
            here — and the answer is the CLASS, which `setTabLock` sets for every
            reason a tab is not editable, rather than a second reading of the
            banner. */
+        /* + Add Tray on a SAVED card: a new record whose plot and day are the
+           card's own, so the save lands it in the same card (one plot, one day).
+           It goes through the ordinary Add Record form and the ordinary save, so
+           every rule that save carries still applies. */
+        function addTrayToT3Card(i) {
+            if (_t3CardLocked()) { showToast('This report is signed off — unverify it to add a tray.', 'error'); return; }
+            const card = document.querySelector(`.t3-saved-row[data-card-index="${i}"]`);
+            if (!card) return;
+            const plot = card.dataset.cardPlot || '';
+            const day  = card.dataset.cardDay || '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(day) && window.MJMMonthLock && MJMMonthLock.isDateLocked(day)) {
+                showToast('That month is locked — a tray cannot be added to it.', 'error'); return;
+            }
+            addTransplantRow();
+            const n = transplantDraftCount;
+            const headId = `transplant-draft-${n}-head`;
+            const head = document.getElementById(headId);
+            if (!head) return;
+            const pn = plot.toUpperCase();
+            const type = pn === 'PREMIUM CARE' ? 'premium' : pn === 'DOUBLE-TONE' ? 'doubletone' : 'main';
+            const d = head.querySelector('.t3-date');
+            if (d && /^\d{4}-\d{2}-\d{2}$/.test(day)) d.value = day;
+            const t = head.querySelector('.t3-dest-type');
+            if (t) { t.value = type; togglePlotInput(headId); }
+            const ps = head.querySelector('.t3-dest-plot');
+            if (ps && type === 'main' && plot) {
+                if (!Array.from(ps.options).some(o => o.value === plot)) ps.insertAdjacentHTML('beforeend', `<option value="${_escAttr(plot)}">${_escAttr(plot)}</option>`);
+                ps.value = plot;
+            }
+            _t3SyncDraft(n);
+            const draft = document.getElementById(`transplant-draft-${n}`);
+            if (draft) {
+                draft.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const tray = draft.querySelector('select.t3-source-tray');
+                if (tray) setTimeout(() => { try { tray.focus(); } catch (e) {} }, 300);
+            }
+        }
+
         function _t3CardLocked() {
             const tab = document.getElementById('tab-3');
             return !!(tab && tab.classList.contains('mjm-locked'));

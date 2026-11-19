@@ -645,6 +645,82 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
               return !!el && /N15\.jpg/.test(el.innerHTML);
             }));
 
+  console.log('\n── 7b · + ADD TRAY ON A SAVED CARD LANDS IN THE SAME CARD ──');
+  /* 我要add tray, over a saved U3 card. The button opens a new record with the
+     card plot and day already set, so the save lands it in that card. */
+  /* October is auto-locked by the time this runs (the lock calendar is live),
+     so the month is opened for the section and asked about on its own below. */
+  await page.evaluate(() => {
+    window.__TOASTS = []; window.__INSERTED = []; window.__UPLOADS = [];
+    window.__realIsDateLocked = MJMMonthLock.isDateLocked;
+    MJMMonthLock.isDateLocked = () => false;
+    document.querySelectorAll('#transplant-rows-container .t3-draft-card').forEach(el => el.remove());
+  });
+  const addTray = await page.evaluate(() => {
+    const card = Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-saved-row')).find(el => el.dataset.reviewKey === 'B07|2026-10-11');
+    if (!card) return { err: 'no B07 card' };
+    const btn = card.querySelector('.t3-card-addtray');
+    if (!btn) return { err: 'no Add Tray on the card' };
+    btn.click();
+    const drafts = document.querySelectorAll('#transplant-rows-container .t3-draft-card');
+    const d = drafts[drafts.length - 1];
+    if (!d) return { err: 'no draft opened ' + JSON.stringify(window.__TOASTS) + ' locked=' + document.getElementById('tab-3').classList.contains('mjm-locked') };
+    const head = d.querySelector('[id$="-head"]');
+    const row = d.querySelector('.transplant-row');
+    return {
+      drafts: drafts.length,
+      day: head.querySelector('.t3-date').value,
+      type: head.querySelector('.t3-dest-type').value,
+      plot: head.querySelector('.t3-dest-plot').value,
+      mirrored: [row.querySelector('input.t3-date').value, row.querySelector('input.t3-dest-plot').value],
+      n: Number(d.id.replace('transplant-draft-', ''))
+    };
+  });
+  check('the card offers + Add Tray and it opens ONE new record', addTray.err || addTray.drafts, 1);
+  check('…with the card day, Main Plot and the card plot already set',
+        [addTray.day, addTray.type, addTray.plot], ['2026-10-11', 'main', 'B07']);
+  check('…mirrored onto the tray line every reader asks', addTray.mirrored, ['2026-10-11', 'B07']);
+  if (!addTray.err) {
+    await page.evaluate((n) => {
+      const r = document.querySelector(`#transplant-draft-${n}-trays .transplant-row`);
+      const t = r.querySelector('select.t3-source-tray');
+      const opts = Array.from(t.options).map(o => o.value).filter(Boolean);
+      t.value = opts[0];
+      r.querySelector('input.t3-qty').value = '25';
+      window.calcTransplanting();
+    }, addTray.n);
+    await page.evaluate(async () => { await window.saveTransplantTab(); });
+    await page.waitForTimeout(1500);
+    const added = await page.evaluate(() => (window.__INSERTED || [])
+      .filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 25)
+      .map(r => ({ plot: r.plot_name, day: r.transaction_date })));
+    check('saving it writes the tray under the SAME plot and day, so it joins the card',
+          added, [{ plot: 'B07', day: '2026-10-11' }]);
+  }
+  const lockedAdd = await page.evaluate(() => {
+    const tab = document.getElementById('tab-3'); tab.classList.add('mjm-locked');
+    window.__TOASTS = [];
+    const before = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    const card = document.querySelector('#t3-saved-rows-list .t3-saved-row');
+    const i = Number(card.dataset.cardIndex);
+    window.addTrayToT3Card(i);
+    const after = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    tab.classList.remove('mjm-locked');
+    return { opened: after - before, said: window.__TOASTS.some(t => t.t === 'error') };
+  });
+  check('a signed-off report opens nothing and says so', [lockedAdd.opened, lockedAdd.said], [0, true]);
+  const monthShut = await page.evaluate(() => {
+    MJMMonthLock.isDateLocked = () => true;
+    window.__TOASTS = [];
+    const before = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    const card = document.querySelector('#t3-saved-rows-list .t3-saved-row');
+    window.addTrayToT3Card(Number(card.dataset.cardIndex));
+    const after = document.querySelectorAll('#transplant-rows-container .t3-draft-card').length;
+    MJMMonthLock.isDateLocked = window.__realIsDateLocked;
+    return { opened: after - before, said: window.__TOASTS.some(t => t.t === 'error' && /locked/i.test(t.m)) };
+  });
+  check('a locked month opens nothing and says so', [monthShut.opened, monthShut.said], [0, true]);
+
   console.log('\n── 8 · A CENSUS THAT WILL NOT UPLOAD IS A WARNING, NEVER AN ERROR ──');
   /* The report is in the database by the time the census goes up. Saying
      error over stored work is what leaves a tab dirty by its own success, and
