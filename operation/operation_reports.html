@@ -4209,7 +4209,7 @@ function ymKey(d) {
 
 const SUMMARY_SKIP_TYPES = new Set([
   'Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action',
-  'Planting_Photo'
+  'Seed_Audit_PackingList', 'Planting_Photo'
 ]);
 // Stock_Calibration used to be skipped here too — now it's read by the
 // Stock Adjustment branch below, so it has to actually reach the loop.
@@ -4430,9 +4430,13 @@ function mvShowDetailTip(anchorEl, idx) {
         <span class="font-bold text-[#3d2610] uppercase truncate max-w-[140px]">${esc(r.customer)}</span>
         <span class="ml-auto font-black text-[#3a7ab4]">${fmtNum(r.qty)}</span>
       </div>` : `
-      <div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
-        <span class="font-bold text-[#8a7a68]">${fmtDate(r.date)}</span>
-        ${r.label ? `<span class="font-bold text-[#3d2610] truncate max-w-[160px]">${esc(r.label)}</span>` : ''}
+      <div class="flex items-baseline gap-2 py-0.5 text-[11px] ${entry.full ? '' : 'whitespace-nowrap'}">
+        <span class="font-bold text-[#8a7a68] whitespace-nowrap">${fmtDate(r.date)}</span>
+        ${r.label ? (entry.full
+          /* A calibration's reason IS the explanation the hover exists for,
+             so it is shown whole and wraps (show full), never cut to "…". */
+          ? `<span class="font-bold text-[#3d2610] flex-1 min-w-0 whitespace-normal break-words">${esc(r.label)}</span>`
+          : `<span class="font-bold text-[#3d2610] truncate max-w-[160px]">${esc(r.label)}</span>`) : ''}
         <span class="ml-auto font-black text-[#3a7ab4]">${fmtNum(r.qty)}</span>
       </div>`;
   });
@@ -4491,7 +4495,7 @@ async function runMovementReportCombined(withCull2) {
       .in('transaction_type', ['Seeds_Received', 'Planted', 'Transplanted',
           'Transplanted_Premium', 'Transplanted_DoubleTone', 'Damaged_Seeds',
           '1st_Culling', '2nd_Culling', '3rd_Culling', 'Cull3_Transfer',
-          'Stock_Calibration',
+          'Stock_Calibration', 'DTone_Nursery_Qty',
           /* Not a figure on this report — it is what holds a batch out of
              Completed. See shared/shared_batch_completed.js. */
           'Review_Rejection'])
@@ -4558,33 +4562,24 @@ async function runMovementReportCombined(withCull2) {
     if (!place || !qty) return;
     ev.push({ sc, date, place, batch: batch || '—', col, qty });
   };
-  // DOUBLE-TONE and PREMIUM CARE (PRE_NURSERY_PLOTS) are quality-grade
-  // labels, not physical trays — a batch graded Double Tone never actually
-  // moves into a tray called that; it stays in whatever numbered tray it
-  // was planted into, just re-tagged. So a "from tray [DOUBLE-TONE]" /
-  // "[PREMIUM CARE]" remark names a grade, not a place with its own
-  // standing balance — no "Planted" event ever credits one, which without
-  // this fallback debited a tray that (correctly) never existed, System-
-  // wide sweep (CHECK_pre_nursery_negative_balances.sql): every one of
-  // these came back showing transfer_in=0 too, confirming nothing ever
-  // credits "DOUBLE-TONE"/"PREMIUM CARE" as a place either. Redirected to
-  // the batch's home tray — the same fallback Damaged_Seeds already uses
-  // for exactly the same reason (see batchHomeTray below).
-  //
-  // Any OTHER tray name a "from tray [X]" remark names — a real numbered
-  // tray, or a range/list like "P28-P30" — is left as-is. Those are
-  // genuine tray-attribution gaps in the source data (see the SQL sweep),
-  // not something this report can safely paper over by guessing which
-  // real tray the seedlings actually came from.
-  const PRE_GRADE_LABELS = new Set(['DOUBLE-TONE', 'PREMIUM CARE']);
+  /* WHICH TRAY A TRANSPLANT LEAVES is the tray the batch report says it
+     left, letter for letter -- the "from tray [X]" its save writes.
+
+     PREMIUM CARE and DOUBLE-TONE are HOLDING trays and are read here the
+     way Tab 3 reads them (calcTransplanting in operation_batch_detail.html):
+       PREMIUM CARE  filled by Transplanted_Premium out of a numbered tray,
+                     emptied by the transplants and the 1st culling that
+                     name it.
+       DOUBLE-TONE   filled by the keyed "Double Tone Quantity in Nursery"
+                     (DTone_Nursery_Qty, newest row per batch), emptied the
+                     same way.
+     This used to send a transplant out of either back to the batch home
+     tray, so a seedling moved into Premium Care came off its numbered tray
+     TWICE -- once going in, once coming out -- while Premium Care kept
+     everything it was ever given and never emptied. */
   const srcTrayOf = (l) => {
     const m = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
-    const raw = m ? m[1].trim() : null;
-    if (raw && PRE_GRADE_LABELS.has(raw)) {
-      const home = batchHomeTray[_mvBatchKey(l.batch_name)];
-      return home ? home.tray : raw;
-    }
-    return raw;
+    return m ? m[1].trim() : null;
   };
 
   // Records behind Transfer In / Transplanted from PN / 3rd Culled /
@@ -4648,6 +4643,8 @@ async function runMovementReportCombined(withCull2) {
       }
       return;
     }
+
+    if (t === 'DTone_Nursery_Qty') return;   // read once per batch, below
 
     if (t === 'Damaged_Seeds') {
       const home = batchHomeTray[_mvBatchKey(b)];
@@ -4715,6 +4712,96 @@ async function runMovementReportCombined(withCull2) {
     }
   });
 
+  // The Double-Tone holding tray stock: ONE keyed figure per batch, the
+  // newest row winning, exactly as loadDtoneNurseryQty reads it on Tab 3.
+  const dtoneNewest = {};
+  logs.forEach(l => {
+    if (l.transaction_type !== 'DTone_Nursery_Qty' || l.quantity_change == null) return;
+    const k = _mvBatchKey(l.batch_name);
+    if (!k) return;
+    const when = String(l.created_at || '');
+    if (!dtoneNewest[k] || when >= dtoneNewest[k].when) dtoneNewest[k] = { when, l };
+  });
+  // Tab 3 uses the keyed figure where there is one and falls back to what
+  // was moved INTO the tray (Transplanted_DoubleTone) only where there is
+  // not, so a batch carrying both must not count both.
+  for (let i = ev.length - 1; i >= 0; i--) {
+    const e = ev[i];
+    if (e.sc === 'pre' && e.col === 'trIn' && e.place === 'DOUBLE-TONE' && dtoneNewest[_mvBatchKey(e.batch)]) ev.splice(i, 1);
+  }
+  Object.values(dtoneNewest).forEach(({ l }) => {
+    push('pre', _logDate(l), 'DOUBLE-TONE', l.batch_name, 'trIn', Math.abs(Number(l.quantity_change) || 0));
+  });
+
+  /* A SOURCE NAMING SEVERAL TRAYS IS THOSE TRAYS, never a tray of its own.
+     The Tab 3 source box takes free text, so some transplants were saved
+     "from tray [P1, P2]", "[P11-P13]" or "[P32, P33. P34]". Read as one
+     name, each became a row nothing was ever planted into, reading minus
+     the whole transplant, while P1 and P2 themselves were never reduced
+     and read high by exactly that much.
+
+     The record does not say how many came out of each tray, so the
+     transplant is taken off the trays it names IN THE ORDER NAMED, each
+     up to what that tray of this batch has standing, and anything left
+     over goes on the last one named. The batch total is exact either way;
+     only the split between the named trays is worked out. A source naming
+     no tray this batch was planted into is left exactly as it was. */
+  const _trayList = (raw) => {
+    const out = [];
+    String(raw || '').split(/[,;.&/]+|\s+and\s+|\s+/i).forEach(tok => {
+      const t = tok.trim().toUpperCase();
+      if (!t) return;
+      const rng = t.match(/^([A-Z]*)(\d+)-([A-Z]*)(\d+)$/);
+      if (rng && (!rng[3] || rng[3] === rng[1])) {
+        const a = +rng[2], b = +rng[4];
+        if (b >= a && b - a < 60) { for (let n = a; n <= b; n++) out.push(rng[1] + n); return; }
+      }
+      out.push(t);
+    });
+    return out;
+  };
+  {
+    const preEv = ev.filter(e => e.sc === 'pre');
+    // What each real tray of each batch holds, before any multi-tray source.
+    const planted = {};   // batchKey -> Map(trayKey -> real tray name)
+    const stand = {};     // place + SEP + batchKey -> balance
+    const SEPX = '\x01';
+    const isMulti = (place) => _trayList(place).length > 1;
+    preEv.forEach(e => {
+      const bk = _mvBatchKey(e.batch);
+      if (e.col === 'planted' || e.col === 'trIn') {
+        (planted[bk] = planted[bk] || new Map()).set(_mvPlotKey(e.place), e.place);
+      }
+    });
+    preEv.forEach(e => {
+      if (isMulti(e.place)) return;
+      const c = MOVE_COLS.pre.find(x => x.key === e.col);
+      if (!c || !c.sign) return;
+      const k = e.place + SEPX + _mvBatchKey(e.batch);
+      stand[k] = (stand[k] || 0) + c.sign * e.qty;
+    });
+    const multi = preEv.filter(e => e.col === 'transOut' && isMulti(e.place))
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    multi.forEach(e => {
+      const bk = _mvBatchKey(e.batch);
+      const known = planted[bk] || new Map();
+      const named = _trayList(e.place).map(t => known.get(_mvPlotKey(t))).filter(Boolean);
+      if (!named.length) return;
+      const idx = ev.indexOf(e);
+      if (idx >= 0) ev.splice(idx, 1);
+      let left = e.qty;
+      named.forEach((tray, n) => {
+        if (left <= 0) return;
+        const k = tray + SEPX + bk;
+        const take = n === named.length - 1 ? left : Math.max(0, Math.min(left, stand[k] || 0));
+        if (!take) return;
+        ev.push({ sc: 'pre', date: e.date, place: tray, batch: e.batch, col: 'transOut', qty: take });
+        stand[k] = (stand[k] || 0) - take;
+        left -= take;
+      });
+    });
+  }
+
   // ── Sales, only against a plot·batch the batch report already has ──
   // Only worth doing when the Main Nursery section is actually wanted.
   const unmatchedSales = [];
@@ -4773,7 +4860,34 @@ async function runMovementReportCombined(withCull2) {
     });
   }
 
-  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, saleDetails, colDetails };
+  /* APPROVED CALIBRATIONS BY BATCH, for the Pre-Nursery rows they explain.
+     A tray reading -1 or 6 with nothing on its row is usually a holding tray
+     a Transplanting adjustment settled: the adjustment moves the plot, not
+     the tray, so the tray goes on reading the difference. 224 and 234 are
+     that (224 和234 都是以为calibration 导致的 加虚线). Read here once; the
+     section dots the figure and the hover names the calibration. */
+  const batchCals = {};
+  logs.forEach(l => {
+    if (l.transaction_type !== 'Stock_Calibration') return;
+    const ap = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/i);
+    const q = Number(l.quantity_change) || 0;
+    if (!ap || !q) return;
+    const body = (l.remark || '').replace(ap[0], '');
+    const noTx = body.replace(/TxTray:\s*([^.]+?)\s*\.\s*/i, '');
+    const tray = noTx.match(/Tray:\s*([^.]+?)\s*(?:\.|$)/i);
+    let reason = noTx.replace(/Report:\s*[^.]+?\s*\.\s*/i, '')
+                     .replace(/Plot:\s*[^.]+?\s*\.\s*/i, '')
+                     .replace(/Side:\s*(seed|plot)\s*\.\s*/i, '')
+                     .replace(/Tray:\s*[^.]+?\s*\.\s*/i, '').trim();
+    const k = _mvBatchKey(l.batch_name);
+    (batchCals[k] = batchCals[k] || []).push({
+      date: _logDate(l), qty: q,
+      tray: tray ? tray[1].trim().toUpperCase() : '',
+      plot: String(l.plot_name || '').trim().toUpperCase(),
+      label: [l.plot_name ? 'Plot ' + l.plot_name : '', tray ? 'Tray ' + tray[1].trim() : '', reason].filter(Boolean).join(' · ')
+    });
+  });
+  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, saleDetails, colDetails, batchCals };
   const sections = [];
   if (wantPre)  sections.push(buildMovementSection('pre',  ev.filter(e => e.sc === 'pre'),  { ...ctx, unmatchedSales: [] }));
   // The Summary Report's main section draws with the cull2 column ('main2');
@@ -4923,6 +5037,36 @@ function buildMovementSection(scope, ev, ctx) {
       onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(n)}</span></td>`;
   };
 
+  /* A Pre-Nursery figure a CALIBRATION explains is DOTTED, and the hover
+     names it. Matched first on the tray the calibration names (or the plot
+     it is keyed against); failing that, on a calibration total EXACTLY the
+     size of the figure -- exactly, never nearly, the house rule for a
+     difference being called explained. */
+  const calsFor = (r) => {
+    if (scope !== 'pre') return null;
+    const all = (ctx.batchCals || {})[_mvBatchKey(r.batch)] || [];
+    if (!all.length) return null;
+    const kk = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const place = kk(r.place);
+    const named = all.filter(c => (c.tray && kk(c.tray) === place) || (c.plot && kk(c.plot) === place));
+    if (named.length) return named;
+    /* A batch usually carries more than one calibration -- a seed-side one
+       beside the tray-named one -- so the SUM is rarely the figure. One of
+       them exactly the figure's size is (234 PREMIUM CARE 6). */
+    const figs = [r.closing, r.bf].map(n => Math.abs(Number(n) || 0)).filter(Boolean);
+    if (!figs.length) return null;
+    const one = all.filter(c => figs.includes(Math.abs(c.qty)));
+    if (one.length) return one;
+    const sum = Math.abs(all.reduce((t, c) => t + c.qty, 0));
+    return figs.includes(sum) ? all : null;
+  };
+  const calCell = (n, cls, cals) => {
+    if (!cals || !n) return fmtCell(n, cls);
+    const idx = _mvDetailPool.push({ title: 'Stock Calibration', full: true, rows: cals }) - 1;
+    return `<td class="${cls || ''}"><span class="t3-cal-dot cursor-help border-b border-dotted border-current"
+      onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(n)}</span></td>`;
+  };
+
   // ── Body: a section per nursery, a group per tray/plot ──
   // Grouped by whichever the reader asked for. By batch, a batch that has
   // been transferred shows every plot it now sits in under one heading —
@@ -4953,7 +5097,10 @@ function buildMovementSection(scope, ev, ctx) {
     // Alternating band per ROW (not per group) — every line gets its own
     // dark/light step, so a batch with several tray/plot rows still shows
     // each one distinctly instead of one solid block of colour.
+    const gCals = [];
+    g.list.forEach(r => (calsFor(r) || []).forEach(c => { if (!gCals.includes(c)) gCals.push(c); }));
     g.list.forEach((r, i) => {
+      const rCals = calsFor(r);
       band = !band;
       const zebra = band ? ' style="background:#f0e6d2"' : '';
       // The group key and the group's Balance are shown once per group, not
@@ -4969,10 +5116,10 @@ function buildMovementSection(scope, ev, ctx) {
         ${i === 0 ? `<td rowspan="${g.list.length}" class="col-label font-black text-[#8a7a68] align-middle" style="background:#fff">${g.key}</td>` : ''}
         <td class="col-label">${otherOf(r) || '—'}</td>
         <td class="col-label text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
-        ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
+        ${calCell(r.bf, 'text-[#8a7a68] font-black', rCals)}
         ${cols.map(c => fmtDetailCell(r, c)).join('')}
-        ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-balance-total font-black text-[#8a7a68] align-middle" style="background:#fff">${fmtNum(bal)}</td>` : ''}
+        ${calCell(r.closing, 'text-[#4a7a2e] font-black', rCals)}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-balance-total font-black text-[#8a7a68] align-middle" style="background:#fff">${gCals.length && bal ? (() => { const gi = _mvDetailPool.push({ title: 'Stock Calibration', full: true, rows: gCals }) - 1; return `<span class="t3-cal-dot cursor-help border-b border-dotted border-current" onmouseenter="mvShowDetailTip(this, ${gi})" onmouseleave="mvHideDetailTip()">${fmtNum(bal)}</span>`; })() : fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
