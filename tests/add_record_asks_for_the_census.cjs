@@ -699,8 +699,33 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
       r.querySelector('input.t3-qty').value = '25';
       window.calcTransplanting();
     }, addTray.n);
+    /* 根本都没超过: a tray the SAVED rows already over-draw must not block a
+       new row on another tray. One saved row is pushed far past its tray. */
+    const pushed = await page.evaluate((n) => {
+      // Two trays the batch planted: PX1 the saved records over-draw, PX2 the new row uses.
+      preNurseryTrayData.push({ name: 'PX1', initialQty: 100, currentQty: 100 },
+                              { name: 'PX2', initialQty: 5000, currentQty: 5000 });
+      window.calcTransplanting();
+      const saved = document.querySelector('#transplant-rows-container .transplant-row');
+      const draftRow = document.querySelector(`#transplant-draft-${n} .transplant-row`);
+      if (!saved || !draftRow) return null;
+      saved.querySelector('.t3-source-tray').value = 'PX1';
+      saved.querySelector('.t3-qty').value = '999';
+      draftRow.querySelector('.t3-source-tray').value = 'PX2';
+      window.__TOASTS = [];
+      return saved.querySelector('.t3-source-tray').value === 'PX1' ? 'PX1' : null;
+    }, addTray.n);
     await page.evaluate((n) => { const b = document.querySelector(`#transplant-draft-${n} .t3-inline-save`); if (b) b.click(); }, addTray.n);
     await page.waitForTimeout(1500);
+    if (pushed) {
+      const t = await page.evaluate(() => window.__TOASTS || []);
+      checkFalse('an over-drawn tray the new row does not touch does not block the save',
+                 t.some(x => x.t === 'error' && /over-drawn/i.test(x.m)));
+      checkTrue('…it is said as a warning, naming the tray',
+                t.some(x => x.t === 'warn' && x.m.indexOf(pushed) >= 0));
+    } else {
+      check('the fixture has a saved row on another tray to over-draw', 'none', 'one');
+    }
     const added = await page.evaluate(() => (window.__INSERTED || [])
       .filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 25)
       .map(r => ({ plot: r.plot_name, day: r.transaction_date })));

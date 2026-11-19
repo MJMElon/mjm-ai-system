@@ -7657,13 +7657,31 @@
                     const qty  = parseInt(row.querySelector('.t3-qty').value) || 0;
                     if (tray && trayUsed.hasOwnProperty(tray)) trayUsed[tray] -= qty;
                 });
-                const overdrawn = Object.entries(trayUsed).filter(([,bal]) => bal < 0);
+                /* ONLY A TRAY THE NEW ROWS DRAW FROM CAN BLOCK THE SAVE. A tray
+                   already over-drawn in the SAVED records was blocking every
+                   save on the tab, whatever was being added -- a P12 row
+                   refused over P11, which nobody touched (根本都没超过). The new
+                   rows are the draft lines; a saved row is corrected through
+                   its own Edit. An untouched over-drawn tray is still SAID, as a
+                   warning, so it is not lost. */
+                const draftTrays = new Set();
+                document.querySelectorAll('.t3-draft-card .transplant-row').forEach(row => {
+                    const tray = row.querySelector('.t3-source-tray').value;
+                    const qty  = parseInt(row.querySelector('.t3-qty').value) || 0;
+                    if (tray && qty > 0) draftTrays.add(tray);
+                });
+                const overAll   = Object.entries(trayUsed).filter(([,bal]) => bal < 0);
+                const overdrawn = overAll.filter(([name]) => draftTrays.has(name));
+                const overOld   = overAll.filter(([name]) => !draftTrays.has(name));
                 if (overdrawn.length > 0) {
                     const msg = overdrawn.map(([name, bal]) => `${name}: exceeds by ${Math.abs(bal).toLocaleString()}`).join(', ');
                     showToast(`Cannot save — tray over-drawn: ${msg}`, 'error');
                     btn.innerText = originalText; btn.disabled = false;
                     return;
                 }
+                const _overOldMsg = overOld.length
+                    ? overOld.map(([name, bal]) => `${name} by ${Math.abs(bal).toLocaleString()}`).join(', ')
+                    : '';
 
                 /* ROWS THIS FORM DOES NOT OWN, CARRIED ACROSS THE REPLACE.
 
@@ -7817,6 +7835,7 @@
                 updateTracker(2);
 
                 showToast(`Transplant report saved — ${logsToInsert.length} record(s) logged.`, 'success');
+                if (_overOldMsg) showToast(`Note: the saved records already over-draw ${_overOldMsg}. This save did not touch it; check those rows.`, 'warn');
                 btn.innerText = originalText; btn.disabled = false;
 
             } catch(e) {
