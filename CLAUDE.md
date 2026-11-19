@@ -2627,6 +2627,77 @@ green on a board that narrows nothing — and sweeps every page for anything
 still reaching for the deleted one. **8 of its 10 checks fail on the previous
 code**, the first in the office's own two names.
 
+### CONTOH IS NOT A WORD THE BOARD INVENTS, and the repair had a precondition
+
+The office, over a board row reading `B3 | Membesar | 18 Aug 2026 | 91D OVER
+| 17 Aug 2026 · Contoh`: *"为什么这个还是contoh？"*
+
+**IT IS THE REAL `recorded_by` OF A REAL ROW, and the row was GENERATED.** A
+fresh install of the FC Portal seeds itself with a made-up plot log so there
+is something on screen before anybody has recorded a day, and every seeded
+entry is stamped Contoh. For such a row the honest answer to *who last
+updated this plot* is NOBODY. **The second tell is on the line itself**: B3
+is Membesar due the DAY AFTER it started, and Membesar is a 270-day stage —
+`applyStages` reads a stage with no `ideal_days` as 1, and so does a row.
+
+**NOTHING CAN SEND ONE ANY MORE, which was checked rather than assumed.**
+`data.js` marks every seeded entry and every seeded daily report, and
+`sync.js` refuses both — `if (e.uid && !e.demo)` for entries, a `!h.demo`
+filter for reports. The flag arrived AFTER the first version that synced, so
+a device that pushed before it carries its sample log on the server still.
+
+**WHICH OF TWO TABLES IT SITS ON DECIDES HOW BAD IT IS**, because `plotLine`
+builds Last update out of both and shows whichever happened later, a tie
+going to the daily report. A sample DAILY REPORT spoils only that cell. A
+sample LOG ENTRY means the stage, the due date and the days-over on that line
+were generated too — which is B3.
+
+**THE PRECONDITION IS THE WHOLE FIND, and the old file did not know about
+it.** `migration_palms_no_takebacks.sql` puts an AFTER DELETE trigger on the
+plot log that leaves the `client_uid` in `fcportal_palms_tombstones`, and a
+tombstoned entry can never be inserted again by any phone, an old build
+included. **Without it, sync pushes every local entry the server has not
+got** — that migration was written for exactly this resurrection — so
+deleting the sample rows would be a repair of today and the phones would put
+them back within hours. So `RUN_ME_the_sample_log_is_not_a_record.sql`
+**REFUSES** and names the file to run first, rather than deleting and looking
+as though it worked.
+
+**IT IS A DELETE AND NOT A MARK, which is the one place in this system where
+that is right.** Everywhere else a decision is recorded rather than removed,
+because a row is somebody saying something. These rows are not: nobody keyed
+them, they say nothing about any plot, and there is nothing to keep a record
+OF.
+
+**WHAT IT COSTS: a plot whose ONLY entry is a sample one LEAVES THE BOARD.**
+`boardLines` draws a plot from its log, so with no entry there is no line —
+which is the truth, and it is the fault this board exists to stop only when
+nothing says where the plot went. The result NAMES every one, so a plot going
+quiet is expected rather than reported as the repair breaking the board. B3
+is one of them. It comes back the moment somebody records a stage on it.
+
+**What is NOT closed**: the daily report table carries no tombstone, so an
+old build could in principle push a sample report again. Section 4 of
+`CHECK_why_a_plot_still_reads_contoh.sql` is how you tell — a `created_at`
+from the last few weeks means a device is still sending them, and clearing
+that device sample data is the rest of the answer.
+
+**`cleanup_palms_demo_rows.sql` is DELETED and its reasoning is carried into
+both new files.** It could not be pasted: **five result sets**, so its own
+LOOK FIRST section answered into the void; a trailing comment block after the
+last semicolon; and a `BEGIN … SELECT … COMMIT` telling the reader to read
+the counts before committing, which the SQL Editor cannot do because it runs
+the whole paste. An unrunnable file beside a runnable one is how somebody
+runs the wrong one. `check_what_i_have_run.sql` section 6 was repointed and
+now names the precondition too.
+
+Both files were driven on the scratch Postgres against the office own
+shapes — a sample-only plot, a sample report over real work, a sample entry
+with real work after it, and one that landed last week — with the trigger
+absent (refuses, deletes nothing), present (deletes, proves nought left, the
+real work untouched), a re-push of a tombstoned entry (`INSERT 0 0`), and
+run twice.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
@@ -8374,6 +8445,60 @@ the batch total is exact, only the split is worked out. A list naming no
 tray the batch was planted into is left as it was.
 `tests/the_pre_nursery_follows_the_batch_report.cjs`; nothing to run in
 the database.
+
+### A HOLDING TRAY BELOW NOUGHT is the ledger OR the dates, never anything else
+
+The office, over the Summary Report: *"summary report里面为什么premium care是
+负数？"*
+
+**NOTHING IN THE PAGE CAN MAKE IT NEGATIVE, which is why this has one answer
+and not a list of them.** Premium Care is a holding tray — nothing is planted
+into it, seedlings ARRIVE from a numbered tray and leave again — so its
+Balance is `trIn + planted − cull1 − transOut`, counted cumulatively up to
+the As At date. Every movement column is `Math.abs`, Seed Damage carries
+`sign: 0`, and only B/F and Balance can go below nought at all. So below
+nought means exactly one thing: **the ledger says more seedlings left that
+tray than ever entered it.**
+
+**AND THERE ARE TWO WAYS FOR THAT TO BE TRUE, with different repairs.** They
+are told apart by the RUNNING BALANCE in date order, which is what
+`CHECK_why_premium_care_is_negative.sql` works out:
+
+- **THE LEDGER IS SHORT.** Added over all time the tray is still below
+  nought. A figure is wrong — the arrival too small, a transplant out too
+  big, the 1st culling too big, or **a transplant naming `PREMIUM CARE` when
+  the seedlings came out of a numbered tray**, which is the commonest of the
+  four because the source box offers that name at the top of its own group.
+- **THE DATES ARE OUT OF ORDER.** Over all time it adds up, and a departure
+  is DATED BEFORE the arrival that supplied it. Nothing is missing and no
+  quantity is wrong; a DATE has to move. **The B/F column is where this
+  shows**, being everything strictly before the month started, so the office
+  can be looking at a negative in a month whose Balance is perfectly right.
+
+**IT IS ASKED BY DAY AND NEVER BY ROW.** The report is cut at a DATE, so an
+arrival and a departure on the same day are both inside the figure whatever
+order they were keyed in. A running balance worked out row by row reports a
+dip no reading of the report can ever show — the fixture keys the departure
+first on purpose, and it must not be named.
+
+**DOUBLE-TONE HAS A THIRD WAY, and it is not shared with Premium Care.** A
+keyed *Double Tone Quantity in Nursery* **REPLACES** the arrivals rather than
+adding to them (`dtoneNewest`, the rule `calcTransplanting` follows), so a
+figure keyed smaller than what has already left that tray takes the tray
+below nought on its own and no transplant is at fault. The check names that
+case in its own words rather than blaming a transplant.
+
+**The one thing the check cannot date as exactly as the report** is a row
+with no `transaction_date`: `_logDate` reads a `Date:` out of the remark as
+its middle rung and the SQL Editor cannot be handed a regular expression, so
+those rows are NAMED in a section of their own instead of being parsed.
+`CHECK_trays_that_went_negative.sql` is the drill-down for the numbered trays
+of a batch this one names, and it is the LEDGER half only — it has no As At
+date, so it cannot see the second cause at all, which is the whole reason
+this file exists beside it.
+
+**Nothing to run in the database and nothing in the page changed.** The
+figure the report shows is the figure the ledger holds.
 
 ## Mata Malam is set in the office, and the app only follows
 
