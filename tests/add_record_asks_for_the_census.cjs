@@ -197,7 +197,14 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
   const rows = Array.from(document.querySelectorAll(`#transplant-draft-${n}-trays .transplant-row`));
   rows.forEach((r, k) => {
     const t = r.querySelector('select.t3-source-tray');
-    const opts = Array.from(t.options).map(o => o.value).filter(Boolean);
+    // A pre-nursery tray: PREMIUM CARE can only be drawn from once something
+    // has been moved into it, which this fixture never does (section 7c).
+    const all = Array.from(t.options).map(o => o.value).filter(Boolean);
+    const pn = all.filter(v => v !== 'PREMIUM CARE' && v !== 'DOUBLE-TONE');
+    // The fixture plants no tray, so the dropdown offers only the two
+    // holding trays; the ledger own source tray P2 is offered by hand.
+    if (!pn.length) { const o = document.createElement('option'); o.value = o.textContent = 'P2'; t.appendChild(o); pn.push('P2'); }
+    const opts = pn;
     if (opts.length) t.value = opts[Math.min(k, opts.length - 1)];
     r.querySelector('input.t3-qty').value = String(qtys[k] || 0);
   });
@@ -755,6 +762,47 @@ const fillDraft = (page, n, dateISO, qtys) => page.evaluate(({ n, dateISO, qtys 
     return { opened: after - before, said: window.__TOASTS.some(t => t.t === 'error' && /locked/i.test(t.m)) };
   });
   check('a locked month opens nothing and says so', [monthShut.opened, monthShut.said], [0, true]);
+
+  console.log('\n── 7c · PREMIUM CARE IS FILLED BEFORE IT IS EMPTIED ──');
+  /* 要能够transplant from premium care to main plot, 一定要有transaction from
+     pre tray to premium care first. A new row drawing from PREMIUM CARE is
+     refused until some row moves seedlings INTO it on or before its day. */
+  const premTry = async (fillDay) => {
+    await page.evaluate((fillDay) => {
+      window.__TOASTS = []; window.__INSERTED = [];
+      document.querySelectorAll('#transplant-rows-container .t3-draft-card, .t3-fake-fill').forEach(el => el.remove());
+      if (fillDay) {
+        // a SAVED fill row, the shape the sync rebuilds: P2 into PREMIUM CARE
+        const r = document.createElement('div');
+        r.className = 'action-row transplant-row t3-fake-fill'; r.id = 'fake-fill';
+        r.style.display = 'none';
+        r.innerHTML = `<input class="t3-date" value="${fillDay}"><select class="t3-source-tray"><option value="P2" selected>P2</option></select>
+          <select class="t3-dest-type"><option value="premium" selected>premium</option></select><input class="t3-dest-plot" value="PREMIUM CARE"><input class="t3-qty" value="50">`;
+        document.getElementById('transplant-rows-container').appendChild(r);
+      }
+      window.addTransplantRow();
+    }, fillDay);
+    const n = await liveDraft(page);
+    await fillDraft(page, n, '2026-10-22', [30]);
+    await page.evaluate((n) => {
+      const t = document.querySelector(`#transplant-draft-${n}-trays .transplant-row select.t3-source-tray`);
+      t.value = 'PREMIUM CARE';
+    }, n);
+    await page.evaluate(async () => { await window.saveTransplantTab(); });
+    await page.waitForTimeout(800);
+    const out = await page.evaluate(() => ({
+      refused: (window.__TOASTS || []).some(t => t.t === 'error' && /PREMIUM CARE/.test(t.m) && /first/.test(t.m)),
+      wrote: (window.__INSERTED || []).filter(r => r && r.transaction_type === 'Transplanted' && r.quantity_change === 30).length
+    }));
+    await page.evaluate(() => document.querySelectorAll('#transplant-rows-container .t3-draft-card, .t3-fake-fill').forEach(el => el.remove()));
+    return out;
+  };
+  const noFill = await premTry(null);
+  check('a row from PREMIUM CARE with nothing ever moved into it is refused, and nothing is written', [noFill.refused, noFill.wrote], [true, 0]);
+  const lateFill = await premTry('2026-10-25');
+  check('…and so is one whose only fill is dated AFTER it', [lateFill.refused, lateFill.wrote], [true, 0]);
+  const goodFill = await premTry('2026-10-20');
+  check('a fill from a pre tray on or before its day lets it save', [goodFill.refused, goodFill.wrote], [false, 1]);
 
   console.log('\n── 8 · A CENSUS THAT WILL NOT UPLOAD IS A WARNING, NEVER AN ERROR ──');
   /* The report is in the database by the time the census goes up. Saying

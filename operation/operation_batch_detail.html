@@ -7683,6 +7683,41 @@
                     ? overOld.map(([name, bal]) => `${name} by ${Math.abs(bal).toLocaleString()}`).join(', ')
                     : '';
 
+                /* PREMIUM CARE IS FILLED BEFORE IT IS EMPTIED. A seedling can
+                   only leave PREMIUM CARE for a main plot once a pre-nursery
+                   tray has moved seedlings INTO it (要能够transplant from
+                   premium care to main plot, 一定要有transaction from pre tray
+                   to premium care first). So a NEW row drawing from PREMIUM
+                   CARE is refused unless some row -- saved or in this save --
+                   moves seedlings into PREMIUM CARE on or before its day. A
+                   saved row is left alone, the over-draw rule above. */
+                const _premFillDays = [];
+                document.querySelectorAll('.action-row.transplant-row').forEach(row => {
+                    const type = (row.querySelector('.t3-dest-type') || {}).value || '';
+                    const qty  = parseInt((row.querySelector('.t3-qty') || {}).value) || 0;
+                    const src  = (row.querySelector('.t3-source-tray') || {}).value || '';
+                    if (type === 'premium' && qty > 0 && src && src !== 'PREMIUM CARE')
+                        _premFillDays.push((row.querySelector('.t3-date') || {}).value || '');
+                });
+                const _premNoFill = [];
+                document.querySelectorAll('.t3-draft-card .transplant-row').forEach(row => {
+                    const src  = (row.querySelector('.t3-source-tray') || {}).value || '';
+                    const qty  = parseInt((row.querySelector('.t3-qty') || {}).value) || 0;
+                    if (src !== 'PREMIUM CARE' || qty <= 0) return;
+                    const day  = (row.querySelector('.t3-date') || {}).value || '';
+                    const plot = (row.querySelector('.t3-dest-plot') || {}).value || '';
+                    const ok = _premFillDays.some(d => !day || !d || d <= day);
+                    if (!ok) _premNoFill.push(`${plot || 'a plot'}${day ? ' on ' + day : ''}`);
+                });
+                if (_premNoFill.length > 0) {
+                    const what = _premFillDays.length
+                        ? 'nothing was moved into PREMIUM CARE on or before that day'
+                        : 'nothing has been moved into PREMIUM CARE yet';
+                    showToast(`Cannot save — ${_premNoFill.join(', ')} draws from PREMIUM CARE, but ${what}. Record the move from a pre-nursery tray to PREMIUM CARE first.`, 'error');
+                    btn.innerText = originalText; btn.disabled = false;
+                    return;
+                }
+
                 /* ROWS THIS FORM DOES NOT OWN, CARRIED ACROSS THE REPLACE.
 
                    A transplanting row written by an approved adjustment — a
