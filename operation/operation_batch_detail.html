@@ -6126,10 +6126,12 @@
            here — and the answer is the CLASS, which `setTabLock` sets for every
            reason a tab is not editable, rather than a second reading of the
            banner. */
-        /* + Add Tray on a SAVED card: a new record whose plot and day are the
-           card's own, so the save lands it in the same card (one plot, one day).
-           It goes through the ordinary Add Record form and the ordinary save, so
-           every rule that save carries still applies. */
+        /* + Add Tray on a SAVED card adds a tray ROW INSIDE THE CARD, the same
+           place, rather than a new record further down: 直接开多一行 同一个地方.
+           Underneath it is an ordinary draft (so the ordinary save writes it,
+           every rule included), its date, category and plot set to the card
+           own and its head hidden, moved into the card. A second press adds
+           another row to that same draft. */
         function addTrayToT3Card(i) {
             if (_t3CardLocked()) { showToast('This report is signed off — unverify it to add a tray.', 'error'); return; }
             const card = document.querySelector(`.t3-saved-row[data-card-index="${i}"]`);
@@ -6139,11 +6141,21 @@
             if (/^\d{4}-\d{2}-\d{2}$/.test(day) && window.MJMMonthLock && MJMMonthLock.isDateLocked(day)) {
                 showToast('That month is locked — a tray cannot be added to it.', 'error'); return;
             }
+            const open = card.querySelector('.t3-draft-card');
+            if (open) {
+                const m = String(open.id).match(/transplant-draft-(\d+)$/);
+                if (m) addTransplantTray(parseInt(m[1], 10));
+                const rows = open.querySelectorAll('select.t3-source-tray');
+                if (rows.length) try { rows[rows.length - 1].focus(); } catch (e) {}
+                return;
+            }
             addTransplantRow();
             const n = transplantDraftCount;
-            const headId = `transplant-draft-${n}-head`;
+            const id = `transplant-draft-${n}`;
+            const headId = `${id}-head`;
             const head = document.getElementById(headId);
-            if (!head) return;
+            const draft = document.getElementById(id);
+            if (!head || !draft) return;
             const pn = plot.toUpperCase();
             const type = pn === 'PREMIUM CARE' ? 'premium' : pn === 'DOUBLE-TONE' ? 'doubletone' : 'main';
             const d = head.querySelector('.t3-date');
@@ -6156,12 +6168,27 @@
                 ps.value = plot;
             }
             _t3SyncDraft(n);
-            const draft = document.getElementById(`transplant-draft-${n}`);
-            if (draft) {
-                draft.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                const tray = draft.querySelector('select.t3-source-tray');
-                if (tray) setTimeout(() => { try { tray.focus(); } catch (e) {} }, 300);
-            }
+            /* Into the card, as a plain row: the head, the title and the census
+               box are this card own already, so they are hidden, not removed --
+               the hidden head is what the tray lines mirror. */
+            head.style.display = 'none';
+            const list = document.getElementById(`${id}-censuslist`);
+            if (list) list.style.display = 'none';
+            Array.from(draft.children).forEach(el => {
+                if (el.children.length === 0 && /New Record/i.test(el.textContent || '')) el.style.display = 'none';
+            });
+            draft.classList.add('t3-inline-draft');
+            draft.classList.remove('border-2', 'shadow-sm', 'p-4', 'rounded-2xl');
+            draft.classList.add('px-4', 'py-3', 'border-t', 'border-dashed');
+            const total = document.getElementById(`${id}-total`);
+            const bar = total ? total.closest('.flex') : null;
+            if (bar) bar.insertAdjacentHTML('beforeend',
+                `<button type="button" onclick="saveTransplantTab()" class="t3-inline-save btn-earth text-[10px] px-4 py-2">Save</button>`);
+            const foot = card.querySelector('.t3-card-addtray');
+            const footRow = foot ? foot.parentElement : null;
+            if (footRow) card.insertBefore(draft, footRow); else card.appendChild(draft);
+            const tray = draft.querySelector('select.t3-source-tray');
+            if (tray) setTimeout(() => { try { tray.focus(); } catch (e) {} }, 100);
         }
 
         function _t3CardLocked() {
