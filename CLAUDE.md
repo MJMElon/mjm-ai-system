@@ -8409,6 +8409,23 @@ the app's Settings moved there, because a guard only does the check-ins.
 - **Nothing saved is nobody having been asked**: until the first Save the
   phones keep the times they have, and the card says so.
 
+**ONE PIN IS ONE CHECK-IN AND ONE PHOTO.** At every check-in time the app
+raises a task per pin of the location (`getTaskPoints` in the app), named
+after the pin, and the record carries it as `point` (a column on
+`mata_malam_logs`). A location with no pin has one task a time and no
+point, as before. A record with no point is from before this and answers
+every pin of its location and time (`logCoversPoint`), so nothing old is
+marked missed. A pin is told apart by its NAME, so the card refuses two
+pins of one location sharing one, and a pin renamed is a new task from
+that night on.
+
+**AND ONE ROAD TRACK RUNS THROUGH ALL OF A ROUND'S PINS.** A round is one
+location at one check-in time. The track is started once, carries on while
+every pin is checked in, and is stopped after the last; it is stored on
+the round's FIRST check-in (`roundAnchor` in the app), which is the one
+card that waits in the To-Do List. The other pins' records carry no
+route of their own.
+
 **What each person may USE is on Portal View & Function**, a Mata Malam
 row under Maintenance with five switches: `home` (main task), `photo`
 (capture photo), `gps` (GPS track record), `history`, `report`. It is ONE

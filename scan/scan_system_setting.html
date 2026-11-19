@@ -308,7 +308,7 @@
       <div id="mm-locs"></div>
 
       <div class="mm-h">Map pins</div>
-      <div class="muted" style="margin-bottom:8px;">A location can have as many pins as it has places to check. The coloured outlines are the boundaries uploaded below.</div>
+      <div class="muted" style="margin-bottom:8px;">Each pin is one place to check in: at every check-in time the guard gets one task and takes one photo for each pin of the location. The coloured outlines are the boundaries uploaded below.</div>
       <div class="mm-pins" id="mm-pins"></div>
       <div class="muted" id="mm-pin-hint" style="margin-bottom:8px;"></div>
       <div id="mm-map">The map is loading…</div>
@@ -1364,6 +1364,13 @@ async function mmSave() {
   else {
     const dup = mmActive().find(l => new Set(mm.locations[l.code].slots).size !== mm.locations[l.code].slots.length);
     if (dup) problem = `${dup.name} has the same time twice.`;
+    /* A pin is a check-in of its own on the phone, told apart by its NAME: two pins of one
+       location sharing a name would be one task there, and one of the two places never visited. */
+    const twin = !dup && mmActive().find(l => {
+      const names = mmPinsOf(l.code).map(p => (String(p.name || '').trim() || l.name).toLowerCase());
+      return new Set(names).size !== names.length;
+    });
+    if (twin) problem = `${twin.name} has two pins with the same name. Each pin is its own check-in on the phone, so give each a name of its own.`;
   }
   if (problem) { status.innerHTML = `<span style="color:#b91c1c">${esc(problem)}</span>`; return; }
 
