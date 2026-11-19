@@ -17,7 +17,7 @@
 --
 -- Safe to run twice.
 --
--- WHAT A GOOD RESULT LOOKS LIKE: every check reads OK. The two DO
+-- WHAT A GOOD RESULT LOOKS LIKE: every check reads OK and the Imbok line 0. The two DO
 -- lines at the foot are counts to read, not faults: suspected twin
 -- DOs are rows with the same order, day, quantity and first line,
 -- made within ten minutes of each other in the last 60 days.
@@ -106,6 +106,55 @@ BEGIN
   END IF;
 END $$;
 
+-- 4. ONE ORDER, NEVER MORE SEALS THAN ITS CONSENTS ALLOW, counted over every
+--    scan point. Two phones can take the last seal in the same second, and only
+--    the database sees both, so the insert is refused here. The cap is per AL:
+--    every consent signed on that AL added together, against every seal scanned
+--    on any of them. A merged card files its scans against any member consent,
+--    so a cap per consent would refuse a seal the order still has room for.
+--    The phone reads the words MJM_ORDER_FULL and takes the seal back.
+CREATE OR REPLACE FUNCTION public.fcportal_scan_cap()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_al   TEXT;
+  v_cap  BIGINT;
+  v_have BIGINT;
+BEGIN
+  SELECT m.al_number INTO v_al FROM public.mobile_consent_records m WHERE m.id::text = NEW.consent_id::text;
+  IF v_al IS NULL THEN
+    RETURN NEW;
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtext('fcportal_scan_cap:' || v_al));
+  SELECT coalesce(sum(m.consent_qty), 0) INTO v_cap FROM public.mobile_consent_records m WHERE m.al_number = v_al;
+  IF v_cap <= 0 THEN
+    RETURN NEW;
+  END IF;
+  SELECT count(*) INTO v_have
+    FROM public.fcportal_scan_records r
+   WHERE r.consent_id::text IN (SELECT m.id::text FROM public.mobile_consent_records m WHERE m.al_number = v_al);
+  IF v_have >= v_cap THEN
+    RAISE EXCEPTION 'MJM_ORDER_FULL: order % already holds % of % seals', v_al, v_have, v_cap;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS fcportal_scan_cap ON public.fcportal_scan_records;
+CREATE TRIGGER fcportal_scan_cap BEFORE INSERT ON public.fcportal_scan_records
+  FOR EACH ROW EXECUTE FUNCTION public.fcportal_scan_cap();
+
+-- 5. IMBOK ENTERPRISE, AL BB0RS8: 1,231 scans held against a consent of 1,000,
+--    none of them on a DO, every one from before scan points existed, so no
+--    phone may clear them. Only the scans on that one consent that name no
+--    scan point and are on no DO are taken off. A second run finds none.
+DELETE FROM public.fcportal_scan_records r
+ WHERE r.consent_id::text = '3bdc6612-d75c-49d9-a879-1305ff22aa1b'
+   AND r.do_number IS NULL
+   AND (r.scan_point IS NULL OR r.scan_point = '');
+
 NOTIFY pgrst, 'reload schema';
 
 SELECT 1 AS n, 'scan_point column' AS item,
@@ -116,7 +165,13 @@ UNION ALL
 SELECT 2, 'fcportal_reset_scans function',
        CASE WHEN to_regprocedure('public.fcportal_reset_scans(text[],text,boolean)') IS NOT NULL THEN 'OK' ELSE 'MISSING' END
 UNION ALL
-SELECT 3, 'scan rows naming no scan point (shown as Earlier scans)',
+SELECT 3, 'order cap trigger',
+       CASE WHEN EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'fcportal_scan_cap') THEN 'OK' ELSE 'MISSING' END
+UNION ALL
+SELECT 31, 'Imbok BB0RS8 scans left (should read 0)',
+       (SELECT count(*)::text FROM public.fcportal_scan_records WHERE consent_id::text = '3bdc6612-d75c-49d9-a879-1305ff22aa1b')
+UNION ALL
+SELECT 32, 'scan rows naming no scan point (shown as Earlier scans)',
        (SELECT count(*)::text FROM public.fcportal_scan_records WHERE scan_point IS NULL)
 UNION ALL
 SELECT 4, 'DO press id unique index',
