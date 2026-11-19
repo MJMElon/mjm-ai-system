@@ -7904,6 +7904,24 @@ chosen for the office -- both are offered, marked before and after.
 
 `tests/seal_dashboard.cjs` holds the office page.
 
+## A consent downloads as a PDF, built from the saved row
+
+The Admin Portal's Customer Consent history carries a **PDF** button on every
+record (`Mobile/src/pages/Consent.jsx`, `buildConsentPdf` in
+`Mobile/src/lib/pdf.js`): the DO's letterhead, customer, AL, order, consent
+qty, AI count, every seal range, the sticker photo, the signature, the terms
+in BOTH languages (the row does not record which one was on screen) and the
+seal receipt photo.
+
+**No file is stored.** The row already holds everything the paper says, so a
+PDF kept beside it would be a second copy that a corrected seal range leaves
+behind; built on demand it is always the record as it is now, and every
+consent ever signed has one. The terms are read off the form's own
+`CONSENT_STRINGS`. A photo that will not load is named in its box rather than
+failing the download. `Mobile/tests/a_consent_downloads_as_a_pdf.cjs` drives
+the real jsPDF and reads the file back with `pdftotext`. Nothing to run in
+the database.
+
 ## Coming back to the portal is not signing in again
 
 `index.html` shows the sign-in screen until `onAuthStateChange` has read the
@@ -9963,3 +9981,45 @@ heading and cell alignment, the icons against their handlers, and a Delete
 that still confirms. **23 of its 25 checks fail on the previous page**, each
 by name. `SHOT=/dir` draws it, `VW=400` at phone width. **Nothing to run in
 the database.**
+
+## The Sales Web publishes what the Monthly Maturity Allocation says is left
+
+February 2027 read **29,042** After Deduct Reserve on Stock & Sales →
+Monthly Maturity Allocation, and the Sales Web's Publish to Sales Web
+dialog read a raw maturity of 35,027, a customer allocation of **0** and
+*"only 2,938 is currently available"*. The dialog had its own rule, and
+it was different in three places:
+
+- **The date.** It dated a transplant off the remark, then `created_at`,
+  and never `transaction_date`, so a row keyed against the wrong save day
+  matured into the wrong month.
+- **A DO came off the PLOT, whatever the batch.** Every sale ever made out
+  of U3, last year's crop included, came off February's U3. That is the
+  2,938. The office matches a DO line on the batch AND the plot.
+- **The reservation was a column nothing writes.** It read
+  `shared_plot_allocations.reserved_qty`. The customers are the chips in
+  `shared_batch_customer_allocations`, each capped at what its order still
+  owes (AL quantity less the DOs against that AL; nought for a cancelled or
+  closed AL; a spent order reserves nothing).
+
+`shared/shared_month_maturity.js` is the office rule written down, pure,
+and **`public/month-maturity.js` in MJMNursery-Sales-Web is its copy, word
+for word**. The stock, the allocation, the suitable-for-sales figure and
+Sync from Batches all read it there, so a month's product stock IS After
+Deduct Reserve (less what was moved to another product, plus what was moved
+in), and the dialog's *After deducting customer allocation* is that figure.
+
+**The office page does not read the shared file.** Its own code in
+`operation_stock_sales.js` stays the original, and
+`tests/the_sales_web_reads_the_maturity_table.cjs` is what keeps them
+together: one ledger carrying all three traps, the REAL office page's Feb
+2027 foot, the shared file, and the REAL Sales Web `computeProductStock` /
+`computeCustomerAllocation`, all compared, plus the two copies compared.
+**3 of its checks fail on the previous Sales Web code**, in the shape the
+office saw: raw low, allocation 0, available a fraction. A change to the
+office table's arithmetic is a change to this file and to its copy.
+
+Not copied, deliberately: Plot-R rows (the web sells by month), the
+location filter (it cuts the list, never the totals) and the flow-back of
+chips that no longer fit (the office page deletes those itself, so the
+database already holds the result). **Nothing to run in the database.**
