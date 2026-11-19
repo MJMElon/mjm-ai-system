@@ -10023,3 +10023,42 @@ Not copied, deliberately: Plot-R rows (the web sells by month), the
 location filter (it cuts the list, never the totals) and the flow-back of
 chips that no longer fit (the office page deletes those itself, so the
 database already holds the result). **Nothing to run in the database.**
+
+## The boss's AI agent reaches the system through ONE Edge Function
+
+`supabase/functions/mjm-mcp` is the MJM AI System as an MCP server (Streamable
+HTTP, JSON responses, no session), added to Claude as a custom connector. Five
+tools and nothing more: **check_stock**, **list_products**, **create_quotation**,
+**find_quotations**, **confirm_order**.
+
+- **THE LINK IS THE KEY.** A Claude connector takes a URL and nothing else, so
+  the secret rides in the path: `…/functions/v1/mjm-mcp/<MCP_SECRET>`. A wrong
+  or missing key is a plain 404. Changing `MCP_SECRET` switches the old link off.
+  It is deployed with `--no-verify-jwt` because Claude sends no Supabase login.
+- **IT RUNS AS THE SERVICE ROLE**, so row level security does not stand behind
+  it — the tools ARE the permission. It writes to `shared_quotations` and to
+  nothing else, and never deletes; the test asserts both off every request.
+- **check_stock IS THE DASHBOARD, BY CONSTRUCTION.** The Stock Analysis rule is
+  `shared/shared_stock_analysis.js`, read by the page (`classify`) and by the
+  function (`buildStockRows`, `orderBalances`, `openOrders`). The function
+  bundles only what is under `supabase/functions`, so
+  `supabase/functions/_shared/stock_analysis.js` is the SAME FILE, byte for
+  byte. Change one, copy it to the other — the test fails on a single byte.
+  `buildStockRows` is `loadMaturity()` written down; change one, change the other.
+- **A quotation is a DRAFT** numbered QOPS<n>/MM/YY the way the Quotation page
+  numbers them, and a number taken a moment ago (23505) moves to the next.
+  Only a PUBLISHED Sales Web product can be quoted at its price.
+- **confirm_order marks a quotation ACCEPTED and nothing else** — no Sales Web
+  order, no AL; the office raises those as today. That was the boss's choice
+  and is the safe first step.
+- **Dates are Malaysian.** The Edge runtime is UTC, which is the day before for
+  eight hours of every day; `myNow` / `myLocalDay` in `tools.mjs` are why.
+
+`tests/the_mcp_reads_the_dashboard.cjs` runs the REAL `index.ts` in Deno against
+a fake of Supabase's REST API serving the dashboard test's own ledger: 5,200
+available and 7,000 owed on both. It needs Deno (`npm install deno` anywhere and
+point `DENO=` at it); run it with `--node-modules-dir=none` semantics already
+built in, because the repository's `package.json` otherwise sends Deno looking
+for a local `node_modules`. It kills its function by PROCESS GROUP — the npm
+wrapper starts the real binary as a child, and killing the wrapper alone left a
+stale function answering on port 8000 for the next run.
