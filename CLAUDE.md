@@ -10113,6 +10113,33 @@ that still confirms. **23 of its 25 checks fail on the previous page**, each
 by name. `SHOT=/dir` draws it, `VW=400` at phone width. **Nothing to run in
 the database.**
 
+### Work Records has FOUR entries, and two of them are entries ONLY
+
+The office: *"help me add Monthly Night Watchman Record and Monthly Watering
+Record under Work records there. and change the monthly records name to
+Monthly Maintenance Record"* -- and Monthly Performance became **Monthly
+Maintenance Performance** once asked, the message having given both the same
+name.
+
+- **THE KEYS DID NOT MOVE.** `list` / `chart`, `pn-subtab-list` /
+  `pn-subtab-chart`, `tab.maintList` / `tab.chart`: only the words changed,
+  in both languages, so every handler and test that names them still works.
+- **Night Watchman and Watering hold NOTHING yet, on purpose.** What a row
+  of each should carry was asked and the answer was *"Menu entry only for
+  now"*. So `recview-watchman` / `recview-watering` say the record is not
+  set up and draw no table, no box and no button: a sheet of invented
+  columns is a record somebody would start keying into. Nothing is read or
+  stored for either, and **nothing in the system records night watchman or
+  watering work** -- there is no table to link. The columns are the next
+  question to put to the office, not something to guess.
+- **Both are in `RECORD_VIEW_KEYS`**, because `_syncSubNav` only touches the
+  ids it is handed: a view missing from that list stays lit for ever once
+  pressed.
+
+`tests/work_records_has_four_entries.cjs` serves the repository itself;
+**18 of its 26 checks fail on the previous page**, each by name. Nothing to
+run in the database.
+
 ## The Sales Web publishes what the Monthly Maturity Allocation says is left
 
 February 2027 read **29,042** After Deduct Reserve on Stock & Sales →

@@ -2039,3 +2039,11 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .jc-cell{min-width:150px;}
 .jc-cell .jc-chip{margin:2px 4px 2px 0;}
 .jc-off{color:var(--text-faint);text-align:center !important;}
+
+
+/* A Work Records entry whose record is not set up yet (Night Watchman,
+   Watering). It says so and draws nothing else: no table, no figure. */
+.rec-soon{border:1px dashed var(--wr-line,#e6ebe8);border-radius:12px;
+  background:#fff;padding:44px 20px;text-align:center;margin-top:8px;}
+.rec-soon-title{font-size:15px;font-weight:800;color:var(--wr-text,#1f2a24);}
+.rec-soon-note{margin-top:6px;font-size:13px;color:var(--wr-muted,#6b7a72);}

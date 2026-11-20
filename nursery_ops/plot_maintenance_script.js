@@ -4917,7 +4917,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Monthly Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Maintenance Record', 'tab.chart':'Monthly Maintenance Performance', 'tab.watchman':'Monthly Night Watchman Record', 'tab.watering':'Monthly Watering Record', 'rec.notSetUp':'This record is not set up yet. Nothing is recorded here.', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -5122,7 +5122,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi Bulanan', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Penyelenggaraan Bulanan', 'tab.chart':'Prestasi Penyelenggaraan Bulanan', 'tab.watchman':'Rekod Jaga Malam Bulanan', 'tab.watering':'Rekod Penyiraman Bulanan', 'rec.notSetUp':'Rekod ini belum disediakan. Tiada apa-apa direkodkan di sini.', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -7475,7 +7475,12 @@ function _syncSubNav(prefix, ids, activeKey) {
 
 /* Work Record sub-views: the maintenance list and the performance charts. */
 let _recordView = 'list';
-const RECORD_VIEW_KEYS = ['list', 'chart'];
+/* `watchman` and `watering` are ENTRIES ONLY for now: the office asked for
+   the two under Work Records and said what they hold comes later. They are
+   in this list so the side bar lights the right one and un-lights the rest
+   -- _syncSubNav only touches the ids it is handed, so a view missing from
+   here stays lit for ever once pressed. Neither draws or reads anything. */
+const RECORD_VIEW_KEYS = ['list', 'chart', 'watchman', 'watering'];
 function switchRecordView(view) {
   _recordView = view;
   _syncSubNav('subtab-', RECORD_VIEW_KEYS, view);
@@ -7483,7 +7488,8 @@ function switchRecordView(view) {
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
-  if (view === 'chart') renderPerformance(); else renderRecords();
+  if (view === 'chart') renderPerformance();
+  else if (view === 'list') renderRecords();
 }
 
 /* Inside the maintenance list: approved work, or what was sent back.
@@ -10914,7 +10920,7 @@ function printPerfTable() {
     thead { display: table-header-group; }
     tr { page-break-inside: avoid; }`;
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Monthly Performance — ${_perfEsc(d.n)} ${_perfEsc(d.monthFull)}</title>
+    <title>Monthly Maintenance Performance — ${_perfEsc(d.n)} ${_perfEsc(d.monthFull)}</title>
     <style>${css}</style></head><body>${_perfHeadHtml(d)}${_perfTableHtml(d, true)}</body></html>`;
   const f = document.createElement('iframe');
   f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
