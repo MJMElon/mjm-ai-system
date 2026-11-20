@@ -368,8 +368,13 @@ async function pickWorkAndSave(page) {
     check('and has no second button', /c-gaia-link/.test(casePg), false);
     const dashPg = read('nelos/nelos_dashboard.html');
     check('the hub sheet Location value is the Gaia link',
-          /k === 'Location'[\s\S]{0,300}s-loc-gaia[\s\S]{0,400}MJMNelos\.gaiaHref/.test(dashPg), true);
+          /locLinkHtml\(c, k, v\)/.test(dashPg), true);
     check('and has no Gaia or Maps button', /Open the location in (Gaia GPS|Maps)/.test(dashPg), false);
+    /* "make it can direct click location from the outside": the LIST ROW
+       draws its Location value through the same helper as the sheet. */
+    check('the hub list row: the Location value is the Gaia link too',
+          /class="d-val">\$\{locLinkHtml\(c, lab, val\)\}/.test(dashPg) &&
+          /function locLinkHtml[\s\S]{0,500}s-loc-gaia[\s\S]{0,300}MJMNelos\.gaiaHref/.test(dashPg), true);
     for (const [k, f] of [['fc', '../Barcode_Counter/src/components/NelosWindow.jsx'], ['mobile', '../Mobile/src/components/NelosCase.jsx']]) {
       const fp = path.join(ROOT, f);
       if (!fs.existsSync(fp)) continue;

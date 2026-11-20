@@ -1043,6 +1043,16 @@ function detailRows(c) {
   return rows;
 }
 
+/* The Location value IS the Gaia link, in the list row as on the case sheet:
+   one press from the list, no need to open the case first. Same href, same
+   copy-to-clipboard, same class, so the two cannot drift. */
+function locLinkHtml(c, lab, val) {
+  if (lab !== 'Location' || !MJMNelos.fmtLatLng(c.location_lat, c.location_lng)) return esc(val);
+  return `<a class="s-loc-gaia" data-copy="${esc(val)}" title="Open in Gaia GPS"
+     onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
+     href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">${esc(val)}</a>`;
+}
+
 function rowHtml(c) {
   const pending = isPending(c);
   const due = c.due_date
@@ -1101,7 +1111,7 @@ function rowHtml(c) {
                category here was printing the title twice. -->
           <div class="d-rows">
             ${shown.map(([lab, val]) => lab
-              ? `<div class="d-row${lab === 'Remark' ? ' d-remark' : ''}"><span class="d-lab">${esc(lab)}</span><span class="d-val">${esc(val)}</span></div>`
+              ? `<div class="d-row${lab === 'Remark' ? ' d-remark' : ''}"><span class="d-lab">${esc(lab)}</span><span class="d-val">${locLinkHtml(c, lab, val)}</span></div>`
               : `<div class="d-row d-free"><span class="d-val">${esc(val)}</span></div>`).join('')}
             ${rows.length > DETAIL_CAP
               ? `<div class="d-row d-free"><span class="d-more">+${rows.length - DETAIL_CAP} more — open the case to read it all</span></div>`
@@ -1544,15 +1554,9 @@ function caseBlockHtml(c) {
   return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot + doc +
     `<div class="s-case-g">` +
       bits.map(([k, v]) => `<div class="s-case-k">${esc(k)}</div><div class="s-case-v">${
-        /* THE COORDINATE ITSELF OPENS GAIA GPS, with no button beside it:
-           the office asked for the two numbers to be the link. The press
-           also copies them, since Gaia has no link that drops a pin and
-           pasting them into its search is what marks the spot. */
-        k === 'Location' && MJMNelos.fmtLatLng(c.location_lat, c.location_lng)
-          ? `<a class="s-loc-gaia" data-copy="${esc(v)}" title="Open in Gaia GPS"
-               onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
-               href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">${esc(v)}</a>`
-          : esc(v)}</div>`).join('') +
+        /* THE COORDINATE ITSELF OPENS GAIA GPS, here and in the list row:
+           locLinkHtml is the one place that draws it. */
+        locLinkHtml(c, k, v)}</div>`).join('') +
     `</div>` +
     /* Who raised it, and when, at the foot of the block. It is the
        provenance of the case rather than a fact about the work, so it

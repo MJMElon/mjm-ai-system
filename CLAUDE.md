@@ -8022,7 +8022,9 @@ and number 7 showed the Marked Location:
 `https://www.gaiagps.com/map/?loc=17/<lng>/<lat>`. The phone hands that
 address to the installed app. So `gaiaHref` is ONE link everywhere, in all
 four copies, with no user-agent test. A phone with no Gaia opens the web map
-instead of doing nothing.
+instead of doing nothing. **And it is a link in the hub LIST ROW too**, not
+only inside the opened case (*"direct click location from the outside"*):
+`locLinkHtml` draws the Location value for both the row and the sheet.
 
 `tests/a_case_can_carry_a_location.cjs` drives the real dock with a mocked
 geolocation and runs all four parsers over the same inputs; **31 of its 43
