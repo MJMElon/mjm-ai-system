@@ -5970,7 +5970,17 @@ still holds the keys.
   level is the select in the Admin Portal block's header, writing the same
   `modules.mobile`. `PORTAL_MODULES` still lists `mobile`.
 
-`tests/module_assess_control_layout.cjs` — 43 checks, **37 fail on the
+**And the Admin Portal carries NO level select at all** — it sat in the
+header for a day after the merge and the office asked for it off. Ticking
+the Admin, Auditor or FC Portal open raises its module (`mobile`, `audit`,
+`scan`) from None to Normal, never lowers one, because `canDo` refuses
+before it reads a page tick. **The way back is an ICON** on this page, on
+System Setting and on the Worker System board: a round arrow, its words
+(*Back to Nursery 555 Team*) kept as the tooltip and `aria-label`. And on
+`scan_admin.html` the **Audit Portal door opens a new tab** like the FC,
+Admin and Worker doors beside it.
+
+`tests/module_assess_control_layout.cjs` — 44 checks, **37 fail on the
 previous page**, each by name. Nothing to run in the database.
 
 ### Worker System has its own ADD & EDIT tick, because opening it was not editing it

@@ -298,19 +298,28 @@ console.log('\n── 6. A name carries its e-mail and its job on the register �
   await page.close();
 }
 
-console.log('\n── 7. The Admin Portal is drawn once ──');
+console.log('\n── 7. The Admin Portal is drawn once, with no level select ──');
 {
   const page = await open(browser);
-  await openRow(page, 'u-siti');
+  await openRow(page, 'u-faiz');
   check('no "555 Admin Portal" row under Other Modules', await safe(() =>
     page.locator('.area-block[data-block="other"] [data-othermod="mobile"]').count(), -1), 0);
-  check('its level is in the Admin Portal header instead', await safe(() =>
-    page.locator('.area-block[data-block="admin_portal"] .area-head select[data-othermod="mobile"]').inputValue(), ''),
-    'normal');
-  await safe(() => page.selectOption('.area-block[data-block="admin_portal"] select[data-othermod="mobile"]', 'admin', { timeout: T }));
+  check('and no Admin / Normal / None select on the Admin Portal either', await safe(() =>
+    page.locator('.area-block[data-block="admin_portal"] select').count(), -1), 0);
+  await safe(() => page.click('.area-block[data-block="admin_portal"] [data-area="admin_portal"]', { timeout: T }));
   await page.waitForTimeout(100);
-  check('and it writes modules.mobile, as the old row did', await safe(() =>
-    page.evaluate(() => draft.modules.mobile), ''), 'admin');
+  check('ticking the portal open still gives the module it needs', await safe(() =>
+    page.evaluate(() => [draft.scan_areas.admin_portal.view, draft.modules.mobile]), []), [true, 'normal']);
+  await page.close();
+}
+
+console.log('\n── 7b. The way back is an icon ──');
+{
+  const page = await open(browser);
+  check('an arrow and no words, its words kept as the label', await safe(() =>
+    page.locator('a.back-btn').evaluate((a) => [a.textContent.trim(), !!a.querySelector('svg'),
+      a.getAttribute('aria-label'), a.getAttribute('href')]), []),
+    ['', true, 'Back to Nursery 555 Team', 'scan_admin.html']);
   await page.close();
 }
 

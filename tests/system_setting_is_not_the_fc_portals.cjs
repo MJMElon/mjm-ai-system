@@ -181,7 +181,7 @@ console.log('\n── 4. The way out follows the way in ──');
   checkTrue('and so does User Access, whose Back pointed at a page that is gone',
             ua.indexOf('href="scan_admin.html"') >= 0);
   check('with no Back left pointing anywhere else',
-        (ua.match(/back-btn" href="([^"]+)"/g) || []), ['back-btn" href="scan_admin.html"']);
+        (ua.match(/back-btn[^"]*" href="([^"]+)"/g) || []).map((m) => m.replace(/back-btn[^"]*"/, 'back-btn"')), ['back-btn" href="scan_admin.html"']);
 }
 
 console.log('\n── 5. The rows carry the office\'s own words ──');

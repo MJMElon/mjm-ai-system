@@ -44,6 +44,10 @@
               background:white; border:1.5px solid #ede9fe; color:#6d28d9; text-decoration:none;
               font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
               line-height:1; transition:all .15s; }
+  /* The way back is an ICON, not a sentence (the office asked for it):
+     a round arrow, its words kept as the tooltip and the label a screen
+     reader reads. */
+  .back-btn.icon-only { width:40px; height:40px; padding:0; justify-content:center; gap:0; }
   .back-btn:hover { background:#f5f3ff; border-color:#ddd6fe; }
   /* Narrow: stack rather than squeeze a long label and a title into one row. */
   @media (max-width:700px) {
@@ -225,7 +229,7 @@
          is gone; this goes where it is now opened from. Renamed from "User
          Access" to "Module Assess Control" — same page, same keys, only
          the words changed. -->
-    <a class="back-btn" href="scan_admin.html">&#8592; Back to Nursery 555 Team</a>
+    <a class="back-btn icon-only" href="scan_admin.html" data-icon-back title="Back to Nursery 555 Team" aria-label="Back to Nursery 555 Team"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
     <h1 class="page-title">Module Assess Control</h1>
     <span aria-hidden="true"></span>
   </div>
@@ -946,10 +950,13 @@ function areaBlockHtml(area) {
      and a chip valued "UNN1" are the same nursery, and a tick that failed to
      show for one spelling would be taken away the moment Save was pressed. */
   const chosen = new Set(all ? [] : list.map(nurseryKey));
-  /* The Admin Portal's LEVEL rides in its own header — it was a second row
-     for the same portal under Other Modules, and the office asked for one. */
-  const extra = area.key === 'admin_portal'
-    ? levelSelect('portal-level', 'mobile', moduleLevel((draft.modules || {}).mobile)) : '';
+  /* NO LEVEL SELECT on the Admin Portal. It sat in this header for a day
+     after leaving Other Modules, and the office asked for it off: the tick
+     opens the portal and the pages inside say what it may do. What the
+     select used to carry, `modules.mobile`, is still raised from None to
+     Normal when the portal is ticked open (see the change handler), because
+     canDo refuses before it reads a single page tick. */
+  const extra = '';
   return `
     <div class="area-block ${on ? 'on' : ''} ${open ? 'open' : ''}" data-block="${area.key}">
       ${headHtml(area.key, { label: area.label, desc: area.desc, extra, sum: summaryOf(area),
@@ -1336,6 +1343,11 @@ document.addEventListener('change', (e) => {
     const entry = draft.scan_areas[t.dataset.area] || {};
     entry.view = t.checked;
     draft.scan_areas[t.dataset.area] = entry;
+    /* Opening a portal over a module the person does not hold is a door
+       that does not open. Raised, never lowered: closing the portal leaves
+       the module level where it was. */
+    const MOD_OF_DOOR = { admin_portal:'mobile', audit_portal:'audit', fc:'scan' };
+    if (t.checked && MOD_OF_DOOR[t.dataset.area]) raiseModule(MOD_OF_DOOR[t.dataset.area]);
     return render();
   }
   if (t.dataset.anall) {
