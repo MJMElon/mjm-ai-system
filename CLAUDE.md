@@ -10182,6 +10182,24 @@ location filter (it cuts the list, never the totals) and the flow-back of
 chips that no longer fit (the office page deletes those itself, so the
 database already holds the result). **Nothing to run in the database.**
 
+## Review AL Details names every DO, and hands the customer a statement
+
+On the AL page (`operation_booking.html`) the DO history read "-" for the
+date and the plot and breed on every row, because its read of
+`shared_do_records` asked for seven columns and none of them was a date or
+a plot. The Delivery and BA pages carry the same modal and always asked.
+The read asks for them now, and a DO with no `delivery_date` (one raised on
+a phone) shows the day it was saved (`doDayOf`).
+
+**Download** on that section is a PDF for the customer
+(`downloadALStatement`): the customer, order number, AL, order date, order
+quantity, every collection with its plots and breeds, the running balance
+and the total. A cancelled DO is no collection and is left off; nothing
+internal (BA form, remark) is printed. It is built from the rows the
+modal already drew, so the paper cannot disagree with the screen.
+`tests/an_al_shows_its_collections.cjs`; its stub projects a read to the
+columns asked for, which is the only way the fault shows. Nothing to run.
+
 ## A maturity row says how old its seedlings are
 
 Under each Maturity Date on Monthly Maturity Allocation, small and muted:

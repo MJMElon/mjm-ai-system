@@ -12,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../shared/shared_staff_gate.js"></script>
     <script src="../shared/shared_access.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
 <style>
@@ -245,7 +246,13 @@
             </div>
 
             <div class="mt-8 pt-6 border-t-2 border-slate-100 relative z-30">
-                <h4 class="text-sm font-black text-blue-800 tracking-widest uppercase mb-4">Complete Documentation History (DO & BA Records)</h4>
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <h4 class="text-sm font-black text-blue-800 tracking-widest uppercase">Complete Documentation History (DO & BA Records)</h4>
+                    <button id="al-statement-btn" onclick="downloadALStatement()" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl shadow flex items-center gap-2" title="Download a statement for the customer: order, every collection and the balance">
+                        <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"></path></svg>
+                        Download
+                    </button>
+                </div>
                 <div class="bg-blue-50/50 rounded-xl border border-blue-200 p-4 overflow-x-auto relative z-30 shadow-inner">
                     <table class="w-full text-left min-w-[1000px]">
                         <thead>
@@ -422,6 +429,129 @@
         }
         setInterval(spawnHealingEmoji, 1200);
 
+        // The day a DO counts on: the date keyed on it, else the day it was
+        // saved. A DO raised on a phone can come in with no delivery date.
+        function doDayOf(d) { return (d && (d.delivery_date || d.created_at)) || ''; }
+
+        // The DOs of one AL in the order they were collected, cancelled ones
+        // kept and marked, each carrying the AL balance standing after it.
+        function alCollections(order) {
+            const isCx = d => d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'));
+            const list = globalDOs.filter(d => d.al_number === order.al_number)
+                .slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            let run = 0;
+            return list.map(d => {
+                const cancelled = isCx(d);
+                if (!cancelled) run += Number(d.total_qty) || 0;
+                const items = [];
+                for (let i = 1; i <= 5; i++) {
+                    if (d[`plot_${i}`] || d[`breed_${i}`] || d[`qty_${i}`]) items.push({ plot: d[`plot_${i}`] || '', breed: d[`breed_${i}`] || '', qty: Number(d[`qty_${i}`]) || 0 });
+                }
+                return { d, cancelled, items, qty: Number(d.total_qty) || 0, balance: (Number(order.quantity_ordered) || 0) - run };
+            });
+        }
+
+        // A statement to hand the customer: the order, every collection on it
+        // and what is still owed. Cancelled DOs are left off, being no
+        // collection, and nothing internal (BA forms, remarks) is printed.
+        function downloadALStatement() {
+            const order = currentManageAL;
+            if (!order) return;
+            if (!(window.jspdf && window.jspdf.jsPDF)) { alert('The PDF tool did not load. Check the connection and try again.'); return; }
+            const doc = new window.jspdf.jsPDF();
+            const INK = [17, 24, 39], GREY = [85, 85, 85], LIGHT = [229, 231, 235], HEAD_BG = [244, 244, 245];
+            const fmt = n => Number(n || 0).toLocaleString('en-MY');
+            const day = v => { const x = new Date(v); return v && !isNaN(x) ? x.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'; };
+            const rows = alCollections(order).filter(r => !r.cancelled);
+            const ordered = Number(order.quantity_ordered) || 0;
+            const collected = rows.reduce((s, r) => s + r.qty, 0);
+            const balance = ordered - collected;
+            const PAGE_FLOOR = 270;
+
+            const head = () => {
+                doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+                doc.text('MEGA JUTAMAS SDN BHD', 20, 19);
+                doc.setFontSize(10.5); doc.setTextColor(51, 51, 51); doc.text('MJM Nursery', 20, 25);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY);
+                doc.text('Lot 1180, Bangunan Bei, Krokop 2, Miri, Sarawak, Malaysia', 20, 30);
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...INK);
+                doc.text('ORDER STATEMENT', 190, 19, { align: 'right' });
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY);
+                doc.text('As at ' + day(new Date()), 190, 25, { align: 'right' });
+                doc.setDrawColor(...INK); doc.setLineWidth(0.8); doc.line(20, 34.5, 190, 34.5);
+            };
+            const tableHead = (y) => {
+                doc.setFillColor(...HEAD_BG); doc.rect(20, y, 170, 8.5, 'F');
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...INK);
+                doc.text('No.', 22, y + 5.7); doc.text('DO Number', 31, y + 5.7); doc.text('Date', 66, y + 5.7);
+                doc.text('Plot / Breed', 92, y + 5.7);
+                doc.text('Qty', 163, y + 5.7, { align: 'right' }); doc.text('Balance', 188, y + 5.7, { align: 'right' });
+                doc.setDrawColor(...INK); doc.setLineWidth(0.5); doc.line(20, y + 8.5, 190, y + 8.5);
+                return y + 14;
+            };
+
+            head();
+            const field = (label, value, x, y, w) => {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...GREY);
+                doc.text(label, x, y);
+                doc.setFontSize(10.5); doc.setTextColor(...INK);
+                doc.text(doc.splitTextToSize(String(value || '-'), w)[0], x, y + 5.5);
+            };
+            field('CUSTOMER NAME', order.customer_name, 20, 44, 165);
+            field('ORDER NUMBER', order.order_number || order.al_number, 20, 58, 52);
+            field('AL NUMBER', order.al_number, 78, 58, 52);
+            field('ORDER DATE', day(order.order_date), 136, 58, 54);
+            field('ORDER QUANTITY', fmt(ordered), 20, 72, 52);
+            field('TOTAL COLLECTED', fmt(collected), 78, 72, 52);
+            field('BALANCE', fmt(balance), 136, 72, 54);
+
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...INK);
+            doc.text('COLLECTION DETAILS', 20, 88);
+            let y = tableHead(91);
+            if (!rows.length) {
+                doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(...GREY);
+                doc.text('No collection yet.', 22, y); y += 9;
+            }
+            rows.forEach((r, i) => {
+                const lines = [];
+                (r.items.length ? r.items : [{ plot: '', breed: '', qty: r.qty }]).forEach(it => {
+                    const t = [it.plot, it.breed].filter(Boolean).join(' - ') || '-';
+                    doc.splitTextToSize(r.items.length > 1 ? t + ' (' + fmt(it.qty) + ')' : t, 62).forEach(l => lines.push(l));
+                });
+                const h = Math.max(1, lines.length) * 4.6 + 4;
+                if (y + h > PAGE_FLOOR) { doc.addPage(); head(); y = tableHead(42); }
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+                doc.setTextColor(...GREY); doc.text(String(i + 1), 22, y);
+                doc.setTextColor(...INK);
+                doc.text(String(r.d.do_number || '-'), 31, y);
+                doc.text(day(doDayOf(r.d)), 66, y);
+                doc.text(lines, 92, y);
+                doc.text(fmt(r.qty), 163, y, { align: 'right' });
+                doc.setFont('helvetica', 'bold'); doc.text(fmt(r.balance), 188, y, { align: 'right' });
+                doc.setDrawColor(...LIGHT); doc.setLineWidth(0.2); doc.line(20, y + h - 4, 190, y + h - 4);
+                y += h;
+            });
+            if (y + 12 > PAGE_FLOOR) { doc.addPage(); head(); y = 44; }
+            doc.setDrawColor(...INK); doc.setLineWidth(0.7); doc.line(20, y - 3, 190, y - 3);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK);
+            doc.text('TOTAL COLLECTED', 92, y + 3);
+            doc.text(fmt(collected), 163, y + 3, { align: 'right' });
+            doc.text(fmt(balance), 188, y + 3, { align: 'right' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GREY);
+            doc.text('Balance quantity still to be collected: ' + fmt(balance), 20, y + 11);
+
+            const pages = doc.getNumberOfPages();
+            for (let p = 1; p <= pages; p++) {
+                doc.setPage(p);
+                doc.setDrawColor(...LIGHT); doc.setLineWidth(0.3); doc.line(20, 280, 190, 280);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GREY);
+                doc.text('MJM Nursery - Order statement ' + (order.al_number || ''), 20, 285);
+                doc.text('Page ' + p + ' of ' + pages, 190, 285, { align: 'right' });
+            }
+            const safe = String(order.order_number || order.al_number || 'order').replace(/[^A-Za-z0-9_-]+/g, '_');
+            doc.save('Order_Statement_' + safe + '.pdf');
+        }
+
         function formatDateDisplay(dateString) {
             if(!dateString || dateString === '-') return '-';
             const d = new Date(dateString);
@@ -444,7 +574,7 @@
         async function fetchData() {
             const [alRes, doRes] = await Promise.all([
                 _supabase.from('shared_al_orders').select('id,al_number,order_number,order_date,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,remark,created_at').order('created_at', { ascending: false }),
-                _supabase.from('shared_do_records').select('id,do_number,al_number,total_qty,status,remark,created_at')
+                _supabase.from('shared_do_records').select('id,do_number,al_number,delivery_date,total_qty,status,remark,created_at,plot_1,breed_1,batch_1,qty_1,plot_2,breed_2,batch_2,qty_2,plot_3,breed_3,batch_3,qty_3,plot_4,breed_4,batch_4,qty_4,plot_5,breed_5,batch_5,qty_5,ba_number,ba_raw_name')
             ]);
             // Surface load errors instead of silently rendering "no entries" —
             // an RLS denial on shared_al_orders / shared_do_records would
@@ -809,7 +939,7 @@
                 
                 linkedDOs.reverse().forEach(d => { 
                     const dCancelled = d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]')); 
-                    const displayDate = formatDateDisplay(d.delivery_date); 
+                    const displayDate = formatDateDisplay(doDayOf(d)); 
                     
                     let plots = []; 
                     for(let i=1; i<=5; i++) { 
