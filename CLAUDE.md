@@ -10182,6 +10182,16 @@ location filter (it cuts the list, never the totals) and the flow-back of
 chips that no longer fit (the office page deletes those itself, so the
 database already holds the result). **Nothing to run in the database.**
 
+## A maturity row says how old its seedlings are
+
+Under each Maturity Date on Monthly Maturity Allocation, small and muted:
+**(10 Months)** — the batch's age AS AT TODAY, off its seed-in date. The
+anchor is the Batch Record's own (`processBatchLogic`): the KEYED
+`transaction_date` of `Seeds_Received`, `created_at` only where nothing was
+keyed, newest reception row wins, whole months as days / 30.44. A batch
+with no seed-in row shows no age rather than a guess.
+`tests/maturity_shows_the_seedling_age.cjs`.
+
 ## The boss's AI agent reaches the system through ONE Edge Function
 
 `supabase/functions/mjm-mcp` is the MJM AI System as an MCP server (Streamable
