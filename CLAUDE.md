@@ -10193,7 +10193,7 @@ a phone) shows the day it was saved (`doDayOf`).
 
 **Download** on that section is a PDF for the customer
 (`downloadALStatement`): the customer, order number, AL, order date, order
-quantity, every collection with its plots and breeds, the running balance
+quantity, every collection with its plots and breeds (no quantity per plot, on screen or paper; the same on the Delivery and BA pages), the running balance
 and the total. A cancelled DO is no collection and is left off; nothing
 internal (BA form, remark) is printed. It is built from the rows the
 modal already drew, so the paper cannot disagree with the screen.

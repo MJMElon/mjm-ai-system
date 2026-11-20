@@ -105,6 +105,8 @@ const check = (name, got, want) => {
   check('03578 names U9 and its breed', (byNo['03578'] || [])[2], s => /U9/.test(s || '') && /IOI DxP HYBRID/.test(s || ''));
   check('03707 names both its plots', (byNo['03707'] || [])[2], s => /B4/.test(s || '') && /B5/.test(s || '') && /UPB PREMIER/.test(s || ''));
   check('a DO with no delivery date falls back to the day it was saved', (byNo['DO-BG8WA101'] || [])[1], '2026-10-05');
+  check('03578 reads plot and breed, no quantity', (byNo['03578'] || [])[2], 'U9 - IOI DxP HYBRID');
+  check('03707 reads both plots and breeds, no quantities', (byNo['03707'] || [])[2], 'B4 - UPB PREMIER HYBRID, B5 - UPB PREMIER HYBRID');
   check('no row reads a dash for its day', rows.filter(r => r[1] === '-').map(r => r[0]), []);
   check('no row reads a dash for its plot', rows.filter(r => r[2] === '-').map(r => r[0]), []);
   check('the balance still runs: 1000 - 19 - 181 - 80 = 720 after the last', (byNo['DO-BG8WA101'] || [])[4], '720');
@@ -123,6 +125,7 @@ const check = (name, got, want) => {
       const txt = execFileSync('pdftotext', ['-layout', f, '-']).toString();
       check('it names the customer', /LEE YOK JIN CONTRACTOR SDN BHD/.test(txt), true);
       check('it names the order number', /BG8WA1/.test(txt), true);
+      check('the plot lines carry no quantity', /HYBRID \(\d/.test(txt), false);
       check('it gives the order quantity', /1,000/.test(txt), true);
       check('it lists each collection with its plot and breed', /03578/.test(txt) && /U9 - IOI DxP HYBRID/.test(txt) && /B4 - UPB PREMIER HYBRID/.test(txt), true);
       check('it leaves the cancelled DO off', /DO-BG8WA1XX/.test(txt), false);

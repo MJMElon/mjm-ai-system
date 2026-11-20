@@ -483,7 +483,7 @@
                     
                     let plots = []; 
                     for(let i=1; i<=5; i++) { 
-                        if(d[`plot_${i}`]) plots.push(`${d[`plot_${i}`]} (${d[`qty_${i}`]} ${d[`breed_${i}`]||''})`); 
+                        if(d[`plot_${i}`]) plots.push(d[`breed_${i}`] ? `${d[`plot_${i}`]} - ${d[`breed_${i}`]}` : `${d[`plot_${i}`]}`); 
                     } 
                     const sourceText = plots.length > 0 ? plots.join(', ') : '-'; 
                     const bal = order.quantity_ordered - d._modalCumul; 

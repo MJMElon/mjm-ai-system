@@ -516,7 +516,7 @@
                 const lines = [];
                 (r.items.length ? r.items : [{ plot: '', breed: '', qty: r.qty }]).forEach(it => {
                     const t = [it.plot, it.breed].filter(Boolean).join(' - ') || '-';
-                    doc.splitTextToSize(r.items.length > 1 ? t + ' (' + fmt(it.qty) + ')' : t, 62).forEach(l => lines.push(l));
+                    doc.splitTextToSize(t, 62).forEach(l => lines.push(l));
                 });
                 const h = Math.max(1, lines.length) * 4.6 + 4;
                 if (y + h > PAGE_FLOOR) { doc.addPage(); head(); y = tableHead(42); }
@@ -943,7 +943,7 @@
                     
                     let plots = []; 
                     for(let i=1; i<=5; i++) { 
-                        if(d[`plot_${i}`]) plots.push(`${d[`plot_${i}`]} (${d[`qty_${i}`]} ${d[`breed_${i}`]||''})`); 
+                        if(d[`plot_${i}`]) plots.push(d[`breed_${i}`] ? `${d[`plot_${i}`]} - ${d[`breed_${i}`]}` : `${d[`plot_${i}`]}`); 
                     } 
                     const sourceText = plots.length > 0 ? plots.join(', ') : '-'; 
                     const bal = order.quantity_ordered - d._modalCumul; 
