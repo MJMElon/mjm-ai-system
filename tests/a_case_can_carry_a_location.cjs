@@ -314,7 +314,7 @@ async function pickWorkAndSave(page) {
           /RUN_ME_nelos_case_location\.sql/.test(read('tests/sql_pastes_into_the_editor.cjs')), true);
   }
 
-  console.log('\n8. THE LOCATION OPENS IN GAIA, and Maps always stands beside it');
+  console.log('\n8. THE COORDINATE IS THE GAIA LINK, with no button beside it');
   {
     /* The office: "if i saw the case and click the location, can it bring
        me to there by gaia?" On a phone it is the app link, which does
@@ -358,29 +358,26 @@ async function pickWorkAndSave(page) {
     }
     const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     const dock = read('shared/shared_nelos_dock.js');
-    check('the dock detail offers Gaia', /nd-d-gaia/.test(dock), true);
-    check('and still offers Maps beside it', />Maps<\/a>/.test(dock), true);
-    check('the case page offers Gaia', /c-gaia-link/.test(read('nelos/nelos_case.html')), true);
-    check('and still offers Maps', /c-loc-link/.test(read('nelos/nelos_case.html')), true);
-    /* "i click the location (the latitude, longtitude) then it will directly
-       bring me to gaia". The two numbers ARE the Gaia link, and the press
-       copies them, because Gaia has no link that drops a pin: pasted into
-       its search they become a Marked Location. */
-    check('the dock coordinate itself is the Gaia link and copies itself',
-          /nd-d-gaia"[^;]*data-copy=[\s\S]{0,400}gaiaHref\(f\.location_lat/.test(dock), true);
+    /* "dont do it button. direct click the location": the two numbers are
+       the ONE link, to Gaia, with no Gaia or Maps button beside them. */
+    check('the dock detail: the coordinate is the Gaia link', /nd-d-gaia/.test(dock), true);
+    check('and no Maps button beside it', />Maps<\/a>/.test(dock), false);
     const casePg = read('nelos/nelos_case.html');
     check('the case page coordinate goes to Gaia',
           /\$\('c-loc-link'\)\.href = MJMNelos\.gaiaHref/.test(casePg) && /data-copy/.test(casePg), true);
-    check('the hub sheet coordinate goes to Gaia',
-          /data-copy="\$\{esc\(MJMNelos\.fmtLatLng[\s\S]{0,400}MJMNelos\.gaiaHref/.test(read('nelos/nelos_dashboard.html')), true);
+    check('and has no second button', /c-gaia-link/.test(casePg), false);
+    const dashPg = read('nelos/nelos_dashboard.html');
+    check('the hub sheet Location value is the Gaia link',
+          /k === 'Location'[\s\S]{0,300}s-loc-gaia[\s\S]{0,400}MJMNelos\.gaiaHref/.test(dashPg), true);
+    check('and has no Gaia or Maps button', /Open the location in (Gaia GPS|Maps)/.test(dashPg), false);
     for (const [k, f] of [['fc', '../Barcode_Counter/src/components/NelosWindow.jsx'], ['mobile', '../Mobile/src/components/NelosCase.jsx']]) {
       const fp = path.join(ROOT, f);
       if (!fs.existsSync(fp)) continue;
+      const src = fs.readFileSync(fp, 'utf8');
       check(k + ': the coordinate is the Gaia link and copies itself',
-            /<a href=\{gaiaHref\(c\.location_lat, c\.location_lng\)\}[\s\S]{0,260}clipboard\.writeText/.test(fs.readFileSync(fp, 'utf8')), true);
+            /<a href=\{gaiaHref\(c\.location_lat, c\.location_lng\)\}[\s\S]{0,260}clipboard\.writeText/.test(src), true);
+      check(k + ': no Maps button', /mapsHref\(/.test(src), false);
     }
-    check('the hub sheet offers both', /Open the location in Gaia GPS/.test(read('nelos/nelos_dashboard.html')) &&
-          /Open the location in Maps/.test(read('nelos/nelos_dashboard.html')), true);
   }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

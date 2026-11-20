@@ -387,6 +387,7 @@
               font-size:11.5px; }
   .s-case-k { color:#8a93a3; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
   .s-case-v { color:#0f172a; font-weight:700; overflow-wrap:anywhere; }
+  .s-loc-gaia { color:#2563eb; text-decoration:underline; text-underline-offset:2px; }
   /* A file input renders as the browser's own grey "Choose file" control,
      which on a phone says nothing about the camera it actually opens. The
      real input is hidden and this label drives it. */
@@ -1539,20 +1540,19 @@ function caseBlockHtml(c) {
          esc(c.doc_name || 'Open the document')}</a>`
     : '';
 
-  /* …and the location, which opens the map. The two numbers are already
-     a row in the block below; this is the door. */
-  const locLink = MJMNelos.fmtLatLng(c.location_lat, c.location_lng)
-    ? `<a class="s-case-doc" data-copy="${esc(MJMNelos.fmtLatLng(c.location_lat, c.location_lng))}"
-         title="Open in Gaia GPS. The coordinate is copied: paste it in Gaia search to mark it."
-         onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
-         href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">📍 ${esc(MJMNelos.fmtLatLng(c.location_lat, c.location_lng))} · Open the location in Gaia GPS</a>
-       <a class="s-case-doc" href="${esc(MJMNelos.mapsHref(c.location_lat, c.location_lng))}"
-         target="_blank" rel="noopener">Open the location in Maps</a>`
-    : '';
 
-  return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot + doc + locLink +
+  return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot + doc +
     `<div class="s-case-g">` +
-      bits.map(([k, v]) => `<div class="s-case-k">${esc(k)}</div><div class="s-case-v">${esc(v)}</div>`).join('') +
+      bits.map(([k, v]) => `<div class="s-case-k">${esc(k)}</div><div class="s-case-v">${
+        /* THE COORDINATE ITSELF OPENS GAIA GPS, with no button beside it:
+           the office asked for the two numbers to be the link. The press
+           also copies them, since Gaia has no link that drops a pin and
+           pasting them into its search is what marks the spot. */
+        k === 'Location' && MJMNelos.fmtLatLng(c.location_lat, c.location_lng)
+          ? `<a class="s-loc-gaia" data-copy="${esc(v)}" title="Open in Gaia GPS"
+               onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
+               href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">${esc(v)}</a>`
+          : esc(v)}</div>`).join('') +
     `</div>` +
     /* Who raised it, and when, at the foot of the block. It is the
        provenance of the case rather than a fact about the work, so it

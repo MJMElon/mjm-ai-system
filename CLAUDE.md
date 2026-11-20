@@ -8007,9 +8007,13 @@ next: *"i click the location (the latitude, longtitude) then it will
 directly bring me to gaia"* with a marked location. Gaia documents no link
 that drops a pin or runs its search, so the press also COPIES the
 coordinate (best effort): pasted into Gaia search it becomes a Marked
-Location. Maps is the smaller link beside it. On the case page
-`#c-loc-link` is the Gaia one and `#c-gaia-link` is Maps, the ids being
-from when they were the other way round.
+Location. **And no buttons at all** — *"dont do it button. direct click
+the location"*: the Gaia and Maps buttons came off every case view, so the
+two numbers are the ONE door, to Gaia, on all five screens (`#c-loc-link`
+on the case page, `.s-loc-gaia` on the hub sheet, `.nd-d-gaia` in the dock,
+and the phone case views). The "two doors" rule above is what it replaced;
+a phone without Gaia GPS gets nothing from the press, which the office
+chose.
 
 `tests/a_case_can_carry_a_location.cjs` drives the real dock with a mocked
 geolocation and runs all four parsers over the same inputs; **31 of its 43
