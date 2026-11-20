@@ -1168,8 +1168,9 @@ function mmRenderPins() {
 }
 
 function mmRenderPinList() {
-  const rows = mm.pins.map((p, i) => ({ p, i }))
-    .sort((x, y) => mmLocs.findIndex(l => l.code === x.p.location) - mmLocs.findIndex(l => l.code === y.p.location) || x.i - y.i);
+  /* Only the location picked above: every pin of every location in one list was long and hard to read.
+     The map still shows them all, so a pin is never placed on top of another location's without seeing it. */
+  const rows = mm.pins.map((p, i) => ({ p, i })).filter(({ p }) => p.location === mmSel);
   $('mm-pin-list').innerHTML = rows.length ? rows.map(({ p, i }) => {
     const off = !(mm.locations[p.location] && mm.locations[p.location].active);
     return `<div class="mm-pin-row${i === mmPinSel ? ' on' : ''}${off ? ' off' : ''}" data-pin="${i}">
@@ -1180,7 +1181,7 @@ function mmRenderPinList() {
       <button type="button" class="mm-x" title="Remove this pin" aria-label="Remove ${esc(p.name)}"
               onclick="mmRemovePin(${i})" ${mmCanSave ? '' : 'disabled'}>×</button>
     </div>`;
-  }).join('') : '<div class="muted">No pin placed yet.</div>';
+  }).join('') : `<div class="muted">${mmSel ? 'No pin placed for ' + esc(mmLocName(mmSel)) + ' yet.' : 'No pin placed yet.'}</div>`;
 }
 
 function mmOutline(code) {
