@@ -187,11 +187,11 @@ console.log('\n── 2. Worker System and Setting are INSIDE the back office �
   check('the two tools are nested under Worker Portal Manage',
         await manage.locator('.page-block [data-area]')
           .evaluateAll((els) => els.map((e) => e.dataset.area)),
-        ['workers', 'setting']);
+        ['workers', 'workers_edit', 'setting']);
   check('and they are drawn with the office’s own words',
         await manage.locator('.page-block .text-\\[13px\\]')
           .evaluateAll((els) => els.map((e) => e.textContent.trim())),
-        ['Worker System', 'Module Assess Control']);
+        ['Worker System', 'Worker System — add & edit workers', 'Module Assess Control']);
   checkTrue('the register’s description is the one the office wrote',
             (await manage.locator('.page-block .text-\\[11px\\]').first().textContent())
               .indexOf('who is on the books, their section and their PIN') >= 0);
@@ -203,7 +203,7 @@ console.log('\n── 2. Worker System and Setting are INSIDE the back office �
      so every one of the seven must be written by merely opening his row. */
   const seeded = await page.evaluate(() => Object.keys(draft.scan_areas).sort());
   check('opening a row still records every door, nested ones included', seeded,
-        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers'].sort());
+        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers', 'workers_edit'].sort());
   await page.close();
 }
 
@@ -352,10 +352,12 @@ console.log('\n── 7. Looking is not deciding ──');
      is not, and saving has to write both of those down rather than one. */
   check('while every door is written down, as what he actually holds',
         Object.keys(sent.scan_areas).sort(),
-        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers'].sort());
+        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers', 'workers_edit'].sort());
   check('the FC Portal, which a scan normal holds', sent.scan_areas.fc.view, true);
   check('and Worker System, which needs npayroll he has not got',
         sent.scan_areas.workers.view, false);
+  check('nor adding and editing workers, for the same reason',
+        sent.scan_areas.workers_edit.view, false);
   await page.close();
 }
 

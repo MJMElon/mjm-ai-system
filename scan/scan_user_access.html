@@ -330,6 +330,8 @@ const AREAS = [
     children: [
       { key:'workers', label:'Worker System',
         desc:'The register of workers — who is on the books, their section and their PIN' },
+      { key:'workers_edit', label:'Worker System — add & edit workers',
+        desc:'Add a worker, move one on the board, set a PIN, reject a signup. Without it the board opens read-only' },
       { key:'setting', label:'Module Assess Control',
         desc:'This screen. Who may open what, for everybody' },
     ] },
@@ -563,6 +565,16 @@ function areaOn(perms, key) {
       if (!np || np === 'none') return false;
       const acts = (perms.npayroll_actions || {}).workers;
       return acts ? !!acts.view : true;
+    }
+    /* The board write gate: the Payroll module own Workers / manage, the
+       rule scan_workers.html asked before this tick existed. Same answer
+       as canDo() there -- module open, then the page entry if any. */
+    case 'workers_edit': {
+      if (perms.manage_users) return true;
+      const np = String(mods.npayroll || '').toLowerCase();
+      if (!np || np === 'none') return false;
+      const acts = (perms.npayroll_actions || {}).workers;
+      return acts ? (!!acts.view && !!acts.manage) : true;
     }
     case 'setting': return !!perms.manage_users;
     /* Admin Portal and Audit Portal moved onto the 555 MJM Team page from the

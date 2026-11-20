@@ -5932,6 +5932,19 @@ every line of its own code inline, so the page IS the deploy — and a
 permission screen is the worst place in the system for a browser to be
 showing yesterday's rules while the office believes it has changed them.
 
+### Worker System has its own ADD & EDIT tick, because opening it was not editing it
+
+A user was given Worker System on Module Assess Control and could change
+nothing on the board: `scan_workers.html` gated every write on the Nursery
+Payroll module (`npayroll_actions.workers.manage`), which that screen never
+shows. A tick saved and not obeyed, again. **Worker System — add & edit
+workers** (`scan_areas.workers_edit`) is that answer now, nested under
+Worker Portal Manage. Absent is nobody asked, and the Payroll rule still
+answers (`canScanArea('workers_edit')` in `shared_access.js`, and
+`workersEditAnswer()` read straight off the row in the page, so a cached
+shared file cannot take it away). Section 10 of
+`tests/the_board_is_read_only_until_edit.cjs`. Nothing to run.
+
 ### More than one portal opens the DOORS, whoever holds them
 
 YM Chai was ticked for the FC, Worker, Admin and Auditor Portals with Worker

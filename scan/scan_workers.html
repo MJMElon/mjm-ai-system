@@ -599,11 +599,38 @@ const isRejected = w => !!(w && w.rejected_at);
    Payroll tab asked, so the answer is the same. Allows it when the shared
    helper is too old to know about the action, which is how the rest of the
    system behaves too. */
+/* ADDING AND EDITING WORKERS is the "Add & edit workers" tick under
+   Worker System on Module Assess Control (scan_areas.workers_edit). It was
+   gated on the Nursery Payroll module alone, so somebody given Worker
+   System on that screen could open the board and change nothing, and the
+   screen had no tick that would let them. An absent answer is nobody
+   having been asked, and the Payroll rule that governed this before still
+   answers. Same rule as canScanArea('workers_edit') in shared_access.js,
+   read straight off the row here so a cached copy of that file cannot
+   take the tick away. */
+function workersEditAnswer() {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && typeof MJMAccess.permissions === 'function') ? MJMAccess.permissions() : null;
+    const e = p && p.scan_areas && p.scan_areas.workers_edit;
+    return e && e.view !== undefined ? !!e.view : undefined;
+  } catch (_) { return undefined; }
+}
 function mayDo(page, action, message) {
+  if (page === 'workers' && action === 'manage') {
+    const a = workersEditAnswer();
+    if (a !== undefined) {
+      if (!a) { try { alert(message || 'You do not have permission to add or edit workers.'); } catch (_) {} }
+      return a;
+    }
+  }
   if (typeof MJMAccess === 'undefined' || typeof MJMAccess.requireAction !== 'function') return true;
   return MJMAccess.requireAction('npayroll', page, action, message);
 }
 function may(page, action) {
+  if (page === 'workers' && action === 'manage') {
+    const a = workersEditAnswer();
+    if (a !== undefined) return a;
+  }
   if (typeof MJMAccess === 'undefined' || typeof MJMAccess.canDo !== 'function') return true;
   return MJMAccess.canDo('npayroll', page, action || 'view');
 }
