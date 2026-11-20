@@ -351,10 +351,10 @@ async function pickWorkAndSave(page) {
         else console.log('  --   ' + k + ' copy not checked out here, not compared');
         continue;
       }
-      check(k + ': a phone opens the Gaia app at the spot',
-            onPhone(4.123457, 117.876543), 'gaiagps://map?lat=4.123457&lng=117.876543&z=17');
+      check(k + ': a phone opens the Gaia web map, which the app takes with a pin',
+            onPhone(4.123457, 117.876543), 'https://www.gaiagps.com/map/?loc=17/117.876543/4.123457');
       check(k + ': a desk opens the Gaia web map, longitude first',
-            onDesk(4.123457, 117.876543), 'https://www.gaiagps.com/map/?loc=17.0/117.876543/4.123457');
+            onDesk(4.123457, 117.876543), 'https://www.gaiagps.com/map/?loc=17/117.876543/4.123457');
     }
     const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
     const dock = read('shared/shared_nelos_dock.js');
