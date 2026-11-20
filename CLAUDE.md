@@ -5932,6 +5932,47 @@ every line of its own code inline, so the page IS the deploy — and a
 permission screen is the worst place in the system for a browser to be
 showing yesterday's rules while the office believes it has changed them.
 
+### Module Assess Control is laid out on the office's eleven points
+
+Only the DRAWING of `scan/scan_user_access.html` moved; every tick reads and
+writes the keys it always did, and `user_access_reads_portal_by_portal.cjs`
+still holds the keys.
+
+- **Every block opens FOLDED** with a summary in its header (`3/5 on`,
+  `Off`). `openBlocks` keeps a block unfolded across `render()`, so a tick
+  never snaps it shut. The portal tick is OUTSIDE the label now: the name
+  unfolds, only the box opens the door.
+- **The Auditor Portal is one matrix** (`auditMatrixHtml`): an audit per row,
+  Open / Record / Edit / Delete across, explained once above. Same
+  `data-mpage` / `data-mact` inputs. A card per audit on a phone.
+- **`danger:true`** marks a tick that cannot be taken back — Maintenance
+  Delete (moved LAST in its list) and the audit Delete. It is red and asks
+  before it is ticked; unticking never asks.
+- **Presets** (`applyPreset`): Admin = only the Admin Portal; Field Conductor
+  = only the FC Portal, every page and action but Delete; Auditor = only the
+  Auditor Portal, Record and Edit; Worker = only the 555 Worker Portal; plus
+  Select all (asks, it opens Delete) and Clear all. A preset settles a store
+  before moving it, and raises that portal's module from None to Normal
+  (never lowers one), because `canDo` refuses before it reads a tick. Custom
+  lights when the open doors match no preset.
+- **Save lights only on a change, and counts it.** `snapshot()` flattens what
+  the draft effectively answers and `changeCount()` compares it with the
+  snapshot taken at `openRow`, so settling a store (which writes what was
+  already showing) counts as nothing. So pressing Save on an untouched row is
+  no longer possible at all, which is the strongest form of *looking is not
+  deciding*.
+- **The register job title** (`mjmnpayroll_workers.role`, matched by name on
+  letters and digits) is a tag beside the name, with the e-mail under it. A
+  name the register does not carry gets no tag rather than a guess; two
+  accounts sharing a name share its tags, and the e-mail is what tells them
+  apart.
+- **The Admin Portal is drawn once.** `mobile` left `OTHER_MODULES`; its
+  level is the select in the Admin Portal block's header, writing the same
+  `modules.mobile`. `PORTAL_MODULES` still lists `mobile`.
+
+`tests/module_assess_control_layout.cjs` — 43 checks, **37 fail on the
+previous page**, each by name. Nothing to run in the database.
+
 ### Worker System has its own ADD & EDIT tick, because opening it was not editing it
 
 A user was given Worker System on Module Assess Control and could change

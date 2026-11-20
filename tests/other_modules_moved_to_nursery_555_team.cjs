@@ -111,6 +111,9 @@ function mockSupabase(page) {
   check('Training select shows None (default)',
     await page.locator('select[data-othermod="training"]').inputValue(), 'none');
 
+  /* Every block opens folded now; unfold Other Modules before using it. */
+  await page.locator('.area-block[data-block="other"] .fold-btn').click();
+  await page.waitForTimeout(100);
   await page.locator('select[data-othermod="training"]').selectOption('normal');
   await page.waitForTimeout(100);
   await page.locator('#save-btn').click();
