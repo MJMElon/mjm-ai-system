@@ -1916,8 +1916,30 @@ function mayRaiseFrom(c, key) {
   if (!rm.length) return false;
   return rm.includes(NELOS_ANY_SYSTEM) || rm.includes(key);
 }
+/* ON THE HUB THE LIST FOLLOWS THE SYSTEM PICKED UNDER "ASSIGNED TO".
+
+   A case raised here has Nelos itself as its source, and Nelos is on no
+   From System tick list - so the list was only ever the titles left open
+   to ANY system, whichever system had been picked above it. The office
+   chose FC Portal, opened Case Category and found nothing but Other, with
+   two titles filed under FC Portal on Case Routing.
+
+   The hub is the case log, so once somebody has said which system the
+   case is for, what is offered is what THAT system solves. An EMPTY From
+   list is still left out: that is a title the system opens by itself.
+   A deep link naming a real raising system keeps the From System rule,
+   and so does the drawer before any system is chosen. */
+function hubSolverOf() {
+  return (newSource === 'nelos' && destTouched && $('c-dest').value) || '';
+}
+function mayOffer(c, systemKey) {
+  const solver = hubSolverOf();
+  if (!solver) return mayRaiseFrom(c, systemKey);
+  if (Array.isArray(c.raise_modules) && !c.raise_modules.length) return false;
+  return c.module_key ? c.module_key === solver : mayRaiseFrom(c, systemKey);
+}
 function fillProblems(systemKey) {
-  const scoped = categories.filter(c => mayRaiseFrom(c, systemKey));
+  const scoped = categories.filter(c => mayOffer(c, systemKey));
   const keep = $('c-problem').value;
 
   $('c-problem').innerHTML =
@@ -2306,6 +2328,9 @@ async function openNew(prefill) {
   newSource = (prefill && prefill.source) || 'nelos';
   quiet.batch = (prefill && prefill.batch) || null;
   fillProblems(newSource);
+  /* Read again on every open: a title added or retired on Case Routing
+     since this page loaded is otherwise missing until a reload. */
+  if (!prefill) loadCategories();
 
   // It may also name the case (…&title=Broken+tray). If that matches one of
   // the offered categories, use it; otherwise it goes in as "Other".
@@ -2458,7 +2483,15 @@ $('c-problem').addEventListener('change', () => {
 });
 
 $('c-nursery').addEventListener('change', () => fillPlots());
-$('c-dest').addEventListener('change', () => { destTouched = true; fillPics(); });
+$('c-dest').addEventListener('change', () => {
+  destTouched = true;
+  fillPics();
+  /* The category list follows the system on the hub. A category already
+     chosen that this system does not solve is dropped by fillProblems, so
+     the case cannot carry a title filed under another queue. */
+  fillProblems(newSource);
+  applyCategoryDefaults();
+});
 $('c-pic').addEventListener('change', () => fillPics());
 
 $('c-photo').addEventListener('change', () => {

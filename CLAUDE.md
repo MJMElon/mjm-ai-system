@@ -10179,3 +10179,16 @@ part. `shared/RUN_ME_scan_points.sql` is the database half: the
 rows naming no point only when asked), the per-AL cap trigger `fcportal_scan_cap`, a one-off clear of Imbok BB0RS8, a `fcportal_scan_resets` log of who
 reset what, and the DO press-id index again. Its check names suspected
 twin DOs. The rules are in `FC-Portal/CLAUDE.md`.
+
+### On the hub, the Case Category list follows the system picked
+
+The hub drawer raises with Nelos as its source, and Nelos is on no From
+System list, so it only ever offered titles left open to Any system. The
+office picked FC Portal and found nothing but Other. Once a system is
+chosen under Assigned To, the list is what THAT system solves
+(`mayOffer` / `hubSolverOf` in `nelos_dashboard.html`); a title with an
+EMPTY From list is still left out, being one the system opens by itself.
+Before a system is chosen, and on a deep link naming a real raising system,
+the From System rule stands. The drawer also re-reads the titles each time
+it opens. The two raise forms on real modules are untouched.
+`tests/the_hub_category_list_follows_the_system.cjs`. Nothing to run.
