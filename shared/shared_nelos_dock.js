@@ -2121,13 +2121,21 @@
                 nothing on most of them. Opens the map, which is the only
                 thing anybody does with two numbers. */
              (fmtLatLng(f.location_lat, f.location_lng)
-               ? fact('Location', '&#128205; ' + esc(fmtLatLng(f.location_lat, f.location_lng)) +
-                      /* Two doors, never one: the Gaia link does nothing
-                         on a phone without the app. No target on it — an
-                         app link in a new tab leaves an empty tab behind. */
+               ? fact('Location',
+                      /* THE COORDINATE IS THE DOOR, and it goes to Gaia GPS:
+                         the office asked for the two numbers themselves to
+                         open it. Gaia has no link that drops a pin, so the
+                         press also COPIES the coordinate - pasted into Gaia
+                         search it becomes a Marked Location. No target on
+                         it: an app link in a new tab leaves an empty tab.
+                         Maps stays beside it, because the Gaia link does
+                         nothing on a phone without the app. */
+                      '<a class="nd-d-loc nd-d-gaia" title="Open in Gaia GPS (the coordinate is copied, paste it in Gaia search to mark it)"' +
+                        ' data-copy="' + esc(fmtLatLng(f.location_lat, f.location_lng)) + '"' +
+                        ' onclick="try{navigator.clipboard.writeText(this.getAttribute(\'data-copy\'))}catch(e){}"' +
+                        ' href="' + esc(gaiaHref(f.location_lat, f.location_lng)) + '">&#128205; ' +
+                        esc(fmtLatLng(f.location_lat, f.location_lng)) + '</a>' +
                       '<span class="nd-d-go">' +
-                      '<a class="nd-d-loc nd-d-gaia" href="' +
-                        esc(gaiaHref(f.location_lat, f.location_lng)) + '">Gaia</a>' +
                       '<a class="nd-d-loc" target="_blank" rel="noopener" href="' +
                         esc(mapsHref(f.location_lat, f.location_lng)) + '">Maps</a></span>')
                : '') +

@@ -1542,9 +1542,12 @@ function caseBlockHtml(c) {
   /* …and the location, which opens the map. The two numbers are already
      a row in the block below; this is the door. */
   const locLink = MJMNelos.fmtLatLng(c.location_lat, c.location_lng)
-    ? `<a class="s-case-doc" href="${esc(MJMNelos.mapsHref(c.location_lat, c.location_lng))}"
-         target="_blank" rel="noopener">📍 Open the location in Maps</a>
-       <a class="s-case-doc" href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">🧭 Open the location in Gaia GPS</a>`
+    ? `<a class="s-case-doc" data-copy="${esc(MJMNelos.fmtLatLng(c.location_lat, c.location_lng))}"
+         title="Open in Gaia GPS. The coordinate is copied: paste it in Gaia search to mark it."
+         onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
+         href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">📍 ${esc(MJMNelos.fmtLatLng(c.location_lat, c.location_lng))} · Open the location in Gaia GPS</a>
+       <a class="s-case-doc" href="${esc(MJMNelos.mapsHref(c.location_lat, c.location_lng))}"
+         target="_blank" rel="noopener">Open the location in Maps</a>`
     : '';
 
   return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot + doc + locLink +

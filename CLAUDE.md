@@ -8002,6 +8002,15 @@ location at all. `gaiaHref` is the rule, in the same four files as
   one. **Neither link could be tried against a real Gaia install from
   here**, so the first press on a phone is the proof.
 
+**THE COORDINATE ITSELF IS THE GAIA LINK NOW**, which the office asked for
+next: *"i click the location (the latitude, longtitude) then it will
+directly bring me to gaia"* with a marked location. Gaia documents no link
+that drops a pin or runs its search, so the press also COPIES the
+coordinate (best effort): pasted into Gaia search it becomes a Marked
+Location. Maps is the smaller link beside it. On the case page
+`#c-loc-link` is the Gaia one and `#c-gaia-link` is Maps, the ids being
+from when they were the other way round.
+
 `tests/a_case_can_carry_a_location.cjs` drives the real dock with a mocked
 geolocation and runs all four parsers over the same inputs; **31 of its 43
 checks fail on the previous code**, each by name.

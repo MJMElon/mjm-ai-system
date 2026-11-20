@@ -138,20 +138,22 @@
     <!-- Where it is, as a coordinate, if the person raising it said. It
          opens the map, which is the only thing anybody does with two
          numbers. Optional on the form, so absent on most cases. -->
-    <a id="c-loc-link" class="hidden mt-3" target="_blank" rel="noopener"
-       style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #f8e2f1;
-              border-radius:12px;background:#fefafd;font-size:12.5px;font-weight:800;color:#511f41;
+    <a id="c-loc-link" class="hidden mt-3"
+       title="Open in Gaia GPS. The coordinate is copied: paste it in Gaia search to mark it."
+       onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
+       style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #d1fae5;
+              border-radius:12px;background:#f0fdf4;font-size:12.5px;font-weight:800;color:#1b4332;
               text-decoration:none;overflow-wrap:anywhere;">
       <span aria-hidden="true">📍</span><span id="c-loc-label"></span>
     </a>
     <!-- …and the same spot in Gaia GPS, which is the map the nursery walks
          by. A second door and never the only one: on a phone without the
          app this link does nothing. -->
-    <a id="c-gaia-link" class="hidden mt-2"
-       style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #d1fae5;
-              border-radius:12px;background:#f0fdf4;font-size:12.5px;font-weight:800;color:#1b4332;
+    <a id="c-gaia-link" class="hidden mt-2" target="_blank" rel="noopener"
+       style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid #f8e2f1;
+              border-radius:12px;background:#fefafd;font-size:12px;font-weight:800;color:#511f41;
               text-decoration:none;">
-      <span aria-hidden="true">🧭</span><span>Open in Gaia GPS</span>
+      <span aria-hidden="true">🗺️</span><span>Open in Maps</span>
     </a>
 
     <div class="grid grid-cols-3 gap-3 mt-4 p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
@@ -298,10 +300,15 @@ function renderCase() {
      and are optional on the form, so most cases have none. */
   const locText = MJMNelos.fmtLatLng(c.location_lat, c.location_lng);
   if (locText) {
-    $('c-loc-link').href = MJMNelos.mapsHref(c.location_lat, c.location_lng);
-    $('c-loc-label').textContent = locText + ' — open in Maps';
+    /* The coordinate itself is the Gaia door, and the press copies it:
+       Gaia has no link that drops a pin, so pasting it into Gaia search
+       is what marks the spot. The second link (its id is from when the
+       two were the other way round) is Maps. */
+    $('c-loc-link').href = MJMNelos.gaiaHref(c.location_lat, c.location_lng);
+    $('c-loc-link').setAttribute('data-copy', locText);
+    $('c-loc-label').textContent = locText + ' — open in Gaia GPS';
     $('c-loc-link').classList.remove('hidden');
-    $('c-gaia-link').href = MJMNelos.gaiaHref(c.location_lat, c.location_lng);
+    $('c-gaia-link').href = MJMNelos.mapsHref(c.location_lat, c.location_lng);
     $('c-gaia-link').classList.remove('hidden');
   } else {
     $('c-loc-link').classList.add('hidden');
