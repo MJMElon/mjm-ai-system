@@ -626,15 +626,14 @@
     const link = linkedQty(r && r.plot, '', r && r.tarikh, qtyOpts(r));
     const shown = link ? link.batches.filter(b => b && b !== '—').join(', ') : '';
     if (keyed) {
-      /* The link rides along on the DISAGREEING answer too. It was already
-         worked out to decide the mark, and it is the one thing somebody
-         reading down this column for the unmarked rows actually wants: what
-         the batch report would have said. The CHECKED branch above returns
-         before this and keeps no info, deliberately — a settled row is not
-         re-read, not even to describe itself. */
+      /* A KEYED ANSWER THAT DISAGREES CARRIES NOTHING — no mark and no link
+         to describe it with. The cell wears nothing either, because on this
+         screen the ABSENCE is what the office reads down the column for, so
+         a field here would only ever feed a sentence that must not be on
+         the screen. */
       return shown && batchesAgree(keyed, shown)
         ? { value: keyed, linked: true, agrees: true, info: link }
-        : { value: keyed, linked: false, info: link };
+        : { value: keyed, linked: false };
     }
     /* No batch keyed and none to name. `info` rides along all the same, so
        a cell can tell "this plot has been 3rd culled" from "the ledger has

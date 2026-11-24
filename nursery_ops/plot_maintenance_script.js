@@ -8689,18 +8689,13 @@ function _qtyCell(r) {
        people read down for the number itself. */
     return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">${txt}</span>`;
   }
-  /* KEYED BY HAND. Frozen returned above and a null returned above that, so
-     everything that reaches here is somebody's own figure — and until the
-     office asked it was the one kind of cell on the row wearing no mark at
-     all, which is what sent them looking for the line. It says what it is
-     and how to put it back on the link, which is a PRESS and not something
-     anybody would guess. */
-  if (!q.linked) {
-    const tip = 'Keyed by hand, so the batch report does not move it. Open '
-              + 'the row and press "' + t('link.useLink') + '" to put it '
-              + 'back on the link.';
-    return `<span class="qty-keyed" title="${tip.replace(/"/g, '&quot;')}">${txt}</span>`;
-  }
+  /* KEYED BY HAND, and it wears NOTHING. A mark was put here for a few
+     hours and the office took it off: on this screen the ABSENCE is the
+     signal — *"如果图二我看到没虚线我还是要check"* — so a line on a figure
+     that is somebody's own override says the opposite of what they read it
+     as. The hover it carried is in the record dialog, which is where the
+     comparison belongs. */
+  if (!q.linked) return txt;
   const i = q.info;
   const scope = i.allBatches
     ? `all batches in plot ${r.plot}`
@@ -8759,27 +8754,14 @@ function _batchCell(r) {
               + 'report again.';
     return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">${esc(b.value)}</span>`;
   }
+  /* KEYED BY HAND AND NOT WHAT THE REPORT SAYS, and it wears NOTHING — the
+     row this column is read down to find. A mark was put here for a few
+     hours and the office took it off in one line: *"打的batch不等于如果不打
+     自动link的batch 那就不要虚线"*, which is the other half of *"如果图二我
+     看到没虚线我还是要check"*. THE ABSENCE IS THE SIGNAL, so marking it says
+     the opposite of what they read it as. */
+  if (!b.linked) return esc(b.value);
   const when = b.info && b.info.asOf ? `as at ${b.info.asOf}` : 'standing today';
-  /* KEYED BY HAND AND NOT WHAT THE REPORT SAYS — the row this column is read
-     down to find, and the one that had no mark on it. Two ways to get here
-     and they are told apart, because only one of them has an answer to
-     compare against: a CHECKED row returns before the ledger is read at all,
-     so there is nothing to name and saying so is the honest sentence. */
-  if (!b.linked) {
-    const says = b.info
-      ? (b.info.batches || []).filter(x => x && x !== '—').join(', ')
-      : null;
-    const tip = says == null
-      ? 'Keyed by hand, and this row is checked — the batch report is not '
-        + 'read again while it is.'
-      : (says
-          ? `Keyed by hand, and NOT what the batch report says: it has `
-            + `${says} standing on plot ${r.plot} ${when}. This row counts `
-            + `the batch keyed here.`
-          : `Keyed by hand. The batch report has nothing standing on plot `
-            + `${r.plot} ${when}.`);
-    return `<span class="qty-keyed" title="${tip.replace(/"/g, '&quot;')}">${esc(b.value)}</span>`;
-  }
   /* THE MARK MEANS "THIS IS WHAT THE BATCH REPORT SAYS", however it got
      there. Filled in from the report, or keyed by somebody and the same
      answer — either way it is a row nobody has to go and check, which is

@@ -747,20 +747,6 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
    than dotted: the dots say "this is worked out and still moving", and
    this one has stopped. */
 .qty-frozen{color:var(--text-head);border-bottom:1px solid var(--border);}
-/* KEYED BY HAND, and it carried no mark at all. The office read a CHECKED
-   row where the quantity beside it had a line and the batch they had typed
-   themselves had nothing — *"这个链接的icon出来了 但是因为自己有打字 所以
-   check的时候底下没有线 我要线"* — and they are right: a cell with something
-   to say has to look like one, or the only cells anybody can hover are the
-   ones the system filled in. It was true unchecked too, and of the quantity
-   as well as the batch, which is why both wear it.
-   DOTTED LIKE THE LINK AND NEVER GREEN. The green is the batch report's own
-   answer, and the whole of what the 🔗 was asked for is reading down this
-   column for the rows that are NOT it — a keyed value wearing the report's
-   colour would undo that in one line of CSS.
-   NO COLOUR OF ITS OWN either: the mark is the line. Recolouring would move
-   a keyed figure away from the column it is read down with. */
-.qty-keyed{border-bottom:1px dotted var(--border-strong);}
 /* A dash that means "3rd culled, nothing of it is here" rather than "no
    answer". Dotted like the linked mark, because it is the same ledger
    talking — it is simply saying the plot is empty. */
