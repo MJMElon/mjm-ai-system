@@ -15,18 +15,17 @@
     <script src="../shared/shared_access.js"></script>
     <style>
         body { font-family: 'Outfit', system-ui, sans-serif; background: #f1f5f9; }
-        .lp-wrap { overflow-x: auto; }
-        table.lp { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; font-size: 13px; }
-        table.lp th, table.lp td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; white-space: nowrap; }
+        table.lp { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; font-size: 13px; width: 100%; }
+        table.lp th, table.lp td { padding: 9px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; white-space: nowrap; }
         table.lp th { background: #f8fafc; color: #64748b; font-weight: 800; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
-        table.lp td.name, table.lp th.name { position: sticky; left: 0; background: #fff; text-align: left; z-index: 1; }
-        table.lp th.name { background: #f8fafc; z-index: 2; }
+        table.lp td.l, table.lp th.l { text-align: left; }
+        table.lp tbody tr.plotrow { cursor: pointer; }
+        table.lp tbody tr.plotrow:hover { background: #f0fdfa; }
         table.lp tr.grp td { background: #ccfbf1; color: #134e4a; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
-        table.lp tr.sub td { background: #f0fdfa; font-weight: 800; color: #0f766e; }
         table.lp tr.tot td { background: #134e4a; color: #fff; font-weight: 900; }
-        table.lp tr.cum td { color: #64748b; font-style: italic; }
-        table.lp td.yr { background: #f8fafc; font-weight: 800; }
         table.lp td.dash { color: #cbd5e1; }
+        table.lp td.adj { color: #b45309; font-weight: 700; }
+        table.lp td.cull { color: #be123c; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -34,22 +33,24 @@
 <div class="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
     <div class="flex items-center justify-between gap-4 mb-5 flex-wrap">
         <div class="flex items-center gap-4">
-            <a href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-teal-700 uppercase tracking-widest bg-white px-4 py-2 rounded-full border border-slate-200 no-underline">&#8592; Dashboard</a>
+            <a id="lp-back" href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-teal-700 uppercase tracking-widest bg-white px-4 py-2 rounded-full border border-slate-200 no-underline">&#8592; Dashboard</a>
             <div>
-                <h1 class="text-xl font-black text-slate-800 uppercase tracking-widest">Life of Plot</h1>
-                <p class="text-[11px] font-bold text-slate-400">Seedlings transplanted into each plot, month by month, read off the system.</p>
+                <h1 class="text-xl font-black text-slate-800 uppercase tracking-widest" id="lp-title">Life of Plot</h1>
+                <p class="text-[11px] font-bold text-slate-400" id="lp-sub">Every plot, and what happened to it.</p>
             </div>
-        </div>
-        <div class="flex items-center gap-2">
-            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest" for="lp-year">Year</label>
-            <select id="lp-year" class="h-10 px-3 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 text-sm"></select>
         </div>
     </div>
 
     <div id="lp-status" class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm font-bold text-slate-400">Loading…</div>
-    <div id="lp-body" class="hidden">
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div class="lp-wrap"><table class="lp" id="lp-table"></table></div>
+
+    <div id="lp-list" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+        <table class="lp" id="lp-plots"></table>
+    </div>
+
+    <div id="lp-detail" class="hidden">
+        <button id="lp-up" class="mb-4 text-[10px] font-bold text-slate-500 hover:text-teal-700 uppercase tracking-widest bg-white px-4 py-2 rounded-full border border-slate-200">&#8592; All plots</button>
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+            <table class="lp" id="lp-timeline"></table>
         </div>
         <p id="lp-note" class="text-[11px] font-bold text-slate-400 mt-3"></p>
     </div>
@@ -60,7 +61,6 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const NURSERY_LABEL = { BNN: 'BNN', UNN1: 'UNN 1', UNN2: 'UNN 2', OTHER: 'Not in Seedling Stock' };
     const NURSERY_ORDER = ['BNN', 'UNN1', 'UNN2', 'OTHER'];
 
@@ -68,9 +68,24 @@
     function lpNurKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
     function lpPlotKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(^|[A-Z])0+(\d)/g, '$1$2'); }
     function lpIsReplant(s) { return /-R/i.test(String(s || '')); }
-    function lpNaturalCmp(a, b) { return String(a).localeCompare(String(b), 'en', { numeric: true }); }
-    function buildLifePlot(plots, rows, year) {
-        const yr = String(year);
+    function lpNatural(a, b) { return String(a).localeCompare(String(b), 'en', { numeric: true }); }
+    // A row's day: its own transaction_date, else the Date: written in its remark, else the day it was saved.
+    function lpDayOf(r, key) {
+        const td = String(r.transaction_date || '').slice(0, 10);
+        if (td) return td;
+        const rem = String(r.remark || '');
+        const m = rem.match(new RegExp(key + ':\\s*(\\d{4}-\\d{2}-\\d{2})'));
+        if (m) return m[1];
+        return String(r.created_at || '').slice(0, 10) || null;
+    }
+    function lpEarliest(days) { return days.filter(Boolean).sort()[0] || null; }
+    function lpLatest(days) { return days.filter(Boolean).sort().slice(-1)[0] || null; }
+    // An approved calibration against the transplanting report, keyed to the batch it corrects.
+    function lpIsApprovedTransplantCal(r) {
+        const rem = String(r.remark || '');
+        return r.transaction_type === 'Stock_Calibration' && /^Report:\s*Transplanting/i.test(rem) && /APPROVED/i.test(rem);
+    }
+    function buildPlotHistory(plots, rows) {
         const nurOfPlot = new Map();
         (plots || []).forEach(p => {
             if (lpIsReplant(p.plot_name)) return;
@@ -78,33 +93,56 @@
             nurOfPlot.set(lpPlotKey(p.plot_name), { name: p.plot_name, nursery: NURSERY_ORDER.includes(n) ? n : 'OTHER' });
         });
         const byPlot = new Map();
-        (rows || []).forEach(r => {
-            const d = String(r.transaction_date || '').slice(0, 10);
-            if (!d || d.slice(0, 4) !== yr) return;
-            if (lpIsReplant(r.plot_name)) return;
+        const plotOf = (r) => {
             const k = lpPlotKey(r.plot_name);
             if (!byPlot.has(k)) {
                 const known = nurOfPlot.get(k);
-                byPlot.set(k, { name: known ? known.name : r.plot_name, nursery: known ? known.nursery : 'OTHER', m: Array(12).fill(0) });
+                byPlot.set(k, { name: known ? known.name : r.plot_name, nursery: known ? known.nursery : 'OTHER', batches: new Map() });
             }
-            byPlot.get(k).m[Number(d.slice(5, 7)) - 1] += Number(r.quantity_change) || 0;
+            return byPlot.get(k);
+        };
+        const batchOf = (plot, r) => {
+            const b = String(r.batch_name || '—');
+            if (!plot.batches.has(b)) plot.batches.set(b, { batch: b, tRows: [], adjRows: [], c2Rows: [], c3Rows: [] });
+            return plot.batches.get(b);
+        };
+        (rows || []).forEach(r => {
+            if (lpIsReplant(r.plot_name)) return;
+            const t = r.transaction_type;
+            if (t === 'Transplanted') batchOf(plotOf(r), r).tRows.push(r);
+            else if (lpIsApprovedTransplantCal(r)) batchOf(plotOf(r), r).adjRows.push(r);
+            else if (t === '2nd_Culling') batchOf(plotOf(r), r).c2Rows.push(r);
+            else if (t === '3rd_Culling') batchOf(plotOf(r), r).c3Rows.push(r);
         });
-        // A plot in Seedling Stock with no transplant this year still gets its row, so an
-        // empty plot is seen as empty rather than missing.
-        nurOfPlot.forEach((v, k) => {
-            if (!byPlot.has(k) && v.nursery !== 'OTHER') byPlot.set(k, { name: v.name, nursery: v.nursery, m: Array(12).fill(0) });
-        });
-        const groups = NURSERY_ORDER.map(key => {
-            const list = [...byPlot.values()].filter(p => p.nursery === key).sort((a, b) => lpNaturalCmp(a.name, b.name));
-            const m = Array(12).fill(0);
-            list.forEach(p => p.m.forEach((v, i) => { m[i] += v; }));
-            return { key, label: NURSERY_LABEL[key], plots: list.map(p => ({ plot: p.name, m: p.m, total: p.m.reduce((a, b) => a + b, 0) })), m, total: m.reduce((a, b) => a + b, 0) };
+        // A plot in Seedling Stock with nothing recorded still gets a row, so an empty plot shows as empty.
+        nurOfPlot.forEach((v, k) => { if (!byPlot.has(k) && v.nursery !== 'OTHER') byPlot.set(k, { name: v.name, nursery: v.nursery, batches: new Map() }); });
+
+        const sum = (xs, f) => xs.reduce((a, r) => a + (Number(f(r)) || 0), 0);
+        const out = NURSERY_ORDER.map(key => {
+            const list = [...byPlot.values()].filter(p => p.nursery === key).sort((a, b) => lpNatural(a.name, b.name));
+            return { key, label: NURSERY_LABEL[key], plots: list.map(p => {
+                const batches = [...p.batches.values()].map(b => {
+                    const tQty = sum(b.tRows, r => r.quantity_change);
+                    const adj = sum(b.adjRows, r => r.quantity_change);
+                    return {
+                        batch: b.batch,
+                        tDate: lpEarliest(b.tRows.map(r => lpDayOf(r, 'Date'))),
+                        tQty, adj, tAdj: tQty + adj,
+                        c2Date: lpEarliest(b.c2Rows.map(r => lpDayOf(r, 'CullDate'))),
+                        c2Qty: sum(b.c2Rows, r => r.quantity_change),
+                        c3Date: lpEarliest(b.c3Rows.map(r => lpDayOf(r, 'CullDate'))),
+                        c3Qty: sum(b.c3Rows, r => r.quantity_change),
+                    };
+                }).sort((x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch));
+                return {
+                    plot: p.name, nursery: p.nursery, batches,
+                    tAdj: batches.reduce((a, b) => a + b.tAdj, 0),
+                    c2: batches.reduce((a, b) => a + b.c2Qty, 0),
+                    c3: batches.reduce((a, b) => a + b.c3Qty, 0),
+                };
+            }) };
         }).filter(g => g.plots.length || g.key !== 'OTHER');
-        const m = Array(12).fill(0);
-        groups.forEach(g => g.m.forEach((v, i) => { m[i] += v; }));
-        const cum = []; let run = 0;
-        m.forEach(v => { run += v; cum.push(run); });
-        return { groups, m, total: m.reduce((a, b) => a + b, 0), cum };
+        return { groups: out };
     }
     // ── END build ──
 
@@ -120,59 +158,82 @@
     }
 
     const nf = n => (n ? Number(n).toLocaleString('en-MY') : '');
+    const dash = v => (v ? nf(v) : '–');
+    let MODEL = null;
 
-    function render(model) {
-        const head = '<tr><th class="name">Plot</th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '<th class="yr">Total</th></tr>';
-        let h = '<thead>' + head + '</thead><tbody>';
-        model.groups.forEach(g => {
-            h += `<tr class="grp"><td class="name" colspan="14">${g.label}</td></tr>`;
+    function showList() {
+        document.getElementById('lp-list').classList.remove('hidden');
+        document.getElementById('lp-detail').classList.add('hidden');
+        document.getElementById('lp-title').textContent = 'Life of Plot';
+        document.getElementById('lp-sub').textContent = 'Every plot, and what happened to it. Click a plot for its timeline.';
+        history.replaceState(null, '', location.pathname);
+    }
+
+    function renderList() {
+        let h = '<thead><tr><th class="l">Plot</th><th class="l">Nursery</th><th>Transplanted (adjusted)</th><th>2nd cull</th><th>3rd cull</th></tr></thead><tbody>';
+        MODEL.groups.forEach(g => {
+            h += `<tr class="grp"><td colspan="5">${g.label} · ${g.plots.length} plot${g.plots.length === 1 ? '' : 's'}</td></tr>`;
             g.plots.forEach(p => {
-                h += '<tr><td class="name">' + p.plot + '</td>' + p.m.map(v => `<td class="${v ? '' : 'dash'}">${v ? nf(v) : '–'}</td>`).join('') + `<td class="yr">${nf(p.total) || '–'}</td></tr>`;
+                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l" style="font-weight:800">${p.plot}</td><td class="l">${g.label}</td><td>${dash(p.tAdj)}</td><td class="cull">${dash(p.c2)}</td><td class="cull">${dash(p.c3)}</td></tr>`;
             });
-            if (!g.plots.length) h += '<tr><td class="name" colspan="14" style="text-align:left;color:#94a3b8;font-weight:700">No plots.</td></tr>';
-            h += '<tr class="sub"><td class="name">Total ' + g.label + '</td>' + g.m.map(v => `<td>${nf(v) || '–'}</td>`).join('') + `<td class="yr">${nf(g.total) || '–'}</td></tr>`;
+            if (!g.plots.length) h += '<tr><td colspan="5" class="l" style="color:#94a3b8;font-weight:700">No plots.</td></tr>';
         });
-        h += '<tr class="tot"><td class="name">Total</td>' + model.m.map(v => `<td>${nf(v) || '–'}</td>`).join('') + `<td>${nf(model.total) || '–'}</td></tr>`;
-        h += '<tr class="cum"><td class="name">Cumulative</td>' + model.cum.map(v => `<td>${nf(v) || '–'}</td>`).join('') + '<td></td></tr>';
         h += '</tbody>';
-        document.getElementById('lp-table').innerHTML = h;
+        document.getElementById('lp-plots').innerHTML = h;
+        document.querySelectorAll('#lp-plots tr.plotrow').forEach(tr => tr.addEventListener('click', () => showPlot(tr.dataset.plot)));
+    }
+
+    function showPlot(name) {
+        const p = MODEL.groups.flatMap(g => g.plots).find(x => x.plot === name);
+        if (!p) return;
+        document.getElementById('lp-list').classList.add('hidden');
+        document.getElementById('lp-detail').classList.remove('hidden');
+        document.getElementById('lp-title').textContent = 'Life of Plot · ' + p.plot;
+        const nurLabel = NURSERY_LABEL[p.nursery];
+        document.getElementById('lp-sub').textContent = nurLabel + ' · transplant, 2nd cull and 3rd cull by batch, in date order. Transplant includes approved calibration.';
+        history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
+        let h = '<thead><tr><th class="l">Batch</th><th class="l">Transplant date</th><th>Transplant qty</th><th>Calibration</th><th>Adjusted</th>'
+              + '<th class="l">2nd cull date</th><th>2nd cull qty</th><th class="l">3rd cull date</th><th>3rd cull qty</th></tr></thead><tbody>';
+        if (!p.batches.length) h += '<tr><td colspan="9" class="l" style="color:#94a3b8;font-weight:700">Nothing recorded on this plot yet.</td></tr>';
+        p.batches.forEach(b => {
+            h += `<tr><td class="l" style="font-weight:800">${b.batch}</td><td class="l">${b.tDate || '–'}</td><td>${dash(b.tQty)}</td>`
+               + `<td class="${b.adj ? 'adj' : 'dash'}">${b.adj ? (b.adj > 0 ? '+' : '') + nf(b.adj) : '–'}</td><td>${dash(b.tAdj)}</td>`
+               + `<td class="l">${b.c2Date || '–'}</td><td class="cull">${dash(b.c2Qty)}</td><td class="l">${b.c3Date || '–'}</td><td class="cull">${dash(b.c3Qty)}</td></tr>`;
+        });
+        h += `</tbody><tfoot><tr class="tot"><td class="l">Total</td><td></td><td>${dash(p.batches.reduce((a, b) => a + b.tQty, 0))}</td>`
+           + `<td>${dash(p.batches.reduce((a, b) => a + b.adj, 0)) || '–'}</td><td>${dash(p.tAdj)}</td><td></td><td>${dash(p.c2)}</td><td></td><td>${dash(p.c3)}</td></tr></tfoot>`;
+        document.getElementById('lp-timeline').innerHTML = h;
+        document.getElementById('lp-note').textContent = 'Dates come from the transplant and cull records: the record\'s own date, else the Date / CullDate written in its remark, else the day it was saved.';
     }
 
     async function load() {
-        const year = Number(document.getElementById('lp-year').value);
-        const status = document.getElementById('lp-status');
-        status.classList.remove('hidden');
-        status.textContent = 'Loading…';
-        document.getElementById('lp-body').classList.add('hidden');
+        document.getElementById('lp-status').classList.remove('hidden');
+        document.getElementById('lp-status').textContent = 'Loading…';
         try {
-            const [plots, rows, nodate] = await Promise.all([
-                lpFetchAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name, is_active').order('plot_name')),
+            const [plots, rows] = await Promise.all([
+                lpFetchAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name').order('plot_name')),
                 lpFetchAll(() => _supabase.from('shared_inventory_logs')
-                    .select('id, plot_name, transaction_date, quantity_change')
-                    .eq('transaction_type', 'Transplanted')
-                    .gte('transaction_date', `${year}-01-01`).lt('transaction_date', `${year + 1}-01-01`)
+                    .select('id, plot_name, transaction_type, transaction_date, quantity_change, batch_name, remark, created_at')
+                    .in('transaction_type', ['Transplanted', 'Stock_Calibration', '2nd_Culling', '3rd_Culling'])
                     .order('id', { ascending: true })),
-                _supabase.from('shared_inventory_logs').select('id', { count: 'exact', head: true })
-                    .eq('transaction_type', 'Transplanted').is('transaction_date', null),
             ]);
-            if (nodate.error) throw nodate.error;
-            const model = buildLifePlot(plots, rows, year);
-            render(model);
-            const noDate = nodate.count || 0;
-            document.getElementById('lp-note').textContent = `Figures are the Transplanted records dated in ${year}. `
-                + (noDate ? `${nf(noDate)} transplant record(s) have no date and are not counted in any month.` : '');
-            status.classList.add('hidden');
-            document.getElementById('lp-body').classList.remove('hidden');
+            MODEL = buildPlotHistory(plots, rows);
+            document.getElementById('lp-status').classList.add('hidden');
+            renderList();
+            const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
+            if (deep) showPlot(deep); else showList();
         } catch (e) {
-            status.textContent = 'Could not read the transplant records: ' + (e && e.message ? e.message : e);
+            document.getElementById('lp-status').textContent = 'Could not read the plot records: ' + (e && e.message ? e.message : e);
         }
     }
 
+    document.getElementById('lp-up').addEventListener('click', showList);
+    window.addEventListener('hashchange', () => {
+        const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
+        if (MODEL && deep) showPlot(deep); else if (MODEL) showList();
+    });
+
     (async function boot() {
-        const sel = document.getElementById('lp-year');
-        const now = new Date().getFullYear();
-        for (let y = now; y >= 2025; y--) sel.insertAdjacentHTML('beforeend', `<option value="${y}">${y}</option>`);
-        sel.addEventListener('change', load);
         try {
             await MJMAccess.load(_supabase);
             if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
