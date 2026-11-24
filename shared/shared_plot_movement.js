@@ -296,7 +296,30 @@
      and asked under two names below. An unevidenced 3rd culling never
      became an event at all (see _load), so neither question can be
      satisfied by a claim nobody has flown — the same condition the
-     report's own cull3 column carries. */
+     report's own cull3 column carries.
+
+     AND AN UNFLOWN CULLING WAS TRIED AS AN ANSWER TO THE GROUND, ON THE
+     OFFICE OWN 统统, AND THE CHECK REVERSED IT. The reasoning looked
+     sound: the drone map gates the FIGURE, so the row itself could answer
+     whether the plot had been culled, and until then the batch was named
+     AND its whole pre-culling balance counted. Built, tested, and then
+     `shared/CHECK_why_a_finished_batch_is_still_linked.sql` was run on the
+     real ledger: **85 work records, about 72,900 seedlings of capacity,
+     and 44 of them to NOUGHT** — N2 4,962 to 0, N17 1,896 to 0, U9 916 to
+     0 — and B5 off its own reconciled 6,515. Those are workers who walked
+     a plot being paid for nothing.
+
+     THE CAUSE IS THE ORDER OF THE WORK, which the same run showed: 74
+     plot-and-batch pairs carry a 3rd culling row with NO map and NO
+     figure, so Tab 6 rows are routinely opened and keyed WELL BEFORE the
+     plot is flown. In that world an unflown culling is not an answer about
+     the ground, it is a row halfway through being filled in — and the rule
+     would have zeroed capacity for the weeks in between.
+
+     AND IT ANSWERED NOTHING: the row the office was asking about, B4 on 4
+     Nov, has FOUR batches with no 3rd culling in the ledger at all. So the
+     rule moved 72,900 seedlings elsewhere and left their own screen as it
+     was. Do not re-add it without running that check first. */
   function hasCull3(evs) {
     return (evs || []).some(e => e.type === '3rd_Culling'
                               && Math.abs(Number(e.qty || 0)) > 0);
@@ -433,10 +456,49 @@
     let goneQty = 0;
     gone.forEach(k => { goneQty += per[k].closing; });
 
+    /* AND A BATCH WITH NOTHING STANDING IS NOT ON THE PLOT EITHER.
+
+       The office put the two screens side by side: B6-R on 6 Nov linked
+       *"225, 227, 228, 233, 234, 238, 240, 242, 244, 247"* and the Summary
+       Report for the same plot and the same day lists **228, 234, 242, 244,
+       247** — *"B6-R 在6/11并没有225"*. The five extra all had movement on
+       that plot at some point and NOTHING LEFT by the work date.
+
+       A bucket was named for having an EVENT, not for having seedlings. So
+       a batch that arrived and then went — sold, transplanted on, culled —
+       was offered for ever afterwards, and on a -R plot, which is populated
+       entirely by transfers in and emptied again, that is most of them.
+
+       NOUGHT OR BELOW, and the office said so in one line when the first
+       version kept the negatives and named them: *"小过负数也不要出现 只要
+       过了3rd cull统统不要出现"*. The argument for keeping one was that the
+       Summary Report draws a negative because it is a figure to look into,
+       so a work record that stopped naming the batch would be disagreeing
+       with the report about the very row somebody has to go and fix. The
+       office overruled it with the consequence in front of them: this is
+       the CAPACITY column, which is what somebody is paid off, and a plot
+       that owes nothing has nothing to spray whatever the ledger says.
+
+       NOUGHT COSTS THE FIGURE NOTHING AND A NEGATIVE DOES NOT. A bucket
+       closing at nought adds nought, so `qty` is the same number before and
+       after and only the names move. A bucket closing BELOW nought is
+       adding a negative to `raw`, which is deliberately not floored (see
+       `qty` below) — so dropping it RAISES the figure by exactly that much.
+       `shared/CHECK_which_batches_leave_the_link.sql` names every record it
+       moves and by how much, which is the only honest way to ship this.
+
+       AND INTERROW ANSWERS DIFFERENTLY, which falls out rather than being a
+       second rule: `closing` is `liveCount` with this row's own options, so
+       a batch whose 2nd culling takes it to nought is EMPTY for the other
+       three jobs and still STANDING for interrow — which is the whole of
+       what keepCull2 says, the polybags being where they were. */
+    const empty = new Set(here.filter(k => per[k].closing <= 0));
+    const standing = here.filter(k => !empty.has(k));
+
     let culledBal = 0;
-    here.forEach(k => { if (leftBy.has(k)) culledBal += Math.max(0, per[k].closing); });
+    standing.forEach(k => { if (leftBy.has(k)) culledBal += Math.max(0, per[k].closing); });
     const excl = !!(opts && opts.exclBal) && culledBal > 0;
-    const keys = excl ? here.filter(k => !leftBy.has(k)) : here;
+    const keys = excl ? standing.filter(k => !leftBy.has(k)) : standing;
     /* ASKED PER BUCKET, never over the plot as a whole, because the
        supersede rule is per plot-and-batch: a plot with one batch 3rd
        culled and one not has some of its 2nd culling taken off and some of
@@ -488,7 +550,7 @@
       /* The balance left behind a transfer out — see "the culled balance"
          above — and whether this figure has it taken off. */
       culledBal: Math.round(culledBal),
-      culledBatches: here.filter(k => leftBy.has(k)).map(k => per[k].label),
+      culledBatches: standing.filter(k => leftBy.has(k)).map(k => per[k].label),
       exclBal: excl,
       /* The batches this plot no longer holds, and what the ledger still
          showed for them — COUNTED AND NAMED rather than dropped in silence,
@@ -500,10 +562,24 @@
             .sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true }))
         : [],
       goneQty: Math.round(goneQty),
+      /* The batches that had movement on this plot and nothing left standing
+         by the work date — see the empty rule above. They are NOT a figure:
+         each one adds nought, so there is nothing for a screen to price or
+         to explain away. The names are here so the one case that needs a
+         sentence can have one. */
+      emptyBatches: empty.size
+        ? here.filter(k => empty.has(k)).map(k => per[k].label)
+            .sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true }))
+        : [],
       /* Nothing of this plot is standing any more: every batch it had has
          been 3rd culled. The quantity really is nought, which is a different
          statement from "could not be worked out" and has to read as one. */
-      allGone: gone.size > 0 && !here.length
+      allGone: gone.size > 0 && !standing.length,
+      /* The same sentence for the other way a plot empties — everything that
+         was here has gone without a 3rd culling of its own. Asked only where
+         NO batch was culled, so the harder fact above keeps the cell when
+         both are true. */
+      allEmpty: !gone.size && empty.size > 0 && !standing.length
     };
   }
 

@@ -8753,6 +8753,15 @@ function _batchCell(r) {
       const tip = `Every batch this plot held — ${b.info.goneBatches.join(', ')} — has been 3rd culled by this date, so nothing of them is standing here. After a 3rd culling a batch is off the main plot; at most it is on the -R plot.`;
       return `<span class="batch-gone" title="${tip.replace(/"/g, '&quot;')}">—</span>`;
     }
+    /* THE OTHER WAY A PLOT EMPTIES, and it reads identically without this:
+       every batch that was ever here has gone — sold, transplanted on,
+       transferred — leaving the ledger with movement and nothing standing.
+       A bare dash there says "no answer" about a plot the batch report has
+       a perfectly good answer for. */
+    if (b.info && b.info.allEmpty) {
+      const tip = `Every batch this plot held — ${b.info.emptyBatches.join(', ')} — has nothing standing by this date, nought or below, so there is nothing here to name.`;
+      return `<span class="batch-gone" title="${tip.replace(/"/g, '&quot;')}">—</span>`;
+    }
     return '—';
   }
   if (b.frozen) {
