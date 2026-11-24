@@ -581,6 +581,21 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     await page.close();
   }
 
+  console.log('\n7e. Dashboard and Task Request Status use the width the other tabs use');
+  {
+    const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' });
+    await drawn(page);
+    await page.setViewportSize({ width: 1920, height: 900 });
+    const w = {};
+    for (const v of ['overview', 'requests', 'board', 'list', 'timeline', 'value']) { await go(page, v); await page.waitForTimeout(150);
+      w[v] = await page.evaluate(() => { const m = document.querySelector('main.wrap').getBoundingClientRect();
+        return { w: Math.round(m.width), over: document.documentElement.scrollWidth - window.innerWidth }; }); }
+    is([w.overview.w, w.requests.w], [w.board.w, w.board.w], 'at 1920 the dashboard and the request list are as wide as the board (' + w.board.w + ')');
+    is(Object.values(w).every((x) => x.over <= 0), true, 'and no tab runs off the side');
+    if (process.env.SHOT) { await go(page, 'overview'); await page.waitForTimeout(250); await page.screenshot({ path: process.env.SHOT.replace('.png', '_dash1920.png') }); }
+    await page.close();
+  }
+
   console.log('\n8. The hub shows the tile only to a login holding the module');
   for (const [pms, want] of [[undefined, 'none'], ['normal', 'shown']]) {
     const page = await open(browser, port, { email: 'x@mjm.test', name: 'X', pms }, 'index.html');

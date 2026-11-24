@@ -194,7 +194,7 @@ td.date.l{color:var(--late)}
 td .nm{font-weight:500}
 .tcount{color:var(--muted);font-size:13px;margin:10px 2px}
 /* Tasks table: wider page, every column centred on one line; only the task name (2nd column) wraps, left-aligned. */
-body[data-view="list"] .wrap,body[data-view="timeline"] .wrap,body[data-view="board"] .wrap,body[data-view="value"] .wrap{max-width:1680px}
+body[data-view="overview"] .wrap,body[data-view="requests"] .wrap,body[data-view="list"] .wrap,body[data-view="timeline"] .wrap,body[data-view="board"] .wrap,body[data-view="value"] .wrap{max-width:1680px}
 table.tasks th,table.tasks td{text-align:center;white-space:nowrap;vertical-align:middle}
 table.tasks th:nth-child(2),table.tasks td:nth-child(2){text-align:left;white-space:normal;min-width:220px}
 /* The project path and the people WRAP, so the dates stay on screen instead of running off the right edge. */

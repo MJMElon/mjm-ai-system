@@ -10242,6 +10242,10 @@ So there are two layers, and they are the house pattern:
   42px tall, the approve form one column. **The pieces are the same
   elements either way** (`.r-st`, `.r-main`, `.r-info`, `.r-who`,
   `.r-end`); the stylesheet places them, so there is one renderer.
+- **EVERY WORKING TAB USES THE SAME WIDTH.** The Dashboard and Task Request
+  Status were held to 1240px while the other four ran to 1680px, so on a
+  wide screen they sat in a column with space either side. One rule names
+  all six (`body[data-view=…] .wrap`); Settings keeps 1240px, being forms.
 - **THE TASK LIST WAS EMPTIED ON REQUEST**, with
   `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
   else. It keeps no copy, so it is not a file to run again by habit.
