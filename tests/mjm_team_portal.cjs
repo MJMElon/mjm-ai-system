@@ -115,6 +115,10 @@ function mockSupabase(page, permissions) {
        Audit System"), so this door means one thing for everybody — see
        tests/the_audit_system_is_its_own_module.cjs. */
     check('Audit Portal door goes to the AUDITOR portal, admin or not', await page.locator('#audit-portal-link').getAttribute('href'), '../audit/audit_home.html');
+    /* Like the FC, Admin and Worker portals beside it, it opens in a page of
+       its own and leaves this one standing. */
+    check('and opens in a new tab like the other three portals',
+      await page.locator('#audit-portal-link').getAttribute('target'), '_blank');
 
     console.log('\n  -- drag-reordering the MJM Team cards persists across a reload --');
     const cardsBefore = await page.locator('#mjm-team-grid .door').evaluateAll(els => els.map(e => e.id));

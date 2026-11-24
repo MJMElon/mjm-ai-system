@@ -6139,6 +6139,70 @@ every line of its own code inline, so the page IS the deploy — and a
 permission screen is the worst place in the system for a browser to be
 showing yesterday's rules while the office believes it has changed them.
 
+### Module Assess Control is laid out on the office's eleven points
+
+Only the DRAWING of `scan/scan_user_access.html` moved; every tick reads and
+writes the keys it always did, and `user_access_reads_portal_by_portal.cjs`
+still holds the keys.
+
+- **Every block opens FOLDED** with a summary in its header (`3/5 on`,
+  `Off`). `openBlocks` keeps a block unfolded across `render()`, so a tick
+  never snaps it shut. The portal tick is OUTSIDE the label now: the name
+  unfolds, only the box opens the door.
+- **The Auditor Portal is one matrix** (`auditMatrixHtml`): an audit per row,
+  Open / Record / Edit / Delete across, explained once above. Same
+  `data-mpage` / `data-mact` inputs. A card per audit on a phone.
+- **`danger:true`** marks a tick that cannot be taken back — Maintenance
+  Delete (moved LAST in its list) and the audit Delete. It is red and asks
+  before it is ticked; unticking never asks.
+- **Presets** (`applyPreset`): Admin = only the Admin Portal; Field Conductor
+  = only the FC Portal, every page and action but Delete; Auditor = only the
+  Auditor Portal, Record and Edit; Worker = only the 555 Worker Portal; plus
+  Select all (asks, it opens Delete) and Clear all. A preset settles a store
+  before moving it, and raises that portal's module from None to Normal
+  (never lowers one), because `canDo` refuses before it reads a tick. Custom
+  lights when the open doors match no preset.
+- **Save lights only on a change, and counts it.** `snapshot()` flattens what
+  the draft effectively answers and `changeCount()` compares it with the
+  snapshot taken at `openRow`, so settling a store (which writes what was
+  already showing) counts as nothing. So pressing Save on an untouched row is
+  no longer possible at all, which is the strongest form of *looking is not
+  deciding*.
+- **The register job title** (`mjmnpayroll_workers.role`, matched by name on
+  letters and digits) is a tag beside the name, with the e-mail under it. A
+  name the register does not carry gets no tag rather than a guess; two
+  accounts sharing a name share its tags, and the e-mail is what tells them
+  apart.
+- **The Admin Portal is drawn once.** `mobile` left `OTHER_MODULES`; its
+  level is the select in the Admin Portal block's header, writing the same
+  `modules.mobile`. `PORTAL_MODULES` still lists `mobile`.
+
+**And the Admin Portal carries NO level select at all** — it sat in the
+header for a day after the merge and the office asked for it off. Ticking
+the Admin, Auditor or FC Portal open raises its module (`mobile`, `audit`,
+`scan`) from None to Normal, never lowers one, because `canDo` refuses
+before it reads a page tick. **The way back is an ICON** on this page, on
+System Setting and on the Worker System board: a round arrow, its words
+(*Back to Nursery 555 Team*) kept as the tooltip and `aria-label`. And on
+`scan_admin.html` the **Audit Portal door opens a new tab** like the FC,
+Admin and Worker doors beside it.
+
+`tests/module_assess_control_layout.cjs` — 44 checks, **37 fail on the
+previous page**, each by name. Nothing to run in the database.
+
+### Worker System has its own ADD & EDIT tick, because opening it was not editing it
+
+A user was given Worker System on Module Assess Control and could change
+nothing on the board: `scan_workers.html` gated every write on the Nursery
+Payroll module (`npayroll_actions.workers.manage`), which that screen never
+shows. A tick saved and not obeyed, again. **Worker System — add & edit
+workers** (`scan_areas.workers_edit`) is that answer now, nested under
+Worker Portal Manage. Absent is nobody asked, and the Payroll rule still
+answers (`canScanArea('workers_edit')` in `shared_access.js`, and
+`workersEditAnswer()` read straight off the row in the page, so a cached
+shared file cannot take it away). Section 10 of
+`tests/the_board_is_read_only_until_edit.cjs`. Nothing to run.
+
 ### More than one portal opens the DOORS, whoever holds them
 
 YM Chai was ticked for the FC, Worker, Admin and Auditor Portals with Worker
@@ -7799,10 +7863,12 @@ download."* So the census hangs off the TOTAL and nowhere else: the checker is
 looking at that figure, comparing it against a drone count, and the census is
 the paper behind it. Photo or PDF, more than one file.
 
-**No census, no save** — *"c 一定要有才可以 save"* — and the refusal is the
-only thing said about it: *"只是没 census 的话按 save 会 pop out 不能 save 因为
-没 census."* No line on the form explaining the rule, no green tick saying it
-is satisfied.
+**THE CENSUS IS OPTIONAL NOW.** It was *no census, no save* — *"c 一定要有
+才可以 save"* — and the office then took the refusal off: *"现在没有census也可
+以save"*. The box stays (labelled Census, no asterisk) and a census picked
+still goes up with the save; a record with none simply has none, and Add
+Census on its card is the door later. What follows is how the census is
+carried when there is one.
 
 **IT REACHES ONLY WHAT IS KEYED NOW.** 以前填的就不需要 — every existing
 record, any batch, 271's N15 included, and a card already on the list whether
@@ -8141,6 +8207,99 @@ still shows the sign-in when the session has gone. A session with nothing
 remembered shows neither screen rather than the login.
 `tests/portal_back_is_not_a_sign_in.cjs` holds it against a database that
 never answers.
+
+## A Nelos case can carry a LOCATION, and it is optional
+
+The office: *"help me add location coordinate in nelos case form. and this
+is optional. make it can auto detect the location, and can manual key in
+location."* A plot is a hectare, and "the broken pipe in N12" is a walk
+round it.
+
+It is ONE box that takes `latitude, longitude` and a **Detect** button that
+fills it from the device, on all four raise forms: the dock
+(`shared/shared_nelos_dock.js`, 52 pages), the hub drawer
+(`nelos/nelos_dashboard.html`), and `NelosNewCase.jsx` in the FC Portal and
+the Admin Portal. The dock detail, the case page and the hub list show it
+as a link that opens the map. `shared/RUN_ME_nelos_case_location.sql` adds
+`nelos_cases.location_lat` / `location_lng`.
+
+- **EMPTY IS ALLOWED, A WRONG ONE IS NOT.** `parseLatLng` answers three
+  ways and all three are used: `null` is an empty box, `false` is something
+  typed that is not two numbers in range (refused before anything is
+  uploaded, by name), an object is a position. A coordinate saved wrong is
+  a pin in the sea that reads exactly like a real one.
+- **THE BOX IS NOT DRAWN UNTIL THE DATABASE HAS THE COLUMNS**, the rule the
+  document picker already follows: naming a column a table has not got is
+  the whole insert refused, so the case would be lost over its location.
+  The columns are named on a write only when there is a location.
+- **DETECT IS A PRESS, never something the form does on opening.** Asking
+  for a position puts a permission prompt on the screen, and this form is
+  on 52 office pages where most cases are raised from a desk, whose
+  position is the office and not where the problem is.
+- **A detected reading is still the person's to correct**, and every
+  failure (no permission, weak signal, no GPS) says the same thing: key it
+  in.
+- **THE DATABASE HOLDS THE RULE TOO** (`nelos_cases_location_whole`): both
+  numbers or neither, both in range. **Both `IS NOT NULL` tests are spelled
+  out**, because a comparison against an empty value answers unknown and a
+  CHECK lets unknown through. The first version accepted a latitude with no
+  longitude, and it was the scratch Postgres that said so.
+- **`parseLatLng` IS FOUR COPIES in three repositories**: the dock (loaded
+  bare, depends on nothing), `MJMNelos.parseLatLng`, and `src/lib/latLng.js`
+  in `Barcode_Counter` and `Mobile`, word for word. Change one, change the
+  others.
+- **`shared_nelos.js` carries a `?v=` on the hub and the case page now**,
+  and the case page gained the three no-cache metas. Both pages call
+  `MJMNelos.fmtLatLng`, so a new page over a cached old script would throw
+  on every case. It is still loaded bare on the other two Nelos pages,
+  which do not call it.
+
+**AND IT OPENS IN GAIA GPS**, which the office asked for next: *"if i saw
+the case and click the location, can it bring me to there by gaia?"* Every
+screen that shows a location offers **Gaia** and **Maps** side by side: the
+dock detail, the case page, the hub sheet, and the case view on both phone
+apps (`NelosWindow.jsx`, `NelosCase.jsx`), which had not been showing the
+location at all. `gaiaHref` is the rule, in the same four files as
+`parseLatLng`.
+
+- **TWO DOORS, NEVER ONE.** On a phone the link is the app's own
+  (`gaiagps://map?lat=…&lng=…&z=17`), which does NOTHING where Gaia GPS is
+  not installed, so Maps is never replaced by it.
+- **On a desk it is the Gaia web map**, whose address is zoom / LONGITUDE /
+  latitude. The order is the thing to get wrong.
+- **No `target` on the app link**: opened in a new tab it leaves an empty
+  tab behind.
+- **It CENTRES the map and drops no waypoint**, the link having no word for
+  one. **Neither link could be tried against a real Gaia install from
+  here**, so the first press on a phone is the proof.
+
+**THE COORDINATE ITSELF IS THE GAIA LINK NOW**, which the office asked for
+next: *"i click the location (the latitude, longtitude) then it will
+directly bring me to gaia"* with a marked location. Gaia documents no link
+that drops a pin or runs its search, so the press also COPIES the
+coordinate (best effort): pasted into Gaia search it becomes a Marked
+Location. **And no buttons at all** — *"dont do it button. direct click
+the location"*: the Gaia and Maps buttons came off every case view, so the
+two numbers are the ONE door, to Gaia, on all five screens (`#c-loc-link`
+on the case page, `.s-loc-gaia` on the hub sheet, `.nd-d-gaia` in the dock,
+and the phone case views). The "two doors" rule above is what it replaced;
+a phone without Gaia GPS gets nothing from the press, which the office
+chose.
+
+**AND THE LINK IS THE GAIA WEB MAP ON A PHONE TOO.** The app link
+(`gaiagps://map?lat=…&lng=…`) only centred the map, with no pin, and Gaia
+documents nothing better, so the office tapped ten candidates on an iPhone
+and number 7 showed the Marked Location:
+`https://www.gaiagps.com/map/?loc=17/<lng>/<lat>`. The phone hands that
+address to the installed app. So `gaiaHref` is ONE link everywhere, in all
+four copies, with no user-agent test. A phone with no Gaia opens the web map
+instead of doing nothing. **And it is a link in the hub LIST ROW too**, not
+only inside the opened case (*"direct click location from the outside"*):
+`locLinkHtml` draws the Location value for both the row and the sheet.
+
+`tests/a_case_can_carry_a_location.cjs` drives the real dock with a mocked
+geolocation and runs all four parsers over the same inputs; **31 of its 43
+checks fail on the previous code**, each by name.
 
 ## A category nothing raises is a feature somebody stopped halfway
 
@@ -8636,6 +8795,40 @@ this file exists beside it.
 **Nothing to run in the database and nothing in the page changed.** The
 figure the report shows is the figure the ledger holds.
 
+## Collection time slots are a SYSTEM SETTING
+
+Seedling Stock Management -> System Settings -> **Collection Time Slot**
+sets the hours a collection can be booked in (Monday to Friday, Saturday;
+Sunday stays closed) and the two load figures (seedlings one booking loads
+in an hour, and the most one hour slot may take). It is the one row of
+`shared_collection_slot_settings` (`shared/RUN_ME_collection_slot_settings.sql`)
+and `shared/shared_collection_slots.js` is the one rule.
+
+- **The defaults are the hours the page had written in** (8-5, Sat 8-12,
+  350, 600), so a database without the table books exactly as before.
+- **A date override still wins**: Close / Open / Fully Booked on one date
+  keeps its own hours. The setting is the default for every other day.
+- **LUNCH is one break for every open day**, two hours both empty until
+  somebody sets them (`lunch_start` / `lunch_end`, NULL meaning no break,
+  never 0). Its hours are taken out of `hours(dow)`, drawn as a Lunch break
+  row nobody can pick, and `crossesLunch` refuses a booking that would run
+  INTO it, because one booking is one lorry loaded straight through. A day
+  opened by hand on the calendar still breaks for it. A database without
+  the two columns still saves the hours while no lunch is set.
+- `operation_collection_booking.html` fills `HOURS_WEEKDAY` / `HOURS_SAT`
+  IN PLACE (`applySlotSettings`) so every reader of them follows it.
+- **The customer booking page (`CollectionTimeBooking/index.html`) and the
+  Sales Web change-booking window (`_BE_*` in `src/pages/shop/main.js`)
+  read the row too**, each through a small COPY of this rule (another site
+  cannot be imported). Change one, change all three.
+- **The Admin Portal booking (`Mobile/src/pages/Booking.jsx`) reads it
+  through `Mobile/src/lib/collectionSlots.js`**, a fourth copy; it also
+  refuses a booking that runs past closing.
+- **NOT YET FOLLOWING IT:** `mobile/mobile_booking.html` here, with its own
+  8-5 and no lunch.
+
+`tests/the_collection_slots_are_the_setting.cjs` drives the real booking
+page and the real settings card.
 ## Mata Malam is set in the office, and the app only follows
 
 Mata Malam (the night check-in app, repository `MataMalam`) keeps its data
@@ -8669,6 +8862,25 @@ the app's Settings moved there, because a guard only does the check-ins.
   interactive, so a click inside one still places the pin.
 - **Nothing saved is nobody having been asked**: until the first Save the
   phones keep the times they have, and the card says so.
+
+**ONE TASK A CHECK-IN TIME, AND ITS PINS ARE INSIDE IT.** It was a task per
+pin for a day and the office asked for it back: the To-Do List shows ONE
+task for a location at each time, and opening it (the round sheet,
+`openRoundSheet` in the app) shows a map with the location boundary and
+every pin, the pins to visit, and Check In on each, which takes one photo
+for that pin and comes back. The RECORD is still one per pin, carrying the
+pin name as `point` (a column on `mata_malam_logs`), so the office sees
+which pins were visited. A location with no pin has one check-in a time and
+no point, as before. A record with no point answers every pin of its
+location and time (`logCoversPoint`), so nothing old is marked missed. A pin
+is told apart by its NAME, so the card refuses two pins of one location
+sharing one, and a pin renamed is a new pin from that night on.
+
+**AND ONE ROAD TRACK FOR THE TASK**, started and stopped on that screen,
+running while every pin is checked in. It is stored on the task's first
+check-in made on that phone (`attachRoundRoute`); a track stopped before
+any check-in waits for the first one. The task stays in the To-Do List
+while its track is still recording, so Stop can always be reached.
 
 **What each person may USE is on Portal View & Function**, a Mata Malam
 row under Maintenance with five switches: `home` (main task), `photo`
@@ -10226,6 +10438,33 @@ that still confirms. **23 of its 25 checks fail on the previous page**, each
 by name. `SHOT=/dir` draws it, `VW=400` at phone width. **Nothing to run in
 the database.**
 
+### Work Records has FOUR entries, and two of them are entries ONLY
+
+The office: *"help me add Monthly Night Watchman Record and Monthly Watering
+Record under Work records there. and change the monthly records name to
+Monthly Maintenance Record"* -- and Monthly Performance became **Monthly
+Maintenance Performance** once asked, the message having given both the same
+name.
+
+- **THE KEYS DID NOT MOVE.** `list` / `chart`, `pn-subtab-list` /
+  `pn-subtab-chart`, `tab.maintList` / `tab.chart`: only the words changed,
+  in both languages, so every handler and test that names them still works.
+- **Night Watchman and Watering hold NOTHING yet, on purpose.** What a row
+  of each should carry was asked and the answer was *"Menu entry only for
+  now"*. So `recview-watchman` / `recview-watering` say the record is not
+  set up and draw no table, no box and no button: a sheet of invented
+  columns is a record somebody would start keying into. Nothing is read or
+  stored for either, and **nothing in the system records night watchman or
+  watering work** -- there is no table to link. The columns are the next
+  question to put to the office, not something to guess.
+- **Both are in `RECORD_VIEW_KEYS`**, because `_syncSubNav` only touches the
+  ids it is handed: a view missing from that list stays lit for ever once
+  pressed.
+
+`tests/work_records_has_four_entries.cjs` serves the repository itself;
+**18 of its 26 checks fail on the previous page**, each by name. Nothing to
+run in the database.
+
 ## The Sales Web publishes what the Monthly Maturity Allocation says is left
 
 February 2027 read **29,042** After Deduct Reserve on Stock & Sales →
@@ -10267,3 +10506,93 @@ Not copied, deliberately: Plot-R rows (the web sells by month), the
 location filter (it cuts the list, never the totals) and the flow-back of
 chips that no longer fit (the office page deletes those itself, so the
 database already holds the result). **Nothing to run in the database.**
+
+## Review AL Details names every DO, and hands the customer a statement
+
+On the AL page (`operation_booking.html`) the DO history read "-" for the
+date and the plot and breed on every row, because its read of
+`shared_do_records` asked for seven columns and none of them was a date or
+a plot. The Delivery and BA pages carry the same modal and always asked.
+The read asks for them now, and a DO with no `delivery_date` (one raised on
+a phone) shows the day it was saved (`doDayOf`).
+
+**Download** on that section is a PDF for the customer
+(`downloadALStatement`): the customer, order number, AL, order date, order
+quantity, every collection with its plots and breeds (no quantity per plot, on screen or paper; the same on the Delivery and BA pages), the running balance
+and the total. A cancelled DO is no collection and is left off; nothing
+internal (BA form, remark) is printed. It is built from the rows the
+modal already drew, so the paper cannot disagree with the screen.
+`tests/an_al_shows_its_collections.cjs`; its stub projects a read to the
+columns asked for, which is the only way the fault shows. Nothing to run.
+
+## A maturity row says how old its seedlings are
+
+Under each Maturity Date on Monthly Maturity Allocation, small and muted:
+**(10 Months)** — the batch's age AS AT TODAY, off its seed-in date. The
+anchor is the Batch Record's own (`processBatchLogic`): the KEYED
+`transaction_date` of `Seeds_Received`, `created_at` only where nothing was
+keyed, newest reception row wins, whole months as days / 30.44. A batch
+with no seed-in row shows no age rather than a guess.
+`tests/maturity_shows_the_seedling_age.cjs`.
+
+## The boss's AI agent reaches the system through ONE Edge Function
+
+`supabase/functions/mjm-mcp` is the MJM AI System as an MCP server (Streamable
+HTTP, JSON responses, no session), added to Claude as a custom connector. Five
+tools and nothing more: **check_stock**, **list_products**, **create_quotation**,
+**find_quotations**, **confirm_order**.
+
+- **THE LINK IS THE KEY.** A Claude connector takes a URL and nothing else, so
+  the secret rides in the path: `…/functions/v1/mjm-mcp/<MCP_SECRET>`. A wrong
+  or missing key is a plain 404. Changing `MCP_SECRET` switches the old link off.
+  It is deployed with `--no-verify-jwt` because Claude sends no Supabase login.
+- **IT RUNS AS THE SERVICE ROLE**, so row level security does not stand behind
+  it — the tools ARE the permission. It writes to `shared_quotations` and to
+  nothing else, and never deletes; the test asserts both off every request.
+- **check_stock IS THE DASHBOARD, BY CONSTRUCTION.** The Stock Analysis rule is
+  `shared/shared_stock_analysis.js`, read by the page (`classify`) and by the
+  function (`buildStockRows`, `orderBalances`, `openOrders`). The function
+  bundles only what is under `supabase/functions`, so
+  `supabase/functions/_shared/stock_analysis.js` is the SAME FILE, byte for
+  byte. Change one, copy it to the other — the test fails on a single byte.
+  `buildStockRows` is `loadMaturity()` written down; change one, change the other.
+- **A quotation is a DRAFT** numbered QOPS<n>/MM/YY the way the Quotation page
+  numbers them, and a number taken a moment ago (23505) moves to the next.
+  Only a PUBLISHED Sales Web product can be quoted at its price.
+- **confirm_order marks a quotation ACCEPTED and nothing else** — no Sales Web
+  order, no AL; the office raises those as today. That was the boss's choice
+  and is the safe first step.
+- **Dates are Malaysian.** The Edge runtime is UTC, which is the day before for
+  eight hours of every day; `myNow` / `myLocalDay` in `tools.mjs` are why.
+
+`tests/the_mcp_reads_the_dashboard.cjs` runs the REAL `index.ts` in Deno against
+a fake of Supabase's REST API serving the dashboard test's own ledger: 5,200
+available and 7,000 owed on both. It needs Deno (`npm install deno` anywhere and
+point `DENO=` at it); run it with `--node-modules-dir=none` semantics already
+built in, because the repository's `package.json` otherwise sends Deno looking
+for a local `node_modules`. It kills its function by PROCESS GROUP — the npm
+wrapper starts the real binary as a child, and killing the wrapper alone left a
+stale function answering on port 8000 for the next run.
+
+## A scan point is a phone, and a reset clears only its own seals
+
+The FC Portal lets two places scan one order at once and reset their own
+part. `shared/RUN_ME_scan_points.sql` is the database half: the
+`scan_point` columns on `fcportal_scan_records`, the ONE deleting function
+`fcportal_reset_scans` (by point id; never a row already on a DO; the
+rows naming no point only when asked), the per-AL cap trigger `fcportal_scan_cap`, a one-off clear of Imbok BB0RS8, a `fcportal_scan_resets` log of who
+reset what, and the DO press-id index again. Its check names suspected
+twin DOs. The rules are in `FC-Portal/CLAUDE.md`.
+
+### On the hub, the Case Category list follows the system picked
+
+The hub drawer raises with Nelos as its source, and Nelos is on no From
+System list, so it only ever offered titles left open to Any system. The
+office picked FC Portal and found nothing but Other. Once a system is
+chosen under Assigned To, the list is what THAT system solves
+(`mayOffer` / `hubSolverOf` in `nelos_dashboard.html`); a title with an
+EMPTY From list is still left out, being one the system opens by itself.
+Before a system is chosen, and on a deep link naming a real raising system,
+the From System rule stands. The drawer also re-reads the titles each time
+it opens. The two raise forms on real modules are untouched.
+`tests/the_hub_category_list_follows_the_system.cjs`. Nothing to run.

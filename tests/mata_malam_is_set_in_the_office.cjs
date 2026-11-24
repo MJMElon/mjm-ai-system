@@ -182,6 +182,9 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
     await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await page.waitForTimeout(250);
     pins = await page.evaluate(() => mm.pins);
     check('a click with UNN 1 selected adds a UNN 1 pin and leaves BNN its three', pins.map(p => p.location), ['BNN', 'BNN', 'BNN', 'UNN1']);
+    check('with UNN 1 picked, the list shows only UNN 1 pins', await page.$$eval('#mm-pin-list .mm-pin-name', e => e.map(x => x.value)), ['UNN 1 Pin 1']);
+    await page.evaluate(() => mmPick('BNN')); await page.waitForTimeout(300);
+    check('and with BNN picked, only the three of BNN', await page.$$eval('#mm-pin-list .mm-pin-row', e => e.length), 3);
     // rename one, remove one
     await page.locator('#mm-pin-list .mm-pin-row').nth(0).locator('.mm-pin-name').fill('Main Gate');
     await page.locator('#mm-pin-list .mm-pin-row').nth(1).locator('.mm-x').click(); await page.waitForTimeout(200);

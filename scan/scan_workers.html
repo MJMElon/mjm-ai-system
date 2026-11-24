@@ -53,6 +53,10 @@
                font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
                color:#7c3aed; text-decoration:none; }
   .page-back:hover { color:#5b21b6; }
+  /* The way back is an ICON, not a sentence (the office asked for it). */
+  .page-back.icon-only { width:40px; height:40px; justify-content:center; gap:0; border-radius:999px;
+                         background:white; border:1.5px solid #ede9fe; }
+  .page-back.icon-only:hover { background:#f5f3ff; border-color:#ddd6fe; }
 
   /* ── The board's own spacing and stacking ──────────────────────────────
      Overrides rather than edits to npayroll_styles.css: that sheet is the
@@ -209,7 +213,7 @@
 <div id="loading" class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
 
 <div id="main" class="wrap hidden">
-  <a class="page-back" href="scan_admin.html">&larr; Worker Portal Manage</a>
+  <a class="page-back icon-only" href="scan_admin.html" data-icon-back title="Back to Nursery 555 Team" aria-label="Back to Nursery 555 Team"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
 
 <section id="tab-workers" class="panel">
     <div class="bar">
@@ -599,11 +603,38 @@ const isRejected = w => !!(w && w.rejected_at);
    Payroll tab asked, so the answer is the same. Allows it when the shared
    helper is too old to know about the action, which is how the rest of the
    system behaves too. */
+/* ADDING AND EDITING WORKERS is the "Add & edit workers" tick under
+   Worker System on Module Assess Control (scan_areas.workers_edit). It was
+   gated on the Nursery Payroll module alone, so somebody given Worker
+   System on that screen could open the board and change nothing, and the
+   screen had no tick that would let them. An absent answer is nobody
+   having been asked, and the Payroll rule that governed this before still
+   answers. Same rule as canScanArea('workers_edit') in shared_access.js,
+   read straight off the row here so a cached copy of that file cannot
+   take the tick away. */
+function workersEditAnswer() {
+  try {
+    const p = (typeof MJMAccess !== 'undefined' && typeof MJMAccess.permissions === 'function') ? MJMAccess.permissions() : null;
+    const e = p && p.scan_areas && p.scan_areas.workers_edit;
+    return e && e.view !== undefined ? !!e.view : undefined;
+  } catch (_) { return undefined; }
+}
 function mayDo(page, action, message) {
+  if (page === 'workers' && action === 'manage') {
+    const a = workersEditAnswer();
+    if (a !== undefined) {
+      if (!a) { try { alert(message || 'You do not have permission to add or edit workers.'); } catch (_) {} }
+      return a;
+    }
+  }
   if (typeof MJMAccess === 'undefined' || typeof MJMAccess.requireAction !== 'function') return true;
   return MJMAccess.requireAction('npayroll', page, action, message);
 }
 function may(page, action) {
+  if (page === 'workers' && action === 'manage') {
+    const a = workersEditAnswer();
+    if (a !== undefined) return a;
+  }
   if (typeof MJMAccess === 'undefined' || typeof MJMAccess.canDo !== 'function') return true;
   return MJMAccess.canDo('npayroll', page, action || 'view');
 }

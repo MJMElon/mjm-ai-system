@@ -155,11 +155,12 @@ async function open(browser, port, opts) {
   await page.route('**cdn.tailwindcss.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript',
     body: 'document.addEventListener("DOMContentLoaded",function(){document.head.insertAdjacentHTML("beforeend","<style>.hidden{display:none}</style>")});' }));
   await page.route('**cdn.jsdelivr.net/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_SUPABASE }));
-  await page.addInitScript(({ manage, workers, cols }) => {
+  await page.addInitScript(({ manage, workers, cols, areas, npayroll }) => {
     const user = { id: 'u1', email: 'office@mjmnursery.com', user_metadata: { full_name: 'Office' } };
     window.__FAKE_SESSION = { access_token: 'x', user };
-    const perms = { modules: { npayroll: 'normal', operation: 'admin' } };
+    const perms = { modules: { npayroll: npayroll || 'normal', operation: 'admin', scan: 'normal' } };
     if (!manage) perms.npayroll_actions = { workers: { view: true, manage: false } };
+    if (areas) perms.scan_areas = areas;
     window.__FAKE_PROFILE = { id: 'u1', email: user.email, user_type: 'system',
                               full_name: 'The Office', permissions: perms };
     /* shared_profiles is what turns a stored email into a name. The strip
@@ -178,7 +179,7 @@ async function open(browser, port, opts) {
     window.alert = (m) => { window.__ALERTS.push(String(m)); };
     window.confirm = (m) => { window.__CONFIRMS.push(String(m)); return window.__SAY_YES !== false; };
     window.prompt = () => { throw new Error('nothing here may raise a prompt'); };
-  }, { manage: o.manage !== false, workers: o.workers || WORKERS, cols: o.cols || COLS });
+  }, { manage: o.manage !== false, workers: o.workers || WORKERS, cols: o.cols || COLS, areas: o.areas || null, npayroll: o.npayroll || null });
   await page.goto('http://localhost:' + port + '/scan/scan_workers.html', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#worker-board .bd', { timeout: 8000 });
   return page;
@@ -493,6 +494,26 @@ const until = (page, fn, ms) => page.waitForFunction(fn, null, { timeout: ms || 
       'but they still see when the register was last touched — that is a reading');
     await call(page, 'boardEdit');
     is(await btns(page), [], 'and boardEdit from outside does not unlock it either');
+    await page.close();
+
+    /* == 10. THE "ADD & EDIT WORKERS" TICK ON MODULE ASSESS CONTROL ===
+       The office gave a user Worker System on that screen and she could
+       change nothing: the board asked the Payroll module only, and the
+       screen had no tick that answered it. */
+    console.log('\n-- 10. the Module Assess Control tick decides --');
+    page = await open(browser, port, { manage: false, npayroll: 'none',
+      areas: { workers: { view: true }, workers_edit: { view: true } } });
+    is(await btns(page), ['✎ Edit'], 'ticked Add & edit workers, with no Payroll module at all: Edit is offered');
+    await call(page, 'boardEdit');
+    is(await btns(page), ['Cancel', 'Save'], 'and pressing it unlocks the board');
+    is(await page.evaluate(() => window.__ALERTS.length), 0, 'with no refusal said');
+    await page.close();
+    page = await open(browser, port, { manage: true,
+      areas: { workers: { view: true }, workers_edit: { view: false } } });
+    is(await btns(page), [], 'unticked, even a Payroll manager is offered no Edit -- the tick is the answer');
+    await page.close();
+    page = await open(browser, port, { manage: true, areas: { workers: { view: true } } });
+    is(await btns(page), ['✎ Edit'], 'nobody asked: the Payroll rule still answers, so nobody lost anything');
     await page.close();
 
   } finally {

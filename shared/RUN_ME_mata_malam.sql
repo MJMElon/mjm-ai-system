@@ -65,6 +65,12 @@ CREATE TABLE IF NOT EXISTS public.mata_malam_logs (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- One pin is one place to check in and one photo. The point is the name of
+-- the pin the check-in was made at, as it was called on the office map that
+-- night. Empty for a location with no pin, and for every check-in made
+-- before the pins were tasks.
+ALTER TABLE public.mata_malam_logs ADD COLUMN IF NOT EXISTS point TEXT;
+
 CREATE UNIQUE INDEX IF NOT EXISTS mata_malam_logs_client_uid
   ON public.mata_malam_logs (client_uid);
 CREATE INDEX IF NOT EXISTS mata_malam_logs_shift
@@ -182,6 +188,7 @@ BEGIN
       SELECT jsonb_agg(jsonb_build_object(
                'id',            l.client_uid,
                'location',      l.location,
+               'point',         COALESCE(l.point, ''),
                'date',          to_char(l.shift_date, 'YYYY-MM-DD'),
                'time',          l.slot,
                'status',        l.status,
@@ -270,10 +277,10 @@ BEGIN
   END IF;
 
   INSERT INTO public.mata_malam_logs AS l
-    (client_uid, worker_id, worker_name, location, shift_date, slot, status,
+    (client_uid, worker_id, worker_name, location, point, shift_date, slot, status,
      coordinates, submitted_at, photo_url, patrol_open, route, route_distance, route_duration)
   VALUES
-    (v_uid, w.id, w.full_name, v_loc, v_date, v_slot, 'completed',
+    (v_uid, w.id, w.full_name, v_loc, NULLIF(left(btrim(COALESCE(p_log ->> 'point', '')), 80), ''), v_date, v_slot, 'completed',
      left(p_log ->> 'coordinates', 120),
      COALESCE((p_log ->> 'submittedAt')::TIMESTAMPTZ, now()),
      v_url,

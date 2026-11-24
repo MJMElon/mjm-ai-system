@@ -28,6 +28,7 @@ const SHARED = path.join(__dirname, '..', 'shared');
 const SWEPT = [
   'CHECK_which_plots_each_module_offers.sql',
   'CHECK_what_the_audit_could_not_see.sql',
+  'RUN_ME_nelos_case_location.sql',
   'RUN_ME_audit_save_check.sql',
   'RUN_ME_restore_sep_2026_from_sheet.sql',
   'RUN_ME_sep_four_missing_rows.sql',

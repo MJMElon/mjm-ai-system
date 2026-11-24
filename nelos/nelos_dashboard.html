@@ -15,7 +15,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_nelos.js"></script>
+<script src="../shared/shared_nelos.js?v=20261120a"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -387,6 +387,7 @@
               font-size:11.5px; }
   .s-case-k { color:#8a93a3; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
   .s-case-v { color:#0f172a; font-weight:700; overflow-wrap:anywhere; }
+  .s-loc-gaia { color:#2563eb; text-decoration:underline; text-underline-offset:2px; }
   /* A file input renders as the browser's own grey "Choose file" control,
      which on a phone says nothing about the camera it actually opens. The
      real input is hidden and this label drives it. */
@@ -781,6 +782,24 @@
         </div>
       </div>
 
+      <!-- WHERE, as a coordinate, and OPTIONAL. Detect asks this device;
+           the box takes the same two numbers typed or pasted, which is
+           the usual case on this screen — somebody at a desk raising a
+           case for a spot they were told about. Hidden until the database
+           has the columns: shared/RUN_ME_nelos_case_location.sql. Same
+           box as the dock's raise form (shared_nelos_dock.js). -->
+      <div class="m-sec hidden" id="step-loc">
+        <div class="m-sec-h">Location <span style="font-weight:700;color:#cbd5e1;text-transform:none;letter-spacing:.02em;">(optional)</span></div>
+        <div style="display:flex;gap:8px;align-items:stretch;">
+          <input id="c-loc" class="inp" maxlength="60" autocomplete="off"
+                 placeholder="Latitude, longitude" style="flex:1;min-width:0;">
+          <button type="button" id="c-loc-detect"
+                  style="flex:0 0 auto;padding:0 14px;border:1.5px solid #e2e8f0;border-radius:11px;background:#f8fafc;font-size:11px;font-weight:900;color:#913673;cursor:pointer;white-space:nowrap;">
+            📍 Detect</button>
+        </div>
+        <div id="c-loc-msg" style="font-size:10.5px;font-weight:700;color:#64748b;margin-top:6px;line-height:1.45;"></div>
+      </div>
+
       <div class="m-sec" id="step-photo">
         <div class="m-sec-h">Attach photo</div>
         <!-- One button, and deliberately no capture attribute: capture
@@ -871,6 +890,7 @@ let docName   = null;
    on the first load: without them the picker would take a file, upload it
    and lose it at the insert, which is worse than not offering it. */
 let docsOn    = false;
+let locOn     = false;      // nelos_cases has location_lat / location_lng
 
 /* The system a case is raised FROM. The form no longer asks — a case
    raised here is a Nelos case — but a deep link still says so
@@ -997,6 +1017,9 @@ function detailRows(c) {
   const where = whereOf(c);
   if (where) { add(where[0], where[1]); seen.add('plot'); }
   if (c.batch_name) add('Batch', c.batch_name);
+  // Only where there is one: it is optional on the form.
+  const locText = MJMNelos.fmtLatLng(c.location_lat, c.location_lng);
+  if (locText) add('Location', locText);
 
   String(c.description || '').split(/\r?\n/).forEach(line => {
     const t = line.trim();
@@ -1018,6 +1041,16 @@ function detailRows(c) {
      rather than loose lines that read like unlabelled figures. */
   if (free.length) add('Remark', free.join(' '));
   return rows;
+}
+
+/* The Location value IS the Gaia link, in the list row as on the case sheet:
+   one press from the list, no need to open the case first. Same href, same
+   copy-to-clipboard, same class, so the two cannot drift. */
+function locLinkHtml(c, lab, val) {
+  if (lab !== 'Location' || !MJMNelos.fmtLatLng(c.location_lat, c.location_lng)) return esc(val);
+  return `<a class="s-loc-gaia" data-copy="${esc(val)}" title="Open in Gaia GPS"
+     onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
+     href="${esc(MJMNelos.gaiaHref(c.location_lat, c.location_lng))}">${esc(val)}</a>`;
 }
 
 function rowHtml(c) {
@@ -1078,7 +1111,7 @@ function rowHtml(c) {
                category here was printing the title twice. -->
           <div class="d-rows">
             ${shown.map(([lab, val]) => lab
-              ? `<div class="d-row${lab === 'Remark' ? ' d-remark' : ''}"><span class="d-lab">${esc(lab)}</span><span class="d-val">${esc(val)}</span></div>`
+              ? `<div class="d-row${lab === 'Remark' ? ' d-remark' : ''}"><span class="d-lab">${esc(lab)}</span><span class="d-val">${locLinkHtml(c, lab, val)}</span></div>`
               : `<div class="d-row d-free"><span class="d-val">${esc(val)}</span></div>`).join('')}
             ${rows.length > DETAIL_CAP
               ? `<div class="d-row d-free"><span class="d-more">+${rows.length - DETAIL_CAP} more — open the case to read it all</span></div>`
@@ -1517,9 +1550,13 @@ function caseBlockHtml(c) {
          esc(c.doc_name || 'Open the document')}</a>`
     : '';
 
+
   return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot + doc +
     `<div class="s-case-g">` +
-      bits.map(([k, v]) => `<div class="s-case-k">${esc(k)}</div><div class="s-case-v">${esc(v)}</div>`).join('') +
+      bits.map(([k, v]) => `<div class="s-case-k">${esc(k)}</div><div class="s-case-v">${
+        /* THE COORDINATE ITSELF OPENS GAIA GPS, here and in the list row:
+           locLinkHtml is the one place that draws it. */
+        locLinkHtml(c, k, v)}</div>`).join('') +
     `</div>` +
     /* Who raised it, and when, at the foot of the block. It is the
        provenance of the case rather than a fact about the work, so it
@@ -1886,8 +1923,30 @@ function mayRaiseFrom(c, key) {
   if (!rm.length) return false;
   return rm.includes(NELOS_ANY_SYSTEM) || rm.includes(key);
 }
+/* ON THE HUB THE LIST FOLLOWS THE SYSTEM PICKED UNDER "ASSIGNED TO".
+
+   A case raised here has Nelos itself as its source, and Nelos is on no
+   From System tick list - so the list was only ever the titles left open
+   to ANY system, whichever system had been picked above it. The office
+   chose FC Portal, opened Case Category and found nothing but Other, with
+   two titles filed under FC Portal on Case Routing.
+
+   The hub is the case log, so once somebody has said which system the
+   case is for, what is offered is what THAT system solves. An EMPTY From
+   list is still left out: that is a title the system opens by itself.
+   A deep link naming a real raising system keeps the From System rule,
+   and so does the drawer before any system is chosen. */
+function hubSolverOf() {
+  return (newSource === 'nelos' && destTouched && $('c-dest').value) || '';
+}
+function mayOffer(c, systemKey) {
+  const solver = hubSolverOf();
+  if (!solver) return mayRaiseFrom(c, systemKey);
+  if (Array.isArray(c.raise_modules) && !c.raise_modules.length) return false;
+  return c.module_key ? c.module_key === solver : mayRaiseFrom(c, systemKey);
+}
 function fillProblems(systemKey) {
-  const scoped = categories.filter(c => mayRaiseFrom(c, systemKey));
+  const scoped = categories.filter(c => mayOffer(c, systemKey));
   const keep = $('c-problem').value;
 
   $('c-problem').innerHTML =
@@ -2099,7 +2158,8 @@ async function loadModules() {
 /* ── New case ──────────────────────────────────────────────────── */
 
 function clearDrawer() {
-  ['c-desc', 'c-problem-other', 'c-nursery', 'c-plot'].forEach(id => $(id).value = '');
+  ['c-desc', 'c-problem-other', 'c-nursery', 'c-plot', 'c-loc'].forEach(id => $(id).value = '');
+  locSay('');
   $('c-problem').value = '';
   $('c-pic').value = '';
   $('c-photo').value = '';
@@ -2141,6 +2201,56 @@ function setDoc(url, name) {
     a.href = docUrl;
   }
 }
+
+/* The same question about location_lat / location_lng, on the same terms:
+   only a missing column hides the box, and it fails open. */
+async function checkLocColumn() {
+  const { error } = await _supabase.from('nelos_cases').select('location_lat,location_lng').limit(1);
+  const missing = !!error && (error.code === '42703' ||
+                              /column .* does not exist|location_lat|location_lng/i.test(error.message || ''));
+  locOn = !missing;
+  $('step-loc').classList.toggle('hidden', !locOn);
+  if (missing) {
+    console.warn('[nelos] nelos_cases has no location_lat — run shared/RUN_ME_nelos_case_location.sql ' +
+                 'to let a case carry a location.');
+  }
+}
+
+function locSay(text, bad) {
+  const m = $('c-loc-msg');
+  m.textContent = text || '';
+  m.style.color = bad ? '#b91c1c' : '#64748b';
+}
+
+/* DETECT. Every failure says what to do instead, which is always the same
+   thing: key it in. A button and never something the drawer does on
+   opening — a position asked for unprompted is a permission prompt over a
+   form most people fill in from a desk. */
+function detectLoc() {
+  if (!navigator.geolocation) return locSay('This device cannot give a location. Key it in instead.', true);
+  const btn = $('c-loc-detect');
+  const done = () => { btn.disabled = false; btn.textContent = '📍 Detect'; };
+  btn.disabled = true; btn.textContent = 'Detecting…';
+  locSay('');
+  navigator.geolocation.getCurrentPosition(pos => {
+    done();
+    $('c-loc').value = MJMNelos.fmtLatLng(pos.coords.latitude, pos.coords.longitude);
+    const acc = pos.coords.accuracy;
+    locSay('Detected' + (isFinite(acc) ? ', accurate to about ' + Math.round(acc) + ' m' : '') +
+           '. You can still correct it.');
+  }, e => {
+    done();
+    locSay(e && e.code === 1
+      ? 'Location is switched off for this site. Allow it in the browser, or key it in.'
+      : e && e.code === 3
+      ? 'No location yet, the signal is weak. Try again, or key it in.'
+      : 'Could not get a location. Try again, or key it in.', true);
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const b = $('c-loc-detect'); if (b) b.addEventListener('click', detectLoc);
+  const i = $('c-loc');        if (i) i.addEventListener('input', () => locSay(''));
+});
 
 /* Does this database know about doc_url / doc_name? A blank select of the
    two columns is the cheapest way to ask, and PostgREST answers 400 when
@@ -2225,6 +2335,9 @@ async function openNew(prefill) {
   newSource = (prefill && prefill.source) || 'nelos';
   quiet.batch = (prefill && prefill.batch) || null;
   fillProblems(newSource);
+  /* Read again on every open: a title added or retired on Case Routing
+     since this page loaded is otherwise missing until a reload. */
+  if (!prefill) loadCategories();
 
   // It may also name the case (…&title=Broken+tray). If that matches one of
   // the offered categories, use it; otherwise it goes in as "Other".
@@ -2333,6 +2446,7 @@ async function openEdit(c) {
   $('c-nursery').value = c.nursery_name || '';
   fillPlots();
   $('c-plot').value = c.plot_name || '';
+  $('c-loc').value = MJMNelos.fmtLatLng(c.location_lat, c.location_lng);
 
   // Where it already sits, not where the rule would send it.
   destTouched = true;
@@ -2376,7 +2490,15 @@ $('c-problem').addEventListener('change', () => {
 });
 
 $('c-nursery').addEventListener('change', () => fillPlots());
-$('c-dest').addEventListener('change', () => { destTouched = true; fillPics(); });
+$('c-dest').addEventListener('change', () => {
+  destTouched = true;
+  fillPics();
+  /* The category list follows the system on the hub. A category already
+     chosen that this system does not solve is dropped by fillProblems, so
+     the case cannot carry a title filed under another queue. */
+  fillProblems(newSource);
+  applyCategoryDefaults();
+});
 $('c-pic').addEventListener('change', () => fillPics());
 
 $('c-photo').addEventListener('change', () => {
@@ -2404,6 +2526,16 @@ $('c-save').addEventListener('click', async () => {
   }
   if (!$('c-dest').value) { toast('Choose which system this goes to.', false); $('c-dest').focus(); return; }
   if (!$('c-nursery').value) { toast('Choose which nursery.', false); $('c-nursery').focus(); return; }
+
+  /* OPTIONAL, and a wrong one is not: empty is no location, and
+     something typed that is not a coordinate is refused before anything
+     is uploaded. Read only while the box is on screen. */
+  const loc = locOn ? MJMNelos.parseLatLng($('c-loc').value) : null;
+  if (loc === false) {
+    toast('The location is not a coordinate. Key it as latitude, longitude, press Detect, or leave it empty.', false);
+    $('c-loc').focus();
+    return;
+  }
 
   const btn = $('c-save');
   const wording = editingId ? 'Save Changes' : 'Add New Case';
@@ -2457,6 +2589,12 @@ $('c-save').addEventListener('click', async () => {
       }
     }
 
+    // The location is what the box says: a position, or cleared.
+    if (locOn) {
+      row.location_lat = loc ? loc.lat : null;
+      row.location_lng = loc ? loc.lng : null;
+    }
+
     const { error } = await _supabase.from('nelos_cases').update(row).eq('id', editingId);
     btn.disabled = false; btn.textContent = wording;
     if (error) { toast('Could not save — ' + error.message, false); return; }
@@ -2480,6 +2618,8 @@ $('c-save').addEventListener('click', async () => {
     source:      newSource,
     nursery:     $('c-nursery').value || null,
     plot:        $('c-plot').value || null,
+    lat:         loc ? loc.lat : null,
+    lng:         loc ? loc.lng : null,
     batch:       quiet.batch,
     assignedModule:  $('c-dest').value || null,
     assignedSeatNo:  pic ? pic.seat_no : null,
@@ -2763,7 +2903,7 @@ function maySettings() {
     // until it is in.
     await loadModules();
     await Promise.all([loadCases(), loadCategories(), loadHandlers(), loadPlaces(),
-                       checkDocsColumn()]);
+                       checkDocsColumn(), checkLocColumn()]);
     $('loading').classList.add('hidden');
     $('main').classList.remove('hidden');
 

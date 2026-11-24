@@ -44,6 +44,10 @@
               background:white; border:1.5px solid #ede9fe; color:#6d28d9; text-decoration:none;
               font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
               line-height:1; transition:all .15s; }
+  /* The way back is an ICON, not a sentence (the office asked for it):
+     a round arrow, its words kept as the tooltip and the label a screen
+     reader reads. */
+  .back-btn.icon-only { width:40px; height:40px; padding:0; justify-content:center; gap:0; }
   .back-btn:hover { background:#f5f3ff; border-color:#ddd6fe; }
   /* Narrow: stack rather than squeeze a long label and a title into one row. */
   @media (max-width:700px) {
@@ -97,6 +101,101 @@
   .area-block.on .page-block { background:white; }
   .nur input { accent-color:#7c3aed; cursor:pointer; }
   .hidden { display:none !important; }
+
+  /* ── THE LAYOUT, redesigned on the office's eleven points ─────────────
+     One purple (#7c3aed family) for everything that is a choice, red ONLY
+     for a tick that cannot be taken back, and 8px between everything. Only
+     the drawing moved: every tick reads and writes the keys it always did. */
+  .panel { display:flex; flex-direction:column; gap:8px; }
+  .area-block { padding:0; overflow:hidden; }
+  .area-head { display:flex; align-items:center; gap:8px; padding:8px 12px; min-height:52px; }
+  .area-name { flex:1; min-width:0; text-align:left; background:none; border:0; padding:4px 0;
+               cursor:pointer; display:flex; flex-direction:column; gap:2px; }
+  .area-title { font-size:14px; font-weight:900; color:#1e293b; }
+  .desc { display:block; font-size:11px; color:#94a3b8; line-height:1.35;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .sum { flex-shrink:0; font-size:11px; font-weight:900; letter-spacing:.04em; padding:4px 10px;
+         border-radius:999px; background:#f1f5f9; color:#94a3b8; white-space:nowrap; }
+  .sum.on { background:#ede9fe; color:#6d28d9; }
+  .fold-btn { flex-shrink:0; width:36px; height:36px; border-radius:10px; border:0; background:none;
+              color:#7c3aed; cursor:pointer; font-size:14px; display:grid; place-items:center;
+              transition:transform .15s; }
+  .area-block.open .fold-btn { transform:rotate(180deg); }
+  .area-body { border-top:1px dashed #ddd6fe; padding:8px 12px 12px; display:flex;
+               flex-direction:column; gap:8px; }
+  .area-body .area-pages { margin:0; padding:0; border:0; }
+  .sub-label { font-size:10px; font-weight:900; color:#94a3b8; text-transform:uppercase;
+               letter-spacing:.1em; }
+  .off-note { font-size:11.5px; color:#94a3b8; }
+  .page-block { padding:8px 12px; }
+  .tick { display:flex; align-items:center; gap:8px; cursor:pointer; min-height:36px; min-width:0; }
+  .tick > span { min-width:0; flex:1; }
+  .tick-label { display:block; font-size:13px; font-weight:800; color:#334155; }
+  .page-block > .tick .tick-label { font-weight:900; color:#1e293b; }
+  .acts { margin-top:4px; display:flex; flex-direction:column; gap:0; }
+  .tick.danger .tick-label { color:#dc2626; }
+  .chk.danger { accent-color:#dc2626; }
+  .lvl-select { flex-shrink:0; font-size:11px; font-weight:900; text-transform:uppercase;
+                letter-spacing:.04em; padding:6px 8px; border-radius:10px; border:1.5px solid #ddd6fe;
+                background:white; color:#6d28d9; height:36px; }
+  .note-line { font-size:11px; color:#94a3b8; line-height:1.45; padding:2px 0; }
+  .note-line b { color:#64748b; font-weight:800; }
+  .role-tag { display:inline-block; margin-left:8px; font-size:10px; font-weight:900;
+              letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px;
+              background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe; vertical-align:2px; }
+
+  /* Presets — the four the office named, Custom, and the two blunt ones. */
+  .presets { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .preset { display:inline-flex; align-items:center; min-height:36px; padding:6px 12px; border-radius:999px; border:1.5px solid #ddd6fe;
+            background:white; color:#6d28d9; font-size:12px; font-weight:800; cursor:pointer; }
+  .preset.sel { background:#7c3aed; border-color:#7c3aed; color:white; }
+  .preset.custom { cursor:default; }
+  .preset.quiet { border-color:#e2e8f0; color:#64748b; }
+  .presets .sep { width:1px; align-self:stretch; background:#ede9fe; margin:0 2px; }
+
+  /* The audit matrix: one row per audit, one column per action. */
+  .mx { width:100%; border-collapse:collapse; }
+  .mx th { font-size:10px; font-weight:900; color:#94a3b8; text-transform:uppercase;
+           letter-spacing:.08em; padding:6px 8px; text-align:center; }
+  .mx th:first-child { text-align:left; }
+  .mx th.danger { color:#dc2626; }
+  .mx td { padding:4px 8px; border-top:1px solid #f1f5f9; text-align:center; }
+  .mx td:first-child { text-align:left; }
+  .mx td .cell { display:inline-grid; place-items:center; min-width:44px; min-height:40px; cursor:pointer; }
+  .mx tr.off td:first-child .tick-label { color:#94a3b8; }
+  .mx input:disabled { cursor:not-allowed; opacity:.35; }
+  .mx-help { font-size:11px; color:#94a3b8; line-height:1.45; }
+  .mx-help b { color:#64748b; }
+  .mx-help b.danger { color:#dc2626; }
+
+  /* Save and Cancel follow the panel down the page and light up only when
+     something has actually changed. */
+  .save-bar { position:sticky; bottom:0; z-index:5; display:flex; align-items:center; gap:8px;
+              justify-content:flex-end; background:rgba(255,255,255,.96); backdrop-filter:blur(4px);
+              border-top:1px solid #ede9fe; padding:8px 0; margin-top:8px; }
+  .save-bar .count { margin-right:auto; font-size:12px; font-weight:800; color:#94a3b8; }
+  .save-bar .count.has { color:#6d28d9; }
+
+  /* Phone: 44px targets, and the matrix becomes one card per audit. */
+  @media (max-width:640px) {
+    .u-row { padding:12px; }
+    .chk { width:22px; height:22px; }
+    .tick { min-height:44px; }
+    .btn, .preset, .lvl-select { min-height:44px; }
+    .fold-btn { width:44px; height:44px; }
+    .area-head { padding:8px; gap:6px; }
+    .area-head .lvl-select { max-width:84px; padding:6px 4px; }
+    .sum { padding:4px 8px; }
+    .mx thead { display:none; }
+    .mx, .mx tbody, .mx tr { display:block; width:100%; }
+    .mx tr { border:1.5px solid #f1f5f9; border-radius:14px; padding:8px; margin-bottom:8px; }
+    .mx td { display:inline-flex; flex-direction:column; align-items:center; border:0; padding:0;
+             width:25%; font-size:10px; font-weight:900; color:#94a3b8; text-transform:uppercase; }
+    .mx td:first-child { display:block; width:100%; text-transform:none; padding-bottom:4px; }
+    .mx td[data-label]::before { content:attr(data-label); letter-spacing:.06em; }
+    .mx td.danger::before { color:#dc2626; }
+    .mx td .cell { min-width:44px; min-height:44px; }
+  }
 </style>
 </head>
 <body>
@@ -130,7 +229,7 @@
          is gone; this goes where it is now opened from. Renamed from "User
          Access" to "Module Assess Control" — same page, same keys, only
          the words changed. -->
-    <a class="back-btn" href="scan_admin.html">&#8592; Back to Nursery 555 Team</a>
+    <a class="back-btn icon-only" href="scan_admin.html" data-icon-back title="Back to Nursery 555 Team" aria-label="Back to Nursery 555 Team"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
     <h1 class="page-title">Module Assess Control</h1>
     <span aria-hidden="true"></span>
   </div>
@@ -209,8 +308,6 @@ const PAGES = [
          the morning it was recorded for are different acts with different
          consequences, and somebody trusted to fix a typo is not automatically
          somebody trusted to make a record disappear. */
-      { key:'delete', label:'Delete work done', dflt:false,
-        desc:'Remove a record from the books altogether. It does not come back' },
       /* The Transplanting Job sheet's own, and deliberately NOT part of Edit
          work done above.
 
@@ -229,7 +326,12 @@ const PAGES = [
         desc:'Reopen a saved Transplanting Job record and change who is credited. Without this, '
            + 'a transplanting record cannot be altered once it is saved' },
       { key:'export', label:'Download the month',
-        desc:'Take the nursery\u2019s records away as a spreadsheet' }
+        desc:'Take the nursery\u2019s records away as a spreadsheet' },
+      /* LAST, AND RED (`danger`). The office asked for every tick that cannot
+         be taken back to sit at the end of its group, in red, and to ask
+         before it is ticked. Only the position moved; the key is the same. */
+      { key:'delete', label:'Delete work done', dflt:false, danger:true,
+        desc:'Remove a record from the books altogether. It does not come back' }
     ] },
   { key:'palms',       label:'PALMS (Plot Status Update)' },
   { key:'culling',     label:'Culling Calculator' },
@@ -296,7 +398,7 @@ const AUDIT_PAGES = [
      a tick nobody set; reading it as on would hand back a deletion the
      office had deliberately closed. */
   { key:'delete', label:'Delete past audits', desc:'Remove an audit from the books altogether. It does not come back',
-    fallbackTo:'edit' },
+    fallbackTo:'edit', danger:true },
 ]}));
 
 /* The five PORTALS a person can be sent to, and what they may open in each.
@@ -330,6 +432,8 @@ const AREAS = [
     children: [
       { key:'workers', label:'Worker System',
         desc:'The register of workers — who is on the books, their section and their PIN' },
+      { key:'workers_edit', label:'Worker System — add & edit workers',
+        desc:'Add a worker, move one on the board, set a PIN, reject a signup. Without it the board opens read-only' },
       { key:'setting', label:'Module Assess Control',
         desc:'This screen. Who may open what, for everybody' },
     ] },
@@ -372,11 +476,13 @@ const AREAS = [
    this ships. `mobile` is the SAME key the Admin Portal area above
    already reads as its fallback (`moduleLevel(mods.mobile)`), so this is
    not a new field, only a new place to set the old one. */
+/* `mobile` USED TO BE A ROW HERE as "555 Admin Portal", and it was the same
+   portal as the Admin Portal block above it, drawn twice. The office asked
+   for the two merged: its level is now the select in the Admin Portal
+   block's own header, writing the same `modules.mobile` it always wrote. */
 const OTHER_MODULES = [
   { key:'stock', label:'Stock Inventory System',
     desc:'Nobody holds it until it is granted here. Opened from Nursery Operation Manage’s own tool grid' },
-  { key:'mobile', label:'555 Admin Portal',
-    desc:'Collection DO issuing, customer consent & collection booking — mobile.mjmnursery.com' },
   { key:'training', label:'Training Center',
     desc:'Training slides, practical logbook, certificates' },
   { key:'demo555', label:'555 Portal Demo',
@@ -564,6 +670,16 @@ function areaOn(perms, key) {
       const acts = (perms.npayroll_actions || {}).workers;
       return acts ? !!acts.view : true;
     }
+    /* The board write gate: the Payroll module own Workers / manage, the
+       rule scan_workers.html asked before this tick existed. Same answer
+       as canDo() there -- module open, then the page entry if any. */
+    case 'workers_edit': {
+      if (perms.manage_users) return true;
+      const np = String(mods.npayroll || '').toLowerCase();
+      if (!np || np === 'none') return false;
+      const acts = (perms.npayroll_actions || {}).workers;
+      return acts ? (!!acts.view && !!acts.manage) : true;
+    }
     case 'setting': return !!perms.manage_users;
     /* Admin Portal and Audit Portal moved onto the 555 MJM Team page from the
        hub, where each had its own module-level card, and canScanArea() falls
@@ -632,15 +748,31 @@ function pageNurseries(perms, key) {
 }
 
 /* ---- the list ---- */
+
+/* The job title each person carries on the payroll register, by name. Two
+   accounts can share a name, so the e-mail is always on the row beside it and
+   this tag says which job each holds. A name the register carries under two
+   different roles gets both; a name it does not carry gets no tag at all,
+   rather than a guess. Read once at boot and never written. */
+let roleByName = new Map();
+const nameKey = (s) => String(s == null ? '' : s).replace(/[^a-z0-9]/gi, '').toUpperCase();
+const ROLE_TAG = { 'Field Conductor':'FC', 'Assistant Field Conductor':'Assistant FC',
+                   'General Worker':'Worker' };
+function roleTagsOf(p) {
+  const roles = roleByName.get(nameKey(p.full_name));
+  return roles ? [...roles] : [];
+}
+
 function rowHtml(p) {
   const open = openUid === p.id;
+  const tags = roleTagsOf(p).map((r) => `<span class="role-tag">${esc(r)}</span>`).join('');
   return `
     <div class="u-row" data-uid="${esc(p.id)}">
       <div class="flex items-center gap-3.5">
         <div class="avatar">${esc(initials(p))}</div>
         <div class="flex-1 min-w-0">
-          <div class="font-black text-slate-800 text-[14px] truncate">${esc(p.full_name || '(no name)')}</div>
-          <div class="text-[11.5px] text-slate-400 truncate">${esc(p.email || '—')}</div>
+          <div class="text-[14px] truncate"><span class="font-black text-slate-800">${esc(p.full_name || '(no name)')}</span>${tags}</div>
+          <div class="text-[11.5px] text-slate-400 truncate u-email">${esc(p.email || '—')}</div>
         </div>
         <button class="btn btn-edit ${open ? 'btn-x' : ''}" data-edit="${esc(p.id)}"
                 ${open ? 'title="Close" aria-label="Close"' : ''}>${open ? '&#10005;' : 'Edit Access'}</button>
@@ -649,50 +781,156 @@ function rowHtml(p) {
     </div>`;
 }
 
+/* ── Which blocks are unfolded ──
+   Every portal opens FOLDED, carrying a one-line answer ("3/5 on") in its
+   header, and unfolds on a press. Kept across render() — the panel is drawn
+   again on every tick, and a block snapping shut under somebody's thumb is
+   the thing a fold must never do. Reset when a different person is opened. */
+let openBlocks = new Set();
+
+/* What the draft effectively ANSWERS, flattened to one value per tick. It is
+   what the change count compares, and it is built from the same readers the
+   ticks are drawn from — so settling a store on first touch, which writes
+   what was already showing, counts as nothing changed. */
+let baseline = null;
+function snapshot(perms) {
+  const out = {};
+  ALL_AREAS.forEach((a) => { out['area:' + a.key] = areaOn(perms, a.key); });
+  const fcList = areaNurseries(perms, 'fc');
+  out['nur:fc'] = fcList === null ? '*' : fcList.map(nurseryKey).sort().join(',');
+  PAGES.forEach((pg) => {
+    out['scan:' + pg.key] = pageOn(perms, pg.key);
+    flatActions(pg).forEach((ac) => {
+      out['scan:' + pg.key + ':' + ac.key] = actionOn(perms, pg.key, ac.key, ac.dflt);
+    });
+  });
+  STORES.forEach((store) => areasOfStore(store).forEach((area) => (area.pages || []).forEach((pg) => {
+    const eff = modPage(perms, store, pg);
+    Object.keys(eff).forEach((k) => { out[store + ':' + pg.key + ':' + k] = eff[k]; });
+  })));
+  ['mobile', ...OTHER_MODULES.map((m) => m.key)].forEach((k) => {
+    out['mod:' + k] = moduleLevel((perms.modules || {})[k]);
+  });
+  return out;
+}
+function changeCount() {
+  if (!draft || !baseline) return 0;
+  const now = snapshot(draft);
+  return Object.keys(now).filter((k) => now[k] !== baseline[k]).length;
+}
+
+/* "3/5 on" — or Off — for a portal's header, so a folded block still says
+   what it holds. */
+function summaryOf(area) {
+  if (!areaOn(draft, area.key)) return { on: false, text: 'Off' };
+  let n = 0, of = 0;
+  if (area.children) {
+    of = area.children.length;
+    n = area.children.filter((c) => areaOn(draft, c.key)).length;
+  } else if (area.key === 'audit_portal') {
+    area.pages.forEach((pg) => {
+      const eff = modPage(draft, area.store, pg);
+      pg.actions.forEach((ac) => { of++; if (eff[ac.key]) n++; });
+    });
+  } else if (area.store === 'scan') {
+    of = area.pages.length;
+    n = area.pages.filter((pg) => pageOn(draft, pg.key)).length;
+  } else if (area.store) {
+    of = area.pages.length;
+    n = area.pages.filter((pg) => modPage(draft, area.store, pg).view).length;
+  } else {
+    return { on: true, text: 'On' };
+  }
+  return { on: true, text: n + '/' + of + ' on' };
+}
+
+/* Which preset the draft looks like, by the portals it opens — exactly one
+   of them and it is that preset's; anything else is Custom. */
+const PRESETS = [
+  { key:'admin',   label:'Admin',           door:'admin_portal' },
+  { key:'fc',      label:'Field Conductor', door:'fc' },
+  { key:'auditor', label:'Auditor',         door:'audit_portal' },
+  { key:'worker',  label:'Worker',          door:'worker' },
+];
+function presetOf() {
+  const open = ALL_AREAS.filter((a) => areaOn(draft, a.key)).map((a) => a.key);
+  const hit = PRESETS.find((p) => open.length === 1 && open[0] === p.door);
+  return hit ? hit.key : 'custom';
+}
+
 function panelHtml() {
-  return '<div class="panel space-y-2.5">' +
+  const n = changeCount();
+  const cur = presetOf();
+  return '<div class="panel">' +
+    `<div class="presets" role="group" aria-label="Presets">
+       ${PRESETS.map((p) => `<button type="button" class="preset ${cur === p.key ? 'sel' : ''}" data-preset="${p.key}">${esc(p.label)}</button>`).join('')}
+       <span class="preset custom ${cur === 'custom' ? 'sel' : ''}" aria-current="${cur === 'custom'}">Custom</span>
+       <span class="sep" aria-hidden="true"></span>
+       <button type="button" class="preset quiet" data-preset="all">Select all</button>
+       <button type="button" class="preset quiet" data-preset="none">Clear all</button>
+     </div>` +
     AREAS.map(areaBlockHtml).join('') +
     otherModulesBlockHtml() +
-    `<div class="flex items-center justify-end gap-2 pt-1">
+    `<div class="save-bar">
+       <span class="count ${n ? 'has' : ''}" id="change-count">${n ? n + (n === 1 ? ' change' : ' changes') : 'No changes'}</span>
        <button class="btn btn-ghost" data-cancel="1">Cancel</button>
-       <button class="btn btn-save" id="save-btn">Save</button>
+       <button class="btn btn-save" id="save-btn" ${n ? '' : 'disabled'}>Save${n ? ' (' + n + ')' : ''}</button>
      </div>` +
     '</div>';
 }
 
-/* The four modules with no door of their own on this screen — see
-   OTHER_MODULES above. A plain admin/normal/none select per row, reading
-   and writing `draft.modules.<key>` the same way the main screen's drawer
-   always did. Not an "area block": those are doors INTO this page's own
-   portals, and these four are not. */
+/* The head every block shares: [tick] name · one-line description · [level]
+   summary [fold]. The tick is NOT inside the label any more — pressing the
+   name unfolds the block, and only the box itself opens or closes the door. */
+function headHtml(key, opts) {
+  const open = openBlocks.has(key);
+  return `
+    <div class="area-head">
+      ${opts.tick || ''}
+      <button type="button" class="area-name" data-fold="${key}" aria-expanded="${open}">
+        <span class="area-title">${esc(opts.label)}</span>
+        ${opts.desc ? `<span class="desc" title="${esc(opts.desc)}">${esc(opts.desc)}</span>` : ''}
+      </button>
+      ${opts.extra || ''}
+      <span class="sum ${opts.sum.on ? 'on' : ''}">${esc(opts.sum.text)}</span>
+      <button type="button" class="fold-btn" data-fold="${key}" aria-label="${open ? 'Fold' : 'Unfold'} ${esc(opts.label)}">&#9662;</button>
+    </div>`;
+}
+
+/* The three modules with no portal block of their own — see OTHER_MODULES
+   above. A plain admin/normal/none select per row, reading and writing
+   `draft.modules.<key>` the same way the main screen's drawer always did. */
 function otherModulesBlockHtml() {
   const mods = draft.modules || {};
+  const on = OTHER_MODULES.filter((m) => moduleLevel(mods[m.key]) !== 'none').length;
+  const open = openBlocks.has('other');
   return `
-    <div class="area-block">
-      <div class="min-w-0">
-        <span class="block text-[14px] font-black text-slate-800">Other Modules</span>
-        <span class="block text-[11px] text-slate-400 leading-snug">Not one of the 8 Nursery Sector modules, moved here from the main User Access page</span>
-      </div>
-      <div class="area-pages" style="margin-top:10px;">
-        <div class="space-y-2.5">
-          ${OTHER_MODULES.map((m) => {
-            const lvl = moduleLevel(mods[m.key]);
-            return `
-            <div class="page-block ${lvl !== 'none' ? 'on' : ''}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-              <span class="min-w-0">
-                <span class="block text-[13px] font-black text-slate-800">${esc(m.label)}</span>
-                <span class="block text-[11px] text-slate-400 leading-snug">${esc(m.desc || '')}</span>
-              </span>
-              <select class="othermod-select" data-othermod="${m.key}" style="flex-shrink:0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-radius:10px;border:1.5px solid #e2e8f0;">
-                <option value="admin" ${lvl === 'admin' ? 'selected' : ''}>Admin</option>
-                <option value="normal" ${lvl === 'normal' ? 'selected' : ''}>Normal</option>
-                <option value="none" ${lvl === 'none' ? 'selected' : ''}>None</option>
-              </select>
-            </div>`;
-          }).join('')}
-        </div>
+    <div class="area-block ${open ? 'open' : ''}" data-block="other">
+      ${headHtml('other', { label:'Other Modules',
+        desc:'Not one of the 8 Nursery Sector modules, moved here from the main User Access page',
+        sum:{ on: on > 0, text: on + '/' + OTHER_MODULES.length + ' on' } })}
+      <div class="area-body ${open ? '' : 'hidden'}">
+        ${OTHER_MODULES.map((m) => {
+          const lvl = moduleLevel(mods[m.key]);
+          return `
+          <div class="page-block ${lvl !== 'none' ? 'on' : ''}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span class="min-w-0">
+              <span class="tick-label">${esc(m.label)}</span>
+              <span class="desc" title="${esc(m.desc || '')}">${esc(m.desc || '')}</span>
+            </span>
+            ${levelSelect('othermod-select', m.key, lvl)}
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
+}
+
+function levelSelect(cls, key, lvl) {
+  return `<select class="lvl-select ${cls}" data-othermod="${key}" aria-label="Level">
+      <option value="admin" ${lvl === 'admin' ? 'selected' : ''}>Admin</option>
+      <option value="normal" ${lvl === 'normal' ? 'selected' : ''}>Normal</option>
+      <option value="none" ${lvl === 'none' ? 'selected' : ''}>None</option>
+    </select>`;
 }
 
 /* One PORTAL: its tick, whatever doors are nested under it, the nurseries it
@@ -704,6 +942,7 @@ function otherModulesBlockHtml() {
    answers that were there, not an empty space. */
 function areaBlockHtml(area) {
   const on = areaOn(draft, area.key);
+  const open = openBlocks.has(area.key);
   const list = areaNurseries(draft, area.key);
   const all = list === null;
   /* Matched on letters and digits alone, the same way the phone matches them
@@ -711,27 +950,28 @@ function areaBlockHtml(area) {
      and a chip valued "UNN1" are the same nursery, and a tick that failed to
      show for one spelling would be taken away the moment Save was pressed. */
   const chosen = new Set(all ? [] : list.map(nurseryKey));
+  /* NO LEVEL SELECT on the Admin Portal. It sat in this header for a day
+     after leaving Other Modules, and the office asked for it off: the tick
+     opens the portal and the pages inside say what it may do. What the
+     select used to carry, `modules.mobile`, is still raised from None to
+     Normal when the portal is ticked open (see the change handler), because
+     canDo refuses before it reads a single page tick. */
+  const extra = '';
   return `
-    <div class="area-block ${on ? 'on' : ''}">
-      <label class="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" class="chk mt-0.5" data-area="${area.key}" ${on ? 'checked' : ''}>
-        <span class="min-w-0">
-          <span class="block text-[14px] font-black text-slate-800">${esc(area.label)}</span>
-          <span class="block text-[11px] text-slate-400 leading-snug">${esc(area.desc || '')}</span>
-        </span>
-      </label>
+    <div class="area-block ${on ? 'on' : ''} ${open ? 'open' : ''}" data-block="${area.key}">
+      ${headHtml(area.key, { label: area.label, desc: area.desc, extra, sum: summaryOf(area),
+        tick: `<input type="checkbox" class="chk" data-area="${area.key}" ${on ? 'checked' : ''} aria-label="Open ${esc(area.label)}">` })}
+      <div class="area-body ${open ? '' : 'hidden'}">
+      <div class="off-note ${on ? 'hidden' : ''}">Closed. Tick the box to open this portal — what is inside it is kept.</div>
 
       ${(area.children && area.children.length) ? `
         <div class="area-pages ${on ? '' : 'hidden'}">
-          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-            What they may open in it
-          </div>
-          <div class="space-y-2.5">${area.children.map(childAreaHtml).join('')}</div>
+          <div class="space-y-2">${area.children.map(childAreaHtml).join('')}</div>
         </div>` : ''}
 
       ${area.nurseries ? `
-      <div class="mt-2.5 ${on ? '' : 'hidden'}">
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nurseries</div>
+      <div class="${on ? '' : 'hidden'}">
+        <div class="sub-label mb-2">Nurseries</div>
         <div class="flex flex-wrap gap-2">
           <label class="nur ${all ? 'sel' : ''}">
             <input type="checkbox" data-anall="${area.key}" ${all ? 'checked' : ''}> All
@@ -749,21 +989,16 @@ function areaBlockHtml(area) {
 
       ${(area.pages && area.pages.length) ? `
         <div class="area-pages ${on ? '' : 'hidden'}">
-          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-            What they may open in it
-          </div>
-          <div class="space-y-2.5">${area.pages.map(
+          ${area.key === 'audit_portal' ? auditMatrixHtml(area) : `
+          <div class="sub-label mb-2">What they may open in it</div>
+          <div class="space-y-2">${area.pages.map(
             (pg) => (area.store === 'scan' ? pageBlockHtml(pg) : modPageBlockHtml(area, pg))
-          ).join('')}</div>
+          ).join('')}</div>`}
         </div>` : ''}
 
       ${(area.notes && area.notes.length) ? `
-        <div class="area-pages ${on ? '' : 'hidden'}">
-          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-            What they may open in it
-          </div>
-          <div class="space-y-2.5">${area.notes.map(noteRowHtml).join('')}</div>
-        </div>` : ''}
+        <div class="area-pages ${on ? '' : 'hidden'}">${area.notes.map(noteRowHtml).join('')}</div>` : ''}
+      </div>
     </div>`;
 }
 
@@ -774,65 +1009,89 @@ function childAreaHtml(child) {
   const on = areaOn(draft, child.key);
   return `
     <div class="page-block ${on ? 'on' : ''}">
-      <label class="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" class="chk mt-0.5" data-area="${child.key}" ${on ? 'checked' : ''}>
-        <span class="min-w-0">
-          <span class="block text-[13px] font-black text-slate-800">${esc(child.label)}</span>
-          <span class="block text-[11px] text-slate-400 leading-snug">${esc(child.desc || '')}</span>
+      <label class="tick">
+        <input type="checkbox" class="chk" data-area="${child.key}" ${on ? 'checked' : ''}>
+        <span>
+          <span class="tick-label">${esc(child.label)}</span>
+          <span class="desc" title="${esc(child.desc || '')}">${esc(child.desc || '')}</span>
         </span>
       </label>
     </div>`;
 }
 
 /* Something a portal offers that is NOT decided here — the Worker Portal's
-   Maintenance. Drawn as a row so the portal's contents are complete, and with
-   no checkbox at all, because the one thing worse than no tick is a tick
-   nothing reads. It says where the answer actually lives. */
+   Maintenance. One line of small grey text, and no checkbox at all, because
+   the one thing worse than no tick is a tick nothing reads. It says where the
+   answer actually lives. */
 function noteRowHtml(note) {
-  return `
-    <div class="page-block" style="opacity:.75;">
-      <div class="flex items-start gap-3">
-        <span class="mt-0.5 text-[13px] leading-none text-slate-300">—</span>
-        <span class="min-w-0">
-          <span class="block text-[13px] font-black text-slate-600">${esc(note.label)}</span>
-          <span class="block text-[11px] text-slate-400 leading-snug">${esc(note.desc || '')}</span>
-        </span>
-      </div>
-    </div>`;
+  return `<div class="note-line"><b>${esc(note.label)}</b> — ${esc(note.desc || '')}</div>`;
 }
 
-/* A page of the Admin Portal or the Auditor Portal: the same drawing as an FC
-   Portal page, reading and writing the keys that module's OWN Module Assess Control
-   screen uses. `data-mpage` / `data-mact` carry the store so one handler
-   serves both. */
+/* The Auditor Portal as ONE MATRIX: an audit per row, Open / Record / Edit /
+   Delete across, and what each column means said once above it rather than
+   four times down the screen. Same inputs, same data-* keys, same handler:
+   `data-mpage` is the Open column and `data-mact` the three after it. An
+   action under a closed audit is drawn disabled, which is what modPage
+   already answers for it. On a phone the table folds into a card per audit. */
+function auditMatrixHtml(area) {
+  const acts = area.pages[0].actions;
+  return `
+    <div class="mx-help">
+      <b>Open</b> — the audit is on their phone ·
+      ${acts.map((a) => `<b class="${a.danger ? 'danger' : ''}">${esc(a.label.split(' ')[0])}</b> — ${esc(a.desc)}`).join(' · ')}
+    </div>
+    <table class="mx">
+      <thead><tr><th>Audit</th><th>Open</th>${acts.map((a) =>
+        `<th class="${a.danger ? 'danger' : ''}">${esc(a.label.split(' ')[0])}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${area.pages.map((pg) => {
+          const eff = modPage(draft, area.store, pg);
+          return `
+          <tr class="${eff.view ? '' : 'off'}">
+            <td><span class="tick-label">${esc(pg.label)}</span>
+                <span class="desc" title="${esc(pg.desc || '')}">${esc(pg.desc || '')}</span></td>
+            <td data-label="Open"><label class="cell"><input type="checkbox" class="chk" data-mpage="${pg.key}"
+                data-mstore="${area.store}" ${eff.view ? 'checked' : ''} aria-label="Open ${esc(pg.label)}"></label></td>
+            ${pg.actions.map((ac) => `
+            <td data-label="${esc(ac.label.split(' ')[0])}" class="${ac.danger ? 'danger' : ''}"><label class="cell">
+              <input type="checkbox" class="chk ${ac.danger ? 'danger' : ''}" data-mact="${ac.key}"
+                     data-mactpage="${pg.key}" data-mstore="${area.store}" ${ac.danger ? 'data-danger="1"' : ''}
+                     ${eff[ac.key] ? 'checked' : ''} ${eff.view ? '' : 'disabled'}
+                     aria-label="${esc(ac.label)} — ${esc(pg.label)}"></label></td>`).join('')}
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* A page of the Admin Portal: the same drawing as an FC Portal page, reading
+   and writing the keys that module's OWN Module Assess Control screen uses.
+   `data-mpage` / `data-mact` carry the store so one handler serves both. */
 function modPageBlockHtml(area, pg) {
   const eff = modPage(draft, area.store, pg);
   return `
     <div class="page-block ${eff.view ? 'on' : ''}">
-      <label class="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" class="chk mt-0.5" data-mpage="${pg.key}" data-mstore="${area.store}"
+      <label class="tick">
+        <input type="checkbox" class="chk" data-mpage="${pg.key}" data-mstore="${area.store}"
                ${eff.view ? 'checked' : ''}>
-        <span class="min-w-0">
-          <span class="block text-[13px] font-black text-slate-800">${esc(pg.label)}</span>
-          <span class="block text-[11px] text-slate-400 leading-snug">${esc(pg.desc || '')}</span>
+        <span>
+          <span class="tick-label">${esc(pg.label)}</span>
+          <span class="desc" title="${esc(pg.desc || '')}">${esc(pg.desc || '')}</span>
         </span>
       </label>
 
       ${(pg.actions && pg.actions.length) ? `
-      <div class="mt-2.5 ${eff.view ? '' : 'hidden'}">
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">What they may do</div>
-        <div class="space-y-2">
-          ${pg.actions.map((ac) => `
-            <label class="flex items-start gap-2.5 cursor-pointer">
-              <input type="checkbox" class="chk mt-0.5" data-mact="${ac.key}"
-                     data-mactpage="${pg.key}" data-mstore="${area.store}"
-                     ${eff[ac.key] ? 'checked' : ''}>
-              <span class="min-w-0">
-                <span class="block text-[12.5px] font-black text-slate-700">${esc(ac.label)}</span>
-                <span class="block text-[11px] text-slate-400 leading-snug">${esc(ac.desc || '')}</span>
-              </span>
-            </label>`).join('')}
-        </div>
+      <div class="acts ${eff.view ? '' : 'hidden'}">
+        ${pg.actions.map((ac) => `
+          <label class="tick ${ac.danger ? 'danger' : ''}">
+            <input type="checkbox" class="chk ${ac.danger ? 'danger' : ''}" data-mact="${ac.key}"
+                   data-mactpage="${pg.key}" data-mstore="${area.store}" ${ac.danger ? 'data-danger="1"' : ''}
+                   ${eff[ac.key] ? 'checked' : ''}>
+            <span>
+              <span class="tick-label">${esc(ac.label)}</span>
+              <span class="desc" title="${esc(ac.desc || '')}">${esc(ac.desc || '')}</span>
+            </span>
+          </label>`).join('')}
       </div>` : ''}
     </div>`;
 }
@@ -846,12 +1105,12 @@ function modPageBlockHtml(area, pg) {
 function actionRowHtml(pg, ac) {
   const on = actionOn(draft, pg.key, ac.key, ac.dflt);
   return `
-    <label class="flex items-start gap-2.5 cursor-pointer">
-      <input type="checkbox" class="chk mt-0.5" data-act="${pg.key}" data-actkey="${ac.key}"
-             ${on ? 'checked' : ''}>
-      <span class="min-w-0">
-        <span class="block text-[12.5px] font-black text-slate-700">${esc(ac.label)}</span>
-        <span class="block text-[11px] text-slate-400 leading-snug">${esc(ac.desc || '')}</span>
+    <label class="tick ${ac.danger ? 'danger' : ''}">
+      <input type="checkbox" class="chk ${ac.danger ? 'danger' : ''}" data-act="${pg.key}" data-actkey="${ac.key}"
+             ${ac.danger ? 'data-danger="1"' : ''} ${on ? 'checked' : ''}>
+      <span>
+        <span class="tick-label">${esc(ac.label)}</span>
+        <span class="desc" title="${esc(ac.desc || '')}">${esc(ac.desc || '')}</span>
       </span>
     </label>
     ${(ac.children && ac.children.length) ? `
@@ -860,37 +1119,93 @@ function actionRowHtml(pg, ac) {
       </div>` : ''}`;
 }
 
-/* One nursery list per portal, and none per module.
-   
-   Every module used to carry its own row of nursery chips — "Same as portal"
-   and then the portal's own nurseries, to narrow one module further than the
-   rest. Nobody narrowed one. What it produced instead was the same question
-   asked five times down a screen where the answer at the top already decided
-   it, and five chances to leave a module pointing at a nursery the portal no
-   longer holds.
-   
-   The nurseries ticked on the portal now govern everything inside it: which
-   nursery is selected is which nursery's data a module shows. A row already
-   saved with its own list is not read any more — pageNurseries falls through
-   to the portal's — so nothing has to be cleaned up before this reads right. */
+/* One nursery list per portal, and none per module — the nurseries ticked
+   on the FC Portal govern everything inside it. A row already saved with its
+   own per-module list is not read any more (pageNurseries falls through to
+   the portal's), so nothing has to be cleaned up before this reads right. */
 function pageBlockHtml(pg) {
   const on = pageOn(draft, pg.key);
   return `
     <div class="page-block ${on ? 'on' : ''}">
-      <label class="flex items-center gap-3 cursor-pointer">
+      <label class="tick">
         <input type="checkbox" class="chk" data-page="${pg.key}" ${on ? 'checked' : ''}>
-        <span class="block text-[13px] font-black text-slate-800 min-w-0">${esc(pg.label)}</span>
+        <span><span class="tick-label">${esc(pg.label)}</span></span>
       </label>
 
       ${(pg.actions && pg.actions.length) ? `
-      <div class="mt-2.5 ${on ? '' : 'hidden'}">
-        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">What they may do</div>
-        <div class="space-y-2">
-          ${pg.actions.map((ac) => actionRowHtml(pg, ac)).join('')}
-        </div>
+      <div class="acts ${on ? '' : 'hidden'}" style="padding-left:30px;">
+        ${pg.actions.map((ac) => actionRowHtml(pg, ac)).join('')}
       </div>` : ''}
 
     </div>`;
+}
+
+/* ── The presets ──
+   The four the office named, and the two blunt ones. Each only writes ticks
+   this screen already writes, through the same rules as pressing them by
+   hand: a store is SETTLED before anything in it moves, so the other portals'
+   stores stay exactly as unasked as they were. A preset that opens a portal
+   also raises that portal's module from None to Normal, because a door
+   opened over a module the person does not hold is a door that does not
+   open (canDo refuses before it reads a single tick). It never lowers one.
+
+     Admin           — the Admin Portal and nothing else
+     Field Conductor — the FC Portal, every page and action but Delete
+     Auditor         — the Auditor Portal, Record and Edit, no Delete
+     Worker          — the 555 Worker Portal and nothing else */
+function setDoor(key, v) {
+  draft.scan_areas[key] = { ...(draft.scan_areas[key] || {}), view: v };
+}
+function raiseModule(mod) {
+  draft.modules = draft.modules || {};
+  if (moduleLevel(draft.modules[mod]) === 'none') draft.modules[mod] = 'normal';
+}
+function setScanPages(view, actOn) {
+  PAGES.forEach((pg) => {
+    const e = { ...(draft.scan_actions[pg.key] || {}), view };
+    flatActions(pg).forEach((ac) => { e[ac.key] = view && actOn(ac); });
+    draft.scan_actions[pg.key] = e;
+  });
+}
+function setStorePages(store, view, actOn) {
+  settleStore(store);
+  areasOfStore(store).forEach((area) => (area.pages || []).forEach((pg) => {
+    const e = draft[store + '_actions'][pg.key];
+    e.view = view;
+    (pg.actions || []).forEach((ac) => { e[ac.key] = view && actOn(ac); });
+  }));
+}
+function applyPreset(key) {
+  const only = (door) => ALL_AREAS.forEach((a) => setDoor(a.key, a.key === door));
+  const notDanger = (ac) => !ac.danger;
+  switch (key) {
+    case 'admin':
+      only('admin_portal'); raiseModule('mobile');
+      setStorePages('mobile', true, () => true);
+      break;
+    case 'fc':
+      only('fc'); raiseModule('scan');
+      setScanPages(true, notDanger);
+      break;
+    case 'auditor':
+      only('audit_portal'); raiseModule('audit');
+      setStorePages('audit', true, notDanger);
+      break;
+    case 'worker':
+      only('worker');
+      break;
+    case 'all':
+      ALL_AREAS.forEach((a) => setDoor(a.key, true));
+      raiseModule('scan'); raiseModule('mobile'); raiseModule('audit');
+      setScanPages(true, () => true);
+      STORES.forEach((s) => setStorePages(s, true, () => true));
+      break;
+    case 'none':
+      ALL_AREAS.forEach((a) => setDoor(a.key, false));
+      setScanPages(false, () => false);
+      STORES.forEach((s) => setStorePages(s, false, () => false));
+      break;
+  }
 }
 
 function render() {
@@ -983,26 +1298,56 @@ function openRow(uid) {
   }
 
   openUid = uid;
+  openBlocks = new Set();
+  baseline = snapshot(draft);
   render();
 }
-function closeRow() { openUid = null; draft = null; render(); }
+function closeRow() { openUid = null; draft = null; baseline = null; render(); }
 
 document.addEventListener('click', (e) => {
   const edit = e.target.closest('[data-edit]');
   if (edit) { const uid = edit.dataset.edit; return uid === openUid ? closeRow() : openRow(uid); }
   if (e.target.closest('[data-cancel]')) return closeRow();
   if (e.target.id === 'save-btn') return save();
+  const fold = e.target.closest('[data-fold]');
+  if (fold && draft) {
+    const k = fold.dataset.fold;
+    if (openBlocks.has(k)) openBlocks.delete(k); else openBlocks.add(k);
+    return render();
+  }
+  const pre = e.target.closest('[data-preset]');
+  if (pre && draft) {
+    /* Select all opens every Delete as well, so it asks the same question a
+       single red tick asks. The four role presets never open a Delete. */
+    if (pre.dataset.preset === 'all'
+        && !confirm('Select all opens EVERY permission, including Delete — records removed with it do not come back. Continue?')) return;
+    applyPreset(pre.dataset.preset);
+    return render();
+  }
 });
 
 document.addEventListener('change', (e) => {
   if (!draft) return;
   const t = e.target;
 
+  /* A red tick asks before it is ticked. Unticking it never asks — taking a
+     power away is always safe to undo. */
+  if (t.dataset.danger && t.checked
+      && !confirm('This lets them remove records for good — nothing removed comes back. Allow it?')) {
+    t.checked = false;
+    return;
+  }
+
   if (t.dataset.area) {
     draft.scan_areas = draft.scan_areas || {};
     const entry = draft.scan_areas[t.dataset.area] || {};
     entry.view = t.checked;
     draft.scan_areas[t.dataset.area] = entry;
+    /* Opening a portal over a module the person does not hold is a door
+       that does not open. Raised, never lowered: closing the portal leaves
+       the module level where it was. */
+    const MOD_OF_DOOR = { admin_portal:'mobile', audit_portal:'audit', fc:'scan' };
+    if (t.checked && MOD_OF_DOOR[t.dataset.area]) raiseModule(MOD_OF_DOOR[t.dataset.area]);
     return render();
   }
   if (t.dataset.anall) {
@@ -1075,6 +1420,7 @@ $('q').addEventListener('input', render);
 async function save() {
   const p = profiles.find((x) => x.id === openUid);
   if (!p || !draft) return;
+  if (!changeCount()) return;   // nothing changed: Save is not lit, and a call cannot get round that
 
   /* Nobody may close their own Setting door. It is the only way back in, and
      an admin who unticks it on their own row has to be let back in by hand
@@ -1107,8 +1453,7 @@ async function save() {
   const { error } = await _supabase.from('shared_profiles')
     .update({ permissions: next }).eq('id', p.id);
 
-  btn.disabled = false; btn.textContent = 'Save';
-  if (error) { flash('Could not save: ' + error.message); return; }
+  if (error) { btn.disabled = false; btn.textContent = 'Save'; flash('Could not save: ' + error.message); return; }
   p.permissions = next;
   closeRow();
   flash('Saved for ' + (p.full_name || p.email || 'user'));
@@ -1182,11 +1527,23 @@ function buildNurseries(register, people) {
        above refuses to be the one that does it. */
     if (!MJMAccess.canScanArea('setting')) { $('forbidden').classList.remove('hidden'); return; }
 
-    const [reg, people] = await Promise.all([
+    const [reg, people, register] = await Promise.all([
       _supabase.from('operation_nurseries').select('name,license').order('name'),
       _supabase.from('shared_profiles').select('id, email, full_name, permissions')
         .order('full_name', { ascending: true }),
+      /* The job title on the payroll register, for the tag beside a name.
+         A read that fails draws no tags and nothing else changes. */
+      Promise.resolve(_supabase.from('mjmnpayroll_workers').select('full_name, role'))
+        .catch(() => ({ data: [] })),
     ]);
+    roleByName = new Map();
+    (((register && register.data) || [])).forEach((w) => {
+      const k = nameKey(w.full_name);
+      const r = String(w.role || '').trim();
+      if (!k || !r) return;
+      if (!roleByName.has(k)) roleByName.set(k, new Set());
+      roleByName.get(k).add(ROLE_TAG[r] || r);
+    });
 
     /* Only people the main User Access has opened one of these portals for.
        Setting up pages for somebody who cannot open any of them is a setting

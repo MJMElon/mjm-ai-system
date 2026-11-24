@@ -5634,6 +5634,14 @@
                                         <span></span>
                                     </div>
                                     <div id="t3-cardbody-${c.i}"></div>
+                                    <!-- ADD TRAY ON A SAVED CARD opens a new record with this
+                                         card's plot and day already set, so it is saved into
+                                         the SAME card -- a card is one plot on one day. No
+                                         .mjm-review-allow: a signed-off report greys it. -->
+                                    <div class="px-4 py-2 border-t border-[#e8dcc8]">
+                                        <button type="button" onclick="addTrayToT3Card(${c.i})"
+                                                class="t3-card-addtray px-3 py-1.5 bg-white border border-[#c07820] text-[#c07820] text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdf6ec] transition-colors">+ Add Tray</button>
+                                    </div>
                                 </div>
                             `);
                             /* The key, the plot and the day, kept where the save
@@ -6118,6 +6126,71 @@
            here — and the answer is the CLASS, which `setTabLock` sets for every
            reason a tab is not editable, rather than a second reading of the
            banner. */
+        /* + Add Tray on a SAVED card adds a tray ROW INSIDE THE CARD, the same
+           place, rather than a new record further down: 直接开多一行 同一个地方.
+           Underneath it is an ordinary draft (so the ordinary save writes it,
+           every rule included), its date, category and plot set to the card
+           own and its head hidden, moved into the card. A second press adds
+           another row to that same draft. */
+        function addTrayToT3Card(i) {
+            if (_t3CardLocked()) { showToast('This report is signed off — unverify it to add a tray.', 'error'); return; }
+            const card = document.querySelector(`.t3-saved-row[data-card-index="${i}"]`);
+            if (!card) return;
+            const plot = card.dataset.cardPlot || '';
+            const day  = card.dataset.cardDay || '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(day) && window.MJMMonthLock && MJMMonthLock.isDateLocked(day)) {
+                showToast('That month is locked — a tray cannot be added to it.', 'error'); return;
+            }
+            const open = card.querySelector('.t3-draft-card');
+            if (open) {
+                const m = String(open.id).match(/transplant-draft-(\d+)$/);
+                if (m) addTransplantTray(parseInt(m[1], 10));
+                const rows = open.querySelectorAll('select.t3-source-tray');
+                if (rows.length) try { rows[rows.length - 1].focus(); } catch (e) {}
+                return;
+            }
+            addTransplantRow();
+            const n = transplantDraftCount;
+            const id = `transplant-draft-${n}`;
+            const headId = `${id}-head`;
+            const head = document.getElementById(headId);
+            const draft = document.getElementById(id);
+            if (!head || !draft) return;
+            const pn = plot.toUpperCase();
+            const type = pn === 'PREMIUM CARE' ? 'premium' : pn === 'DOUBLE-TONE' ? 'doubletone' : 'main';
+            const d = head.querySelector('.t3-date');
+            if (d && /^\d{4}-\d{2}-\d{2}$/.test(day)) d.value = day;
+            const t = head.querySelector('.t3-dest-type');
+            if (t) { t.value = type; togglePlotInput(headId); }
+            const ps = head.querySelector('.t3-dest-plot');
+            if (ps && type === 'main' && plot) {
+                if (!Array.from(ps.options).some(o => o.value === plot)) ps.insertAdjacentHTML('beforeend', `<option value="${_escAttr(plot)}">${_escAttr(plot)}</option>`);
+                ps.value = plot;
+            }
+            _t3SyncDraft(n);
+            /* Into the card, as a plain row: the head, the title and the census
+               box are this card own already, so they are hidden, not removed --
+               the hidden head is what the tray lines mirror. */
+            head.style.display = 'none';
+            const list = document.getElementById(`${id}-censuslist`);
+            if (list) list.style.display = 'none';
+            Array.from(draft.children).forEach(el => {
+                if (el.children.length === 0 && /New Record/i.test(el.textContent || '')) el.style.display = 'none';
+            });
+            draft.classList.add('t3-inline-draft');
+            draft.classList.remove('border-2', 'shadow-sm', 'p-4', 'rounded-2xl');
+            draft.classList.add('px-4', 'py-3', 'border-t', 'border-dashed');
+            const total = document.getElementById(`${id}-total`);
+            const bar = total ? total.closest('.flex') : null;
+            if (bar) bar.insertAdjacentHTML('beforeend',
+                `<button type="button" onclick="saveTransplantTab()" class="t3-inline-save btn-earth text-[10px] px-4 py-2">Save</button>`);
+            const foot = card.querySelector('.t3-card-addtray');
+            const footRow = foot ? foot.parentElement : null;
+            if (footRow) card.insertBefore(draft, footRow); else card.appendChild(draft);
+            const tray = draft.querySelector('select.t3-source-tray');
+            if (tray) setTimeout(() => { try { tray.focus(); } catch (e) {} }, 100);
+        }
+
         function _t3CardLocked() {
             const tab = document.getElementById('tab-3');
             return !!(tab && tab.classList.contains('mjm-locked'));
@@ -6727,7 +6800,7 @@
                             </div>
                         </div>
                         <div>
-                            <label class="label-style !text-[#c07820]">Census *</label>
+                            <label class="label-style !text-[#c07820]">Census</label>
                             <div id="${id}-censuszone" class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#f3efe6] transition-colors"
                                  onclick="document.getElementById('${id}-censuspick').click()">
                                 <span class="text-[11px] font-bold text-[#8a7a68] uppercase tracking-wider pointer-events-none">+ Photo or PDF</span>
@@ -7484,45 +7557,20 @@
 
                 if (!batchId) throw new Error("No batch number found. Please complete Tab 1 first.");
 
-                /* ══ NO CENSUS, NO SAVE — AND ONLY FOR WHAT IS KEYED NOW ═════
-
-                   The office asked for the census to be compulsory in one line:
-                   *"c 一定要有才可以 save"*, and then for the refusal to be the
-                   only thing said about it — *"只是没 census 的话按 save 会 pop
-                   out 不能 save 因为没 census"*. So there is no sentence on the
-                   form explaining the rule and no green tick saying it is
-                   satisfied; the toast is the whole of it.
-
-                   IT REACHES ONLY THE RECORDS BEING KEYED TODAY. 以前填的就不需
-                   要 — every existing record, any batch, 271's N15 included,
-                   and a card already on the list whether or not anybody has
-                   verified it. The test is not a date and not a batch: it is
-                   whether the tray line sits inside a DRAFT CARD. A line a sync
-                   rebuilt from the ledger is in no card, so the rule cannot
-                   reach back over it — and it cannot be got round either, since
-                   the only way to key a new line is to open a card.
-
-                   It is refused BEFORE anything is written. A save that stored
-                   the rows and then complained would leave the record in the
-                   ledger with no census and nothing asking for one again. */
+                /* THE CENSUS IS OPTIONAL. It was compulsory (no census, no
+                   save) and the office took that off: 没有census也可以save.
+                   The box stays, and a census picked still goes up with the
+                   save below. */
                 const _draftsToSave = {};
                 for (const row of Array.from(document.querySelectorAll('.t3-draft-card .transplant-row'))) {
                     const tray = (row.querySelector('.t3-source-tray') || {}).value || '';
                     const plot = (row.querySelector('input.t3-dest-plot') || {}).value || '';
                     const qty  = parseInt((row.querySelector('.t3-qty') || {}).value) || 0;
-                    if (!tray || !plot || qty <= 0) continue;     // the same test the save below applies
+                    if (!tray || !plot || qty <= 0) continue;
                     const n = _t3DraftOfRow(row);
                     if (n === null) continue;
                     const day = (row.querySelector('input.t3-date') || {}).value || '';
                     _draftsToSave[n] = { plot, day };
-                }
-                const _noCensus = Object.keys(_draftsToSave)
-                    .filter(n => !((t3DraftCensus[n] || []).length))
-                    .map(n => _draftsToSave[n].plot || 'a new record');
-                if (_noCensus.length) {
-                    showToast(`Nothing saved — no census on ${_noCensus.join(', ')}. Attach the census on that record first.`, 'error');
-                    btn.innerText = originalText; btn.disabled = false;
-                    return;
                 }
 
                 let logsToInsert = [];
@@ -7609,10 +7657,63 @@
                     const qty  = parseInt(row.querySelector('.t3-qty').value) || 0;
                     if (tray && trayUsed.hasOwnProperty(tray)) trayUsed[tray] -= qty;
                 });
-                const overdrawn = Object.entries(trayUsed).filter(([,bal]) => bal < 0);
+                /* ONLY A TRAY THE NEW ROWS DRAW FROM CAN BLOCK THE SAVE. A tray
+                   already over-drawn in the SAVED records was blocking every
+                   save on the tab, whatever was being added -- a P12 row
+                   refused over P11, which nobody touched (根本都没超过). The new
+                   rows are the draft lines; a saved row is corrected through
+                   its own Edit. An untouched over-drawn tray is still SAID, as a
+                   warning, so it is not lost. */
+                const draftTrays = new Set();
+                document.querySelectorAll('.t3-draft-card .transplant-row').forEach(row => {
+                    const tray = row.querySelector('.t3-source-tray').value;
+                    const qty  = parseInt(row.querySelector('.t3-qty').value) || 0;
+                    if (tray && qty > 0) draftTrays.add(tray);
+                });
+                const overAll   = Object.entries(trayUsed).filter(([,bal]) => bal < 0);
+                const overdrawn = overAll.filter(([name]) => draftTrays.has(name));
+                const overOld   = overAll.filter(([name]) => !draftTrays.has(name));
                 if (overdrawn.length > 0) {
                     const msg = overdrawn.map(([name, bal]) => `${name}: exceeds by ${Math.abs(bal).toLocaleString()}`).join(', ');
                     showToast(`Cannot save — tray over-drawn: ${msg}`, 'error');
+                    btn.innerText = originalText; btn.disabled = false;
+                    return;
+                }
+                const _overOldMsg = overOld.length
+                    ? overOld.map(([name, bal]) => `${name} by ${Math.abs(bal).toLocaleString()}`).join(', ')
+                    : '';
+
+                /* PREMIUM CARE IS FILLED BEFORE IT IS EMPTIED. A seedling can
+                   only leave PREMIUM CARE for a main plot once a pre-nursery
+                   tray has moved seedlings INTO it (要能够transplant from
+                   premium care to main plot, 一定要有transaction from pre tray
+                   to premium care first). So a NEW row drawing from PREMIUM
+                   CARE is refused unless some row -- saved or in this save --
+                   moves seedlings into PREMIUM CARE on or before its day. A
+                   saved row is left alone, the over-draw rule above. */
+                const _premFillDays = [];
+                document.querySelectorAll('.action-row.transplant-row').forEach(row => {
+                    const type = (row.querySelector('.t3-dest-type') || {}).value || '';
+                    const qty  = parseInt((row.querySelector('.t3-qty') || {}).value) || 0;
+                    const src  = (row.querySelector('.t3-source-tray') || {}).value || '';
+                    if (type === 'premium' && qty > 0 && src && src !== 'PREMIUM CARE')
+                        _premFillDays.push((row.querySelector('.t3-date') || {}).value || '');
+                });
+                const _premNoFill = [];
+                document.querySelectorAll('.t3-draft-card .transplant-row').forEach(row => {
+                    const src  = (row.querySelector('.t3-source-tray') || {}).value || '';
+                    const qty  = parseInt((row.querySelector('.t3-qty') || {}).value) || 0;
+                    if (src !== 'PREMIUM CARE' || qty <= 0) return;
+                    const day  = (row.querySelector('.t3-date') || {}).value || '';
+                    const plot = (row.querySelector('.t3-dest-plot') || {}).value || '';
+                    const ok = _premFillDays.some(d => !day || !d || d <= day);
+                    if (!ok) _premNoFill.push(`${plot || 'a plot'}${day ? ' on ' + day : ''}`);
+                });
+                if (_premNoFill.length > 0) {
+                    const what = _premFillDays.length
+                        ? 'nothing was moved into PREMIUM CARE on or before that day'
+                        : 'nothing has been moved into PREMIUM CARE yet';
+                    showToast(`Cannot save — ${_premNoFill.join(', ')} draws from PREMIUM CARE, but ${what}. Record the move from a pre-nursery tray to PREMIUM CARE first.`, 'error');
                     btn.innerText = originalText; btn.disabled = false;
                     return;
                 }
@@ -7769,6 +7870,7 @@
                 updateTracker(2);
 
                 showToast(`Transplant report saved — ${logsToInsert.length} record(s) logged.`, 'success');
+                if (_overOldMsg) showToast(`Note: the saved records already over-draw ${_overOldMsg}. This save did not touch it; check those rows.`, 'warn');
                 btn.innerText = originalText; btn.disabled = false;
 
             } catch(e) {
@@ -11399,18 +11501,29 @@ Thank you.`;
             const GAP = 10, HEAD_H = 14, MIN_USEFUL = 90, MIN_K = 0.8;
             const availW = pageW - margin * 2;
 
+            /* EVERY PHOTO IS THE SAME HEIGHT — 图片的大小要一致, then 右边的图
+               压缩. A frame of one size with each picture fitted inside it
+               left a landscape photo small in the middle of an empty box
+               beside a portrait one filling its own, which is two sizes
+               again. So every photo on the sheet is drawn at ONE height and
+               its width follows its own shape — never stretched, never
+               cropped. For each layout the height is the largest that lets
+               every row fit the page width, and the SAME height is used on
+               every row, so a short last row does not come out bigger. */
             function _fitPhotos(list, roomH) {
                 const opts = [];
                 for (let perRow = 1; perRow <= 3; perRow++) {
-                    const cellW = (availW - GAP * (perRow - 1)) / perRow;
-                    const rows = [];
-                    for (let i = 0; i < list.length; i += perRow) {
-                        const sized = list.slice(i, i + perRow).map(ph => {
-                            const sc = cellW / ph.w;
-                            return { ph, w: ph.w * sc, h: ph.h * sc };
-                        });
-                        rows.push({ sized, h: Math.max.apply(null, sized.map(z => z.h)) });
-                    }
+                    const groups = [];
+                    for (let i = 0; i < list.length; i += perRow) groups.push(list.slice(i, i + perRow));
+                    let H = Infinity;
+                    groups.forEach(g => {
+                        const aspect = g.reduce((t, ph) => t + ph.w / ph.h, 0);
+                        H = Math.min(H, (availW - GAP * (g.length - 1)) / aspect);
+                    });
+                    const rows = groups.map(g => ({
+                        sized: g.map(ph => ({ ph, w: H * ph.w / ph.h, h: H })),
+                        h: H
+                    }));
                     opts.push({ rows: rows,
                                 natural: rows.reduce((t, r) => t + r.h, 0) + GAP * (rows.length - 1) });
                 }

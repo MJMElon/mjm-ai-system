@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- The page versions shared_nelos.js with a ?v=, so the PAGE must never
+     be served stale or it goes on asking for the old file. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>NELOS — Case</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23efc7e2%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%233b162f%27 text-anchor=%27middle%27%3ENL%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -10,7 +15,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_nelos.js"></script>
+<script src="../shared/shared_nelos.js?v=20261120a"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
@@ -129,6 +134,18 @@
               text-decoration:none;overflow-wrap:anywhere;">
       <span aria-hidden="true">📄</span><span id="c-doc-label">Open the document</span>
     </a>
+
+    <!-- Where it is, as a coordinate, if the person raising it said. It
+         opens the map, which is the only thing anybody does with two
+         numbers. Optional on the form, so absent on most cases. -->
+    <a id="c-loc-link" class="hidden mt-3"
+       title="Open in Gaia GPS"
+       onclick="try{navigator.clipboard.writeText(this.getAttribute('data-copy'))}catch(e){}"
+       style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#2563eb;
+              text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere;">
+      <span aria-hidden="true">📍</span><span id="c-loc-label"></span>
+    </a>
+    
 
     <div class="grid grid-cols-3 gap-3 mt-4 p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
       <div class="min-w-0"><span class="lbl">Nursery (Plot)</span><span class="val" id="c-where"></span></div>
@@ -268,6 +285,22 @@ function renderCase() {
     $('c-doc-link').classList.remove('hidden');
   } else {
     $('c-doc-link').classList.add('hidden');
+  }
+
+  /* location_lat / location_lng arrive with RUN_ME_nelos_case_location.sql
+     and are optional on the form, so most cases have none. */
+  const locText = MJMNelos.fmtLatLng(c.location_lat, c.location_lng);
+  if (locText) {
+    /* The coordinate itself is the Gaia door, and the press copies it:
+       Gaia has no link that drops a pin, so pasting it into Gaia search
+       is what marks the spot. The second link (its id is from when the
+       two were the other way round) is Maps. */
+    $('c-loc-link').href = MJMNelos.gaiaHref(c.location_lat, c.location_lng);
+    $('c-loc-link').setAttribute('data-copy', locText);
+    $('c-loc-label').textContent = locText;
+    $('c-loc-link').classList.remove('hidden');
+  } else {
+    $('c-loc-link').classList.add('hidden');
   }
 
   const pending = c.status === 'open' || c.status === 'in_progress';

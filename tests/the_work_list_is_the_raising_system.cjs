@@ -238,7 +238,8 @@ console.log('\n── 6. The screen that sets it, and the screens that read it �
   checkTrue('the hub drawer routes off the title first',
             /function routedTo\(systemKey, problem\)[\s\S]{0,400}c\.module_key/.test(dash));
   checkTrue('and offers only what that system may raise',
-            /categories\.filter\(c => mayRaiseFrom\(c, systemKey\)\)/.test(dash));
+            /categories\.filter\(c => mayOffer\(c, systemKey\)\)/.test(dash) &&
+            /if \(!solver\) return mayRaiseFrom\(c, systemKey\)/.test(dash));
 
   /* Automate Cases writes the same two fields, so the two screens stay two
      views of one row rather than two rows that can disagree. */
