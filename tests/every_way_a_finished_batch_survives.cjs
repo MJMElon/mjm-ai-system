@@ -19,29 +19,26 @@
    has to be in exactly ONE of the three lists the reader hands back, so a
    batch cannot go quiet with nothing saying where it went.
 
-   WHAT SHIPPED WITH IT is the one cause that was still open: a 3rd culling
-   KEYED AND NOT FLOWN. The drone map gates the FIGURE, because until the
-   plot is flown nobody knows how many were culled — but the row itself is
-   the office saying the plot was culled, and those are different
-   questions. Left out, the unflown case was the WORST of the three: the
-   batch was named AND its whole pre-culling balance was counted as
-   capacity, which is the money.
+   NONE OF THE FOUR IS CLOSED IN CODE, and three of them cannot be. The
+   last one — a culling KEYED AND NOT FLOWN — was built on the office own
+   统统, with the reasoning that the drone map gates the FIGURE while the
+   row itself answers whether the plot was culled. The check then ran on
+   the real ledger and reversed it: **85 work records, about 72,900
+   seedlings, 44 of them to NOUGHT**, and B5 off its own reconciled 6,515.
+   74 plot-and-batch pairs carry a 3rd culling row with no map and no
+   figure, so those rows are routinely keyed well before the plot is
+   flown — an unflown culling is a row halfway through being filled in,
+   not an answer about the ground. And it moved nothing on the row the
+   office asked about. Section 2 is that rule NOT being there, asserted as
+   hard as the rest, so it cannot come back without this file failing.
 
-   IT MUST STILL DEDUCT NOTHING, and sections 2 and 3 are that and nothing
-   else: the balance leaves WHOLE as goneQty, and cull2Superseded goes on
-   asking the EVIDENCED question, or keying an unflown culling would
-   silently raise every maintenance figure on the plot.
+   SO WHAT THIS FILE IS FOR is the enumeration itself. Section 6 is what
+   makes it a check rather than a claim: every batch of every plot has to
+   be in exactly ONE of the three lists the reader hands back, so a fifth
+   way to drop a batch cannot be added without failing here.
 
-   WHAT IS NOT CLOSED HERE, deliberately, is a culling the office has
-   dated AFTER the work day (section 4) — usually because no Cull Date was
-   keyed, which drops the row onto the day somebody pressed Save. Those
-   seedlings really were standing when somebody sprayed, so the rule is
-   right and the repair is theirs: key the date.
-   `shared/CHECK_why_a_finished_batch_is_still_linked.sql` names every one.
-
-   EVERY READER IS GUARDED: on the previous build an unflown culling is in
-   no list at all, so an unguarded read takes the harness down at the first
-   line and leaves the rest unasked.
+   EVERY READER IS GUARDED, because a test that dies on the first throw
+   leaves everything under it unasked.
 
    Needs a static server on 8777 for the last section.
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/every_way_a_finished_batch_survives.cjs */
@@ -232,45 +229,48 @@ async function boot(browser) {
   check('…and NOT ONE of them is a culling the system can act on',
         [goneOf(b4), emptyOf(b4)], [[], []]);
 
-  console.log('\n2  what shipped: a culling keyed and NOT FLOWN takes the batch off');
+  console.log('\n2  A CULLING NOBODY HAS FLOWN TAKES NOTHING OFF, and the check is why');
+  /* THIS WAS BUILT THE OTHER WAY AND THE NUMBERS REVERSED IT -- see the
+     header. B5 holds 271 with an unflown culling dated before the work day
+     and 272 with nothing: the plot is worth BOTH, and 271 is in no gone
+     list, because on the real ledger that rule zeroed 44 work records. */
   const b5 = link('B5', DAY);
-  check('271 leaves the plot on a culling nobody has flown',
-        [b5.batches, goneOf(b5)], [['272'], ['271']]);
-  check('…and the figure moves by exactly that batch, which is the money',
-        [b5.qty, b5.goneQty], [400, 900]);
-  /* THE BALANCE LEAVES WHOLE. If the unflown row had started deducting as
-     well, goneQty would read nought and the plot would have lost 900
-     seedlings twice over -- once off the link and once off the ledger. */
-  check('…deducting NOTHING on the way out: the balance leaves undeducted',
-        b5.goneQty, 900);
+  check('271 stays on the plot on a culling nobody has flown',
+        [b5.batches, goneOf(b5)], [['271', '272'], []]);
+  check('…and the figure is the whole plot, which is what the report reads',
+        b5.qty, 1300);
 
-  console.log('\n3  and it supersedes nothing, which is the arithmetic half');
+  console.log('\n3  and it supersedes nothing either, which is the arithmetic half');
   /* B8 is 500 less a 2nd culling of 100. An EVIDENCED 3rd culling would
      supersede that culling and the bucket would read 500; an unflown one
-     must not, or keying a claim silently raises every figure on the plot. */
+     must not, or keying a claim silently RAISES every figure on the plot
+     -- the opposite direction, and worse. */
   const b8 = link('B8', DAY);
   check('the 2nd culling still comes off a batch whose 3rd culling is a claim',
-        b8.goneQty, 400);
+        b8.qty, 400);
   check('…and cull2Superseded still answers the EVIDENCED question',
         [PM.cull2Superseded(PM.events().filter((e) => e.plotKey === 'B8')),
          PM.cull2Superseded(PM.events().filter((e) => e.plotKey === 'B6'))],
         [false, true]);
 
-  console.log('\n4  what is NOT closed, and is the office own to fix');
+  console.log('\n4  the DATE rule, which is the office own to fix');
   /* A culling dated after the work day is correctly left out: those
      seedlings were standing when somebody sprayed. 233 carries a keyed
-     Cull Date; 259 carries none at all and so lands on the day it was
-     SAVED, three weeks after the work -- which is how a correct rule comes
-     to look like a broken one. */
+     Cull Date and a map, so it drops the batch the day the work date
+     passes it -- which is how the rule is meant to read. */
   check('a culling dated AFTER the work day leaves the batch standing',
         [link('B4', DAY).batches.includes('233'),
          link('B4', '2026-11-30').batches.includes('233')], [true, false]);
-  check('…including one that lands on the save day because nobody keyed one',
+  /* AND ONE THAT LANDS ON THE SAVE DAY NEVER DROPS IT AT ALL, because
+     without a map it is not an event: 259 is on the plot on every date.
+     That is the pair the office has to fix on Tab 6 -- key the figure, the
+     Cull Date AND the map, and the batch leaves by the evidenced rule. */
+  check('…and one with no map never drops it, whatever the date',
         [link('B4', DAY).batches.includes('259'),
-         link('B4', '2026-11-30').batches.includes('259')], [true, false]);
-  /* AN EMPTY SHELL ACTS ON NOTHING, whatever date it carries. A row with
-     no map and no figure is one somebody opened and did not fill, and a
-     screen that read it as a culling would be inventing one. */
+         link('B4', '2026-12-31').batches.includes('259')], [true, true]);
+  /* AN EMPTY SHELL ACTS ON NOTHING either, which is the same answer for a
+     different reason: a row with no map and no figure is one somebody
+     opened and did not fill. */
   check('a culling row with no map AND no figure takes nothing off, ever',
         [link('B4', '2026-12-31').batches.includes('264'),
          goneOf(link('B4', '2026-12-31')).includes('264')], [true, false]);
@@ -327,15 +327,14 @@ async function boot(browser) {
     check('the office B4 cell still names its five, so the screen agrees with the rule',
           [/233/.test(c4.text), /270/.test(c4.text)], [true, true]);
     const c5 = await cell('B5', 'batch');
-    check('B5 names only 272 once the unflown culling is read',
-          c5.text.replace(/[^0-9,]/g, ''), '272');
-    /* THE SENTENCE IS ON THE QUANTITY, which is the figure it explains. A
-       batch taken out and a batch that was never there read exactly alike,
-       so the row has to say which — and it must name the balance it is NOT
-       counting, or the hover is a sentence about nothing. */
+    check('B5 names BOTH, because a culling nobody has flown is not an answer',
+          c5.text.replace(/[^0-9,]/g, ''), '271,272');
+    /* AND THE ROW SAYS NOTHING ABOUT A BATCH GOING, because none did. A
+       sentence here would be the screen explaining a deduction that is not
+       in the figure -- the fault one rule along, pointing the other way. */
     const q5 = await cell('B5', 'qty');
-    check('…and the quantity hover names the batch that went and the 900 it is not counting',
-          [/271/.test(q5.tip), /900/.test(q5.tip)], [true, true]);
+    check('…and the quantity hover claims no batch was taken off',
+          [/1,300/.test(q5.text), /off this plot/.test(q5.tip)], [true, false]);
     await browser.close();
   }
 

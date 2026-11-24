@@ -224,28 +224,14 @@ const supersededOf = (evs) => typeof PlotMovement.cull2Superseded === 'function'
          linkOf('U2', '260', '2026-09-21').goneBatches], [960, []]);
 
   console.log('\nU3 — a 3rd culling nobody has flown');
-  /* THE FIGURE IS A CLAIM AND THE GROUND IS NOT, and this is where the two
-     part company. The report leaves the batch standing, because its cull3
-     column needs the flown figure; the link takes the batch OFF, because a
-     3rd culling row is the office saying the plot was culled and this
-     column is the capacity somebody is paid off.
-
-     IT MUST STILL DEDUCT NOTHING, which is the half this check was written
-     for: cull3 is nought, the balance leaves WHOLE as goneQty with only
-     the 2nd culling off it, and cull2Superseded goes on answering the
-     EVIDENCED question below -- or keying an unflown 3rd culling would
-     silently raise every maintenance figure on that plot. cull2Off is
-     nought because the batch is not in the row's figure at all, so a
-     sentence explaining a deduction inside it would be explaining nothing.
-
-     WHAT IT COSTS is a THIRD deliberate difference from the report, named
-     in CLAUDE.md beside the interrow one and the finished-culling one. */
+  /* It is a CLAIM. The report leaves the batch standing, the link leaves it
+     standing, and it must not supersede the 2nd culling either -- otherwise
+     keying an unflown 3rd culling would silently raise every maintenance
+     figure on that plot. */
   const claim = linkOf('U3', '270', '2026-09-30');
-  check('the batch goes off the plot and the figure with it',
-        [claim.qty, claim.goneBatches, claim.allGone], [0, ['270'], true]);
-  check('…and it deducts nothing on the way out',
-        [claim.goneQty, claim.cull3, claim.cull2Off, claim.cull2Inside],
-        [190, 0, 0, 0]);
+  check('it deducts nothing, and supersedes nothing',
+        [claim.qty, claim.cull3, claim.cull2Off, claim.cull2Inside],
+        [190, 0, 10, 0]);
   check('…and cull2Superseded says so of the events themselves',
         [supersededOf(PlotMovement.events().filter((e) => e.plotKey === 'U3')),
          supersededOf(PlotMovement.events().filter((e) => e.plotKey === 'U1'))],
@@ -303,15 +289,12 @@ const supersededOf = (evs) => typeof PlotMovement.cull2Superseded === 'function'
   });
   check('every plot and batch reads what the report reads', disagree, []);
   /* And which of the two it was, named — so a build that quietly stopped
-     dropping anything cannot pass the line above by agreeing everywhere.
-     U3|270 is the unflown one and is in this list now: the figure still
-     agrees with the report above, what changed is that the batch is no
-     longer part of the plot. */
+     dropping anything cannot pass the line above by agreeing everywhere. */
   check('…and these are the ones the 3rd culling took off the plot',
         pairs.filter((k) => {
           const [p, b] = k.split('|');
           return linkOf(p, b, '-').goneBatches.length > 0;
-        }), ['U1|250', 'U2|260', 'U3|270']);
+        }), ['U1|250', 'U2|260']);
   check('…and that was asked of all four of them', pairs,
         ['U1|250', 'U2|260', 'U2|261', 'U3|270']);
   /* AND IT IS THE SUMMARY REPORT AND NOT THE MPOB ONE. Those two differ by

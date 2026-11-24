@@ -31,11 +31,15 @@
 --   is a batch genuinely still standing there.
 -- Section 3 is a 3rd culling row carrying NEITHER a drone map NOR a culled
 --   figure. Nothing in it says any culling happened, so nothing acts on it.
--- Section 4 is WHAT THE NEW RULE COSTS, and it is somebody pay: a 3rd
---   culling keyed and NOT FLOWN now takes its batch off the plot, where
---   before it took nothing off and the whole pre-culling balance was
---   counted as capacity. Every record whose figure moves is named, with
---   what it read and what it reads now.
+-- Section 4 is A CULLING KEYED AND NOT FLOWN -- the figure is keyed, the
+--   drone map is not, so the system counts no culling at all and the whole
+--   pre-culling balance goes on being read as capacity. THIS IS WHERE THE
+--   WORK IS: key the map on Tab 6 and the batch leaves by itself. It is
+--   also the section that stopped a rule: making an unflown culling take
+--   the batch off was built and reversed by this very query, which found
+--   85 records and about 72,900 seedlings moving, 44 of them to NOUGHT.
+--   The last column is what each record WOULD have read, so the size of
+--   that decision stays visible rather than being a sentence in a note.
 -- Section 5 is what is deliberately left alone.
 --
 -- Scope: the linked rows, which are the ones with no batch keyed by hand
@@ -205,13 +209,17 @@ scored AS (
 -- WHAT IS STILL NAMED once the shipped rules have had their say.
 named AS (
   SELECT * FROM scored
-   WHERE flown_by_day = 0 AND claim_by_day = 0 AND closing > 0
+   WHERE flown_by_day = 0 AND closing > 0
      AND NOT (excl AND left_by_day = 1)
 ),
 -- And why, one reason per named batch, in the order the office can act on.
+-- Reason 0 is the one with a repair: the culling is keyed and the map is
+-- not, so the whole balance is still capacity. It is listed per RECORD in
+-- section 4 rather than here, because that is the row somebody opens.
 why AS (
   SELECT named.*,
-         CASE WHEN c3_later > 0  THEN 1
+         CASE WHEN claim_by_day > 0 THEN 0
+              WHEN c3_later > 0  THEN 1
               WHEN left_by_day = 1 THEN 2
               WHEN c3_shell > 0  THEN 3
               ELSE 4 END AS reason
@@ -235,8 +243,10 @@ later_on AS (
 -- figure the list under it disagrees with.
 left_out AS (SELECT DISTINCT rplot, batch, jenis, tarikh, closing FROM why WHERE reason = 2),
 no_cull  AS (SELECT DISTINCT rplot, batch, jenis, tarikh, closing, c3_any FROM why WHERE reason = 4),
--- WHAT THE UNFLOWN RULE MOVES. Scoped to a row whose figure is actually
--- the link: no batch keyed, no quantity keyed, not Checked.
+-- WHAT AN UNFLOWN CULLING WOULD COST IF IT TOOK THE BATCH OFF. It does
+-- NOT, and this is the measurement that settled that. Scoped to a row
+-- whose figure is actually the link: no batch keyed, no quantity keyed,
+-- not Checked.
 figs AS (
   SELECT rid, mth, rplot, jenis, tarikh,
          coalesce(sum(closing) FILTER (WHERE flown_by_day = 0 AND closing > 0), 0) AS was,
@@ -259,11 +269,14 @@ SELECT 0 AS section, 'SUMMARY' AS a, '-' AS b,
        -- that is the row somebody opens, and sections 2 and 3 count a pair,
        -- because the same batch standing on twenty work rows is one batch and
        -- a list of twenty is a wall nobody works down.
-       'section 1, ' || (SELECT count(*) FROM later_on)::text || ' record row(s) dated after the work day. '
+       'section 4, ' || (SELECT count(*) FROM movers)::text || ' record row(s) whose culling is keyed with no drone map. '
+         || 'section 1, ' || (SELECT count(*) FROM later_on)::text || ' record row(s) dated after the work day. '
          || 'section 2, ' || (SELECT count(*) FROM left_out)::text || ' pair(s) transferred out and awaiting the Exclude choice and '
          || (SELECT count(*) FROM no_cull)::text || ' with no culling keyed. '
          || 'section 3, ' || (SELECT count(*) FROM shells)::text || ' pair(s) with an empty culling row' AS d,
-       CASE WHEN (SELECT count(*) FROM later_on WHERE day_rank = 0) > 0
+       CASE WHEN (SELECT count(*) FROM movers) > 0
+            THEN 'START AT SECTION 4 -- a keyed culling with no drone map, which is where the work is'
+            WHEN (SELECT count(*) FROM later_on WHERE day_rank = 0) > 0
             THEN 'START AT SECTION 1 -- keying the Cull Date on Tab 6 takes those off by itself'
             WHEN (SELECT count(*) FROM later_on) > 0
             THEN 'read section 1 -- those cullings are dated after the work, which is a fact and not a fault'
@@ -314,15 +327,16 @@ SELECT 3, 'nothing to report', '-', 'no empty 3rd culling row anywhere in the le
        '-', 'every 3rd culling row carries a map or a figure'
  WHERE NOT EXISTS (SELECT 1 FROM shells)
 UNION ALL
-SELECT 4, 'THE FIGURE MOVES', m.rplot,
+SELECT 4, 'A CULLING KEYED AND NOT FLOWN', m.rplot,
        'record ' || m.rid || ' -- ' || m.jenis || ' on ' || m.tarikh || ' (' || m.mth || ')',
-       'read ' || m.was::text || ', now reads ' || m.now_q::text
-         || ' -- ' || (m.was - m.now_q)::text || ' fewer',
-       'batch ' || m.leaving || ' had a 3rd culling keyed and never flown, so its balance was being counted as capacity'
+       'batch ' || m.leaving || ' carries a keyed 3rd culling with NO drone map, so the whole '
+         || m.was::text || ' is still read as capacity',
+       'key the map on Tab 6 and it leaves by itself -- dropping it here instead would have taken this row to '
+         || m.now_q::text || ', and that rule was reversed by this section'
   FROM movers m
 UNION ALL
-SELECT 4, 'nothing to report', '-', 'no figure moves',
-       '-', 'no linked row counts a batch whose 3rd culling is keyed and unflown'
+SELECT 4, 'nothing to report', '-', 'no 3rd culling is keyed without its drone map',
+       '-', 'so no linked row counts a batch somebody has already culled on paper'
  WHERE NOT EXISTS (SELECT 1 FROM movers)
 UNION ALL
 SELECT 5, 'LEFT ALONE', '-',

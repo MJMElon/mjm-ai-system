@@ -3107,11 +3107,12 @@ Five things in it, and three are rules this file already has:
   plot used to hold — the same choice `allGone` made one rule along. **It
   no longer says the report agrees**, because on a negative it does not:
   the report draws that row and this column does not.
-- **ONE WAY WAS LEFT for a batch to be named after a 3rd culling, and the
-  office closed it the next day** — see the section below. A culling keyed
-  with no drone map never became an event at all, so it took nothing off
-  and could not empty its own batch, which is why *统统* was not quite true
-  yet. It is now.
+- **ONE WAY IS LEFT for a batch to be named after a 3rd culling, and it is
+  NOT closed here.** A culling keyed with no drone map never becomes an
+  event at all, so it takes nothing off and cannot empty its own batch —
+  which is why *统统* is not quite true. It was closed for a day and the
+  check reversed it; the section below is the whole of why, and it is the
+  one to read before anybody tries again.
 
 **Nothing to run in the database.** The whole of it is in
 `shared_plot_movement.js` and the batch cell.
@@ -3150,79 +3151,90 @@ can still be named are CLOSED, and they are:
 
 | | |
 |---|---|
-| **keyed, NOT FLOWN** | no `MapQty:`, so the row never became an event at all. **This was the one still open, and it is closed now.** |
+| **keyed, NOT FLOWN** | no `MapQty:`, so the row never became an event at all. **Closed for a day and reversed by the check — see below.** |
 | **dated AFTER the work day** | correctly left out — those seedlings were standing when somebody sprayed. Usually no Cull Date keyed, so `logDate` falls to `created_at` and the row lands on the day somebody pressed Save. **The office own to fix.** |
 | **an EMPTY SHELL row** | no map and no figure. Nobody filled it in, so nothing acts on it. |
 | **a transfer out and no culling** | near culling is not finished culling. The per-row Exclude balance choice, and only the office knows. |
 
-**THE UNFLOWN CASE WAS THE WORST OF THE THREE, not the mildest**, which is
-what the previous note had backwards. It both named the batch AND counted
-its whole pre-culling balance as capacity — exactly the fault the rule was
-written to stop. The argument for leaving it was that dropping it LOWERS
-pay on evidence the system does not have; what that missed is that the
-evidence it does not have is **the figure**, and the figure is not what
-the question turns on.
+**AND THE FOURTH REASON WAS CLOSED, AND THE CHECK REVERSED IT THE SAME
+DAY.** This is the second time in this file that *"what does this actually
+move"* has overturned a rule that read perfectly well on paper — the stock
+adjustment approval gate is the first — and the shape is identical, so it
+is worth keeping both.
 
-**SO THE MAP GATES THE FIGURE AND THE ROW ANSWERS THE GROUND**, and they
-are two questions off one fact — the third one, which `hasCull3`'s own
-comment had already said of the first two. An unevidenced culling is kept
-APART from `_events`, in `_claims`, and that is the whole safety of it:
-**it is in no sum anywhere**, so `liveCount`, `cull2Superseded`, `netOfRow`
-and the report comparison are all untouched. The batch leaves WHOLE and
-its balance is reported undeducted as `goneQty`.
+**THE ARGUMENT FOR CLOSING IT WAS GOOD.** The drone map gates the FIGURE,
+because until the plot is flown nobody knows how many were culled; the row
+itself is the office saying the plot WAS culled, and those are different
+questions — the third question off one fact, where `hasCull3`'s own comment
+already named two. Left out, the unflown case was the WORST of the four: the
+batch was named AND its whole pre-culling balance was counted as capacity.
+It was built so as to be arithmetically harmless: the claim was kept APART
+from `_events`, in `_claims`, so it was in no sum anywhere and `liveCount`,
+`cull2Superseded` and the `netOfRow` comparison were all untouched.
 
-Four things in it:
+**THEN THE CHECK RAN ON THE REAL LEDGER AND THE NUMBERS SETTLED IT:**
 
-- **IT MUST NOT SUPERSEDE THE 2ND CULLING.** `cull2Superseded` goes on
-  asking the EVIDENCED question, or keying an unflown culling would
-  silently RAISE every maintenance figure on that plot — the opposite
-  direction, and worse.
-- **AN EMPTY SHELL IS NOT AN ANSWER.** A `3rd_Culling` row with neither a
-  map nor a figure is one somebody opened and did not fill; acting on it
-  would be the screen inventing a culling. `|qty| > 0` is the test, the
-  same one `hasCull3` makes.
-- **THE CELL ALREADY SAID THE RIGHT THING.** *"has been 3rd culled by this
-  date and is off this plot"* was about the GROUND all along, so no
-  wording moved — which is the tell that the two questions were there
-  before anybody separated them.
-- **WHAT IT COSTS is a THIRD deliberate difference from the Summary
-  Report**, beside the interrow one and the finished-culling one: the
-  report draws such a batch standing with its full balance, because its
-  cull3 column needs the flown figure. The headline sweep in
-  `the_link_is_the_summary_report.cjs` still agrees bucket for bucket,
-  because a gone bucket is compared against `goneQty` — which is what says
-  the arithmetic did not move.
+| | |
+|---|---|
+| **85 work records** moved | about **72,900 seedlings** of capacity |
+| **44 of them to NOUGHT** | N2 4,962 → 0, N17 1,896 → 0, U9 916 → 0, U7-R 235 → 0 |
+| B5 left its own **6,515** | the figure the office reconciles against, down to 5,706 |
+| and it reached **Jul and Aug 2026** | unchecked rows in months already worked |
+
+**THE CAUSE IS THE ORDER OF THE WORK, which the same run showed and nobody
+had asked about: 74 plot-and-batch pairs carry a 3rd culling row with NO map
+and NO figure.** So Tab 6 rows are routinely opened and keyed WELL BEFORE
+the plot is flown. In that world an unflown culling is not an answer about
+the ground — it is a row halfway through being filled in — and the rule
+would have zeroed the capacity of a plot somebody really walked, for the
+weeks in between. 44 records paying nothing is not a figure anybody would
+have accepted to settle a naming question.
+
+**AND IT ANSWERED NOTHING THE OFFICE ASKED.** Section 2 of that run names
+B4's own row: **259, 261, 264 and 270 have no 3rd culling in the ledger at
+all** — 270 still carrying the 2,309 off its own papan tanda. 233 had
+already gone by the evidenced rule. So the real answer to *到底为什么已经
+结束了的batch一直在* is that **nothing in the system says those four
+finished**, and the repair is on Tab 6, not in this file. The rule moved
+72,900 seedlings somewhere else and left their screen exactly as it was.
+
+**WHAT TO DO INSTEAD, and it is the only thing that is both correct and
+cheap: finish the Tab 6 row.** A figure, a Cull Date and a drone map, and
+the batch leaves by the evidenced rule that has been there all along —
+which also keeps the link agreeing with the Summary Report, which is what
+the office reconciles with.
 
 `shared/CHECK_why_a_finished_batch_is_still_linked.sql` is the handover and
-is the point of all of this: it answers *why is this batch still here* for
-**every record in the system at once**, one reason per named batch, so
-nobody has to report a fifth. Section 1 is the one to act on and the rows
-whose day came from the SAVE DAY sort FIRST, those being the only ones
-sitting on a day nobody chose. Section 4 is what the unflown rule MOVES,
-record by record, with what each read before and reads now — it is pay, so
-it is named rather than shipped quietly. **Its summary deliberately does
-not add up and says so**: section 1 counts a record row, because that is
-the row somebody opens, and sections 2 and 3 count a plot-and-batch pair,
-because one batch standing on twenty work rows is one batch and a list of
-twenty is a wall nobody works down. Tested on the scratch Postgres against
-B4's own five batches, against a database where every culling is flown and
-dated before the work (which draws all five *nothing to report* lines),
-against an empty ledger and a records blob that is not an array, and twice.
+the thing that earned its place: it answers *why is this batch still here*
+for **every record in the system at once**, one reason per named batch, so
+nobody has to report a fifth. Section 4 is where the work is — every record
+whose culling is keyed with no map, and, in its last column, what that
+record WOULD have read under the rejected rule, so the size of that decision
+stays visible instead of becoming a sentence in a note. Section 1 is the
+mis-dated cullings with the SAVE-DAY rows first, those being the only ones
+sitting on a day nobody chose. **Its summary deliberately does not add up
+and says so**: sections 1 and 4 count a record row, because that is the row
+somebody opens, and sections 2 and 3 count a plot-and-batch pair, because
+one batch standing on twenty work rows is one batch and a list of twenty is
+a wall nobody works down. Tested on the scratch Postgres against B4's own
+five batches, against a database where every culling is flown and dated
+before the work (which draws all five *nothing to report* lines), against an
+empty ledger and a records blob that is not an array, and twice.
 
-`tests/every_way_a_finished_batch_survives.cjs` drives all four reasons
-over one ledger, and **section 6 is what makes the enumeration a check
-rather than a claim**: every batch of every plot has to be in exactly ONE
-of `batches`, `goneBatches` and `emptyBatches`. A batch in none of them has
-gone quiet with nothing saying where it went, which is the fault these
-rules exist to stop, so a fifth way to drop one cannot be added without
-failing there. **7 of its 18 checks fail on the previous code**, each by
-name.
+`tests/every_way_a_finished_batch_survives.cjs` drives all four reasons over
+one ledger. **Section 2 asserts the rejected rule is NOT there**, as hard as
+the rest, so it cannot come back quietly; and **section 6 is what makes the
+enumeration a check rather than a claim**: every batch of every plot has to
+be in exactly ONE of `batches`, `goneBatches` and `emptyBatches`. A batch in
+none of them has gone quiet with nothing saying where it went, which is the
+fault these rules exist to stop, so a fifth way to drop one cannot be added
+without failing there.
 
-**AND TWO OF THE THREE RULES HAD NEVER REACHED THEIR SCREEN**, which is
-part of why B4 still read five. The empty-batch rule and the negative rule
+**AND TWO OF THE THREE SHIPPED RULES HAD NEVER REACHED THEIR SCREEN**, which
+is part of why B4 still read five. The empty-batch rule and the negative rule
 sat on a branch; only `cull3Done` was on `main`. Before diagnosing a report
-like this from the code, check what is actually deployed — a rule written
-and not merged reads exactly like a rule that does not work.
+like this from the code, check what is actually deployed — a rule written and
+not merged reads exactly like a rule that does not work.
 
 ### A keyed batch that agrees with the ledger carries the mark
 
