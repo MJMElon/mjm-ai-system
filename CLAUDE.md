@@ -3236,6 +3236,76 @@ sat on a branch; only `cull3Done` was on `main`. Before diagnosing a report
 like this from the code, check what is actually deployed — a rule written and
 not merged reads exactly like a rule that does not work.
 
+#### AND A FIFTH WAY, WHICH WAS NOT A BATCH STANDING AT ALL: A SALE THAT REACHED NO PLOT
+
+The enumeration above is closed and still correct — it is the list of ways a
+batch **the ledger says is standing** survives on a linked row. B14-R was a
+different fault one level down: **the ledger said it was standing and it was
+not**, because a sale never reached the plot.
+
+The office put two screens side by side — the batch report Sales tile for
+B14-R reading **2 delivery notes, 30 on DO 03357 and 5 on DO 03364, total
+35** — against a linked row still reading 30: *"B14-R卖出去了不是吗？？"*
+
+**44 of batch 232 came onto B14-R by transfer, 30 went on one note, 5 on the
+other and 9 were transferred on. That is NOUGHT.** The link counted the 5 and
+not the 30.
+
+**THE TWO KEYS HAD DRIFTED, AND THE `real` SET SAYS IN ITS OWN WORDS THAT IT
+EXISTS TO STOP EXACTLY THAT** — *"this has to agree with it or the two screens
+quote different numbers for the same plot"*. DO 03357 had **`232 (B13)`**
+typed into its batch field, the origin plot in brackets. The Summary Report
+reads a batch by its **trailing digits** and places that on 232;
+`shared_plot_movement.js` only dropped punctuation, so it read batch
+`232B13`, matched nothing in the ledger, and **dropped the sale entirely**.
+
+**AND `operation_reports.html` HAD ALREADY MET THIS, ON THIS VERY PLOT.**
+`_mvBatchKey`'s own comment names it: *"which is exactly why B14-R's batch 232
+sale wasn't matching: the DO line had `232 (B13)` typed into its batch
+field."* That file was fixed and this one never was — the thinner-copy fault
+this file is full of, with the thin copy being the one that prices the work.
+
+So `plotKey` and `batchKey` are the report's rules now, in the report's own
+ORDER. Four things in it:
+
+- **THE NOTE IS SPLIT OFF FIRST, or `232 (B13)` reads as batch 13** — the
+  trap `_mvBatchKey`'s comment is mostly about.
+- **A LEADING `Plot:` COMES OFF BEFORE THE SPLIT**, or `PLOT: U15` reads as
+  plot `PLOT`. The test caught that one; the first version split first.
+- **IT IS STRICTLY MORE FORGIVING, NEVER LESS.** A name with no trailing
+  digits — `24D` — is no batch at all to the report and matches nothing
+  there. Here that would take a batch off every plot it matched yesterday,
+  so it **falls back to the old key**. Nothing that matched before stops
+  matching.
+- **THE DASH IS STILL DROPPED**, so B14-R and B14 stay two plots.
+
+**WHAT IT COSTS IS THE PIECE-RATE MONEY, IN THE DIRECTION THAT MATTERS: the
+link was OVERSTATING.** A sale that reached no plot left the plot reading as
+though the seedlings were still standing, so capacity was being paid on ground
+the lorry had emptied. `shared/CHECK_which_sales_the_link_was_dropping.sql`
+is what says how much: every live delivery line the old rule could not place
+and the new one can, with the note number, and **section 2 is the capacity
+that moves, per plot and batch**. A Checked row does not move — it froze its
+figure the day it was agreed. Section 3 is the lines NEITHER rule can place,
+which this change does not fix and `CHECK_do_lines_unmatched.sql` is for.
+
+`tests/the_link_counts_the_same_sale_as_the_report.cjs` is the check that
+cannot drift: it lifts the REAL `_mvBatchKey` and `_mvPlotKey` out of the
+shipped `operation_reports.html` and drives them beside the SHIPPED
+`PlotMovement.batchKey` and `.plotKey` over the same spellings, then drives
+B14-R's own 44 / 30 / 5 / 9 through `linkedQty` and asserts it reads **0**.
+**6 of its 14 checks fail on the previous code.** A comment claiming the two
+agree is not agreement — LOS taught this file that once already.
+
+**And the office asked the right question about the other half of it.** Told
+that B11-R carried a batch spelled `229.` beside `229`, they answered *"有影
+响吗 是一样的batch"* — and they are right: `batchKey` strips punctuation on
+both sides, so the app has always read them as one. The two rows were **the
+CHECK's fault**, not the app's: SQL `translate()` removes only the characters
+it is handed, where the app drops every non-alphanumeric, so a spelling the
+list did not name survived as a key of its own. A check that is blunter than
+the code it is checking invents a fault.
+
 ### A keyed batch that agrees with the ledger carries the mark
 
 *"如果FC填的batch/人为填的batch=本来用link的话的batch 那就show link的icon
