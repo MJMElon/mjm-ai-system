@@ -548,10 +548,26 @@
       const link = linkedQty(r.plot, r.batch, r.tarikh, qtyOpts(r));
       if (link && link.qty != null) out.qtyFrozen = link.qty;
     }
-    if (!String(r.batch || '').trim()) {
-      const b = recBatches(r);
-      if (b && b.linked && b.value) out.batchFrozen = b.value;
-    }
+    /* THE BATCH NAMES, and they are written for a KEYED batch too. The
+       office: *"人为打的=link的batch的话,checked了也要长这样"* — a batch
+       somebody typed that IS the report's own answer is the report's own
+       answer, and once the row is settled it has to read like one, or they
+       are back to checking a cell that has already been agreed.
+
+       THE ONLY WAY TO SAY THAT WITHOUT RE-READING THE LEDGER UNDER A
+       SETTLED ROW is to write down what the report said at the moment it
+       was checked, which is what this field has always been for. A keyed
+       batch that did NOT agree writes nothing and stays the row left to
+       check, which is the whole of what that column is read down for.
+
+       ASKED OFF THE LINK AND NOT THROUGH recBatches, because that one
+       short-circuits on a checked row by design — and freezeCheckedRows
+       calls this over rows that are ALREADY checked, so a reader that
+       returns early there could never repair one. */
+    const keyedB = String(r.batch || '').trim();
+    const lk = linkedQty(r.plot, '', r.tarikh, qtyOpts(r));
+    const shown = lk ? (lk.batches || []).filter(b => b && b !== '—').join(', ') : '';
+    if (shown && (!keyedB || batchesAgree(keyedB, shown))) out.batchFrozen = shown;
     return out;
   }
 
@@ -592,7 +608,13 @@
   function recBatches(r) {
     const keyed = String((r && r.batch) || '').trim();
     const frozen = String((r && r.batchFrozen) || '').trim();
-    if (!keyed && frozen) return { value: frozen, linked: false, frozen: true };
+    /* HELD AT THE CHECK — and a batch somebody TYPED is held too, where
+       what they typed is what the report said on the day the row was
+       checked. It reads exactly like one the link filled in, because that
+       is what it is; only the hover says a person keyed it. The KEYED
+       spelling is what is shown, because that is what somebody wrote. */
+    if (frozen && (!keyed || batchesAgree(keyed, frozen)))
+      return { value: keyed || frozen, linked: false, frozen: true, agrees: !!keyed };
     /* A CHECKED ROW IS SETTLED AND DOES NOT ASK THE LEDGER AGAIN, not even
        for a mark. Checked is what stops a figure being a formula, and a row
        that went green today and grew a 🔗 next week because a batch moved

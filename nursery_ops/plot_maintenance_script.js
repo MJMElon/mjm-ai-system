@@ -8747,7 +8747,15 @@ function _batchCell(r) {
     return '—';
   }
   if (b.frozen) {
-    const tip = `Held when this row was checked. Uncheck it to read the batch `
+    /* The same look either way, deliberately — a keyed batch that was the
+       report's own answer IS the report's own answer, and the office asked
+       for it to stop reading as a row still to go through. Only the hover
+       says a person wrote it. */
+    const tip = b.agrees
+      ? 'Keyed by hand — and it was exactly what the batch report had when '
+        + 'this row was checked, so it is held at that. Uncheck it to read '
+        + 'the report again.'
+      : `Held when this row was checked. Uncheck it to read the batch `
               + 'report again.';
     return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">${esc(b.value)}</span>`;
   }

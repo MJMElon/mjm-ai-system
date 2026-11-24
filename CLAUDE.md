@@ -3134,6 +3134,54 @@ was about, which this file already says one screen along.
 
 **Nothing to run in the database.**
 
+##### AND A KEYED BATCH THAT WAS THE REPORT IS HELD LIKE ONE
+
+Two crops of the same seven batch numbers, one dark and one muted, and the
+office's own rule for them: *"人为打的=link的batch的话,checked了也要长这样
+图一,目前是图二"*, then — the half that says why — *"如果图二我看到没虚线
+我还是要check"*.
+
+**A BATCH SOMEBODY TYPED THAT IS THE REPORT'S OWN ANSWER IS THE REPORT'S OWN
+ANSWER.** Once the row is settled there is nothing left about it to go
+through, and it was reading as muted — which on this screen means *come back
+to this one*. So it takes the HELD look, the same dark and the same solid
+line as a batch the link filled in, because that is what it is. The only
+thing that still says a person wrote it is the hover.
+
+**IT CANNOT BE DECIDED AT DRAW TIME, and that is the whole shape of it.** A
+checked row is never re-read — the rule one heading up — so whether the two
+agreed has to have been written down on the day. `batchFrozen` is that field
+and always has been; what changed is that `freezeFor` writes it for a KEYED
+batch as well, where the keyed answer matches the link. A keyed batch that
+did NOT agree writes nothing and stays the row left to check.
+
+Three things in it:
+
+- **`freezeFor` ASKS THE LINK, not `recBatches`.** That one short-circuits
+  on a checked row by design, and `freezeCheckedRows` calls `freezeFor` over
+  rows that are ALREADY checked — which is how a row checked before any of
+  this is repaired on the next page load. A reader that returned early there
+  could never repair one, and the repair would have looked like it was
+  working.
+- **MATCHED AS A SET**, through the same `batchesAgree` the 🔗 uses, so a
+  different spelling of the same answer is the same answer.
+- **WHAT IT COSTS: a row repaired today is matched against TODAY'S ledger**,
+  not the day it was checked, because nothing recorded that. It is the trade
+  `freezeCheckedRows` already names in its own comment, it happens once, and
+  after it the row never moves again.
+
+The QUANTITY is deliberately still out of this, for the reason the section
+above gives: a keyed quantity is the office's own override and is MEANT to
+differ.
+
+`tests/a_keyed_cell_wears_a_mark.cjs` is 28 checks and **17 fail on the build
+the office is on**. Its section 1b drives the shipped `freezeFor` directly,
+including over a row that is already checked, because that is the one call
+the repair depends on and the only one a short-circuit would hide.
+
+**Nothing to run in the database.** `batchFrozen` is an ordinary field of the
+record and a row that has never carried one behaves exactly as it did.
+
 ### A -R plot with nothing in it is not drawn at all
 
 *"没有东西的R plot不要出现"*, over PLOT N3-R carrying ten tasks, batch 241

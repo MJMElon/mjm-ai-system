@@ -90,7 +90,11 @@ const RECORDS = [
   R(904, { batch: '241', checked: 1, qtyFrozen: 800 }),       // checked + keyed batch — the office own row
   R(905, { batch: '241', checked: 1, qty: 777 }),             // checked, both keyed
   R(906, { plot: 'B7' }),                                     // nothing keyed at all
-  R(907, { plot: 'B7', checked: 1, batchFrozen: '243', qtyFrozen: 500 })  // frozen at Check
+  R(907, { plot: 'B7', checked: 1, batchFrozen: '243', qtyFrozen: 500 }),  // frozen at Check
+  /* CHECKED, and the batch they typed WAS the report's own answer. The
+     office asked for this one to stop reading as a row still to go
+     through: *"人为打的=link的batch的话,checked了也要长这样"*. */
+  R(908, { batch: '240, 241', checked: 1, batchFrozen: '240, 241', qtyFrozen: 1800 })
 ];
 async function boot(browser) {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
@@ -202,6 +206,30 @@ async function boot(browser) {
         [bat({ batch: '240', checked: 1 }).linked, bat({ batch: '240', checked: 1 }).info === undefined],
         [false, true]);
 
+  console.log('\n1b  a keyed batch that WAS the report is HELD like one');
+  /* The only way to say so without re-reading the ledger under a settled
+     row is to have written down what the report said on the day. */
+  const froze = (o) => (PM.freezeFor(Object.assign({ plot: 'B5', tarikh: '2026-11-20' }, o)) || {}).batchFrozen;
+  check('checking a row writes the batch names for a keyed batch that agrees',
+        froze({ batch: '240, 241' }), '240, 241');
+  check('…matched as a SET, so a different spelling is the same answer',
+        froze({ batch: '241,240' }), '240, 241');
+  check('…and nothing at all for one that does not agree',
+        froze({ batch: '240' }), undefined);
+  /* freezeCheckedRows calls this over rows that are ALREADY checked — it is
+     how a row checked before any of this is repaired on the next load — so
+     a reader that short-circuits on `checked` could never answer here. */
+  check('…and it still answers for a row that is already checked',
+        froze({ batch: '240, 241', checked: 1 }), '240, 241');
+  const held = (o) => { const b = bat(Object.assign({ checked: 1 }, o));
+                        return [b.frozen === true, !!b.agrees, b.value]; };
+  check('a held keyed batch reads as held, and says a person keyed it',
+        held({ batch: '240, 241', batchFrozen: '240, 241' }), [true, true, '240, 241']);
+  check('…a held batch nobody keyed is exactly what it was',
+        held({ batch: '', batchFrozen: '240, 241' }), [true, false, '240, 241']);
+  check('…and one that disagrees is still the row left to check',
+        held({ batch: '240', batchFrozen: '240, 241' }), [false, false, '240']);
+
   const { chromium } = require('playwright');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const page = await boot(browser);
@@ -215,12 +243,16 @@ async function boot(browser) {
       if (td.length < 6) return;                       // a plot group header
       const read = (cell) => {
         const sp = cell && cell.querySelector('span');
-        if (!sp) return { mark: 'no mark at all', line: 'none', colour: '', tip: '' };
+        if (!sp) return { mark: 'no mark at all', line: 'none', colour: '',
+                          textColour: getComputedStyle(cell).color, tip: '' };
         const cs = getComputedStyle(sp);
         return { mark: sp.className,
                  line: cs.borderBottomStyle === 'none' ? 'none'
                      : cs.borderBottomWidth + ' ' + cs.borderBottomStyle,
                  colour: cs.borderBottomColor,
+                 /* The two pictures the office sent differ by the TEXT
+                    colour and nothing else, so it has to be read back. */
+                 textColour: cs.color,
                  tip: sp.getAttribute('title') || '' };
       };
       out.push({ plot: String(td[3].textContent).trim(),
@@ -238,7 +270,7 @@ async function boot(browser) {
      four of the seven states on the floor and answers "row not drawn" about
      a row that is on the screen, which is the quietest way for a check like
      this to pass over the thing it is for. */
-  const BARE = { mark: 'row not drawn', line: 'none', colour: '', tip: '' };
+  const BARE = { mark: 'row not drawn', line: 'none', colour: '', textColour: '', tip: '' };
   const row = (p) => rows.filter(p).length === 1 ? rows.filter(p)[0] : null;
   const at = (p, col) => (row(p) || {})[col] || BARE;
   const KEYED_CHECKED = (r) => r.plot === 'B5' && r.checked && r.batchText === '241' && r.qtyText === '800';
@@ -247,11 +279,12 @@ async function boot(browser) {
   const KEYED_QTY     = (r) => r.plot === 'B5' && !r.checked && r.qtyText === '777';
   const LINKED        = (r) => r.plot === 'B7' && !r.checked;
   const FROZEN        = (r) => r.plot === 'B7' && r.checked;
+  const KEYED_AGREED  = (r) => r.plot === 'B5' && r.checked && r.qtyText === '1,800';
 
   console.log('\n2  every cell with something to say has a line under it');
   /* THE OFFICE OWN ROW: checked, and the batch is the one they typed. The
      quantity beside it carried a line the whole time. */
-  check('all seven states are on the screen', rows.length, 7);
+  check('all eight states are on the screen', rows.length, 8);
   check('a keyed batch on a CHECKED row is marked',
         [at(KEYED_CHECKED, 'batch').mark, at(KEYED_CHECKED, 'batch').line], ['qty-keyed', '1px dotted']);
   check('…and the quantity frozen beside it still wears its own',
@@ -266,6 +299,18 @@ async function boot(browser) {
         [at(LINKED, 'batch').mark, at(LINKED, 'qty').mark], ['qty-linked', 'qty-linked']);
   check('and so is the frozen one',
         [at(FROZEN, 'batch').mark, at(FROZEN, 'qty').mark], ['qty-frozen', 'qty-frozen']);
+  /* THE OFFICE OWN TWO PICTURES. A keyed batch that was the report's own
+     answer has to read like the held one beside it — same dark, same solid
+     line — or they go on checking a cell that is already agreed. */
+  check('a keyed batch that WAS the report reads as held once the row is checked',
+        [at(KEYED_AGREED, 'batch').mark, at(KEYED_AGREED, 'batch').line],
+        ['qty-frozen', '1px solid']);
+  check('…and it is the same colour as a held batch nobody keyed, letter for letter',
+        at(KEYED_AGREED, 'batch').textColour === at(FROZEN, 'batch').textColour, true);
+  check('…and it is NOT the muted one still to check',
+        at(KEYED_AGREED, 'batch').textColour === at(KEYED_CHECKED, 'batch').textColour, false);
+  check('…and its hover says a person keyed it',
+        /Keyed by hand/.test(at(KEYED_AGREED, 'batch').tip), true);
   check('nothing on either column is left bare',
         rows.filter((r) => r.batch.mark === 'no mark at all'
                         || r.qty.mark === 'no mark at all').map((r) => r.batchText), []);
