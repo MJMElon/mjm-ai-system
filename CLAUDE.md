@@ -2971,6 +2971,142 @@ ticked by hand is still left alone.
 `tests/a_replant_plot_takes_its_rounds.cjs` drives both through the shipped
 files and the real dialog, October included. **Nothing to run in the database.**
 
+### FINISHED CULLING IS NOT NEAR CULLING, and a finished batch is off the plot
+
+The office, over an Interrow Spraying row on B14 still linking batches 234
+and 262 and 3,541 of capacity: *"已经结束了3rd culling了的batch就不要再link了
+除了plot-R 3rd culling后 main plot不会有那个batch了 最多只会去p-R"*.
+
+**IT IS A FACT ABOUT THE GROUND AND NOT ABOUT THE ARITHMETIC.** A 3rd culling
+is the batch LEAVING the main plot — the good seedlings go to the -R plot and
+the rest are culled — so there is nothing of it standing there to spray,
+manure or weed. Whatever balance the ledger still shows for it is a figure
+and not seedlings, and the link was quoting it as CAPACITY, which is the
+piece-rate money.
+
+So `cull3Done` in `shared_plot_movement.js` is the rule, and a bucket it says
+yes to contributes **nothing** — not to the quantity, and not to the batch
+names beside it. It is dropped rather than counted at nought, because the
+names had to stop being offered too: *就不要再link了*.
+
+**THE OFFICE DREW THE LINE THEMSELVES, and it is the whole of why this is a
+rule where the Include / Exclude balance choice above it is not:**
+
+| | |
+|---|---|
+| a transfer out and **no 3rd culling keyed** | the batch is on its way out and what is left is about to be culled. Only the office knows whether a round was walked before the culling or after, so that stays a CHOICE on the row (`exclBal`) |
+| an **evidenced 3rd culling** | it has happened. There is nothing left to decide, and no round walked after it treated that batch |
+
+Five things in it, and three are rules this file already has:
+
+- **THE -R EXCEPTION FALLS OUT rather than being a second condition**, which
+  is why there is no -R test anywhere in that file. The question is asked of
+  one PLOT AND BATCH: on a -R plot the batch arrived by `Cull3_Transfer_In`
+  and carries no 3rd culling of its own, so it reads exactly as it always
+  did. The day the -R plot is itself 3rd culled the batch really has gone
+  from it too, and a written-out exemption would have gone on counting
+  seedlings nobody kept.
+- **AN UNFLOWN 3RD CULLING TAKES NOTHING OFF.** It never became an event at
+  all (`_load`), so it can no more take a batch off a plot than it can deduct
+  from one — the safe direction, and the same condition the report's own
+  cull3 column carries.
+- **IT IS CUT AT THE WORK DATE**, so a round dated BEFORE the culling counts
+  the batch in full. The seedlings were standing when somebody sprayed them,
+  and without this the rule would reach backwards over work already paid.
+- **INTERROW DOES NOT KEEP IT EITHER, and the two rules point opposite ways
+  on purpose.** Interrow keeps the 2nd culling in because the polybag is
+  still sitting exactly where it was — same rows, same gaps, same walk. A 3rd
+  culling takes the polybags AWAY, so there are no rows left to walk between.
+  The office's own row was an interrow one, which is why they saw it first.
+- **IT IS SAID ON THE ROW** (`goneBatches`, `goneQty`). A figure with a batch
+  taken out of it and a figure that never had one read exactly alike, which
+  is how the old one went unquestioned; the hover names the batch and the
+  balance it is not counting, and a plot whose batches have ALL gone draws a
+  dash that says so rather than one that reads as no answer.
+
+**WHAT IT COSTS, and it is named rather than buried: the link stops being the
+Summary Report on exactly these batches.** The report counts every batch a
+plot has ever held; the capacity now counts the ones it still holds. That is
+a deliberate second difference beside the interrow one, and
+`tests/the_link_is_the_summary_report.cjs` holds it by asking the sweep of
+BOTH halves — a standing bucket against `qty`, a gone one against `goneQty`
+— which makes that check **stronger** than it was: the double-deduction it
+was written for is still caught on a 3rd-culled batch, which is the only
+kind of batch it could ever have happened on.
+
+**NO MONTH GATE, which is a decision and not an oversight.** The
+`REPLANT_RULE_FROM` gate beside it exists for two rules that were NEW
+behaviour; this one is a CORRECTION, and what protects a settled month is
+what has always protected one — a Checked row froze its figure the day it was
+agreed (`qtyFrozen`) and a verified claim holds its own snapshot. Section 3
+of the check below is what says so out loud.
+
+`shared/CHECK_what_the_3rd_culling_rule_moves.sql` is the handover and
+**reads it FIRST**: every work record that moves with the month it is in,
+the plot and batch behind them, and — the line worth a second look on its
+own account — **what the ledger still shows standing for a batch the office
+says is gone**, which on a large figure is usually a transfer row nobody
+keyed.
+
+### A keyed batch that agrees with the ledger carries the mark
+
+*"如果FC填的batch/人为填的batch=本来用link的话的batch 那就show link的icon
+这样的话我就只需要查没有link的icon的部分"* — and the reason is the sentence
+after it. The office reads down that column for what to check, and a keyed
+batch that matches the batch report is not a row anybody has to open.
+Unmarked used to mean *somebody typed this*; it means **somebody typed this
+AND it is not what the report says**, which is the only version of the column
+worth reading down.
+
+- **THE KEYED VALUE IS STILL WHAT IS SHOWN AND WHAT DECIDES.** Nothing is
+  rewritten, the quantity is still counted over the batch somebody typed, and
+  `agrees` only ever changes the mark on it.
+- **Matched as a SET of batch keys** — letters and digits, like every other
+  key here — so `234, 262`, `262,234` and `262 / 234` are one answer and a
+  stray space cannot send the office to a row that is perfectly correct.
+- **A CHECKED ROW IS NEVER RE-READ, not even for a mark.** Checked is what
+  stops a figure being a formula, and a row that went green today and grew a
+  🔗 next week because a batch moved is exactly what that rule exists to stop.
+- **The QUANTITY cell is deliberately NOT in this.** A keyed quantity is the
+  office's own override and is MEANT to differ; marking one that happens to
+  agree would say nothing. One line the day they ask.
+
+### A -R plot with nothing in it is not drawn at all
+
+*"没有东西的R plot不要出现"*, over PLOT N3-R carrying ten tasks, batch 241
+linked against it and every quantity reading 0.
+
+**The ten rows were this page's own doing.** A -R plot joins the schedule on
+ONE test — it has had a `Cull3_Transfer` in by the end of the month — and
+that test answers yes for ever afterwards, whatever became of the seedlings.
+So a plot that took a transfer and has since been emptied went on being given
+its parent's rounds every month. `_replantEmpty` asks what the plot HOLDS
+instead: the Summary Report's own closing balance as at the end of the month,
+which is the figure those rows would have been worked at anyway.
+
+- **IT FAILS OPEN.** With the ledger not loaded it answers no and nothing is
+  dropped — a plot missing because a read was slow is far worse than a plot
+  too many, and the sync runs again the moment the figures land.
+- **NOTHING IS DELETED AND NOTHING IS UN-TICKED.** The schedule keeps what it
+  holds, so a -R plot that takes a second transfer draws its rows again by
+  itself. What stops is the GENERATING of rows against it, and a generated
+  row that is not rebuilt is dropped by `kept` while a row somebody keyed by
+  hand (no `_src`) is never the schedule's to take away.
+- **It is filtered in `autoSyncRecords`, never out of `NURSERY_PLOTS`.** That
+  list is what the capacity grid, the Setting page and `ours` are all built
+  from; narrowing it would take the plot off screens nobody asked about and
+  orphan the hand-keyed rows on it.
+- **A MAIN plot is never dropped by this**, whatever it holds. The office
+  said -R, and a main plot with a schedule on it is work somebody planned.
+
+`tests/a_batch_3rd_culled_is_off_the_plot.cjs` holds all three asks — the
+rule through the shipped `shared_plot_movement.js`, the seeding through the
+shipped `seedReplantRounds`, and the two cells on the REAL page in a real
+browser. **20 of its 37 checks fail on the previous code**, each by NAME,
+because every reader is guarded: on that build there is no `goneBatches`, no
+`agrees` and no `_replantEmpty`, and an unguarded read takes the harness down
+at the first line and leaves every check under it unasked.
+
 ## A worker is the register ROW, not the name on it
 
 The Worker Record keys its ticks by NAME, because a column header is a name:

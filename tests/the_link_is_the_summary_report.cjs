@@ -30,6 +30,19 @@
    DIFFERENT reason from the one above and it has to go on holding on a plot
    where neither, either or both apply.
 
+   AND THEN THE OFFICE NARROWED WHAT "IT" IS — *"已经结束了3rd culling了的
+   batch就不要再link了 除了plot-R"*. The link is the Summary Report's
+   balance OF THE BATCHES THE PLOT STILL HOLDS: a batch whose 3rd culling
+   has been keyed and flown has left the main plot, so there is nothing of
+   it there to spray, and the capacity stops counting it.
+
+   THAT DOES NOT LOOSEN THIS FILE, it tightens it. The arithmetic is still
+   netOfRow's, batch by batch, and the sweep at the end now asks it of
+   EVERY bucket — the ones still standing against `qty`, the ones that have
+   left against `goneQty`. So the double-deduction this file exists to
+   catch is still caught on a 3rd-culled batch, which is the only kind of
+   batch it could ever have happened on.
+
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/the_link_is_the_summary_report.cjs
    (no browser and no server -- both files are read off disk.)             */
 const fs = require('fs');
@@ -173,27 +186,42 @@ const supersededOf = (evs) => typeof PlotMovement.cull2Superseded === 'function'
     linkOf('U1', '250', '2026-09-11').qty,
     linkOf('U1', '250', '2026-09-21').qty
   ], [100, 95, 67]);
-  /* AND THE ONE THAT MOVED. 100 − 25 − 3 − 60 = 12, with the 5 back in
-     because it is inside the 60. The previous code read 7. */
+  /* AND THE ONE THAT MOVED, TWICE OVER. The office asked for a batch whose
+     3rd culling is done to stop being linked at all — *"已经结束了3rd
+     culling了的batch就不要再link了"* — so on the 25th this plot has nothing
+     of 250 standing and the capacity is 0.
+
+     THE 12 IS STILL WORKED OUT, and that is what keeps the rule this file
+     was written for alive: 100 − 25 − 3 − 60 = 12, with the 5 back in
+     because it is inside the 60. The code this file first caught read 7.
+     It is reported as goneQty — what the ledger still shows for a batch
+     that has left the plot — so a figure taking one loss off twice is
+     still caught here even though nothing prices it. */
   const after = linkOf('U1', '250', '2026-09-25');
-  check('once the 3rd culling is flown, the 2nd culling is not taken off again',
-        after.qty, 12);
-  check('…and the row can SAY so rather than leaving it to be noticed',
-        [after.cull2, after.cull2Off, after.cull2Inside, after.cull3],
-        [5, 0, 5, 60]);
+  check('a batch whose 3rd culling is flown is off the plot', after.qty, 0);
+  check('…and it is NAMED, with what the ledger still shows for it',
+        [after.goneBatches, after.goneQty, after.allGone], [['250'], 12, true]);
 
   console.log('\nU2 — two batches, and only one of them 3rd culled');
   /* THE RULE IS PER PLOT AND BATCH, which is the bucket the report asks it
-     of. 260 reads 1000 − 300 = 700 with its 40 back in; 261 reads
-     500 − 20 = 480 with its 20 off. A rule asked of the PLOT would be wrong
-     about one of them whichever way it answered. */
+     of — and it is what makes the office's "except plot-R" fall out rather
+     than being written down: 260 has been 3rd culled and is gone, 261 has
+     not and reads 500 − 20 = 480 with its 20 off. A rule asked of the PLOT
+     would be wrong about one of them whichever way it answered. */
   const plot = linkOf('U2', '', '2026-09-30');
-  check('the whole plot adds up to its two batches, each by its own rule',
-        [plot.qty, linkOf('U2', '260', '2026-09-30').qty,
-                   linkOf('U2', '261', '2026-09-30').qty],
-        [1180, 700, 480]);
-  check('…and the two halves of the 2nd culling are named separately',
-        [plot.cull2, plot.cull2Off, plot.cull2Inside], [60, 20, 40]);
+  check('the plot is worth the batches it still holds, and no others',
+        [plot.qty, linkOf('U2', '261', '2026-09-30').qty], [480, 480]);
+  check('…and the one that left is named rather than dropped in silence',
+        [plot.goneBatches, plot.goneQty, plot.allGone], [['260'], 700, false]);
+  check('…and the 2nd culling named is the one still standing on the plot',
+        [plot.cull2, plot.cull2Off, plot.cull2Inside], [20, 20, 0]);
+  /* A ROUND WALKED BEFORE THE CULLING STILL COUNTS IT IN FULL. The cut-off
+     is the work date, as it is for everything else here, so the seedlings
+     that were standing on the 21st are counted on the 21st. Without this
+     the rule would reach backwards over work already done and paid. */
+  check('before the culling date the batch is still there',
+        [linkOf('U2', '260', '2026-09-21').qty,
+         linkOf('U2', '260', '2026-09-21').goneBatches], [960, []]);
 
   console.log('\nU3 — a 3rd culling nobody has flown');
   /* It is a CLAIM. The report leaves the batch standing, the link leaves it
@@ -215,10 +243,19 @@ const supersededOf = (evs) => typeof PlotMovement.cull2Superseded === 'function'
      culled are gone from the ground, and all 60 second culled are still
      standing in their polybags. Nothing is "taken off" and nothing is
      "inside", because neither sentence is the reason here. */
+  /* A 3RD CULLING CLEARS THE GROUND, WHICH A 2ND CULLING DOES NOT, so the
+     two rules point opposite ways and both are right. Interrow keeps the
+     2nd culling in because the polybag is still sitting exactly where it
+     was — same rows, same gaps, same walk. A 3rd culling takes the polybags
+     away: the good ones to the -R plot and the rest culled, so there are no
+     rows left to walk between. 261 alone: 500 − 20 third culled is none,
+     and its 20 second culled are still standing in their polybags. */
   const ir = linkOf('U2', '', '2026-09-30', { keepCull2: true });
   check('the whole 2nd culling is counted, superseded or not',
         [ir.qty, ir.cull2, ir.keptCull2, ir.cull2Off, ir.cull2Inside],
-        [1200, 60, true, 0, 0]);
+        [500, 20, true, 0, 0]);
+  check('…and interrow does not keep a batch the 3rd culling took away',
+        ir.goneBatches, ['260']);
   /* And the job decides it, off the JENIS and never the chemical — the same
      rule `qtyOpts` has always applied. Asked here so the two rules cannot
      be wired up to each other by accident. */
@@ -237,11 +274,27 @@ const supersededOf = (evs) => typeof PlotMovement.cull2Superseded === 'function'
   const pairs = [...new Set(PlotMovement.events()
     .filter((e) => e.plotKey && e.batchKey)
     .map((e) => e.plotKey + '|' + e.batchKey))].sort();
+  /* THE ARITHMETIC IS STILL THE REPORT'S, batch by batch — what the office
+     changed is WHICH batches a plot is worth, not how one is counted. So a
+     bucket still on the plot has to equal netOfRow, and one the 3rd culling
+     took off has to equal it in goneQty. Asked this way the check is
+     STRONGER than it was: the double-deduction this file was written to
+     catch is caught on every bucket, gone or standing, and a rule that
+     started dropping the wrong batches is caught beside it. */
   const disagree = pairs.filter((k) => {
     const [p, b] = k.split('|');
-    return linkOf(p, b, '-').qty !== REPORT.netOfRow('main2', reportRow(p, b));
+    const link = linkOf(p, b, '-');
+    const mine = link.goneBatches.length ? link.goneQty : link.qty;
+    return mine !== REPORT.netOfRow('main2', reportRow(p, b));
   });
   check('every plot and batch reads what the report reads', disagree, []);
+  /* And which of the two it was, named — so a build that quietly stopped
+     dropping anything cannot pass the line above by agreeing everywhere. */
+  check('…and these are the ones the 3rd culling took off the plot',
+        pairs.filter((k) => {
+          const [p, b] = k.split('|');
+          return linkOf(p, b, '-').goneBatches.length > 0;
+        }), ['U1|250', 'U2|260']);
   check('…and that was asked of all four of them', pairs,
         ['U1|250', 'U2|260', 'U2|261', 'U3|270']);
   /* AND IT IS THE SUMMARY REPORT AND NOT THE MPOB ONE. Those two differ by

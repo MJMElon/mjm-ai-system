@@ -747,6 +747,10 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
    than dotted: the dots say "this is worked out and still moving", and
    this one has stopped. */
 .qty-frozen{color:var(--text-head);border-bottom:1px solid var(--border);}
+/* A dash that means "3rd culled, nothing of it is here" rather than "no
+   answer". Dotted like the linked mark, because it is the same ledger
+   talking — it is simply saying the plot is empty. */
+.batch-gone{color:var(--text-muted);border-bottom:1px dotted var(--border);}
 /* A settled row, tinted. Very light on purpose: it has to mark the row at a
    glance while leaving the figures on it the most legible thing in the cell,
    and the table is read down the middle where the Checked badge, out at the
