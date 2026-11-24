@@ -26,6 +26,11 @@
         table.lp td.dash { color: #cbd5e1; }
         table.lp td.adj { color: #b45309; font-weight: 700; }
         table.lp td.cull { color: #be123c; }
+        .lp-chip-label{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8}
+        .lp-chips{display:flex;flex-wrap:wrap;gap:6px}
+        .lp-chip{height:34px;padding:0 12px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-weight:800;font-size:12px;color:#334155;cursor:pointer}
+        .lp-chip:hover{border-color:#5eead4;color:#0f766e}
+        .lp-chip.on{background:#0f766e;border-color:#0f766e;color:#fff}
     </style>
 </head>
 <body class="min-h-screen">
@@ -39,10 +44,13 @@
                 <p class="text-[11px] font-bold text-slate-400" id="lp-sub">Every plot, and what happened to it.</p>
             </div>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-            <select id="lp-nursery" class="h-10 px-3 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 text-sm"></select>
-            <select id="lp-plot" class="h-10 px-3 rounded-xl border border-slate-200 bg-white font-bold text-slate-700 text-sm"></select>
-        </div>
+    </div>
+
+    <div class="mb-4 space-y-2">
+        <div class="lp-chip-label">Nursery</div>
+        <div id="lp-nursery-row" class="lp-chips"></div>
+        <div class="lp-chip-label">Plot</div>
+        <div id="lp-plot-row" class="lp-chips"></div>
     </div>
 
     <div id="lp-status" class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm font-bold text-slate-400">Loading…</div>
@@ -175,17 +183,18 @@
     }
 
     let NUR = '';
+    const chip = (attr, val, label, on) =>
+        `<button type="button" class="lp-chip${on ? ' on' : ''}" data-${attr}="${String(val).replace(/"/g, '&quot;')}">${label}</button>`;
     function fillNurserySelect() {
-        const sel = document.getElementById('lp-nursery');
         const keys = MODEL.groups.filter(g => g.plots.length).map(g => g.key);
-        sel.innerHTML = '<option value="">All nurseries</option>' + keys.map(k => `<option value="${k}">${NURSERY_LABEL[k]}</option>`).join('');
-        sel.value = NUR;
+        document.getElementById('lp-nursery-row').innerHTML =
+            chip('nur', '', 'All nurseries', !NUR) + keys.map(k => chip('nur', k, NURSERY_LABEL[k], NUR === k)).join('');
     }
     function fillPlotSelect(keep) {
-        const sel = document.getElementById('lp-plot');
         const names = MODEL.groups.filter(g => !NUR || g.key === NUR).flatMap(g => g.plots.map(p => p.plot));
-        sel.innerHTML = '<option value="">All plots</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
-        sel.value = keep && names.includes(keep) ? keep : '';
+        const cur = keep && names.includes(keep) ? keep : '';
+        document.getElementById('lp-plot-row').innerHTML =
+            chip('plot', '', 'All plots', !cur) + names.map(n => chip('plot', n, n, cur === n)).join('');
     }
 
     function renderList() {
@@ -252,14 +261,19 @@
     }
 
     document.getElementById('lp-up').addEventListener('click', showList);
-    document.getElementById('lp-nursery').addEventListener('change', e => {
-        NUR = e.target.value;
+    document.getElementById('lp-nursery-row').addEventListener('click', e => {
+        const b = e.target.closest('button[data-nur]');
+        if (!b) return;
+        NUR = b.dataset.nur;
+        fillNurserySelect();
         fillPlotSelect('');
         renderList();
         showList();
     });
-    document.getElementById('lp-plot').addEventListener('change', e => {
-        if (e.target.value) showPlot(e.target.value); else showList();
+    document.getElementById('lp-plot-row').addEventListener('click', e => {
+        const b = e.target.closest('button[data-plot]');
+        if (!b) return;
+        if (b.dataset.plot) showPlot(b.dataset.plot); else showList();
     });
     window.addEventListener('hashchange', () => {
         const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
