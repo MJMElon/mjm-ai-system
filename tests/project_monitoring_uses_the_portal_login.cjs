@@ -596,6 +596,31 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     await page.close();
   }
 
+  console.log('\n7f. Settings uses the same width, and fits every screen');
+  {
+    const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' });
+    await drawn(page);
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await go(page, 'board'); await page.waitForTimeout(150);
+    const boardW = await page.evaluate(() => Math.round(document.querySelector('main.wrap').getBoundingClientRect().width));
+    const got = {};
+    for (const vw of [1920, 1280, 900, 390]) {
+      await page.setViewportSize({ width: vw, height: 900 });
+      await go(page, 'settings'); await page.waitForTimeout(250);
+      got[vw] = await page.evaluate(() => { const m = document.querySelector('main.wrap').getBoundingClientRect();
+        const bad = [...document.querySelectorAll('#v-settings .sgrid > *, #v-settings .settings > *')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && (r.right > m.right + 1 || r.left < m.left - 1); }).length;
+        return { w: Math.round(m.width), over: document.documentElement.scrollWidth - window.innerWidth, bad }; });
+      if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_set' + vw + '.png'), fullPage: true });
+    }
+    is(got[1920].w, boardW, 'at 1920 Settings is as wide as the board (' + boardW + ')');
+    is(Object.values(got).map((x) => x.over <= 0), [true, true, true, true], 'the page does not scroll sideways at 1920, 1280, 900 or 390');
+    is(Object.values(got).map((x) => x.bad), [0, 0, 0, 0], 'and no settings block runs out of the page');
+    await page.setViewportSize({ width: 1920, height: 900 }); await go(page, 'settings'); await page.waitForTimeout(200);
+    const fill = await page.evaluate(() => { const g = document.querySelector('#v-settings .sgrid.lookups'); const r = g.getBoundingClientRect(); const l = g.lastElementChild.getBoundingClientRect(); return Math.round(r.right - l.right); });
+    is(fill <= 1, true, 'the three lists fill the row, with no empty column beside them (gap ' + fill + ')');
+    await page.close();
+  }
+
   console.log('\n8. The hub shows the tile only to a login holding the module');
   for (const [pms, want] of [[undefined, 'none'], ['normal', 'shown']]) {
     const page = await open(browser, port, { email: 'x@mjm.test', name: 'X', pms }, 'index.html');
