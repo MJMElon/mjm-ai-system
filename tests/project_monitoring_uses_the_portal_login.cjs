@@ -514,6 +514,88 @@ const go = (page, view) => page.evaluate((v) => document.querySelector('nav.tabs
     await page.close();
   }
 
+  console.log('\n7d. Task Request Status is a list on a desk and cards on a phone');
+  {
+    const rows = ROWS();
+    const mk = (i, status, extra) => Object.assign({ id: 'rq' + i, data: Object.assign({ name: 'Request number ' + i + ' with a name that is long enough to need a second line on a phone',
+      project: 'Nursery', module: 'Nursery Payroll System', sub: 'A sub project with a long name', priority: 'Low', type: 'Mobile & Web', due: '2026-11-30',
+      reason: 'Because the screen is hard to read on a handset and somebody asked for it twice.', status, requestedBy: 'Joyce Yii', requestedAt: '2026-11-13T02:00:00Z', assignees: ['Joyce Yii'] }, extra || {}) });
+    for (let i = 0; i < 5; i++) rows.pms_task_requests.push(mk(i, 'Pending'));
+    rows.pms_task_requests.push(mk(9, 'Approved', { decidedBy: 'Ruth Wong', decidedAt: '2026-11-13T03:00:00Z', decisionNote: 'Agreed, start next week' }));
+    const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' }, null, rows);
+    await drawn(page);
+    const read = () => page.evaluate(() => { const root = document.querySelector('#v-requests'), cards = [...root.querySelectorAll('.req')];
+      const seg = root.querySelector('.seg').getBoundingClientRect(), tops = new Set(cards.map((c) => Math.round(c.getBoundingClientRect().top)));
+      const inside = (c) => [...c.querySelectorAll('*')].every((k) => k.getBoundingClientRect().right <= c.getBoundingClientRect().right + 1);
+      return { n: cards.length, perRow: cards.filter((c) => Math.round(c.getBoundingClientRect().top) === [...tops][0]).length,
+        page: document.documentElement.scrollWidth - window.innerWidth, widest: Math.round(Math.max(...cards.map((c) => c.getBoundingClientRect().width))),
+        narrowest: Math.round(Math.min(...cards.map((c) => c.getBoundingClientRect().width))), allInside: cards.every(inside),
+        segIn: seg.right <= window.innerWidth + 1, segFull: Math.round(seg.width), rootW: Math.round(root.getBoundingClientRect().width),
+        head: (() => { const h = root.querySelector('.reqs-head'); return !!h && getComputedStyle(h).display !== 'none'; })(),
+        headCols: [...root.querySelectorAll('.reqs-head span')].filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.textContent),
+        pillXs: [...new Set(cards.map((c) => Math.round(c.querySelector('.pill').getBoundingClientRect().left)))].length,
+        nameXs: [...new Set(cards.map((c) => Math.round(c.querySelector('.nm').getBoundingClientRect().left)))].length,
+        actXs: [...new Set(cards.map((c) => { const a = c.querySelector('.r-end'); return a ? Math.round(a.getBoundingClientRect().left) : -1; }))].length,
+        sameLine: cards.every((c) => { const p = c.querySelector('.pill').getBoundingClientRect(), n = c.querySelector('.nm').getBoundingClientRect(), a = c.querySelector('.r-end');
+          return Math.abs(p.top - n.top) < 12 && n.left > p.right && (!a || a.getBoundingClientRect().left > n.right - 1); }),
+        tallest: Math.round(Math.max(...cards.map((c) => c.getBoundingClientRect().height))),
+        btnH: Math.round(Math.min(...[...root.querySelectorAll('.req .acts .btn')].map((b) => b.getBoundingClientRect().height))) }; });
+    for (const w of [1440, 1024, 390]) {
+      await page.setViewportSize({ width: w, height: 800 }); await go(page, 'requests'); await page.waitForTimeout(200);
+      const r = await read();
+      is(r.n, 5, 'requests at ' + w + ': the five pending requests are drawn');
+      is(r.page <= 0 && r.allInside && r.segIn, true, 'requests at ' + w + ': nothing runs off the side (page ' + r.page + ')');
+      if (w !== 390) {
+        is(r.perRow === 1 && r.rootW - r.narrowest <= 4, true, 'requests at ' + w + ': a list, one request to a line across the full width');
+        is(r.head, true, 'requests at ' + w + ': the list has its column headings');
+        is(r.headCols, w === 1440 ? ['Status', 'Request', 'Details', 'Requested', 'Decision'] : ['Status', 'Request', 'Decision'], 'requests at ' + w + ': the headings name the columns drawn');
+        is([r.pillXs, r.nameXs, r.actXs], [1, 1, 1], 'requests at ' + w + ': status, request and buttons each stand in one column down the list');
+        is(r.sameLine, true, 'requests at ' + w + ': the status, the request and its buttons are side by side on the line');
+      }
+      if (w === 1440) is(r.tallest <= 160, true, 'requests at 1440: a line is a line, not a card (' + r.tallest + 'px)');
+      if (w === 390) { is(r.perRow, 1, 'requests at 390: one card to a row');
+        is(r.head, false, 'requests at 390: cards, with no column headings');
+        is(r.rootW - r.narrowest <= 2 && r.rootW - r.segFull <= 2, true, 'requests at 390: the card and the status tabs take the full width');
+        is(r.btnH >= 40, true, 'requests at 390: Approve and Reject are tall enough for a thumb (' + r.btnH + ')'); }
+      if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_req' + w + '.png') });
+    }
+    // The approve form opens under its own line, and the line above keeps its columns.
+    await page.setViewportSize({ width: 1440, height: 800 }); await page.waitForTimeout(150);
+    await page.evaluate(() => [...document.querySelectorAll('#v-requests .req .acts .btn')].find((b) => /Approve/.test(b.textContent)).click()); await page.waitForTimeout(150);
+    const od = await page.evaluate(() => { const d = document.querySelector('#v-requests .req .decide'), c = d && d.closest('.req'); if (!d) return 'no form';
+      const dr = d.getBoundingClientRect(), nr = c.querySelector('.nm').getBoundingClientRect();
+      return { below: dr.top >= nr.bottom, inside: dr.right <= c.getBoundingClientRect().right + 1, page: document.documentElement.scrollWidth - window.innerWidth }; });
+    is(od, { below: true, inside: true, page: 0 }, 'requests at 1440: the approve form opens under its line, inside the list');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_req1440_open.png') });
+    await page.evaluate(() => [...document.querySelectorAll('#v-requests .req .decide .btn')].find((b) => /Cancel/.test(b.textContent)).click()); await page.waitForTimeout(100);
+    await page.evaluate(() => [...document.querySelectorAll('#v-requests .seg button')].find((b) => /Approved/.test(b.textContent)).click()); await page.waitForTimeout(150);
+    const one = await read();
+    is(one.n === 1 && one.sameLine && one.head, true, 'an approved request is a line too, its decision in the last column');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_req_one.png') });
+    await page.setViewportSize({ width: 390, height: 800 }); await page.waitForTimeout(150);
+    await page.evaluate(() => [...document.querySelectorAll('#v-requests .seg button')].find((b) => /Pending/.test(b.textContent)).click()); await page.waitForTimeout(100);
+    await page.evaluate(() => [...document.querySelectorAll('#v-requests .req .acts .btn')].find((b) => /Approve/.test(b.textContent)).click()); await page.waitForTimeout(150);
+    const open1 = await read();
+    is(open1.page <= 0 && open1.allInside, true, 'requests at 390: the approve form opens inside its card');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace('.png', '_req390_open.png') });
+    await page.close();
+  }
+
+  console.log('\n7e. Dashboard and Task Request Status use the width the other tabs use');
+  {
+    const page = await open(browser, port, { email: 'boss@mjm.test', name: 'The Boss', pms: 'admin' });
+    await drawn(page);
+    await page.setViewportSize({ width: 1920, height: 900 });
+    const w = {};
+    for (const v of ['overview', 'requests', 'board', 'list', 'timeline', 'value']) { await go(page, v); await page.waitForTimeout(150);
+      w[v] = await page.evaluate(() => { const m = document.querySelector('main.wrap').getBoundingClientRect();
+        return { w: Math.round(m.width), over: document.documentElement.scrollWidth - window.innerWidth }; }); }
+    is([w.overview.w, w.requests.w], [w.board.w, w.board.w], 'at 1920 the dashboard and the request list are as wide as the board (' + w.board.w + ')');
+    is(Object.values(w).every((x) => x.over <= 0), true, 'and no tab runs off the side');
+    if (process.env.SHOT) { await go(page, 'overview'); await page.waitForTimeout(250); await page.screenshot({ path: process.env.SHOT.replace('.png', '_dash1920.png') }); }
+    await page.close();
+  }
+
   console.log('\n8. The hub shows the tile only to a login holding the module');
   for (const [pms, want] of [[undefined, 'none'], ['normal', 'shown']]) {
     const page = await open(browser, port, { email: 'x@mjm.test', name: 'X', pms }, 'index.html');
