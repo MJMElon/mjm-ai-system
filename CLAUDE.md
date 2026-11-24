@@ -8396,6 +8396,24 @@ the table saying what is shown with a cross on each. It is drawn OUTSIDE the
 table (`position:fixed` off the heading) because the table scrolls sideways
 and would clip it.
 
+### A seal number is SIX digits, keyed and stored
+
+The office: every seal number written down must be exactly six digits or it
+is not saved, and every record carries six. Keyed, it is REFUSED rather
+than padded -- the person reading the roll keys 004187, not 4187:
+`isSealCode` on this page (an order, a delivery, a site confirm, Key DO),
+`SEAL_DIGITS` in the Admin Portal SealRangeInput (consent form and Receive
+Seals), and `MANUAL_SEAL_DIGITS` on the FC Portal Add. The FC Portal also
+refuses a camera or gun reading that is not six digits: those were product
+barcodes counted as seals.
+
+Stored, it is NORMALISED, never refused: `shared/RUN_ME_seal_numbers_are_six_digits.sql`
+puts an `a_seal_six` BEFORE trigger on all thirteen tables holding a seal
+number (a consent the customer signed must not be lost over the width of a
+number) and rewrites what is there, with the sync triggers switched off for
+the rewrite so no case is raised. A code with more than six significant
+digits is not a seal and is left as it is and counted by its check.
+
 ### A seal that went out unscanned is SETTLED, never re-scanned
 
 The FC Portal scans every seal as it goes out, and the DO names the scanned
