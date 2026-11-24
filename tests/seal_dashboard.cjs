@@ -96,41 +96,41 @@ window.supabase = { createClient: function () {
 // then pending again. On Seal with Customer all three are one customer still
 // to collect, so it is one run and must read as one start and end.
 const SEGMENTS = [
-  { seg_status: 'collected', start_code: '0009001', end_code: '0009600', start_no: 9001, end_no: 9600, qty: 600, al_number: 'AL-1234', customer_name: 'Ah Seng Farm', consent_at: '2026-10-03T02:00:00Z', do_number: 'DO-1234-01', open_problems: 0 },
-  { seg_status: 'pending',   start_code: '0009601', end_code: '0010000', start_no: 9601, end_no: 10000, qty: 400, al_number: 'AL-1234', customer_name: 'Ah Seng Farm', consent_at: '2026-10-03T02:00:00Z', do_number: null, open_problems: 0 },
-  { seg_status: 'pending',   start_code: '0010001', end_code: '0010500', start_no: 10001, end_no: 10500, qty: 500, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
-  { seg_status: 'scanned',   start_code: '0010501', end_code: '0010600', start_no: 10501, end_no: 10600, qty: 100, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
-  { seg_status: 'pending',   start_code: '0010601', end_code: '0012000', start_no: 10601, end_no: 12000, qty: 1400, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
-  { seg_status: 'in_stock',  start_code: '0012001', end_code: '0020000', start_no: 12001, end_no: 20000, qty: 8000, al_number: null, customer_name: null, consent_at: '2026-10-01T00:00:00Z', do_number: null, open_problems: 0 },
+  { seg_status: 'collected', start_code: '009001', end_code: '009600', start_no: 9001, end_no: 9600, qty: 600, al_number: 'AL-1234', customer_name: 'Ah Seng Farm', consent_at: '2026-10-03T02:00:00Z', do_number: 'DO-1234-01', open_problems: 0 },
+  { seg_status: 'pending',   start_code: '009601', end_code: '010000', start_no: 9601, end_no: 10000, qty: 400, al_number: 'AL-1234', customer_name: 'Ah Seng Farm', consent_at: '2026-10-03T02:00:00Z', do_number: null, open_problems: 0 },
+  { seg_status: 'pending',   start_code: '010001', end_code: '010500', start_no: 10001, end_no: 10500, qty: 500, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
+  { seg_status: 'scanned',   start_code: '010501', end_code: '010600', start_no: 10501, end_no: 10600, qty: 100, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
+  { seg_status: 'pending',   start_code: '010601', end_code: '012000', start_no: 10601, end_no: 12000, qty: 1400, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_id: '41', consent_at: '2026-10-05T02:00:00Z', do_number: null, open_problems: 1 },
+  { seg_status: 'in_stock',  start_code: '012001', end_code: '020000', start_no: 12001, end_no: 20000, qty: 8000, al_number: null, customer_name: null, consent_at: '2026-10-01T00:00:00Z', do_number: null, open_problems: 0 },
 ];
 const PROBLEMS = [
-  { id: 7, kind: 'consent_overlap', status: 'open', seal_from: '0010001', seal_to: '0010050', qty: 50,
+  { id: 7, kind: 'consent_overlap', status: 'open', seal_from: '010001', seal_to: '010050', qty: 50,
     al_number: 'AL-1240', customer_name: 'Kebun Maju', other_al: 'AL-1234', other_customer: 'Ah Seng Farm',
-    detail: 'Seals 0010001 - 0010050 were given twice.', nelos_case_id: 88, created_at: '2026-10-06T00:00:00Z' },
+    detail: 'Seals 010001 - 010050 were given twice.', nelos_case_id: 88, created_at: '2026-10-06T00:00:00Z' },
 ];
 const DELIVERIES = [
-  { id: 5, site: 'UNN 1', status: 'packed', ranges: [{ start: '0030001', end: '0031000' }], packed_by: 'Amy', packed_at: '2026-10-20T01:00:00Z' },
-  { id: 4, site: 'UNN 1', status: 'delivered', ranges: [{ start: '0029001', end: '0030000' }], packed_by: 'Amy', packed_at: '2026-10-18T01:00:00Z', delivered_by: 'Amy', delivered_at: '2026-10-19T01:00:00Z' },
+  { id: 5, site: 'UNN 1', status: 'packed', ranges: [{ start: '030001', end: '031000' }], packed_by: 'Amy', packed_at: '2026-10-20T01:00:00Z' },
+  { id: 4, site: 'UNN 1', status: 'delivered', ranges: [{ start: '029001', end: '030000' }], packed_by: 'Amy', packed_at: '2026-10-18T01:00:00Z', delivered_by: 'Amy', delivered_at: '2026-10-19T01:00:00Z' },
 ];
-// One order of 2,500 from 0040001: the first 1,000 received, the rest to come.
+// One order of 2,500 from 040001: the first 1,000 received, the rest to come.
 const ORDERS = [
-  { id: 3, start_code: '0040001', end_code: '0042500', start_no: 40001, end_no: 42500, qty: 2500, status: 'Ordered', order_date: '2026-10-20', created_by: 'Amy' },
+  { id: 3, start_code: '040001', end_code: '042500', start_no: 40001, end_no: 42500, qty: 2500, status: 'Ordered', order_date: '2026-10-20', created_by: 'Amy' },
 ];
 const HQ_RECEIPTS = [
-  { id: 9, order_id: 3, ranges: [{ start: '0040001', end: '0041000' }], received_by: 'Amy', received_date: '2026-10-22' },
+  { id: 9, order_id: 3, ranges: [{ start: '040001', end: '041000' }], received_by: 'Amy', received_date: '2026-10-22' },
 ];
 const RPCDATA = {
-  seal_missed_scans: [{ al_number: 'AL-1234', customer_name: 'Ah Seng Farm', start_code: '0009550', end_code: '0009560', start_no: 9550, end_no: 9560, qty: 11,
+  seal_missed_scans: [{ al_number: 'AL-1234', customer_name: 'Ah Seng Farm', start_code: '009550', end_code: '009560', start_no: 9550, end_no: 9560, qty: 11,
                         do_before: 'DO-1234-01', do_after: 'DO-1234-02', problem_id: 61, nelos_case_id: 89 }],
-  seal_settle_scan: 'Seals 0009550 - 0009560 (11) settled as delivered on DO DO-1234-01 by Office.',
+  seal_settle_scan: 'Seals 009550 - 009560 (11) settled as delivered on DO DO-1234-01 by Office.',
   seal_nelos_cases: [
-    { id: 88, title: 'Seals 0010001 - 0010050 given twice, already with Ah Seng Farm (AL-1234), for Kebun Maju (AL-1240)', status: 'open', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: 'Admin 2', created_at: '2026-10-06T00:00:00Z' },
-    { id: 80, title: 'Seal 0009001 collected but on no consent', status: 'closed', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: null, created_at: '2026-10-01T00:00:00Z' },
+    { id: 88, title: 'Seals 010001 - 010050 given twice, already with Ah Seng Farm (AL-1234), for Kebun Maju (AL-1240)', status: 'open', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: 'Admin 2', created_at: '2026-10-06T00:00:00Z' },
+    { id: 80, title: 'Seal 009001 collected but on no consent', status: 'closed', assigned_module: 'nursery_ops', assigned_module_label: 'Nursery Operation', assignee_name: null, created_at: '2026-10-01T00:00:00Z' },
   ],
-  seal_hq_summary: [{ last_code: '0042500', next_code: '0042501', hq_received: 6000, hq_stock: 4000, on_the_way: 2000, site_stock: 8000,
-                      last_ordered_code: '0042500', next_order_code: '0042501', pending_receive: 1500 }],
-  seal_hq_stock: [{ start_code: '0031001', end_code: '0033000', start_no: 31001, end_no: 33000, qty: 2000, received_date: '2026-10-15' },
-                  { start_code: '0033001', end_code: '0035000', start_no: 33001, end_no: 35000, qty: 2000, received_date: '2026-10-16' }],
+  seal_hq_summary: [{ last_code: '042500', next_code: '042501', hq_received: 6000, hq_stock: 4000, on_the_way: 2000, site_stock: 8000,
+                      last_ordered_code: '042500', next_order_code: '042501', pending_receive: 1500 }],
+  seal_hq_stock: [{ start_code: '031001', end_code: '033000', start_no: 31001, end_no: 33000, qty: 2000, received_date: '2026-10-15' },
+                  { start_code: '033001', end_code: '035000', start_no: 33001, end_no: 35000, qty: 2000, received_date: '2026-10-16' }],
 };
 
 let fails = 0;
@@ -167,7 +167,7 @@ async function open(browser, port, level, tab) {
                       shared_do_records: [{ do_number: 'DO-1234-01', al_number: 'AL-1234', delivery_date: '2026-10-12' },
                                           { do_number: 'DO-1234-02', al_number: 'AL-1234', delivery_date: '2026-10-14' }],
                       mobile_consent_records: [{ id: 41, al_number: 'AL-1240', customer_name: 'Kebun Maju', consent_qty: 2000, created_at: '2026-10-05T02:00:00Z',
-                        seal_ranges: [{ start: '0010001', end: '0012000' }], signature_data: 'data:image/png;base64,iVBORw0KGgo=', photo_url: null }] };
+                        seal_ranges: [{ start: '010001', end: '012000' }], signature_data: 'data:image/png;base64,iVBORw0KGgo=', photo_url: null }] };
     window.alert = () => {};
     window.confirm = () => true;
   }, { level, segs: SEGMENTS, probs: PROBLEMS, dels: DELIVERIES, rpc: RPCDATA, ords: ORDERS, hqr: HQ_RECEIPTS });
@@ -207,30 +207,30 @@ async function open(browser, port, level, tab) {
     const rowsOf = () => page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim())));
     is(await page.$$eval('#list-table thead th', (t) => t.map((h) => h.textContent.trim())), ['Seal range ▲', 'Qty', 'Customer', 'Consent date', ''],
       'Seal with Customer reads like Seal used: range, qty, customer, consent date, and a button');
-    is(await rowsOf(), [['0009601 – 0010000', '400', 'Ah Seng FarmAL-1234', '03 Oct 2026', 'Key DO'],
-      ['0010001 – 0012000', '2,000', 'Kebun Maju ⚠ 1AL-1240', '05 Oct 2026', 'View consent Key DO']],
+    is(await rowsOf(), [['009601 – 010000', '400', 'Ah Seng FarmAL-1234', '03 Oct 2026', 'Key DO'],
+      ['010001 – 012000', '2,000', 'Kebun Maju ⚠ 1AL-1240', '05 Oct 2026', 'View consent Key DO']],
       'one flat list in seal-number order across customers, and a run part-scanned still reads as one start and end');
-    is((await page.$eval('#list-table', (e) => e.textContent)).includes('0009001'), false, 'a used seal is not listed as with the customer');
+    is((await page.$eval('#list-table', (e) => e.textContent)).includes('009001'), false, 'a used seal is not listed as with the customer');
     await page.click('#nv-sort');
-    is((await rowsOf()).map((r) => r[0]), ['0010001 – 0012000', '0009601 – 0010000'], 'pressing Seal range turns it to descending');
+    is((await rowsOf()).map((r) => r[0]), ['010001 – 012000', '009601 – 010000'], 'pressing Seal range turns it to descending');
     await page.click('#nv-sort');
     await page.click('#list-table [data-consent]');
     await page.waitForFunction(() => /Signature/.test(document.getElementById('modal-body').textContent), null, { timeout: 3000 }).catch(() => {});
     is(await page.$eval('#modal-title', (e) => e.textContent), 'Signed consent', 'View consent opens the signed consent');
     const cm = await page.$eval('#modal-body', (e) => e.textContent.replace(/\s+/g, ' '));
-    is(cm.includes('Kebun Maju') && cm.includes('0010001 – 0012000') && cm.includes('Signature'), true, 'with the seals given and the signature');
+    is(cm.includes('Kebun Maju') && cm.includes('010001 – 012000') && cm.includes('Signature'), true, 'with the seals given and the signature');
     if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_consent.png', fullPage: true });
     await page.evaluate(() => closeModal());
 
-    is(await page.evaluate(() => [range('1101', '1200'), range('1101'), range('0009297', '0009300'), sealCode(1101, 4), range('AB12')]),
-      ['001101 – 001200', '001101', '0009297 – 0009300', '001101', 'AB12'],
+    is(await page.evaluate(() => [range('1101', '1200'), range('1101'), range('009297', '009300'), sealCode(1101, 4), range('AB12')]),
+      ['001101 – 001200', '001101', '009297 – 009300', '001101', 'AB12'],
       'a seal keyed without its zeros reads at least six digits, a wider one keeps its width');
     await page.click('#nb-cab');
     is(await page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].slice(0, 2).map((c) => c.textContent.trim()))),
-      [['0012001 – 0020000', '8,000']], 'pressing the cabinet lists what is in it');
+      [['012001 – 020000', '8,000']], 'pressing the cabinet lists what is in it');
     await page.click('#nb-used');
     is(await page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim()))),
-      [['0009001 – 0009600', '600', 'Ah Seng FarmAL-1234', 'DO-1234-01', '12 Oct 2026']], 'Seal used names the seals, the customer, the DO number and the DO date');
+      [['009001 – 009600', '600', 'Ah Seng FarmAL-1234', 'DO-1234-01', '12 Oct 2026']], 'Seal used names the seals, the customer, the DO number and the DO date');
     if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_used.png', fullPage: true });
     await page.click('#nb-cust');
 
@@ -244,13 +244,13 @@ async function open(browser, port, level, tab) {
     await page.waitForSelector('#hq-view-body table', { timeout: 3000 });
     is(await page.$eval('#blk-last', (e) => e.textContent.includes('Seal in HQ Cabinet')), true, 'block 1 is called Seal in HQ Cabinet');
     is(await page.$eval('#blk-last-qty', (e) => e.textContent), '4,000', 'and counts what is in the cabinet');
-    is(await page.$eval('#blk-last-sub', (e) => e.textContent), 'Last seal 0042500 · next order starts 0042501', 'the last seal and the next order start are a small line under it');
+    is(await page.$eval('#blk-last-sub', (e) => e.textContent), 'Last seal 042500 · next order starts 042501', 'the last seal and the next order start are a small line under it');
     is(await page.$eval('#blk-pending-qty', (e) => e.textContent), '1,500', 'block 2 is the seals still to be received');
     is(await page.$eval('#blk-deliver-qty', (e) => e.textContent), '2,000', 'block 3 is the seals delivering to the nursery');
     is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Seal in HQ Cabinet', 'the view under the blocks opens on the cabinet');
     is(await page.$eval('#blk-last', (e) => e.classList.contains('on')), true, 'and its block is marked as the one showing');
     const cab = await page.$$eval('#hq-view-body tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.trim())));
-    is(cab, [['0031001 – 0035000', '4,000']], 'the cabinet is the seals In HQ only, two receipts that meet as one run');
+    is(cab, [['031001 – 035000', '4,000']], 'the cabinet is the seals In HQ only, two receipts that meet as one run');
     const align = await page.$eval('#hq-view-body table', (t) => [...t.querySelectorAll('th')].map((h, i) =>
       [getComputedStyle(h).textAlign, getComputedStyle(t.querySelector('tbody tr').children[i]).textAlign]));
     is(align.map(([h, d]) => (h === 'start' ? 'left' : h) === (d === 'start' ? 'left' : d)), [true, true], 'every heading sits on the same side as its figures (Qty right over the numbers)');
@@ -263,22 +263,22 @@ async function open(browser, port, level, tab) {
     // + on block 1: order a range, in a window
     await page.click('#btn-order');
     is(await page.$eval('#modal-title', (e) => e.textContent), 'New Seal Order', 'the + opens New Seal Order in a window');
-    is(await page.$eval('#ord-start', (e) => e.value), '0042501', 'the start is filled in after the last seal');
+    is(await page.$eval('#ord-start', (e) => e.value), '042501', 'the start is filled in after the last seal');
     is(await page.$eval('#ord-start', (e) => parseFloat(getComputedStyle(e).fontSize)) >= 16, true, 'the order window is set a size up');
-    await page.fill('#ord-start', '0042601');
+    await page.fill('#ord-start', '042601');
     await page.waitForFunction(() => /would start at/.test(document.getElementById('ord-warn').textContent), null, { timeout: 2000 }).catch(() => {});
-    is((await page.$eval('#ord-warn', (e) => e.textContent)).includes('the next order would start at 0042501'), true, 'a start other than last order + 1 is warned about');
+    is((await page.$eval('#ord-warn', (e) => e.textContent)).includes('the next order would start at 042501'), true, 'a start other than last order + 1 is warned about');
     if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_order.png', fullPage: true });
-    await page.fill('#ord-start', '0042501');
+    await page.fill('#ord-start', '042501');
     await page.waitForFunction(() => !document.getElementById('ord-warn').textContent, null, { timeout: 2000 }).catch(() => {});
     is(await page.$eval('#ord-warn', (e) => e.textContent), '', 'and the warning goes when it is put back');
-    await page.fill('#ord-end', '0052500');
+    await page.fill('#ord-end', '052500');
     await page.waitForFunction(() => /10,000/.test(document.getElementById('ord-msg').textContent), null, { timeout: 2000 }).catch(() => {});
     is((await page.$eval('#ord-msg', (e) => e.textContent)).includes('10,000 seals, 10 rows of 1,000'), true, 'it says how many seals and how many rows of 1,000');
     await page.click('#ord-save');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_orders'), null, { timeout: 2000 }).catch(() => {});
     const ord = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_orders') || {}).rows);
-    is(ord && [ord[0].start_code, ord[0].end_code, ord[0].qty, ord[0].created_by], ['0042501', '0052500', 10000, 'Office'], 'Save writes the order with its range');
+    is(ord && [ord[0].start_code, ord[0].end_code, ord[0].qty, ord[0].created_by], ['042501', '052500', 10000, 'Office'], 'Save writes the order with its range');
     is(await page.isVisible('#modal'), false, 'and the window closes');
     await page.waitForFunction(() => document.getElementById('hq-view-title').textContent === 'Seal pending receive', null, { timeout: 3000 }).catch(() => {});
     is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Seal pending receive', 'and the view below moves to the orders waiting');
@@ -289,10 +289,10 @@ async function open(browser, port, level, tab) {
     await page.waitForSelector('#hq-view-body tbody tr', { timeout: 3000 });
     is(await page.$eval('#blk-pending', (e) => e.classList.contains('on')), true, 'pressing block 2 marks it');
     const prow = await page.$eval('#hq-view-body tbody tr', (r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
-    is([prow[0], prow[1].startsWith('0040001 – 0042500'), prow[2], prow[3]], ['20 Oct 2026', true, 'Amy', '>'], 'the view below lists each order: date, range, by whom, >');
+    is([prow[0], prow[1].startsWith('040001 – 042500'), prow[2], prow[3]], ['20 Oct 2026', true, 'Amy', '>'], 'the view below lists each order: date, range, by whom, >');
     await page.click('#hq-view-body tbody tr button');
     await page.waitForSelector('#hq-view-body .chunk', { timeout: 3000 });
-    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Order : 20 Oct 2026, 0040001 – 0042500 receiving check list', 'the order opens below as its receiving check list');
+    is(await page.$eval('#hq-view-title', (e) => e.textContent), 'Order : 20 Oct 2026, 040001 – 042500 receiving check list', 'the order opens below as its receiving check list');
     is(await page.isVisible('#hq-view-back'), true, 'with a Back to the list');
     const chunks = await page.$$eval('#hq-view-body .chunk', (cs) => cs.map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
     is(chunks.length === 3 && chunks[0].includes('Received by Amy'), true, '2,500 seals as three rows, the first already received');
@@ -307,7 +307,7 @@ async function open(browser, port, level, tab) {
     await page.click('#rcv-save');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_hq_receipts'), null, { timeout: 2000 }).catch(() => {});
     const rcv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_hq_receipts') || {}).rows);
-    is(rcv && [rcv[0].order_id, rcv[0].ranges], [3, [{ start: '0041001', end: '0042500' }]], 'Receive ticked writes one receipt for the ticked rows');
+    is(rcv && [rcv[0].order_id, rcv[0].ranges], [3, [{ start: '041001', end: '042500' }]], 'Receive ticked writes one receipt for the ticked rows');
     await page.click('#hq-view-back');
     await page.waitForSelector('#hq-view-body tbody tr', { timeout: 3000 });
     await page.click('#hq-view-actions button:has-text("History")');
@@ -326,15 +326,15 @@ async function open(browser, port, level, tab) {
     const upd = await page.evaluate(() => window.__UPDATES[0]);
     is([upd && upd.table, upd && upd.row.status, upd && upd.row.delivered_by], ['seal_deliveries', 'delivered', 'Office'], 'Mark delivered writes who and when');
 
-    // Site keys it again -- delivery #4 sent 0029001 - 0030000.
+    // Site keys it again -- delivery #4 sent 029001 - 030000.
     await page.waitForSelector('#hq-view-body .track', { timeout: 3000 });
     await page.click('#hq-view-body .space-y-3 > div:nth-child(2) button:has-text("confirm receive")');
-    await page.fill('#cbox-4 [data-k="start"]', '0029001');
-    await page.fill('#cbox-4 [data-k="end"]', '0029950');
+    await page.fill('#cbox-4 [data-k="start"]', '029001');
+    await page.fill('#cbox-4 [data-k="end"]', '029950');
     await page.waitForFunction(() => /Does not match/.test(document.getElementById('cmsg-4').textContent), null, { timeout: 2000 }).catch(() => {});
-    is((await page.$eval('#cmsg-4', (e) => e.textContent)).includes('50 sent but not keyed: 0029951 – 0030000'), true,
+    is((await page.$eval('#cmsg-4', (e) => e.textContent)).includes('50 sent but not keyed: 029951 – 030000'), true,
       'a short count says which seals were not keyed');
-    await page.fill('#cbox-4 [data-k="end"]', '0030000');
+    await page.fill('#cbox-4 [data-k="end"]', '030000');
     await page.waitForFunction(() => /Matches/.test(document.getElementById('cmsg-4').textContent), null, { timeout: 2000 }).catch(() => {});
     await page.click('#csave-4');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_receipts'), null, { timeout: 2000 }).catch(() => {});
@@ -348,28 +348,28 @@ async function open(browser, port, level, tab) {
     is(await page.$eval('#modal-body', (e) => !!e.querySelector('p')), false, 'and no subtitle');
     is(await page.$eval('#dv-remark', (e) => [e.tagName, !!(e.compareDocumentPosition(document.getElementById('dv-ranges')) & Node.DOCUMENT_POSITION_PRECEDING)]),
       ['TEXTAREA', true], 'Remark is a larger box, under the seal ranges');
-    // Not in the cabinet: 0035001 onward never reached HQ.
-    await page.fill('#dv-ranges [data-k="start"]', '0034501');
-    await page.fill('#dv-ranges [data-k="end"]', '0035500');
+    // Not in the cabinet: 035001 onward never reached HQ.
+    await page.fill('#dv-ranges [data-k="start"]', '034501');
+    await page.fill('#dv-ranges [data-k="end"]', '035500');
     await page.waitForFunction(() => /not in the HQ cabinet/.test(document.getElementById('dv-ranges').textContent), null, { timeout: 2000 }).catch(() => {});
-    is((await page.$eval('#dv-ranges', (e) => e.textContent)).includes('0035001 – 0035500: not in the HQ cabinet'), true, 'a seal not in the HQ cabinet is named');
+    is((await page.$eval('#dv-ranges', (e) => e.textContent)).includes('035001 – 035500: not in the HQ cabinet'), true, 'a seal not in the HQ cabinet is named');
     if (process.env.SEAL_SHOTS) await page.screenshot({ path: process.env.SEAL_SHOTS + '/seal_delivery.png', fullPage: true });
     await page.click('#dv-save');
     is(await page.evaluate(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries')), false, 'and cannot be saved');
     // Backwards.
-    await page.fill('#dv-ranges [data-k="start"]', '0033500');
-    await page.fill('#dv-ranges [data-k="end"]', '0031001');
+    await page.fill('#dv-ranges [data-k="start"]', '033500');
+    await page.fill('#dv-ranges [data-k="end"]', '031001');
     await page.click('#dv-save');
     is(await page.evaluate(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries')), false, 'a range keyed backwards cannot be saved, even before the check has run');
     await page.waitForFunction(() => /before the first/.test(document.getElementById('dv-ranges').textContent), null, { timeout: 2000 }).catch(() => {});
     is((await page.$eval('#dv-ranges', (e) => e.textContent)).includes('The last seal is before the first'), true, 'and says why');
-    await page.fill('#dv-ranges [data-k="start"]', '0031001');
-    await page.fill('#dv-ranges [data-k="end"]', '0033500');
+    await page.fill('#dv-ranges [data-k="start"]', '031001');
+    await page.fill('#dv-ranges [data-k="end"]', '033500');
     await page.waitForFunction(() => !/cabinet|before the first/.test(document.getElementById('dv-ranges').textContent), null, { timeout: 2000 }).catch(() => {});
     await page.click('#dv-save');
     await page.waitForFunction(() => window.__INSERTS.some((x) => x.table === 'seal_deliveries'), null, { timeout: 2000 }).catch(() => {});
     const dv = await page.evaluate(() => (window.__INSERTS.find((x) => x.table === 'seal_deliveries') || {}).rows);
-    is(dv && [dv[0].status, dv[0].packed_by, dv[0].ranges], ['packed', 'Office', [{ start: '0031001', end: '0033500' }]], 'a new delivery is saved Packed, by whoever packed it');
+    is(dv && [dv[0].status, dv[0].packed_by, dv[0].ranges], ['packed', 'Office', [{ start: '031001', end: '033500' }]], 'a new delivery is saved Packed, by whoever packed it');
     is(await page.isVisible('#modal'), false, 'and the window closes');
     await page.waitForSelector('#hq-view-actions button', { timeout: 3000 });
     await page.click('#hq-view-actions button:has-text("History")');
@@ -382,18 +382,18 @@ async function open(browser, port, level, tab) {
     await page.click('[data-tab="report"]');
     await page.waitForSelector('#rp-table table', { timeout: 3000 });
     const rp = await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => [r.children[0].textContent.trim(), r.children[2].textContent.trim()]));
-    is(rp[0], ['0009001 – 0009600', 'Used · on a DO'], 'the report starts at the first seal');
-    is(rp[rp.length - 1][0].endsWith('0042500'), true, 'and runs to the latest ordered');
+    is(rp[0], ['009001 – 009600', 'Used · on a DO'], 'the report starts at the first seal');
+    is(rp[rp.length - 1][0].endsWith('042500'), true, 'and runs to the latest ordered');
     const seen = new Set(rp.map((r) => r[1]));
     is(['Used · on a DO', 'With customer · pending', 'MJM Nursery cabinet', 'Delivering to MJM Nursery', 'HQ cabinet', 'Pending receive at HQ', 'No record'].every((x) => seen.has(x)), true,
       'every place a seal can be is on it, and a gap with no record is said');
-    is(rp.some((r) => r[0] === '0041001 – 0042500' && r[1] === 'Pending receive at HQ'), true, 'an order part not yet received is pending receive');
-    is(rp.some((r) => r[0] === '0029001 – 0030000' && r[1] === 'Delivering to MJM Nursery'), true, 'a delivery not yet received at site is delivering');
+    is(rp.some((r) => r[0] === '041001 – 042500' && r[1] === 'Pending receive at HQ'), true, 'an order part not yet received is pending receive');
+    is(rp.some((r) => r[0] === '029001 – 030000' && r[1] === 'Delivering to MJM Nursery'), true, 'a delivery not yet received at site is delivering');
     const nums = await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => r.children[0].textContent.split('–').map((x) => Number(x.trim()))));
     is(nums.every((r, i) => i === 0 || r[0] === nums[i - 1][nums[i - 1].length - 1] + 1), true, 'every number between the first and the latest is on exactly one row');
     await page.fill('#rp-q', '30500');
     await page.waitForTimeout(400);
-    is(await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => r.children[0].textContent.trim())), ['0030001 – 0031000'], 'a seal number typed finds the range holding it');
+    is(await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => r.children[0].textContent.trim())), ['030001 – 031000'], 'a seal number typed finds the range holding it');
     await page.fill('#rp-q', '');
     await page.waitForTimeout(400);
     is(await page.$$eval('#rp-stats, #rp-stats [data-rs]', (x) => x.length), 0, 'no row of status chips over the report any more');
@@ -420,14 +420,14 @@ async function open(browser, port, level, tab) {
     is(await page.$$eval('#rp-table tbody tr', (t) => t.length), rp.length, 'and ticking All shows the full list again');
     await page.click('body', { position: { x: 5, y: 5 } });
     await page.click('#rp-sort');
-    is(await page.$eval('#rp-table tbody tr', (r) => r.children[0].textContent.trim()), '0041001 – 0042500', 'the sort button turns it to descending');
+    is(await page.$eval('#rp-table tbody tr', (r) => r.children[0].textContent.trim()), '041001 – 042500', 'the sort button turns it to descending');
     await page.click('#rp-sort');
     await page.fill('#rp-from', '9501');
     await page.fill('#rp-to', '12500');
     await page.waitForTimeout(400);
     is(await page.$$eval('#rp-table tbody tr', (t) => t.map((r) => [r.children[0].textContent.trim(), r.children[1].textContent.trim()])),
-      [['0009501 – 0009600', '100'], ['0009601 – 0010000', '400'], ['0010001 – 0010500', '500'], ['0010501 – 0010600', '100'],
-       ['0010601 – 0012000', '1,400'], ['0012001 – 0012500', '500']],
+      [['009501 – 009600', '100'], ['009601 – 010000', '400'], ['010001 – 010500', '500'], ['010501 – 010600', '100'],
+       ['010601 – 012000', '1,400'], ['012001 – 012500', '500']],
       'From and To show only the numbers keyed, a range across either end cut at it');
     await page.click('#rp-status-btn');
     is(await page.$eval('#rp-pop label', (l) => l.textContent.replace(/\s+/g, ' ').trim()), 'All3,000', 'and the counts are of what was keyed');
@@ -440,7 +440,7 @@ async function open(browser, port, level, tab) {
     await page.click('[data-tab="nelos"]');
     await page.waitForSelector('#nelos-table table', { timeout: 3000 });
     const nrows = await page.$$eval('#nelos-table tbody tr', (t) => t.map((r) => r.textContent.replace(/\s+/g, ' ').trim()));
-    is(nrows.length === 1 && nrows[0].includes('Seals 0010001 - 0010050 given twice') && nrows[0].includes('Admin 2'), true,
+    is(nrows.length === 1 && nrows[0].includes('Seals 010001 - 010050 given twice') && nrows[0].includes('Admin 2'), true,
       'the NELOS tab lists the open seal cases, whoever has them');
     is(await page.$eval('#nelos-table a[href*="nelos_case.html"]', (a) => a.getAttribute('href')), '../nelos/nelos_case.html?id=88', 'each opens its case');
     is(await page.evaluate(() => window.__RPC.some((c) => c.fn === 'seal_nelos_cases')), true, 'asked of seal_nelos_cases, not of what this login can see in NELOS');
@@ -449,7 +449,7 @@ async function open(browser, port, level, tab) {
 
     // ── seals nobody scanned: Key DO ──
     is(await page.$$eval('#missed-table tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim()))),
-      [['0009550 – 0009560', '11', 'Ah Seng FarmAL-1234', 'DO-1234-01', 'DO-1234-02', 'Key DO']],
+      [['009550 – 009560', '11', 'Ah Seng FarmAL-1234', 'DO-1234-01', 'DO-1234-02', 'Key DO']],
       'the NELOS tab lists the seals never scanned, with the DO before and after');
     await page.click('#missed-table [data-missed]');
     await page.waitForSelector('#kd-do-pick [data-do]', { timeout: 3000 });
@@ -466,7 +466,7 @@ async function open(browser, port, level, tab) {
     await page.click('#kd-save');
     await page.waitForFunction(() => window.__RPC.some((c) => c.fn === 'seal_settle_scan'), null, { timeout: 2000 }).catch(() => {});
     const settle = await page.evaluate(() => (window.__RPC.find((c) => c.fn === 'seal_settle_scan') || {}).args);
-    is(settle, { p_al: 'AL-1234', p_start: '0009550', p_end: '0009560', p_outcome: 'delivered', p_do: 'DO-1234-01', p_remark: 'found on the truck', p_problem: 61 },
+    is(settle, { p_al: 'AL-1234', p_start: '009550', p_end: '009560', p_outcome: 'delivered', p_do: 'DO-1234-01', p_remark: 'found on the truck', p_problem: 61 },
       'Settle asks the database, naming the customer, the range, the DO and the problem');
     is(await page.isVisible('#modal'), false, 'and the window closes');
     await page.close();
@@ -477,7 +477,7 @@ async function open(browser, port, level, tab) {
     await page.evaluate(() => { window.__RPCDATA.seal_settle_scan = { __error: 'Some of these seals were scanned already. Key only the seals that were not scanned.' }; });
     await page.click('#list-table [data-keydo]');
     await page.waitForSelector('#kd-start', { timeout: 3000 });
-    is([await page.$eval('#kd-start', (e) => e.value), await page.$eval('#kd-end', (e) => e.value)], ['0009601', '0010000'],
+    is([await page.$eval('#kd-start', (e) => e.value), await page.$eval('#kd-end', (e) => e.value)], ['009601', '010000'],
       'Key DO on a Seal with Customer row opens on that range, to be narrowed to what was not scanned');
     await page.check('input[name="kd-out"][value="not_delivered"]');
     is(await page.$eval('#kd-do-box', (e) => e.classList.contains('hidden')), true, 'Not delivered asks for no DO');
@@ -523,6 +523,18 @@ async function open(browser, port, level, tab) {
   const seg = (f) => { const s = fs.readFileSync(path.join(ROOT, 'shared', f), 'utf8'); const i = s.indexOf('FUNCTION public.seal_segments(p_al'); return s.slice(i, s.indexOf('END $$;', i)); };
   is(seg('RUN_ME_seal_missed_scan.sql') === seg('RUN_ME_seal_management.sql') && seg('RUN_ME_seal_management.sql').includes('seal_settled_scans'), true,
     'seal_segments is one function in both files, and it reads the seals the office settled');
+
+  // ── a seal number is keyed as six digits, or it is not saved ──
+  {
+    const src = fs.readFileSync(path.join(ROOT, 'seal', 'seal_dashboard.html'), 'utf8');
+    const lift = (name) => { const i = src.indexOf('function ' + name); return src.slice(i, src.indexOf('\n', i)); };
+    const isSealCode = new Function('SEAL_DIGITS', lift('isSealCode') + '; return isSealCode;')(6);
+    is(['004187', '4187', '04187', '0004187', '00418A', ''].map(isSealCode), [true, false, false, false, false, false],
+      'only six digits is a seal number: 4187, 04187 and 0004187 are refused');
+    is((src.match(/if \((dvBox|box)\.notSix\(\)\) \{ toast\(SEAL_SIX_MSG/g) || []).length, 2, 'a delivery and a site confirm refuse a range that is not six digits');
+    is(/!isSealCode\(s\) \|\| !isSealCode\(en\)/.test(src) && /!isSealCode\(start\) \|\| !isSealCode\(end\)/.test(src), true, 'and so do a New Seal Order and Key DO');
+    is((src.match(/maxlength="6"/g) || []).length >= 6, true, 'every seal box takes at most six digits');
+  }
 
   console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
   process.exit(fails ? 1 : 0);

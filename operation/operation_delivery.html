@@ -1436,7 +1436,25 @@
         // deducts plot stock from the DO's plot+batch, so a line without a batch
         // can't be deducted anywhere. Returns line numbers (1-based) that have
         // plot/breed/qty keyed in but no batch.
-        function linesMissingBatch(container) {
+        /* A DO TOTAL IS ITS LINES ADDED UP. The total box on this screen is keyed
+   on its own, so a DO could be saved reading 109 at the top and 200 on its
+   one line -- DO-B1PXG701 did, and the dashboard (which reads the total)
+   and the Sales Listing (which reads the lines) then disagreed by 91 for
+   the whole of November. Every other door that writes a DO works the
+   total out from the lines; this one refuses a save where the keyed lines
+   do not come to the total. Answers the line sum when they disagree, or
+   null when they agree or no line carries a quantity at all. */
+function linesDisagreeWithTotal(container, total) {
+    if (!container) return null;
+    let sum = 0, keyed = 0;
+    container.querySelectorAll('.item-row').forEach(row => {
+        const q = parseInt((row.querySelector('.item-qty') || {}).value) || 0;
+        if (q) { sum += q; keyed++; }
+    });
+    if (!keyed) return null;
+    return sum === (parseInt(total) || 0) ? null : sum;
+}
+function linesMissingBatch(container) {
             const missing = [];
             let n = 0, filled = 0;
             container.querySelectorAll('.item-row').forEach(itemRow => {
@@ -1479,6 +1497,10 @@
             const missingBatch = linesMissingBatch(document.getElementById('items_container_mng'));
             if (missingBatch.length) {
                 return alert(`Cannot save: every DO needs at least one collection line, and Batch is required on each line (check line ${missingBatch.join(', ')}). The batch tells the system which plot stock this DO deducts from.`);
+            }
+            const lineSumMng = linesDisagreeWithTotal(document.getElementById('items_container_mng'), newQty);
+            if (lineSumMng !== null) {
+                return alert(`Cannot save: the lines add up to ${lineSumMng} but the Total Delivery Qty is ${newQty}. Make the lines and the total the same number.`);
             }
 
             const btn = document.getElementById('save-edit-do-btn');
@@ -1734,6 +1756,12 @@
                 const missingBatch = linesMissingBatch(document.getElementById(`items_container_${rId}`));
                 if (missingBatch.length) {
                     alert(`Cannot save DO ${doNum}: every DO needs at least one collection line, and Batch is required on each line (check line ${missingBatch.join(', ')}).`);
+                    row.classList.add('bg-red-50');
+                    continue;
+                }
+                const lineSumNew = linesDisagreeWithTotal(document.getElementById(`items_container_${rId}`), doTotalQty);
+                if (lineSumNew !== null) {
+                    alert(`Cannot save DO ${doNum}: the lines add up to ${lineSumNew} but the total is ${doTotalQty}. Make the lines and the total the same number.`);
                     row.classList.add('bg-red-50');
                     continue;
                 }

@@ -426,6 +426,14 @@ function sealNo(c) { const d = String(c == null ? '' : c).replace(/\D+/g, ''); r
 function sealWidth(c) { return String(c == null ? '' : c).replace(/\D+/g, '').length; }
 const SEAL_MIN_WIDTH = 6;
 function sealCode(n, w) { const s = String(n); return s.padStart(Math.max(w || 0, SEAL_MIN_WIDTH), '0'); }
+// A SEAL NUMBER IS WRITTEN AS SIX DIGITS. Whatever is keyed here -- an
+// order, a delivery, a site confirm, a Key DO -- must be exactly six digits
+// or it is not saved; the Admin Portal (SEAL_DIGITS in SealRangeInput) and
+// the FC Portal (MANUAL_SEAL_DIGITS) refuse the same. Not padded on the way
+// in: 4187 keyed is refused, so the person reading the roll keys 004187.
+const SEAL_DIGITS = 6;
+function isSealCode(c) { const s = String(c == null ? '' : c).trim(); return s.length === SEAL_DIGITS && /^[0-9]+$/.test(s); }
+const SEAL_SIX_MSG = 'A seal number must be exactly 6 digits, e.g. 004187.';
 // A code as keyed, shown padded. Anything that is not all digits is left alone.
 function sealShow(c) { const s = String(c == null ? '' : c).trim(); return /^[0-9]+$/.test(s) ? sealCode(s, s.length) : s; }
 function sealQty(a, b) { const x = sealNo(a), y = sealNo(b || a); return x == null || y == null ? 0 : Math.abs(y - x) + 1; }
@@ -479,6 +487,8 @@ function RangeBox(host, opts) {
   const self = {
     ranges() { return list.filter((r) => sealNo(r.start) != null && sealNo(r.end || r.start) != null).map((r) => ({ start: r.start.trim(), end: (r.end || r.start).trim() })); },
     incomplete() { return list.some((r) => (r.start.trim() || r.end.trim()) && (sealNo(r.start) == null || sealNo(r.end || r.start) == null)); },
+    // A row keyed but not six digits -- start, or an end that was keyed.
+    notSix() { return list.some((r) => (r.start.trim() || r.end.trim()) && (!isSealCode(r.start) || (r.end.trim() && !isSealCode(r.end)))); },
     set(rs) { list = rs.length ? rs.map((r) => ({ start: r.start, end: r.end })) : [{ start: '', end: '' }]; Object.keys(notes).forEach((k) => delete notes[k]); draw(); changed(); },
     clear() { self.set([]); },
     note(i, html) { notes[i] = html; const el = host.querySelector('[data-note="' + i + '"]'); if (el) el.innerHTML = html || ''; },
@@ -491,8 +501,8 @@ function RangeBox(host, opts) {
       const q = sealQty(r.start, r.end || r.start);
       return '<div class="mb-2"><div class="rrow">'
         + '<div class="text-[11px] font-black text-slate-400 text-center">' + (i + 1) + '</div>'
-        + '<input class="inp mono" data-i="' + i + '" data-k="start" placeholder="First seal" value="' + esc(r.start) + '" inputmode="numeric" autocomplete="off">'
-        + '<input class="inp mono" data-i="' + i + '" data-k="end" placeholder="Last seal" value="' + esc(r.end) + '" inputmode="numeric" autocomplete="off">'
+        + '<input class="inp mono" data-i="' + i + '" data-k="start" placeholder="First seal (6 digits)" maxlength="6" value="' + esc(r.start) + '" inputmode="numeric" autocomplete="off">'
+        + '<input class="inp mono" data-i="' + i + '" data-k="end" placeholder="Last seal (6 digits)" maxlength="6" value="' + esc(r.end) + '" inputmode="numeric" autocomplete="off">'
         + '<div class="text-[11px] font-black text-slate-500 text-right mono" data-q="' + i + '">' + (r.start ? fmt(q) + ' seals' : '') + '</div>'
         + '<button type="button" class="x" data-x="' + i + '" title="Remove">×</button>'
         + '</div><div class="pl-8 text-[11px] font-bold" data-note="' + i + '">' + (notes[i] || '') + '</div></div>';
@@ -508,7 +518,9 @@ function RangeBox(host, opts) {
   host.addEventListener('input', (e) => {
     const i = e.target.dataset.i, k = e.target.dataset.k;
     if (i == null) return;
-    list[i][k] = e.target.value;
+    const clean = String(e.target.value).replace(/[^0-9]+/g, '').slice(0, SEAL_DIGITS);
+    if (clean !== e.target.value) e.target.value = clean;
+    list[i][k] = clean;
     delete notes[i];
     const n = host.querySelector('[data-note="' + i + '"]'); if (n) n.innerHTML = '';
     const r = list[i];
@@ -664,8 +676,8 @@ function openOrder() {
     + '</div>'
     + '<div class="lbl mt-5">Next order seal number</div>'
     + '<div class="grid grid-cols-2 gap-3">'
-    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">Start</label><input id="ord-start" class="inp mono" inputmode="numeric" value="' + esc(sealShow(summary.next_order_code || summary.next_code || '')) + '"></div>'
-    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">End</label><input id="ord-end" class="inp mono" inputmode="numeric" placeholder="Last seal of this order"></div>'
+    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">Start</label><input id="ord-start" class="inp mono" inputmode="numeric" maxlength="6" value="' + esc(sealShow(summary.next_order_code || summary.next_code || '')) + '"></div>'
+    +   '<div><label class="lbl" style="text-transform:none;letter-spacing:0;font-size:14px">End</label><input id="ord-end" class="inp mono" inputmode="numeric" maxlength="6" placeholder="Last seal of this order (6 digits)"></div>'
     + '</div>'
     + '<div id="ord-warn" class="say font-bold mt-3"></div>'
     + '<div id="ord-msg" class="say font-bold mt-2 text-slate-500"></div>'
@@ -708,6 +720,7 @@ async function saveOrder(e) {
   if (!mayManageHQ()) { toast('Not allowed to order seals — ask an admin to grant it on Module Assess Control.', true); return; }
   const s = document.getElementById('ord-start').value.trim(), en = document.getElementById('ord-end').value.trim();
   if (sealNo(s) == null || sealNo(en) == null) { toast('Key the start and the end seal number.', true); return; }
+  if (!isSealCode(s) || !isSealCode(en)) { toast(SEAL_SIX_MSG, true); return; }
   if (sealNo(en) < sealNo(s)) { toast('The end is before the start.', true); return; }
   await checkOrder();
   if (orderBlocked) { toast('Some of these seals were already ordered.', true); return; }
@@ -959,6 +972,7 @@ async function saveDV(e) {
   const rs = dvBox.ranges();
   if (!rs.length) { toast('Key at least one range.', true); return; }
   if (dvBox.incomplete()) { toast('Finish or remove the incomplete range.', true); return; }
+  if (dvBox.notSix()) { toast(SEAL_SIX_MSG, true); return; }
   // Asked again here: the check waits for typing to stop, so a quick Save
   // can arrive before it, or after an answer about what was keyed before.
   await checkDV(dvBox);
@@ -1062,6 +1076,7 @@ async function saveConfirm(id) {
   const rs = box ? box.ranges() : [];
   if (!rs.length) { toast('Key the seals that arrived.', true); return; }
   if (box.incomplete()) { toast('Finish or remove the incomplete range.', true); return; }
+  if (box.notSix()) { toast(SEAL_SIX_MSG, true); return; }
   const diff = compareConfirm(id);
   if (diff && (diff.nm || diff.nx) && !confirm('What site keyed does not match what HQ sent. Save it as it was counted? A NELOS case will open to HQ.')) return;
   const btn = document.getElementById('csave-' + id);
@@ -1571,8 +1586,8 @@ async function openSettle(ctx) {
     + '<div><div class="lbl">Customer</div><div class="font-black text-slate-800">' + esc(ctx.customer || '—') + '</div></div>'
     + '<div><div class="lbl">AL</div><div class="font-black mono text-slate-800">' + esc(ctx.al) + '</div></div></div>'
     + '<div class="grid grid-cols-2 gap-3 mb-4">'
-    + '<div><label class="lbl">First seal</label><input id="kd-start" class="inp mono" inputmode="numeric" value="' + esc(sealShow(ctx.start)) + '"></div>'
-    + '<div><label class="lbl">Last seal</label><input id="kd-end" class="inp mono" inputmode="numeric" value="' + esc(sealShow(ctx.end)) + '"></div></div>'
+    + '<div><label class="lbl">First seal</label><input id="kd-start" class="inp mono" inputmode="numeric" maxlength="6" value="' + esc(sealShow(ctx.start)) + '"></div>'
+    + '<div><label class="lbl">Last seal</label><input id="kd-end" class="inp mono" inputmode="numeric" maxlength="6" value="' + esc(sealShow(ctx.end)) + '"></div></div>'
     + '<div class="lbl">Did these seals go out?</div>'
     + '<div class="flex gap-4 mb-4 text-[13px] font-black text-slate-700">'
     + '<label class="flex items-center gap-2"><input type="radio" name="kd-out" value="delivered" checked> Delivered</label>'
@@ -1616,6 +1631,7 @@ async function saveSettle(e) {
   const out = settleOutcome();
   const doNo = document.getElementById('kd-do').value.trim();
   if (sealNo(start) == null || sealNo(end) == null) { msg.innerHTML = '<span class="text-red-600">Key the first and the last seal.</span>'; return; }
+  if (!isSealCode(start) || !isSealCode(end)) { msg.innerHTML = '<span class="text-red-600">' + SEAL_SIX_MSG + '</span>'; return; }
   if (sealNo(end) < sealNo(start)) { msg.innerHTML = '<span class="text-red-600">The last seal is before the first.</span>'; return; }
   if (out === 'delivered' && !doNo) { msg.innerHTML = '<span class="text-red-600">Pick or key the DO these seals went out on.</span>'; return; }
   e.target.disabled = true;
