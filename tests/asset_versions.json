@@ -50,8 +50,8 @@
   "shared/shared_collection_slots.js@20261119b": "5f0b36574f7c",
   "shared/shared_stock_analysis.js@1": "0e08fd5b3ab3",
   "operation/operation_stock_sales.js@26": "9cddc0681a4c",
-  "pms/pms_styles.css@20261113b": "1b166d278dcf",
-  "pms/pms_app.js@20261113b": "34799e11a9c3",
+  "pms/pms_styles.css@20261125a": "178eda04e5bc",
+  "pms/pms_app.js@20261124b": "ebf6d9d0ea32",
   "reporting/report_menu.js@2": "d3581b02eb2b",
   "reporting/report_sidebar.js@2": "ec1aa56ffda3"
 }

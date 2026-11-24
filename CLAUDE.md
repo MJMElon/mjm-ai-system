@@ -10408,6 +10408,20 @@ So there are two layers, and they are the house pattern:
   the left, so the page still scrolls round it. The name column narrows
   with the window (`tlLabelWidth`, handed to the CSS as `--tl-lw`), and
   because the chart is laid out in pixels a resize draws it again.
+- **TASK REQUEST STATUS IS A LIST ON A DESK AND CARDS ON A PHONE.** It was
+  cards at every width for a day and the office asked for a list on the
+  website view. Over 700px each request is one LINE under column headings
+  (Status, Request, Details, Requested, Decision), and the approve form
+  opens under its own line; under 1180px Details and Requested go under
+  the request, leaving three columns. Under 700px it is the cards: status
+  tabs the full width (three over two under 480px), Approve and Reject
+  42px tall, the approve form one column. **The pieces are the same
+  elements either way** (`.r-st`, `.r-main`, `.r-info`, `.r-who`,
+  `.r-end`); the stylesheet places them, so there is one renderer.
+- **EVERY WORKING TAB USES THE SAME WIDTH.** The Dashboard and Task Request
+  Status were held to 1240px while the other four ran to 1680px, so on a
+  wide screen they sat in a column with space either side. One rule names
+  all six (`body[data-view=…] .wrap`); Settings keeps 1240px, being forms.
 - **THE TASK LIST WAS EMPTIED ON REQUEST**, with
   `shared/RUN_ME_pms_clear_tasks.sql`: every row of `pms_tasks`, nothing
   else. It keeps no copy, so it is not a file to run again by habit.
