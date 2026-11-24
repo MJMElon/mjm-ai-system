@@ -3048,6 +3048,72 @@ own account — **what the ledger still shows standing for a batch the office
 says is gone**, which on a large figure is usually a transfer row nobody
 keyed.
 
+#### AND A BATCH WITH NOTHING STANDING IS NOT ON THE PLOT EITHER
+
+The rule above took the 3rd-culled batches off and the office put two
+screens side by side: the Work Record row for **B6-R on 6 Nov linked ten
+batches** — *"B6-R 在6/11并没有225"* — and the Summary Report for the same
+plot and the same day lists **five**, 228, 234, 242, 244, 247.
+
+**A BUCKET WAS NAMED FOR HAVING AN EVENT, NOT FOR HAVING SEEDLINGS.**
+`linkedQty` builds a bucket per batch the plot has ever had a movement for
+and then asked ONE question of it — has it been 3rd culled — so a batch
+that arrived, left again and closes at nought was named exactly like one
+standing there. **On a -R plot that is most of them**, which is why the
+office saw it here first: a replant plot is populated entirely by
+`Cull3_Transfer_In` and emptied by transfers on, sales and approved
+calibrations, so a bucket with no seedlings left is the ordinary case
+rather than the odd one. 225 was corrected away by an approved
+calibration, 227 was transferred on, 233 is a transfer somebody keyed at
+nought — an event and never a seedling.
+
+**IT COSTS THE FIGURE NOTHING, which is what makes it safe to ship on its
+own.** A bucket closing at nought contributes nought to the quantity, so
+only the NAMES move — and the names are what the office reads the column
+for. The check says so in its own first line, and `0 of capacity moves` is
+the answer to expect.
+
+Four things in it, and three are rules this file already has:
+
+- **NOUGHT EXACTLY, never `<= 0`.** A NEGATIVE balance is kept and still
+  named, because the Summary Report draws one and a plot reading below
+  nought is a figure to go and look into — usually a transfer row nobody
+  keyed, which is the same thing section 2 of the check above already
+  says. Hiding it would turn the one visible symptom of a short ledger
+  into silence. `qty` is deliberately not floored either, for the same
+  reason.
+- **INTERROW ANSWERS DIFFERENTLY, and it FALLS OUT rather than being a
+  second condition.** The test is `per[k].closing`, which is `liveCount`
+  with that row's own `opts` — so a batch 2nd culled to nought is gone for
+  every job and **standing for Interrow Spraying**, which sprays the
+  ground between the rows and keeps the culling in. The same plot and
+  batch therefore answers two ways on two rows of one day, which is the
+  interrow rule working and not a disagreement; the check prints both
+  lines side by side so nobody reports it as one.
+- **A 3RD-CULLED BATCH IS STILL THE OTHER RULE'S.** `empty` is taken out
+  of `here`, which is what the gone rule has already finished with, so a
+  batch that went that way keeps its own sentence (`goneBatches`,
+  `goneQty`) and the hover still names the balance it is not counting. Two
+  rules, two reasons, two sentences.
+- **A PLOT WHOSE BATCHES ARE ALL EMPTY SAYS SO** (`allEmpty`,
+  `emptyBatches`). A bare dash there reads as *no answer* about a plot the
+  batch report has a perfectly good answer for, so the cell names what the
+  plot used to hold and says the report agrees — the same choice `allGone`
+  made one rule along.
+
+**Nothing to run in the database.** The whole of it is in
+`shared_plot_movement.js` and the batch cell.
+`shared/CHECK_which_batches_leave_the_link.sql` is the handover: every
+record that loses a name, the names, the plot and batch behind them, the
+interrow half printed rather than merely absent, and every negative
+balance named on its own account. **"nothing to report" is a real answer**
+and means the list and the Summary Report already agree everywhere.
+
+`tests/a_batch_with_nothing_standing_is_not_on_the_plot.cjs` drives the
+shipped reader over the office's own B6-R and then the real page in a real
+browser; **12 of its 19 checks fail on the build the office is on**, the
+first in their own figures.
+
 ### A keyed batch that agrees with the ledger carries the mark
 
 *"如果FC填的batch/人为填的batch=本来用link的话的batch 那就show link的icon

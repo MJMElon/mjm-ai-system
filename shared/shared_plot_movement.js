@@ -433,10 +433,41 @@
     let goneQty = 0;
     gone.forEach(k => { goneQty += per[k].closing; });
 
+    /* AND A BATCH WITH NOTHING STANDING IS NOT ON THE PLOT EITHER.
+
+       The office put the two screens side by side: B6-R on 6 Nov linked
+       *"225, 227, 228, 233, 234, 238, 240, 242, 244, 247"* and the Summary
+       Report for the same plot and the same day lists **228, 234, 242, 244,
+       247** — *"B6-R 在6/11并没有225"*. The five extra all had movement on
+       that plot at some point and NOTHING LEFT by the work date.
+
+       A bucket was named for having an EVENT, not for having seedlings. So
+       a batch that arrived and then went — sold, transplanted on, culled —
+       was offered for ever afterwards, and on a -R plot, which is populated
+       entirely by transfers in and emptied again, that is most of them.
+
+       IT COSTS THE FIGURE NOTHING, which is what makes it safe: a bucket
+       closing at nought adds nought, so `qty` is the same number before and
+       after. Only the names change.
+
+       NOUGHT EXACTLY, never `<= 0`. A NEGATIVE balance is a figure to look
+       into — the Summary Report draws one for that reason and this file
+       deliberately does not floor it (see `qty` below), so a work record
+       that stopped naming the batch would be quietly disagreeing with the
+       report about the very row somebody has to go and fix.
+
+       AND INTERROW ANSWERS DIFFERENTLY, which falls out rather than being a
+       second rule: `closing` is `liveCount` with this row's own options, so
+       a batch whose 2nd culling takes it to nought is EMPTY for the other
+       three jobs and still STANDING for interrow — which is the whole of
+       what keepCull2 says, the polybags being where they were. */
+    const empty = new Set(here.filter(k => per[k].closing === 0));
+    const standing = here.filter(k => !empty.has(k));
+
     let culledBal = 0;
-    here.forEach(k => { if (leftBy.has(k)) culledBal += Math.max(0, per[k].closing); });
+    standing.forEach(k => { if (leftBy.has(k)) culledBal += Math.max(0, per[k].closing); });
     const excl = !!(opts && opts.exclBal) && culledBal > 0;
-    const keys = excl ? here.filter(k => !leftBy.has(k)) : here;
+    const keys = excl ? standing.filter(k => !leftBy.has(k)) : standing;
     /* ASKED PER BUCKET, never over the plot as a whole, because the
        supersede rule is per plot-and-batch: a plot with one batch 3rd
        culled and one not has some of its 2nd culling taken off and some of
@@ -488,7 +519,7 @@
       /* The balance left behind a transfer out — see "the culled balance"
          above — and whether this figure has it taken off. */
       culledBal: Math.round(culledBal),
-      culledBatches: here.filter(k => leftBy.has(k)).map(k => per[k].label),
+      culledBatches: standing.filter(k => leftBy.has(k)).map(k => per[k].label),
       exclBal: excl,
       /* The batches this plot no longer holds, and what the ledger still
          showed for them — COUNTED AND NAMED rather than dropped in silence,
@@ -500,10 +531,24 @@
             .sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true }))
         : [],
       goneQty: Math.round(goneQty),
+      /* The batches that had movement on this plot and nothing left standing
+         by the work date — see the empty rule above. They are NOT a figure:
+         each one adds nought, so there is nothing for a screen to price or
+         to explain away. The names are here so the one case that needs a
+         sentence can have one. */
+      emptyBatches: empty.size
+        ? here.filter(k => empty.has(k)).map(k => per[k].label)
+            .sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true }))
+        : [],
       /* Nothing of this plot is standing any more: every batch it had has
          been 3rd culled. The quantity really is nought, which is a different
          statement from "could not be worked out" and has to read as one. */
-      allGone: gone.size > 0 && !here.length
+      allGone: gone.size > 0 && !standing.length,
+      /* The same sentence for the other way a plot empties — everything that
+         was here has gone without a 3rd culling of its own. Asked only where
+         NO batch was culled, so the harder fact above keeps the cell when
+         both are true. */
+      allEmpty: !gone.size && empty.size > 0 && !standing.length
     };
   }
 
