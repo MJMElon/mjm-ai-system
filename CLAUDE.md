@@ -3071,6 +3071,69 @@ worth reading down.
   office's own override and is MEANT to differ; marking one that happens to
   agree would say nothing. One line the day they ask.
 
+#### AND A CELL SOMEBODY TYPED INTO HAD NO MARK AT ALL
+
+The mark above shipped, the office looked at the next row down and said it:
+*"这个链接的icon出来了 但是因为自己有打字 所以check的时候底下没有线 我要线"*.
+
+**THE SCREEN WAS WORSE THAN THEIR SENTENCE, and only rendering it said so.**
+Driven through the real page, every state of those two columns answered:
+
+| | |
+|---|---|
+| linked | 🔗 green dotted, hover explains it |
+| keyed AND agreeing | 🔗 green dotted, hover explains it |
+| keyed and NOT agreeing | **nothing at all** |
+| keyed quantity | **nothing at all** |
+| frozen at Check | grey solid, hover explains it |
+| checked + keyed batch | **nothing at all** |
+
+So on a CHECKED row the quantity the system filled in carried a line and the
+batch THEY had typed carried none — which is the row they were looking at —
+and it was true unchecked too, and of the QUANTITY as well as the batch. One
+batch is the example, never the scope: both wear `.qty-keyed` now.
+
+**A cell with something to say has to look like one**, or the only cells
+anybody can hover are the ones the system filled in. That is the rule worth
+keeping, and it is not a wording question: three of those six states had a
+sentence written for them and no way to reach it.
+
+Three things in it:
+
+- **DOTTED LIKE THE LINK AND NEVER GREEN.** The green is the batch report's
+  own answer, and the whole of what the 🔗 was asked for one message earlier
+  is reading down this column for the rows that are NOT it. A keyed value in
+  the report's colour would undo that in one line of CSS, so the test asks
+  for the two colours to DIFFER rather than pinning either.
+- **NO COLOUR OF ITS OWN.** The mark is the line. Recolouring would move a
+  keyed figure away from the column it is read down with.
+- **IT NAMES WHAT THE REPORT SAYS where it can.** `recBatches` had already
+  worked the link out to decide the mark and was throwing it away on the
+  disagreeing answer; that is the one thing somebody reading down for the
+  unmarked rows wants. **A CHECKED row is the exception** and returns before
+  the ledger is read at all, so there is nothing to name and the sentence
+  says so instead — a settled row is not re-read, not even to describe
+  itself. The quantity's says how to put it back on the link, which is a
+  PRESS (*Use the linked amount*) and not something anybody would guess.
+
+`tests/a_keyed_cell_wears_a_mark.cjs` is 17 checks and **9 fail on the
+previous code**, the headline one naming the office's own cells: *nothing on
+either column is left bare → got ["240","🔗 240, 241","241","241"]*. It finds
+a row by WHAT IT IS and never by the text in the cell — three of its seven
+rows read `241` — because a map keyed on the text drops four of the states on
+the floor and answers *row not drawn* about a row that is on the screen,
+which is the quietest way for a check like this to pass over the thing it is
+for. That was the first version, and it is in the file as a comment.
+
+**And the check beside it in `a_batch_3rd_culled_is_off_the_plot.cjs` was
+pinned to the wrong thing** — *the row left to check* asserted **no class at
+all**, which was true of that build and is not what it was protecting. It
+asks whether the cell wears the REPORT's mark now. A test that pins the exact
+spelling of a line is a test that fails on a change which altered nothing it
+was about, which this file already says one screen along.
+
+**Nothing to run in the database.**
+
 ### A -R plot with nothing in it is not drawn at all
 
 *"没有东西的R plot不要出现"*, over PLOT N3-R carrying ten tasks, batch 241

@@ -362,8 +362,16 @@ async function boot(browser) {
     const agree = await cell(902, 'batch'), differ = await cell(903, 'batch');
     check('a keyed batch that matches the report carries the mark',
           [agree.text, agree.cls], ['🔗 241', 'qty-linked']);
+    /* WHAT THIS CHECK IS ABOUT is that the row left to check does not wear
+       the REPORT's mark — the office reads down this column for the ones
+       without the 🔗. It used to be written as "no class at all", which was
+       true of that build and is not what it was protecting: the office then
+       asked for a line on a cell they had typed into
+       (a_keyed_cell_wears_a_mark.cjs), and this failed on a change that
+       altered nothing it was about. */
     check('…and the one that does not is the row left to check',
-          [differ.text, differ.cls], ['240, 241', '']);
+          [differ.text, /🔗/.test(differ.text), differ.cls === 'qty-linked'],
+          ['240, 241', false, false]);
     check('the mark says it is keyed AND agreed, not that it was filled in',
           /nothing to check/i.test(agree.tip), true);
     const claim = await cell(904, 'batch');
