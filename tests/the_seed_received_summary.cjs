@@ -151,10 +151,10 @@ const server = http.createServer((req, res) => {
   ok(sb && sb.main.join('|') === 'Dashboard', 'main menu: Dashboard', sb && sb.main);
   ok(sb && sb.cats.map(c => c.label).join('|') === 'Seed Procurement & Receiving|Sales & Marketing|Nursery Operations|Audit & Compliance|Inventory & Stock Control|Nursery Performance & Analytics', 'six categories, in the order asked', sb && sb.cats.map(c => c.label));
   ok(sb && sb.cats.every(c => c.icon), 'every category has an icon');
-  ok(sb && sb.cats.slice(1).every(c => c.soon && c.disabled) && !sb.cats[0].soon && !sb.cats[0].disabled, 'the other five say Coming soon and cannot be opened', sb && sb.cats);
+  ok(sb && sb.cats.filter(c => c.id !== 'seed-proc' && c.id !== 'audit').every(c => c.soon && c.disabled) && !sb.cats[0].soon && !sb.cats[0].disabled && !sb.cats[3].soon, 'the categories with no report say Coming soon and cannot be opened (Audit & Compliance has Site Audit)', sb && sb.cats);
   ok(sb && sb.active.join() === 'home' && sb.width === 260 && sb.x === 0, 'on the Dashboard: Dashboard is highlighted, the sidebar is 260px on the left', sb && [sb.active, sb.width, sb.x]);
   ok(sb && sb.activeBg === 'rgb(234, 243, 237)|rgb(36, 107, 74)', 'the active item is light green with dark green text', sb && sb.activeBg);
-  ok(await page.$$eval('#rs a[href]', as => as.map(a => a.getAttribute('href')).join('|')) === 'nursery_dashboard.html|nursery_dashboard.html#seed|reporting_admin.html', 'no dummy routes: Dashboard, Seed Summary and the way back are the only links', await page.$$eval('#rs a[href]', as => as.map(a => a.getAttribute('href'))));
+  ok(await page.$$eval('#rs a[href]', as => as.map(a => a.getAttribute('href')).join('|')) === 'nursery_dashboard.html|nursery_dashboard.html#seed|nursery_dashboard.html#audit|reporting_admin.html', 'no dummy routes: Dashboard, Seed Summary, Site Audit and the way back are the only links', await page.$$eval('#rs a[href]', as => as.map(a => a.getAttribute('href'))));
   await page.click('#rs [data-rs-cat="sales"]', { force: true }).catch(() => {}); await page.waitForTimeout(80);
   ok((await SB()).cats[1].open === false && !(await vis('#dash-seed')), 'a Coming soon category does nothing when pressed');
   await page.click('#rs [data-rs-cat="seed-proc"]'); await page.waitForTimeout(250);
@@ -460,9 +460,9 @@ const server = http.createServer((req, res) => {
   ok(sb.width === 72, 'collapsed: 72px', sb.width);
   const gaps = await page.$$eval('#rs .rs-cat', bs => bs.map(b => Math.round(b.getBoundingClientRect().height)));
   ok(gaps.every(h => h === gaps[0]), 'collapsed: every category icon sits on the same rhythm', gaps);
-  await page.hover('#rs [data-rs-cat="audit"]'); await page.waitForTimeout(60);
+  await page.hover('#rs [data-rs-cat="inventory"]'); await page.waitForTimeout(60);
   const tipT = await page.evaluate(() => { const t = document.querySelector('.rs-tip'); return t.style.display === 'none' ? '' : t.textContent; });
-  ok(/Audit & Compliance/.test(tipT) && /Coming soon/.test(tipT), 'collapsed: a tooltip names the category', tipT);
+  ok(/Inventory & Stock Control/.test(tipT) && /Coming soon/.test(tipT), 'collapsed: a tooltip names the category', tipT);
   const chartW = await page.evaluate(() => document.querySelector('#dash-seed .c1 svg').getAttribute('width'));
   ok(+chartW > 1000, 'collapsed: the chart is redrawn into the room it got back', chartW);
   await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(900);
