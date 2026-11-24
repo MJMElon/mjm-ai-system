@@ -15,7 +15,7 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="report_menu.js?v=2"></script>
+<script src="report_menu.js?v=1"></script>
 <script src="report_sidebar.js?v=2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/shared_responsive.css?v=1">
@@ -144,32 +144,6 @@
   .rep-stat-l { font-size:11px; font-weight:600; color:var(--ink-2); }
   .rep-stat-v { font-size:17px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums; }
   .rep-open { font-size:12px; font-weight:600; color:var(--green); }
-
-  /* Site Audit: the rotation grid. A plot is two rows (Collection, Transplanting)
-     across twelve months; a cell is an actual figure (solid) or a plan (dashed). */
-  .sa-filters { display:grid; grid-template-columns:repeat(3, minmax(0,180px)) 1fr; gap:12px 16px; align-items:end; }
-  .sa-legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); align-items:center; }
-  .sa-legend i { display:inline-block; width:22px; height:14px; border-radius:4px; vertical-align:-3px; margin-right:6px; }
-  .sa-grid-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .sa-grid { display:grid; grid-template-columns:88px 96px repeat(12, minmax(60px,1fr)); gap:6px; min-width:980px; font-variant-numeric:tabular-nums; }
-  .sa-mh { text-align:center; font-size:13px; font-weight:600; color:var(--ink-2); padding:4px 0; }
-  .sa-mh.now { color:#B65252; font-weight:700; }
-  .sa-plot { grid-row:span 2; align-self:center; }
-  .sa-plot b { display:block; font-size:15px; color:var(--ink); }
-  .sa-plot span { font-size:12px; color:var(--ink-2); }
-  .sa-kind { align-self:center; font-size:12px; font-weight:600; color:var(--ink-2); }
-  .sa-cell { height:50px; border:1px solid var(--line); border-radius:8px; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center;
-             font-size:13px; font-weight:600; line-height:1.15; cursor:default; }
-  .sa-cell small { font-size:11px; font-weight:500; }
-  .sa-cell.fut { background:#EEF0EA; border-color:#EEF0EA; }
-  .sa-cell.c1 { background:#F5E6C8; border-color:#F5E6C8; color:#5B3F12; }
-  .sa-cell.c2 { background:#DDA04B; border-color:#DDA04B; color:#3F2A08; }
-  .sa-cell.c3 { background:#B8730E; border-color:#B8730E; color:#fff; }
-  .sa-cell.t1 { background:#2E7D4F; border-color:#2E7D4F; color:#fff; }
-  .sa-cell.pc { border:2px dashed #B8732A; color:var(--ink-2); font-weight:500; }
-  .sa-cell.pt { border:2px dashed #2E7D4F; color:var(--ink-2); font-weight:500; }
-  .sa-gap { grid-column:1 / -1; height:6px; }
-  table.bd td.h-ok { color:var(--green); font-weight:600; }
 
   /* ── Responsive: tablet, then phone ── */
   @media (max-width:1100px) {
@@ -321,65 +295,6 @@
         </span>
         <span class="rep-open" id="card-seed-scope">Open report →</span>
       </button>
-      <button class="rep-card" id="card-audit" data-open="audit">
-        <span class="rep-top">
-          <span class="rep-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 8.2-8 9-4.8-.8-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>
-          <span>
-            <span class="rep-cat">Audit &amp; Compliance</span>
-            <span class="rep-name" style="display:block">Site Audit</span>
-            <span class="rep-sub" style="display:block">Collection and transplanting rotation by plot and month against plan, and seedling height against the 1.5 m mark.</span>
-          </span>
-        </span>
-        <span class="rep-stats">
-          <span><span class="rep-stat-l">Plots</span><br><span class="rep-stat-v" id="card-audit-n">…</span></span>
-          <span><span class="rep-stat-l">Collected</span><br><span class="rep-stat-v" id="card-audit-col">…</span></span>
-          <span><span class="rep-stat-l">Transplanted</span><br><span class="rep-stat-v" id="card-audit-tr">…</span></span>
-        </span>
-        <span class="rep-open" id="card-audit-scope">Open report →</span>
-      </button>
-    </div>
-  </section>
-
-
-  <section id="dash-audit" data-view="audit" class="stack hidden">
-    <div class="card">
-      <div class="sa-filters">
-        <label class="field"><span>Nursery</span>
-          <select id="sa-nursery"><option value="BNN">BNN</option><option value="UNN1">UNN 1</option><option value="UNN2">UNN 2</option></select>
-        </label>
-        <label class="field"><span>Year</span><select id="sa-year"></select></label>
-        <label class="field"><span>Height month</span><select id="sa-hmonth"></select></label>
-        <div></div>
-      </div>
-    </div>
-    <div id="sa-msg" class="card"><div class="empty">Loading the site audit…</div></div>
-    <div id="sa-body" class="stack hidden">
-      <div class="kpis" id="sa-kpis"></div>
-      <div class="card">
-        <div class="card-head">
-          <div><h2 class="card-title" id="sa-rot-title">Collection &amp; Transplanting Rotation</h2>
-            <div class="card-sub">Collection plan = 90% of what was transplanted into the plot 9 months earlier. Transplanting plan = what was transplanted 10 months earlier. % is the collection against the plot capacity.</div></div>
-          <div class="sa-legend">
-            <span><i style="background:#F5E6C8"></i>Collected &lt;40%</span>
-            <span><i style="background:#DDA04B"></i>40–79%</span>
-            <span><i style="background:#B8730E"></i>≥80%</span>
-            <span><i style="border:2px dashed #B8732A"></i>Collection plan</span>
-            <span><i style="background:#2E7D4F"></i>Transplanted</span>
-            <span><i style="border:2px dashed #2E7D4F"></i>Transplanting plan</span>
-          </div>
-        </div>
-        <div class="sa-grid-wrap"><div class="sa-grid" id="sa-grid"></div></div>
-        <div class="note" id="sa-rot-note" style="margin-top:10px"></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div><h2 class="card-title" id="sa-h-title">Seedling Height</h2>
-            <div class="card-sub">Average of each plot's readings on its last Seedling Height audit of the month, in metres. Suitable height is 1.5 m.</div></div>
-          <div class="legend"><span><i style="background:var(--green)"></i>Average height</span><span><i class="ln red"></i>Suitable height 1.5 m</span></div>
-        </div>
-        <div class="chart" id="sa-hchart"></div>
-        <div class="tbl-wrap" style="margin-top:16px"><table class="bd" id="sa-htable"></table></div>
-      </div>
     </div>
   </section>
 
@@ -541,102 +456,7 @@ function labelOf(key, by) {
   return key || '—';
 }
 
-/* ═══ Site Audit ═══════════════════════════════════════════════════════
-   The office's own sheet "Site Audit Lines by EW" ([01] Nursery Dashboard
-   2026), read off the system rather than typed into a sheet. Per plot and
-   month:
-     Collection     = seedlings out of the plot on a delivery order, by the
-                      DO's delivery date (shared_do_records, cancelled out)
-     Collection %   = Collection / plot capacity, rounded DOWN to a whole %
-     Collection plan = 90% of what was transplanted into the plot 9 months
-                      earlier (the sheet's  Sasaran = transplant x 0.9)
-     Transplanting  = the batch report's Transplanted rows into the plot
-                      (shared_inventory_logs), by the day keyed on Tab 3
-     Transplanting plan = what was transplanted 10 months earlier
-     Capacity       = the plot capacity keyed on Work Maintenance > Setting
-                      (nops_maint_plot_qty), the sheet's  Kapasiti
-     Height         = Seedling Height audits (audit_height_records), a plot
-                      being the mean of its readings on its LAST audit day of
-                      the month, in metres against 1.5 m.
-   Pure, so the test drives the real thing. */
-const SA_SUITABLE_M = 1.5;
-const SA_RANGES = { BNN: ['B', 14], UNN1: ['U', 18], UNN2: ['N', 20] };
-const saNurKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-const saKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(^|[A-Z])0+(\d)/g, '$1$2');
-const saIsReplant = s => /-R\d*$/i.test(String(s || '').trim());
-function saDay(r) {
-  if (r.transaction_date) return String(r.transaction_date).slice(0, 10);
-  const m = String(r.remark || '').match(/Date:\s*(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : String(r.created_at || '').slice(0, 10);
-}
-function saShift(ym, by) {
-  const y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + by;
-  const yy = y + Math.floor(m / 12), mm = ((m % 12) + 12) % 12 + 1;
-  return yy + '-' + String(mm).padStart(2, '0');
-}
-/* The plots of a nursery: Seedling Stock's list (shared_plots), the ranges
-   only where Seedling Stock holds none for it. Replant (-R) plots are not
-   on the office's sheet and are left off. */
-function saPlotsOf(sharedPlots, nursery) {
-  const want = saNurKey(nursery);
-  const seen = new Set(), out = [];
-  (sharedPlots || []).forEach(p => {
-    if (saNurKey(p.nursery_name) !== want || saIsReplant(p.plot_name)) return;
-    const k = saKey(p.plot_name); if (!k || seen.has(k)) return;
-    seen.add(k); out.push(String(p.plot_name).trim());
-  });
-  if (!out.length && SA_RANGES[want]) { const [L, n] = SA_RANGES[want]; for (let i = 1; i <= n; i++) out.push(L + i); }
-  const num = s => { const m = String(s).match(/\d+/); return m ? +m[0] : 0; };
-  return out.sort((a, b) => num(a) - num(b) || a.localeCompare(b));
-}
-/* plots: names; capacity: {key: qty}; transplants / sales: [{plot, day, qty}]. */
-function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
-  const sum = rows => { const o = {}; (rows || []).forEach(r => {
-    const k = saKey(r.plot), ym = String(r.day || '').slice(0, 7);
-    if (!k || ym.length !== 7) return;
-    (o[k] || (o[k] = {}))[ym] = ((o[k] || {})[ym] || 0) + (Number(r.qty) || 0);
-  }); return o; };
-  const T = sum(transplants), S = sum(sales);
-  return (plots || []).map(name => {
-    const k = saKey(name), cap = Number((capacity || {})[k]) || 0;
-    const t = ym => (T[k] && T[k][ym]) || 0, c = ym => (S[k] && S[k][ym]) || 0;
-    const months = [];
-    for (let m = 1; m <= 12; m++) {
-      const ym = year + '-' + String(m).padStart(2, '0');
-      const col = c(ym), tr = t(ym);
-      months.push({
-        ym, future: !!todayYM && ym > todayYM,
-        col, colPct: cap > 0 && col > 0 ? Math.floor(col / cap * 100) : null,
-        colPlan: Math.round(t(saShift(ym, -9)) * 0.9),
-        tr, trPlan: t(saShift(ym, -10)),
-      });
-    }
-    return { plot: name, key: k, cap, months,
-             colTotal: months.reduce((a, x) => a + x.col, 0), trTotal: months.reduce((a, x) => a + x.tr, 0) };
-  });
-}
-/* records: audit_height_records rows. → { [plotKey]: { [ym]: metres } } */
-function buildHeights(records, nursery, year) {
-  const want = saNurKey(nursery), last = {};
-  (records || []).forEach(r => {
-    if (saNurKey(r.nursery) !== want) return;
-    const h = Number(r.avg_height); if (!(h > 0)) return;
-    const d = String(r.date || '').slice(0, 10); if (d.slice(0, 4) !== String(year)) return;
-    const k = saKey(r.plot), ym = d.slice(0, 7), id = k + '|' + ym;
-    const cur = last[id];
-    if (!cur || d > cur.day) last[id] = { k, ym, day: d, vals: [h] };
-    else if (d === cur.day) cur.vals.push(h);
-  });
-  const out = {};
-  Object.values(last).forEach(x => {
-    const mean = x.vals.reduce((a, b) => a + b, 0) / x.vals.length;
-    (out[x.k] || (out[x.k] = {}))[x.ym] = Math.round(mean) / 100;
-  });
-  return out;
-}
-
-if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, reportBlocks, labelOf, MAX_DAMAGE_PCT,
-  saKey, saNurKey, saDay, saShift, saPlotsOf, buildRotation, buildHeights, SA_SUITABLE_M };
+if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, reportBlocks, labelOf, MAX_DAMAGE_PCT };
 </script>
 <script>
 (function () {
@@ -668,8 +488,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
      off the MENU, so a report is named in one place. ── */
   const MENU = window.MJM_REPORT_MENU;
   const VIEWS = { home: { sub: 'Every report at a glance. Open one from its card or from the menu.' },
-                  seed: { sub: 'Seed expected against actual seed received, and seed damage against the 5% maximum, read off the batch report.' },
-                  audit: { sub: 'Collection and transplanting rotation by plot against plan, and seedling height, read off the batch report, the delivery orders and the height audits.' } };
+                  seed: { sub: 'Seed expected against actual seed received, and seed damage against the 5% maximum, read off the batch report.' } };
   function menuEntry(v) {
     const main = (MENU.main || []).find(i => i.view === v);
     if (main) return { item: main, cat: null };
@@ -687,7 +506,6 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     document.title = (m ? m.item.label : 'Dashboard') + ' — Nursery Management Reporting';
     if (window.MJMReportSidebar && SIDEBAR && m) MJMReportSidebar.setActive(m.item.id);
     if (v === 'seed' && LOADED) render();
-    if (v === 'audit' && SA.loaded) saRender();
   }
   let SIDEBAR = null;
   function mountSidebar(v) {
@@ -1251,155 +1069,6 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     $('card-seed-scope').textContent = (y ? y + ' · ' : '') + 'Open report →';
   }
 
-  /* ═══ Site Audit: read, then draw ═══════════════════════════════════ */
-  const SA = { loaded: false };
-  async function saAll(make) {
-    const out = [], PG = 1000;
-    for (let p = 0; p < 60; p++) {
-      const { data, error } = await make().range(p * PG, p * PG + PG - 1);
-      if (error) throw error;
-      out.push(...(data || []));
-      if (!data || data.length < PG) break;
-    }
-    return out;
-  }
-  async function saLoad() {
-    const soft = (pr, what) => pr.catch(e => { SA.missing.push(what + ': ' + (e.message || e)); return []; });
-    SA.missing = [];
-    const [plots, logs, dos, caps, heights] = await Promise.all([
-      soft(saAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name').order('plot_name')), 'plot list'),
-      saAll(() => _supabase.from('shared_inventory_logs').select('id, plot_name, quantity_change, transaction_date, created_at, remark')
-        .eq('transaction_type', 'Transplanted').order('id', { ascending: true })),
-      soft(saAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5')
-        .order('id', { ascending: true })), 'delivery orders'),
-      soft(saAll(() => _supabase.from('nops_maint_plot_qty').select('nursery, plot, qty').order('plot')), 'plot capacity'),
-      soft(saAll(() => _supabase.from('audit_height_records').select('nursery, plot, avg_height, date').order('date')), 'height audits'),
-    ]);
-    SA.plots = plots;
-    SA.transplants = logs.map(r => ({ plot: r.plot_name, day: saDay(r), qty: Number(r.quantity_change) || 0 }));
-    SA.sales = [];
-    dos.forEach(d => {
-      if (d.status === 'Cancelled' || String(d.remark || '').includes('[CANCELLED]')) return;
-      const day = String(d.delivery_date || '').slice(0, 10);
-      for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) SA.sales.push({ plot: d['plot_' + i], day, qty: q }); }
-    });
-    SA.caps = caps; SA.heights = heights;
-    const years = new Set();
-    SA.transplants.concat(SA.sales).forEach(r => { const y = String(r.day || '').slice(0, 4); if (/^\d{4}$/.test(y)) years.add(y); });
-    const now = new Date(); const ty = String(now.getFullYear());
-    years.add(ty);
-    const ys = [...years].sort().reverse();
-    $('sa-year').innerHTML = ys.map(y => `<option value="${y}">${y}</option>`).join('');
-    $('sa-year').value = ty;
-    $('sa-hmonth').innerHTML = MONTHS.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}">${m}</option>`).join('');
-    $('sa-hmonth').value = String(now.getMonth() + 1).padStart(2, '0');
-    SA.loaded = true;
-  }
-  function saCapsOf(nursery) {
-    const want = saNurKey(nursery), o = {};
-    (SA.caps || []).forEach(r => { if (saNurKey(r.nursery) === want && Number(r.qty) > 0) o[saKey(r.plot)] = Number(r.qty); });
-    return o;
-  }
-  function saRender() {
-    const nursery = $('sa-nursery').value, year = $('sa-year').value;
-    const now = new Date(), todayYM = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-    const plots = saPlotsOf(SA.plots, nursery), caps = saCapsOf(nursery);
-    const rows = buildRotation({ plots, capacity: caps, transplants: SA.transplants, sales: SA.sales, year, todayYM });
-    const nurLabel = $('sa-nursery').selectedOptions[0].textContent;
-    $('sa-rot-title').textContent = `Collection & Transplanting Rotation — ${nurLabel}, ${year}`;
-    const capT = rows.reduce((a, r) => a + r.cap, 0), colT = rows.reduce((a, r) => a + r.colTotal, 0), trT = rows.reduce((a, r) => a + r.trTotal, 0);
-    const kpi = (l, v, n) => `<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div><div class="kpi-n">${n}</div></div>`;
-    $('sa-kpis').innerHTML = kpi('Plots', nf(rows.length), esc(nurLabel))
-      + kpi('Total capacity', nf(capT), 'seedlings, ' + nf(rows.filter(r => !r.cap).length) + ' plots with none keyed')
-      + kpi('Collected in ' + year, nf(colT), 'seedlings out on delivery orders')
-      + kpi('Transplanted in ' + year, nf(trT), 'seedlings into the plots');
-
-    const curYM = todayYM;
-    let h = '<div></div><div></div>' + MONTHS.map((m, i) => {
-      const ym = year + '-' + String(i + 1).padStart(2, '0');
-      return `<div class="sa-mh${ym === curYM ? ' now' : ''}">${m}</div>`;
-    }).join('');
-    rows.forEach((r, ri) => {
-      if (ri) h += '<div class="sa-gap"></div>';
-      h += `<div class="sa-plot"><b>${esc(r.plot)}</b><span>${r.cap ? nf(r.cap) + ' seedlings' : 'No capacity keyed'}</span></div>`;
-      h += '<div class="sa-kind">Collection</div>';
-      r.months.forEach(x => {
-        const tipT = `${r.plot} · ${x.ym} · Collected ${nf(x.col)}${x.colPct != null ? ' (' + x.colPct + '%)' : ''} · Plan ${nf(x.colPlan)}`;
-        if (x.col > 0) {
-          const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
-          h += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
-        } else if (x.colPlan > 0) {
-          h += `<div class="sa-cell pc${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.colPlan)}</div>`;
-        } else h += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
-      });
-      h += '<div class="sa-kind">Transplanting</div>';
-      r.months.forEach(x => {
-        const tipT = `${r.plot} · ${x.ym} · Transplanted ${nf(x.tr)} · Plan ${nf(x.trPlan)}`;
-        if (x.tr > 0) h += `<div class="sa-cell t1" title="${esc(tipT)}">${nf(x.tr)}</div>`;
-        else if (x.trPlan > 0) h += `<div class="sa-cell pt${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.trPlan)}</div>`;
-        else h += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
-      });
-    });
-    $('sa-grid').innerHTML = rows.length ? h : '<div class="empty" style="grid-column:1/-1">No plots for this nursery.</div>';
-    $('sa-rot-note').textContent = SA.missing.length ? 'Could not read: ' + SA.missing.join('; ') + '. Those figures show as empty.' : '';
-
-    // Seedling height: the month picked, one bar per plot, and every month in a table.
-    const H = buildHeights(SA.heights, nursery, year), hm = year + '-' + $('sa-hmonth').value;
-    const hg = rows.map(r => ({ key: r.plot, v: (H[r.key] || {})[hm] }));
-    $('sa-h-title').textContent = `Seedling Height — ${nurLabel}, ${MONTHS[+hm.slice(5) - 1]} ${year}`;
-    if (!hg.some(g => g.v != null)) $('sa-hchart').innerHTML = '<div class="empty">No Seedling Height audit in this month.</div>';
-    else drawChart($('sa-hchart'), hg, {
-      by: 'batch', aria: 'Average seedling height by plot', xTitle: 'Plot', yTitle: 'Height (m)',
-      yFmt: v => v.toFixed(2), ref: null,
-      max: gs => Math.max(SA_SUITABLE_M * 1.25, ...gs.map(g => g.v || 0)),
-      bar: g => ({ v: g.v || 0, color: (g.v || 0) >= SA_SUITABLE_M ? 'var(--green)' : 'var(--green-2)' }),
-      labels: g => [{ text: g.v == null ? '—' : g.v.toFixed(2), color: 'var(--ink)', narrow: 'top' }],
-      tipHtml: g => `<b>${esc(g.key)}</b>` + tipRow('', 'Average height', g.v == null ? 'Not audited' : g.v.toFixed(2) + ' m') + tipRow('', 'Suitable height', SA_SUITABLE_M.toFixed(2) + ' m'),
-    });
-    // The suitable line, drawn over the chart in the same scale.
-    const svg = $('sa-hchart').querySelector('svg');
-    if (svg) {
-      const ticks = [...svg.querySelectorAll('.ytick')].map(t => ({ v: +t.textContent, y: +t.getAttribute('y') - 4 }));
-      if (ticks.length > 1) {
-        const a = ticks[0], b = ticks[ticks.length - 1], y = a.y + (SA_SUITABLE_M - a.v) * (b.y - a.y) / (b.v - a.v);
-        const x1 = 86, x2 = (+svg.getAttribute('width') || svg.viewBox.baseVal.width) - 16;
-        svg.insertAdjacentHTML('beforeend', `<line class="suit" x1="${x1}" x2="${x2}" y1="${y}" y2="${y}" stroke="var(--neg)" stroke-width="2" stroke-dasharray="6 4"/><text x="${x2}" y="${y - 6}" text-anchor="end" font-size="12" font-weight="600" fill="var(--neg)">Suitable ${SA_SUITABLE_M} m</text>`);
-      }
-    }
-    let t = '<thead><tr><th>Month</th>' + rows.map(r => `<th class="num">${esc(r.plot)}</th>`).join('') + '</tr></thead><tbody>';
-    MONTHS.forEach((m, i) => {
-      const ym = year + '-' + String(i + 1).padStart(2, '0');
-      if (!rows.some(r => (H[r.key] || {})[ym] != null)) return;
-      t += `<tr><td class="key">${m}</td>` + rows.map(r => { const v = (H[r.key] || {})[ym];
-        return `<td class="num${v != null && v >= SA_SUITABLE_M ? ' h-ok' : ''}">${v == null ? '—' : v.toFixed(2)}</td>`; }).join('') + '</tr>';
-    });
-    t += '</tbody>';
-    $('sa-htable').innerHTML = t.includes('<td') ? t : '<tbody><tr><td class="empty">No Seedling Height audit this year.</td></tr></tbody>';
-  }
-  function saFillCard() {
-    const now = new Date(), y = String(now.getFullYear()), todayYM = y + '-' + String(now.getMonth() + 1).padStart(2, '0');
-    let n = 0, c = 0, t = 0;
-    ['BNN', 'UNN1', 'UNN2'].forEach(nu => {
-      const rows = buildRotation({ plots: saPlotsOf(SA.plots, nu), capacity: saCapsOf(nu), transplants: SA.transplants, sales: SA.sales, year: y, todayYM });
-      n += rows.length; rows.forEach(r => { c += r.colTotal; t += r.trTotal; });
-    });
-    $('card-audit-n').textContent = nf(n); $('card-audit-col').textContent = nf(c); $('card-audit-tr').textContent = nf(t);
-    $('card-audit-scope').textContent = y + ' · Open report →';
-  }
-  ['sa-nursery', 'sa-year', 'sa-hmonth'].forEach(id => $(id).addEventListener('change', () => { if (SA.loaded) saRender(); }));
-  async function saStart() {
-    try {
-      await saLoad();
-      saFillCard();
-      $('sa-msg').classList.add('hidden'); $('sa-body').classList.remove('hidden');
-      if (!$('dash-audit').classList.contains('hidden')) saRender();
-    } catch (e) {
-      console.warn(e);
-      $('sa-msg').innerHTML = '<div class="empty">Could not read the site audit: ' + esc(e.message || e) + '</div>';
-      ['card-audit-n', 'card-audit-col', 'card-audit-tr'].forEach(id => $(id).textContent = '—');
-    }
-  }
-
   (async () => {
     try {
       await MJMAccess.load(_supabase);
@@ -1411,7 +1080,6 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       mountSidebar(location.hash.slice(1) || 'home');
       showView(location.hash.slice(1) || 'home');
     } catch (e) { console.warn(e); location.href = '../index.html'; return; }
-    saStart();
 
     try {
       BATCHES = buildBatches(await loadLedger());
