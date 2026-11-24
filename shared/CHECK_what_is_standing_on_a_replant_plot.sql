@@ -120,13 +120,15 @@ m AS (
 pb AS (
   SELECT pk, bk, max(plot) AS plot, max(batch) AS batch,
          bool_or(t = '3rd_Culling' AND inert = '' AND abs(q) > 0) AS c3_flown,
-         bool_or(t = '3rd_Culling' AND inert <> '')               AS c3_claim,
+         bool_or(t = '3rd_Culling' AND inert <> '' AND abs(q) > 0) AS c3_claim,
+         bool_or(t = '3rd_Culling' AND abs(q) = 0)                AS c3_shell,
          max(CASE WHEN t = 'Cull3_Transfer_In' THEN from_plot ELSE '' END) AS came_from,
          min(CASE WHEN t = 'Cull3_Transfer_In' THEN on_day END)            AS came_on
     FROM m GROUP BY pk, bk
 ),
 bal AS (
-  SELECT p.pk, p.bk, p.plot, p.batch, p.c3_flown, p.c3_claim, p.came_from, p.came_on,
+  SELECT p.pk, p.bk, p.plot, p.batch, p.c3_flown, p.c3_claim, p.c3_shell,
+         p.came_from, p.came_on,
          coalesce(pc.flown, false) AS parent_flown,
          sum(CASE WHEN p.c3_flown AND m.t = '2nd_Culling' THEN 0 ELSE m.sgn END) AS closing,
          sum(CASE WHEN m.t = '2nd_Culling' THEN 0 ELSE m.sgn END)                AS closing_ir
@@ -134,23 +136,27 @@ bal AS (
     JOIN m ON m.pk = p.pk AND m.bk = p.bk
     LEFT JOIN c3_all pc
            ON pc.pk = upper(translate(p.came_from, ' -_./()', '')) AND pc.bk = p.bk
-   GROUP BY p.pk, p.bk, p.plot, p.batch, p.c3_flown, p.c3_claim,
+   GROUP BY p.pk, p.bk, p.plot, p.batch, p.c3_flown, p.c3_claim, p.c3_shell,
             p.came_from, p.came_on, pc.flown
 ),
 run AS (
   SELECT m.plot, m.batch, m.on_day, m.day_note, m.t, m.sgn, m.q, m.inert,
          sum(CASE WHEN b.c3_flown AND m.t = '2nd_Culling' THEN 0 ELSE m.sgn END)
              OVER (PARTITION BY m.pk, m.bk
-                   ORDER BY m.on_day, m.t, m.q
-                   ROWS UNBOUNDED PRECEDING) AS running
+                   ORDER BY m.on_day, m.t, m.q, m.inert
+                   ROWS UNBOUNDED PRECEDING) AS running,
+         row_number()
+             OVER (PARTITION BY m.pk, m.bk
+                   ORDER BY m.on_day, m.t, m.q, m.inert) AS rn
     FROM m JOIN bal b ON b.pk = m.pk AND b.bk = m.bk
 ),
 out0 AS (
-  SELECT 0 AS sec, 0 AS sub, b.plot AS k1, b.batch AS k2,
+  SELECT 0 AS sec, 0 AS sub, b.plot AS k1, b.batch AS k2, 0::bigint AS ord,
          b.plot AS c_plot, b.batch AS c_batch,
          b.closing::text AS c_qty,
          CASE WHEN b.c3_flown THEN 'YES, flown'
-              WHEN b.c3_claim THEN 'keyed but NO drone map, so it counts for nothing'
+              WHEN b.c3_claim THEN 'FIGURE keyed, NO drone map -- counts for nothing'
+              WHEN b.c3_shell THEN 'an EMPTY row -- no figure and no drone map'
               ELSE 'none keyed' END AS c_own,
          CASE WHEN coalesce(b.came_from, '') = '' THEN 'not a transfer'
               ELSE 'from ' || b.came_from || ' on ' || coalesce(b.came_on::text, '-')
@@ -166,7 +172,7 @@ out0 AS (
     FROM bal b
 ),
 out1 AS (
-  SELECT 1 AS sec, 0 AS sub, r.plot AS k1, r.batch AS k2,
+  SELECT 1 AS sec, 0 AS sub, r.plot AS k1, r.batch AS k2, r.rn AS ord,
          r.plot, r.batch,
          r.on_day::text || r.day_note AS c_qty,
          r.t AS c_own,
@@ -176,7 +182,7 @@ out1 AS (
     FROM run r
 ),
 out2 AS (
-  SELECT 2 AS sec, 0 AS sub, b.plot AS k1, b.batch AS k2,
+  SELECT 2 AS sec, 0 AS sub, b.plot AS k1, b.batch AS k2, 0::bigint AS ord,
          b.plot, b.batch, b.closing::text,
          b.closing_ir::text,
          (b.closing_ir - b.closing)::text,
@@ -184,28 +190,28 @@ out2 AS (
     FROM bal b WHERE b.closing_ir <> b.closing
 ),
 hdr AS (
-  SELECT 0 AS sec, -1 AS sub, '' AS k1, '' AS k2,
+  SELECT 0 AS sec, -1 AS sub, '' AS k1, '' AS k2, 0::bigint AS ord,
          '== SECTION 0 ==' AS c_plot, 'every -R plot and batch' AS c_batch,
          'standing' AS c_qty, '3rd culling ON THIS PLOT' AS c_own,
          'how the batch got here' AS c_came, 'WHY IT IS STILL LINKED' AS c_why
   UNION ALL
-  SELECT 1, -1, '', '', '== SECTION 1 ==', 'every movement, in date order',
+  SELECT 1, -1, '', '', 0, '== SECTION 1 ==', 'every movement, in date order',
          'day', 'what', 'counts as', 'running balance'
   UNION ALL
-  SELECT 2, -1, '', '', '== SECTION 2 ==', 'where Interrow differs',
+  SELECT 2, -1, '', '', 0, '== SECTION 2 ==', 'where Interrow differs',
          'other jobs', 'Interrow', 'difference', 'and that is not a disagreement'
 ),
 nil AS (
-  SELECT 0 AS sec, 1 AS sub, 'zzz' AS k1, 'zzz' AS k2,
+  SELECT 0 AS sec, 1 AS sub, 'zzz' AS k1, 'zzz' AS k2, 0::bigint AS ord,
          'nothing to report' AS c_plot, 'no -R plot has any movement at all' AS c_batch,
          '-' AS c_qty, '-' AS c_own, '-' AS c_came, '-' AS c_why
    WHERE NOT EXISTS (SELECT 1 FROM bal)
   UNION ALL
-  SELECT 1, 1, 'zzz', 'zzz', 'nothing to report',
+  SELECT 1, 1, 'zzz', 'zzz', 0, 'nothing to report',
          'no -R plot has any movement at all', '-', '-', '-', '-'
    WHERE NOT EXISTS (SELECT 1 FROM run)
   UNION ALL
-  SELECT 2, 1, 'zzz', 'zzz', 'nothing to report',
+  SELECT 2, 1, 'zzz', 'zzz', 0, 'nothing to report',
          'no -R plot reads differently for Interrow', '-', '-', '-', '-'
    WHERE NOT EXISTS (SELECT 1 FROM bal WHERE closing_ir <> closing)
 )
@@ -218,4 +224,4 @@ SELECT c_plot AS "Plot", c_batch AS "Batch", c_qty AS "Qty",
     UNION ALL SELECT * FROM out2
     UNION ALL SELECT * FROM nil
   ) z
- ORDER BY sec, sub, k1, k2, c_qty;
+ ORDER BY sec, sub, k1, k2, ord, c_qty;
