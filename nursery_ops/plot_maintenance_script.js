@@ -1800,6 +1800,18 @@ function _doLines(d) {
   return out;
 }
 
+/* WHICH NURSERY THE SEEDLINGS CAME OUT OF, read off the DO own plots --
+   the office asked for it beside the DO number on Loading Seedlings. The
+   sheet itself is the GANG that loaded (see below), so a UNN 2 DO carried
+   by the UNN 1 gang sits on the UNN 1 sheet; this column is what says the
+   plot was UNN 2. A DO drawn from two nurseries names both, in the order
+   the nurseries are listed; a plot nothing can place reads a dash. */
+function _doPlotNurseries(d) {
+  const seen = new Set(_doLines(d).map(l => l.nursery).filter(Boolean));
+  const order = Object.keys(NURSERY_PLOTS);
+  return order.filter(k => seen.has(k)).concat([...seen].filter(k => !order.includes(k)));
+}
+
 /* A sheet row is a DO this nursery GANG carried, which is the plot nursery
    unless that gang is unticked and another is (doLoaderQty says why). A UNN 2
    DO the UNN 1 gang loaded is therefore on the UNN 1 sheet, where its ticks
@@ -2994,11 +3006,12 @@ function renderLoadingSeedlingsPayroll() {
   const payTh = (txt, w, cls) =>
     `<th class="${cls || ''}" style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
   let h = `<thead>
-    <tr><th class="wk-th" colspan="${4 + wk.length + 1}">${t('tab.loadingSeedlings')}</th></tr>
+    <tr><th class="wk-th" colspan="${5 + wk.length + 1}">${t('tab.loadingSeedlings')}</th></tr>
     <tr>
       ${payTh(t('pay.date'), 92)}
       ${payTh(t('pay.customer'), 140)}
       ${payTh(t('pay.doNumber'), 96)}
+      ${payTh(t('pay.doNursery'), 80)}
       ${payTh(t('pay.qtyLoaded'), 108)}
       ${wk.map(w => payTh(w, 108)).join('')}
       ${payTh(t('pay.perWorker'), 112)}
@@ -3008,7 +3021,7 @@ function renderLoadingSeedlingsPayroll() {
   let capTotal = 0;
 
   if (!rows.length) {
-    h += `<tr><td colspan="${4 + wk.length + 1}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noDOs')}</td></tr>`;
+    h += `<tr><td colspan="${5 + wk.length + 1}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noDOs')}</td></tr>`;
   } else {
     rows.forEach(({ d, qty }) => {
       const cells = (d.worked_by_by_nursery || {})[n] || [];
@@ -3024,6 +3037,7 @@ function renderLoadingSeedlingsPayroll() {
         <td style="font-weight:600;white-space:nowrap;">${d.delivery_date ? new Date(d.delivery_date).toLocaleDateString('en-MY') : '—'}</td>
         <td class="plot-td">${esc(d.remark || '—')}</td>
         <td>${esc(d.do_number || '—')}${d.worked_by_locked_at ? ' 🔒' : ''}</td>
+        <td class="do-nursery" style="white-space:nowrap;">${esc(_doPlotNurseries(d).join(' / ') || '—')}</td>
         <td>${qty.toLocaleString()}</td>
         ${wk.map(w => `<td class="check-td${cells.includes(w) ? ' ticked' : ''}${locked ? ' locked' : ''}" onclick="${locked ? '_denyDoLocked()' : `toggleDoWorkerTick(${d.id},'${n}','${String(w).replace(/'/g, "\\'")}')`}" title="${locked ? lockTitle + ' — ' + w : w}"></td>`).join('')}
         <td style="font-weight:700;">${capFmt(share)}
@@ -3036,7 +3050,7 @@ function renderLoadingSeedlingsPayroll() {
   const grand = wk.reduce((sum, w) => sum + totals[w], 0);
   h += `</tbody><tfoot>
     <tr class="jumlah-tr">
-      <td class="th-left" colspan="3">${t('pay.totalCap')}</td>
+      <td class="th-left" colspan="4">${t('pay.totalCap')}</td>
       <td>${capTotal ? capTotal.toLocaleString() : '—'}</td>
       ${wk.map(w => `<td>${capFmt(totals[w])}</td>`).join('')}
       <td>${capFmt(grand)}</td></tr>
@@ -4921,7 +4935,7 @@ const I18N = {
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
-    'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
+    'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.doNursery':'Nursery', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
     'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
@@ -5126,7 +5140,7 @@ const I18N = {
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
-    'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
+    'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.doNursery':'Tapak Semaian', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
     'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
     'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
