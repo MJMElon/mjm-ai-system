@@ -242,13 +242,24 @@ async function boot(browser) {
   check('a transfer with no 3rd culling keyed is untouched, and still a choice',
         [b6.qty, gone(b6), b6.culledBal, b6.culledBatches], [600, [], 600, ['250']]);
   check('…and Exclude still answers it', link('B6', '', '2026-11-20', { exclBal: 1 }).qty, 0);
-  /* AN UNFLOWN 3RD CULLING IS A CLAIM. It never became an event at all, so
-     it can no more take a batch off a plot than it can deduct from one —
-     which is the safe direction: the batch keeps showing until the map is
-     keyed. */
+  /* AN UNFLOWN 3RD CULLING IS A CLAIM ABOUT THE FIGURE AND AN ANSWER ABOUT
+     THE GROUND, and this check used to read it as neither. It asserted the
+     batch went on being linked exactly as before — true of the code, and
+     the office overruled it: *"到底为什么已经结束了的batch一直在？不要我讲
+     一个改一个"*. The drone map says how many were culled; the row itself
+     says the plot was culled.
+
+     WHAT IT WAS REALLY PROTECTING IS STILL ASSERTED, and it is the half
+     that matters: an unflown culling must not move one figure in the
+     arithmetic. The batch leaves WHOLE — its balance is reported as
+     goneQty undeducted, with the 2nd culling still taken off because
+     cull2Superseded goes on asking the EVIDENCED question, which is the
+     check immediately below. */
   const b7 = link('B7', '', '2026-11-20');
-  check('a 3rd culling nobody has flown takes nothing off',
-        [b7.qty, gone(b7)], [500, []]);
+  check('a 3rd culling nobody has flown takes the batch off the plot',
+        [b7.qty, gone(b7)], [0, ['243']]);
+  check('…and deducts nothing on the way: the balance leaves undeducted',
+        b7.goneQty, 500);
 
   console.log('\n3  interrow does not keep a batch the 3rd culling took away');
   /* Interrow keeps the 2nd culling in because the polybag is still sitting
@@ -375,8 +386,10 @@ async function boot(browser) {
     check('the mark says it is keyed AND agreed, not that it was filled in',
           /nothing to check/i.test(agree.tip), true);
     const claim = await cell(904, 'batch');
-    check('an unflown 3rd culling leaves the batch linked as it always was',
-          [claim.text, claim.cls], ['🔗 243', 'qty-linked']);
+    check('an unflown 3rd culling takes the batch off the cell as well',
+          [claim.text, claim.cls], ['—', 'batch-gone']);
+    check('…and the dash says which batch went, rather than reading as no answer',
+          /243/.test(claim.tip), true);
 
     /* AND THE ROWS STOP BEING GENERATED. The schedule keeps its ticks — a
        -R plot that takes a second transfer draws its rows again by itself —

@@ -25,11 +25,14 @@
 -- Section 3 is every record whose FIGURE moves, what it read and what it
 --   reads now. Nought here is the answer to hope for and means no plot in
 --   the system carries a negative balance.
--- Section 4 is the ONE way a batch can still be named after a 3rd culling:
---   one keyed with NO drone map. The system never counts such a culling at
---   all, so it takes nothing off and the batch goes on standing. Those are
---   not dropped here, because it is the map that says the culling happened
---   and the figure is somebody pay -- they are NAMED so the office can say.
+-- Section 4 was the ONE way a batch could still be named after a 3rd
+--   culling: one keyed with NO drone map, which the system did not count at
+--   all, so it took nothing off and the batch went on standing. THAT IS NOW
+--   CLOSED -- such a culling takes the batch off the plot while still
+--   deducting nothing, and the cost of it is in
+--   CHECK_why_a_finished_batch_is_still_linked.sql, which also says why
+--   every batch still on a link is still there. This section is kept
+--   because those rows are the ones that moved.
 -- Section 5 is what is left alone.
 
 WITH ev AS (
@@ -146,8 +149,8 @@ figs AS (
     FROM scored GROUP BY rid, mth, rplot, jenis, tarikh
 ),
 movers AS (SELECT * FROM figs WHERE was <> now_q),
--- A 3rd culling keyed with no drone map is not an event at all, so it takes
--- nothing off and cannot empty its batch. The one case left.
+-- A 3rd culling keyed with no drone map takes the batch OFF the plot now,
+-- while still deducting nothing. These are the rows that moved by it.
 unflown AS (
   SELECT DISTINCT d.mth, d.plot AS rplot, d.tarikh, l.batch_name AS batch,
          abs(coalesce(l.quantity_change, 0)) AS culled_qty, s.closing
@@ -156,6 +159,7 @@ unflown AS (
       ON upper(translate(coalesce(l.plot_name, ''), ' -_./()', '')) = d.pk
      AND l.transaction_type = '3rd_Culling'
      AND position('MapQty:' in coalesce(l.remark, '')) = 0
+     AND abs(coalesce(l.quantity_change, 0)) > 0
      AND coalesce(l.transaction_date, l.created_at::date) <= d.work_day
     JOIN scored s ON s.rid = d.rid
      AND upper(translate(s.batch, ' -_./()', ''))
@@ -225,12 +229,12 @@ SELECT 3, 'nothing to report', '-', 'no work record reads a different figure',
 UNION ALL
 SELECT DISTINCT 4, rplot, batch, 'a 3rd culling of ' || culled_qty::text
          || ' with NO drone map, as at ' || tarikh,
-       'still standing at ' || closing::text || ', so it is still named',
-       'the map is what evidences a culling -- key it on Tab 6 and the batch leaves by itself'
+       'it was standing at ' || closing::text || ' and named -- it is NOT named now',
+       'the row says the plot was culled, so the batch leaves -- the map gates the FIGURE and that is still not deducted'
   FROM unflown
 UNION ALL
 SELECT 4, 'nothing to report', '-', 'every 3rd culling on every named batch carries its drone map',
-       '-', 'so no batch is named after a culling the system can see'
+       '-', 'so nothing moved by the unflown rule either'
  WHERE NOT EXISTS (SELECT 1 FROM unflown)
 UNION ALL
 SELECT 5, 'left alone', '-',

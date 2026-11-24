@@ -118,6 +118,11 @@
   }
 
   let _events = null;      // [{plotKey, batchKey, batch, type, qty, ms}]
+  /* A 3RD CULLING KEYED AND NOT FLOWN IS NOT AN EVENT AND IS STILL AN
+     ANSWER. Kept apart from _events on purpose: it must move no figure
+     anywhere (see _load and `gone` in linkedQty), and the one thing that
+     guarantees that is its not being in the list every sum walks. */
+  let _claims = null;      // [{plotKey, batchKey, ms}] unevidenced 3rd cullings
   let _ready  = false;
   let _err    = null;
   let _inFlight = null;
@@ -163,13 +168,31 @@
       if (logsRes.error) throw logsRes.error;
 
       const evs = [];
+      const claims = [];
       const EVIDENCED = /MapQty:\s*\d+/;
       const APPROVED  = /\[APPROVED by [^\]]+ on [^\]]+\]/;
       (logsRes.data || []).forEach(l => {
         const t = l.transaction_type;
-        // A 3rd culling nobody has flown yet is a claim, not a deduction —
-        // the report leaves the batch standing, and so does this.
-        if (t === '3rd_Culling' && !EVIDENCED.test(l.remark || '')) return;
+        /* A 3rd culling nobody has flown yet is a claim, not a deduction —
+           the report leaves the batch standing, and so does this.
+
+           BUT IT IS STILL THE OFFICE SAYING THE PLOT HAS BEEN CULLED, and
+           that is a different question from how many to take off. It is
+           remembered as a CLAIM, which answers the first question and is in
+           no sum at all; see `gone` in linkedQty. A row with neither a map
+           nor a figure on it is an empty shell somebody opened and did not
+           fill, and says nothing about any ground. */
+        if (t === '3rd_Culling' && !EVIDENCED.test(l.remark || '')) {
+          if (Math.abs(Number(l.quantity_change || 0)) > 0) {
+            const cms = parseDate(logDate(l));
+            if (cms != null) claims.push({
+              plotKey:  plotKey(l.plot_name),
+              batchKey: batchKey(l.batch_name),
+              ms:       cms
+            });
+          }
+          return;
+        }
         // A pending adjustment has not been ruled on and moves no figure
         // anywhere else in the system.
         if (t === 'Stock_Calibration' && !APPROVED.test(l.remark || '')) return;
@@ -226,6 +249,7 @@
         }
       });
       _events = evs;
+      _claims = claims;
       _ready  = true;
       _err    = null;
     } catch (e) {
@@ -424,11 +448,26 @@
     const allKeys = Object.keys(per);
     if (!allKeys.length) return null;
 
-    /* Every batch whose 3rd culling is keyed and flown by the work date is
-       off this plot — see cull3Done. Taken out FIRST, so what is left is
-       what is standing, and the Include / Exclude balance choice below is
-       only ever asked about a batch that really is still there. */
-    const gone = new Set(allKeys.filter(k => cull3Done(per[k].evs)));
+    /* Every batch whose 3rd culling is keyed by the work date is off this
+       plot — see cull3Done. Taken out FIRST, so what is left is what is
+       standing, and the Include / Exclude balance choice below is only ever
+       asked about a batch that really is still there.
+
+       KEYED, NOT FLOWN, and that is the one thing that changed here. The
+       drone map gates the FIGURE, because until the plot has been flown
+       nobody knows how many were culled — so an unevidenced row is in no
+       sum, and `cull2Superseded` goes on asking the evidenced question,
+       which is about arithmetic. Whether the batch is still ON THE GROUND
+       is a different question, and a 3rd culling row IS the office
+       answering it. Left out of this one, the unflown case was the WORST of
+       the three: the batch was named AND its whole pre-culling balance was
+       counted as capacity, which is exactly the thing the rule above was
+       written to stop. The office, having been shown two more of these one
+       at a time: *"到底为什么已经结束了的batch一直在？不要我讲一个改一个"*. */
+    const claimed = new Set((_claims || [])
+      .filter(c => c.plotKey === pk && c.ms <= cutoff)
+      .map(c => c.batchKey));
+    const gone = new Set(allKeys.filter(k => cull3Done(per[k].evs) || claimed.has(k)));
     const here = allKeys.filter(k => !gone.has(k));
     let goneQty = 0;
     gone.forEach(k => { goneQty += per[k].closing; });

@@ -55,12 +55,18 @@ const log = (type, date, plot, batch, qty, remark) => ({
 
 /* Two plots and nothing clever. B5 holds 240 and 241, so a row keyed "240,
    241" is the report's own answer and one keyed "240" is not. B7 holds 243
-   and has a 3rd culling nobody has flown, which takes nothing off. */
+   and nothing else has happened to it.
+
+   B7 CARRIED A 3RD CULLING NOBODY HAD FLOWN, as a way of proving nothing
+   was deducted — and the day an unflown culling started taking the batch
+   OFF the plot, this file's whole subject went with it: every B7 cell drew
+   a dash and the mark states could not be read at all. Proving an unflown
+   culling deducts nothing is `a_batch_3rd_culled_is_off_the_plot.cjs`'s
+   job. A fixture that is about marks holds nothing but standing batches. */
 const LOGS = [
   log('Transplanted', '2026-09-01', 'B5', '240', 1000),
   log('Transplanted', '2026-09-01', 'B5', '241', 800),
-  log('Transplanted', '2026-09-01', 'B7', '243', 500),
-  log('3rd_Culling',  '2026-11-03', 'B7', '243', 400, 'CullDate: 2026-11-03')
+  log('Transplanted', '2026-09-01', 'B7', '243', 500)
 ];
 
 function fakeSupabase() {
