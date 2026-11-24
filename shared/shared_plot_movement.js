@@ -44,8 +44,47 @@
     return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
   }
 
-  const plotKey  = v => String(v == null ? '' : v).trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
-  const batchKey = v => String(v == null ? '' : v).replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+  /* ── A PLOT AND A BATCH ARE KEYED THE WAY THE SUMMARY REPORT KEYS THEM ──
+
+     This file IS the Summary Report asked about one work record, so the two
+     have to place a delivery order line on the same plot and the same batch
+     or they quote different numbers for the same plot. The `real` set in
+     _load says in its own words that it exists to stop exactly that, and it
+     did not: the keys underneath it were blunter than the report's.
+
+     THE OFFICE FOUND IT ON B14-R. The batch report showed 35 of batch 232
+     sold on two notes — 30 on DO 03357 and 5 on DO 03364 — and the link
+     counted 5, so a plot the lorry had emptied went on reading 30 standing
+     and 30 of capacity was being paid on ground with nothing in it. DO
+     03357 had "232 (B13)" typed into its batch field, the origin plot in
+     brackets, and the old rule only dropped punctuation: it read that as
+     batch "232B13", which matches nothing. operation_reports.html met this
+     on this very plot and fixed it — _mvBatchKey there carries the same
+     case in its own comment — and this file never got the fix.
+
+     So: a note is split off FIRST (or "232 (B13)" reads as batch 13, which
+     is the trap that comment names), then the trailing digits are the
+     batch, exactly as the Batch Record identifies one.
+
+     IT IS STRICTLY MORE FORGIVING, NEVER LESS, and that is what the
+     fallback is for. A name with no trailing digits at all — "24D" — is no
+     batch to the report and matches nothing there; here it would take a
+     batch that matched itself perfectly well yesterday off every plot, so
+     it keeps the old key. Nothing that matched before stops matching.
+
+     The plot is read the report way too, in the same ORDER: a leading
+     "Plot:" comes off BEFORE the note is split, or "PLOT: U15" reads as
+     plot "PLOT". A line reading "U15 (UPB PREMIER HYBRID)" is plot U15 on
+     the report and was "U15UPBPREMIERHYBRID" here. The dash is still
+     dropped, so B14-R and B14 stay two different plots. */
+  const noNote   = v => String(v == null ? '' : v).trim().split(/[\s(,\[]/)[0];
+  const rawBatch = v => String(v == null ? '' : v).replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+  const plotKey  = v => noNote(String(v == null ? '' : v).trim().toUpperCase()
+                                .replace(/^PLOT\s*:?\s*/, '')).replace(/[^0-9A-Z]/g, '');
+  const batchKey = v => {
+    const m = /(\d+)$/.exec(noNote(v).replace(/[^0-9A-Za-z]+$/, ''));
+    return m ? String(parseInt(m[1], 10)) : rawBatch(v);
+  };
   function batchList(s) {
     return String(s == null ? '' : s).split(/[,;/|]+/).map(batchKey).filter(Boolean);
   }
