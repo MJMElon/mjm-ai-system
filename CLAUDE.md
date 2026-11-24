@@ -3071,41 +3071,105 @@ worth reading down.
   office's own override and is MEANT to differ; marking one that happens to
   agree would say nothing. One line the day they ask.
 
-### A -R plot with nothing in it is not drawn at all
+#### A CELL WITH NO MARK IS THE ONE TO GO AND CHECK
 
-*"没有东西的R plot不要出现"*, over PLOT N3-R carrying ten tasks, batch 241
-linked against it and every quantity reading 0.
+Three sentences from the office, and the first was misread — which is the
+part worth keeping, because the build that came out of the misreading looked
+perfectly reasonable on screen:
 
-**The ten rows were this page's own doing.** A -R plot joins the schedule on
-ONE test — it has had a `Cull3_Transfer` in by the end of the month — and
-that test answers yes for ever afterwards, whatever became of the seedlings.
-So a plot that took a transfer and has since been emptied went on being given
-its parent's rounds every month. `_replantEmpty` asks what the plot HOLDS
-instead: the Summary Report's own closing balance as at the end of the month,
-which is the figure those rows would have been worked at anyway.
+> *"这个链接的icon出来了 但是因为自己有打字 所以check的时候底下没有线
+>   我要线"*
+>
+> *"如果图二我看到没虚线我还是要check"*
+>
+> *"打的batch不等于如果不打自动link的batch 那就不要虚线"*
 
-- **IT FAILS OPEN.** With the ledger not loaded it answers no and nothing is
-  dropped — a plot missing because a read was slow is far worse than a plot
-  too many, and the sync runs again the moment the figures land.
-- **NOTHING IS DELETED AND NOTHING IS UN-TICKED.** The schedule keeps what it
-  holds, so a -R plot that takes a second transfer draws its rows again by
-  itself. What stops is the GENERATING of rows against it, and a generated
-  row that is not rebuilt is dropped by `kept` while a row somebody keyed by
-  hand (no `_src`) is never the schedule's to take away.
-- **It is filtered in `autoSyncRecords`, never out of `NURSERY_PLOTS`.** That
-  list is what the capacity grid, the Setting page and `ours` are all built
-  from; narrowing it would take the plot off screens nobody asked about and
-  orphan the hand-keyed rows on it.
-- **A MAIN plot is never dropped by this**, whatever it holds. The office
-  said -R, and a main plot with a schedule on it is work somebody planned.
+**THE ABSENCE IS THE SIGNAL.** A marked cell is the batch report's own
+answer — green and 🔗 while it is live, dark and solid once the row is
+checked — and a cell wearing NOTHING is somebody's own answer that the
+report does not agree with, which is the row they open. That is the whole
+rule, and it is the other half of the 🔗 one section up: *"我就只需要查没有
+link的icon的部分"*.
 
-`tests/a_batch_3rd_culled_is_off_the_plot.cjs` holds all three asks — the
-rule through the shipped `shared_plot_movement.js`, the seeding through the
-shipped `seedReplantRounds`, and the two cells on the REAL page in a real
-browser. **20 of its 37 checks fail on the previous code**, each by NAME,
-because every reader is guarded: on that build there is no `goneBatches`, no
-`agrees` and no `_replantEmpty`, and an unguarded read takes the harness down
-at the first line and leaves every check under it unasked.
+So the first sentence was never *mark every cell somebody typed into*. It
+was about the ONE case where what they typed IS the report's answer, which
+carried the 🔗 right up until the row was checked and then went bare.
+
+**A BUILD THAT MARKED EVERY KEYED CELL SHIPPED IN BETWEEN**, with a
+`.qty-keyed` class, a grey dotted line and a hover on the batch and the
+quantity alike. It was wrong in the one way this screen cannot afford: a
+mark on the wrong cell does not look like a bug, **it looks like a row that
+has already been checked**, so the office would have stopped opening exactly
+the rows this column exists to find. It is all taken back — the class, both
+cell branches, and the `info` the rule was handing back to describe a
+disagreeing answer with, because a field whose only reader has gone is
+clutter. `tests/a_cell_with_no_mark_is_the_one_to_check.cjs` asserts the
+ABSENCES as hard as the marks for that reason.
+
+**The lesson is not "ask first".** It is that *"我要线"* was about a cell they
+had just watched change state, and reading it as a rule about a KIND of cell
+was the step too far. The screen could have answered it: rendering all the
+states side by side is what found the real asymmetry and would have shown
+that only one of them was the one being talked about.
+
+##### AND A KEYED BATCH THAT WAS THE REPORT IS HELD LIKE ONE
+
+That one case, which is what they actually asked for, in their own two
+crops: *"人为打的=link的batch的话,checked了也要长这样图一,目前是图二"*.
+
+**A BATCH SOMEBODY TYPED THAT IS THE REPORT'S OWN ANSWER IS THE REPORT'S OWN
+ANSWER.** Once the row is settled there is nothing left about it to go
+through, and it was reading muted and bare — which on this screen means
+*come back to this one*. So it takes the HELD look, the same dark and the
+same solid line as a batch the link filled in, because that is what it is.
+The only thing that still says a person wrote it is the hover.
+
+**IT CANNOT BE DECIDED AT DRAW TIME, and that is the whole shape of it.** A
+checked row is never re-read — the rule one section up — so whether the two
+agreed has to have been written down on the day. `batchFrozen` is that field
+and always has been; what changed is that `freezeFor` writes it for a KEYED
+batch as well, where the keyed answer matches the link. A keyed batch that
+did NOT agree writes nothing and stays bare, which is the signal.
+
+Three things in it:
+
+- **`freezeFor` ASKS THE LINK, not `recBatches`.** That one short-circuits
+  on a checked row by design, and `freezeCheckedRows` calls `freezeFor` over
+  rows that are ALREADY checked — which is how a row checked before any of
+  this is repaired on the next page load. A reader that returned early there
+  could never repair one, and the repair would have looked like it was
+  working.
+- **MATCHED AS A SET**, through the same `batchesAgree` the 🔗 uses, so a
+  different spelling of the same answer is the same answer.
+- **WHAT IT COSTS: a row repaired today is matched against TODAY'S ledger**,
+  not the day it was checked, because nothing recorded that. It is the trade
+  `freezeCheckedRows` already names in its own comment, it happens once, and
+  after it the row never moves again.
+
+The QUANTITY is in none of this: a keyed quantity is the office's own
+override and is MEANT to differ, so there is no agreeing case to mark and no
+reason to mark the rest.
+
+`tests/a_cell_with_no_mark_is_the_one_to_check.cjs` is 23 checks and **7
+fail on the build the office is on**. Its section 1b drives the shipped
+`freezeFor` directly, including over a row that is already checked, because
+that is the one call the repair depends on and the only one a short-circuit
+would hide. It finds a row by WHAT IT IS and never by the text in the cell —
+three of its eight rows read `241` — because a map keyed on the text drops
+half the states on the floor and answers *row not drawn* about a row that is
+on the screen, which is the quietest way for a check like this to pass over
+the thing it is for.
+
+**And the check beside it in `a_batch_3rd_culled_is_off_the_plot.cjs` was
+pinned to the wrong thing** — *the row left to check* asserted **no class at
+all**, which was true of that build and is not what it was protecting. It
+asks whether the cell wears the REPORT's mark now. A test that pins the
+exact spelling of a line is a test that fails on a change which altered
+nothing it was about, which this file already says one screen along — and
+here it passed again by luck when the class was taken back out.
+
+**Nothing to run in the database.** `batchFrozen` is an ordinary field of the
+record and a row that has never carried one behaves exactly as it did.
 
 ## A worker is the register ROW, not the name on it
 
