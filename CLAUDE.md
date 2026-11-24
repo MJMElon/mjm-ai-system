@@ -2627,6 +2627,77 @@ green on a board that narrows nothing — and sweeps every page for anything
 still reaching for the deleted one. **8 of its 10 checks fail on the previous
 code**, the first in the office's own two names.
 
+### CONTOH IS NOT A WORD THE BOARD INVENTS, and the repair had a precondition
+
+The office, over a board row reading `B3 | Membesar | 18 Aug 2026 | 91D OVER
+| 17 Aug 2026 · Contoh`: *"为什么这个还是contoh？"*
+
+**IT IS THE REAL `recorded_by` OF A REAL ROW, and the row was GENERATED.** A
+fresh install of the FC Portal seeds itself with a made-up plot log so there
+is something on screen before anybody has recorded a day, and every seeded
+entry is stamped Contoh. For such a row the honest answer to *who last
+updated this plot* is NOBODY. **The second tell is on the line itself**: B3
+is Membesar due the DAY AFTER it started, and Membesar is a 270-day stage —
+`applyStages` reads a stage with no `ideal_days` as 1, and so does a row.
+
+**NOTHING CAN SEND ONE ANY MORE, which was checked rather than assumed.**
+`data.js` marks every seeded entry and every seeded daily report, and
+`sync.js` refuses both — `if (e.uid && !e.demo)` for entries, a `!h.demo`
+filter for reports. The flag arrived AFTER the first version that synced, so
+a device that pushed before it carries its sample log on the server still.
+
+**WHICH OF TWO TABLES IT SITS ON DECIDES HOW BAD IT IS**, because `plotLine`
+builds Last update out of both and shows whichever happened later, a tie
+going to the daily report. A sample DAILY REPORT spoils only that cell. A
+sample LOG ENTRY means the stage, the due date and the days-over on that line
+were generated too — which is B3.
+
+**THE PRECONDITION IS THE WHOLE FIND, and the old file did not know about
+it.** `migration_palms_no_takebacks.sql` puts an AFTER DELETE trigger on the
+plot log that leaves the `client_uid` in `fcportal_palms_tombstones`, and a
+tombstoned entry can never be inserted again by any phone, an old build
+included. **Without it, sync pushes every local entry the server has not
+got** — that migration was written for exactly this resurrection — so
+deleting the sample rows would be a repair of today and the phones would put
+them back within hours. So `RUN_ME_the_sample_log_is_not_a_record.sql`
+**REFUSES** and names the file to run first, rather than deleting and looking
+as though it worked.
+
+**IT IS A DELETE AND NOT A MARK, which is the one place in this system where
+that is right.** Everywhere else a decision is recorded rather than removed,
+because a row is somebody saying something. These rows are not: nobody keyed
+them, they say nothing about any plot, and there is nothing to keep a record
+OF.
+
+**WHAT IT COSTS: a plot whose ONLY entry is a sample one LEAVES THE BOARD.**
+`boardLines` draws a plot from its log, so with no entry there is no line —
+which is the truth, and it is the fault this board exists to stop only when
+nothing says where the plot went. The result NAMES every one, so a plot going
+quiet is expected rather than reported as the repair breaking the board. B3
+is one of them. It comes back the moment somebody records a stage on it.
+
+**What is NOT closed**: the daily report table carries no tombstone, so an
+old build could in principle push a sample report again. Section 4 of
+`CHECK_why_a_plot_still_reads_contoh.sql` is how you tell — a `created_at`
+from the last few weeks means a device is still sending them, and clearing
+that device sample data is the rest of the answer.
+
+**`cleanup_palms_demo_rows.sql` is DELETED and its reasoning is carried into
+both new files.** It could not be pasted: **five result sets**, so its own
+LOOK FIRST section answered into the void; a trailing comment block after the
+last semicolon; and a `BEGIN … SELECT … COMMIT` telling the reader to read
+the counts before committing, which the SQL Editor cannot do because it runs
+the whole paste. An unrunnable file beside a runnable one is how somebody
+runs the wrong one. `check_what_i_have_run.sql` section 6 was repointed and
+now names the precondition too.
+
+Both files were driven on the scratch Postgres against the office own
+shapes — a sample-only plot, a sample report over real work, a sample entry
+with real work after it, and one that landed last week — with the trigger
+absent (refuses, deletes nothing), present (deletes, proves nought left, the
+real work untouched), a re-push of a tombstoned entry (`INSERT 0 0`), and
+run twice.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
@@ -2899,6 +2970,142 @@ ticked by hand is still left alone.
 
 `tests/a_replant_plot_takes_its_rounds.cjs` drives both through the shipped
 files and the real dialog, October included. **Nothing to run in the database.**
+
+### FINISHED CULLING IS NOT NEAR CULLING, and a finished batch is off the plot
+
+The office, over an Interrow Spraying row on B14 still linking batches 234
+and 262 and 3,541 of capacity: *"已经结束了3rd culling了的batch就不要再link了
+除了plot-R 3rd culling后 main plot不会有那个batch了 最多只会去p-R"*.
+
+**IT IS A FACT ABOUT THE GROUND AND NOT ABOUT THE ARITHMETIC.** A 3rd culling
+is the batch LEAVING the main plot — the good seedlings go to the -R plot and
+the rest are culled — so there is nothing of it standing there to spray,
+manure or weed. Whatever balance the ledger still shows for it is a figure
+and not seedlings, and the link was quoting it as CAPACITY, which is the
+piece-rate money.
+
+So `cull3Done` in `shared_plot_movement.js` is the rule, and a bucket it says
+yes to contributes **nothing** — not to the quantity, and not to the batch
+names beside it. It is dropped rather than counted at nought, because the
+names had to stop being offered too: *就不要再link了*.
+
+**THE OFFICE DREW THE LINE THEMSELVES, and it is the whole of why this is a
+rule where the Include / Exclude balance choice above it is not:**
+
+| | |
+|---|---|
+| a transfer out and **no 3rd culling keyed** | the batch is on its way out and what is left is about to be culled. Only the office knows whether a round was walked before the culling or after, so that stays a CHOICE on the row (`exclBal`) |
+| an **evidenced 3rd culling** | it has happened. There is nothing left to decide, and no round walked after it treated that batch |
+
+Five things in it, and three are rules this file already has:
+
+- **THE -R EXCEPTION FALLS OUT rather than being a second condition**, which
+  is why there is no -R test anywhere in that file. The question is asked of
+  one PLOT AND BATCH: on a -R plot the batch arrived by `Cull3_Transfer_In`
+  and carries no 3rd culling of its own, so it reads exactly as it always
+  did. The day the -R plot is itself 3rd culled the batch really has gone
+  from it too, and a written-out exemption would have gone on counting
+  seedlings nobody kept.
+- **AN UNFLOWN 3RD CULLING TAKES NOTHING OFF.** It never became an event at
+  all (`_load`), so it can no more take a batch off a plot than it can deduct
+  from one — the safe direction, and the same condition the report's own
+  cull3 column carries.
+- **IT IS CUT AT THE WORK DATE**, so a round dated BEFORE the culling counts
+  the batch in full. The seedlings were standing when somebody sprayed them,
+  and without this the rule would reach backwards over work already paid.
+- **INTERROW DOES NOT KEEP IT EITHER, and the two rules point opposite ways
+  on purpose.** Interrow keeps the 2nd culling in because the polybag is
+  still sitting exactly where it was — same rows, same gaps, same walk. A 3rd
+  culling takes the polybags AWAY, so there are no rows left to walk between.
+  The office's own row was an interrow one, which is why they saw it first.
+- **IT IS SAID ON THE ROW** (`goneBatches`, `goneQty`). A figure with a batch
+  taken out of it and a figure that never had one read exactly alike, which
+  is how the old one went unquestioned; the hover names the batch and the
+  balance it is not counting, and a plot whose batches have ALL gone draws a
+  dash that says so rather than one that reads as no answer.
+
+**WHAT IT COSTS, and it is named rather than buried: the link stops being the
+Summary Report on exactly these batches.** The report counts every batch a
+plot has ever held; the capacity now counts the ones it still holds. That is
+a deliberate second difference beside the interrow one, and
+`tests/the_link_is_the_summary_report.cjs` holds it by asking the sweep of
+BOTH halves — a standing bucket against `qty`, a gone one against `goneQty`
+— which makes that check **stronger** than it was: the double-deduction it
+was written for is still caught on a 3rd-culled batch, which is the only
+kind of batch it could ever have happened on.
+
+**NO MONTH GATE, which is a decision and not an oversight.** The
+`REPLANT_RULE_FROM` gate beside it exists for two rules that were NEW
+behaviour; this one is a CORRECTION, and what protects a settled month is
+what has always protected one — a Checked row froze its figure the day it was
+agreed (`qtyFrozen`) and a verified claim holds its own snapshot. Section 3
+of the check below is what says so out loud.
+
+`shared/CHECK_what_the_3rd_culling_rule_moves.sql` is the handover and
+**reads it FIRST**: every work record that moves with the month it is in,
+the plot and batch behind them, and — the line worth a second look on its
+own account — **what the ledger still shows standing for a batch the office
+says is gone**, which on a large figure is usually a transfer row nobody
+keyed.
+
+### A keyed batch that agrees with the ledger carries the mark
+
+*"如果FC填的batch/人为填的batch=本来用link的话的batch 那就show link的icon
+这样的话我就只需要查没有link的icon的部分"* — and the reason is the sentence
+after it. The office reads down that column for what to check, and a keyed
+batch that matches the batch report is not a row anybody has to open.
+Unmarked used to mean *somebody typed this*; it means **somebody typed this
+AND it is not what the report says**, which is the only version of the column
+worth reading down.
+
+- **THE KEYED VALUE IS STILL WHAT IS SHOWN AND WHAT DECIDES.** Nothing is
+  rewritten, the quantity is still counted over the batch somebody typed, and
+  `agrees` only ever changes the mark on it.
+- **Matched as a SET of batch keys** — letters and digits, like every other
+  key here — so `234, 262`, `262,234` and `262 / 234` are one answer and a
+  stray space cannot send the office to a row that is perfectly correct.
+- **A CHECKED ROW IS NEVER RE-READ, not even for a mark.** Checked is what
+  stops a figure being a formula, and a row that went green today and grew a
+  🔗 next week because a batch moved is exactly what that rule exists to stop.
+- **The QUANTITY cell is deliberately NOT in this.** A keyed quantity is the
+  office's own override and is MEANT to differ; marking one that happens to
+  agree would say nothing. One line the day they ask.
+
+### A -R plot with nothing in it is not drawn at all
+
+*"没有东西的R plot不要出现"*, over PLOT N3-R carrying ten tasks, batch 241
+linked against it and every quantity reading 0.
+
+**The ten rows were this page's own doing.** A -R plot joins the schedule on
+ONE test — it has had a `Cull3_Transfer` in by the end of the month — and
+that test answers yes for ever afterwards, whatever became of the seedlings.
+So a plot that took a transfer and has since been emptied went on being given
+its parent's rounds every month. `_replantEmpty` asks what the plot HOLDS
+instead: the Summary Report's own closing balance as at the end of the month,
+which is the figure those rows would have been worked at anyway.
+
+- **IT FAILS OPEN.** With the ledger not loaded it answers no and nothing is
+  dropped — a plot missing because a read was slow is far worse than a plot
+  too many, and the sync runs again the moment the figures land.
+- **NOTHING IS DELETED AND NOTHING IS UN-TICKED.** The schedule keeps what it
+  holds, so a -R plot that takes a second transfer draws its rows again by
+  itself. What stops is the GENERATING of rows against it, and a generated
+  row that is not rebuilt is dropped by `kept` while a row somebody keyed by
+  hand (no `_src`) is never the schedule's to take away.
+- **It is filtered in `autoSyncRecords`, never out of `NURSERY_PLOTS`.** That
+  list is what the capacity grid, the Setting page and `ours` are all built
+  from; narrowing it would take the plot off screens nobody asked about and
+  orphan the hand-keyed rows on it.
+- **A MAIN plot is never dropped by this**, whatever it holds. The office
+  said -R, and a main plot with a schedule on it is work somebody planned.
+
+`tests/a_batch_3rd_culled_is_off_the_plot.cjs` holds all three asks — the
+rule through the shipped `shared_plot_movement.js`, the seeding through the
+shipped `seedReplantRounds`, and the two cells on the REAL page in a real
+browser. **20 of its 37 checks fail on the previous code**, each by NAME,
+because every reader is guarded: on that build there is no `goneBatches`, no
+`agrees` and no `_replantEmpty`, and an unguarded read takes the harness down
+at the first line and leaves every check under it unasked.
 
 ## A worker is the register ROW, not the name on it
 
@@ -8533,6 +8740,60 @@ the batch total is exact, only the split is worked out. A list naming no
 tray the batch was planted into is left as it was.
 `tests/the_pre_nursery_follows_the_batch_report.cjs`; nothing to run in
 the database.
+
+### A HOLDING TRAY BELOW NOUGHT is the ledger OR the dates, never anything else
+
+The office, over the Summary Report: *"summary report里面为什么premium care是
+负数？"*
+
+**NOTHING IN THE PAGE CAN MAKE IT NEGATIVE, which is why this has one answer
+and not a list of them.** Premium Care is a holding tray — nothing is planted
+into it, seedlings ARRIVE from a numbered tray and leave again — so its
+Balance is `trIn + planted − cull1 − transOut`, counted cumulatively up to
+the As At date. Every movement column is `Math.abs`, Seed Damage carries
+`sign: 0`, and only B/F and Balance can go below nought at all. So below
+nought means exactly one thing: **the ledger says more seedlings left that
+tray than ever entered it.**
+
+**AND THERE ARE TWO WAYS FOR THAT TO BE TRUE, with different repairs.** They
+are told apart by the RUNNING BALANCE in date order, which is what
+`CHECK_why_premium_care_is_negative.sql` works out:
+
+- **THE LEDGER IS SHORT.** Added over all time the tray is still below
+  nought. A figure is wrong — the arrival too small, a transplant out too
+  big, the 1st culling too big, or **a transplant naming `PREMIUM CARE` when
+  the seedlings came out of a numbered tray**, which is the commonest of the
+  four because the source box offers that name at the top of its own group.
+- **THE DATES ARE OUT OF ORDER.** Over all time it adds up, and a departure
+  is DATED BEFORE the arrival that supplied it. Nothing is missing and no
+  quantity is wrong; a DATE has to move. **The B/F column is where this
+  shows**, being everything strictly before the month started, so the office
+  can be looking at a negative in a month whose Balance is perfectly right.
+
+**IT IS ASKED BY DAY AND NEVER BY ROW.** The report is cut at a DATE, so an
+arrival and a departure on the same day are both inside the figure whatever
+order they were keyed in. A running balance worked out row by row reports a
+dip no reading of the report can ever show — the fixture keys the departure
+first on purpose, and it must not be named.
+
+**DOUBLE-TONE HAS A THIRD WAY, and it is not shared with Premium Care.** A
+keyed *Double Tone Quantity in Nursery* **REPLACES** the arrivals rather than
+adding to them (`dtoneNewest`, the rule `calcTransplanting` follows), so a
+figure keyed smaller than what has already left that tray takes the tray
+below nought on its own and no transplant is at fault. The check names that
+case in its own words rather than blaming a transplant.
+
+**The one thing the check cannot date as exactly as the report** is a row
+with no `transaction_date`: `_logDate` reads a `Date:` out of the remark as
+its middle rung and the SQL Editor cannot be handed a regular expression, so
+those rows are NAMED in a section of their own instead of being parsed.
+`CHECK_trays_that_went_negative.sql` is the drill-down for the numbered trays
+of a batch this one names, and it is the LEDGER half only — it has no As At
+date, so it cannot see the second cause at all, which is the whole reason
+this file exists beside it.
+
+**Nothing to run in the database and nothing in the page changed.** The
+figure the report shows is the figure the ledger holds.
 
 ## Collection time slots are a SYSTEM SETTING
 
