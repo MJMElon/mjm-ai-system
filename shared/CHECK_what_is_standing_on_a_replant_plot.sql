@@ -27,6 +27,15 @@
 --   keeps the 2nd culling standing, so one plot and batch can read two
 --   figures on two rows of one day.
 --
+-- ONE THING THIS FILE READS MORE LITERALLY THAN THE APP, and the office
+-- found it: it keys a plot and a batch with translate(), which removes only
+-- the characters it is handed, where the app drops EVERY non-alphanumeric
+-- and reads a batch by its trailing digits. So a spelling this list does not
+-- name can show here as a batch of its own when the app has always read it
+-- as one -- B11-R 229 and 229. are the same batch on every screen.
+-- CHECK_which_sales_the_link_was_dropping.sql carries the app own rules
+-- written out, and is the file to read for anything about SPELLING.
+--
 -- Nothing is changed by this file. Safe to run as often as you like.
 
 WITH raw AS (
