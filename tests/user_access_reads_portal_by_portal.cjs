@@ -171,7 +171,7 @@ console.log('\n── 1. Five portals, in the order the office listed them ─�
 
   await openRow(page, 'u-faiz');
   check('one block per portal, top level, in the office’s order',
-        await page.locator('.panel > .area-block > label > span > .text-\\[14px\\]')
+        await page.locator('.panel > .area-block:not([data-block=other]) > .area-head .area-title')
           .evaluateAll((els) => els.map((e) => e.textContent.trim())),
         ['Worker Portal Manage', '555 FC Portal', 'Admin Portal',
          '555 Worker Portal', 'Auditor Portal']);
@@ -187,13 +187,13 @@ console.log('\n── 2. Worker System and Setting are INSIDE the back office �
   check('the two tools are nested under Worker Portal Manage',
         await manage.locator('.page-block [data-area]')
           .evaluateAll((els) => els.map((e) => e.dataset.area)),
-        ['workers', 'setting']);
+        ['workers', 'workers_edit', 'setting']);
   check('and they are drawn with the office’s own words',
-        await manage.locator('.page-block .text-\\[13px\\]')
+        await manage.locator('.page-block .tick-label')
           .evaluateAll((els) => els.map((e) => e.textContent.trim())),
-        ['Worker System', 'Module Assess Control']);
+        ['Worker System', 'Worker System — add & edit workers', 'Module Assess Control']);
   checkTrue('the register’s description is the one the office wrote',
-            (await manage.locator('.page-block .text-\\[11px\\]').first().textContent())
+            (await manage.locator('.page-block .desc').first().textContent())
               .indexOf('who is on the books, their section and their PIN') >= 0);
 
   /* THE SEEDING HAD TO FOLLOW THEM DOWN. areaOn() falls back for anybody
@@ -203,7 +203,7 @@ console.log('\n── 2. Worker System and Setting are INSIDE the back office �
      so every one of the seven must be written by merely opening his row. */
   const seeded = await page.evaluate(() => Object.keys(draft.scan_areas).sort());
   check('opening a row still records every door, nested ones included', seeded,
-        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers'].sort());
+        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers', 'workers_edit'].sort());
   await page.close();
 }
 
@@ -215,10 +215,16 @@ console.log('\n── 3. The FC Portal keeps its pages, and keeps the nurseries 
   check('the five pages are unchanged',
         await fc.locator('[data-page]').evaluateAll((els) => els.map((e) => e.dataset.page)),
         ['barcode', 'do', 'maintenance', 'palms', 'culling']);
-  check('and Maintenance still carries the three the office named',
+  /* Delete moved LAST and turned red: the office asked for every tick that
+     cannot be taken back to end its group. Same five keys, one moved. */
+  check('and Maintenance still carries the five, Delete last',
         await fc.locator('[data-act="maintenance"]')
-          .evaluateAll((els) => els.map((e) => e.dataset.actkey)).then((l) => l.slice(0, 3)),
-        ['verify', 'edit', 'delete']);
+          .evaluateAll((els) => els.map((e) => e.dataset.actkey)),
+        ['verify', 'edit', 'transplant_edit', 'export', 'delete']);
+  check('and only Delete is red and asks first',
+        await fc.locator('[data-act="maintenance"][data-danger]')
+          .evaluateAll((els) => els.map((e) => e.dataset.actkey)),
+        ['delete']);
 
   /* ONE NURSERY LIST, ON THE ONE BLOCK ANYTHING READS. The phone reads
      scan_area_nurseries.fc and nothing else (Barcode_Counter src/lib/access
@@ -235,8 +241,10 @@ console.log('\n── 4. The Admin Portal, Seal Management included ──');
   const page = await open(browser);
   await openRow(page, 'u-siti');
   const admin = page.locator('.area-block').nth(2);
+  await admin.locator('.fold-btn').click();
+  await page.waitForTimeout(100);
   check('the four rows the office listed, in their order',
-        await admin.locator('.page-block .text-\\[13px\\]')
+        await admin.locator('.page-block .tick-label')
           .evaluateAll((els) => els.map((e) => e.textContent.trim())),
         ['Issue Collection DO', 'Customer Consent',
          'Customer Collection Time Slot Booking', 'Seal Management']);
@@ -294,6 +302,8 @@ console.log('\n── 5. The Auditor Portal writes the keys the audit module rea
   /* Untick one action and save: the whole audit block becomes explicit, the
      way that module's own screen writes it, and the `_pages` mirror follows
      the `view` beside it. */
+  await audit.locator('.fold-btn').click();
+  await page.waitForTimeout(100);
   await audit.locator('[data-mact="edit"]').first().click();
   await page.waitForTimeout(120);
   await page.click('#save-btn');
@@ -338,6 +348,15 @@ console.log('\n── 7. Looking is not deciding ──');
      for people it used to answer for. */
   const page = await open(browser);
   await openRow(page, 'u-faiz');
+  /* Save is only lit once something has changed, so the change made here is
+     one FC Portal page — nothing in the Admin or Auditor Portal. */
+  checkTrue('Save is not lit while nothing has changed',
+            await page.locator('#save-btn').isDisabled());
+  await page.locator('.area-block').nth(1).locator('.fold-btn').click();
+  await page.waitForTimeout(100);
+  await page.locator('[data-page="barcode"]').click();
+  await page.waitForTimeout(100);
+  check('the bar counts the one change', (await page.textContent('#change-count')).trim(), '1 change');
   await page.click('#save-btn');
   await page.waitForTimeout(400);
   const sent = await page.evaluate(() => window.__saved[window.__saved.length - 1].permissions);
@@ -352,10 +371,12 @@ console.log('\n── 7. Looking is not deciding ──');
      is not, and saving has to write both of those down rather than one. */
   check('while every door is written down, as what he actually holds',
         Object.keys(sent.scan_areas).sort(),
-        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers'].sort());
+        ['admin_portal', 'audit_portal', 'fc', 'manage', 'setting', 'worker', 'workers', 'workers_edit'].sort());
   check('the FC Portal, which a scan normal holds', sent.scan_areas.fc.view, true);
   check('and Worker System, which needs npayroll he has not got',
         sent.scan_areas.workers.view, false);
+  check('nor adding and editing workers, for the same reason',
+        sent.scan_areas.workers_edit.view, false);
   await page.close();
 }
 

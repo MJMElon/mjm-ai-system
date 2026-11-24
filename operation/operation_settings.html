@@ -181,6 +181,65 @@
                 </div>
             </section>
 
+            <!-- COLLECTION TIME SLOT. The hours a collection can be booked in
+                 and how much one hour can take. Saved as the one row of
+                 shared_collection_slot_settings and read by every booking
+                 screen through shared/shared_collection_slots.js, so a
+                 change here is the slots on Collection Time Slot Booking.
+                 A Close / Open / Fully Booked on ONE date (on the booking
+                 page itself) still wins over this for that date. -->
+            <section id="slot-setting">
+                <div class="flex items-center gap-3 mb-6 border-b-2 border-emerald-200 pb-2">
+                    <span class="text-2xl">📅</span>
+                    <h2 class="text-xl font-black text-emerald-800 uppercase tracking-widest">Collection Booking</h2>
+                </div>
+                <div class="glass-panel p-8 rounded-[2.5rem] shadow-xl border-l-[8px] border-emerald-500">
+                    <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg border-b-2 border-slate-100 pb-4 mb-4">Collection Time Slot</h2>
+                    <div id="slot-warn" class="hidden mb-4 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3"></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-5">
+                            <div class="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-3">Monday – Friday</div>
+                            <div class="flex items-center gap-3">
+                                <select id="slot-wd-open" class="input-style text-sm" aria-label="Monday to Friday opens"></select>
+                                <span class="font-black text-slate-400">to</span>
+                                <select id="slot-wd-close" class="input-style text-sm" aria-label="Monday to Friday closes"></select>
+                            </div>
+                        </div>
+                        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-5">
+                            <div class="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-3">Saturday</div>
+                            <div class="flex items-center gap-3">
+                                <select id="slot-sat-open" class="input-style text-sm" aria-label="Saturday opens"></select>
+                                <span class="font-black text-slate-400">to</span>
+                                <select id="slot-sat-close" class="input-style text-sm" aria-label="Saturday closes"></select>
+                            </div>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-5 md:col-span-2">
+                            <div class="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-3">Lunch break (every open day)</div>
+                            <div class="flex items-center gap-3">
+                                <select id="slot-lunch-start" class="input-style text-sm" aria-label="Lunch starts"></select>
+                                <span class="font-black text-slate-400">to</span>
+                                <select id="slot-lunch-end" class="input-style text-sm" aria-label="Lunch ends"></select>
+                            </div>
+                            <div class="mt-2 text-[11px] text-slate-500">No slot is offered at lunch, and a booking that would run into it is not offered either.</div>
+                        </div>
+                        <div>
+                            <label for="slot-rate" class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 block ml-1">Seedlings loaded per hour (one booking)</label>
+                            <input id="slot-rate" type="number" min="1" step="1" class="input-style text-sm">
+                        </div>
+                        <div>
+                            <label for="slot-max" class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 block ml-1">Maximum seedlings per hour slot</label>
+                            <input id="slot-max" type="number" min="1" step="1" class="input-style text-sm">
+                        </div>
+                    </div>
+                    <div class="mt-5 text-xs font-bold text-slate-500">Slots: <span id="slot-preview" class="text-slate-700"></span></div>
+                    <div class="mt-1 text-xs text-slate-400">Sunday stays closed. A date opened, closed or marked fully booked on the booking calendar keeps its own hours.</div>
+                    <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+                        <div id="slot-stamp" class="text-[11px] font-bold text-slate-400"></div>
+                        <button id="slot-save" onclick="saveSlotSetting()" class="btn-purple !bg-emerald-600 !px-8 !py-3 text-xs tracking-widest">Save Time Slots</button>
+                    </div>
+                </div>
+            </section>
+
             <section>
                 <div class="flex items-center gap-3 mb-6 border-b-2 border-slate-200 pb-2">
                     <span class="text-2xl">🏢</span>
@@ -470,6 +529,7 @@
     </div>
 
     <script src="../shared/shared_month_lock.js?v=1"></script>
+    <script src="../shared/shared_collection_slots.js?v=20261119b"></script>
     <script>
         const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
@@ -1615,7 +1675,105 @@
             fetchData(); 
         }
 
-        _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else fetchData(); });
+        // ── COLLECTION TIME SLOT ─────────────────────────────────────────
+        // The rule and the read are shared/shared_collection_slots.js, the
+        // same file the booking page reads, so the two cannot disagree.
+        function slotHourLabel(h) {
+            if (h === 0 || h === 24) return '12 AM';
+            if (h < 12) return h + ' AM';
+            if (h === 12) return '12 PM';
+            return (h - 12) + ' PM';
+        }
+        function slotFill(id, from, to, sel) {
+            const el = document.getElementById(id);
+            let o = '';
+            for (let h = from; h <= to; h++) o += `<option value="${h}"${h === sel ? ' selected' : ''}>${slotHourLabel(h)}</option>`;
+            el.innerHTML = o;
+            el.value = String(sel);
+            el.dispatchEvent(new Event('change'));
+        }
+        // The lunch boxes carry an empty first option, No lunch break, which
+        // is read as NULL: a break at hour 0 is not the same as no break.
+        function slotFillLunch(id, from, to, sel) {
+            const el = document.getElementById(id);
+            let o = `<option value=""${sel === null ? ' selected' : ''}>No lunch break</option>`;
+            for (let h = from; h <= to; h++) o += `<option value="${h}"${h === sel ? ' selected' : ''}>${slotHourLabel(h)}</option>`;
+            el.innerHTML = o;
+            el.value = sel === null ? '' : String(sel);
+            el.dispatchEvent(new Event('change'));
+        }
+        function slotRead() {
+            const n = id => Number(document.getElementById(id).value);
+            const opt = id => { const v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+            return { weekday_open: n('slot-wd-open'), weekday_close: n('slot-wd-close'),
+                     sat_open: n('slot-sat-open'), sat_close: n('slot-sat-close'),
+                     rate_per_hour: n('slot-rate'), max_load_per_hour: n('slot-max'),
+                     lunch_start: opt('slot-lunch-start'), lunch_end: opt('slot-lunch-end') };
+        }
+        function slotPreview() {
+            const s = slotRead(), why = MJMCollectionSlots.problem(s);
+            const inLunch = h => s.lunch_start !== null && s.lunch_end !== null && h >= s.lunch_start && h < s.lunch_end;
+            const span = (a, b) => { const out = []; for (let h = a; h < b; h++) if (!inLunch(h)) out.push(slotHourLabel(h) + ' – ' + slotHourLabel(h + 1)); return out; };
+            document.getElementById('slot-preview').textContent = why
+                ? why
+                : `Mon–Fri ${span(s.weekday_open, s.weekday_close).length} slots (${slotHourLabel(s.weekday_open)} – ${slotHourLabel(s.weekday_close)}) · Sat ${span(s.sat_open, s.sat_close).length} slots (${slotHourLabel(s.sat_open)} – ${slotHourLabel(s.sat_close)})`
+                  + (s.lunch_start !== null ? ` · lunch ${slotHourLabel(s.lunch_start)} – ${slotHourLabel(s.lunch_end)}` : ' · no lunch break');
+            document.getElementById('slot-preview').className = why ? 'text-rose-600' : 'text-slate-700';
+            document.getElementById('slot-save').disabled = !!why;
+            document.getElementById('slot-save').style.opacity = why ? '0.5' : '';
+        }
+        function renderSlotSetting() {
+            const s = MJMCollectionSlots.get();
+            slotFill('slot-wd-open', 0, 23, s.weekday_open);
+            slotFill('slot-wd-close', 1, 24, s.weekday_close);
+            slotFill('slot-sat-open', 0, 23, s.sat_open);
+            slotFill('slot-sat-close', 1, 24, s.sat_close);
+            slotFillLunch('slot-lunch-start', 0, 23, s.lunch_start);
+            slotFillLunch('slot-lunch-end', 1, 24, s.lunch_end);
+            document.getElementById('slot-rate').value = s.rate_per_hour;
+            document.getElementById('slot-max').value = s.max_load_per_hour;
+            const row = MJMCollectionSlots.row(), err = MJMCollectionSlots.error();
+            const warn = document.getElementById('slot-warn');
+            if (err) {
+                warn.textContent = /does not exist|schema cache/i.test(err.message || '')
+                    ? 'The time slot setting is not in the database yet — run shared/RUN_ME_collection_slot_settings.sql in the Supabase SQL Editor. The booking page is using the hours shown below until then.'
+                    : 'Could not read the saved time slots (' + (err.message || err) + '). Showing the default hours.';
+                warn.classList.remove('hidden');
+            } else warn.classList.add('hidden');
+            document.getElementById('slot-stamp').textContent = row && row.updated_at
+                ? 'Last saved ' + new Date(row.updated_at).toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + (row.updated_by ? ' by ' + row.updated_by : '')
+                : 'Not saved yet — these are the default hours';
+            slotPreview();
+        }
+        async function loadSlotSetting() {
+            await MJMCollectionSlots.load(_supabase);
+            renderSlotSetting();
+        }
+        async function saveSlotSetting() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
+            const s = slotRead(), why = MJMCollectionSlots.problem(s);
+            if (why) return alert(why);
+            const btn = document.getElementById('slot-save');
+            btn.disabled = true; const was = btn.textContent; btn.textContent = 'Saving…';
+            try {
+                const { data: { user } } = await _supabase.auth.getUser();
+                const { error } = await MJMCollectionSlots.save(_supabase, s, user ? user.email : null);
+                if (error) {
+                    alert('Could not save: ' + error.message + (/does not exist|schema cache/i.test(error.message || '') ? '\n\nRun shared/RUN_ME_collection_slot_settings.sql in the Supabase SQL Editor first.' : ''));
+                } else {
+                    await loadSlotSetting();
+                    alert('Time slots saved. The booking page uses them from its next load.');
+                }
+            } finally { btn.textContent = was; btn.disabled = false; slotPreview(); }
+        }
+        ['slot-wd-open', 'slot-wd-close', 'slot-sat-open', 'slot-sat-close', 'slot-lunch-start', 'slot-lunch-end', 'slot-rate', 'slot-max'].forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener('change', slotPreview);
+            el.addEventListener('input', slotPreview);
+        });
+        renderSlotSetting();
+
+        _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else { fetchData(); loadSlotSetting(); } });
     </script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->

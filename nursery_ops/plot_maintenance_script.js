@@ -4917,7 +4917,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Monthly Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.cullIncentive':'Culling Monitoring', 'tab.seedPlanting':'Seed Planting & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Work Records', 'tab.maintList':'Monthly Maintenance Record', 'tab.chart':'Monthly Maintenance Performance', 'tab.watchman':'Monthly Night Watchman Record', 'tab.watering':'Monthly Watering Record', 'rec.notSetUp':'This record is not set up yet. Nothing is recorded here.', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -5122,7 +5122,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi Bulanan', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.cullIncentive':'Pemantauan Culling', 'tab.seedPlanting':'Tanam Benih & Hyplug', 'tab.hyplugSoil':'Mengisi Tanah ke Hyplug', 'tab.mainNursery':'Main Nursery', 'tab.preNursery':'Pre Nursery', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Penyelenggaraan Bulanan', 'tab.chart':'Prestasi Penyelenggaraan Bulanan', 'tab.watchman':'Rekod Jaga Malam Bulanan', 'tab.watering':'Rekod Penyiraman Bulanan', 'rec.notSetUp':'Rekod ini belum disediakan. Tiada apa-apa direkodkan di sini.', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -6996,16 +6996,65 @@ function _replantRuleOn(m) {
 function _replantParent(plot) {
   return String(plot || '').split('#')[0].trim().replace(/-R\d*$/i, '');
 }
+function _isReplantPlot(p) { return /-R\d*$/i.test(String(p || '').split('#')[0].trim()); }
+
+/* The first and last day of a schedule month, as the rest of this file
+   reads them. One copy, because seedReplantRounds and the record sync both
+   ask and a month that starts on two different days is two schedules. */
+function _monthBounds(m) {
+  const mm = /^([A-Za-z]{3})\s+(\d{4})$/.exec(String(m || '').trim());
+  if (!mm) return null;
+  const mi = MONTH_ABBR.findIndex(x => x.toLowerCase() === mm[1].toLowerCase());
+  if (mi < 0) return null;
+  const y = +mm[2];
+  return { y, mi, start: Date.UTC(y, mi, 1), end: Date.UTC(y, mi + 1, 0) };
+}
+
+/* ── A -R PLOT WITH NOTHING IN IT IS NOT ON THE SCHEDULE ─────────────────
+
+   The office, over PLOT N3-R drawn with ten tasks, batch 241 linked against
+   it and every quantity reading 0: *"没有东西的R plot不要出现"*.
+
+   They are right, and the ten rows were this page's own doing. A -R plot
+   joins the schedule on ONE test — it has had a Cull3_Transfer in by the
+   end of the month (see seedReplantRounds) — and that test answers yes for
+   ever afterwards, whatever became of the seedlings. A plot that took a
+   transfer and has since been emptied therefore went on being given its
+   parent's rounds every month, and the ten rows it drew are ten jobs
+   nobody is going to do on ground with nothing standing on it.
+
+   So the test is what the plot HOLDS, not what once arrived: the Summary
+   Report's own closing balance for that plot as at the end of the month,
+   which is the figure the rows would have been worked at anyway.
+
+   IT FAILS OPEN. With the ledger not loaded this answers null and nothing
+   is dropped — a plot missing because a read was slow is far worse than a
+   plot too many, and the sync runs again the moment the figures land.
+
+   NOTHING IS DELETED and nothing is un-ticked. The schedule keeps whatever
+   it holds, so a -R plot that takes a second transfer next month draws its
+   rows again by itself; what stops is the GENERATING of rows against it,
+   and a row somebody keyed BY HAND on such a plot is never the schedule's
+   to take away (it carries no `_src`, so `kept` keeps it). */
+function _replantEmpty(plot, m) {
+  if (!_isReplantPlot(plot)) return false;
+  if (!window.PlotMovement || !PlotMovement.ready()) return false;
+  const b = _monthBounds(m);
+  if (!b) return false;
+  const endISO = new Date(b.end).toISOString().slice(0, 10);
+  let link = null;
+  try { link = PlotMovement.linkedQty(plot, '', endISO, {}); } catch (_) { return false; }
+  // No movement at all on it, or everything that arrived has gone again.
+  return !link || Number(link.qty || 0) <= 0;
+}
+
 function seedReplantRounds(n, m) {
   if (!window.PlotMovement || !PlotMovement.ready() || !NURSERY_PLOTS[n]) return false;
   if (!_replantRuleOn(m)) return false;
-  const isR = (p) => /-R\d*$/i.test(String(p || '').split('#')[0].trim());
-  const mm = /^([A-Za-z]{3})\s+(\d{4})$/.exec(String(m || '').trim());
-  if (!mm) return false;
-  const mi = MONTH_ABBR.findIndex(x => x.toLowerCase() === mm[1].toLowerCase());
-  if (mi < 0) return false;
-  const y = +mm[2];
-  const monthStart = Date.UTC(y, mi, 1), monthEnd = Date.UTC(y, mi + 1, 0);
+  const isR = _isReplantPlot;
+  const b = _monthBounds(m);
+  if (!b) return false;
+  const monthStart = b.start, monthEnd = b.end;
 
   // When each -R plot first received seedlings.
   const firstIn = {};
@@ -7024,6 +7073,8 @@ function seedReplantRounds(n, m) {
     (stockPlots[stockName] || []).forEach(p => {
       const k = pk(p);
       if (!isR(p) || have.has(k) || firstIn[k] == null || firstIn[k] > monthEnd) return;
+      // Something arrived once; this asks whether any of it is still there.
+      if (_replantEmpty(p, m)) return;
       NURSERY_PLOTS[n].push(p); have.add(k);
     });
   });
@@ -7044,6 +7095,7 @@ function seedReplantRounds(n, m) {
     if (!isR(rp)) return;
     const at = firstIn[pk(rp)];
     if (at == null || at > monthEnd) return;
+    if (_replantEmpty(rp, m)) return;   // nothing standing — no rounds to give it
     const parent = NURSERY_PLOTS[n].find(p => pk(p) === pk(_replantParent(rp)));
     if (!parent) return;
     const day = at < monthStart ? 1 : new Date(at).getUTCDate();
@@ -7106,7 +7158,15 @@ function autoSyncRecords() {
   if (seeded) { try { renderAll(); } catch (_) {} }
   try { updateReplantNotice(); } catch (_) {}
   const n=getNursery(), m=getMonth(), s=getState(n,m), cfg=s.pdConfig;
-  const plots=NURSERY_PLOTS[n];
+  /* A -R PLOT WITH NOTHING STANDING GENERATES NOTHING — see _replantEmpty.
+     Filtered HERE and not out of NURSERY_PLOTS, because that list is what
+     the capacity grid, the Setting page and `ours` below are all built
+     from: narrowing it would take the plot off screens nobody asked about
+     and would orphan rows somebody keyed by hand. Left out of this one
+     loop, the rows it used to draw are simply not rebuilt — and `kept`
+     drops them, because a generated row that has lost its tick goes while
+     a hand-keyed one (no `_src`) never does. */
+  const plots=NURSERY_PLOTS[n].filter(p => !_replantEmpty(p, m));
   const R=roundMaps(n,m,s);
   const newRecs=[]; let id=Date.now();
 
@@ -7475,7 +7535,12 @@ function _syncSubNav(prefix, ids, activeKey) {
 
 /* Work Record sub-views: the maintenance list and the performance charts. */
 let _recordView = 'list';
-const RECORD_VIEW_KEYS = ['list', 'chart'];
+/* `watchman` and `watering` are ENTRIES ONLY for now: the office asked for
+   the two under Work Records and said what they hold comes later. They are
+   in this list so the side bar lights the right one and un-lights the rest
+   -- _syncSubNav only touches the ids it is handed, so a view missing from
+   here stays lit for ever once pressed. Neither draws or reads anything. */
+const RECORD_VIEW_KEYS = ['list', 'chart', 'watchman', 'watering'];
 function switchRecordView(view) {
   _recordView = view;
   _syncSubNav('subtab-', RECORD_VIEW_KEYS, view);
@@ -7483,7 +7548,8 @@ function switchRecordView(view) {
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
-  if (view === 'chart') renderPerformance(); else renderRecords();
+  if (view === 'chart') renderPerformance();
+  else if (view === 'list') renderRecords();
 }
 
 /* Inside the maintenance list: approved work, or what was sent back.
@@ -8641,7 +8707,13 @@ function _qtyCell(r) {
   const off = i.exclBal
     ? ` The ${numMY(i.culledBal)} left behind a transfer to the -R plot is the culled balance and is NOT counted.`
     : '';
-  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Summary Report's closing balance for the same plot, batch and date.${plus}${off} Key a number here to override.`;
+  /* A batch taken out by the 3rd-culling rule is SAID, not dropped in
+     silence: a figure with a batch taken out of it and a figure that never
+     had one read exactly alike, which is how the old one went unquestioned. */
+  const gone = (i.goneBatches && i.goneBatches.length)
+    ? ` Batch ${i.goneBatches.join(', ')} has been 3rd culled by this date and is off this plot, so the ${numMY(i.goneQty)} the ledger still shows for it is NOT counted.`
+    : '';
+  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Summary Report's closing balance for the same plot, batch and date.${plus}${off}${gone} Key a number here to override.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
@@ -8653,7 +8725,16 @@ function _qtyCell(r) {
    with the keyed value still winning. */
 function _batchCell(r) {
   const b = PlotMovement.recBatches(r);
-  if (!b.value) return '—';
+  if (!b.value) {
+    /* Nothing to name, and TWO different reasons for it. A plot whose
+       batches have all been 3rd culled is empty on purpose and says so;
+       a plot the ledger simply has no movement for is the old dash. */
+    if (b.info && b.info.allGone) {
+      const tip = `Every batch this plot held — ${b.info.goneBatches.join(', ')} — has been 3rd culled by this date, so nothing of them is standing here. After a 3rd culling a batch is off the main plot; at most it is on the -R plot.`;
+      return `<span class="batch-gone" title="${tip.replace(/"/g, '&quot;')}">—</span>`;
+    }
+    return '—';
+  }
   if (b.frozen) {
     const tip = `Held when this row was checked. Uncheck it to read the batch `
               + 'report again.';
@@ -8661,7 +8742,13 @@ function _batchCell(r) {
   }
   if (!b.linked) return esc(b.value);
   const when = b.info && b.info.asOf ? `as at ${b.info.asOf}` : 'standing today';
-  const tip = `No batch keyed, so this row covers every batch standing on plot ${r.plot} ${when}, which is what the quantity beside it counts. Key a batch here to narrow it — a batch you type decides the figure, on every job.`;
+  /* THE MARK MEANS "THIS IS WHAT THE BATCH REPORT SAYS", however it got
+     there. Filled in from the report, or keyed by somebody and the same
+     answer — either way it is a row nobody has to go and check, which is
+     the whole of what the office asked the mark for. */
+  const tip = b.agrees
+    ? `Keyed — and it is exactly what the batch report has standing on plot ${r.plot} ${when}, so there is nothing to check here.`
+    : `No batch keyed, so this row covers every batch standing on plot ${r.plot} ${when}, which is what the quantity beside it counts. Key a batch here to narrow it — a batch you type decides the figure, on every job.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${esc(b.value)}</span>`;
 }
 
@@ -10914,7 +11001,7 @@ function printPerfTable() {
     thead { display: table-header-group; }
     tr { page-break-inside: avoid; }`;
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Monthly Performance — ${_perfEsc(d.n)} ${_perfEsc(d.monthFull)}</title>
+    <title>Monthly Maintenance Performance — ${_perfEsc(d.n)} ${_perfEsc(d.monthFull)}</title>
     <style>${css}</style></head><body>${_perfHeadHtml(d)}${_perfTableHtml(d, true)}</body></html>`;
   const f = document.createElement('iframe');
   f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';

@@ -139,11 +139,16 @@ BEGIN
     END IF;
   END IF;
 
-  -- ── 6. cleanup_palms_demo_rows.sql ────────────────────────────
-  -- Left behind: nothing. It is done when no Contoh row survives.
+  -- ── 6. RUN_ME_the_sample_log_is_not_a_record.sql ──────────────
+  -- Left behind: nothing of its own. It is done when no Contoh row survives.
+  -- It REFUSES to delete unless migration_palms_no_takebacks.sql has been run
+  -- first (7b below), because without the tombstone trigger the phones put
+  -- every sample row back within hours.
+  -- It replaced cleanup_palms_demo_rows.sql, which could not be pasted: five
+  -- result sets, so its own look-first section answered into the void.
   IF to_regclass('public.fcportal_palms_plot_logs') IS NULL THEN
     INSERT INTO what_i_have_run VALUES
-      (6, 'cleanup_palms_demo_rows.sql', 'NOT NEEDED', 'no PALMS log table');
+      (6, 'RUN_ME_the_sample_log_is_not_a_record.sql', 'NOT NEEDED', 'no PALMS log table');
   ELSE
     EXECUTE $q$SELECT count(*) FROM public.fcportal_palms_plot_logs
                 WHERE recorded_by = 'Contoh'$q$ INTO n;
@@ -154,10 +159,15 @@ BEGIN
       n2 := 0;
     END IF;
     INSERT INTO what_i_have_run VALUES
-      (6, 'cleanup_palms_demo_rows.sql',
+      (6, 'RUN_ME_the_sample_log_is_not_a_record.sql',
        CASE WHEN n + n2 = 0 THEN 'NOT NEEDED' ELSE 'NOT RUN' END,
-       CASE WHEN n + n2 = 0 THEN 'no demo rows left - nothing for it to delete'
-            ELSE n || ' demo rows in the log and ' || n2 || ' in the history are still showing on the board' END);
+       CASE WHEN n + n2 = 0 THEN 'no sample rows left - nothing for it to delete'
+            ELSE n || ' sample rows in the log and ' || n2 || ' in the history are still showing on the board'
+                   || CASE WHEN EXISTS (SELECT 1 FROM pg_trigger
+                                         WHERE tgname = 'palms_log_bury'
+                                           AND tgrelid = to_regclass('public.fcportal_palms_plot_logs'))
+                           THEN ''
+                           ELSE ' - and it will refuse until migration_palms_no_takebacks.sql has been run' END END);
   END IF;
 
   -- ── 7b. migration_palms_no_takebacks.sql ──────────────────────

@@ -134,7 +134,7 @@
                 // not take the table down — the breed column is worth losing,
                 // the stock is not.
                 fetchAllRows(() => _supabase.from('shared_inventory_logs')
-                    .select('batch_name,breed_name')
+                    .select('batch_name,breed_name,transaction_date,created_at')
                     .eq('transaction_type', 'Seeds_Received')
                     .order('id', { ascending: true }))
                     .then(r => r, e => ({ data: [], error: e })),
@@ -158,8 +158,15 @@
             // one and some have many (see the duplicate receptions note in
             // CLAUDE.md). Ordered by id, so the last write stands.
             const batchBreed = {};
+            // The batch's seed-in date, for the AGE under each Maturity
+            // Date. Anchored on the KEYED transaction_date, the Batch
+            // Record's own rule (processBatchLogic), created_at only where
+            // nothing was keyed. Newest reception row wins, like the breed.
+            const batchSeedIn = {};
             (seedsRes?.data || []).forEach(b => {
                 if (b.batch_name && b.breed_name) batchBreed[b.batch_name] = b.breed_name;
+                const d = b.transaction_date || b.created_at;
+                if (b.batch_name && d) batchSeedIn[b.batch_name] = d;
             });
 
             const trans = transRes.data || [];
@@ -267,6 +274,7 @@
                         // The row's own breed first, else the batch's — see
                         // the Seeds_Received read above (batch 260).
                         breed: g.breed || batchBreed[g.batch] || '—',
+                        seedIn: batchSeedIn[g.batch] || null,
                         location: resolveLocation(g.plot),
                         qty: g.qty,
                         afterCulling,
@@ -1104,7 +1112,7 @@
 
             const html = `
                 <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}" data-mat-closed="${(culled || closedOut) ? '1' : '0'}">
-                    <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                    <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}${seedlingAgeHtml(r.seedIn)}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
                     <td class="col-prod font-mono">${escapeHtml(r.batch || '—')}</td>
                     <td class="col-prod" title="${escapeHtml(r.breed || '')}">${escapeHtml(r.breed || '—')}</td>
@@ -1252,6 +1260,23 @@
             console.warn('[Allocation] save failed (table may not exist yet):', e?.message || e);
             renderMaturityTable();
         }
+    }
+
+    // The age of a batch's seedlings as at TODAY, off its seed-in date,
+    // in whole months the way the Batch Record counts them (days / 30.44).
+    // Small and muted under the Maturity Date; nothing where the batch
+    // has no seed-in row, rather than a guess.
+    function seedlingAgeMonths(seedIn, now) {
+        if (!seedIn) return null;
+        const t = new Date(seedIn);
+        if (isNaN(t)) return null;
+        const days = Math.max(0, Math.floor(((now || new Date()) - t) / 86400000));
+        return Math.floor(days / 30.44);
+    }
+    function seedlingAgeHtml(seedIn) {
+        const m = seedlingAgeMonths(seedIn);
+        if (m == null) return '';
+        return `<div class="mat-age" title="Seedling age today, from the batch seed-in date">(${m} ${m === 1 ? 'Month' : 'Months'})</div>`;
     }
 
     function escapeHtml(s) {

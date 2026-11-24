@@ -747,6 +747,10 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
    than dotted: the dots say "this is worked out and still moving", and
    this one has stopped. */
 .qty-frozen{color:var(--text-head);border-bottom:1px solid var(--border);}
+/* A dash that means "3rd culled, nothing of it is here" rather than "no
+   answer". Dotted like the linked mark, because it is the same ledger
+   talking — it is simply saying the plot is empty. */
+.batch-gone{color:var(--text-muted);border-bottom:1px dotted var(--border);}
 /* A settled row, tinted. Very light on purpose: it has to mark the row at a
    glance while leaving the figures on it the most legible thing in the cell,
    and the table is read down the middle where the Checked badge, out at the
@@ -2039,3 +2043,11 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .jc-cell{min-width:150px;}
 .jc-cell .jc-chip{margin:2px 4px 2px 0;}
 .jc-off{color:var(--text-faint);text-align:center !important;}
+
+
+/* A Work Records entry whose record is not set up yet (Night Watchman,
+   Watering). It says so and draws nothing else: no table, no figure. */
+.rec-soon{border:1px dashed var(--wr-line,#e6ebe8);border-radius:12px;
+  background:#fff;padding:44px 20px;text-align:center;margin-top:8px;}
+.rec-soon-title{font-size:15px;font-weight:800;color:var(--wr-text,#1f2a24);}
+.rec-soon-note{margin-top:6px;font-size:13px;color:var(--wr-muted,#6b7a72);}

@@ -73,6 +73,7 @@
         .mat-table tbody td.col-plot {background:rgba(254,249,195,.45);}
         .mat-table tbody td.col-alloc{background:rgba(236,253,245,.45);}
         .mat-table tbody tr:hover td.col-prod {background:rgba(219,234,254,.55);}
+        .mat-table .mat-age {font-size:10px;line-height:1.1;font-weight:600;color:#64748b;margin-top:2px;letter-spacing:0;text-transform:none;}
         .mat-table tbody tr:hover td.col-plot {background:rgba(254,240,138,.55);}
         .mat-table tbody tr:hover td.col-alloc{background:rgba(187,247,208,.55);}
         /* Plot-R has no 10%-culling estimate to show — a transfer-in qty is
@@ -375,6 +376,7 @@
    reach. Generated: the list is every rule above under 11px. */
 @media (max-width:767.98px){
   .combo-switch-btn .csw-sub,
+  .mat-table .mat-age,
   .mat-table thead th,
   .mat-card-title-sub,
   .mat-table thead .mat-group-row th,
@@ -978,7 +980,7 @@
 </div>
 
 <script src="../shared/shared_stock_analysis.js?v=1"></script>
-<script src="operation_stock_sales.js?v=25"></script>
+<script src="operation_stock_sales.js?v=26"></script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>
