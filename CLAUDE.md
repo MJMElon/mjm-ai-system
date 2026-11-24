@@ -9797,6 +9797,107 @@ B4-R2 both go; a split area is judged by its plot.
   because a phone can be holding a list cached before this.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
+**`isReplantPlot` MOVED out of `palms/data.js`** the day a worker boundary
+had to carry a replant — see below — into
+`src/modules/maintenance/plotBatches.js`, which imports nothing where
+`palms/data.js` pulls in supabase, so it is the only place in that repository
+a plot-name rule can live without dragging a module in behind it. `data.js`
+re-exports **the same function object**, which is what the PALMS screens have
+always read, and the test asserts the identity rather than that the two agree
+today. Its lift had to follow; and doing that **surfaced a stale check nobody
+could see** — *"the PALMS board asks for it on every load"* pinned the exact
+spelling of a line the office's own *"PN UNE不需要出现在这里"* had since
+rewritten, and the test had been dying on a missing path before it ever got
+there. It asks the PROPERTY now: every non-empty `MAP_SCOPE` carries
+`skipReplant`.
+
+### A WORKER BOUNDED TO A PLOT IS BOUNDED TO ITS REPLANT
+
+The office, and the second sentence is the whole of why it matters: *"如果
+worker做工的那天某plot-R有在 要show出来 … 月头 没有B3-R 结果15号那天B3-R出现
+所以worker那边要live update B3-R 出现 如果有做B3-R就按B3-R 如果两边都有做
+B3 和 B3-R都要按 是为了避免可能B3已经没有苗了 要cull了 但是B3-R没出现 他们就
+会按B3 结果B3的balance其实是要被cull的"*.
+
+**A -R PLOT IS MADE MID-MONTH, so a boundary cannot name it.** A
+3rd-culling transfer lands on ground that was not a plot the day before, and
+the boundary was keyed on the 1st — so the office would have to re-key every
+bounded worker the morning one appears. Both key rules make this exact: the
+phone's `plotKey` **keeps the dash** (deliberately — B3 and B3-R are two
+plots with two balances) and the database's `worker_key` strips it, so `B3`
+and `B3R` are two keys either way and **the replant sat outside the boundary
+for ever**.
+
+**WHAT THAT COST IS THE OFFICE'S OWN SENTENCE.** The replant is where the
+seedlings now are; the parent is the ground about to be culled. A worker
+handed only the parent ticks the parent, and the morning is recorded against
+a balance on its way out — which is the figure the claim then prices.
+
+**THE DATABASE IS THE HALF THAT DECIDES, and the screen fix alone would have
+been worse than nothing.** `worker_plots()` is the single gate: the phone
+lists what it returns and `worker_submit_maint` refuses a save against
+anything it does not, raising 42501. Its own comment says why — *a boundary
+enforced only by what the screen draws is not a boundary* — so a release
+with only `workerPlotFilter` changed would show the plot and then refuse the
+save, **after the walk**. `shared/RUN_ME_worker_boundary_carries_the_replant
+.sql` is that half and `create_worker_portal.sql` carries the same body.
+
+Five things in it, and three are rules this file already has:
+
+- **IT TRAVELS ONE WAY ONLY.** A boundary naming B3 opens B3-R, because the
+  replant IS the parent's own ground moved and whoever was trusted with B3 is
+  who the -R plot was made out of. A boundary naming B3-R does **not** open
+  B3: the office put that worker on the replant, and the parent is other
+  seedlings and somebody else's morning.
+- **THE ROW KEEPS THE REPLANT'S OWN SPELLING**, which is the whole point of
+  the ask. `worker_submit_maint` takes the plot name back from
+  `worker_plots` rather than keeping what the phone sent, so a morning on
+  B3-R is filed under **B3-R** and never under B3 — the office's per-plot
+  figures stay apart, and that is what lets them see the parent is empty.
+- **THE NURSERY BOUNDARY STILL WINS.** A worker narrowed to UNN 2 and named
+  U7 does not gain U7-R, because U7-R is in UNN 1. That is the office's own
+  scoping working, and it is the line somebody would otherwise report as
+  this change failing, so the check **names it as its own reason** rather
+  than lumping it in with a replant nobody's parent covers.
+- **An EMPTY plot list still means nobody** and **no plot list is still no
+  filter**, by construction — no key matches either way, and `NULL IN (...)`
+  is never TRUE, so an ordinary plot simply does not match the new branch.
+  A worker with no list is most of them and is untouched.
+- **The boundary is a LIST OF NAMES, not a join.** A worker bounded to `B14`
+  gains `B14-R` even though Seedling Stock has no `B14` row at all. That
+  fell out rather than being decided, and it is right: the office keyed the
+  parent, so the replant of it is theirs.
+
+**`worker_replant_parent` carries NO regular expression**, unlike
+`worker_key` beside it, because this file is pasted into the SQL Editor —
+`split_part`, `position` and `translate` do the same work.
+
+**WHAT IS NOT CLAIMED, and it is named rather than buried: the two copies
+disagree on a plot name with a SPACE in it.** `plotKey` splits on
+whitespace, being also the reader for a delivery order's plot (`U15 (UPB
+PREMIER HYBRID)`), so it reads `U 7-R` as `U` where `worker_key` reads it as
+`U7`. Unreachable unless the office keys a space inside a plot name, and for
+such a name **the boundary already mismatched before any of this** —
+`plotKey('U 7')` is `U` and `plotKey('U7')` is `U7`. Closing it means moving
+`plotKey`, which moves the movement-report agreement everything here rests
+on. Left, and left said; the test asserts the shape instead of pretending.
+
+**TWO THINGS OUTSIDE ALL OF THIS HAVE TO BE TRUE** before B3-R reaches any
+worker, and neither is code: **`shared_plots` must carry the B3-R row**
+(Seedling Stock → System Settings → Add Plot, the one door), and the office
+must press **Save Schedule** after `seedReplantRounds` seeds the -R rounds,
+because that function writes a DRAFT and does not publish. Without either
+there is no B3-R task for anybody to tick, and the boundary is not what is
+wrong.
+
+`tests/no_replant_plot_on_palms.cjs` keeps the shared-rule half;
+`Barcode_Counter/tests/a_boundary_carries_the_replant.cjs` is the phone half
+and **7 of its 33 checks fail on the previous code**, the headline one in the
+office's own terms (*and B3-R, which appeared on the 15th → got false*). It
+**lifts `workerPlotFilter` out of the shipped file** rather than importing
+it, because that module pulls in supabase and the outbox and stubbing a dozen
+modules to reach one pure function is a thicker fixture than the function.
+Its section 4 reads the SQL, so a release that ships one half fails here.
 
 ## The overlay is pinned to a WRAPPER, so the wrapper has to be the photo
 
