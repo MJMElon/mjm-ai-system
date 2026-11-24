@@ -15,17 +15,18 @@
     <script src="../shared/shared_access.js"></script>
     <style>
         body { font-family: 'Outfit', system-ui, sans-serif; background: #f1f5f9; }
-        table.lp { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; font-size: 13px; width: 100%; }
-        table.lp th, table.lp td { padding: 9px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; white-space: nowrap; }
-        table.lp th { background: #f8fafc; color: #64748b; font-weight: 800; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+        table.lp { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; font-size: 13px; width: 100%; color: #1e293b; }
+        table.lp th, table.lp td { padding: 12px 16px; border-bottom: 1px solid #eef2f6; text-align: right; white-space: nowrap; }
+        table.lp th { color: #94a3b8; font-weight: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
         table.lp td.l, table.lp th.l { text-align: left; }
         table.lp tbody tr.plotrow { cursor: pointer; }
-        table.lp tbody tr.plotrow:hover { background: #f0fdfa; }
-        table.lp tr.grp td { background: #ccfbf1; color: #134e4a; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
-        table.lp tr.tot td { background: #134e4a; color: #fff; font-weight: 900; }
+        table.lp tbody tr.plotrow:hover td { background: #f8fafc; }
+        table.lp tr.grp td { color: #0f766e; font-weight: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; padding-top: 18px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+        table.lp tfoot tr.tot td { font-weight: 700; border-top: 1px solid #cbd5e1; border-bottom: none; padding-top: 14px; }
         table.lp td.dash { color: #cbd5e1; }
-        table.lp td.adj { color: #b45309; font-weight: 700; }
-        table.lp td.cull { color: #be123c; }
+        table.lp td.adj { color: #0f766e; }
+        table.lp td.cull { color: #334155; }
+        table.lp td.nil { color: #cbd5e1; }
         .lp-chip-label{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8}
         .lp-chips{display:flex;flex-wrap:wrap;gap:6px}
         .lp-chip{height:34px;padding:0 12px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-weight:800;font-size:12px;color:#334155;cursor:pointer}
