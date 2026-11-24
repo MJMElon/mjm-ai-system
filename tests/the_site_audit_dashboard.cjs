@@ -138,16 +138,23 @@ const server = http.createServer((req, res) => {
   await page.selectOption('#sa-hmonth', '10').catch(() => {});
   await page.waitForTimeout(200);
   const G = await page.evaluate(() => {
-    const g = document.getElementById('sa-grid'); if (!g) return null;
-    const kids = [...g.children];
-    const plots = kids.filter(k => k.classList.contains('sa-plot')).map(k => k.textContent);
-    const cells = kids.filter(k => k.classList.contains('sa-cell')).map(k => ({ cls: k.className, t: k.textContent.replace(/\s+/g, ' ').trim() }));
-    return { plots, cells, months: kids.filter(k => k.classList.contains('sa-mh')).map(k => k.textContent) };
+    const g = document.getElementById('sa-grid-sales'), t = document.getElementById('sa-grid-tr');
+    if (!g || !t) return null;
+    const of = (el) => {
+      const kids = [...el.children];
+      return {
+        plots: kids.filter(k => k.classList.contains('sa-plot')).map(k => k.textContent),
+        cells: kids.filter(k => k.classList.contains('sa-cell')).map(k => ({ cls: k.className, t: k.textContent.replace(/\s+/g, ' ').trim() })),
+        months: kids.filter(k => k.classList.contains('sa-mh')).map(k => k.textContent),
+      };
+    };
+    const c = of(g), x = of(t);
+    return { plots: c.plots, cells: c.cells, tcells: x.cells, tplots: x.plots, months: c.months, tmonths: x.months };
   });
-  ok(G && G.months.join() === 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec', 'twelve month columns, in English', G && G.months);
-  ok(G && G.plots[0] === 'B12,352 seedlings' && G.plots.length === 2, 'B1 named with its capacity, 2,352 seedlings; two BNN plots', G && G.plots);
+  ok(G && G.months.join() === 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec' && G.tmonths.join() === G.months.join(), 'twelve month columns in each of the two tables, in English', G && G.months);
+  ok(G && G.plots[0] === 'B12,352 seedlings' && G.plots.length === 2 && G.tplots.join() === G.plots.join(), 'B1 named with its capacity, 2,352 seedlings, in both tables; two BNN plots', G && G.plots);
   if (G) {
-    const b1c = G.cells.slice(0, 12), b1t = G.cells.slice(12, 24);
+    const b1c = G.cells.slice(0, 12), b1t = G.tcells.slice(0, 12);
     ok(b1c[3].t === '873%' && /c1/.test(b1c[3].cls), 'B1 April collection reads 87 · 3%, the lightest shade', b1c[3]);
     ok(b1c[6].t === '1,48062%' && /c2/.test(b1c[6].cls), 'B1 July collection 1,480 · 62%, the middle shade', b1c[6]);
     ok(b1c[5].t === 'Plan551' && /pc/.test(b1c[5].cls), 'B1 June: a dashed collection plan of 551', b1c[5]);

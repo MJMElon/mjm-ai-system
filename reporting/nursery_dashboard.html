@@ -169,6 +169,9 @@
   .sa-cell.pc { border:2px dashed #B8732A; color:var(--ink-2); font-weight:500; }
   .sa-cell.pt { border:2px dashed #2E7D4F; color:var(--ink-2); font-weight:500; }
   .sa-gap { grid-column:1 / -1; height:6px; }
+  /* One table per cycle: the plot, then twelve months. No kind column. */
+  .sa-grid-one { grid-template-columns:110px repeat(12, minmax(60px,1fr)); }
+  .sa-grid-one .sa-plot { grid-row:auto; }
   table.bd td.h-ok { color:var(--green); font-weight:600; }
 
   /* ── Responsive: tablet, then phone ── */
@@ -357,18 +360,27 @@
       <div class="kpis" id="sa-kpis"></div>
       <div class="card">
         <div class="card-head">
-          <div><h2 class="card-title" id="sa-rot-title">Collection &amp; Transplanting Rotation</h2>
-            <div class="card-sub">Collection plan = 90% of what was transplanted into the plot 9 months earlier. Transplanting plan = what was transplanted 10 months earlier. % is the collection against the plot capacity.</div></div>
+          <div><h2 class="card-title" id="sa-sales-title">Pusingan Jualan</h2>
+            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. % is the collection against the plot capacity.</div></div>
           <div class="sa-legend">
             <span><i style="background:#F5E6C8"></i>Collected &lt;40%</span>
             <span><i style="background:#DDA04B"></i>40–79%</span>
             <span><i style="background:#B8730E"></i>≥80%</span>
             <span><i style="border:2px dashed #B8732A"></i>Collection plan</span>
+          </div>
+        </div>
+        <div class="sa-grid-wrap"><div class="sa-grid sa-grid-one" id="sa-grid-sales"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div><h2 class="card-title" id="sa-rot-title">Pusingan Transplant</h2>
+            <div class="card-sub">Transplanting cycle: transplanting plan = what was transplanted 10 months earlier.</div></div>
+          <div class="sa-legend">
             <span><i style="background:#2E7D4F"></i>Transplanted</span>
             <span><i style="border:2px dashed #2E7D4F"></i>Transplanting plan</span>
           </div>
         </div>
-        <div class="sa-grid-wrap"><div class="sa-grid" id="sa-grid"></div></div>
+        <div class="sa-grid-wrap"><div class="sa-grid sa-grid-one" id="sa-grid-tr"></div></div>
         <div class="note" id="sa-rot-note" style="margin-top:10px"></div>
       </div>
       <div class="card">
@@ -1306,7 +1318,8 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const plots = saPlotsOf(SA.plots, nursery), caps = saCapsOf(nursery);
     const rows = buildRotation({ plots, capacity: caps, transplants: SA.transplants, sales: SA.sales, year, todayYM });
     const nurLabel = $('sa-nursery').selectedOptions[0].textContent;
-    $('sa-rot-title').textContent = `Collection & Transplanting Rotation — ${nurLabel}, ${year}`;
+    $('sa-sales-title').textContent = `Pusingan Jualan — ${nurLabel}, ${year}`;
+    $('sa-rot-title').textContent = `Pusingan Transplant — ${nurLabel}, ${year}`;
     const capT = rows.reduce((a, r) => a + r.cap, 0), colT = rows.reduce((a, r) => a + r.colTotal, 0), trT = rows.reduce((a, r) => a + r.trTotal, 0);
     const kpi = (l, v, n) => `<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div><div class="kpi-n">${n}</div></div>`;
     $('sa-kpis').innerHTML = kpi('Plots', nf(rows.length), esc(nurLabel))
@@ -1315,32 +1328,35 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       + kpi('Transplanted in ' + year, nf(trT), 'seedlings into the plots');
 
     const curYM = todayYM;
-    let h = '<div></div><div></div>' + MONTHS.map((m, i) => {
+    const head = '<div></div>' + MONTHS.map((m, i) => {
       const ym = year + '-' + String(i + 1).padStart(2, '0');
       return `<div class="sa-mh${ym === curYM ? ' now' : ''}">${m}</div>`;
     }).join('');
+    const plotCell = r => `<div class="sa-plot"><b>${esc(r.plot)}</b><span>${r.cap ? nf(r.cap) + ' seedlings' : 'No capacity keyed'}</span></div>`;
+    let hs = head, ht = head;
     rows.forEach((r, ri) => {
-      if (ri) h += '<div class="sa-gap"></div>';
-      h += `<div class="sa-plot"><b>${esc(r.plot)}</b><span>${r.cap ? nf(r.cap) + ' seedlings' : 'No capacity keyed'}</span></div>`;
-      h += '<div class="sa-kind">Collection</div>';
+      if (ri) { hs += '<div class="sa-gap"></div>'; ht += '<div class="sa-gap"></div>'; }
+      hs += plotCell(r);
       r.months.forEach(x => {
         const tipT = `${r.plot} · ${x.ym} · Collected ${nf(x.col)}${x.colPct != null ? ' (' + x.colPct + '%)' : ''} · Plan ${nf(x.colPlan)}`;
         if (x.col > 0) {
           const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
-          h += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
+          hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
         } else if (x.colPlan > 0) {
-          h += `<div class="sa-cell pc${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.colPlan)}</div>`;
-        } else h += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
+          hs += `<div class="sa-cell pc${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.colPlan)}</div>`;
+        } else hs += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
       });
-      h += '<div class="sa-kind">Transplanting</div>';
+      ht += plotCell(r);
       r.months.forEach(x => {
         const tipT = `${r.plot} · ${x.ym} · Transplanted ${nf(x.tr)} · Plan ${nf(x.trPlan)}`;
-        if (x.tr > 0) h += `<div class="sa-cell t1" title="${esc(tipT)}">${nf(x.tr)}</div>`;
-        else if (x.trPlan > 0) h += `<div class="sa-cell pt${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.trPlan)}</div>`;
-        else h += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
+        if (x.tr > 0) ht += `<div class="sa-cell t1" title="${esc(tipT)}">${nf(x.tr)}</div>`;
+        else if (x.trPlan > 0) ht += `<div class="sa-cell pt${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.trPlan)}</div>`;
+        else ht += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
       });
     });
-    $('sa-grid').innerHTML = rows.length ? h : '<div class="empty" style="grid-column:1/-1">No plots for this nursery.</div>';
+    const empty = '<div class="empty" style="grid-column:1/-1">No plots for this nursery.</div>';
+    $('sa-grid-sales').innerHTML = rows.length ? hs : empty;
+    $('sa-grid-tr').innerHTML = rows.length ? ht : empty;
     $('sa-rot-note').textContent = SA.missing.length ? 'Could not read: ' + SA.missing.join('; ') + '. Those figures show as empty.' : '';
 
     // Seedling height: the month picked, one bar per plot, and every month in a table.
