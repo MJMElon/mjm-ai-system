@@ -64,7 +64,11 @@ const APPROVED = 'Report: 3rd Culling [APPROVED by esther on 2026-10-01]';
          transferred on, 233 is a transfer keyed at nought. Three empties,
          three different causes, because a rule that only answers one of
          them is a rule that leaves the other two on the list.
-   B7    a NEGATIVE balance, which stays named.
+   B7    a NEGATIVE balance on its ONLY batch. The office took these off
+         too -- 小过负数也不要出现 -- so the plot reads as empty.
+   B12   a negative BESIDE a positive, which is the case that moves money:
+         dropping the negative RAISES the figure by exactly its size, and a
+         plot with only negatives could never show that.
    B8    a batch whose 2nd culling takes it to nought — empty for three
          jobs and standing for interrow.
    B9    a plot where EVERYTHING has gone, and none of it was 3rd culled. */
@@ -82,6 +86,10 @@ const LOGS = [
 
   log('Transplanted',      '2026-09-01', 'B7', '243', 100),
   log('Stock_Calibration', '2026-10-05', 'B7', '243', -150, APPROVED),
+
+  log('Transplanted',      '2026-09-01', 'B12', '255', 300),
+  log('Transplanted',      '2026-09-01', 'B12', '256', 100),
+  log('Stock_Calibration', '2026-10-05', 'B12', '256', -150, APPROVED),
 
   log('Transplanted', '2026-09-01', 'B8', '250', 100),
   log('2nd_Culling',  '2026-10-05', 'B8', '250', 100),
@@ -233,10 +241,21 @@ async function boot(browser) {
         [before.batches, before.qty, emptyOf(before)],
         [['225', '227', '228', '234'], 1400, ['233']]);
 
-  console.log('\n3  a NEGATIVE balance is a figure to look into, so it is named');
+  /* ── 3 ──────────────────────────────────────────────────────────────────
+     A NEGATIVE GOES TOO, which is the office own second sentence and the
+     one thing here that MOVES MONEY. `raw` is not floored, so a bucket at
+     -50 was taking 50 off the capacity; dropping it hands those 50 back.
+     B12 is what says so: a plot of only negatives reads 0 either way and
+     would have passed over the whole of it. */
+  console.log('\n3  a NEGATIVE balance goes as well, and the figure moves with it');
   const b7 = link('B7', '2026-11-06');
-  check('B7 keeps the batch its ledger has gone below nought on',
-        [b7.batches, b7.qty, emptyOf(b7)], [['243'], -50, []]);
+  check('B7 stops naming the batch its ledger has gone below nought on',
+        [b7.batches, b7.qty, emptyOf(b7)], [[], 0, ['243']]);
+  const b12 = link('B12', '2026-11-06');
+  check('a negative beside a positive leaves only the positive',
+        [b12.batches, emptyOf(b12)], [['255'], ['256']]);
+  check('…and the figure RISES by exactly the negative that went',
+        [b12.qty, 300 + (100 - 150)], [300, 250]);
 
   console.log('\n4  interrow answers differently, and it falls out of keepCull2');
   const b8 = link('B8', '2026-11-06');
@@ -292,8 +311,14 @@ async function boot(browser) {
         [c.text, c.cls], ['🔗 228, 234', 'qty-linked']);
   check('…and the quantity beside it is the standing figure', q.text, '🔗 800');
   const e = await cell(902, 'batch');
+  /* The hover has to SAY it, or the dash reads as no answer -- but this
+     asks whether there is a sentence and what it is ABOUT, never its exact
+     spelling: a check pinned to the wording fails on a change that altered
+     nothing it was for, which is what happened when the office took the
+     negatives off and the clause about the report agreeing had to go. */
   check('a plot with nothing standing draws a dash that says why',
-        [e.text, e.cls, /nothing left standing/.test(e.tip)], ['—', 'batch-gone', true]);
+        [e.text, e.cls, /nothing standing/.test(e.tip), e.tip.length > 40],
+        ['—', 'batch-gone', true, true]);
   check('…and names what it used to hold', /260/.test(e.tip), true);
   const m = await cell(903, 'batch'), ir = await cell(904, 'batch');
   check('B8 reads empty on Manuring and standing on Interrow',

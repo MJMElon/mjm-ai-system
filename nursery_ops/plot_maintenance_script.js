@@ -8745,7 +8745,7 @@ function _batchCell(r) {
        A bare dash there says "no answer" about a plot the batch report has
        a perfectly good answer for. */
     if (b.info && b.info.allEmpty) {
-      const tip = `Every batch this plot held — ${b.info.emptyBatches.join(', ')} — has nothing left standing by this date, so there is nothing here to name. The batch report shows the same.`;
+      const tip = `Every batch this plot held — ${b.info.emptyBatches.join(', ')} — has nothing standing by this date, nought or below, so there is nothing here to name.`;
       return `<span class="batch-gone" title="${tip.replace(/"/g, '&quot;')}">—</span>`;
     }
     return '—';

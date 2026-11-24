@@ -446,22 +446,30 @@
        was offered for ever afterwards, and on a -R plot, which is populated
        entirely by transfers in and emptied again, that is most of them.
 
-       IT COSTS THE FIGURE NOTHING, which is what makes it safe: a bucket
-       closing at nought adds nought, so `qty` is the same number before and
-       after. Only the names change.
+       NOUGHT OR BELOW, and the office said so in one line when the first
+       version kept the negatives and named them: *"小过负数也不要出现 只要
+       过了3rd cull统统不要出现"*. The argument for keeping one was that the
+       Summary Report draws a negative because it is a figure to look into,
+       so a work record that stopped naming the batch would be disagreeing
+       with the report about the very row somebody has to go and fix. The
+       office overruled it with the consequence in front of them: this is
+       the CAPACITY column, which is what somebody is paid off, and a plot
+       that owes nothing has nothing to spray whatever the ledger says.
 
-       NOUGHT EXACTLY, never `<= 0`. A NEGATIVE balance is a figure to look
-       into — the Summary Report draws one for that reason and this file
-       deliberately does not floor it (see `qty` below), so a work record
-       that stopped naming the batch would be quietly disagreeing with the
-       report about the very row somebody has to go and fix.
+       NOUGHT COSTS THE FIGURE NOTHING AND A NEGATIVE DOES NOT. A bucket
+       closing at nought adds nought, so `qty` is the same number before and
+       after and only the names move. A bucket closing BELOW nought is
+       adding a negative to `raw`, which is deliberately not floored (see
+       `qty` below) — so dropping it RAISES the figure by exactly that much.
+       `shared/CHECK_which_batches_leave_the_link.sql` names every record it
+       moves and by how much, which is the only honest way to ship this.
 
        AND INTERROW ANSWERS DIFFERENTLY, which falls out rather than being a
        second rule: `closing` is `liveCount` with this row's own options, so
        a batch whose 2nd culling takes it to nought is EMPTY for the other
        three jobs and still STANDING for interrow — which is the whole of
        what keepCull2 says, the polybags being where they were. */
-    const empty = new Set(here.filter(k => per[k].closing === 0));
+    const empty = new Set(here.filter(k => per[k].closing <= 0));
     const standing = here.filter(k => !empty.has(k));
 
     let culledBal = 0;

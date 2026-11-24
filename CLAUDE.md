@@ -3067,21 +3067,27 @@ rather than the odd one. 225 was corrected away by an approved
 calibration, 227 was transferred on, 233 is a transfer somebody keyed at
 nought — an event and never a seedling.
 
-**IT COSTS THE FIGURE NOTHING, which is what makes it safe to ship on its
-own.** A bucket closing at nought contributes nought to the quantity, so
-only the NAMES move — and the names are what the office reads the column
-for. The check says so in its own first line, and `0 of capacity moves` is
-the answer to expect.
+**NOUGHT COSTS THE FIGURE NOTHING AND A NEGATIVE DOES NOT**, which is the
+one line to read before touching this. A bucket closing at nought
+contributes nought, so those records only lose a NAME — and the names are
+what the office reads the column for. A bucket closing BELOW nought was
+**subtracting**, and `raw` is deliberately not floored, so dropping it
+**RAISES the capacity by exactly that much** — which is the piece-rate
+money. Section 0 of the check prints that figure and section 3 names every
+record it moves; `NOUGHT of capacity moves` is the answer to hope for and
+means no plot in the system carries a negative balance.
 
-Four things in it, and three are rules this file already has:
+Five things in it, and three are rules this file already has:
 
-- **NOUGHT EXACTLY, never `<= 0`.** A NEGATIVE balance is kept and still
-  named, because the Summary Report draws one and a plot reading below
-  nought is a figure to go and look into — usually a transfer row nobody
-  keyed, which is the same thing section 2 of the check above already
-  says. Hiding it would turn the one visible symptom of a short ledger
-  into silence. `qty` is deliberately not floored either, for the same
-  reason.
+- **NOUGHT OR BELOW, and the negative half was shipped the other way
+  first.** It kept a negative balance and named it, on the argument that
+  the Summary Report draws one and a plot reading below nought is a figure
+  to go and look into — usually a transfer row nobody keyed, so hiding it
+  turns the one visible symptom of a short ledger into silence. **The
+  office overruled it in one line** — *"小过负数也不要出现 只要过了3rd cull
+  统统不要出现"* — with the cost in front of them, and they are right about
+  what the column IS: this is the CAPACITY somebody is paid off, and a plot
+  that owes nothing has nothing to spray whatever the ledger says.
 - **INTERROW ANSWERS DIFFERENTLY, and it FALLS OUT rather than being a
   second condition.** The test is `per[k].closing`, which is `liveCount`
   with that row's own `opts` — so a batch 2nd culled to nought is gone for
@@ -3098,21 +3104,38 @@ Four things in it, and three are rules this file already has:
 - **A PLOT WHOSE BATCHES ARE ALL EMPTY SAYS SO** (`allEmpty`,
   `emptyBatches`). A bare dash there reads as *no answer* about a plot the
   batch report has a perfectly good answer for, so the cell names what the
-  plot used to hold and says the report agrees — the same choice `allGone`
-  made one rule along.
+  plot used to hold — the same choice `allGone` made one rule along. **It
+  no longer says the report agrees**, because on a negative it does not:
+  the report draws that row and this column does not.
+- **ONE WAY IS LEFT for a batch to be named after a 3rd culling, and it is
+  NOT closed here.** A culling keyed with no drone map never becomes an
+  event at all, so it takes nothing off and cannot empty its own batch —
+  which is why *统统* is not quite true yet. Dropping those would be the
+  screen deciding a culling happened on evidence the system does not have,
+  and it would LOWER somebody's pay, so section 4 of the check NAMES them
+  instead and the office says. Key the map on Tab 6 and the batch leaves by
+  itself.
 
 **Nothing to run in the database.** The whole of it is in
 `shared_plot_movement.js` and the batch cell.
 `shared/CHECK_which_batches_leave_the_link.sql` is the handover: every
 record that loses a name, the names, the plot and batch behind them, the
-interrow half printed rather than merely absent, and every negative
-balance named on its own account. **"nothing to report" is a real answer**
-and means the list and the Summary Report already agree everywhere.
+interrow half printed rather than merely absent, **every record whose
+FIGURE moves with what it read and what it reads now**, and every 3rd
+culling keyed with no map. **"nothing to report" is a real answer** and
+means the list and the Summary Report already agree everywhere. Tested on
+the scratch Postgres against B6-R's own shape, a negative beside a
+positive, an unflown culling, nothing moving at all, and twice.
 
 `tests/a_batch_with_nothing_standing_is_not_on_the_plot.cjs` drives the
 shipped reader over the office's own B6-R and then the real page in a real
-browser; **12 of its 19 checks fail on the build the office is on**, the
-first in their own figures.
+browser. **Its B12 is the fixture that earns its place**: a negative
+BESIDE a positive is the only shape where dropping one can be seen to move
+the figure, and a plot carrying only negatives reads nought either way and
+would have passed over the whole of it. And its hover check asks what the
+sentence is ABOUT rather than its exact spelling — pinned to the wording,
+it failed the day the clause about the report agreeing had to come off,
+which is a check breaking over a change it was never for.
 
 ### A keyed batch that agrees with the ledger carries the mark
 
