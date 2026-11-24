@@ -1092,8 +1092,8 @@ function syncJobNurseries() {
   syncNurseryCircles();
 }
 
-function payrollRowsFor(type) {
-  const n = getNursery();
+function payrollRowsFor(type, nursery) {
+  const n = nursery || getNursery();
   const plots = NURSERY_PLOTS[n] || [];
   const jenis = PAYROLL_TYPES[type].jenis;
   /* Plot, then the day the work was done.
@@ -3798,38 +3798,65 @@ function _fmtRate(r) {
 
    Capacity only — no money. Pay is worked out in the Nursery Payroll,
    which reads this same record. */
-function downloadPayrollPDF() {
-  const { jsPDF } = window.jspdf;
-  /* THE TAB ON SCREEN DECIDES WHAT IS PRINTED. Pressed on Transplanting it
-     printed the four maintenance sheets regardless, which is the office
-     asking for one thing and getting another -- "当我在transplanting的tab，
-     我要下载的是transplanting的资料". Transplanting is a wider sheet (a Work
-     column and a number in every worker cell, not a tick), so it takes the
-     wide page; the four tick sheets keep the tall one they have always had. */
-  const tpView = _payrollView === 'transplanting';
-  /* Seed Planting is the Pre Nursery's own sheet, a figure in every worker
-     cell like Transplanting, so it takes the wide page too. */
-  /* Both Pre Nursery sheets take the wide page: they are the same table
-     with the same worker columns, and only the job differs. */
-  const spView = !!SP_VIEWS[_payrollView];
-  const wide = tpView || spView;
-  const doc = new jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
-  const PW = wide ? 297 : 210, PH = wide ? 210 : 297, MARGIN = 25;
-  const CONTENT_W = PW - MARGIN * 2;      // 160 mm
-  const MID = PW / 2;
+function downloadPayrollPDF(opts) {
+  /* ONE JOB, ONE OR MORE NURSERIES, ONE FILE. The office asked for a
+     download on every job of Worker Activity -- *"全部应该要有一个Download
+     button for 不同的工作 ... 我要一次可以download 1个/2个/3个 nursery"* -- so
+     the file is the job on screen and nothing else (it used to print all
+     four maintenance sheets whichever was open), each nursery starting on
+     a page of its own. Called with no argument it prints the job and the
+     nursery on screen, which is what every older caller meant.
 
-  const n = spView ? SP_NURSERY : getNursery(), m = getMonth();
-  const TYPES = ['pd', 'manuring', 'weeding', 'interrow'];
-  /* Each job draws ITS OWN worker list (Settings → Worker List for Each
-     Job), so the page asks per type; `wk` is every name on any of the four,
-     which is what "is there anybody at all" is a question about. */
-  const wkOfType = {};
-  TYPES.forEach(ty => { wkOfType[ty] = jobWorkers(n, ty); });
-  let wk = [...new Set(TYPES.flatMap(ty => wkOfType[ty]))];
-
-  if (!wide && !wk.length) {
-    alert(t('pay.noWorkers'));
+     PORTRAIT OR LANDSCAPE IS DECIDED PER NURSERY, by whether its worker
+     columns fit across the tall page without splitting (`orientFor`). A
+     crew of six is a portrait sheet; a crew of fourteen is a landscape one.
+     jsPDF lets every page carry its own shape, so a file holding a small
+     crew and a big one has both. */
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('The PDF library has not loaded — usually the internet connection.\n\nReload the page and try again.');
     return;
+  }
+  const { jsPDF } = window.jspdf;
+  opts = opts || {};
+  const JOB = opts.job || _payrollView;
+  const m = getMonth();
+  const spView = !!SP_VIEWS[JOB];
+  const tpView = JOB === 'transplanting';
+  const lsView = JOB === 'loading_seedlings';
+  const ciView = JOB === 'cull_incentive';
+  const MAINT_TYPE = PAYROLL_TYPES[JOB] ? JOB : null;
+  const NURS = spView ? [SP_NURSERY]
+    : ((opts.nurseries && opts.nurseries.length) ? opts.nurseries.slice() : [getNursery()]);
+  const JOB_TITLE = spView ? t('tab.seedPlanting') : (MAINT_TYPE ? t(PAYROLL_TYPES[JOB].label) : jobLabel(JOB));
+
+  let doc = null, ORIENT = 'portrait';
+  let PW = 210, PH = 297;
+  const MARGIN = 25;
+  let CONTENT_W = PW - MARGIN * 2;
+  let MID = PW / 2;
+  function setGeom(o) {
+    ORIENT = o;
+    PW = o === 'landscape' ? 297 : 210; PH = o === 'landscape' ? 210 : 297;
+    CONTENT_W = PW - MARGIN * 2; MID = PW / 2;
+  }
+  /* Every page after the first goes through here, so it keeps the shape the
+     section chose -- a bare addPage() would fall back to the first page's. */
+  function newPage() { doc.addPage('a4', ORIENT); }
+  function startSection(o) {
+    setGeom(o);
+    if (!doc) doc = new jsPDF({ orientation: o, unit: 'mm', format: 'a4' });
+    else newPage();
+  }
+  let n = NURS[0];
+
+  /* What fits across the TALL page: the job's fixed columns, then the
+     narrowest a worker column may be. More workers than that is landscape. */
+  const FIX_OF = { tick: 77, loading: 116, transplanting: 131, seed: 96, cull: 0 };
+  const MINW_OF = { tick: 8, loading: 8, transplanting: 11, seed: 12, cull: 1 };
+  function orientFor(kind, cols) {
+    if (kind === 'cull') return 'portrait';
+    const fit = Math.floor((210 - MARGIN * 2 - FIX_OF[kind]) / MINW_OF[kind]);
+    return cols <= fit ? 'portrait' : 'landscape';
   }
 
   const HEAD_FILL = [232, 240, 235], TOTAL_FILL = [219, 236, 226], ZEBRA = [250, 252, 251];
@@ -3921,7 +3948,9 @@ function downloadPayrollPDF() {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
     doc.text('MEGA JUTAMAS SDN BHD', MID, y + 5, { align: 'center' });
     doc.setFontSize(12);
-    doc.text(t('pay.form').toUpperCase(), MID, y + 12, { align: 'center' });
+    /* THE JOB IS IN THE TITLE, so a sheet in a pile says what it is --
+       *"记得要有title 这样我才知道这是Loading Seedlings的"*. */
+    doc.text((t('pay.form') + ' — ' + JOB_TITLE).toUpperCase(), MID, y + 12, { align: 'center' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
     doc.text(`${NURSERY_NAMES[n] || n} (${nurseryShort(n)})  ·  ${t('pay.month')} ${m}`, MID, y + 19, { align: 'center' });
     doc.setDrawColor(13, 122, 71); doc.setLineWidth(0.6);
@@ -3945,11 +3974,6 @@ function downloadPayrollPDF() {
      -- and what is held back is said under them, exactly as on screen. */
   function drawTransplantingSheet() {
     const key = _tpPayrollKey(n, m);
-    if (_tpRecordsCache[key] === undefined || _tpRecordsLoading[key]) {
-      alert(t('pay.loading'));
-      return;
-    }
-    if (_tpRecordsErr[key]) { alert(_tpRecordsErr[key]); return; }
     const rows = transplantingRows(n, m);
     const { wk: cols } = tpWorkerColumns(n, rows);
     const agreed = (r) => tpAgreed(key, r);
@@ -3964,7 +3988,7 @@ function downloadPayrollPDF() {
     if (!tchunks.length) tchunks.push([]);
 
     tchunks.forEach((chunk, ci) => {
-      if (ci) doc.addPage();
+      if (ci) newPage();
       const part = tchunks.length > 1
         ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
         : '';
@@ -4001,7 +4025,7 @@ function downloadPayrollPDF() {
         });
         rows.forEach((r, ri) => {
           if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
-            doc.addPage();
+            newPage();
             y = titleBlock(label, part);
             drawHead();
           }
@@ -4084,7 +4108,6 @@ function downloadPayrollPDF() {
       doc.setTextColor(0, 0, 0);
     });
 
-    doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
   /* THE PRE NURSERY SHEET: the batch report's rows, and what each worker
@@ -4098,10 +4121,8 @@ function downloadPayrollPDF() {
      this is the rule that was there, asked once more. */
   function drawSeedPlantingSheet() {
     const st = _spCache[m];
-    if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
     const rows = st.rows, saved = st.saved;
     const { wk: cols } = spWorkerColumns(rows, saved, st.names);
-    if (!cols.length) { alert(t('pay.spNoNames')); return; }
     const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
 
     const W_DATE = 24, W_BATCH = 24, W_QTY = 24, W_SUM = 26;
@@ -4114,7 +4135,7 @@ function downloadPayrollPDF() {
     SP_JOBS.forEach((j) => {
       const job = j.job, label = t(j.label);
       chunks.forEach((chunk, ci) => {
-        if (started) doc.addPage();
+        if (started) newPage();
         started = true;
         const part = chunks.length > 1
           ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
@@ -4145,7 +4166,7 @@ function downloadPayrollPDF() {
         } else {
           const floor = PH - MARGIN - 20;
           rows.forEach((r, ri) => {
-            if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
+            if (y + ROW_H > floor) { newPage(); y = titleBlock(label, part); drawHead(); }
             const sv = saved[_spKey(r.key, job)];
             const cells = (sv && sv.workers) || {};
             const keyed = _spKeyed(sv);
@@ -4177,40 +4198,29 @@ function downloadPayrollPDF() {
         doc.setTextColor(0, 0, 0);
       });
     });
-    doc.save(`Worker_Record_Pre_Nursery_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
-  /* Column widths for one chunk of workers. The three fixed columns and the
-     per-worker total keep their size; the workers share what is left. */
-  const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
-  const FIXED = W_DATE + W_PLOT + W_CAP + W_PER;   // 77 mm, leaving 83 mm
-  const MIN_WK = 8;
-  const maxPerPage = Math.max(1, Math.floor((CONTENT_W - FIXED) / MIN_WK));
-
-  // Split the worker list only when it genuinely will not fit.
-  const chunksOf = (list) => {
-    const out = [];
-    for (let i = 0; i < list.length; i += maxPerPage) out.push(list.slice(i, i + maxPerPage));
-    return out;
-  };
-  let chunks = chunksOf(wk);
-
   const ROW_H = 8;
-  if (tpView) { drawTransplantingSheet(); return; }
-  if (spView) { drawSeedPlantingSheet(); return; }
-  let firstPage = true;
 
-  TYPES.forEach(type => {
+  /* ONE MAINTENANCE SHEET -- P & D, Manuring, Weeding or Interrow -- for the
+     nursery `n`. Column widths for one chunk of workers: the three fixed
+     columns and the per-worker total keep their size; the workers share
+     what is left, split onto further pages only when they will not fit. */
+  function drawMaintSheet(type) {
+    const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
+    const FIXED = W_DATE + W_PLOT + W_CAP + W_PER;   // 77 mm
+    const MIN_WK = 8;
+    const maxPerPage = Math.max(1, Math.floor((CONTENT_W - FIXED) / MIN_WK));
     const cfg = PAYROLL_TYPES[type];
-    const rows = payrollRowsFor(type);
+    const rows = payrollRowsFor(type, n);
     const store = payrollData[payrollKey(n, m, type)] || {};
-    wk = wkOfType[type];
-    chunks = chunksOf(wk);
+    const wk = jobWorkers(n, type);
+    let chunks = [];
+    for (let i = 0; i < wk.length; i += maxPerPage) chunks.push(wk.slice(i, i + maxPerPage));
     if (!chunks.length) chunks = [[]];
 
     chunks.forEach((chunk, ci) => {
-      if (!firstPage) doc.addPage();
-      firstPage = false;
+      if (ci) newPage();
 
       const part = chunks.length > 1
         ? `${t('pay.workersRange')} ${ci * maxPerPage + 1}–${ci * maxPerPage + chunk.length} ${t('pay.ofTotal')} ${wk.length}`
@@ -4254,7 +4264,7 @@ function downloadPayrollPDF() {
         });
         rows.forEach((r, ri) => {
           if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
-            doc.addPage();
+            newPage();
             y = titleBlock(t(cfg.label), part);
             drawHead();
           }
@@ -4295,9 +4305,278 @@ function downloadPayrollPDF() {
       doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
       doc.setTextColor(0, 0, 0);
     });
-  });
+  }
 
-  doc.save(`Worker_Record_${n}_${m.replace(/\s+/g, '_')}.pdf`);
+  /* LOADING SEEDLINGS, as the tab draws it: Date, Customer, DO Number, the
+     plot's Nursery, the quantity this nursery's gang loaded, a tick per
+     worker and each one's share. Every figure is loadingSeedlingsRows' own,
+     so the paper cannot disagree with the screen. */
+  function drawLoadingSheet() {
+    const W_DATE = 18, W_CUST = 30, W_DO = 22, W_NUR = 14, W_QTY = 14, W_PER = 18;
+    const FIXED = W_DATE + W_CUST + W_DO + W_NUR + W_QTY + W_PER;   // 116 mm
+    const per = Math.max(1, Math.floor((CONTENT_W - FIXED) / 8));
+    const label = t('tab.loadingSeedlings');
+    const rows = loadingSeedlingsRows(n, m);
+    const wk = jobWorkers(n, 'loading_seedlings');
+    let chunks = [];
+    for (let i = 0; i < wk.length; i += per) chunks.push(wk.slice(i, i + per));
+    if (!chunks.length) chunks = [[]];
+    chunks.forEach((chunk, ci) => {
+      if (ci) newPage();
+      const part = chunks.length > 1
+        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${wk.length}`
+        : '';
+      let y = titleBlock(label, part);
+      const wkW = chunk.length ? (CONTENT_W - FIXED) / chunk.length : 0;
+      const custW = chunk.length ? W_CUST : W_CUST + (CONTENT_W - FIXED);
+      const widths = [W_DATE, custW, W_DO, W_NUR, W_QTY, ...chunk.map(() => wkW), W_PER];
+      const xs = []; let x = MARGIN;
+      widths.forEach(w => { xs.push(x); x += w; });
+      const iPer = widths.length - 1;
+      const HEAD_H = headerHeightFor(chunk.length ? chunk : ['']);
+      const drawHead = () => {
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.date'), { bold: true, size: 8, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.customer'), { bold: true, size: 8, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.doNumber'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        cell(xs[3], y, widths[3], HEAD_H, t('pay.doNursery'), { bold: true, size: 7, fill: HEAD_FILL });
+        cell(xs[4], y, widths[4], HEAD_H, t('pay.qtyLoaded'), { bold: true, size: 7, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[5 + i], y, widths[5 + i], HEAD_H, w));
+        cell(xs[iPer], y, widths[iPer], HEAD_H, t('pay.perWorker'), { bold: true, size: 7, fill: HEAD_FILL });
+        y += HEAD_H;
+      };
+      drawHead();
+      const totals = {}; chunk.forEach(w => totals[w] = 0);
+      let capTotal = 0;
+      if (!rows.length) {
+        cell(MARGIN, y, CONTENT_W, 14, t('pay.noDOs'), { size: 9 });
+        y += 14;
+      } else {
+        const floor = PH - MARGIN - 20;
+        rows.forEach(({ d, qty }, ri) => {
+          if (y + ROW_H > floor) { newPage(); y = titleBlock(label, part); drawHead(); }
+          const cells = (d.worked_by_by_nursery || {})[n] || [];
+          // The share is divided among EVERY ticked worker, not just those
+          // on this page, so splitting the sheet moves no figure.
+          const ticked = wk.filter(w => cells.includes(w));
+          const share = ticked.length ? qty / ticked.length : 0;
+          chunk.forEach(w => { if (cells.includes(w)) totals[w] += share; });
+          capTotal += qty;
+          const z = ri % 2 ? ZEBRA : null;
+          cell(xs[0], y, widths[0], ROW_H, d.delivery_date ? _tarikhDisplay(String(d.delivery_date).slice(0, 10)) : '—',
+               { size: 7.5, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, d.remark || '—', { size: 7, fill: z, align: 'left' });
+          cell(xs[2], y, widths[2], ROW_H, d.do_number || '—', { size: 7.5, nowrap: true, fill: z });
+          cell(xs[3], y, widths[3], ROW_H, _doPlotNurseries(d).join(' / ') || '—', { size: 7, nowrap: true, fill: z });
+          cell(xs[4], y, widths[4], ROW_H, qty.toLocaleString('en-MY'), { size: 8, nowrap: true, fill: z });
+          chunk.forEach((w, i) => {
+            cell(xs[5 + i], y, widths[5 + i], ROW_H, '', { fill: z });
+            if (cells.includes(w)) drawTick(xs[5 + i], y, widths[5 + i], ROW_H);
+          });
+          cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(share), { size: 8, bold: true, nowrap: true, fill: z });
+          y += ROW_H;
+        });
+      }
+      const grand = chunk.reduce((sm, w) => sm + totals[w], 0);
+      cell(xs[0], y, widths[0] + widths[1] + widths[2] + widths[3], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[4], y, widths[4], ROW_H + 1, capTotal ? capTotal.toLocaleString('en-MY') : '—', { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[5 + i], y, widths[5 + i], ROW_H + 1, capFmt(totals[w]),
+           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iPer], y, widths[iPer], ROW_H + 1, capFmt(grand), { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL });
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    });
+  }
+
+  /* CULLING MONITORING: the plots that earn it, their two days, the
+     duration and who it pays -- then the plots transplanted this month that
+     do not, with the reason. No worker columns, so always the tall page. */
+  function drawCullSheet() {
+    const ym = monthLabelToInput(m);
+    const rows = cullIncentiveRows(n, ym);
+    const qualify = rows.filter(r => r.counts);
+    const other = rows.filter(r => !r.counts && !(r.override && r.override.action === 'remove'));
+    const who = MJMCullIncentive.whoEarns(n).join(', ');
+    const label = t('tab.cullIncentive') + ' — Saringan to Transplanting within ' + MJMCullIncentive.TARGET_DAYS + ' days';
+    const W = [10, 16, 28, 28, 18, 0, 22];
+    W[5] = CONTENT_W - W.reduce((a, b) => a + b, 0);
+    const xs = []; let x = MARGIN; W.forEach(w => { xs.push(x); x += w; });
+    let y = titleBlock(label, '');
+    const HEAD_H = 10;
+    const floor = PH - MARGIN - 20;
+    const head = (cols) => {
+      cols.forEach((c, i) => cell(xs[i], y, W[i], HEAD_H, c, { bold: true, size: 7.5, fill: HEAD_FILL }));
+      y += HEAD_H;
+    };
+    const page = (hd) => { if (y + ROW_H > floor) { newPage(); y = titleBlock(label, ''); head(hd); } };
+    const H1 = ['No.', t('pay.plot'), 'Saringan started', 'Transplanting ended', 'Days', 'Who gets it', t('pay.checked')];
+    head(H1);
+    if (!qualify.length) { cell(MARGIN, y, CONTENT_W, 12, 'No plot qualifies this month.', { size: 9 }); y += 12; }
+    qualify.forEach((r, i) => {
+      page(H1);
+      const z = i % 2 ? ZEBRA : null;
+      cell(xs[0], y, W[0], ROW_H, String(i + 1), { size: 8, fill: z });
+      cell(xs[1], y, W[1], ROW_H, r.plot, { size: 8.5, bold: true, nowrap: true, fill: z });
+      cell(xs[2], y, W[2], ROW_H, _cullPd(r.start), { size: 8, nowrap: true, fill: z });
+      cell(xs[3], y, W[3], ROW_H, _cullPd(r.end), { size: 8, nowrap: true, fill: z });
+      cell(xs[4], y, W[4], ROW_H, r.days == null ? '—' : String(r.days), { size: 8.5, bold: true, fill: z });
+      cell(xs[5], y, W[5], ROW_H, who || '—', { size: 7, fill: z, align: 'left' });
+      if (r.check) { cell(xs[6], y, W[6], ROW_H, '', { fill: z }); drawTick(xs[6], y, W[6], ROW_H); }
+      else cell(xs[6], y, W[6], ROW_H, 'Not checked', { size: 6.5, nowrap: true, fill: z });
+      y += ROW_H;
+    });
+    const held = qualify.filter(r => !r.check).length;
+    cell(MARGIN, y, CONTENT_W, ROW_H + 1,
+         `${qualify.length - held} of ${qualify.length} plot(s) checked — sent to the payroll` + (held ? ` · ${held} not checked yet — not paid` : ''),
+         { bold: true, size: 8, fill: TOTAL_FILL });
+    y += ROW_H + 1;
+    if (other.length) {
+      y += 6;
+      const H2 = ['No.', t('pay.plot'), 'Saringan started', 'Transplanting ended', 'Days', 'Why not', ''];
+      if (y + HEAD_H + ROW_H > floor) { newPage(); y = titleBlock(label, ''); }
+      cell(MARGIN, y, CONTENT_W, 8, 'Transplanted this month and NOT earning it', { bold: true, size: 8.5, fill: [243, 244, 246] });
+      y += 8;
+      head(H2);
+      other.forEach((r, i) => {
+        page(H2);
+        const z = i % 2 ? ZEBRA : null;
+        cell(xs[0], y, W[0], ROW_H, String(i + 1), { size: 8, fill: z });
+        cell(xs[1], y, W[1], ROW_H, r.plot, { size: 8.5, bold: true, nowrap: true, fill: z });
+        cell(xs[2], y, W[2], ROW_H, _cullPd(r.start), { size: 8, nowrap: true, fill: z });
+        cell(xs[3], y, W[3], ROW_H, _cullPd(r.end), { size: 8, nowrap: true, fill: z });
+        cell(xs[4], y, W[4], ROW_H, r.days == null ? '—' : String(r.days), { size: 8.5, fill: z });
+        cell(xs[5], y, W[5] + W[6], ROW_H, _cullWhy(r), { size: 7.5, fill: z, align: 'left' });
+        y += ROW_H;
+      });
+    }
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+    doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+  }
+
+  /* Is everything this file needs actually in memory? Asked BEFORE a page
+     is drawn, so a nursery still loading costs one sentence and not a file
+     with a hole in it. wrDownloadGo loads all of it first. */
+  for (const nn of NURS) {
+    if (tpView) {
+      const k = _tpPayrollKey(nn, m);
+      if (_tpRecordsCache[k] === undefined || _tpRecordsLoading[k]) { alert(t('pay.loading')); return; }
+      if (_tpRecordsErr[k]) { alert(_tpRecordsErr[k]); return; }
+    } else if (lsView) {
+      const k = _doPayrollKey(nn, m);
+      if (_doRecordsCache[k] === undefined || _doRecordsLoading[k]) { alert(t('pay.loading')); return; }
+      if (_doRecordsErr[k]) { alert(_doRecordsErr[k]); return; }
+    } else if (ciView) {
+      const ym = monthLabelToInput(m);
+      if (!window.MJMCullIncentive || !_cullCache[ym] || _cullLoading[ym]) { alert(t('pay.loading')); return; }
+    } else if (spView) {
+      const st = _spCache[m];
+      if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
+      if (!spWorkerColumns(st.rows, st.saved, st.names).wk.length) { alert(t('pay.spNoNames')); return; }
+    }
+  }
+  if (MAINT_TYPE && !NURS.some(nn => jobWorkers(nn, MAINT_TYPE).length)) {
+    alert(t('pay.noWorkers'));
+    return;
+  }
+
+  NURS.forEach(nn => {
+    n = nn;
+    if (MAINT_TYPE) {
+      startSection(orientFor('tick', jobWorkers(n, MAINT_TYPE).length));
+      drawMaintSheet(MAINT_TYPE);
+    } else if (lsView) {
+      startSection(orientFor('loading', jobWorkers(n, 'loading_seedlings').length));
+      drawLoadingSheet();
+    } else if (tpView) {
+      startSection(orientFor('transplanting', tpWorkerColumns(n, transplantingRows(n, m)).wk.length));
+      drawTransplantingSheet();
+    } else if (spView) {
+      const st = _spCache[m];
+      startSection(orientFor('seed', spWorkerColumns(st.rows, st.saved, st.names).wk.length));
+      drawSeedPlantingSheet();
+    } else if (ciView) {
+      startSection('portrait');
+      drawCullSheet();
+    }
+  });
+  if (!doc) return;
+  /* The file names the job and every nursery in it. */
+  const jobPart = spView ? 'Pre_Nursery'
+    : String(JOB_TITLE).replace(/&/g, 'and').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const nurPart = spView ? '' : NURS.join('_') + '_';
+  doc.save(`Worker_Record_${jobPart}_${nurPart}${m.replace(/\s+/g, '_')}.pdf`);
+}
+
+/* ── THE DOWNLOAD WINDOW ────────────────────────────────────────────────
+   The icon on Worker Activity opens this. It names the job on screen and
+   the month, offers a tick per nursery that job is done in, and builds ONE
+   file. The data a nursery not on screen needs is read first, so ticking
+   UNN 2 from the BNN screen is not a file with an empty UNN 2 in it. */
+function wrDownloadNurseries(job) {
+  if (SP_VIEWS[job]) return [SP_NURSERY];
+  if (job === 'cull_incentive')
+    return (window.MJMCullIncentive && MJMCullIncentive.NURSERIES) || ['BNN', 'UNN1', 'UNN2'];
+  return jobNurseries(job);
+}
+function wrDownloadTitle(job) {
+  if (SP_VIEWS[job]) return t('tab.seedPlanting');
+  if (PAYROLL_TYPES[job]) return t(PAYROLL_TYPES[job].label);
+  return jobLabel(job);
+}
+function openWrDownload() {
+  const job = _payrollView, list = wrDownloadNurseries(job);
+  /* The nursery on screen starts ticked; one this job is not done in
+     (PN on a main-nursery job) starts on the first that it is. */
+  const cur = list.includes(getNursery()) ? getNursery() : list[0];
+  document.getElementById('wr-dl-title').textContent = 'Download — ' + wrDownloadTitle(job);
+  document.getElementById('wr-dl-sub').textContent =
+    t('pay.month') + ' ' + getMonth() + (list.length > 1 ? ' · tick one or more nurseries' : '');
+  document.getElementById('wr-dl-list').innerHTML = list.map(k => `
+    <label class="chk-label"><input type="checkbox" class="wr-dl-n" value="${esc(k)}"
+      ${(k === cur || list.length === 1) ? 'checked' : ''} onchange="wrDownloadSync()">
+      <span>${esc(NURSERY_NAMES[k] || k)} (${esc(nurseryShort(k))})</span></label>`).join('');
+  wrDownloadSync();
+  document.getElementById('wr-dl-modal').classList.add('open');
+}
+function closeWrDownload() { document.getElementById('wr-dl-modal').classList.remove('open'); }
+function wrDownloadPicked() {
+  return [...document.querySelectorAll('#wr-dl-list .wr-dl-n')].filter(i => i.checked).map(i => i.value);
+}
+function wrDownloadSync() {
+  const go = document.getElementById('wr-dl-go');
+  if (go) go.disabled = !wrDownloadPicked().length;
+}
+async function wrDownloadGo() {
+  const job = _payrollView, picked = wrDownloadPicked();
+  if (!picked.length) return;
+  const go = document.getElementById('wr-dl-go');
+  const was = go.textContent;
+  go.disabled = true; go.textContent = 'Preparing…';
+  try {
+    const m = getMonth();
+    if (job === 'transplanting') {
+      for (const nn of picked) {
+        const k = _tpPayrollKey(nn, m);
+        if (_tpRecordsCache[k] === undefined && !_tpRecordsLoading[k]) await loadTransplantRecordsForPayroll(nn, m);
+      }
+    } else if (job === 'loading_seedlings') {
+      for (const nn of picked) {
+        const k = _doPayrollKey(nn, m);
+        if (_doRecordsCache[k] === undefined && !_doRecordsLoading[k]) await loadDoRecordsForPayroll(nn, m);
+      }
+    } else if (job === 'cull_incentive') {
+      const ym = monthLabelToInput(m);
+      if (_cullCache[ym] === undefined && !_cullLoading[ym]) await loadCullIncentiveForPayroll(ym);
+    }
+    closeWrDownload();
+    downloadPayrollPDF({ job, nurseries: picked });
+  } catch (e) {
+    console.error('[maint] download:', e);
+    alert('The PDF could not be made:\n\n' + ((e && e.message) || e));
+  } finally {
+    go.textContent = was; wrDownloadSync();
+  }
 }
 
 /* ── Piece rates (one rate card for all nurseries) ── */
