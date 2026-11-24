@@ -1496,17 +1496,21 @@ function renderRequests(){
 
   const reqCard = r => {
     const mineReq = me && r.requestedBy === me;
+    // On a desk a request is one LINE of a list (status, request, details, who asked, decision); on a phone the same
+    // pieces stack as a card. The pieces are the same elements either way: the stylesheet places them.
     const meta = el("div",{class:"meta"},
-      el("span",{class:"pill "+REQ_CLS[r.status], text:r.status}),
-      r.priority ? el("span",{class:"pri "+r.priority, text:r.priority}) : null, r.type ? el("span",{text:r.type}) : null,
-      r.due ? el("span",{text:"Needed by "+fmtY(r.due)}) : null);
+      el("span",{class:"r-st"}, el("span",{class:"pill "+REQ_CLS[r.status], text:r.status})),
+      el("span",{class:"r-info"},
+        r.priority ? el("span",{class:"pri "+r.priority, text:r.priority}) : null, r.type ? el("span",{text:r.type}) : null,
+        r.due ? el("span",{text:"Needed by "+fmtY(r.due)}) : null));
     const kids = [meta,
-      el("div",{class:"nm", text:r.name}),
-      el("div",{class:"path", text:path(r)}),
-      r.reason ? el("p",{class:"why", text:r.reason}) : null,
-      el("div",{class:"note", text:`Requested by ${r.requestedBy || "someone"} · ${when(r.requestedAt)}` + ((r.assignees||[]).length ? ` · for ${(r.assignees||[]).join(", ")}` : "")})];
+      el("div",{class:"r-main"},
+        el("div",{class:"nm", text:r.name}),
+        el("div",{class:"path", text:path(r)}),
+        r.reason ? el("p",{class:"why", text:r.reason}) : null),
+      el("div",{class:"note r-who", text:`Requested by ${r.requestedBy || "someone"} · ${when(r.requestedAt)}` + ((r.assignees||[]).length ? ` · for ${(r.assignees||[]).join(", ")}` : "")})];
     if (r.status !== "Pending"){
-      kids.push(el("div",{class:"note decided"}, `${r.status} by ${r.decidedBy || "—"} · ${when(r.decidedAt)}` + (r.decisionNote ? ` — “${r.decisionNote}”` : ""),
+      kids.push(el("div",{class:"note decided r-end"}, `${r.status} by ${r.decidedBy || "—"} · ${when(r.decidedAt)}` + (r.decisionNote ? ` — “${r.decisionNote}”` : ""),
         r.taskId && tasks.find(t => t.id === r.taskId) ? el("button",{class:"linkbtn", style:"padding-left:8px", onclick:()=>openSheet(r.taskId)}, "Open task →") : null));
     } else if (reqOpen && reqOpen.id === r.id){
       const approve = reqOpen.mode === "approve";
@@ -1536,7 +1540,7 @@ function renderRequests(){
           el("button",{class:"btn danger", onclick:() => { reqOpen = {id:r.id, mode:"reject"}; renderRequests(); }}, "Reject"));
       }
       if (mineReq && canWrite) acts.push(el("button",{class:"btn", onclick:() => decideRequest(r, "Withdrawn", "")}, "Withdraw"));
-      if (acts.length) kids.push(el("div",{class:"acts"}, ...acts));
+      if (acts.length) kids.push(el("div",{class:"acts r-end"}, ...acts));
     }
     return el("div",{class:"panel req"}, ...kids);
   };
@@ -1551,7 +1555,10 @@ function renderRequests(){
         el("p",{class:"note", style:"margin:4px 0 0", text:`Approved requests are added to Tasks as Not Started. ${who}`})),
       el("span",{class:"spacer"})),
     seg,
-    list.length ? el("div",{class:"reqs"}, ...list.map(reqCard))
+    list.length ? el("div",{class:"reqs"},
+      el("div",{class:"reqs-head", "aria-hidden":"true"}, ...[["r-st","Status"],["r-main","Request"],["r-info","Details"],["r-who","Requested"],["r-end","Decision"]]
+        .map(([c,t]) => el("span",{class:c, text:t}))),
+      ...list.map(reqCard))
       : el("div",{class:"empty"}, el("b",{text: reqShow === "Pending" ? "No requests waiting" : `No ${reqShow.toLowerCase()} requests`}),
           reqShow === "Pending" && canRequest ? "Use “+ Request a task” to ask for something new." : ""));
 }
