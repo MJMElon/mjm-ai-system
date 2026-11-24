@@ -15,17 +15,23 @@
     <script src="../shared/shared_access.js"></script>
     <style>
         body { font-family: 'Outfit', system-ui, sans-serif; background: #f1f5f9; }
-        table.lp { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; font-size: 13px; width: 100%; }
-        table.lp th, table.lp td { padding: 9px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; white-space: nowrap; }
-        table.lp th { background: #f8fafc; color: #64748b; font-weight: 800; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+        table.lp { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; font-size: 13px; width: 100%; color: #1e293b; }
+        table.lp th, table.lp td { padding: 12px 16px; border-bottom: 1px solid #eef2f6; text-align: right; white-space: nowrap; }
+        table.lp th { color: #94a3b8; font-weight: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
         table.lp td.l, table.lp th.l { text-align: left; }
         table.lp tbody tr.plotrow { cursor: pointer; }
-        table.lp tbody tr.plotrow:hover { background: #f0fdfa; }
-        table.lp tr.grp td { background: #ccfbf1; color: #134e4a; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
-        table.lp tr.tot td { background: #134e4a; color: #fff; font-weight: 900; }
+        table.lp tbody tr.plotrow:hover td { background: #f8fafc; }
+        table.lp tr.grp td { color: #0f766e; font-weight: 700; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; padding-top: 18px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+        table.lp tfoot tr.tot td { font-weight: 700; border-top: 1px solid #cbd5e1; border-bottom: none; padding-top: 14px; }
         table.lp td.dash { color: #cbd5e1; }
-        table.lp td.adj { color: #b45309; font-weight: 700; }
-        table.lp td.cull { color: #be123c; }
+        table.lp td.adj { color: #0f766e; }
+        table.lp td.cull { color: #334155; }
+        table.lp td.nil { color: #cbd5e1; }
+        .lp-chip-label{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8}
+        .lp-chips{display:flex;flex-wrap:wrap;gap:6px}
+        .lp-chip{height:34px;padding:0 12px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-weight:800;font-size:12px;color:#334155;cursor:pointer}
+        .lp-chip:hover{border-color:#5eead4;color:#0f766e}
+        .lp-chip.on{background:#0f766e;border-color:#0f766e;color:#fff}
     </style>
 </head>
 <body class="min-h-screen">
@@ -39,6 +45,13 @@
                 <p class="text-[11px] font-bold text-slate-400" id="lp-sub">Every plot, and what happened to it.</p>
             </div>
         </div>
+    </div>
+
+    <div class="mb-4 space-y-2">
+        <div class="lp-chip-label">Nursery</div>
+        <div id="lp-nursery-row" class="lp-chips"></div>
+        <div class="lp-chip-label">Plot</div>
+        <div id="lp-plot-row" class="lp-chips"></div>
     </div>
 
     <div id="lp-status" class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm font-bold text-slate-400">Loading…</div>
@@ -162,6 +175,7 @@
     let MODEL = null;
 
     function showList() {
+        fillPlotSelect('');
         document.getElementById('lp-list').classList.remove('hidden');
         document.getElementById('lp-detail').classList.add('hidden');
         document.getElementById('lp-title').textContent = 'Life of Plot';
@@ -169,9 +183,24 @@
         history.replaceState(null, '', location.pathname);
     }
 
+    let NUR = '';
+    const chip = (attr, val, label, on) =>
+        `<button type="button" class="lp-chip${on ? ' on' : ''}" data-${attr}="${String(val).replace(/"/g, '&quot;')}">${label}</button>`;
+    function fillNurserySelect() {
+        const keys = MODEL.groups.filter(g => g.plots.length).map(g => g.key);
+        document.getElementById('lp-nursery-row').innerHTML =
+            chip('nur', '', 'All nurseries', !NUR) + keys.map(k => chip('nur', k, NURSERY_LABEL[k], NUR === k)).join('');
+    }
+    function fillPlotSelect(keep) {
+        const names = MODEL.groups.filter(g => !NUR || g.key === NUR).flatMap(g => g.plots.map(p => p.plot));
+        const cur = keep && names.includes(keep) ? keep : '';
+        document.getElementById('lp-plot-row').innerHTML =
+            chip('plot', '', 'All plots', !cur) + names.map(n => chip('plot', n, n, cur === n)).join('');
+    }
+
     function renderList() {
         let h = '<thead><tr><th class="l">Plot</th><th class="l">Nursery</th><th>Transplanted (adjusted)</th><th>2nd cull</th><th>3rd cull</th></tr></thead><tbody>';
-        MODEL.groups.forEach(g => {
+        MODEL.groups.filter(g => !NUR || g.key === NUR).forEach(g => {
             h += `<tr class="grp"><td colspan="5">${g.label} · ${g.plots.length} plot${g.plots.length === 1 ? '' : 's'}</td></tr>`;
             g.plots.forEach(p => {
                 h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l" style="font-weight:800">${p.plot}</td><td class="l">${g.label}</td><td>${dash(p.tAdj)}</td><td class="cull">${dash(p.c2)}</td><td class="cull">${dash(p.c3)}</td></tr>`;
@@ -186,6 +215,9 @@
     function showPlot(name) {
         const p = MODEL.groups.flatMap(g => g.plots).find(x => x.plot === name);
         if (!p) return;
+        NUR = p.nursery;
+        fillNurserySelect();
+        fillPlotSelect(p.plot);
         document.getElementById('lp-list').classList.add('hidden');
         document.getElementById('lp-detail').classList.remove('hidden');
         document.getElementById('lp-title').textContent = 'Life of Plot · ' + p.plot;
@@ -219,6 +251,8 @@
             ]);
             MODEL = buildPlotHistory(plots, rows);
             document.getElementById('lp-status').classList.add('hidden');
+            fillNurserySelect();
+            fillPlotSelect('');
             renderList();
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
             if (deep) showPlot(deep); else showList();
@@ -228,6 +262,20 @@
     }
 
     document.getElementById('lp-up').addEventListener('click', showList);
+    document.getElementById('lp-nursery-row').addEventListener('click', e => {
+        const b = e.target.closest('button[data-nur]');
+        if (!b) return;
+        NUR = b.dataset.nur;
+        fillNurserySelect();
+        fillPlotSelect('');
+        renderList();
+        showList();
+    });
+    document.getElementById('lp-plot-row').addEventListener('click', e => {
+        const b = e.target.closest('button[data-plot]');
+        if (!b) return;
+        if (b.dataset.plot) showPlot(b.dataset.plot); else showList();
+    });
     window.addEventListener('hashchange', () => {
         const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
         if (MODEL && deep) showPlot(deep); else if (MODEL) showList();
