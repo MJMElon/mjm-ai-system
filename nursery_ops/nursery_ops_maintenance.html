@@ -564,8 +564,16 @@
           <div style="font-size:13px;font-weight:700;color:var(--text-head);">Mega Jutamas Sdn Bhd</div>
           <div style="font-size:12px;font-weight:600;color:var(--text-muted);" id="payroll-form-line"></div>
         </div>
-        <!-- One form covering all four work types, not just the open sub-tab. -->
-        <button class="btn" style="font-size:12px;" onclick="downloadPayrollPDF()" data-i18n="btn.claimPdf">⬇ Salary Claim Form (PDF)</button>
+        <!-- DOWNLOAD THE JOB ON SCREEN, for one, two or three nurseries.
+             An icon, as the office asked; the window it opens says what is
+             being downloaded and asks which nurseries. -->
+        <button type="button" class="btn wr-dl-btn" id="wr-dl-btn" onclick="openWrDownload()"
+                style="width:38px;height:36px;padding:0;display:inline-flex;align-items:center;justify-content:center;"
+                title="Download PDF" aria-label="Download PDF">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        </button>
       </div>
       <!-- VERIFY & LOCK. Above the names bar and the table, because it is
            about both of them and because that is where the payroll module
@@ -1008,6 +1016,27 @@
 </div>
 
 <!-- ═══ PDF DOWNLOAD MODAL ═══ -->
+<!-- WORKER ACTIVITY DOWNLOAD: the job on screen, for the nurseries ticked.
+     Filled by openWrDownload(). -->
+<div class="modal-overlay" id="wr-dl-modal" onclick="if(event.target===this)closeWrDownload()">
+  <div class="modal" style="width:440px;">
+    <div class="modal-top">
+      <div class="modal-title" id="wr-dl-title">Download</div>
+      <button class="modal-close" onclick="closeWrDownload()" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="wr-dl-sub" style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;"></div>
+      <div id="wr-dl-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div id="wr-dl-note" style="font-size:11.5px;color:var(--text-faint);margin-top:12px;line-height:1.5;">
+        Each nursery starts its own page. A sheet with few workers prints portrait; one with many prints landscape.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeWrDownload()">Cancel</button>
+      <button class="btn btn-primary" id="wr-dl-go" onclick="wrDownloadGo()">Download PDF</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="pdf-modal">
   <div class="modal" style="width:420px;">
     <div class="modal-top">
@@ -1077,7 +1106,7 @@
      page's own, and the office asked for it here; the rules are shared, so
      the file is shared. -->
 <script src="../shared/shared_npayroll_lock.js?v=3"></script>
-<script src="plot_maintenance_script.js?v=197"></script>
+<script src="plot_maintenance_script.js?v=198"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

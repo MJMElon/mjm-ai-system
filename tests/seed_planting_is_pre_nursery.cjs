@@ -367,8 +367,11 @@ const sheetOf = (page) => page.evaluate(() => {
     const d = window.__PDFS[0] || { lines: [], o: {} };
     return { saved: d.saved, orient: d.o.orientation, lines: d.lines };
   });
-  check('the Pre Nursery sheet downloads, wide',
-    [/^Worker_Record_Pre_Nursery_Oct_2026/.test(pdf.saved || ''), pdf.orient], [true, 'landscape']);
+  /* A CREW THIS SMALL FITS THE TALL PAGE, so it prints portrait -- the
+     office's rule for every Worker Activity download: few workers portrait,
+     many landscape (tests/every_job_downloads_by_nursery.cjs). */
+  check('the Pre Nursery sheet downloads, tall for a small crew',
+    [/^Worker_Record_Pre_Nursery_Oct_2026/.test(pdf.saved || ''), pdf.orient], [true, 'portrait']);
   /* BOTH JOBS ARE ON THE PAPER, each with its own total naming it. A sheet
      printing only the half that happened to be on screen is the fault the
      Transplanting download already had once. */

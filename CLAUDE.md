@@ -10819,6 +10819,35 @@ name.
 **18 of its 26 checks fail on the previous page**, each by name. Nothing to
 run in the database.
 
+## Worker Activity downloads ONE job, for the nurseries ticked
+
+The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果
+少人可以是 Portrait 的，如果人多就是 print Landscape的。我要一次可以download
+1个/2个/3个 nursery。记得要有title ... Download button用Icon就可以了。"*
+
+- **The button is an icon** (`#wr-dl-btn`) and opens a window
+  (`openWrDownload`) naming the job on screen and the month, with a tick per
+  nursery that job is done in (`wrDownloadNurseries`: the job scope; Culling
+  Monitoring its own three; Seed Planting the Pre Nursery only).
+- **The file is the job on screen and nothing else.** It used to print all
+  four maintenance sheets whichever was open. `downloadPayrollPDF({ job,
+  nurseries })` draws one section per nursery, each starting its own page;
+  called bare it prints the job and nursery on screen, as before.
+- **Portrait or landscape is decided per nursery** (`orientFor`): portrait
+  while that crew's worker columns fit across the tall page without
+  splitting, landscape otherwise. Every later page goes through `newPage()`,
+  because a bare `addPage()` takes the FIRST page's shape.
+- **The title says the job** (`WORKER RECORD — LOADING SEEDLINGS`) and so does
+  the file name, with every nursery in it.
+- **Loading Seedlings and Culling Monitoring had no paper at all**;
+  `drawLoadingSheet` and `drawCullSheet` are theirs, off the same rows the
+  tabs draw (`loadingSeedlingsRows`, `cullIncentiveRows`).
+- `wrDownloadGo` reads the data a nursery not on screen needs (transplanting,
+  DOs, culling) BEFORE the file is made.
+
+`tests/every_job_downloads_by_nursery.cjs` serves the repository itself;
+23 checks, all failing on the previous page. Nothing to run in the database.
+
 ## The Sales Web publishes what the Monthly Maturity Allocation says is left
 
 February 2027 read **29,042** After Deduct Reserve on Stock & Sales →
