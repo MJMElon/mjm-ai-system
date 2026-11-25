@@ -10281,6 +10281,15 @@ CONDUCTOR** (paid on their own nursery), and in Edit it takes a drop.
   the draft live as groups are dropped. A cross takes the group off the row
   and its people off the rule. People already on the rule before anybody
   dragged stay paid and are on the card above, not chips here.
+- **THE GROUP IS FOLLOWED, not copied once** (*"把surnano drag去admin ...
+  为什么这里不跟着变动"*). On each page load, anybody now standing in a
+  dragged group who is not on the rule is ADDED through `cmSave`, dated this
+  month (`_cullFollowGroups`). It only ADDS; taking somebody off moves money
+  and stays a press (the cross on the group).
+- **THE CULLING MONITORING CARD EDITS PRICES AND THE TARGET ONLY**
+  (*"为什么可以drop down? 已经跟着底下的逻辑了"*). Its names are shown, never
+  picked: no dropdown, no Add, no Remove, which were a second writer of the
+  list.
 
 Section 7 of `tests/each_job_has_its_own_worker_list.cjs`. Nothing to run in
 the database.

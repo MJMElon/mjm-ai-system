@@ -13733,6 +13733,15 @@ function jcCullDrop(ev) {
   const p = MJMJobCrew.splitGroup(g);
   if (!p) return;
   if (!cullGroupsDraft.includes(g)) cullGroupsDraft.push(g);
+  _cullAddGroupPeople(g);
+  _cmRedraw();
+}
+/* Put every person standing in group g today onto the draft, once. FC
+   goes on the Field Conductor list for its own nursery; anything else on
+   the every-nursery list. Answers how many it added. */
+function _cullAddGroupPeople(g) {
+  const p = MJMJobCrew.splitGroup(g);
+  if (!p || !cmDraft) return 0;
   const CI = window.MJMCullIncentive;
   const kind = p.role === 'Field Conductor' ? 'fc' : 'admin';
   const nursery = kind === 'fc' ? ((CI.sectionOf && CI.sectionOf(p.section)) || p.section) : '';
@@ -13744,12 +13753,43 @@ function jcCullDrop(ev) {
     .filter(r => r.kind === kind && r.active !== false && (kind !== 'fc' || k(r.nursery) === k(nursery)));
   const already = (nm) => on.some(r => k(r.name) === k(nm)
     || (CI.resolveName && CI.resolveName(r.name, [nm], x => x).row === nm));
+  let added = 0;
   _jcNames(g).forEach(nm => {
     if (already(nm)) return;
     on.push({ name: nm });
     cmDraft.people.push({ id: null, kind, name: nm, workerId: _cmWorkerId(nm), nursery, active: true });
+    added++;
   });
-  _cmRedraw();
+  return added;
+}
+
+/* ── THE GROUP IS FOLLOWED, NOT COPIED ONCE ──────────────────────────────
+   The office moved Surnano into Admin on the Team Board and the Culling
+   Monitoring card did not move: a drop copied the group's people onto the
+   rule on the day it was made and never looked again. *"如果worker namelist
+   那边drag了上面的部分也会改"* -- the group dragged here IS the answer, so
+   somebody who joins it later joins the rule too.
+
+   So once the rule, the register and the stored groups are all in hand,
+   anybody now standing in a dragged group who is not on the rule is
+   ADDED, through the same dated cmSave (from this month). It only ever
+   ADDS: taking somebody off moves money, and that stays a press (the
+   cross on the group here, or Remove on the card above). Once per page
+   load, never under an open edit, and only for a login that may edit the
+   setting. */
+let _cullFollowed = false;
+async function _cullFollowGroups() {
+  const CI = window.MJMCullIncentive;
+  if (_cullFollowed || cmDraft || jobCrewDraft || !cullGroups.length) return;
+  if (!CI || !CI.ruleSource || CI.ruleSource() !== 'office' || !maySetting()) return;
+  if (!Array.isArray(_registerRows) || !_registerRows.length || !window.MJMJobCrew) return;
+  _cullFollowed = true;
+  _cmOpenDraft(true);
+  let added = 0;
+  cullGroups.forEach(g => { added += _cullAddGroupPeople(g); });
+  if (!added) { cmDraft = null; return; }
+  await cmSave();
+  if (cmDraft && cmDraft.viaJc) { cmDraft = null; _cmRedraw(); }
 }
 
 /* OFF EVERY NURSERY IT IS ON, never only the one the chip was drawn from:
@@ -13921,7 +13961,7 @@ function renderCullMonitoringSetting() {
   if (cmDraft || !CI || !CI.loadRule || !_supabase || _cmRuleAsked === M) return;
   _cmRuleAsked = M;
   CI.loadRule(_supabase, M).then(
-    (r) => { if (!cmDraft) { renderCullMonitoringSetting(); renderJobCrewSetting(); }
+    (r) => { if (!cmDraft) { renderCullMonitoringSetting(); renderJobCrewSetting(); _cullFollowGroups(); }
              if (!(r && r.ready)) _cmRuleAsked = ''; },
     (e) => { console.warn('[maint] Culling Monitoring rule not read:', e); _cmRuleAsked = ''; });
 }
@@ -13969,10 +14009,6 @@ function cmRegisterRows() {
   return (Array.isArray(_registerRows) ? _registerRows : [])
     .filter(w => w && w.full_name && w.active !== false);
 }
-function cmRegisterNames() {
-  return [...new Set(cmRegisterRows().map(w => String(w.full_name).trim()))]
-    .sort((a, b) => a.localeCompare(b));
-}
 function _cmWorkerId(name) {
   const ws = cmRegisterRows();
   const CI = window.MJMCullIncentive;
@@ -14017,33 +14053,6 @@ function _cmOpenDraft(viaJc) {
 function _cmRedraw() { renderCullMonitoringSetting(); renderJobCrewSetting(); }
 function cmCancel() { cmDraft = null; _cmRedraw(); }
 function cmSetRate(kind, v) { if (cmDraft) cmDraft.rate[kind] = v === '' ? '' : Number(v); }
-function cmSetName(i, v) {
-  if (!cmDraft || !cmDraft.people[i]) return;
-  cmDraft.people[i].name = v;
-  cmDraft.people[i].workerId = _cmWorkerId(v);
-}
-function cmSetNursery(i, v) { if (cmDraft && cmDraft.people[i]) cmDraft.people[i].nursery = v; }
-function cmRemove(i) {
-  if (!cmDraft || !cmDraft.people[i]) return;
-  /* A row that was never saved is dropped; one that WAS is marked, because
-     taking somebody off the rule is a record and not a deletion. */
-  if (cmDraft.people[i].id == null) cmDraft.people.splice(i, 1);
-  else cmDraft.people[i].active = false;
-  _cmRedraw();
-}
-function cmAdd(kind) {
-  if (!cmDraft) return;
-  const CI = window.MJMCullIncentive;
-  const names = cmRegisterNames();
-  if (!names.length) {
-    alert('The worker register has not loaded, so there is nobody to choose.\n\n'
-        + 'Reload the page and try again.');
-    return;
-  }
-  cmDraft.people.push({ id: null, kind, name: names[0], workerId: _cmWorkerId(names[0]),
-    nursery: kind === 'fc' ? ((CI.NURSERIES && CI.NURSERIES[0]) || 'BNN') : '', active: true });
-  _cmRedraw();
-}
 
 /* THE MONTH AN EDIT STARTS FROM. Settings carries no month picker — it is
    the one panel that is not about a month — so an edit starts from the one
@@ -14160,34 +14169,6 @@ async function cmSave() {
   }
 }
 
-/* The name and nursery pickers, shared by this card and by the Culling
-   Monitoring row of Worker List for Each Job. Both edit ONE draft, so they
-   draw it with ONE pair of controls.
-
-   THE NAME IS A DROPDOWN OFF THE REGISTER, never a typed box: a worker is
-   the register ROW, and a name keyed by hand that the register cannot
-   place is money leaving the claim with nothing saying it had gone. A name
-   already on the rule that is NOT on the register keeps its place in its
-   own list and says so -- it is the row somebody has to settle. Which
-   register row a name resolves to is the CLAIM own rule, because the names
-   on the rule are short and the register spells them out. */
-function _cmPicker(r, i) {
-  const CI = window.MJMCullIncentive;
-  const names = cmRegisterNames();
-  const on = CI && CI.resolveName ? (CI.resolveName(r.name, names, x => x).row || '') : '';
-  const opts = names.map(nm =>
-    `<option value="${esc(nm)}"${nm === on ? ' selected' : ''}>${esc(nm)}</option>`).join('');
-  const stray = on ? ''
-    : `<option value="${esc(r.name)}" selected>${esc(r.name)} — not on the register</option>`;
-  return `<select class="cm-pick" onchange="cmSetName(${i}, this.value)">${stray}${opts}</select>`;
-}
-function _cmNurseryPick(r, i) {
-  const CI = window.MJMCullIncentive;
-  const opts = (CI.NURSERIES.length ? CI.NURSERIES : ['BNN', 'UNN1', 'UNN2']).map(n =>
-    `<option value="${esc(n)}"${n === r.nursery ? ' selected' : ''}>${esc(n)}</option>`).join('');
-  return `<select class="cm-pick cm-pick-n" onchange="cmSetNursery(${i}, this.value)">${opts}</select>`;
-}
-
 function _cmSettingHtml() {
   const CI = window.MJMCullIncentive;
   if (!CI) {
@@ -14241,22 +14222,24 @@ function _cmSettingHtml() {
      place is money leaving the claim with nothing saying it had gone. A
      name already on the rule that is NOT on the register keeps its place in
      its own list and says so — it is the row somebody has to settle. */
-  const picker = _cmPicker, nurseryPick = _cmNurseryPick;
-
   const block = (kind, title, perLine) => {
     const rows = live(kind);
     const body = rows.map((r) => {
       const i = D ? D.people.indexOf(r) : -1;
-      const who = D ? picker(r, i) : `<span class="cm-set-k">${esc(r.name)}</span>`;
+      /* NO PICKERS HERE ANY MORE -- *"而且为什么可以drop down? 已经跟着底下的
+         逻辑了"*. Who is paid follows the groups dragged onto Worker List for
+         Each Job, so this card SHOWS the names and edits only the prices and
+         the target. A dropdown here was a second way to change the list, and
+         two writers of one answer is the fault this file keeps finding. */
+      const who = `<span class="cm-set-k">${esc(r.name)}</span>`;
       const where = kind === 'fc'
-        ? (D ? nurseryPick(r, i) : `<span class="cm-set-w">${esc(r.nursery)} only</span>`)
+        ? `<span class="cm-set-w">${esc(r.nursery)} only</span>`
         : `<span class="cm-set-w">Every nursery</span>`;
-      const cut = D ? `<button class="cm-x" title="Take off the rule"
-                        onclick="cmRemove(${i})">&times;</button>` : '<span></span>';
+      const cut = '<span></span>';
       return `<div class="cm-pay-row">${who}${where}${cut}</div>`;
     }).join('') || `<div class="cm-pay-row cm-pay-none"><span>Nobody is on this list, so it
         pays nobody.</span><span></span><span></span></div>`;
-    const add = D ? `<button type="button" class="row-add" onclick="cmAdd('${kind}')">+ Add</button>` : '';
+    const add = D ? `<div class="cm-pay-row cm-pay-note"><span>Who is paid is set on Worker List for Each Job below.</span></div>` : '';
     return `
       <div class="cm-pay">
         <div class="cm-pay-top"><span class="cm-pay-t">${esc(title)}</span>

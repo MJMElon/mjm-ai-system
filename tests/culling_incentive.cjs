@@ -576,43 +576,18 @@ const payOf = (page, sec) => page.evaluate((s) =>
              adds: [...b.querySelectorAll('.row-add')].length,
              dated: /leaves every month before it alone/.test(b.textContent) };
   });
-  check('Edit opens the office\u2019s own shape: one price a block, a row a person',
+  /* NO PICKERS AND NO ADD/REMOVE -- *"而且为什么可以drop down? 已经跟着底下的
+     逻辑了"*. Who is paid follows the groups on Worker List for Each Job, so
+     this card's Edit is the prices and the target only. */
+  check('Edit on this card is the prices only: names shown, no pickers, no add, no remove',
     [ed.hadEdit, ed.rates, ed.picks, ed.nurseryPicks, ed.removes, ed.adds],
-    [true, ['20', '50'], 5, 3, 5, 2]);
+    [true, ['20', '50'], 0, 0, 0, 0]);
   check('\u2026and Edit is in the CORNER, not at the foot, and goes while editing',
     [ed.hadEdit, ed.editAtFoot, ed.cornerWhileEditing], [true, false, '']);
   check('\u2026and the target is keyed in its own bar, not inside a sentence',
     ed.target, '15');
   check('\u2026and the dated line is said HERE, where the decision is made',
     ed.dated, true);
-  /* THE NAME IS A DROPDOWN OFF THE REGISTER, and it preselects through the
-     CLAIM's own resolver -- the rule says "Florence" and the register says
-     "Florence Anak Jugah", so an exact match alone would mark five people
-     the claim pays perfectly well as strangers to it. */
-  check('the dropdown offers the register, and resolves a short name to its row',
-    await mp.evaluate(() => {
-      const sel = document.querySelectorAll('#cm-set-body .cm-pick:not(.cm-pick-n)');
-      const first = sel[0], florence = sel[1];
-      return [[...first.options].map(o => o.value).includes('Rousell Wayne'),
-              florence.value, [...florence.options].some(o => /not on the register/.test(o.textContent))];
-    }),
-    [true, 'Florence Anak Jugah', false]);
-
-  check('Add puts a row on the block it was pressed on, Remove takes one off',
-    await mp.evaluate(() => {
-      cmAdd('fc');
-      const after = document.querySelectorAll('#cm-set-body .cm-pick-n').length;
-      cmRemove(cmDraft.people.findIndex(p => p.id == null));
-      const back = document.querySelectorAll('#cm-set-body .cm-pick-n').length;
-      /* A row that WAS saved is marked, never spliced -- taking somebody off
-         the rule is a record, and that is the way back. */
-      const i = cmDraft.people.findIndex(p => p.id === 200);
-      cmRemove(i);
-      return [after, back, cmDraft.people.length, cmDraft.people[i].active,
-              document.querySelectorAll('#cm-set-body .cm-pick-n').length];
-    }),
-    [4, 3, 5, false, 2]);
-
   check('a rule with nobody on it is refused, not saved as paying nobody',
     await mp.evaluate(async () => {
       const keep = cmDraft.people.slice();
