@@ -11418,6 +11418,81 @@ nothing else on it cannot see where the records were put. The check is
 written as **which group the row falls under**, not as a position in the
 list, because what the office asked for is where it is FILED.
 
+#### AND IT IS DRAGGED ONTO THE ROUND IT BELONGS TO
+
+*"在这里我要可以drag 例如我把这个21 Nov 2026 可以drag去他的下一个上面 drag的
+话 代表它就是on schedule 是同一个工"*.
+
+**WHY A RECORD IS LOOSE AT ALL IS ALMOST ALWAYS THE ROUND, and that is the
+whole of the fix.** The pairing keys on (job, plot, ROUND), and the round a
+record carries is `week_no` — which the phone works out from the day the
+work was done. A worker who ticked round 2 and walked the plot on the 21st
+sends week 3, the office scheduled round 2, and the two never meet. The
+work is real, the row is real, and nothing joins them.
+
+**SO THE DRAG WRITES `week_no` AND NOTHING ELSE.** It is the one field that
+says which round; the phone only ever DERIVED it; and this page already
+corrects it on exactly that reasoning — the sent-back edit modal rewrites it
+whenever the office moves a date, because *"a record dated the 3rd of
+September cannot belong to the August sheet"*. What the worker reported —
+the day, the plot, the job, the batches, who did it — is untouched.
+
+**ONE FACT IN ONE PLACE, which is why this is a write and not a mark on the
+office's own row.** The pairing is read by this screen, by
+`applyFieldRecords` (which has its own copy of the loop) and by
+`maintFieldCredits` in the payroll module, all keyed on the week. A pin
+stored beside the schedule would have to be taught to all three — and a rule
+living in one of them is a rule the other two do not obey, which on this one
+is a crew paid for a round nothing credits them with.
+
+Six things in it, and four are rules this file already has:
+
+- **`recPinRefusal` IS THE ONE RULE, ASKED THREE TIMES** — to decide which
+  rows light up, at the drop, and again at the write, because a row drawn
+  before the month moved is still on the screen. It refuses another plot
+  (that is another plot's capacity paid for work nobody did there), another
+  job (*是同一个工*, the office's own words), a CHECKED row (settled, and
+  the claim is paying on it — Uncheck first), a row carrying no round, and
+  **a round another row of that plot and job already shares**: two rows on
+  one round is the ambiguity the pairing refuses to answer, and a drag that
+  wrote it would leave the record looking filed and still loose.
+- **THE GESTURE IS OFFERED ONLY WHERE IT CAN LAND.** A loose row is
+  `draggable` only where `recPinTargets` finds a row, and where it finds
+  none the tag's own hover says so rather than leaving somebody tugging at a
+  row that will never do anything.
+- **THE WAY BACK IS DERIVED, never remembered.** Nothing records which
+  records this page filed, so the × on a waiting chip is offered on a record
+  whose round is not the week its own day falls in — which is every record
+  the drag moved, and no record that matched by itself, since for those the
+  two numbers are the same and the button would change nothing. A phone can
+  legitimately send such a record too, so the confirm names BOTH numbers and
+  lets the office judge rather than claiming to undo something it cannot
+  know it did.
+- **IT IS A GATE AND NOT A PAINT.** `mayMaintAct('approve','view')` decides
+  whether the row may be picked up AND whether the write goes through, and
+  section 7 of the test calls the writer straight out of the console on a
+  page that drew no handle — the only way to tell the two apart.
+- **THE TINT IS IN THE WORK RECORDS BLOCK, not beside the markup rules.**
+  `#recview-list .rec-table tbody td` carries an ID and sets white, so a
+  class rule cannot reach it however many times it is repeated — the first
+  version wrote the loose tint and both drop tints four hundred lines up,
+  where they looked right in the source and did nothing on the screen. That
+  is also why the loose row's own cream had never shown since the Work
+  Records redesign.
+- **Nothing to run in the database.** `week_no` has been a column since
+  `add_maint_field_batch.sql`, and this page already writes it.
+
+`tests/a_record_is_dragged_onto_its_round.cjs` is 30 checks and **15 fail on
+the previous page**. It fires REAL `DragEvent`s at the real rows, because a
+drag simulated by calling the writer proves nothing about the screen, and it
+asks for the **computed background** of both lit rows as well as the class —
+which is what caught the ID-specificity fault, and what a class check passes
+straight over. Two things its fixture had to learn: the three refusals each
+have to sit on the row they are being refused FOR (`recPinRefusal` asks the
+plot first, so a weeding row on another plot is refused for the plot and the
+job test is never reached), and the checked row has to be a round the record
+does NOT fall in, or it pairs with it and is never loose to begin with.
+
 ## Worker Activity downloads ONE job, for the nurseries ticked
 
 The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果

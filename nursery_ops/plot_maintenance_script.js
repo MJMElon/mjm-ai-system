@@ -9867,9 +9867,24 @@ function renderRecords() {
      deliberately NOT gated the same way: a row the conductor approved off
      one record can still have a second waiting on it, and a chip hidden
      there would be a submission invisible on both tabs.) */
+  /* A LOOSE ROW IS DRAGGED ONTO THE ROUND IT BELONGS TO — the office's own
+     gesture (*"我要可以drag … drag的话 代表它就是on schedule 是同一个工"*).
+     It is made draggable only where there IS somewhere for it to go, so a
+     drag that could never land is one the screen does not offer; where
+     there is nowhere, the tag's own hover says that rather than leaving
+     somebody tugging at a row. `recPinRefusal` is the rule in both
+     directions. */
+  const mayPin = mayMaintAct('approve', 'view');
   const looseRowHtml = (f) => {
     const jenis = _rejJenis(f);
-    return `<tr class="rec-row-loose">
+    const targets = mayPin ? recPinTargets(f) : [];
+    const drag = targets.length
+      ? ` draggable="true" ondragstart="recDragStart(event,${f.id})" ondragend="recDragEnd(event)"`
+      : '';
+    const tagTip = targets.length
+      ? t('rec.looseSub') + ' — drag this row onto the round it belongs to'
+      : t('rec.looseSub');
+    return `<tr class="rec-row-loose${targets.length ? ' rec-row-drag' : ''}"${drag}>
       <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
       <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
       <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
@@ -9880,7 +9895,7 @@ function renderRecords() {
       <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
       <td class="rc-c" colspan="4">
         <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
-        <span class="rec-loose-tag" title="${esc(t('rec.looseSub'))}">${esc(t('rec.looseTag'))}</span>
+        <span class="rec-loose-tag" title="${esc(tagTip)}">${esc(t('rec.looseTag'))}</span>
       </td>
     </tr>`;
   };
@@ -9929,7 +9944,13 @@ function renderRecords() {
          quantities — gave no clue which rows were agreed and which were still
          moving. The tint is very light on purpose: it marks the row without
          fighting the figures on it. */
-      html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
+      /* EVERY scheduled row is a drop target in the markup; which of them
+         may actually take the record is decided at the drag, by the one
+         rule, and only those light up. Written here rather than filtered
+         here because the answer depends on which record is in the hand. */
+      html += `<tr${r.checked ? ' class="rec-row-checked"' : ''} data-rec-id="${r.id}"`
+        + ` ondragover="recDragOver(event,${r.id})" ondragleave="recDragLeave(event)"`
+        + ` ondrop="recDrop(event,${r.id})">
         <td class="rc-date">${_dateCell(r)}${_waitingChip(waitingOn[r.id])}</td>
         <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
         <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
@@ -10007,8 +10028,31 @@ function _waitingChip(list) {
     + (list.length > 1 ? ' +' + (list.length - 1) : '');
   const full = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
     .filter(Boolean).join(' · ');
+  /* THE WAY BACK OFF A ROUND, offered only on a record whose round is not
+     the one its own work day falls in — which is every record the drag put
+     here, and no record that matched by itself, since for those the two
+     numbers are the same and the button would change nothing. A button that
+     does nothing is how a screen teaches people its buttons do nothing.
+
+     It is NOT offered only on what this page filed, because nothing records
+     that: a phone sends the round the worker was ticking, which can
+     legitimately differ from his walking day. So the confirm names BOTH
+     numbers and lets the office judge rather than claiming to undo
+     something it cannot know it did. */
+  const off = list.filter(_recOffItsOwnWeek);
+  const x = (mayMaintAct('approve', 'view') ? off : []).map((f) =>
+    `<button type="button" class="rec-unpin" title="Take this record off this round"`
+    + ` aria-label="Take this record off this round"`
+    + ` onclick="recUnpinRecord(${f.id})">&times;</button>`).join('');
   return ` <span class="rec-waiting" title="${esc(full + ' — ' + t('rec.waitingTip'))}">`
-       + `${esc(short)}</span>`;
+       + `${esc(short)}</span>${x}`;
+}
+
+/* The round on the record is not the week its own work date falls in. */
+function _recOffItsOwnWeek(f) {
+  if (!f || !f.week_no || !f.work_date || typeof MJMMaintField === 'undefined') return false;
+  const own = MJMMaintField.weekOfDate(f.work_date);
+  return !!own && Number(f.week_no) !== Number(own);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -10210,6 +10254,186 @@ function _submissionScheduleRow(f) {
   const ids = Object.keys(pairs);
   if (ids.length !== 1) return null;
   return pool.find((r) => String(r.id) === ids[0]) || null;
+}
+
+/* ── THE OFFICE SAYS WHICH ROUND A RECORD IS FOR ──────────────────────────
+   *"在这里我要可以drag 例如我把这个21 Nov 2026 可以drag去他的下一个上面
+   drag的话 代表它就是on schedule 是同一个工"*.
+
+   A record comes to rest in its plot wearing NOT ON SCHEDULE because the
+   pairing could not place it: the rule keys on (job, plot, ROUND), and the
+   round a record carries is the week its day falls in. A worker who ticked
+   round 2 and walked the plot on the 21st sends week 3, the office
+   scheduled round 2, and the two never meet — the work is real, the row is
+   real, and nothing joins them.
+
+   SO THE DRAG WRITES THE ROUND, AND NOTHING ELSE. `week_no` is the one
+   field that says which round, the phone only ever DERIVED it from the work
+   date, and this page already corrects it on exactly that reasoning — the
+   sent-back edit modal rewrites it whenever the office moves a date,
+   because *"a record dated the 3rd of September cannot belong to the August
+   sheet"*. What the worker actually reported — the day, the plot, the job,
+   the batches, who did it — is untouched.
+
+   ONE FACT IN ONE PLACE, which is why this is a write and not a mark on the
+   office's own row. The pairing is read by this screen, by
+   `applyFieldRecords` (which has its own copy of the loop) and by the
+   salary claim in the other repository, all keyed on the week. A pin stored
+   beside the schedule would have to be taught to all three, and a rule
+   living in one of them is a rule the other two do not obey — which on this
+   one would be a crew paid for a round nothing credits them with.
+
+   IT IS REVERSIBLE BY THE SAME GESTURE. Dragging the row out again puts the
+   week back to the day's own (`weekOfDate`), which is what the phone sends
+   unless the worker ticked one round and walked in another — so the undo is
+   honest about the ordinary case and says so in the confirm.
+
+   REFUSED RATHER THAN GUESSED, and `recPinRefusal` is the one rule: the
+   same plot and the same job (*"是同一个工"*), a row nobody has Checked, a
+   row that carries a round at all, and a round no OTHER row of that plot
+   and job shares — two rows on one round is the ambiguity the pairing
+   already refuses to answer, and a drag that wrote it would leave the
+   record looking filed and still loose. */
+let _recDragId = null;
+
+function _pendingById(id) {
+  return (pendingFieldRecords || []).find((x) => String(x.id) === String(id)) || null;
+}
+
+/* WHY THIS RECORD CANNOT GO ON THIS ROW, in words, or '' if it can.
+   ONE rule, asked three times: to decide which rows light up while the row
+   is being dragged, at the drop, and again at the write — a row drawn
+   before the month moved is still on the screen. */
+function recPinRefusal(f, row) {
+  if (!f || !row) return 'That row could not be read.';
+  const pk = MJMMaintField.plotKey;
+  if (pk(f.plot_name) !== pk(row.plot)) {
+    return `This is ${f.plot_name} work and that row is Plot ${row.plot}.\n\n`
+         + 'A record moved onto another plot is that plot\'s capacity paid for '
+         + 'work nobody did there.';
+  }
+  if (_rejJenis(f) !== row.jenis) {
+    return `This is ${jenisLabel(_rejJenis(f)) || _rejJenis(f)} and that row is `
+         + `${jenisLabel(row.jenis) || row.jenis}.\n\n`
+         + 'Only the same job on the same plot — the office asked for it in '
+         + 'those words.';
+  }
+  if (row.checked) {
+    return 'That row is Checked, so it is settled and the payroll claim is '
+         + 'paying on it.\n\nPress Uncheck on it first if the round really is '
+         + 'this work.';
+  }
+  const w = MJMMaintField.rowWeek(row);
+  if (!w) return 'That row carries no round, so there is nothing to file this under.';
+  const m = getMonth();
+  const clash = (records || []).filter((r) => r.id !== row.id && _recInMonth(r, m)
+    && pk(r.plot) === pk(row.plot) && r.jenis === row.jenis
+    && MJMMaintField.rowWeek(r) === w);
+  if (clash.length) {
+    return `Plot ${row.plot} has more than one ${jenisLabel(row.jenis) || row.jenis} `
+         + `row on round ${w} this month.\n\nThe pairing cannot tell which of them `
+         + 'a record belongs to, so this would leave the record looking filed and '
+         + 'still unmatched.';
+  }
+  return '';
+}
+
+/* The rows this record may be dropped on, right now. */
+function recPinTargets(f) {
+  if (!f || typeof MJMMaintField === 'undefined') return [];
+  const m = getMonth();
+  return (records || []).filter((r) => _recInMonth(r, m) && !recPinRefusal(f, r));
+}
+
+function recDragStart(ev, id) {
+  _recDragId = String(id);
+  const f = _pendingById(id);
+  try { ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', String(id)); } catch (_) {}
+  const ok = new Set(recPinTargets(f).map((r) => String(r.id)));
+  document.querySelectorAll('#rec-body tr[data-rec-id]').forEach((tr) => {
+    if (ok.has(tr.getAttribute('data-rec-id'))) tr.classList.add('rec-drop-ok');
+  });
+}
+
+function recDragEnd() {
+  _recDragId = null;
+  document.querySelectorAll('#rec-body tr.rec-drop-ok, #rec-body tr.rec-drop-over')
+    .forEach((tr) => tr.classList.remove('rec-drop-ok', 'rec-drop-over'));
+}
+
+function recDragOver(ev, rowId) {
+  if (!_recDragId) return;
+  const tr = ev.currentTarget;
+  if (!tr.classList.contains('rec-drop-ok')) return;
+  ev.preventDefault();
+  tr.classList.add('rec-drop-over');
+}
+
+function recDragLeave(ev) { ev.currentTarget.classList.remove('rec-drop-over'); }
+
+async function recDrop(ev, rowId) {
+  ev.preventDefault();
+  const id = _recDragId || (ev.dataTransfer && ev.dataTransfer.getData('text/plain'));
+  recDragEnd();
+  if (!id) return;
+  const f = _pendingById(id);
+  const row = (records || []).find((r) => String(r.id) === String(rowId));
+  await recPinRecord(f, row);
+}
+
+/* THE WRITE. The permission is asked here as well as at the drag, because a
+   row drawn before somebody's access changed is still sitting on the
+   screen. */
+async function recPinRecord(f, row) {
+  if (!f || !row) return;
+  if (!mayMaintAct('approve', 'view')) {
+    alert('You are not allowed to file a submitted record against a round.\n\n'
+        + 'Ask an admin to tick "Approve a submitted work record" on Module Assess Control.');
+    return;
+  }
+  const why = recPinRefusal(f, row);
+  if (why) { alert('That record cannot go on that row.\n\n' + why); return; }
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+  const w = MJMMaintField.rowWeek(row);
+  const what = `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · `
+             + `${_tarikhDisplay(f.work_date)}${_rejWorkedBy(f) ? ' · ' + _rejWorkedBy(f) : ''}`;
+  if (!confirm(`File this record against that round?\n\n    ${what}\n\n`
+             + `    ${_scheduleRowLabel(row)}\n\n`
+             + `It stops reading as off the schedule and waits for approval on that `
+             + `row instead. Only the ROUND is written — the day, the plot, the job `
+             + `and who did it are untouched.`)) return;
+  const { error } = await _supabase.from('nops_maint_field_records')
+    .update({ week_no: w }).eq('id', f.id);
+  if (error) {
+    /* A database without the column refuses the whole update. The record is
+       exactly as it was, so say so rather than leaving a screen that looks
+       as though it took. */
+    alert('Could not file it against that round: ' + (error.message || error));
+    return;
+  }
+  await _reloadSubmissions();
+}
+
+/* OUT AGAIN, by the same gesture it went in with. The week goes back to the
+   day's own, which is what the phone sends unless the worker ticked one
+   round and walked the plot in another — so the confirm says that rather
+   than promising to restore something nothing recorded. */
+async function recUnpinRecord(id) {
+  const f = _pendingById(id);
+  if (!f) return;
+  if (!mayMaintAct('approve', 'view')) return;
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+  const w = MJMMaintField.weekOfDate(f.work_date) || null;
+  if (!confirm(`Take this record off round ${f.week_no}?\n\n`
+             + `Its own work date, ${_tarikhDisplay(f.work_date)}, falls in round ${w}, `
+             + `and that is where it goes back to.\n\n`
+             + 'It will most likely read as not on the schedule again, and can be '
+             + 'dragged onto a round from there.')) return;
+  const { error } = await _supabase.from('nops_maint_field_records')
+    .update({ week_no: w }).eq('id', f.id);
+  if (error) { alert('Could not take it off: ' + (error.message || error)); return; }
+  await _reloadSubmissions();
 }
 
 /* A ROUND THE OFFICE HAS CHECKED ALREADY HAS ITS WORK ON RECORD.
