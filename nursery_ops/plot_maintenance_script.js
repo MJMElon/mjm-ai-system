@@ -5558,7 +5558,17 @@ const I18N = {
     'rec.partPendingSub':'Every ticked schedule row that nobody has approved yet, and the work a worker recorded that is still waiting for a Field Conductor',
     'rec.waiting':'Waiting for approval',
     'rec.waitingTip':'A worker recorded this job and no Field Conductor has approved it yet, so nothing of it has reached the row — no date, no batch, no quantity. Approve it in the Verify Hub and it moves to Approved.',
-    'rec.looseHead':'Recorded on a phone, on no scheduled row',
+    /* `looseHead` is GONE with the block it was a heading for. The sentence
+       is said on the row itself now — `looseTag` in the cell, `looseSub` on
+       its hover — so the fact travels with the work instead of sitting above
+       the plots. `looseOnly` is the group sub-line of a plot the schedule
+       has nothing for this month. */
+    /* THE OFFICE'S OWN WORDS — *"后面小remark not on schedule"*. It read
+       "No scheduled round", which says the same thing in words nobody
+       used; a tag one word off the one somebody asked for is a tag they
+       have to ask about. */
+    'rec.looseTag':'Not on schedule',
+    'rec.looseOnly':'Nothing on the schedule this month',
     'rec.looseSub':'Work that reached the office and matched no round this month — add the round on the schedule, or approve it and check where it lands',
     'rec.nonePending':'Nothing is waiting — every row here has been approved',
     'rec.noneApproved':'Nothing approved yet — it is all still in Pending',
@@ -5755,7 +5765,8 @@ const I18N = {
     'rec.partPendingSub':'Semua baris jadual yang ditanda dan belum diluluskan, serta kerja yang direkod pekerja yang masih menunggu Field Conductor',
     'rec.waiting':'Menunggu kelulusan',
     'rec.waitingTip':'Seorang pekerja merekod kerja ini dan belum ada Field Conductor meluluskannya, jadi tiada apa-apa sampai ke baris ini — tiada tarikh, batch atau kuantiti. Luluskan di Verify Hub dan ia berpindah ke Diluluskan.',
-    'rec.looseHead':'Direkod di telefon, tiada baris jadual',
+    'rec.looseTag':'Tiada dalam jadual',
+    'rec.looseOnly':'Tiada dalam jadual bulan ini',
     'rec.looseSub':'Kerja yang sampai ke pejabat tetapi tidak sepadan dengan mana-mana pusingan bulan ini',
     'rec.nonePending':'Tiada yang menunggu — semua baris di sini sudah diluluskan',
     'rec.noneApproved':'Belum ada yang diluluskan — semuanya masih di Belum Lulus',
@@ -9780,7 +9791,13 @@ function renderRecords() {
   }
 
   const tbody = document.getElementById('rec-body');
-  if (!sectioned.length && !waitingLoose.length) {
+  /* WHAT WILL ACTUALLY BE DRAWN, never what was collected. The loose rows
+     are PENDING ONLY, so on Approved a month whose every row is unapproved
+     answered this guard with waitingLoose.length and then drew a table with
+     nothing in it and no sentence — an empty screen saying nothing, which
+     is the one thing the three messages below exist to stop. */
+  const drawLoose = _recSection === 'pending' && waitingLoose.length > 0;
+  if (!sectioned.length && !drawLoose) {
     /* WHICH tab is empty, because the three mean different things and the
        one sentence read as all of them. "Nothing matches" over Approved on
        a month of finished work is the office hunting for a fault; what it
@@ -9808,53 +9825,67 @@ function renderRecords() {
     if (!plotGroups[r.plot]) plotGroups[r.plot] = [];
     plotGroups[r.plot].push(r);
   });
-  const sortedPlots = Object.keys(plotGroups).sort(plotOrder);
 
-  let html = '';
-  /* THE LOOSE ROWS GO FIRST, above the plots, when the Pending tab is open. */
-  /* WHAT NO SCHEDULE ROW CLAIMS, at the foot and under its own heading.
-     Never folded in among the plots: these are not rows the office planned,
-     they are work that arrived and found nothing to attach to — the exact
-     thing `_fieldUnpaired` has been counting in silence. The heading is
-     what makes the list honest; the rows are drawn in the same table, so
-     one body and one renderer still serve the whole tab. */
-  /* PENDING ONLY. These are records nobody has approved, so on the Approved
-     tab they would be the one thing that tab promises not to hold. The
-     WAITING CHIP above is deliberately NOT gated the same way: a row the
-     conductor approved off one record can still have a second waiting on
-     it, and a chip hidden there would be a submission invisible on both
-     tabs — which is the silence this whole split exists to end. */
-  if (_recSection === 'pending' && waitingLoose.length) {
-    const byPlot = {};
+  /* ── WHAT NO SCHEDULE ROW CLAIMS SITS UNDER ITS OWN PLOT ─────────────────
+     It was a block of its own ABOVE the plots, on the argument that these
+     are not rows the office planned and folding them in among the plots
+     would read as planned work. The office looked at two U7 records sitting
+     up there and overruled it: *"放下去楼下 就是U7 interrow 14.11就放去U7
+     那边"*.
+
+     THEY ARE RIGHT ABOUT HOW THE LIST IS READ. Somebody going through this
+     month works down it PLOT BY PLOT, and a block at the top is a second
+     place to look for U7 — so U7's own work was in two parts of one screen
+     and the part up there was the part nobody was looking for.
+
+     WHAT THE BLOCK WAS REALLY FOR IS KEPT, and it is the row that carries
+     it now rather than a heading: the row is tinted, and it wears its own
+     tag saying no scheduled round claims it, with the sentence that used to
+     be the block's subtitle on the tag's hover. A record that reached the
+     office and attached to nothing is still the one thing this list must
+     not swallow; what changed is that it is said beside the work instead of
+     above it.
+
+     A PLOT THE SCHEDULE HAS NOTHING FOR THIS MONTH still gets its group,
+     or the record would be on no screen at all — which is the whole fault
+     the block was raised for. Its sub-line says so rather than reading
+     "Task : 0/0", which is a count of nothing dressed as progress. */
+  const looseByPlot = {};
+  if (drawLoose) {
     waitingLoose.forEach((f) => {
-      (byPlot[f.plot_name || '—'] = byPlot[f.plot_name || '—'] || []).push(f);
-    });
-    html += `<tr class="plot-group-row"><td colspan="12" class="rec-group-cell">
-      <span class="rec-group-plot">${esc(t('rec.looseHead'))}</span>
-      <span class="rec-group-sub">${esc(t('rec.looseSub'))}</span></td></tr>`;
-    Object.keys(byPlot).sort(plotOrder).forEach((plot) => {
-      byPlot[plot].slice()
-        .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
-                     || (a.id || 0) - (b.id || 0))
-        .forEach((f) => {
-          const jenis = _rejJenis(f);
-          html += `<tr class="rec-row-loose">
-            <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
-            <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
-            <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
-            <td class="rc-plot">${esc(f.plot_name || '—')}</td>
-            <td class="rc-batch">${esc(f.batch_name || '—')}</td>
-            <td class="rc-qty">${f.qty == null || f.qty === '' ? '—' : numMY(Number(f.qty))}</td>
-            <td class="rc-track">—</td>
-            <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
-            <td class="rc-c" colspan="4">
-              <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
-            </td>
-          </tr>`;
-        });
+      const p = f.plot_name || '—';
+      (looseByPlot[p] = looseByPlot[p] || []).push(f);
     });
   }
+  const sortedPlots = Object.keys(plotGroups)
+    .concat(Object.keys(looseByPlot).filter((p) => !plotGroups[p]))
+    .sort(plotOrder);
 
+  /* ONE LOOSE RECORD, drawn where its plot is. PENDING ONLY — nobody has
+     approved these, so on the Approved tab they would be the one thing that
+     tab promises not to hold. (The WAITING CHIP on a planned row is
+     deliberately NOT gated the same way: a row the conductor approved off
+     one record can still have a second waiting on it, and a chip hidden
+     there would be a submission invisible on both tabs.) */
+  const looseRowHtml = (f) => {
+    const jenis = _rejJenis(f);
+    return `<tr class="rec-row-loose">
+      <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
+      <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
+      <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
+      <td class="rc-plot">${esc(f.plot_name || '—')}</td>
+      <td class="rc-batch">${esc(f.batch_name || '—')}</td>
+      <td class="rc-qty">${f.qty == null || f.qty === '' ? '—' : numMY(Number(f.qty))}</td>
+      <td class="rc-track">—</td>
+      <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
+      <td class="rc-c" colspan="4">
+        <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
+        <span class="rec-loose-tag" title="${esc(t('rec.looseSub'))}">${esc(t('rec.looseTag'))}</span>
+      </td>
+    </tr>`;
+  };
+
+  let html = '';
   sortedPlots.forEach(plot => {
     /* Inside a plot: the four jobs in the order the rest of the page already
        puts them, and inside each job the days in the order they happened.
@@ -9864,14 +9895,35 @@ function renderRecords() {
        ticked later) landed at the bottom and broke the grouping. Sorting it
        here rather than reordering `records` keeps the saved list alone: this
        is how the office reads a plot, not what the plot is. */
-    const recs = plotGroups[plot].slice().sort(_recRowOrder);
+    /* SORTED TOGETHER, by the same rule, so a loose record lands on the day
+       and the job it belongs to rather than at the end of the plot. It is
+       given the four fields `_recRowOrder` reads and nothing else — a shim
+       and not a record, because every cell of the row it draws comes off the
+       submission itself. */
+    const recs = (plotGroups[plot] || []).slice()
+      .concat((looseByPlot[plot] || []).map((f) => ({
+        _loose: f,
+        jenis: _rejJenis(f),
+        tarikh: f.work_date || '',
+        racun: f.chemical || '',
+        id: f.id || 0,
+      })))
+      .sort(_recRowOrder);
+    /* A PLOT WITH NOTHING ON THE SCHEDULE SAYS SO, rather than "Task : 0/0".
+       Nought of nought is not progress, and on a plot that is here only
+       because a worker recorded something it reads as work that went
+       missing. */
+    const sub = plotAll[plot]
+      ? `Task : ${plotDone[plot] || 0}/${plotAll[plot] || 0}`
+      : t('rec.looseOnly');
     html += `<tr class="plot-group-row">
       <td colspan="12" class="rec-group-cell">
         <span class="rec-group-plot">Plot ${plot}</span>
-        <span class="rec-group-sub">Task : ${plotDone[plot] || 0}/${plotAll[plot] || 0}</span>
+        <span class="rec-group-sub">${esc(sub)}</span>
       </td>
     </tr>`;
     recs.forEach(r => {
+      if (r._loose) { html += looseRowHtml(r._loose); return; }
       /* Settled rows carry a tint. The badge alone is at the far right of a
          wide table, so scanning down the middle of the sheet — the dates, the
          quantities — gave no clue which rows were agreed and which were still

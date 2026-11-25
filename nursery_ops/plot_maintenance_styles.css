@@ -688,17 +688,24 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
    runs straight over the Work Type column of the row beneath — which
    makes two rows unreadable instead of one. Block, and only as wide as
    its own text, so it sits on a line of its own inside the cell. In the
-   foot's loose rows it is inline in a colspan cell with room to spare,
-   which is why that one keeps the whole sentence. */
+   loose rows it is inline in a colspan cell with room to spare, which is
+   why that one keeps the whole sentence. */
 .rec-waiting{display:block;width:fit-content;max-width:100%;font-size:11px;
   font-weight:900;letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;color:#92400e;background:#fffbeb;border:1.5px solid #fde68a;
   border-radius:999px;padding:2px 8px;margin:3px 0 0;}
 .rec-row-loose .rec-waiting{display:inline-block;margin:0;}
-/* A row for work that matched no scheduled round. Tinted the same amber,
-   very lightly, so it reads as one block at the foot rather than as rows
-   somebody has to notice are different. */
+/* A row for work that matched no scheduled round, sitting IN its own plot's
+   group — the office asked for it down there (*"放下去楼下"*). So the tint
+   is what tells it from the planned rows around it rather than the heading
+   it used to sit under, and the tag beside the waiting chip is what used to
+   be that heading. Slate and not amber: the amber chip beside it is the
+   state the row is in, and this is a fact about the schedule. */
 .rec-row-loose > td{background:#fffdf5;}
+.rec-loose-tag{display:inline-block;font-size:10.5px;font-weight:800;
+  letter-spacing:.3px;white-space:nowrap;color:#475569;background:#f1f5f9;
+  border:1.5px solid #e2e8f0;border-radius:999px;padding:2px 8px;
+  margin-left:6px;cursor:help;}
 
 /* ─── AUDIT VERDICT ───
    The Auditor Portal's answer for this job, in that portal's own two
