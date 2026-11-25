@@ -6644,6 +6644,74 @@ async function loadMaintAudits() {
     });
     maintAudits = by;
   } catch (e) { console.warn('[maint] audit verdicts unavailable:', e); }
+  await _loadMaintCases();
+}
+
+let maintCaseByTask = {};         // task_id (string) → nelos_cases.id the audit raised
+let nelosCaseStatus = {};         // String(nelos_cases.id) → { no, status }
+
+/* The Nelos case an Unsatisfactory audit raised. audit_raise_nelos() writes
+   nelos_case_id back onto the audit row, and the page reads the id here and
+   the status off the case. Read apart from the verdicts above, so a database
+   that has not run RUN_ME_audit_raises_nelos.sql keeps the Audit column. */
+async function _loadMaintCases() {
+  maintCaseByTask = {};
+  nelosCaseStatus = {};
+  if (!_supabase) return;
+  try {
+    const res = await _mvFetchAll(() => _supabase
+      .from('audit_maintenance_audits')
+      .select('task_id, nelos_case_id')
+      .not('nelos_case_id', 'is', null)
+      .order('id', { ascending: true }));
+    if (res.error) {
+      console.warn('[maint] Nelos case links unavailable:', res.error.message);
+      return;
+    }
+    const ids = [];
+    (res.data || []).forEach((a) => {
+      const k = String(a.task_id == null ? '' : a.task_id);
+      if (!k || a.nelos_case_id == null) return;
+      maintCaseByTask[k] = a.nelos_case_id;
+      ids.push(a.nelos_case_id);
+    });
+    if (!ids.length) return;
+    const cs = await _supabase.from('nelos_cases')
+      .select('id, case_no, status')
+      .in('id', [...new Set(ids)]);
+    if (cs.error) {
+      console.warn('[maint] Nelos case status unavailable:', cs.error.message);
+      return;
+    }
+    (cs.data || []).forEach((c) => {
+      nelosCaseStatus[String(c.id)] = { no: c.case_no, status: c.status };
+    });
+  } catch (e) { console.warn('[maint] Nelos case links unavailable:', e); }
+}
+
+/* The case id this work record's audit raised, or null. Asked the same way
+   _auditFailed asks for the verdict: by the record's own ids first. */
+function _nelosCaseOf(r) {
+  const ids = Array.isArray(r._fieldIds) && r._fieldIds.length ? r._fieldIds : [];
+  for (const i of ids) {
+    if (maintCaseByTask[String(i)]) return maintCaseByTask[String(i)];
+  }
+  return maintCaseByTask[String(r.id)] || null;
+}
+
+/* The case number, linked to the case. Green once the FC has solved it
+   (resolved or closed), red while it is still open. No case is a dash. */
+function _nelosCell(r) {
+  const caseId = _nelosCaseOf(r);
+  if (!caseId) {
+    return `<span class="chk-btn chk-na" title="${esc(t('rec.nelosNa'))}">·</span>`;
+  }
+  const c = nelosCaseStatus[String(caseId)] || {};
+  const solved = c.status === 'resolved' || c.status === 'closed';
+  const colour = solved ? '#15803d' : '#b91c1c';
+  const why = solved ? 'Solved by the FC (' + c.status + ')' : 'Open on Nelos, not yet solved';
+  return `<a href="../nelos/nelos_case.html?id=${encodeURIComponent(caseId)}" title="${esc(why)}"`
+       + ` style="color:${colour};font-weight:700;text-decoration:underline">${esc(c.no || ('#' + caseId))}</a>`;
 }
 
 /* Satisfied / Unsatisfied and nothing else. The auditor's table can also
@@ -9804,8 +9872,8 @@ function renderRecords() {
         <td class="rc-track">${_trackCell(r)}</td>
         <td class="rc-remark">${r.remark||'—'}</td>
         <td class="rc-c">${_auditCell(r)}</td>
-        <td class="rc-c">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
-        <td class="rc-c">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
+        <td class="rc-c">${_nelosCell(r)}</td>
+        <td class="rc-c">${_flagCell(r, 'repaired', !!(r.nelos || _nelosCaseOf(r)), t('rec.repairedNa'))}</td>
         <td class="rc-act">
           ${r.checked
             /* UNCHECK IS OFFERED TO WHOEVER COULD CHECK. A one-way button is
