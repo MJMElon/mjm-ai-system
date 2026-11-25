@@ -992,13 +992,62 @@ let plotsData = [];
 // Closed is excluded the same way Cancelled is — the office decided this
 // order's business is done, so no new collection should be booked against
 // it. See Close AL in operation_booking.html.
+//
+// THE BALANCE IS WORKED OUT FROM THE DOs, never read off the stored
+// shared_al_orders.balance_quantity column. That column is kept in step by
+// hand, one DO at a time, and drifts: AZAM ASIAKOM QUM796 read Bal 600 here
+// while Customer Order Management and the AL List, which both sum the DOs,
+// read it collected in full. Same rule as loadCustomerOrders() in
+// operation_stock_sales.js: quantity_ordered less every non-cancelled DO on
+// that AL, calibration DOs (CAL-) excluded. The live figure is written over
+// balance_quantity on the row in memory, so every reader on this page
+// follows it. If the DOs cannot be read, the stored column is used as before.
+async function _alFetchAll(build) {
+  var out = [], from = 0, PAGE = 1000;
+  for (var i = 0; i < 50; i++) {
+    var r = await build().range(from, from + PAGE - 1);
+    if (r.error) throw r.error;
+    var rows = r.data || [];
+    out = out.concat(rows);
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+  return out;
+}
+function _alLiveBalances(als, dos) {
+  var doQty = {};
+  (dos || []).forEach(function (d) {
+    if (!d.al_number) return;
+    if (String(d.status || '').toLowerCase() === 'cancelled') return;
+    if (/^CAL-/i.test(String(d.do_number || ''))) return;
+    doQty[d.al_number] = (doQty[d.al_number] || 0) + (Number(d.total_qty) || 0);
+  });
+  return (als || []).filter(function (a) {
+    var rem = String(a.remark || '');
+    if (/\[CANCELLED\]/i.test(rem) || /\[CLOSED\]/i.test(rem)) return false;
+    var ordered = Number(a.quantity_ordered);
+    if (!isNaN(ordered)) a.balance_quantity = ordered - (doQty[a.al_number] || 0);
+    return (Number(a.balance_quantity) || 0) > 0;
+  });
+}
 async function loadALData() {
   try {
     var results = await Promise.all([
-      _supabase.from('shared_al_orders').select('*').not('status', 'in', '("Cancelled","Closed","Collected")').gt('balance_quantity', 0).order('customer_name', { ascending: true }),
+      _alFetchAll(function () {
+        return _supabase.from('shared_al_orders').select('*').not('status', 'in', '("Cancelled","Closed","Collected")').order('customer_name', { ascending: true }).order('al_number', { ascending: true });
+      }).then(function (rows) { return { data: rows }; }, function (e) { return { error: e }; }),
       _supabase.from('shared_plots').select('plot_name, nursery_name'),
+      _alFetchAll(function () {
+        return _supabase.from('shared_do_records').select('al_number, do_number, total_qty, status').order('id', { ascending: true });
+      }).then(function (rows) { return { data: rows }; }, function (e) { return { error: e }; }),
     ]);
-    alData = (results[0] && results[0].data) || [];
+    var als = (results[0] && results[0].data) || [];
+    if (results[2] && !results[2].error) {
+      alData = _alLiveBalances(als, results[2].data);
+    } else {
+      console.warn('loadALData: DOs could not be read, using the stored balance', results[2] && results[2].error);
+      alData = als.filter(function (a) { return (Number(a.balance_quantity) || 0) > 0; });
+    }
     plotsData = (results[1] && results[1].data) || [];
   } catch(e) {
     console.error('loadALData error:', e);
