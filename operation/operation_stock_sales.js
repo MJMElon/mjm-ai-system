@@ -406,7 +406,13 @@
                     plot_status: a.plot_status || 'no_status',
                     reserved_for: a.reserved_for || '',
                     reserved_qty: a.reserved_qty || 0,
-                    premium: !!a.premium
+                    premium: !!a.premium,
+                    // The office lock (RUN_ME_maturity_lock_and_waiting_list.sql).
+                    // A database without the columns answers undefined, which
+                    // is "nobody has locked it" — every row stays as it was.
+                    locked: !!a.locked,
+                    locked_by: a.locked_by || '',
+                    locked_at: a.locked_at || null
                 };
             });
 
@@ -932,6 +938,12 @@
             }
             const bounced = [];
             list.forEach(r => {
+                // A LOCKED ROW KEEPS ITS CUSTOMERS. The office locked it so the
+                // reservation stops moving, and a page load bouncing a chip off
+                // it would be the reservation moving with nobody acting. It
+                // reads red if the balance no longer covers it, which is the
+                // thing to see.
+                if (matRowIsLocked(r.key)) return;
                 const allocs = allocsForBatch(r.key);
                 if (!allocs.length) return;
                 let budget = rowFigures(r).room;
@@ -987,6 +999,7 @@
             tfoot.innerHTML = '';
             renderDoUnmatched();
             renderMatReleased();
+            renderWaitList();
             return;
         }
 
@@ -1079,14 +1092,27 @@
             // status, so only the manual pick blocks the drop and not Sold
             // Out, which already blocks it on the balance alone.
             const matFinished = status === 'finished';
+            const locked = matRowIsLocked(r.key);
+            // A culled row, or one sold out with nothing left, takes nobody,
+            // so it is not offered a lock — unless it already carries one.
+            const lockBar = (locked || !(culled || closedOut)) ? matLockBarHtml(r.key, locked) : '';
 
-            const reservHtml = rowAllocs.length
+            const reservBody = rowAllocs.length
                 ? `<div class="reserv-stack">${rowAllocs.map(a => {
                     const live = allocLiveQty(a);
                     const collected = (Number(a.allocated_qty) || 0) - live;
                     const tip = (a.order_number || '') +
                         (collected > 0 ? ` — ${collected.toLocaleString('en-MY')} collected, already in DO Deducted` : '') +
                         ' — drag chip to move to another row';
+                    // A locked row draws its chips with no grip and no ×, and
+                    // draggable off: the paint. removeAllocation, the drop and
+                    // the drag start each refuse in code as well — the gate.
+                    if (locked) return `
+                    <div class="reserv-chip" draggable="false" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml((a.order_number || '') + ' — locked, unlock the row to move or remove')}">
+                        <span class="reserv-chip-grip">🔒</span>
+                        <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
+                        <span class="reserv-chip-qty">${live.toLocaleString('en-MY')}</span>
+                    </div>`;
                     return `
                     <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(tip)}">
                         <span class="reserv-chip-grip">⋮⋮</span>
@@ -1108,10 +1134,13 @@
                     ? `<div class="reserv-empty reserv-empty-locked" title="This plot is ${status === 'culled' ? 'culled' : 'sold out with nothing left (Qty Transplanted − DO Deducted = 0)'} — it cannot take a customer allocation">${status === 'culled' ? 'Culled' : 'Sold out'} — closed</div>`
                 : matFinished
                     ? `<div class="reserv-empty reserv-empty-finished"></div>`
+                : locked
+                    ? `<div class="reserv-empty reserv-empty-locked" title="Locked — unlock the row to drop a customer on it">Locked</div>`
                     : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
+            const reservHtml = lockBar + reservBody;
 
             const html = `
-                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}" data-mat-closed="${(culled || closedOut) ? '1' : '0'}">
+                <tr class="${history ? 'mat-history-row' : ''}${locked ? ' mat-row-locked' : ''}" data-mat-locked="${locked ? '1' : '0'}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}" data-mat-closed="${(culled || closedOut) ? '1' : '0'}">
                     <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}${seedlingAgeHtml(r.seedIn)}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
                     <td class="col-prod font-mono">${escapeHtml(r.batch || '—')}</td>
@@ -1170,12 +1199,28 @@
                 bodyHtml += historyRows.map(x => buildRow(x.r, true).html).join('');
             }
         } else {
-            rows.forEach(r => {
-                const b = buildRow(r, false);
-                bodyHtml += b.html;
-                totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
-                totCollected += b.collected; totOther += b.otherDed; totBalance += b.plotBalance; totAfter += b.afterDeductReserve; totRowCount++;
-            });
+            /* OPEN AND PENDING ON TOP, SOLD OUT AND CULLED AT THE FOOT.
+               The office: "只要是sold out的/culled的可以直接在最下面，上面就是
+               open/pending的". The status is buildRow's own answer, so a row
+               sits where its status pill says it is. Closed (finished) is
+               the office calling a row done, so it sits with them. Within
+               each half the order is the date / plot / batch sort above —
+               the split is stable, it moves nothing else. Every row is
+               still counted in the totals: only WHERE it sits moved. */
+            const built = rows.map(r => ({ r, b: buildRow(r, false) }));
+            const isDone = st => MAT_DONE_STATUSES.includes(st);
+            const live = built.filter(x => !isDone(x.b.status));
+            const done = built.filter(x => isDone(x.b.status));
+            const add = (x, html) => {
+                bodyHtml += html;
+                totQty += x.r.qty; totCull += x.r.afterCulling; totReserved += x.b.allocSum;
+                totCollected += x.b.collected; totOther += x.b.otherDed; totBalance += x.b.plotBalance; totAfter += x.b.afterDeductReserve; totRowCount++;
+            };
+            live.forEach(x => add(x, x.b.html));
+            if (done.length) {
+                bodyHtml += `<tr class="mat-done-divider"><td colspan="12">Sold out · Culled · Closed — ${done.length} row${done.length === 1 ? '' : 's'}</td></tr>`;
+                done.forEach(x => add(x, x.b.html.replace('<tr class="', '<tr class="mat-done-row ')));
+            }
         }
 
         tbody.innerHTML = bodyHtml;
@@ -1217,6 +1262,7 @@
         renderDoUnmatched();
         renderMatReleased();
         applyMatLayout();
+        renderWaitList();
     }
 
     // Expand/collapse Plot-R's History section. Toggles the rows directly
@@ -1261,6 +1307,405 @@
             renderMaturityTable();
         }
     }
+
+    /* ══════════════════════════════════════════════════════════════════
+       THE OFFICE LOCK ON A MATURITY ROW
+       The office: "我需要有一个section是手动的，比如可以lock那个batch，然后
+       customer reservation就不能随便换（除非unlock）". A locked row keeps the
+       customers on it: no chip leaves it, no × removes one, no card or chip
+       lands on it, and the page-load flow-back leaves it alone. It is
+       stored on the row's own shared_plot_allocations record (locked,
+       locked_by, locked_at — RUN_ME_maturity_lock_and_waiting_list.sql),
+       beside the status the office already picks there.
+
+       THE PAINT IS NOT THE GATE. The chips lose their grip and their ×,
+       and four functions refuse in code as well — the drop
+       (matRowLocked), the drag start, moveAllocationToBatch and
+       removeAllocation — because a missing button stops neither a call
+       nor a stale screen.
+       ══════════════════════════════════════════════════════════════════ */
+    const MAT_DONE_STATUSES = ['sold_out', 'culled', 'finished'];
+    function matRowIsLocked(key) {
+        const a = plotAllocations && plotAllocations[key];
+        return !!(a && a.locked);
+    }
+    function _matWho(v) {
+        if (!v) return '';
+        return (typeof MJMPeople !== 'undefined' && MJMPeople.name) ? MJMPeople.name(v) : String(v).split('@')[0];
+    }
+    function _matDay(v) {
+        if (!v) return '';
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    function matLockBarHtml(key, locked) {
+        const a = plotAllocations[key] || {};
+        const who = locked ? [_matWho(a.locked_by), _matDay(a.locked_at)].filter(Boolean).join(' · ') : '';
+        return `<div class="mat-lock-bar">
+                    <span class="mat-lock-who" title="${escapeHtml(who)}">${locked ? '🔒 ' + escapeHtml(who || 'Locked') : ''}</span>
+                    <button type="button" class="mat-lock-btn${locked ? ' is-locked' : ''}" data-lock-key="${escapeHtml(key)}"
+                        onclick="toggleMatLock(this.dataset.lockKey)"
+                        title="${locked ? 'Locked — press to unlock so the customers can be moved' : 'Lock this row so its customer reservation cannot be changed'}">${locked ? '🔒 Unlock' : '🔓 Lock'}</button>
+                </div>`;
+    }
+    function _denyLockedAlloc(a) {
+        if (!a) return false;
+        if (!matRowIsLocked((a.batch_name || '') + '||' + (a.plot_name || ''))) return false;
+        alert('This row is locked — unlock it before moving or removing ' + (a.customer_name || 'this customer') + '.');
+        return true;
+    }
+    let _matLockColumnMissing = false;
+    async function toggleMatLock(key) {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
+        if (_matLockColumnMissing) {
+            alert('The lock is not set up in the database yet — run shared/RUN_ME_maturity_lock_and_waiting_list.sql in the Supabase SQL Editor first.');
+            return;
+        }
+        const [batch, plot] = String(key).split('||');
+        const was = plotAllocations[key] ? { ...plotAllocations[key] } : null;
+        const locking = !(was && was.locked);
+        if (!locking && !confirm(`Unlock ${plot} · batch ${batch}? Its customers can then be moved or removed.`)) return;
+        const me = (typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || null;
+        const now = new Date().toISOString();
+        const next = { plot_status: 'no_status', reserved_for: '', reserved_qty: 0, premium: false, ...(was || {}) };
+        next.locked    = locking;
+        next.locked_by = locking ? ((me && me.email) || '') : '';
+        next.locked_at = locking ? now : null;
+        plotAllocations[key] = next;
+        renderMaturityTable();
+        try {
+            const { error } = await _supabase.from('shared_plot_allocations').upsert({
+                batch_name: batch, plot_name: plot,
+                plot_status: next.plot_status || 'no_status',
+                locked: next.locked, locked_by: next.locked_by || null, locked_at: next.locked_at,
+                updated_at: now
+            }, { onConflict: 'batch_name,plot_name' });
+            if (error) throw error;
+        } catch (e) {
+            const msg = String((e && (e.message || e.details)) || e);
+            if (/locked/i.test(msg) && /column|schema/i.test(msg)) _matLockColumnMissing = true;
+            if (was) plotAllocations[key] = was; else delete plotAllocations[key];
+            renderMaturityTable();
+            alert(_matLockColumnMissing
+                ? 'The lock is not set up in the database yet — run shared/RUN_ME_maturity_lock_and_waiting_list.sql in the Supabase SQL Editor first.'
+                : 'The lock was not saved: ' + msg);
+        }
+    }
+    window.toggleMatLock = toggleMatLock;
+
+    /* ══════════════════════════════════════════════════════════════════
+       WAITING LIST & PO
+       The office: "我也需要有一个可以 key in record的地方，一个waiting list，
+       或者是一个可以key PO的地方。这样就知道什么在pending着". Demand with no AL
+       yet. One row per request in shared_stock_waiting_list: the day, the
+       customer, the PO, the breed and quantity wanted, the month it is
+       wanted in, a remark, and a status — Waiting, Allocated (an AL or a
+       reservation now covers it) or Cancelled. It writes nothing anywhere
+       else: it is a list somebody works down, and the reservation itself
+       is still made on the allocation table above it.
+
+       THE WANTED MONTH IS WHAT TIES IT TO THE TABLE. The strip under the
+       heading totals what is waiting per month, and the month open on the
+       allocation table is lit there and on its rows, so the demand for
+       Feb 2027 is in front of whoever is allocating Feb 2027.
+
+       A missing table is SAID, never an empty list: a list that reads
+       "nothing waiting" because the table is not there yet is the one
+       answer that would send somebody to tell a customer nothing is
+       pending.
+       ══════════════════════════════════════════════════════════════════ */
+    const WAIT_TABLE = 'shared_stock_waiting_list';
+    let waitRows = [];
+    let _waitStatus = 'waiting';
+    let _waitEditId = null;
+    let _waitMissing = false;
+    const WAIT_STATUSES = [['waiting', 'Waiting'], ['allocated', 'Allocated'], ['cancelled', 'Cancelled']];
+
+    function _waitMonthLabel(ym) {
+        if (!ym) return 'No month';
+        const [y, m] = String(ym).split('-').map(Number);
+        if (!y || !m) return String(ym);
+        return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    }
+    async function loadWaitList() {
+        try {
+            const { data, error } = await _supabase.from(WAIT_TABLE).select('*');
+            if (error) throw error;
+            waitRows = data || [];
+            _waitMissing = false;
+        } catch (e) {
+            console.warn('[Waiting list] not loaded:', (e && e.message) || e);
+            waitRows = [];
+            _waitMissing = true;
+        }
+        renderWaitList();
+    }
+    function setWaitStatusFilter(st) {
+        _waitStatus = st;
+        document.querySelectorAll('#wait-status-tabs .mat-loc-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.wst === st));
+        renderWaitList();
+    }
+    function _waitSorted(list) {
+        // Wanted month first (no month last), then first come first served.
+        return list.slice().sort((a, b) => {
+            const am = a.wanted_month || '9999-99', bm = b.wanted_month || '9999-99';
+            if (am !== bm) return am < bm ? -1 : 1;
+            const ad = String(a.entry_date || a.created_at || ''), bd = String(b.entry_date || b.created_at || '');
+            if (ad !== bd) return ad < bd ? -1 : 1;
+            return String(a.id).localeCompare(String(b.id));
+        });
+    }
+    function renderWaitList() {
+        const tbody = document.getElementById('wait-rows');
+        if (!tbody) return;
+        const tfoot  = document.getElementById('wait-foot');
+        const banner = document.getElementById('wait-banner');
+        const strip  = document.getElementById('wait-month-strip');
+        const addBtn = document.getElementById('wait-add-btn');
+        const fmt = n => (Number(n) || 0).toLocaleString('en-MY');
+        const openMonth = (typeof activeMonthKey === 'string' && /^\d{4}-\d{2}$/.test(activeMonthKey)) ? activeMonthKey : '';
+
+        if (banner) {
+            banner.classList.toggle('hidden', !_waitMissing);
+            banner.textContent = _waitMissing
+                ? 'The waiting list is not set up in the database yet — run shared/RUN_ME_maturity_lock_and_waiting_list.sql in the Supabase SQL Editor, then reload.'
+                : '';
+        }
+        if (addBtn) addBtn.disabled = _waitMissing;
+
+        const counts = { waiting: 0, allocated: 0, cancelled: 0 };
+        waitRows.forEach(r => { const k = r.status || 'waiting'; if (k in counts) counts[k]++; });
+        Object.keys(counts).forEach(k => { const el = document.getElementById('wait-n-' + k); if (el) el.textContent = counts[k]; });
+
+        // What is WAITING, per wanted month — whatever tab is open, because
+        // that is the demand the allocation table is being worked against.
+        const byMonth = {};
+        waitRows.filter(r => (r.status || 'waiting') === 'waiting').forEach(r => {
+            const k = r.wanted_month || '';
+            (byMonth[k] = byMonth[k] || { n: 0, qty: 0 });
+            byMonth[k].n++; byMonth[k].qty += Number(r.qty) || 0;
+        });
+        const months = Object.keys(byMonth).sort((a, b) => (a || '9999') < (b || '9999') ? -1 : 1);
+        if (strip) {
+            strip.classList.toggle('hidden', !months.length);
+            strip.innerHTML = months.map(k =>
+                `<span class="wait-month-chip${k && k === openMonth ? ' is-active' : ''}" data-wait-month="${escapeHtml(k)}">${escapeHtml(_waitMonthLabel(k))} · ${byMonth[k].n} waiting · ${fmt(byMonth[k].qty)}</span>`).join('');
+        }
+
+        if (_waitMissing) {
+            tbody.innerHTML = '<tr><td colspan="9" class="wait-empty">Not set up yet — see the note above.</td></tr>';
+            if (tfoot) tfoot.innerHTML = '';
+            return;
+        }
+        const list = _waitSorted(waitRows.filter(r => _waitStatus === 'all' || (r.status || 'waiting') === _waitStatus));
+        if (!list.length) {
+            const word = _waitStatus === 'all' ? 'No records yet' : `Nothing ${(WAIT_STATUSES.find(x => x[0] === _waitStatus) || ['', _waitStatus])[1].toLowerCase()}`;
+            tbody.innerHTML = `<tr><td colspan="9" class="wait-empty">${word}.</td></tr>`;
+            if (tfoot) tfoot.innerHTML = '';
+            return;
+        }
+        tbody.innerHTML = list.map(r => {
+            const st = r.status || 'waiting';
+            const opts = WAIT_STATUSES.map(([v, l]) => `<option value="${v}"${v === st ? ' selected' : ''}>${l}</option>`).join('');
+            const hot = r.wanted_month && r.wanted_month === openMonth;
+            return `<tr data-wait-id="${escapeHtml(r.id)}"${hot ? ' class="wait-this-month"' : ''}>
+                <td>${escapeHtml(_matDay(r.entry_date) || '—')}</td>
+                <td><b>${escapeHtml(r.customer_name || '—')}</b></td>
+                <td>${escapeHtml(r.po_number || '—')}</td>
+                <td>${escapeHtml(r.breed || 'Any')}</td>
+                <td class="num">${fmt(r.qty)}</td>
+                <td>${escapeHtml(r.wanted_month ? _waitMonthLabel(r.wanted_month) : '—')}</td>
+                <td title="${escapeHtml(r.remark || '')}">${escapeHtml(r.remark || '')}</td>
+                <td><select class="wait-status st-${st}" onchange="setWaitStatus(this.closest('tr').dataset.waitId, this.value)">${opts}</select></td>
+                <td style="white-space:nowrap;text-align:right">
+                    <button type="button" class="wait-ico" title="Edit" aria-label="Edit" onclick="openWaitForm(this.closest('tr').dataset.waitId)">✎</button>
+                    <button type="button" class="wait-ico del" title="Delete" aria-label="Delete" onclick="deleteWaitEntry(this.closest('tr').dataset.waitId)">✕</button>
+                </td>
+            </tr>`;
+        }).join('');
+        const tot = list.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+        if (tfoot) tfoot.innerHTML = `<tr><td colspan="4">${list.length} record${list.length === 1 ? '' : 's'}</td><td class="num">${fmt(tot)}</td><td colspan="4"></td></tr>`;
+    }
+
+    function _waitBreeds() {
+        const set = new Set();
+        (allMatGroups || []).forEach(g => { if (g.breed) set.add(g.breed); });
+        return [...set].sort();
+    }
+    function openWaitForm(id) {
+        if (_waitMissing) { renderWaitList(); return; }
+        const form = document.getElementById('wait-form');
+        if (!form) return;
+        const r = id ? waitRows.find(x => String(x.id) === String(id)) : null;
+        _waitEditId = r ? r.id : null;
+        const today = new Date();
+        const iso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        const set = (k, v) => { const el = document.getElementById(k); if (el) el.value = v == null ? '' : v; };
+        set('wf-date', r ? (r.entry_date || '') : iso);
+        set('wf-customer', r ? r.customer_name : '');
+        set('wf-po', r ? r.po_number : '');
+        set('wf-breed', r ? r.breed : '');
+        set('wf-qty', r ? r.qty : '');
+        set('wf-month', r ? (r.wanted_month || '') : ((typeof activeMonthKey === 'string' && /^\d{4}-\d{2}$/.test(activeMonthKey)) ? activeMonthKey : ''));
+        set('wf-remark', r ? r.remark : '');
+        const dl = document.getElementById('wf-breed-list');
+        if (dl) dl.innerHTML = _waitBreeds().map(b => `<option value="${escapeHtml(b)}"></option>`).join('');
+        const msg = document.getElementById('wf-msg'); if (msg) msg.textContent = '';
+        const save = document.getElementById('wf-save'); if (save) save.textContent = r ? 'Save changes' : 'Save';
+        form.classList.remove('hidden');
+        const c = document.getElementById('wf-customer'); if (c) c.focus();
+    }
+    function closeWaitForm() {
+        const form = document.getElementById('wait-form');
+        if (form) form.classList.add('hidden');
+        _waitEditId = null;
+    }
+    async function saveWaitEntry() {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
+        const val = k => { const el = document.getElementById(k); return el ? String(el.value || '').trim() : ''; };
+        const msg = document.getElementById('wf-msg');
+        const say = t => { if (msg) msg.textContent = t; };
+        const customer = val('wf-customer');
+        const qty = parseInt(val('wf-qty'), 10);
+        if (!customer) return say('Key the customer name.');
+        if (!Number.isFinite(qty) || qty <= 0) return say('Key a quantity above nought.');
+        const me = (typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || null;
+        const now = new Date().toISOString();
+        const row = {
+            entry_date: val('wf-date') || null,
+            customer_name: customer,
+            po_number: val('wf-po') || null,
+            breed: val('wf-breed') || null,
+            qty,
+            wanted_month: val('wf-month') || null,
+            remark: val('wf-remark') || null,
+            updated_by: (me && me.email) || null,
+            updated_at: now
+        };
+        const btn = document.getElementById('wf-save');
+        if (btn) btn.disabled = true;
+        try {
+            if (_waitEditId != null) {
+                const { error } = await _supabase.from(WAIT_TABLE).update(row).eq('id', _waitEditId);
+                if (error) throw error;
+                const i = waitRows.findIndex(x => String(x.id) === String(_waitEditId));
+                if (i !== -1) waitRows[i] = { ...waitRows[i], ...row };
+            } else {
+                const ins = { ...row, status: 'waiting', created_by: (me && me.email) || null };
+                const { data, error } = await _supabase.from(WAIT_TABLE).insert(ins).select().single();
+                if (error) throw error;
+                waitRows.push(data || { id: 'local-' + Date.now(), ...ins, created_at: now });
+                if (_waitStatus !== 'waiting' && _waitStatus !== 'all') setWaitStatusFilter('waiting');
+            }
+            closeWaitForm();
+            renderWaitList();
+        } catch (e) {
+            say('Not saved: ' + ((e && e.message) || e));
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+    async function setWaitStatus(id, st) {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) { renderWaitList(); return; }
+        const i = waitRows.findIndex(x => String(x.id) === String(id));
+        if (i === -1) return;
+        const was = waitRows[i];
+        const me = (typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || null;
+        const patch = { status: st, updated_by: (me && me.email) || null, updated_at: new Date().toISOString() };
+        waitRows[i] = { ...was, ...patch };
+        renderWaitList();
+        const { error } = await _supabase.from(WAIT_TABLE).update(patch).eq('id', id);
+        if (error) {
+            waitRows[i] = was;
+            renderWaitList();
+            alert('Status not saved: ' + (error.message || error));
+        }
+    }
+    async function deleteWaitEntry(id) {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
+        const r = waitRows.find(x => String(x.id) === String(id));
+        if (!r) return;
+        if (!confirm(`Delete ${r.customer_name || 'this record'} · ${(Number(r.qty) || 0).toLocaleString('en-MY')}? A record that is no longer needed can be set to Cancelled instead, which keeps it.`)) return;
+        const { error } = await _supabase.from(WAIT_TABLE).delete().eq('id', id);
+        if (error) { alert('Not deleted: ' + (error.message || error)); return; }
+        waitRows = waitRows.filter(x => String(x.id) !== String(id));
+        renderWaitList();
+    }
+    window.setWaitStatusFilter = setWaitStatusFilter;
+    window.openWaitForm   = openWaitForm;
+    window.closeWaitForm  = closeWaitForm;
+    window.saveWaitEntry  = saveWaitEntry;
+    window.setWaitStatus  = setWaitStatus;
+    window.deleteWaitEntry = deleteWaitEntry;
+
+    /* ══════════════════════════════════════════════════════════════════
+       THE ALLOCATE ORDERS BUTTON MOVES. The office: "allocate Order是可以
+       移来移去的" — it sat over the right-hand end of the table. A press
+       that moved it more than a few pixels is a move, not a click, so it
+       does not open the drawer. Where it was left is kept on this machine,
+       and it is clamped back inside the window on every resize so it can
+       never be parked somewhere nobody can reach.
+       ══════════════════════════════════════════════════════════════════ */
+    const ALLOC_FAB_POS_KEY = 'mjm_alloc_fab_pos';
+    function _placeAllocFab(fab, x, y) {
+        const w = fab.offsetWidth || 200, h = fab.offsetHeight || 48;
+        const nx = Math.max(6, Math.min(window.innerWidth  - w - 6, x));
+        const ny = Math.max(6, Math.min(window.innerHeight - h - 6, y));
+        fab.style.left = nx + 'px'; fab.style.top = ny + 'px';
+        fab.style.right = 'auto'; fab.style.bottom = 'auto';
+        return { x: nx, y: ny };
+    }
+    function setupAllocFabDrag() {
+        const fab = document.getElementById('alloc-fab');
+        if (!fab || fab._dragWired) return;
+        fab._dragWired = true;
+        // The click is ours, so a drag can swallow it.
+        fab.removeAttribute('onclick');
+        fab.addEventListener('click', (e) => {
+            if (fab._moved) { fab._moved = false; e.preventDefault(); return; }
+            toggleAllocDrawer();
+        });
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(ALLOC_FAB_POS_KEY) || 'null'); } catch (_) {}
+        const restore = () => {
+            if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) && fab.offsetWidth) _placeAllocFab(fab, saved.x, saved.y);
+        };
+        restore();
+        // It is display:none until the Stock tab opens, so it has no size to
+        // clamp with yet — place it again the first time it is shown.
+        new MutationObserver(restore).observe(fab, { attributes: true, attributeFilter: ['class'] });
+        let start = null;
+        fab.addEventListener('pointerdown', (e) => {
+            if (e.button !== undefined && e.button !== 0) return;
+            const r = fab.getBoundingClientRect();
+            start = { px: e.clientX, py: e.clientY, x: r.left, y: r.top, moved: false, id: e.pointerId };
+        });
+        window.addEventListener('pointermove', (e) => {
+            if (!start || e.pointerId !== start.id) return;
+            const dx = e.clientX - start.px, dy = e.clientY - start.py;
+            if (!start.moved && Math.hypot(dx, dy) < 6) return;
+            if (!start.moved) { start.moved = true; fab.classList.add('fab-dragging'); }
+            _placeAllocFab(fab, start.x + dx, start.y + dy);
+        });
+        const end = (e) => {
+            if (!start || (e && e.pointerId !== start.id)) return;
+            if (start.moved) {
+                fab._moved = true;
+                fab.classList.remove('fab-dragging');
+                const r = fab.getBoundingClientRect();
+                saved = { x: r.left, y: r.top };
+                try { localStorage.setItem(ALLOC_FAB_POS_KEY, JSON.stringify(saved)); } catch (_) {}
+            }
+            start = null;
+        };
+        window.addEventListener('pointerup', end);
+        window.addEventListener('pointercancel', end);
+        window.addEventListener('resize', () => {
+            if (fab.style.left) { const r = fab.getBoundingClientRect(); _placeAllocFab(fab, r.left, r.top); }
+        });
+    }
+    document.addEventListener('DOMContentLoaded', setupAllocFabDrag);
 
     // The age of a batch's seedlings as at TODAY, off its seed-in date,
     // in whole months the way the Batch Record counts them (days / 30.44).
@@ -3466,7 +3911,8 @@
     // Sold Out is NOT a lock by itself any more — see rowFigures(). The
     // row says whether it is closed (culled, or sold out with nothing
     // really left) in data-mat-closed, and that is asked beside the status.
-    const matRowLocked = tr => MAT_DROP_LOCKED.includes(tr.dataset.matStatus) || tr.dataset.matClosed === '1';
+    const matRowLocked = tr => MAT_DROP_LOCKED.includes(tr.dataset.matStatus) || tr.dataset.matClosed === '1'
+        || tr.dataset.matLocked === '1';
 
     function onCardDragStart(e) {
         const orderId = e.currentTarget.dataset.orderId;
@@ -3505,6 +3951,7 @@
         const allocId = e.currentTarget.dataset.allocId;
         const alloc = batchAllocations.find(a => a.id === allocId);
         if (!alloc) return;
+        if (matRowIsLocked((alloc.batch_name || '') + '||' + (alloc.plot_name || ''))) { e.preventDefault(); return; }
         _draggingAlloc = {
             id: allocId,
             // The LIVE quantity, not the stored one — moving a chip moves
@@ -3570,6 +4017,7 @@
             if (isSource) return;
             const newQty = Math.min(balance, _draggingAlloc.qty);
             if (newQty <= 0) return;
+            if (matRowIsLocked(batchName + '||' + plotName)) return;
             await moveAllocationToBatch(_draggingAlloc.id, batchName, plotName, newQty);
             return;
         }
@@ -3589,6 +4037,7 @@
         const idx = batchAllocations.findIndex(a => a.id === allocId);
         if (idx === -1) return;
         const orig = batchAllocations[idx];
+        if (_denyLockedAlloc(orig)) return;
         const updated = { ...orig, batch_name: batchName, plot_name: plotName, allocated_qty: qty, updated_at: new Date().toISOString() };
         batchAllocations[idx] = updated;
 
@@ -3610,6 +4059,7 @@
 
     async function allocateOrderToBatch({ orderId, customer, orderNumber, batchName, plotName, qty }) {
         if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
+        if (matRowIsLocked(batchName + '||' + plotName)) { alert('This row is locked — unlock it before reserving a customer on it.'); return; }
         const payload = {
             batch_name:    batchName,
             plot_name:     plotName,
@@ -3646,6 +4096,7 @@
         if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
         const idx = batchAllocations.findIndex(a => a.id === allocId);
         if (idx === -1) return;
+        if (_denyLockedAlloc(batchAllocations[idx])) return;
         const removed = batchAllocations[idx];
         batchAllocations.splice(idx, 1);
 
@@ -3686,7 +4137,8 @@
         breedTotals: {},      // breed -> {full, collected, balance, batches: Set, plots: Set}
         active: 'all',        // 'all' or nursery name
         selectedBreed: null,
-        batchSearch: ''        // lowercase substring to match batch numbers
+        batchSearch: '',       // lowercase substring to match batch numbers
+        minHeight: null        // cm; a batch shows only if its LATEST height is at or above it
     };
 
     /* ONE PLOT, HOWEVER THE TWO SYSTEMS SPELL IT.
@@ -4102,6 +4554,47 @@
         return list.some(b => String(b.batch).toLowerCase().includes(q));
     }
 
+    /* THE HEIGHT FILTER. A batch passes when its LATEST height audit —
+       the mean of the seedlings measured on its last audit day, the
+       figure the plot window already shows — is at or above the figure
+       picked. A batch nobody has measured is NOT above anything, so a
+       filter leaves it out: showing it would answer "is this 150 cm" with
+       a plot nobody knows the height of. With no filter set, nothing is
+       asked of the heights at all. */
+    function invmapBatchHeight(plot, batch) {
+        const h = _invmap.heights[_invHeightKey(plot, batch)];
+        return (h && h.avg != null) ? h : null;
+    }
+    function batchPassesHeight(plot, batch) {
+        if (_invmap.minHeight == null) return true;
+        const h = invmapBatchHeight(plot, batch);
+        return !!h && h.avg >= _invmap.minHeight;
+    }
+    function plotMatchesHeight(plotName) {
+        if (_invmap.minHeight == null) return true;
+        return (_invmap.plotBatches[plotName] || []).some(b => batchPassesHeight(plotName, b.batch));
+    }
+    function _hFmt(v) { return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, ''); }
+    function setInvmapMinHeight(v) {
+        const n = (v == null || v === '') ? null : Number(v);
+        _invmap.minHeight = (Number.isFinite(n) && n > 0) ? n : null;
+        const input = document.getElementById('invmap-height-input');
+        if (input && document.activeElement !== input) input.value = _invmap.minHeight == null ? '' : _invmap.minHeight;
+        document.querySelectorAll('.invmap-hchip').forEach(b =>
+            b.classList.toggle('active', _invmap.minHeight != null && Number(b.dataset.hmin) === _invmap.minHeight));
+        const clr = document.getElementById('invmap-height-clear');
+        if (clr) clr.classList.toggle('hidden', _invmap.minHeight == null);
+        renderInvmapStack();
+        renderInvmapSidebar();
+    }
+    let _invmapHeightTimer = null;
+    function onInvmapHeightInput(v) {
+        if (_invmapHeightTimer) clearTimeout(_invmapHeightTimer);
+        _invmapHeightTimer = setTimeout(() => setInvmapMinHeight(v), 250);
+    }
+    window.setInvmapMinHeight = setInvmapMinHeight;
+    window.onInvmapHeightInput = onInvmapHeightInput;
+
     function batchMatchesSearch(batch) {
         const q = (_invmap.batchSearch || '').trim().toLowerCase();
         if (!q) return true;
@@ -4130,9 +4623,11 @@
             let batches = _invmap.plotBatches[p.plot_name] || [];
             const matchesBreed  = plotMatchesBreed(p.plot_name);
             const matchesSearch = plotMatchesBatchSearch(p.plot_name);
-            const matches = matchesBreed && matchesSearch;
+            const matchesHeight = plotMatchesHeight(p.plot_name);
+            const matches = matchesBreed && matchesSearch && matchesHeight;
             if (_invmap.selectedBreed) batches = batches.filter(b => b.breed === _invmap.selectedBreed);
             if (_invmap.batchSearch)   batches = batches.filter(b => batchMatchesSearch(b.batch));
+            if (_invmap.minHeight != null) batches = batches.filter(b => batchPassesHeight(p.plot_name, b.batch));
 
             const totalFull = batches.reduce((s, b) => s + b.full, 0);
             const totalColl = batches.reduce((s, b) => s + b.collected, 0);
@@ -4166,10 +4661,21 @@
                 ? `<div class="invmap-batch-line" title="Full ${totalFull.toLocaleString()} · Collected ${totalColl.toLocaleString()} · Balance ${totalBal.toLocaleString()}">${pct}% collected</div>`
                 : `<div class="invmap-batch-line empty">No batch</div>`;
             const dimStyle = !matches ? 'opacity:.35' : '';
+            // The plot's height on the map: the TALLEST batch in scope, by its
+            // latest audit. Tallest rather than the mean because the question
+            // the office asks of the map is "where is there something this
+            // tall", and a plot holding one 150 cm batch beside a 60 cm one
+            // has seedlings that tall in it.
+            const hs = batches.map(b => invmapBatchHeight(p.plot_name, b.batch)).filter(Boolean);
+            const tall = hs.length ? hs.reduce((m, h) => h.avg > m.avg ? h : m) : null;
+            const hLabel = tall
+                ? `<div class="invmap-batch-line invmap-batch-h" title="Latest height audit ${_invFmtDate(tall.date)}">↕ ${_hFmt(tall.avg)} cm</div>`
+                : '';
             labels.innerHTML += `
                 <div class="invmap-label" style="left:${cx}%; top:${cy}%; ${dimStyle}">
                     <div class="invmap-plot-tag">${p.plot_name}</div>
                     ${pctLabel}
+                    ${hLabel}
                 </div>`;
         });
         if (statEl) {
@@ -4194,6 +4700,7 @@
             list.forEach(b => {
                 if (_invmap.selectedBreed && b.breed !== _invmap.selectedBreed) return;
                 if (!batchMatchesSearch(b.batch)) return;
+                if (!batchPassesHeight(plot, b.batch)) return;
                 out.push({ plot, nursery, ...b });
             });
         });
@@ -4238,6 +4745,17 @@
 
         // Render the by-plot batch breakdown (filtered when a breed is active).
         const pairs = visiblePlotBatchPairs();
+        const hNote = document.getElementById('invmap-height-note');
+        if (hNote) {
+            const on = _invmap.minHeight != null;
+            hNote.classList.toggle('hidden', !on);
+            if (on) {
+                const plots = new Set(pairs.map(p => p.plot));
+                hNote.textContent = pairs.length
+                    ? `${pairs.length} batch${pairs.length === 1 ? '' : 'es'} in ${plots.size} plot${plots.size === 1 ? '' : 's'} at ${_hFmt(_invmap.minHeight)} cm or taller, by the latest height audit. Batches never measured are left out.`
+                    : `No batch is ${_hFmt(_invmap.minHeight)} cm or taller by its latest height audit.`;
+            }
+        }
         if (!pairs.length) {
             body.innerHTML = '<div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest">No batch data for this scope.</div>';
             return;
@@ -4249,14 +4767,21 @@
             const totColl = list.reduce((s,b)=>s+b.collected,0);
             const totBal  = list.reduce((s,b)=>s+b.balance,0);
             const pct = totFull > 0 ? Math.round((totColl/totFull)*100) : 0;
-            const rowsHtml = list.map(b => `
+            const rowsHtml = list.map(b => {
+                const h = invmapBatchHeight(plot, b.batch);
+                const hCell = h
+                    ? `<td class="py-1.5 invmap-h-cell" title="Latest height audit">${_hFmt(h.avg)} cm<span class="invmap-h-date">${_invFmtDate(h.date)}</span></td>`
+                    : `<td class="py-1.5 invmap-h-cell" style="color:#cbd5e1" title="Not measured">—</td>`;
+                return `
                 <tr class="border-t border-slate-100">
                     <td class="py-1.5 text-[11px] font-black text-slate-800">#${b.batch}</td>
                     <td class="py-1.5 text-[10px] text-slate-500">${b.breed}</td>
+                    ${hCell}
                     <td class="py-1.5 text-[11px] text-right tabular-nums text-slate-700">${fmt(b.full)}</td>
                     <td class="py-1.5 text-[11px] text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
                     <td class="py-1.5 text-[11px] text-right tabular-nums font-black ${b.balance>0?'text-emerald-700':'text-slate-400'}">${fmt(b.balance)}</td>
-                </tr>`).join('');
+                </tr>`;
+            }).join('');
             return `
             <div class="bg-white border border-slate-200 rounded-xl p-3 mb-3">
                 <div class="flex items-center justify-between gap-2 mb-2">
@@ -4267,6 +4792,7 @@
                     <thead><tr>
                         <th class="text-left text-[8px] font-black text-slate-400 uppercase tracking-widest">Batch</th>
                         <th class="text-left text-[8px] font-black text-slate-400 uppercase tracking-widest">Breed</th>
+                        <th class="text-right text-[8px] font-black text-amber-500 uppercase tracking-widest">Height</th>
                         <th class="text-right text-[8px] font-black text-slate-400 uppercase tracking-widest">Full</th>
                         <th class="text-right text-[8px] font-black text-blue-400 uppercase tracking-widest">Coll</th>
                         <th class="text-right text-[8px] font-black text-emerald-500 uppercase tracking-widest">Bal</th>
@@ -4320,6 +4846,7 @@
         titleEl.innerText = plotName;
         let batches = _invmap.plotBatches[plotName] || [];
         if (_invmap.selectedBreed) batches = batches.filter(b => b.breed === _invmap.selectedBreed);
+        if (_invmap.minHeight != null) batches = batches.filter(b => batchPassesHeight(plotName, b.batch));
         /* Batches this plot is finished with are off the list — see
            _buildInvmapCompleted. Nothing is said about them: the modal is a
            list of what is still standing, and a line about what is not is
@@ -4838,4 +5365,6 @@
         loadScheduledCollection();
         // loadAgingReport removed — Aging Report block deleted from UI.
         loadBatchAllocations().then(() => { renderMaturityTable(); renderAllocDrawer(); });
+        loadWaitList();
+        if (typeof MJMPeople !== 'undefined') MJMPeople.load(_supabase).then(() => renderMaturityTable(), () => {});
     });
