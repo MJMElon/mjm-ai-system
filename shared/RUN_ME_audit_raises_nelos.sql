@@ -3,7 +3,7 @@
 -- When a maintenance audit is marked Unsatisfactory, the database opens a
 -- Nelos case for the Field Conductor of that nursery. The case carries the plot,
 -- the nursery, the job, the workers named on the work record and the
--- auditor's remark. The case number is written back onto the audit row as
+-- remark from the auditor. The case number is written back onto the audit row as
 -- nelos_case_id, so the Work Records page can show it under Nelos Case.
 --
 -- It runs on the database, not in a page, so every app and every version
