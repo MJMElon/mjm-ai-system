@@ -700,7 +700,11 @@
        machine. Cells are MOVED, never re-rendered, so the row template
        stays one shape and every handler on a cell goes with it. */
     const MAT_GROUP_ORDER_KEY = 'mjm_mat_group_order';
-    const MAT_COL_W = { prod: [112, 82, 82, 150, 118, 128], plot: [150, 112, 112], alloc: [null, 104, 138] };
+    // PER CENT, not pixels — the office: "Monthly maturity allocation table
+    // make it fix on the screen that we no need to drag left and right to
+    // see the data". The table is 100% of its card with no minimum width,
+    // so on a laptop every column is on screen at once.
+    const MAT_COL_W = { prod: [10, 5, 6, 9, 7, 7], plot: [9.5, 7, 7], alloc: [null, 7, 8] };
     function matGroupOrder() {
         try { return localStorage.getItem(MAT_GROUP_ORDER_KEY) === 'alloc' ? 'alloc' : 'plot'; }
         catch (e) { return 'plot'; }
@@ -715,7 +719,7 @@
         if (!cg) { cg = document.createElement('colgroup'); cg.className = 'mat-cols'; table.insertBefore(cg, table.firstChild); }
         const prod = MAT_COL_W.prod.filter((w, i) => !(isPR && i === 5));
         const seq = allocFirst ? [...prod, ...MAT_COL_W.alloc, ...MAT_COL_W.plot] : [...prod, ...MAT_COL_W.plot, ...MAT_COL_W.alloc];
-        cg.innerHTML = seq.map(w => w ? `<col style="width:${w}px">` : '<col>').join('');
+        cg.innerHTML = seq.map(w => w ? `<col style="width:${w}%">` : '<col>').join('');
         const gr = table.querySelector('thead tr.mat-group-row');
         const gp = gr && gr.querySelector('.mat-group-plot'), ga = gr && gr.querySelector('.mat-group-alloc');
         if (gp && ga) { if (allocFirst) gr.insertBefore(ga, gp); else gr.appendChild(ga); }
@@ -1095,7 +1099,7 @@
             const locked = matRowIsLocked(r.key);
             // A culled row, or one sold out with nothing left, takes nobody,
             // so it is not offered a lock — unless it already carries one.
-            const lockBar = (locked || !(culled || closedOut)) ? matLockBarHtml(r.key, locked) : '';
+            const lockIcon = (locked || !(culled || closedOut)) ? matLockIconHtml(r.key, locked) : '<span class="mat-lock-gap"></span>';
 
             const reservBody = rowAllocs.length
                 ? `<div class="reserv-stack">${rowAllocs.map(a => {
@@ -1137,11 +1141,11 @@
                 : locked
                     ? `<div class="reserv-empty reserv-empty-locked" title="Locked — unlock the row to drop a customer on it">Locked</div>`
                     : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
-            const reservHtml = lockBar + reservBody;
+            const reservHtml = reservBody;
 
             const html = `
                 <tr class="${history ? 'mat-history-row' : ''}${locked ? ' mat-row-locked' : ''}" data-mat-locked="${locked ? '1' : '0'}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}" data-mat-status="${status}" data-mat-closed="${(culled || closedOut) ? '1' : '0'}">
-                    <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}${seedlingAgeHtml(r.seedIn)}</td>
+                    <td class="col-prod mat-date-cell"><div class="mat-date-wrap">${lockIcon}<div class="mat-date-txt">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}${seedlingAgeHtml(r.seedIn)}</div></div></td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
                     <td class="col-prod font-mono">${escapeHtml(r.batch || '—')}</td>
                     <td class="col-prod" title="${escapeHtml(r.breed || '')}">${escapeHtml(r.breed || '—')}</td>
@@ -1338,15 +1342,20 @@
         const d = new Date(v);
         return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     }
-    function matLockBarHtml(key, locked) {
+    // The lock is a Material Design icon BEFORE the Maturity Date — the
+    // office: "Lock function make it become an material design icon stay
+    // before the maturity date, if being locked, the line will turn to
+    // different colour". Who locked it and when is the icon's hover.
+    const MD_LOCK      = 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z';
+    const MD_LOCK_OPEN = 'M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z';
+    function matLockIconHtml(key, locked) {
         const a = plotAllocations[key] || {};
         const who = locked ? [_matWho(a.locked_by), _matDay(a.locked_at)].filter(Boolean).join(' · ') : '';
-        return `<div class="mat-lock-bar">
-                    <span class="mat-lock-who" title="${escapeHtml(who)}">${locked ? '🔒 ' + escapeHtml(who || 'Locked') : ''}</span>
-                    <button type="button" class="mat-lock-btn${locked ? ' is-locked' : ''}" data-lock-key="${escapeHtml(key)}"
-                        onclick="toggleMatLock(this.dataset.lockKey)"
-                        title="${locked ? 'Locked — press to unlock so the customers can be moved' : 'Lock this row so its customer reservation cannot be changed'}">${locked ? '🔒 Unlock' : '🔓 Lock'}</button>
-                </div>`;
+        const tip = locked
+            ? 'Locked' + (who ? ' by ' + who : '') + ' — this plot cannot be given to anybody else. Press to unlock.'
+            : 'Lock this row so its customer reservation cannot be changed';
+        return `<button type="button" class="mat-lock-btn${locked ? ' is-locked' : ''}" data-lock-key="${escapeHtml(key)}"
+                    onclick="toggleMatLock(this.dataset.lockKey)" title="${escapeHtml(tip)}" aria-label="${locked ? 'Unlock' : 'Lock'}" aria-pressed="${locked ? 'true' : 'false'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${locked ? MD_LOCK : MD_LOCK_OPEN}"/></svg></button>`;
     }
     function _denyLockedAlloc(a) {
         if (!a) return false;
@@ -1419,7 +1428,10 @@
     let _waitStatus = 'waiting';
     let _waitEditId = null;
     let _waitMissing = false;
-    const WAIT_STATUSES = [['waiting', 'Waiting'], ['allocated', 'Allocated'], ['cancelled', 'Cancelled']];
+    // Four, in the office's order: "Waiting, Contacted, Confirmed, Cancelled".
+    // A row saved as Allocated before this reads as Confirmed (the SQL moves it).
+    const WAIT_STATUSES = [['waiting', 'Waiting'], ['contacted', 'Contacted'], ['confirmed', 'Confirmed'], ['cancelled', 'Cancelled']];
+    const _waitSt = r => { const s = r.status || 'waiting'; return s === 'allocated' ? 'confirmed' : s; };
 
     function _waitMonthLabel(ym) {
         if (!ym) return 'No month';
@@ -1474,14 +1486,15 @@
         }
         if (addBtn) addBtn.disabled = _waitMissing;
 
-        const counts = { waiting: 0, allocated: 0, cancelled: 0 };
-        waitRows.forEach(r => { const k = r.status || 'waiting'; if (k in counts) counts[k]++; });
+        const counts = { waiting: 0, contacted: 0, confirmed: 0, cancelled: 0 };
+        waitRows.forEach(r => { const k = _waitSt(r); if (k in counts) counts[k]++; });
         Object.keys(counts).forEach(k => { const el = document.getElementById('wait-n-' + k); if (el) el.textContent = counts[k]; });
 
-        // What is WAITING, per wanted month — whatever tab is open, because
-        // that is the demand the allocation table is being worked against.
+        // What is still OPEN (anything but Cancelled), per wanted month —
+        // whatever tab is open, because that is the demand the allocation
+        // table is being worked against.
         const byMonth = {};
-        waitRows.filter(r => (r.status || 'waiting') === 'waiting').forEach(r => {
+        waitRows.filter(r => _waitSt(r) !== 'cancelled').forEach(r => {
             const k = r.wanted_month || '';
             (byMonth[k] = byMonth[k] || { n: 0, qty: 0 });
             byMonth[k].n++; byMonth[k].qty += Number(r.qty) || 0;
@@ -1490,7 +1503,7 @@
         if (strip) {
             strip.classList.toggle('hidden', !months.length);
             strip.innerHTML = months.map(k =>
-                `<span class="wait-month-chip${k && k === openMonth ? ' is-active' : ''}" data-wait-month="${escapeHtml(k)}">${escapeHtml(_waitMonthLabel(k))} · ${byMonth[k].n} waiting · ${fmt(byMonth[k].qty)}</span>`).join('');
+                `<span class="wait-month-chip${k && k === openMonth ? ' is-active' : ''}" data-wait-month="${escapeHtml(k)}">${escapeHtml(_waitMonthLabel(k))} · ${byMonth[k].n} open · ${fmt(byMonth[k].qty)}</span>`).join('');
         }
 
         if (_waitMissing) {
@@ -1498,7 +1511,7 @@
             if (tfoot) tfoot.innerHTML = '';
             return;
         }
-        const list = _waitSorted(waitRows.filter(r => _waitStatus === 'all' || (r.status || 'waiting') === _waitStatus));
+        const list = _waitSorted(waitRows.filter(r => _waitStatus === 'all' || _waitSt(r) === _waitStatus));
         if (!list.length) {
             const word = _waitStatus === 'all' ? 'No records yet' : `Nothing ${(WAIT_STATUSES.find(x => x[0] === _waitStatus) || ['', _waitStatus])[1].toLowerCase()}`;
             tbody.innerHTML = `<tr><td colspan="9" class="wait-empty">${word}.</td></tr>`;
@@ -1506,7 +1519,7 @@
             return;
         }
         tbody.innerHTML = list.map(r => {
-            const st = r.status || 'waiting';
+            const st = _waitSt(r);
             const opts = WAIT_STATUSES.map(([v, l]) => `<option value="${v}"${v === st ? ' selected' : ''}>${l}</option>`).join('');
             const hot = r.wanted_month && r.wanted_month === openMonth;
             return `<tr data-wait-id="${escapeHtml(r.id)}"${hot ? ' class="wait-this-month"' : ''}>
@@ -1619,7 +1632,10 @@
         if (error) {
             waitRows[i] = was;
             renderWaitList();
-            alert('Status not saved: ' + (error.message || error));
+            const m = String(error.message || error);
+            alert(/check constraint|status_check|23514/i.test(m + ' ' + (error.code || ''))
+                ? 'Status not saved — the database still has the old three statuses. Run shared/RUN_ME_waiting_list_four_statuses.sql in the Supabase SQL Editor first.'
+                : 'Status not saved: ' + m);
         }
     }
     async function deleteWaitEntry(id) {
@@ -4278,7 +4294,10 @@
                 if (b.batch_name && b.breed_name) batchBreedMap[b.batch_name] = b.breed_name;
             });
 
-            _invmap.nurseries = nursRes.data || [];
+            // PN, BNN, UNN 1, UNN 2 — in that order — and no UNE: the office
+            // "Rearrange the tab PN, BNN, UNN1, UNN2. Remove UNE." Matched on
+            // letters and digits, so "UNN 1" and "UNN1" are one nursery.
+            _invmap.nurseries = invmapNurseryTabs(nursRes.data || []);
             _invmap.plots     = plotsRes.data || [];
             _invmap.heights   = _buildInvmapHeights(heightRes && heightRes.data);
             if (heightRes && heightRes.error) console.warn('[invmap] heights not loaded:', heightRes.error);
@@ -4601,6 +4620,18 @@
         return String(batch).toLowerCase().includes(q);
     }
 
+    const INVMAP_NURSERY_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2'];
+    function invmapNurseryTabs(list) {
+        const nk = v => String(v || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+        return (list || [])
+            .filter(n => INVMAP_NURSERY_ORDER.includes(nk(n.name)))
+            .sort((x, y) => INVMAP_NURSERY_ORDER.indexOf(nk(x.name)) - INVMAP_NURSERY_ORDER.indexOf(nk(y.name)));
+    }
+    // A height on the MAP: "<100 cm" under a metre, the figure from there.
+    function invmapMapHeight(cm) {
+        if (cm == null || !isFinite(cm)) return '';
+        return cm < 100 ? '&lt;100 cm' : _hFmt(cm) + ' cm';
+    }
     function renderInvmapPlotsForNursery(nurseryName) {
         const slug   = nurseryName.replace(/\s+/g, '-');
         const svg    = document.getElementById('invmap-svg-' + slug);
@@ -4611,6 +4642,7 @@
         labels.innerHTML = '';
 
         let nurseryFull = 0, nurseryColl = 0;
+        const lorries = [];
         const plots = _invmap.plots.filter(p => p.nursery_name === nurseryName);
 
         plots.forEach(p => {
@@ -4656,31 +4688,46 @@
             const cx = pts.reduce((s, pt) => s + pt.x, 0) / pts.length;
             const cy = pts.reduce((s, pt) => s + pt.y, 0) / pts.length;
 
-            // Label: plot name + collection percentage only.
-            const pctLabel = totalFull > 0
-                ? `<div class="invmap-batch-line" title="Full ${totalFull.toLocaleString()} · Collected ${totalColl.toLocaleString()} · Balance ${totalBal.toLocaleString()}">${pct}% collected</div>`
-                : `<div class="invmap-batch-line empty">No batch</div>`;
+            // Label: the plot name and its height. No collection percentage —
+            // the office: "no need to show how many % collected".
+            const emptyLabel = totalFull > 0 ? '' : `<div class="invmap-batch-line empty">No batch</div>`;
             const dimStyle = !matches ? 'opacity:.35' : '';
             // The plot's height on the map: the TALLEST batch in scope, by its
             // latest audit. Tallest rather than the mean because the question
             // the office asks of the map is "where is there something this
             // tall", and a plot holding one 150 cm batch beside a 60 cm one
-            // has seedlings that tall in it.
+            // has seedlings that tall in it. Under 100 cm it reads "<100 cm"
+            // — the office: "if under 100cm, in the map just show <100cm".
             const hs = batches.map(b => invmapBatchHeight(p.plot_name, b.batch)).filter(Boolean);
             const tall = hs.length ? hs.reduce((m, h) => h.avg > m.avg ? h : m) : null;
             const hLabel = tall
-                ? `<div class="invmap-batch-line invmap-batch-h" title="Latest height audit ${_invFmtDate(tall.date)}">↕ ${_hFmt(tall.avg)} cm</div>`
+                ? `<div class="invmap-batch-line invmap-batch-h" title="Latest height audit ${_invFmtDate(tall.date)} · ${_hFmt(tall.avg)} cm">↕ ${invmapMapHeight(tall.avg)}</div>`
                 : '';
             labels.innerHTML += `
                 <div class="invmap-label" style="left:${cx}%; top:${cy}%; ${dimStyle}">
                     <div class="invmap-plot-tag">${p.plot_name}</div>
-                    ${pctLabel}
+                    ${emptyLabel}
                     ${hLabel}
+                </div>`;
+            // A COLLECTION PLOT gets a lorry driving in to it and back out,
+            // over and over — the office: "for collection plot, create a
+            // moving lorry to go to that plot to do the collection repeatly".
+            // A collection plot is one being collected from: something has
+            // already gone out on a DO and there is still balance to take.
+            if (matches && totalColl > 0 && totalBal > 0) lorries.push({ cx, cy, plot: p.plot_name, bal: totalBal });
+        });
+        // The lorries enter from the foot of the map and stagger their start
+        // so a nursery with several collection plots is not one lock-step.
+        lorries.forEach((l, i) => {
+            const sx = l.cx < 50 ? -4 : 104, sy = 104;
+            labels.innerHTML += `
+                <div class="invmap-lorry${l.cx < 50 ? ' from-left' : ' from-right'}" title="Collecting at ${escapeHtml(l.plot)} · ${l.bal.toLocaleString('en-MY')} left"
+                     style="--sx:${sx}%;--sy:${sy}%;--ex:${l.cx}%;--ey:${l.cy}%;left:${l.cx}%;top:${l.cy}%;animation-delay:${-(i * 1.7) % 8}s">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
                 </div>`;
         });
         if (statEl) {
-            const pct = nurseryFull > 0 ? Math.round((nurseryColl / nurseryFull) * 100) : 0;
-            statEl.innerText = nurseryFull > 0 ? (nurseryColl.toLocaleString() + ' / ' + nurseryFull.toLocaleString() + '  (' + pct + '% collected)') : 'No batch data';
+            statEl.innerText = nurseryFull > 0 ? ('Balance ' + Math.max(0, nurseryFull - nurseryColl).toLocaleString('en-MY') + ' of ' + nurseryFull.toLocaleString('en-MY')) : 'No batch data';
         }
     }
 
@@ -5097,13 +5144,17 @@
             status: (plotAllocations[r.key] || {}).plot_status || 'no_status'
         }));
         const c = MJMStockAnalysis.classify(rows, { now, heights: (_invmap && _invmap.heights) || {} });
-        return { avail: c.avail, nextMature: c.nextMature };
+        return { avail: c.avail, nextMature: c.nextMature, upcoming: c.upcoming };
     }
 
+    // THREE MONTHS — the office: "Collection forecast show 3 months time.
+    // Example if now nov 2026, must show nov 2026, dec 2026 & jan 2027".
+    // Month 0 is the rest of this month; months 1 and 2 are whole months.
     function _saForecast(now, orders, paceRows) {
         const todayKey  = _saDayKey(now);
-        const thisMonth = monthKey(now);
-        const nextMonth = monthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+        const N = (MJMStockAnalysis.FORECAST_MONTHS || 3);
+        const keys = Array.from({ length: N }, (_, i) => monthKey(new Date(now.getFullYear(), now.getMonth() + i, 1)));
+        const thisMonth = keys[0];
         const dim  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
         const left = (dim - now.getDate() + 1) / dim;   // share of this month still to come
 
@@ -5119,22 +5170,31 @@
             done[k] = (done[k] || 0) + (Number(b.collection_qty) || 0);
         });
 
-        let estRest = 0, estNext = 0, noPace = 0;
+        const est = keys.map(() => 0);
+        let noPace = 0;
         const rows = orders.map(o => {
             const bal = Number(o.balance) || 0;
             const pace = Math.round((done[_normOrderKey(o.orderNumber)] || 0) * 30 / SA_PACE_DAYS);
-            let bookedRest = 0, bookedNext = 0;
+            const booked = keys.map(() => 0);
             Object.entries(o.bookingsByDay || {}).forEach(([d, q]) => {
-                if (d >= todayKey && d.slice(0, 7) === thisMonth) bookedRest += Number(q) || 0;
-                if (d.slice(0, 7) === nextMonth) bookedNext += Number(q) || 0;
+                const k = keys.indexOf(d.slice(0, 7));
+                if (k < 0 || (k === 0 && d < todayKey)) return;
+                booked[k] += Number(q) || 0;
             });
-            const rest = Math.min(bal, Math.max(bookedRest, Math.round(pace * left)));
-            const next = Math.min(bal - rest, Math.max(bookedNext, pace));
-            if (!pace && !bookedRest && !bookedNext) noPace++;
-            estRest += rest; estNext += next;
+            let owed = bal;
+            const months = keys.map((k, i) => {
+                const want = Math.max(booked[i], i === 0 ? Math.round(pace * left) : pace);
+                const m = Math.max(0, Math.min(owed, want));
+                owed -= m;
+                est[i] += m;
+                return m;
+            });
+            if (!pace && !booked.some(Boolean)) noPace++;
             return { customer: o.customer, orderNumber: o.orderNumber, alNumber: o.alNumber,
-                     balance: bal, pace, bookedRest, bookedNext, rest, next };
-        }).sort((a, b) => (b.rest + b.next) - (a.rest + a.next) || b.balance - a.balance);
+                     balance: bal, pace, booked, months,
+                     bookedRest: booked[0], bookedNext: booked[1] || 0, rest: months[0], next: months[1] || 0 };
+        }).sort((a, b) => b.months.reduce((s, v) => s + v, 0) - a.months.reduce((s, v) => s + v, 0) || b.balance - a.balance);
+        const estRest = est[0], estNext = est[1] || 0;
 
         // Already out this month — the month Collection card's own figure:
         // non-cancelled DOs delivered this month, calibration DOs and DOs on
@@ -5145,7 +5205,7 @@
             return String(d.delivery_date).slice(0, 7) === thisMonth ? s + (Number(d.total_qty) || 0) : s;
         }, 0);
 
-        return { rows, estRest, estNext, outSoFar, noPace };
+        return { rows, keys, est, estRest, estNext, outSoFar, noPace };
     }
 
     async function renderStockAnalysis() {
@@ -5159,17 +5219,26 @@
             const orders = openOrders.filter(_saIsCounted);
             const nExcl = openOrders.length - orders.length;
             const actual = orders.reduce((s, o) => s + (Number(o.balance) || 0), 0);
-            const { avail, nextMature } = _saStockRows(now);
+            const { avail, nextMature, upcoming } = _saStockRows(now);
             const matured = avail.filter(r => r.why === 'matured').reduce((s, r) => s + r.balance, 0);
             const tall    = avail.filter(r => r.why === 'tall').reduce((s, r) => s + r.balance, 0);
             const available = matured + tall;
             const gap = available - actual;
             const fc = _saForecast(now, orders, paceRows);
-            const nextNew = nextMature.reduce((s, r) => s + r.balance, 0);
-            const leftThis = available - fc.estRest;
-            const nextAvail = Math.max(0, leftThis) + nextNew;
-            const leftNext = nextAvail - fc.estNext;
-            _saData = { now, nextD, avail, nextMature, matured, tall, available, fc, openOrders };
+            // Month by month: what is on hand, plus what turns 10 months in
+            // that month, less what is expected to go out.
+            const ups = upcoming || [];
+            const fcMonths = [];
+            let carry = available;
+            fc.keys.forEach((k, i) => {
+                const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                const newQty = (ups[i] && ups[i].qty) || 0;
+                const stock = (i === 0 ? available : Math.max(0, carry)) + newQty;
+                const after = stock - fc.est[i];
+                fcMonths.push({ d, key: k, carried: i === 0 ? available : Math.max(0, carry), newQty, stock, est: fc.est[i], after });
+                carry = after;
+            });
+            _saData = { now, nextD, avail, nextMature, upcoming: ups, matured, tall, available, fc, fcMonths, openOrders };
 
             const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + _saFmt(Math.abs(n));
             const verdict = n => n >= 0
@@ -5195,7 +5264,7 @@
             body.innerHTML = `
                 <div class="sa-cards">
                     ${card('sa-order', 'Actual Order', _saFmt(actual), `Balance to deliver · ${orders.length} order${orders.length === 1 ? '' : 's'}${nExcl ? ` · ${nExcl} unticked` : ''} · tap for details`, 'onclick="openStockAnalysisWindow(\'orders\')" title="Show the orders behind this figure"')}
-                    ${card('sa-stock', 'Available Stock', _saFmt(available), `Matured ${_saFmt(matured)} + Reached 1.5 m ${_saFmt(tall)} · tap for details`, 'onclick="openStockAnalysisWindow(\'stock\')" title="Show the plots behind this figure"')}
+                    ${card('sa-stock', 'Available Stock', _saFmt(available), `10 months & above ${_saFmt(matured)} + 1.5 m & above ${_saFmt(tall)} · tap for details`, 'onclick="openStockAnalysisWindow(\'stock\')" title="Show the plots behind this figure"')}
                     ${card(gap < 0 ? 'sa-gap-neg' : 'sa-gap-pos', 'Available − Actual Order', signed(gap), gap < 0 ? 'Not enough stock for every order' : 'Enough stock for every order')}
                 </div>
                 <div class="sa-forecast">
@@ -5203,13 +5272,18 @@
                         <span>Collection forecast</span>
                         <button type="button" class="sa-link" onclick="openStockAnalysisWindow('forecast')">By customer ›</button>
                     </div>
-                    <div class="sa-fcols">
-                        ${fcCol(_saMonthLbl(now), fc.outSoFar + fc.estRest,
-                                `${_saFmt(fc.outSoFar)} already collected + ${_saFmt(fc.estRest)} expected for the rest of the month`,
-                                available, 'Available stock now', leftThis)}
-                        ${fcCol(_saMonthLbl(nextD), fc.estNext,
-                                'From each customer’s collection pace and bookings',
-                                nextAvail, `Left from this month ${_saFmt(Math.max(0, leftThis))} + maturing in ${nextD.toLocaleString('en-MY', { month: 'short' })} ${_saFmt(nextNew)}`, leftNext)}
+                    <div class="sa-fcols sa-fcols-3">
+                        ${fcMonths.map((m, i) => {
+                            const mon = m.d.toLocaleString('en-MY', { month: 'short' });
+                            return fcCol(_saMonthLbl(m.d),
+                                i === 0 ? fc.outSoFar + m.est : m.est,
+                                i === 0 ? `${_saFmt(fc.outSoFar)} already collected + ${_saFmt(m.est)} expected for the rest of the month`
+                                        : 'From each customer’s collection pace and bookings',
+                                m.stock,
+                                i === 0 ? `Available now ${_saFmt(available)} + turning 10 months later in ${mon} ${_saFmt(m.newQty)}`
+                                        : `Left from ${new Date(m.d.getFullYear(), m.d.getMonth() - 1, 1).toLocaleString('en-MY', { month: 'short' })} ${_saFmt(m.carried)} + turning 10 months in ${mon} ${_saFmt(m.newQty)}`,
+                                m.after);
+                        }).join('')}
                     </div>
                     ${fc.noPace ? `<div class="sa-fnote sa-foot">${fc.noPace} order${fc.noPace === 1 ? ' has' : 's have'} no collection in the last ${SA_PACE_DAYS} days and no booking, so ${fc.noPace === 1 ? 'it is' : 'they are'} not in the estimate.</div>` : ''}
                 </div>`;
@@ -5300,37 +5374,38 @@
         } else if (which === 'stock') {
             title.textContent = 'Available Stock';
             sub.textContent = _saFmt(d.available) + ' seedlings · as at ' + dt(d.now);
-            const table = (rows, showHeight) => rows.length ? `
+            const age = r => r.age == null ? '—' : r.age + (r.age === 1 ? ' month' : ' months');
+            const table = (rows) => rows.length ? `
                 <div class="sa-twrap"><table class="sa-table">
-                    <thead><tr><th>Plot</th><th>Batch</th><th>Breed</th><th>Nursery</th><th>Maturity</th><th class="r">Height</th><th class="r">Balance</th></tr></thead>
+                    <thead><tr><th>Plot</th><th>Batch</th><th>Breed</th><th>Nursery</th><th class="r">Age</th><th class="r">Height</th><th class="r">Balance</th></tr></thead>
                     <tbody>${rows.map(r => `<tr>
                         <td class="b">${escapeHtml(r.plot)}</td><td>${escapeHtml(r.batch)}</td><td>${escapeHtml(r.breed || '—')}</td>
-                        <td>${escapeHtml(r.location || '—')}</td><td>${dt(r.matureDate)}</td>
-                        <td class="r">${hcm(r.height)}</td><td class="r b">${_saFmt(r.balance)}</td></tr>`).join('')}</tbody>
+                        <td>${escapeHtml(r.location || '—')}</td><td class="r">${age(r)}</td>
+                        <td class="r">${hcm(r.height)}${r.heightDate ? `<div class="sa-hdate">${dt(new Date(r.heightDate))}</div>` : ''}</td><td class="r b">${_saFmt(r.balance)}</td></tr>`).join('')}</tbody>
                     <tfoot><tr><td colspan="6">Total</td><td class="r">${_saFmt(rows.reduce((s, r) => s + r.balance, 0))}</td></tr></tfoot>
                 </table></div>` : '<div class="sa-empty">None</div>';
             const m = d.avail.filter(r => r.why === 'matured'), t = d.avail.filter(r => r.why === 'tall');
             body.innerHTML = `
-                <div class="sa-mhead">Matured by end of ${_saMonthLbl(d.now)} <span>${_saFmt(d.matured)}</span></div>
+                <div class="sa-mhead">10 months &amp; above <span>${_saFmt(d.matured)}</span></div>
                 ${table(m)}
-                <div class="sa-mhead">Reached 1.5 m, not yet matured <span>${_saFmt(d.tall)}</span></div>
+                <div class="sa-mhead">1.5 m &amp; above, under 10 months <span>${_saFmt(d.tall)}</span></div>
                 ${table(t)}
-                <div class="sa-fnote">Balance is the Plot Balance on Stock Allocation (after 10% culling, less DOs). Height is the latest Seedling Height audit of that plot and batch. Culled, Sold Out and Closed plots are left out.</div>`;
+                <div class="sa-fnote">Age is from the batch seed-in date, as at today. Balance is the Plot Balance on Stock Allocation (after 10% culling, less DOs). Height is the latest Seedling Height audit of that plot and batch. Culled, Sold Out and Closed plots are left out.</div>`;
         } else {
             const fc = d.fc;
             title.textContent = 'Collection forecast by customer';
             sub.textContent = `Pace = bookings collected in the last ${SA_PACE_DAYS} days, per month`;
+            const mons = (d.fcMonths || []).map(m => m.d.toLocaleString('en-MY', { month: 'short' }));
             body.innerHTML = fc.rows.length ? `
                 <div class="sa-twrap"><table class="sa-table">
-                    <thead><tr><th>Customer</th><th>Order</th><th class="r">Balance</th><th class="r">Pace / month</th><th class="r">Booked rest of ${d.now.toLocaleString('en-MY', { month: 'short' })}</th><th class="r">Est. rest of ${d.now.toLocaleString('en-MY', { month: 'short' })}</th><th class="r">Booked ${d.nextD.toLocaleString('en-MY', { month: 'short' })}</th><th class="r">Est. ${d.nextD.toLocaleString('en-MY', { month: 'short' })}</th></tr></thead>
+                    <thead><tr><th>Customer</th><th>Order</th><th class="r">Balance</th><th class="r">Pace / month</th>${mons.map((n, i) => `<th class="r">Booked ${i === 0 ? 'rest of ' : ''}${n}</th><th class="r">Est. ${i === 0 ? 'rest of ' : ''}${n}</th>`).join('')}</tr></thead>
                     <tbody>${fc.rows.map(r => `<tr>
                         <td class="b">${escapeHtml(r.customer || '—')}</td><td>${escapeHtml(r.alNumber || r.orderNumber || '—')}</td>
                         <td class="r">${_saFmt(r.balance)}</td><td class="r">${_saFmt(r.pace)}</td>
-                        <td class="r">${_saFmt(r.bookedRest)}</td><td class="r b">${_saFmt(r.rest)}</td>
-                        <td class="r">${_saFmt(r.bookedNext)}</td><td class="r b">${_saFmt(r.next)}</td></tr>`).join('')}</tbody>
-                    <tfoot><tr><td colspan="2">Total</td><td class="r">${_saFmt(fc.rows.reduce((s, r) => s + r.balance, 0))}</td><td></td><td></td><td class="r">${_saFmt(fc.estRest)}</td><td></td><td class="r">${_saFmt(fc.estNext)}</td></tr></tfoot>
+                        ${r.months.map((v, i) => `<td class="r">${_saFmt(r.booked[i])}</td><td class="r b">${_saFmt(v)}</td>`).join('')}</tr>`).join('')}</tbody>
+                    <tfoot><tr><td colspan="2">Total</td><td class="r">${_saFmt(fc.rows.reduce((s, r) => s + r.balance, 0))}</td><td></td>${fc.est.map(v => `<td></td><td class="r">${_saFmt(v)}</td>`).join('')}</tr></tfoot>
                 </table></div>
-                <div class="sa-fnote">Rest of this month = the larger of what is booked from today and the customer’s pace for the days left. Next month = the larger of what is booked and the pace. Never more than the order balance.</div>`
+                <div class="sa-fnote">Rest of this month = the larger of what is booked from today and the customer’s pace for the days left. Each later month = the larger of what is booked and the pace. Never more than the order balance, taken month by month.</div>`
                 : '<div class="sa-empty">No open orders</div>';
         }
         const m = document.getElementById('sa-modal');
