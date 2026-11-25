@@ -10355,6 +10355,56 @@ question about who is in a group is actually answered, so nothing was lost
 but the badge. `.jc-n` went with it rather than being left in the
 stylesheet.
 
+##### AND THE NURSERY COLUMNS WENT, because the CHIP is the nursery
+
+The table was a column per nursery and a cell per (nursery, job). The office
+took the columns off in one line: *"我上面已经有PN BNN UNN1 UNN2的分类了
+底下不需要再分"*.
+
+**THEY ARE RIGHT, AND IT WAS THE SAME ANSWER TWICE.** The palette above is
+already laid out section by section, and every chip is SPELLED with its
+section — `BNN · Workers`. So a BNN column holding a chip that says BNN told
+a reader nothing they did not already have, and it cost **thirty-two cells**,
+nearly all of them empty, to tell them. It is `Job | Who does it` now, one
+cell a row.
+
+**SO THE DROP WORKS THE NURSERY OUT OF THE GROUP** (`_jcTargets`).
+`BNN · Workers` dropped on P & D is keyed against BNN and nowhere else —
+exactly what dropping it in the BNN column did. **A group whose section is
+not one of that job's own nurseries** — UNE or OTHERS, or any of the three
+on a Pre Nursery job — has no sheet of its own to land on, so it goes on
+EVERY nursery the job is done in. That is the crew that comes over to help,
+and it is also what already makes Seed Planting work: BNN, UNN 1 and UNN 2
+Workers dropped on a PN-only job all land on PN. Dropping such a chip on
+NOTHING would be a chip sitting on the card doing nothing.
+
+**THE STORAGE DID NOT MOVE.** It is still one `nops_maint_config` row per
+nursery per job, so `jobWorkers`, `maintJobNames`, the claim and every answer
+the office has already saved are exactly as they were — only the card's
+drawing and its drag changed. The test's section 4 keeps `BNN:pd` as its
+fixture key and says so, because that one IS the storage and not a cell.
+
+Three things fall out:
+
+- **THE ROW SHOWS THE UNION** (`_jcRowGroups`), each group named once
+  however many of the job's nurseries hold it — and `keyed` beside it is
+  what still tells an untouched row from one somebody emptied, the two
+  being the same empty cell and only one of them paying nobody.
+- **THE × TAKES THE GROUP OFF EVERY NURSERY IT IS ON.** Clearing one of
+  them would leave a chip on screen that looks removed and sheets that
+  still have those people.
+- **WHAT IT COSTS, named rather than buried:** the column used to let the
+  office put UNE on BNN's P & D and on neither of the other two. One cell
+  cannot say that, so UNE now goes on all three. An offered column nobody
+  ticks is paid nothing — the ticks are what the claim reads — which is
+  what makes the looser answer safe. The day they want it narrowed, the
+  answer is a nursery on the CHIP and not a column back on the table.
+
+The note under the table says the rule, because the columns were what used
+to say it. **60 checks and 26 fail on the previous card**; the headline ones
+are *the table has no nursery columns* and *UNE, which is on no P & D
+nursery, was keyed against all three*. **Nothing to run in the database.**
+
 **Nothing to run in the database.** The whole of it is on the card.
 `tests/each_job_has_its_own_worker_list.cjs` is 56 checks and **10 fail on
 the previous card**. Section 2b is the pair that says the rule survived the

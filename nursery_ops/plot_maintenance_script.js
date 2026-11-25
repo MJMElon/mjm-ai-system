@@ -12817,6 +12817,61 @@ function _jcState() {
   return out;
 }
 
+/* ── THE TABLE HAS NO NURSERY COLUMNS, BECAUSE THE CHIP IS THE NURSERY ────
+   It was a column per nursery and a cell per (nursery, job), and the office
+   took the columns off in one line: *"我上面已经有PN BNN UNN1 UNN2的分类了
+   底下不需要再分"*.
+
+   **THEY ARE RIGHT, AND IT IS THE SAME ANSWER TWICE.** The palette above is
+   already laid out section by section, and every chip is SPELLED with its
+   section — `BNN · Workers`. So a BNN column holding a chip that says BNN
+   says nothing a reader did not already have, and it cost thirty-two cells,
+   nearly all of them empty, to say it.
+
+   SO THE DROP WORKS THE NURSERY OUT OF THE GROUP. `BNN · Workers` dropped
+   on P & D is keyed against BNN and nowhere else, which is exactly what
+   dropping it in the BNN column did.
+
+   A GROUP FROM A SECTION THAT IS NOT ONE OF THE JOB'S OWN NURSERIES — UNE
+   or OTHERS, or any of them on a Pre Nursery job — has no sheet of its own
+   to land on, so it goes on EVERY nursery that job is done in. That is the
+   crew that comes over to help, and it is what already makes Seed Planting
+   work: BNN, UNN 1 and UNN 2 Workers dropped on a PN-only job all land on
+   PN. Dropping such a chip on NOTHING instead would be a chip sitting on
+   the card doing nothing, which is the fault this file keeps finding.
+
+   **WHAT IT COSTS, and it is named rather than buried:** the column used to
+   let the office put UNE on BNN's P & D and on neither of the other two.
+   One cell cannot say that, so UNE now goes on all three. An offered column
+   nobody ticks is paid nothing — the ticks are what the claim reads — which
+   is what makes the looser answer safe. The day they want it narrowed, the
+   answer is a nursery on the CHIP and not a column back on the table.
+
+   THE STORAGE DID NOT MOVE. It is still one `nops_maint_config` row per
+   nursery per job, so `jobWorkers`, the claim and every saved answer are
+   exactly as they were; only the card's drawing and its drag changed. */
+function _jcTargets(job, g) {
+  const on = jobNurseries(job);
+  const p = MJMJobCrew.splitGroup(g);
+  return on.includes(p ? p.section : '') ? [p.section] : on.slice();
+}
+
+/* What the ONE cell shows: every group keyed against any of the job's own
+   nurseries, each named once. `keyed` is what tells an untouched row from
+   one somebody emptied — the two are both an empty cell and only one of
+   them pays nobody. */
+function _jcRowGroups(state, job) {
+  const seen = {}, list = [];
+  let keyed = false;
+  jobNurseries(job).forEach(n => {
+    const k = state[`${n}:${job}`];
+    if (!k) return;
+    keyed = true;
+    k.forEach(g => { if (!seen[g]) { seen[g] = 1; list.push(g); } });
+  });
+  return { list, keyed };
+}
+
 function _jcChipHtml(g, opts) {
   const names = _jcNames(g);
   const tip = names.length ? names.join(', ') : 'Nobody in this group today';
@@ -12825,7 +12880,7 @@ function _jcChipHtml(g, opts) {
     ? ` draggable="true" ondragstart="jcDragStart(event,'${esc(g)}')" ondragend="jcDragEnd(event)"` : '';
   const x = opts.removable
     ? `<button type="button" class="jc-x" title="Take this group off" aria-label="Remove ${esc(_jcGroupLabel(g))}"
-         onclick="jcRemove('${esc(opts.cell)}','${esc(g)}')">&times;</button>` : '';
+         onclick="jcRemove('${esc(opts.job)}','${esc(g)}')">&times;</button>` : '';
   /* NO COUNT AFTER THE NAME — the office took it off (*"名字后面的人数也不
      用"*). It said how many people a group stands for TODAY, which is a
      figure that moves with the register and is not what somebody dragging
@@ -12853,39 +12908,33 @@ function renderJobCrewSetting() {
         ${bySec[s].map(g => _jcChipHtml(g, { palette: true, editing })).join('')}</div>`).join('')
     : `<span class="jb-none">${_linkErr ? 'The Team Board could not be read — every sheet keeps its own nursery workers.' : 'Nobody is on the Team Board yet.'}</span>`;
 
-  const head = `<tr><th class="jc-job">Job</th>${MAINT_NURSERIES.map(n => `<th>${esc(nurseryShort(n))}</th>`).join('')}</tr>`;
+  const head = `<tr><th class="jc-job">Job</th><th>Who does it</th></tr>`;
   const body = jobs.map(j => {
-    const on = jobNurseries(j);
-    return `<tr><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>${MAINT_NURSERIES.map(n => {
-      const cell = `${n}:${j}`;
-      if (!on.includes(n)) return `<td class="jc-off" title="${esc(jobLabel(j))} is not done in ${esc(nurseryShort(n))} (Where Each Job Is Done)">—</td>`;
-      const keyed = state[cell];
-      /* THREE EMPTY STATES AND THEY ARE NOT ONE. Nothing dragged leaves the
-         sheet exactly as it was; every chip taken off is NOBODY; and a job
-         whose default is everybody says so on the cell, being the only cell
-         in the table whose fallback is not the line underneath it. Drawn
-         alike, the first two would be one blank cell standing for a sheet
-         that works and a sheet that pays nobody. */
-      let chips;
-      if (keyed && keyed.length) chips = keyed.map(g => _jcChipHtml(g, { removable: editing, cell })).join('');
-      else if (JC_ANY_DEFAULT[j]) chips = `<span class="jb-none jc-any">${esc(JC_ANY_DEFAULT[j])}</span>`;
-      else if (!keyed) chips = editing ? `<span class="jc-drop-here">Drag a group here</span>` : '';
-      else chips = `<span class="jb-none">Nobody</span>`;
-      const drop = editing
-        ? ` ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcDrop(event,'${esc(cell)}')"` : '';
-      return `<td class="jc-cell" data-cell="${esc(cell)}"${drop}>${chips}</td>`;
-    }).join('')}</tr>`;
+    const row = _jcRowGroups(state, j);
+    /* THREE EMPTY STATES AND THEY ARE NOT ONE. Nothing dragged leaves the
+       sheets exactly as they were; every chip taken off is NOBODY; and a
+       job whose default is everybody says so on the cell, being the only
+       row in the table whose fallback is not the line underneath it. Drawn
+       alike, the first two would be one blank cell standing for a sheet
+       that works and a sheet that pays nobody. */
+    let chips;
+    if (row.list.length) chips = row.list.map(g => _jcChipHtml(g, { removable: editing, job: j })).join('');
+    else if (JC_ANY_DEFAULT[j]) chips = `<span class="jb-none jc-any">${esc(JC_ANY_DEFAULT[j])}</span>`;
+    else if (!row.keyed) chips = editing ? `<span class="jc-drop-here">Drag a group here</span>` : '';
+    else chips = `<span class="jb-none">Nobody</span>`;
+    const drop = editing
+      ? ` ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcDrop(event,'${esc(j)}')"` : '';
+    return `<tr><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
+      + `<td class="jc-cell" data-cell="${esc(j)}"${drop}>${chips}</td></tr>`;
   }).join('');
 
-  /* ONE cell across every nursery, because the answer is not per nursery:
-     neither of these is set here at all. Four columns repeating one
-     sentence is noise, and the row beside it on Where Each Job Is Done
-     already says which nurseries the job is done in. */
+  /* A job whose crew is set somewhere else says so where the groups would
+     be, and takes no drop — a row that merely LOOKS different while still
+     taking a group would write a crew nothing reads. */
   const elsewhere = _jcElsewhere().map(j =>
     `<tr class="jc-elsewhere"><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
-    + `<td colspan="${MAINT_NURSERIES.length}">`
-    + `${esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}`
-    + `</td></tr>`).join('');
+    + `<td>${esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}</td>`
+    + `</tr>`).join('');
 
   box.innerHTML = `<div class="jc-pal${editing ? ' jc-pal-live' : ''}">${palette}</div>
     <div class="tbl-wrap jc-wrap"><table class="jc-tbl"><thead>${head}</thead>`
@@ -12899,10 +12948,13 @@ function renderJobCrewSetting() {
          <b>Nobody</b> is an answer.</div>`
     + (editing
       ? `<div class="jb-note">Drag a group from the Team Board above onto a job. Its
-           people become that job&rsquo;s columns on Worker Activity for that
-           nursery, and the salary claim pays the same list. A drop gives the cell
-           exactly what was dropped, so to keep a nursery&rsquo;s own workers as well,
-           drag those too.</div>
+           people become that job&rsquo;s columns on Worker Activity, and the salary
+           claim pays the same list. <b>The group says which nursery</b> —
+           ${esc(_jcSectionName('BNN'))}&nbsp;&middot;&nbsp;Workers goes on
+           ${esc(_jcSectionName('BNN'))}&rsquo;s sheet. A group from anywhere else
+           goes on every nursery that job is done in. A drop gives the cell exactly
+           what was dropped, so to keep a nursery&rsquo;s own workers as well, drag
+           those too.</div>
          <div class="lst-foot">
            <button class="btn" onclick="jcCancel()">Cancel</button>
            <button class="btn btn-primary" id="jc-save-btn" onclick="jcSave()">Save</button>
@@ -12939,24 +12991,37 @@ function jcDragOver(ev) {
   ev.dataTransfer.dropEffect = 'copy';
   ev.currentTarget.classList.add('jb-cell-over');
 }
-function jcDrop(ev, cell) {
+function jcDrop(ev, job) {
   ev.preventDefault();
   ev.currentTarget.classList.remove('jb-cell-over');
   const g = _jcDrag;
   _jcDrag = null;
-  if (!g || !jobCrewDraft || !(cell in jobCrewDraft)) return;
-  /* FROM NOTHING, never from the default. The default is not on the cell
-     any more, so adding to it would put a group in the cell that nobody
-     dropped there. */
-  const list = (jobCrewDraft[cell] || []).slice();
-  if (list.includes(g)) return;                 // already on it
-  list.push(g);
-  jobCrewDraft[cell] = list;
+  if (!g || !jobCrewDraft) return;
+  /* The group says which nursery, so one drop can key more than one cell —
+     see _jcTargets. FROM NOTHING, never from the default: the default is
+     not drawn any more, so adding to it would put a group on a sheet
+     nobody dropped one on. */
+  _jcTargets(job, g).forEach(n => {
+    const cell = `${n}:${job}`;
+    if (!(cell in jobCrewDraft)) return;
+    const list = (jobCrewDraft[cell] || []).slice();
+    if (list.includes(g)) return;               // already on it
+    list.push(g);
+    jobCrewDraft[cell] = list;
+  });
   renderJobCrewSetting();
 }
-function jcRemove(cell, g) {
-  if (!jobCrewDraft || !(cell in jobCrewDraft)) return;
-  jobCrewDraft[cell] = (jobCrewDraft[cell] || []).filter(x => x !== g);
+/* OFF EVERY NURSERY IT IS ON, never only the one the chip was drawn from:
+   the row shows one chip per group however many cells hold it, so a × that
+   cleared one of them would leave a chip on screen that looks removed and
+   a sheet that still has those people. */
+function jcRemove(job, g) {
+  if (!jobCrewDraft) return;
+  jobNurseries(job).forEach(n => {
+    const cell = `${n}:${job}`;
+    if (!jobCrewDraft[cell]) return;
+    jobCrewDraft[cell] = jobCrewDraft[cell].filter(x => x !== g);
+  });
   renderJobCrewSetting();
 }
 

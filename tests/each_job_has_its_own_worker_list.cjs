@@ -192,11 +192,22 @@ const cellChips = (page, cell) => ev(page, (cell) => {
        unkeyed cell is EMPTY now, and what it does is said once under the
        table instead of eighteen times inside it. */
     check('an unkeyed cell is empty — no default chip anywhere on it',
-      await ev(page, () => { const td = document.querySelector('#jc-set-body td[data-cell="BNN:pd"]');
+      await ev(page, () => { const td = document.querySelector('#jc-set-body td[data-cell="pd"]');
         return td ? [td.querySelectorAll('.jc-chip').length, td.textContent.trim()] : 'no cell'; }),
       [0, '']);
     check('…and the word DEFAULT is nowhere on the card',
       await ev(page, () => /default/i.test(document.getElementById('jc-set-body').textContent)), false);
+    /* NO NURSERY COLUMNS — *"我上面已经有PN BNN UNN1 UNN2的分类了 底下不需要
+       再分"*. The palette is already laid out section by section and every
+       chip is spelled with its own, so a BNN column holding a chip that
+       says BNN said nothing a reader did not have, over thirty-two cells. */
+    check('the table has no nursery columns: the chip is what says the nursery',
+      await ev(page, () => [...document.querySelectorAll('#jc-set-body .jc-tbl thead th')].map(t => t.textContent.trim())),
+      ['Job', 'Who does it']);
+    check('…so a job is ONE cell', await ev(page, () => {
+      const tr = [...document.querySelectorAll('#jc-set-body .jc-tbl tbody tr')]
+        .find(x => /P & D/.test(x.querySelector('th.jc-job').textContent));
+      return tr ? tr.querySelectorAll('td').length : 'no row'; }), 1);
     check('…but the card still says what an empty cell does',
       await ev(page, () => /unchanged/i.test((document.querySelector('#jc-set-body .jc-empty-note') || {}).textContent || '')), true);
     /* THE NAME AND NOTHING ELSE — the office took the people-count off
@@ -214,21 +225,21 @@ const cellChips = (page, cell) => ev(page, (cell) => {
        is asked as the DRAFT not existing — and the same drag landing one
        line down, once Edit is pressed, is the control. */
     check('a drop before Edit does nothing',
-      await (async () => { await drag(page, 'UNE · Workers', 'BNN:pd');
-        return [await cellChips(page, 'BNN:pd'), await ev(page, () => jobCrewDraft)]; })(),
+      await (async () => { await drag(page, 'UNE · Workers', 'pd');
+        return [await cellChips(page, 'pd'), await ev(page, () => jobCrewDraft)]; })(),
       [[], null]);
     if (process.env.SHOT) { await ev(page, () => document.getElementById('jc-set-body').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_view.png' }); }
     await ev(page, () => jcEdit());
-    check('drop UNE · Workers on BNN P & D', await drag(page, 'UNE · Workers', 'BNN:pd'), 'dropped');
-    check('drop BNN · FC on BNN P & D', await drag(page, 'BNN · FC', 'BNN:pd'), 'dropped');
+    check('drop UNE · Workers on BNN P & D', await drag(page, 'UNE · Workers', 'pd'), 'dropped');
+    check('drop BNN · FC on BNN P & D', await drag(page, 'BNN · FC', 'pd'), 'dropped');
     /* WHAT YOU SEE IS WHAT YOU GET. A drop onto an empty cell used to be
        added to the default, which was honest while the default was a chip
        in the cell and is a lie once it is blank — so BNN's own workers are
        NOT quietly in here beside the two that were dropped. */
     check('the cell carries exactly what was dropped, and not the old default',
-      await cellChips(page, 'BNN:pd'), ['UNE · Workers', 'BNN · FC']);
-    check('dropping the same group twice adds it once', await (async () => { await drag(page, 'BNN · FC', 'BNN:pd'); return (await cellChips(page, 'BNN:pd')).length; })(), 2);
-    check('Manuring was not touched', await cellChips(page, 'BNN:manuring'), []);
+      await cellChips(page, 'pd'), ['UNE · Workers', 'BNN · FC']);
+    check('dropping the same group twice adds it once', await (async () => { await drag(page, 'BNN · FC', 'pd'); return (await cellChips(page, 'pd')).length; })(), 2);
+    check('Manuring was not touched', await cellChips(page, 'manuring'), []);
     if (process.env.SHOT) { await ev(page, () => document.getElementById('jc-set-body').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_edit.png' }); }
     check('nothing was written before Save', await ev(page, () => (window.__WRITES || []).length), 0);
     await ev(page, () => jcSave());
@@ -236,6 +247,16 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     check('Save wrote the cell as its groups',
       await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:BNN:pd') || {}).txt_value),
       'UNE|General Worker,BNN|Field Conductor');
+    /* THE DROP WORKED THE NURSERY OUT OF THE CHIP. `BNN · FC` is BNN's, so
+       it was keyed against BNN and nowhere else — exactly what dropping it
+       in the BNN column did. `UNE · Workers` belongs to no P & D nursery,
+       so it has no sheet of its own and goes on all three; that is the
+       crew that comes over to help, and a chip that landed nowhere would
+       be one sitting on the card doing nothing. */
+    check('…UNE, which is on no P & D nursery, was keyed against all three',
+      await ev(page, () => ['BNN', 'UNN1', 'UNN2'].map(n =>
+        (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:' + n + ':pd') || {}).txt_value)),
+      ['UNE|General Worker,BNN|Field Conductor', 'UNE|General Worker', 'UNE|General Worker']);
     check('and a cell nobody dragged into as DEFAULT',
       await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:BNN:manuring') || {}).txt_value), 'default');
     check('BNN P & D now shows the UNE crew and its FC, and not its own workers',
@@ -270,14 +291,14 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       [['Andi Rosmini', 'Yuyak'], ['Andi Rosmini', 'Yuyak']]);
 
     await ev(page, () => { switchTab('setting', null); jcEdit(); });
-    check('drop BNN · Workers on BNN Weeding', await drag(page, 'BNN · Workers', 'BNN:weeding'), 'dropped');
+    check('drop BNN · Workers on BNN Weeding', await drag(page, 'BNN · Workers', 'weeding'), 'dropped');
     await ev(page, () => jcSave());
     await page.waitForTimeout(300);
     check('it is stored as the group, never folded back into DEFAULT',
       await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:BNN:weeding') || {}).txt_value),
       'BNN|General Worker');
     check('…so the chip is still on the cell after the save',
-      await cellChips(page, 'BNN:weeding'), ['BNN · Workers']);
+      await cellChips(page, 'weeding'), ['BNN · Workers']);
     check('and the sheet reads the same either way', await sheetCols(page, 'weeding'), ['Andi Rosmini', 'Yuyak']);
     check('no page error', errs, []);
     await page.close();
@@ -289,12 +310,12 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       { key: 'job_crew:BNN:pd', txt_value: 'UNE|General Worker' },
       { key: 'job_crew:BNN:weeding', txt_value: 'default' } ] };
     const { page, errs } = await boot(browser, db, 'setting');
-    check('the keyed list replaces the default', await cellChips(page, 'BNN:pd'), ['UNE · Workers']);
+    check('the keyed list replaces the default', await cellChips(page, 'pd'), ['UNE · Workers']);
     check('BNN P & D shows only the UNE crew', await sheetCols(page, 'pd'), ['Wira UNE']);
     check('DEFAULT reads as nobody having been asked', await sheetCols(page, 'weeding'), ['Andi Rosmini', 'Yuyak']);
     await ev(page, () => { switchTab('setting', null); jcEdit(); });
-    await ev(page, () => document.querySelector('#jc-set-body td[data-cell="BNN:pd"] .jc-x').click());
-    check('× takes the group off', await cellChips(page, 'BNN:pd'), []);
+    await ev(page, () => document.querySelector('#jc-set-body td[data-cell="pd"] .jc-x').click());
+    check('× takes the group off', await cellChips(page, 'pd'), []);
     await ev(page, () => jcSave()); await page.waitForTimeout(300);
     check('an emptied cell is saved as nobody', await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:BNN:pd') || {}).txt_value), '');
     check('and the sheet has no worker columns', await sheetCols(page, 'pd'), []);
@@ -319,6 +340,10 @@ const cellChips = (page, cell) => ev(page, (cell) => {
         { full_name: 'Yuyak', section: 'BNN', role: 'General Worker' },
         { full_name: 'Lalu Aenal', section: 'BNN', role: 'Field Conductor' },
         { full_name: 'Wira UNE', section: 'UNE', role: 'General Worker' } ];
+      /* `BNN:pd` IS THE STORAGE KEY and not a cell on the card. The card
+         lost its nursery columns, so its cells are keyed by JOB — the
+         storage never moved, and the claim reads it per nursery as it
+         always has. */
       const maint = { rows: { BNN: workers.slice(0, 2) }, workers: {}, crews: { 'BNN:pd': ['UNE|General Worker', 'BNN|Field Conductor'] } };
       const MAINT_TYPES = [{ code: 'pd' }, { code: 'manuring' }];
       const ROLES = ['Field Conductor', 'General Worker'];
@@ -352,7 +377,9 @@ const cellChips = (page, cell) => ev(page, (cell) => {
         job: tr.querySelector('th.jc-job').textContent.trim(),
         elsewhere: tr.classList.contains('jc-elsewhere'),
         cells: [...tr.querySelectorAll('td')].length,
-        says: (tr.querySelector('.jc-elsewhere, td[colspan]') || {}).textContent || '',
+        /* The row's own cell — it carried a colspan while the table had
+           nursery columns, and there is one column to span now. */
+        says: (tr.querySelector('td') || {}).textContent || '',
       })));
     /* THE SIDE BAR ITSELF, never PAYROLL_VIEW_KEYS — that is a script-scope
        const and so is not on window (the trap this codebase already names
@@ -378,7 +405,7 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     check('…and the one that cannot says so instead',
       (rows || []).filter(r => r.elsewhere).map(r => r.job),
       ['Culling Monitoring']);
-    check('a row set elsewhere is ONE cell across the nurseries, never four empty ones',
+    check('a row set elsewhere is ONE cell, like every other row',
       (rows || []).filter(r => r.elsewhere).map(r => r.cells), [1]);
     check('Culling Monitoring points at its own card',
       (rows || []).some(r => r.elsewhere && /Culling Monitoring above/.test(r.says)), true);
@@ -424,13 +451,15 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       if (!tr) return 'no Seed Planting row';
       return {
         elsewhere: tr.classList.contains('jc-elsewhere'),
-        pn: (tr.querySelector('td[data-cell="PN:seed_planting"]') || {}).textContent || '',
-        off: [...tr.querySelectorAll('td.jc-off')].length,
+        pn: (tr.querySelector('td[data-cell="seed_planting"]') || {}).textContent || '',
+        cells: tr.querySelectorAll('td').length,
       };
     });
     const r0 = await row();
     check('it is a droppable row now, not one set elsewhere', (r0 || {}).elsewhere, false);
-    check('…with a cell under PN and a dash under the other three', (r0 || {}).off, 3);
+    /* ONE cell, like every other row: the nursery columns are gone and
+       Where Each Job Is Done above is what says this job is PN only. */
+    check('…and ONE cell, the nursery columns having gone', (r0 || {}).cells, 1);
     /* THE DEFAULT IS NOT "PN · Workers". PN has no Workers — that is the
        office's own first sentence — so a group chip there would stand for
        nobody. It says what the dropdown has always offered instead. */
@@ -456,9 +485,9 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       ['BNN: Andi Rosmini, Lalu Aenal, Yuyak', 'UNE: Wira UNE', 'UNN 1: Budi UNN1']);
 
     await ev(page, () => { switchTab('setting', null); jcEdit(); });
-    check('BNN · Workers drops onto Seed Planting', await drag(page, 'BNN · Workers', 'PN:seed_planting'), 'dropped');
-    check('and UNN 1 · Workers beside it', await drag(page, 'UNN 1 · Workers', 'PN:seed_planting'), 'dropped');
-    check('the cell carries the two groups', await cellChips(page, 'PN:seed_planting'),
+    check('BNN · Workers drops onto Seed Planting', await drag(page, 'BNN · Workers', 'seed_planting'), 'dropped');
+    check('and UNN 1 · Workers beside it', await drag(page, 'UNN 1 · Workers', 'seed_planting'), 'dropped');
+    check('the cell carries the two groups', await cellChips(page, 'seed_planting'),
       ['BNN · Workers', 'UNN 1 · Workers']);
     await ev(page, () => jcSave());
     await page.waitForTimeout(300);

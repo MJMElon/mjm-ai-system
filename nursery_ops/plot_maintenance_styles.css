@@ -2049,9 +2049,10 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .jc-tbl thead th{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);background:#f7f8f7;}
 .jc-tbl th.jc-job{width:190px;font-size:13px;font-weight:800;color:var(--green-text);}
 .jc-tbl thead th.jc-job{font-size:11px;color:var(--text-faint);}
-.jc-cell{min-width:150px;}
+/* ONE cell, the rest of the row. The nursery columns came off — the chip
+   is spelled with its section, so a column repeating it said nothing. */
+.jc-cell{width:auto;}
 .jc-cell .jc-chip{margin:2px 4px 2px 0;}
-.jc-off{color:var(--text-faint);text-align:center !important;}
 /* A job whose crew is NOT a Team Board group, so there is nothing to drag
    onto it. It is on the card because leaving it off is what made somebody
    count the rows and ask; it is muted and takes no drop, because a cell
