@@ -10464,6 +10464,11 @@ Seed Planting on Worker List for Each Job (by register section where none
 are), then Last month; Add takes every name ticked. It was one dropdown of
 people under optgroups, and the skinned select draws no optgroup, so the
 office saw a flat wall of names. `_spBands` is what was drawn.
+**And it is FLEXI** (*"选了BNN worker然后就不能选UNN1 worker了 我要flexi的"*):
+a group picked stays OPEN under the dropdown, the dropdown goes back to its
+prompt and stops offering the open ones, ticks ride across groups and
+redraws (`_spPick`), and one Add takes them all. The *Use last month names*
+button came off (*删掉*); last month is a group in the dropdown instead.
 
 **Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
 The figures go into `nops_seed_planting_batch_workers`, one record per
