@@ -9899,6 +9899,41 @@ it, because that module pulls in supabase and the outbox and stubbing a dozen
 modules to reach one pure function is a thicker fixture than the function.
 Its section 4 reads the SQL, so a release that ships one half fails here.
 
+#### AND THE BOUNDARY WAS THE WRONG LAYER: there was no ROW to tick
+
+The office answered the above with **不对** and their own November, and they
+were right — the boundary is still owed, and it opened a door into a room
+with nothing in it. **The worker's list IS the office schedule**
+(`periodTasks` is `mergeWeekTasks` and nothing else), so a plot the office
+could not name on the 1st has no row on the 15th whatever the database now
+accepts. The phone half is written up in `Barcode_Counter/CLAUDE.md`; what
+matters from THIS side is the three office facts it rests on, each checked
+before anything was built:
+
+- **`seedReplantRounds` pushes a -R plot into `NURSERY_PLOTS` off the
+  LEDGER**, at the top of `autoSyncRecords`, with nobody pressing Save — so
+  `applyFieldRecords`' `if (!plots.includes(r.plot)) return;` does not drop a
+  B3-R record.
+- **The Worker Record tick is keyed on the FIELD RECORD'S OWN id**
+  (`store[rec.id]`), not on a schedule row, so the capacity is counted even
+  with no planned round to pair against. Without that this would have been
+  *"a plot the salary claim does not know pays nobody"* again.
+- **An unpaired record is NAMED**, in `_fieldUnpaired` — *verified work that
+  reached the office and attached to nothing*. So the gap between the phone
+  offering a round and the office planning one is visible, and pressing Save
+  Schedule closes it.
+
+**AND THE PHONE IS DELIBERATELY LOOSER THAN `seedReplantRounds`.** That rule
+seeds the rounds whose week STARTS on or after the transfer day; the phone
+offers the replant as soon as something is standing in it, because the office
+asked for the 15th and asked for it live. The schedule PLANS what is owed and
+the phone OFFERS what a worker may record — two questions — and an offered
+row nobody ticks costs nothing. Do not "fix" one to the other without asking.
+
+**Nothing to run in the database.** `worker_plot_batches` already answers
+`qty > 0` joined to `worker_plots`, so the replant's seedlings were in the
+phone's hand the moment the boundary carried the plot.
+
 ## The overlay is pinned to a WRAPPER, so the wrapper has to be the photo
 
 The office opened B11 on the PALMS board and said four words:
