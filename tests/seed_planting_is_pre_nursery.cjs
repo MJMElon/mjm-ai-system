@@ -316,7 +316,16 @@ const sheetOf = (page) => page.evaluate(() => {
   check('the dropdown offers the groups, never the people',
     await page.evaluate(() => [...document.querySelectorAll('#sp-new-name option')].map(o => o.value)),
     ['', 'g0', 'g1', 'g2', '__other']);
+  /* NO STANDING ADD BUTTON -- *"add worker add batch 不用 直到选的时候 按
+     confirm就直接下去"*. Confirm shows only once something is picked. */
+  const shown = (id) => page.evaluate((id) => { const b = document.getElementById(id);
+    return b ? getComputedStyle(b).display !== 'none' : 'no #' + id; }, id);
+  check('no Add worker / Add batch buttons left',
+    await page.evaluate(() => [...document.querySelectorAll('#payroll-names button')].map(b => b.textContent.trim())
+      .filter(x => /^\+?\s*Add (worker|batch)/i.test(x))), []);
+  check('Confirm is hidden before a position is picked', await shown('sp-name-confirm'), false);
   await page.evaluate(() => { const s = document.getElementById('sp-new-name'); s.value = 'g1'; _spPickWorker('g1'); });
+  check('…and shows once one is', await shown('sp-name-confirm'), true);
   check('picking a group draws its people as ticks',
     await page.evaluate(() => [...document.querySelectorAll('#sp-pick-list .sp-pick-tick')].map(x => x.value)), ['Nur Aina']);
   /* FLEXI -- *"选了BNN worker然后就不能选UNN1 worker了 我要flexi的"*: a
@@ -355,6 +364,12 @@ const sheetOf = (page) => page.evaluate(() => {
   check('Add batch offers the last two months, newest first, with the day and the total',
     await page.evaluate(() => [...document.querySelectorAll('#sp-new-batch option')].map(o => o.textContent.trim())),
     ['Pick a batch…', '277 · 28/09/2026 · 3,760']);
+  check('batch Confirm is hidden until a batch is picked', await page.evaluate(() => {
+    const c = document.getElementById('sp-batch-confirm'); if (!c) return 'no #sp-batch-confirm';
+    const before = getComputedStyle(c).display === 'none';
+    const sel = document.getElementById('sp-new-batch'); sel.value = '277'; sel.dispatchEvent(new Event('change'));
+    return [before, getComputedStyle(document.getElementById('sp-batch-confirm')).display !== 'none'];
+  }), [true, true]);
   await page.evaluate(() => { document.getElementById('sp-new-batch').value = '277'; addSeedPlantingBatch(); });
   await page.waitForTimeout(700);
   check('the office is asked, naming both months', /^confirm: Move batch 277 from Sep 2026 to Oct 2026\?/.test(dialogs.pop() || ''), true);
