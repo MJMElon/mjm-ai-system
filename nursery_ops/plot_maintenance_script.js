@@ -7356,8 +7356,12 @@ function applyFieldRecords(nursery, monthLbl) {
      like work nobody has done — while a worker has done it, a conductor has
      signed it off, and neither of them can tell. */
   const unpaired = [];
+  const coveredKeys = _checkedRoundKeys(monthLbl);
   Object.keys(idx).forEach((k) => {
     if (k === '__byChem' || usedKeys.has(k)) return;
+    /* A round already checked has its work on record: the same morning sent
+       again is not a second unpaired job. See _checkedRoundKeys. */
+    if (coveredKeys.has(k)) return;
     const g = idx[k];
     /* Consumed through the chemical rather than the round: the record DID
        reach a row, just not by the key it is filed under here. Reporting it
@@ -9665,6 +9669,7 @@ function renderRecords() {
      read 2 over a list of 3. Only the DRAWING is per tab. */
   {
     const pk = MJMMaintField.plotKey;
+    const coveredKeys = _checkedRoundKeys(mF);
     pendingFieldRecords.forEach((f) => {
       if (!nurseryPlots.some((p) => pk(p) === pk(f.plot_name))) return;
       /* The record's OWN month, read the way _submissionScheduleRow reads
@@ -9681,6 +9686,8 @@ function renderRecords() {
         const d = f.work_date || '';
         if (!`${d} ${_tarikhDisplay(d)}`.toLowerCase().includes(dF)) return;
       }
+      /* The same work as an approved round is not waiting for anybody. */
+      if (_coveredByChecked(f, coveredKeys)) return;
       let row = null;
       try { row = _submissionScheduleRow(f); } catch (_) { row = null; }
       if (row) (waitingOn[row.id] = waitingOn[row.id] || []).push(f);
@@ -10066,6 +10073,40 @@ function _submissionScheduleRow(f) {
   const ids = Object.keys(pairs);
   if (ids.length !== 1) return null;
   return pool.find((r) => String(r.id) === ids[0]) || null;
+}
+
+/* A ROUND THE OFFICE HAS CHECKED ALREADY HAS ITS WORK ON RECORD.
+
+   The office checks a round once. A worker's phone can send the same morning
+   again — an outbox that resends, or a second save of the same walk — and that
+   second record has no batch and no quantity, so it pairs with nothing and
+   sits at the foot of Pending as work nobody has done. It has been done, and
+   an approval already stands for it.
+
+   So a submission whose plot, job and round (week) match a CHECKED row is the
+   same work, and the approved one wins. It is left off Pending and off the
+   chip on the approved row. Nothing is rejected, verified or written: a
+   rejection would send the worker back to a job that is finished, and a
+   verification would be a Field Conductor's signature nobody gave.
+
+   Keyed by the same fieldKey the pairing uses, so this and the pairing cannot
+   disagree about which round a record is. */
+function _checkedRoundKeys(monthLbl) {
+  const keys = new Set();
+  records.forEach((r) => {
+    if (!r.checked || !_recInMonth(r, monthLbl)) return;
+    const w = MJMMaintField.rowWeek(r);
+    if (w) keys.add(MJMMaintField.fieldKey(r.jenis, r.plot, w));
+  });
+  return keys;
+}
+
+function _coveredByChecked(f, keys) {
+  if (!keys || !keys.size) return false;
+  const w = f.week_no || MJMMaintField.weekOfDate(f.work_date);
+  const j = _rejJenis(f);
+  if (!w || !j) return false;
+  return keys.has(MJMMaintField.fieldKey(j, f.plot_name, w));
 }
 
 /* How that row reads in a confirm box — enough to recognise it by. */
