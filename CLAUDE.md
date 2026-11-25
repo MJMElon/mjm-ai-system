@@ -10271,15 +10271,16 @@ CONDUCTOR** (paid on their own nursery), and in Edit it takes a drop.
   `viaJc` on the draft says which card edits it; the card above reads it as
   its saved self until Save, so there are never two Save buttons over one
   change.
-- **IT IS CHIPS, LIKE EVERY ROW ABOVE** (*"不要这样 要跟上面的一样"*). It
-  shipped for an hour as name pickers, nursery pickers and two + Add
-  buttons. Now each person is a chip: a name for the every-nursery list,
-  `Name · BNN FC` for a Field Conductor, a cross in Edit. Groups are dragged
-  on; there is no picker and no button on this row. Swapping one name for
-  another is a cross and a drag, or the Culling Monitoring card above.
-- **THE PRICES STAY ON THE CARD ABOVE.** Two boxes for one price is two
-  places to disagree. Only a KEYED rule opens here; the built-in list says
-  which SQL file to run.
+- **IT IS GROUP CHIPS, LIKE EVERY ROW ABOVE, AND ONLY WHAT WAS DRAGGED**
+  (*"要跟上面的一样"*, *"不要自带名字"*, *"不要preset"*). It shipped for an hour
+  as name pickers and then as name chips; the office took both off. The row
+  shows the Team Board groups dragged onto it (`OTHERS · Admin`, `UNN 1 ·
+  FC`), stored as ONE `nops_maint_config` row, `cull_monitoring_groups`, and
+  nothing until somebody drags. The NAMES are on the Culling Monitoring card
+  above (*"上面的culling monitoring setting那边才会需要show 名字"*), which shows
+  the draft live as groups are dropped. A cross takes the group off the row
+  and its people off the rule. People already on the rule before anybody
+  dragged stay paid and are on the card above, not chips here.
 
 Section 7 of `tests/each_job_has_its_own_worker_list.cjs`. Nothing to run in
 the database.
