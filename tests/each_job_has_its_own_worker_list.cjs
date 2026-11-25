@@ -421,8 +421,8 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       ['Culling Monitoring']);
     check('a row set elsewhere is ONE cell, like every other row',
       (rows || []).filter(r => r.elsewhere).map(r => r.cells), [1]);
-    check('Culling Monitoring names who it pays, on its own row',
-      (rows || []).some(r => r.elsewhere && /Rousell|Florence/.test(r.says) && / FC/.test(r.says)), true);
+    check('Culling Monitoring presets nothing: empty until a group is dragged on',
+      (rows || []).filter(r => r.elsewhere).map(r => r.says.trim()), ['']);
 
     /* THE DROP IS THE THING THAT MUST NOT WORK. A row that merely LOOKS
        different while still taking a group would write a crew nothing
@@ -555,7 +555,7 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     const M = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     const reg = REGISTER.concat([
       { id: 6, full_name: 'Rousell Wayne', section: 'UNE', role: 'Admin', active: true },
-      { id: 7, full_name: 'Florence',      section: 'UNE', role: 'Admin', active: true },
+      { id: 7, full_name: 'Florence',      section: 'OTHERS', role: 'Admin', active: true },
       { id: 8, full_name: 'Akbar',         section: 'UNN 1', role: 'Field Conductor', active: true },
     ]);
     const db = { mjmnpayroll_workers: reg, nops_maint_config: [],
@@ -574,15 +574,17 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     await ev(page, () => { cmDraft = null; jobCrewDraft = null; jcEdit(); });
     await page.waitForTimeout(900);
     check('Edit before the rule is read still opens the names', await ev(page, () =>
-      [!!cmDraft && cmDraft.viaJc, !!document.querySelector('#jc-set-body tr.jc-cull .jc-x')]), [true, true]);
+      [!!cmDraft && cmDraft.viaJc, !!document.querySelector('#jc-set-body tr.jc-cull td.jc-cm-drop')]), [true, true]);
     await ev(page, () => jcCancel());
     const row = () => ev(page, () => { const tr = document.querySelector('#jc-set-body tr.jc-cull');
       return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : 'no row'; });
-    check('the row names who is paid today', /Rousell Wayne/.test(await row()) && /Lalu Aenal/.test(await row()), true);
+    check('nothing is preset: nobody has dragged a group here yet ("不要preset")', await row(), 'Culling Monitoring');
+    check('the names are on the Culling Monitoring card above', await ev(page, () =>
+      /Rousell Wayne/.test(document.getElementById('cm-set-body').textContent)), true);
     await ev(page, () => jcEdit());
     check('Edit opens the names here, not on the card above',
       await ev(page, () => [!!cmDraft && cmDraft.viaJc,
-        document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip .jc-x').length > 0,
+        !!document.querySelector('#jc-set-body tr.jc-cull td.jc-cm-drop'),
         !!document.getElementById('cm-save')]), [true, true, false]);
     check('the row is chips like the rows above, no pickers and no buttons', await ev(page, () =>
       [document.querySelectorAll('#jc-set-body tr.jc-cull select').length,
@@ -597,16 +599,18 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       fire('dragstart', chip); fire('dragover', td); fire('drop', td); fire('dragend', chip);
       return 'dropped';
     }, label);
-    check('drag UNE · Admin', await dropCull('UNE · Admin'), 'dropped');
+    check('drag OTHERS · Admin', await dropCull('OTHERS · Admin'), 'dropped');
     check('drag UNN 1 · FC', await dropCull('UNN 1 · FC'), 'dropped');
-    check('drag UNE · Admin again adds nobody twice', await dropCull('UNE · Admin'), 'dropped');
+    check('drag OTHERS · Admin again adds nobody twice', await dropCull('OTHERS · Admin'), 'dropped');
     const live = () => ev(page, () => cmDraft.people.filter(r => r.active !== false)
       .map(r => r.kind + ':' + (r.nursery || '') + ':' + r.name).sort());
     check('Admin goes on every nursery, FC on its own nursery, nobody twice', await live(),
       ['admin::Florence', 'admin::Rousell Wayne', 'fc:BNN:Lalu Aenal', 'fc:UNN1:Akbar']);
-    check('…and the names are chips on the row', await ev(page, () =>
+    check('…and the row shows the groups DRAGGED, never a name ("不要自带名字")', await ev(page, () =>
       [...document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip')].map(c => c.childNodes[0].textContent.trim()).sort()),
-      ['Akbar · UNN1 FC', 'Florence', 'Lalu Aenal · BNN FC', 'Rousell Wayne']);
+      ['OTHERS · Admin', 'UNN 1 · FC']);
+    check('the card above shows the new names as they are dragged ("上面的部分也会改")', await ev(page, () =>
+      ['Florence', 'Akbar'].map(n => document.getElementById('cm-set-body').textContent.includes(n))), [true, true]);
     await ev(page, () => jcSave());
     await page.waitForTimeout(500);
     check('saved through the dated writer: the two new rows start this month', await ev(page, (M) =>
@@ -616,8 +620,11 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     check('the rows already there are untouched',
       await ev(page, () => window.__DB.nops_cull_monitoring_people.filter(r => r.id < 100)
         .map(r => r.until_month)), [null, null]);
+    check('the groups are stored, so the row reads them after a reload', await ev(page, () =>
+      (window.__DB.nops_maint_config.find(r => r.key === 'cull_monitoring_groups') || {}).txt_value),
+      'OTHERS|Admin,UNN1|Field Conductor');
     check('edit is closed and the row reads the new list', await ev(page, () =>
-      [cmDraft, !!jobCrewDraft, /Akbar/.test(document.querySelector('#jc-set-body tr.jc-cull').textContent)]),
+      [cmDraft, !!jobCrewDraft, /UNN 1 · FC/.test(document.querySelector('#jc-set-body tr.jc-cull').textContent)]),
       [null, false, true]);
     if (process.env.SHOT) { await ev(page, () => jcEdit()); await ev(page, () => document.querySelector('#jc-set-body tr.jc-cull').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_cull.png' }); }
     check('no page error', errs, []);

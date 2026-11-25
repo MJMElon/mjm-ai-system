@@ -12964,6 +12964,10 @@ async function loadSettingLists() {
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
   try { jobCrews = window.MJMJobCrew ? MJMJobCrew.readConfig((cfgRes && cfgRes.data) || []) : {}; }
   catch (e) { jobCrews = {}; console.warn('[maint] job worker lists:', e); }
+  {
+    const cg = ((cfgRes && cfgRes.data) || []).find(r => r && r.key === CULL_GROUPS_KEY);
+    cullGroups = cg && cg.txt_value ? String(cg.txt_value).split(',').map(x => x.trim()).filter(Boolean) : [];
+  }
   jobScopes = {};
   ((cfgRes && cfgRes.data) || []).forEach(r => {
     if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
@@ -13284,6 +13288,12 @@ async function jsSave() {
 let jobCrewDraft = null;         // null = not editing; else { 'BNN:pd': [groups] | null }
 let _jcDrag = null;              // the group being dragged
 let _jcSaving = false;
+/* The groups dragged onto Culling Monitoring on this card, and ONLY those --
+   *"不要preset"*. Stored as one nops_maint_config row; the people they stand
+   for live in the dated rule, shown by name on the Culling Monitoring card. */
+let cullGroups = [];
+let cullGroupsDraft = null;
+const CULL_GROUPS_KEY = 'cull_monitoring_groups';
 const JC_SECTION_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'OTHERS'];
 
 function _jcJobs() {
@@ -13343,28 +13353,50 @@ const JC_SET_ELSEWHERE = {};
    reads it as its saved self until Save -- never two Save buttons over
    one change. A draft already open above is left to that card. */
 function _jcCullRowHtml() {
-  const CI = window.MJMCullIncentive;
-  if (!CI) return '<span class="jb-none">The Culling Monitoring rule did not load.</span>';
-  /* THE SAME CHIPS AS EVERY ROW ABOVE -- *"不要这样 要跟上面的一样"*. The
-     rule pays NAMED people, so a chip is a PERSON rather than a group: the
-     two paid on every nursery read as their name, a Field Conductor as his
-     name and the nursery he is paid on. Dropping a group adds its people;
-     the cross takes one off. No pickers and no buttons, like the rows above. */
-  const D = (jobCrewDraft && cmDraft && cmDraft.viaJc) ? cmDraft : null;
-  const list = D
-    ? D.people.filter(r => r.active !== false).map(r => ({ r, i: D.people.indexOf(r) }))
-    : (CI.RULE.everyPlot || []).map(p => ({ r: { kind: 'admin', name: p.name } }))
-        .concat((CI.RULE.ownNursery || []).map(p => ({ r: { kind: 'fc', name: p.name, nursery: p.nursery } })));
-  list.sort((a, b) => (a.r.kind === b.r.kind ? 0 : a.r.kind === 'admin' ? -1 : 1));
-  const chips = list.map(({ r, i }) => {
-    const tip = r.kind === 'fc' ? `Field Conductor, paid on ${r.nursery} only` : 'Paid on every nursery';
-    const label = r.kind === 'fc' ? `${esc(r.name)} · ${esc(r.nursery)} FC` : esc(r.name);
-    const x = D ? `<button type="button" class="jc-x" title="Take off the rule"
-         aria-label="Remove ${esc(r.name)}" onclick="cmRemove(${i})">&times;</button>` : '';
-    return `<span class="jb-chip jc-chip" title="${esc(tip)}">${label}${x}</span>`;
+  /* GROUP CHIPS, EXACTLY THE ROWS ABOVE, and only what was DRAGGED here --
+     *"不要自带名字"*, *"上面的culling monitoring setting那边才会需要show 名字"*,
+     *"不要preset"*. The names are on the Culling Monitoring card above; a
+     drop here adds a group's people to that card's list, and the cross takes
+     them off it again, through the same dated save. */
+  const editing = !!(jobCrewDraft && cmDraft && cmDraft.viaJc && cullGroupsDraft);
+  const list = editing ? cullGroupsDraft : cullGroups;
+  const html = list.map(g => {
+    const x = editing ? `<button type="button" class="jc-x" title="Take this group off" aria-label="Remove ${esc(_jcGroupLabel(g))}"
+         onclick="jcCullRemove('${esc(g)}')">&times;</button>` : '';
+    return `<span class="jb-chip jc-chip" title="${esc(_jcNames(g).join(', ') || 'Nobody in this group today')}">${esc(_jcGroupLabel(g))}${x}</span>`;
   }).join('');
-  if (chips) return chips;
-  return D ? '<span class="jc-drop-here">Drag a group here</span>' : '<span class="jb-none">Nobody</span>';
+  if (html) return html;
+  return editing ? '<span class="jc-drop-here">Drag a group here</span>' : '';
+}
+/* The Team Board group a name on the rule stands in, matched through the
+   claim own resolver (the rule spells names short). Workers last, so an
+   Admin or an FC reads as that rather than as general work. */
+function _cmGroupOfName(name) {
+  const CI = window.MJMCullIncentive;
+  if (!window.MJMJobCrew || !name) return '';
+  const groups = MJMJobCrew.groupsOnRegister(_registerRows, CREW_OPTS)
+    .sort((a, b) => (a.role === 'General Worker') - (b.role === 'General Worker'));
+  const k = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  for (const g of groups) {
+    const names = MJMJobCrew.rowsOf(_registerRows, g.group, CREW_OPTS)
+      .filter(r => r.active !== false).map(r => String(r.full_name).trim());
+    if (names.some(n => k(n) === k(name)
+        || (CI && CI.resolveName && CI.resolveName(name, [n], x => x).row === n))) return g.group;
+  }
+  return '';
+}
+/* The cross takes the group off this row AND its people off the rule
+   (the card above), every person that group stands for. */
+function jcCullRemove(g) {
+  if (!jobCrewDraft || !cmDraft || !cmDraft.viaJc || !cullGroupsDraft) return;
+  cullGroupsDraft = cullGroupsDraft.filter(x => x !== g);
+  for (let i = cmDraft.people.length - 1; i >= 0; i--) {
+    const r = cmDraft.people[i];
+    if (r.active === false || _cmGroupOfName(r.name) !== g) continue;
+    if (r.id == null) cmDraft.people.splice(i, 1);
+    else r.active = false;
+  }
+  _cmRedraw();
 }
 
 /* ── THE DEFAULT IS NOT DRAWN, AND THAT CHANGED WHAT A DROP DOES ─────────
@@ -13603,6 +13635,7 @@ function renderJobCrewSetting() {
 function jcEdit() {
   if (!maySetting()) return;
   jobCrewDraft = _jcState();
+  cullGroupsDraft = cullGroups.slice();
   /* Culling Monitoring's names open with the rest, unless the card above
      is already editing them. Only a keyed rule can be: the built-in list
      has no rows to date a change against. */
@@ -13627,6 +13660,7 @@ function _jcOpenCullDraft() {
 }
 function jcCancel() {
   jobCrewDraft = null;
+  cullGroupsDraft = null;
   if (cmDraft && cmDraft.viaJc) { cmDraft = null; renderCullMonitoringSetting(); }
   renderJobCrewSetting();
 }
@@ -13682,9 +13716,10 @@ function jcCullDrop(ev) {
   ev.currentTarget.classList.remove('jb-cell-over');
   const g = _jcDrag;
   _jcDrag = null;
-  if (!g || !jobCrewDraft || !cmDraft || !cmDraft.viaJc) return;
+  if (!g || !jobCrewDraft || !cmDraft || !cmDraft.viaJc || !cullGroupsDraft) return;
   const p = MJMJobCrew.splitGroup(g);
   if (!p) return;
+  if (!cullGroupsDraft.includes(g)) cullGroupsDraft.push(g);
   const CI = window.MJMCullIncentive;
   const kind = p.role === 'Field Conductor' ? 'fc' : 'admin';
   const nursery = kind === 'fc' ? ((CI.sectionOf && CI.sectionOf(p.section)) || p.section) : '';
@@ -13759,6 +13794,10 @@ async function jcSave() {
         updated_at: now,
       };
     });
+    if (cullGroupsDraft) rows.push({ key: CULL_GROUPS_KEY, txt_value: cullGroupsDraft.join(','),
+      note: 'Team Board groups dragged onto Culling Monitoring on Worker List for Each Job. '
+          + 'The people are in the dated Culling Monitoring rule.',
+      updated_by: (typeof userEmail !== 'undefined' && userEmail) || null, updated_at: now });
     const { error } = await _supabase.from('nops_maint_config')
       .upsert(rows, { onConflict: 'key' }).then(r => r, e => ({ error: e }));
     if (error) {
@@ -13770,6 +13809,8 @@ async function jcSave() {
       return;
     }
     jobCrews = next;
+    if (cullGroupsDraft) cullGroups = cullGroupsDraft.slice();
+    cullGroupsDraft = null;
     jobCrewDraft = null;
     renderJobCrewSetting();
   } finally {
@@ -14145,7 +14186,9 @@ function _cmSettingHtml() {
      for one draft, never two Save buttons for the same change. */
   const D = cmDraft && !cmDraft.viaJc ? cmDraft : null;   // non-null only while editing here
   const rate = (k) => D ? D.rate[k] : _cmRate(k);
-  const live = (k) => D ? D.people.filter(r => r.kind === k && r.active !== false)
+  /* A draft edited on Worker List shows its NAMES here as they are dragged
+     on -- *"drag了上面的部分也会改"* -- with no controls: those are below. */
+  const live = (k) => cmDraft ? cmDraft.people.filter(r => r.kind === k && r.active !== false)
                         : (k === 'admin' ? CI.RULE.everyPlot : CI.RULE.ownNursery);
 
   /* WHICH RULE IS ON SCREEN, IN ONE LINE. It fails open, so a database that
