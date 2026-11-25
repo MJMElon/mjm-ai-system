@@ -3701,20 +3701,75 @@ function _spBatchBar(m, st) {
    Nursery crew is filed under whichever nursery they belong to; then last
    month's names the register cannot place; and an Other that opens a box
    for a name on neither. Names already on this month's list are left out. */
+/* ── AND THE DRAG IS WHAT NARROWS IT ─────────────────────────────────────
+   Settings → Worker List for Each Job carries Seed Planting & Hyplug now,
+   and dropping a Team Board group on it says that position MAY be picked.
+   The office asked for the two halves in one sentence —
+
+     *"drag了后 当admin要选这个月轮到谁做的时候 可以在seed planting那边
+       drag down这个月是谁做"*
+
+   — so the drag narrows THIS dropdown and nothing else. The month list the
+   office picks here is still what the sheet's columns are, which is what
+   they keyed by hand before and asked for in the first place; the groups
+   only decide who is on offer. On a month where other positions take turns
+   that is the difference between eight columns and forty.
+
+   Three things in it:
+
+     · **THE OPTGROUP IS THE GROUP** — *"admin drag down 可以看到这三个
+       职位"*. Narrowed, the list is grouped as the office dragged it (BNN ·
+       Workers), not by the raw register section, so what they see here is
+       what they put there. Unnarrowed it is the section, exactly as before.
+     · **A PERSON IN TWO GROUPS IS OFFERED ONCE**, under the first that
+       holds them, the rule `crewRows` already follows for a column.
+     · **`onReg` IS THE WHOLE REGISTER EITHER WAY.** It is what keeps a name
+       out of the *Last month* list, so narrowing it would hand back under
+       that heading exactly the people the office has just excluded. */
 function _spWorkerSelect(st) {
   const have = new Set(st.names.map(w => w.toLowerCase()));
-  const bySec = {};
+  const offer = (r) => {
+    const name = String((r && r.full_name) || '').trim();
+    return name && r.active !== false && !r.rejected_at && !have.has(name.toLowerCase())
+      ? name : '';
+  };
+  /* Every name the register carries, narrowed or not — see above. */
+  const onReg = new Set();
   (_registerRows || []).forEach(r => {
-    const name = String(r.full_name || '').trim();
-    if (!name || r.active === false || r.rejected_at || have.has(name.toLowerCase())) return;
-    const sec = String(r.section || r.nursery || '').trim() || '—';
-    (bySec[sec] = bySec[sec] || new Set()).add(name);
+    const n = String((r && r.full_name) || '').trim();
+    if (n && r.active !== false && !r.rejected_at) onReg.add(n.toLowerCase());
   });
-  const onReg = new Set(); Object.values(bySec).forEach(set => set.forEach(n => onReg.add(n.toLowerCase())));
+
+  /* FAILS OPEN: no keyed groups is nobody having been asked, and an
+     unreadable register has no groups to resolve — both offer everybody,
+     which is what this dropdown did before the drag existed. */
+  const keyed = window.MJMJobCrew ? jobCrewKeyed(SP_NURSERY, 'seed_planting') : null;
+  const narrow = keyed && !_linkErr && (_registerRows || []).length;
+
+  const bands = [];
+  if (narrow) {
+    const seen = new Set();
+    keyed.forEach(g => {
+      const names = MJMJobCrew.rowsOf(_registerRows, g, CREW_OPTS).map(offer)
+        .filter(n => n && !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
+      if (names.length) bands.push({ label: _jcGroupLabel(g), names: names.sort((a, b) => a.localeCompare(b)) });
+    });
+  } else {
+    const bySec = {};
+    (_registerRows || []).forEach(r => {
+      const name = offer(r);
+      if (!name) return;
+      const sec = String(r.section || r.nursery || '').trim() || '—';
+      (bySec[sec] = bySec[sec] || new Set()).add(name);
+    });
+    Object.keys(bySec).sort().forEach(sec =>
+      bands.push({ label: sec, names: [...bySec[sec]].sort((a, b) => a.localeCompare(b)) }));
+  }
+
   const prev = st.prevNames.filter(w => !have.has(w.toLowerCase()) && !onReg.has(w.toLowerCase()));
   const opt = n => `<option value="${esc(n)}">${esc(n)}</option>`;
-  const groups = Object.keys(bySec).sort().map(sec =>
-    `<optgroup label="${esc(sec)}">${[...bySec[sec]].sort((a, b) => a.localeCompare(b)).map(opt).join('')}</optgroup>`).join('');
+  const groups = bands.map(b =>
+    `<optgroup label="${esc(b.label)}">${b.names.map(opt).join('')}</optgroup>`).join('');
   return `<select id="sp-new-name" class="sp-pick" onchange="_spPickWorker(this.value)">
     <option value="">${esc(t('pay.spPickWorker'))}</option>
     ${groups}
@@ -12678,12 +12733,36 @@ function _jcElsewhere() {
   return PAYROLL_VIEW_KEYS.filter(j => !own.includes(j));
 }
 const JC_SET_ELSEWHERE = {
-  seed_planting: 'Names are keyed by hand, one list per month, on the sheet itself — '
-    + 'the Pre Nursery crew is not a section of its own on the register.',
   cull_incentive: 'Named people at their own rates — set in Culling Monitoring above.',
 };
 
-function _jcDefault(n) { return [MJMJobCrew.group(n, MJMJobCrew.GENERAL)]; }
+/* ── A JOB WHOSE DEFAULT IS NOT A GROUP ──────────────────────────────────
+   Every other job falls back to its own nursery's General Workers, which
+   is what its sheet drew before this card existed. SEED PLANTING CANNOT:
+   the office said it plainly — *"pre nursery 是没有工人的"* — and the Team
+   Board bears them out, PN carrying one Field Conductor and no Workers at
+   all. A `PN · Workers` chip there would be a default standing for nobody.
+
+   What it falls back to is what its dropdown has always offered: EVERYBODY
+   on the register. So `_jcDefault` answers an EMPTY list for it, which does
+   three things at once and none of them is a special case —
+
+     · the cell draws the sentence below rather than a chip;
+     · a drag starts from nothing and adds the one group dropped;
+     · and clearing every chip serialises to exactly the default, so Save
+       writes DEFAULT and the dropdown goes back to offering everybody.
+
+   That last one is deliberately NOT the other six's answer, where an
+   emptied cell saves as `''` meaning nobody. Nobody here is a dropdown
+   with nothing in it, which is a sheet that cannot be used, and the office
+   drags to NARROW the list rather than to close it. */
+const JC_ANY_DEFAULT = {
+  seed_planting: 'Everybody on the register — drag a group to narrow it',
+};
+
+function _jcDefault(n, job) {
+  return JC_ANY_DEFAULT[job] ? [] : [MJMJobCrew.group(n, MJMJobCrew.GENERAL)];
+}
 function _jcSectionName(s) { return MAINT_NURSERIES.includes(s) ? nurseryShort(s) : s; }
 function _jcGroupLabel(g) {
   const p = MJMJobCrew.splitGroup(g);
@@ -12743,10 +12822,16 @@ function renderJobCrewSetting() {
       const cell = `${n}:${j}`;
       if (!on.includes(n)) return `<td class="jc-off" title="${esc(jobLabel(j))} is not done in ${esc(nurseryShort(n))} (Where Each Job Is Done)">—</td>`;
       const keyed = state[cell];
-      const list = keyed || _jcDefault(n);
+      const list = keyed || _jcDefault(n, j);
+      /* An empty list means two different things, so it has to say which:
+         nobody was dragged onto a job whose default is everybody, or every
+         chip was taken off one whose default is a group. */
+      const none = JC_ANY_DEFAULT[j]
+        ? `<span class="jb-none jc-any">${esc(JC_ANY_DEFAULT[j])}</span>`
+        : `<span class="jb-none">Nobody</span>`;
       const chips = list.length
         ? list.map(g => _jcChipHtml(g, { def: !keyed, removable: editing, cell })).join('')
-        : `<span class="jb-none">Nobody</span>`;
+        : none;
       const drop = editing
         ? ` ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcDrop(event,'${esc(cell)}')"` : '';
       return `<td class="jc-cell" data-cell="${esc(cell)}"${drop}>${chips}</td>`;
@@ -12812,8 +12897,8 @@ function jcDrop(ev, cell) {
   const g = _jcDrag;
   _jcDrag = null;
   if (!g || !jobCrewDraft || !(cell in jobCrewDraft)) return;
-  const n = cell.split(':')[0];
-  const list = (jobCrewDraft[cell] || _jcDefault(n)).slice();
+  const [n, j] = cell.split(':');
+  const list = (jobCrewDraft[cell] || _jcDefault(n, j)).slice();
   if (list.includes(g)) return;                 // already on it
   list.push(g);
   jobCrewDraft[cell] = list;
@@ -12821,8 +12906,8 @@ function jcDrop(ev, cell) {
 }
 function jcRemove(cell, g) {
   if (!jobCrewDraft || !(cell in jobCrewDraft)) return;
-  const n = cell.split(':')[0];
-  jobCrewDraft[cell] = (jobCrewDraft[cell] || _jcDefault(n)).filter(x => x !== g);
+  const [n, j] = cell.split(':');
+  jobCrewDraft[cell] = (jobCrewDraft[cell] || _jcDefault(n, j)).filter(x => x !== g);
   renderJobCrewSetting();
 }
 
@@ -12845,7 +12930,7 @@ async function jcSave() {
     const rows = Object.keys(draft).map(cell => {
       const [n, j] = cell.split(':');
       const list = draft[cell];
-      const isDef = !list || MJMJobCrew.serialise(list) === MJMJobCrew.serialise(_jcDefault(n));
+      const isDef = !list || MJMJobCrew.serialise(list) === MJMJobCrew.serialise(_jcDefault(n, j));
       if (!isDef) next[cell] = MJMJobCrew.parse(list.join(','));
       return {
         key: MJMJobCrew.configKey(n, j),

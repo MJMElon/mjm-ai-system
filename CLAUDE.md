@@ -10176,27 +10176,22 @@ database.**
 `ROLES` in the shared file is the third copy of the Team Board's
 `BOARD_ROLES` — change one, change the others.
 
-#### THE TWO JOBS THAT TAKE NO GROUP ARE ON THE CARD, SAYING SO
+#### THE JOBS THAT TAKE NO GROUP ARE ON THE CARD, SAYING SO
 
-Seed Planting and Culling Monitoring were left off, which was right, and
-the card did not say it — so the office counted the sheets on Worker
-Activity against the rows here and asked: *"这一部分少了culling和seed
-planting 吧"*. **A LIST THAT IS QUIETLY SHORT READS AS A LIST WITH A BUG IN
-IT**, the shape this file keeps finding, and somebody having to ask is the
-proof it cost something.
+Seed Planting and Culling Monitoring were left off, which was right at the
+time, and the card did not say it — so the office counted the sheets on
+Worker Activity against the rows here and asked: *"这一部分少了culling和
+seed planting 吧"*. **A LIST THAT IS QUIETLY SHORT READS AS A LIST WITH A
+BUG IN IT**, the shape this file keeps finding, and somebody having to ask
+is the proof it cost something.
 
-**NEITHER CREW IS A GROUP, which is why dragging one here would be wrong
-rather than merely unnecessary:**
-
-- **Seed Planting & Hyplug names are KEYED BY HAND**, one list per month, on
-  the sheet itself. The office asked for that (*"这个月的工人名字需要manual
-  key"*) because the Pre Nursery crew is **not a section of its own on the
-  register** — there is literally no group to drag, and a second way to name
-  them here is two writers and two answers.
-- **Culling Monitoring pays NAMED PEOPLE AT THEIR OWN RATES** — RM 20 to each
-  of two on every nursery and RM 50 to that nursery's own Field Conductor. A
-  group carries no price, so this card could not hold the rule even if it
-  held the names. It is set on the **Culling Monitoring** card above.
+**SEED PLANTING HAS SINCE JOINED THE DRAGGABLE ROWS** — the section below
+is that, and it is why the reason given for leaving it off was only half
+right. **Culling Monitoring is the one that cannot**: it pays NAMED PEOPLE
+AT THEIR OWN RATES — RM 20 to each of two on every nursery and RM 50 to
+that nursery's own Field Conductor — and a group carries no price, so this
+card could not hold the rule even if it held the names. It is set on the
+**Culling Monitoring** card above.
 
 Three things in it:
 
@@ -10224,10 +10219,81 @@ of those bars and the other is Work Records, which answered the first run
 with *Monthly Watering Record* on it. `PAYROLL_VIEW_KEYS` is no use to it
 either: a script-scope `const` is not on `window`.
 
+#### AND SEED PLANTING TAKES A DRAG, which is NOT what the other seven do
+
+Told that dragging a group onto Seed Planting would first need PN workers
+registered on the Team Board, the office corrected the premise rather than
+the answer:
+
+> *"pre nursery 是没有工人的 是由别的职位轮流去做 但是有些职位不能做 所以
+>   要drag"*
+>
+> *"drag了后 当admin要选这个月轮到谁做的时候 可以在seed planting那边drag
+>   down这个月是谁做"*
+>
+> *"例如我drag BNN worker UNN1 worker UNN2 worker 过去seed planting, admin
+>   drag down 可以看到这三个职位，她可以选这个月是谁"*
+>
+> *"选了后 名单就会出来 admin就可以tick 人"*
+
+**THE PRE NURSERY HAS NO CREW OF ITS OWN AND NEVER WILL.** The Team Board
+bears it out — PN carries one Field Conductor and no Workers — so the
+earlier note was wrong to read that as *there is no group to drag*. Other
+positions **TAKE TURNS**, and not every position may, which is a question
+the Team Board can answer perfectly well: it just is not answered by the
+section a person is filed under.
+
+**SO THE GROUPS SAY WHO MAY BE PICKED, AND THE MONTH LIST IS STILL THE
+COLUMNS**, and that split is the whole of the design rather than a detail
+of it. On the other seven jobs the groups ARE the columns. Here they narrow
+the sheet's own **Add worker** dropdown, and the office goes on picking this
+month's people exactly as they asked to in the first place (*"这个月的工人
+名字需要manual key"*). **轮流 is why**: making every eligible person a column
+would put forty names on a sheet that already scrolls sideways at eight, and
+the figures would say who actually did it anyway. Two writers of the columns
+was the fault the old note feared; there is still only one.
+
+Five things in it:
+
+- **THE OPTGROUP IS THE GROUP** — *"可以看到这三个职位"*. Narrowed, the
+  dropdown is grouped as the office dragged it (`BNN · Workers`), not by the
+  raw register section; unnarrowed it is the section, exactly as before. So
+  what they read there is what they put there.
+- **THE DEFAULT IS NOT A GROUP, and it could not be.** Every other job falls
+  back to its own nursery's General Workers; `PN · Workers` stands for
+  nobody. `_jcDefault(n, job)` answers an EMPTY list through `JC_ANY_DEFAULT`
+  and three things fall out of that one fact rather than being special
+  cases: the cell draws *Everybody on the register — drag a group to narrow
+  it*, a drag starts from nothing, and **clearing every chip serialises to
+  exactly the default**, so Save writes DEFAULT and the dropdown goes back to
+  offering everybody. That last one is deliberately NOT the other seven's
+  answer, where an emptied cell is `''` meaning nobody: nobody here is a
+  dropdown with nothing in it, which is a sheet that cannot be used, and the
+  office drags to NARROW rather than to close.
+- **`onReg` IS THE WHOLE REGISTER EITHER WAY.** It is what keeps a name out
+  of the *Last month* band, so narrowing it would hand back under that
+  heading exactly the people the office had just excluded.
+- **A PERSON IN TWO GROUPS IS OFFERED ONCE**, under the first that holds
+  them — the rule `crewRows` already follows for a column.
+- **IT FAILS OPEN.** No keyed groups is nobody having been asked, and an
+  unreadable register has no groups to resolve; both offer everybody, which
+  is what this dropdown did before the drag existed.
+
+**Nothing to run in the database.** It is one more `nops_maint_config` row,
+`job_crew:PN:seed_planting`, in the shape the other seven already use.
+
 `tests/each_job_has_its_own_worker_list.cjs` drives the real card and the
 real drag, opens the sheet and reads its columns, and lifts the claim's
-`maintJobNames` out of the shipped file; **18 of its 25 checks fail on the
-previous code**.
+`maintJobNames` out of the shipped file; **11 of its 47 checks fail on the
+previous code**. Section 6 is the office's own example, and the check that
+earns its place is **`eligible is not the same as on the sheet`**: two
+people are made eligible and the sheet shows NEITHER until one is picked.
+Without it every check would pass just as green on a build that made the
+groups the columns, which is the one reading this is not.
+**Its picker had to learn to WAIT** — the sheet loads its month
+asynchronously, so the first open has no dropdown while every later one
+reads a cached month and answers at once, and a check that did not wait
+would be reading the race rather than the rule.
 
 ### Worker Activity was two parts, and Seed Planting is the Pre Nursery one
 

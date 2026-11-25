@@ -303,15 +303,17 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     });
     check('the card lists every sheet the side bar does',
       (rows || []).map(r => r.job).sort(), (sheets || []).sort());
-    check('…and six of them take a drop, which is the Team Board half',
-      (rows || []).filter(r => !r.elsewhere).length, 6);
-    check('…and the other two say so instead',
-      (rows || []).filter(r => r.elsewhere).map(r => r.job).sort(),
-      ['Culling Monitoring', 'Seed Planting & Hyplug']);
+    /* SEVEN take a drop. Seed Planting joined them when the office said the
+       Pre Nursery has no crew of its own and other positions take turns —
+       section 6 is that half. Culling Monitoring is the one left, and it
+       cannot join: a group carries no price. */
+    check('…and seven of them take a drop, which is the Team Board half',
+      (rows || []).filter(r => !r.elsewhere).length, 7);
+    check('…and the one that cannot says so instead',
+      (rows || []).filter(r => r.elsewhere).map(r => r.job),
+      ['Culling Monitoring']);
     check('a row set elsewhere is ONE cell across the nurseries, never four empty ones',
-      (rows || []).filter(r => r.elsewhere).map(r => r.cells), [1, 1]);
-    check('Seed Planting says the names are keyed per month',
-      (rows || []).some(r => r.elsewhere && /keyed by hand, one list per month/.test(r.says)), true);
+      (rows || []).filter(r => r.elsewhere).map(r => r.cells), [1]);
     check('Culling Monitoring points at its own card',
       (rows || []).some(r => r.elsewhere && /Culling Monitoring above/.test(r.says)), true);
 
@@ -321,16 +323,107 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     await ev(page, () => jcEdit());
     check('no drop target on a row set elsewhere',
       await ev(page, () => document.querySelectorAll('#jc-set-body tr.jc-elsewhere td[data-cell]').length), 0);
-    check('and nothing can be keyed against either job',
-      await ev(page, () => ['cull_incentive', 'seed_planting']
+    check('and nothing can be keyed against it',
+      await ev(page, () => ['cull_incentive']
         .filter(j => Object.keys(jobCrewDraft || {}).some(k => k.endsWith(':' + j)))), []);
     await ev(page, () => jcSave());
     await page.waitForTimeout(300);
-    check('Save writes a row for the six and for neither of the two',
+    check('Save writes a row for the seven and none for it',
       await ev(page, () => (window.__DB.nops_maint_config || [])
         .map(r => r.key).filter(k => k.indexOf('job_crew:') === 0)
-        .some(k => /cull_incentive|seed_planting/.test(k))), false);
+        .some(k => /cull_incentive/.test(k))), false);
     if (process.env.SHOT) { await ev(page, () => document.getElementById('jc-set-body').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_elsewhere.png' }); }
+    check('no page error', errs, []);
+    await page.close();
+  }
+
+  /* ── 6. SEED PLANTING: THE DRAG SAYS WHO MAY BE PICKED ─────────────────
+     The office, when told PN had no Workers to drag:
+
+       "pre nursery 是没有工人的 是由别的职位轮流去做 但是有些职位不能做
+        所以要drag"
+       "例如我drag BNN worker UNN1 worker UNN2 worker 过去seed planting,
+        admin drag down 可以看到这三个职位，她可以选这个月是谁"
+       "选了后 名单就会出来 admin就可以tick 人"
+
+     So it is NOT the other six: the groups narrow the sheet's own dropdown
+     and the month list the office picks is still what the columns are. */
+  console.log('— 6. Seed Planting takes a drag, and it narrows the dropdown');
+  {
+    const db = { mjmnpayroll_workers: REGISTER, nops_maint_config: [] };
+    const { page, errs } = await boot(browser, db, 'setting');
+    const row = () => ev(page, () => {
+      const tr = [...document.querySelectorAll('#jc-set-body .jc-tbl tbody tr')]
+        .find(x => /Seed Planting/.test(x.querySelector('th.jc-job').textContent));
+      if (!tr) return 'no Seed Planting row';
+      return {
+        elsewhere: tr.classList.contains('jc-elsewhere'),
+        pn: (tr.querySelector('td[data-cell="PN:seed_planting"]') || {}).textContent || '',
+        off: [...tr.querySelectorAll('td.jc-off')].length,
+      };
+    });
+    const r0 = await row();
+    check('it is a droppable row now, not one set elsewhere', (r0 || {}).elsewhere, false);
+    check('…with a cell under PN and a dash under the other three', (r0 || {}).off, 3);
+    /* THE DEFAULT IS NOT "PN · Workers". PN has no Workers — that is the
+       office's own first sentence — so a group chip there would stand for
+       nobody. It says what the dropdown has always offered instead. */
+    check('the default is everybody, never an empty PN · Workers chip',
+      [/Everybody on the register/.test((r0 || {}).pn || ''), /Workers/.test((r0 || {}).pn || '')],
+      [true, false]);
+
+    /* THE DROPDOWN BEFORE ANY DRAG: everybody, by register section. */
+    /* THE SHEET LOADS ITS MONTH ASYNCHRONOUSLY, so the FIRST open has no
+       dropdown yet — later ones read a cached month and answer at once. A
+       check that did not wait would read the race rather than the rule. */
+    const picker = async () => {
+      await ev(page, () => { switchTab('payroll', null); switchPayrollView('seed_planting'); });
+      await page.waitForSelector('#sp-new-name', { timeout: 8000 }).catch(() => {});
+      return ev(page, () => {
+      const sel = document.getElementById('sp-new-name');
+      if (!sel) return 'no #sp-new-name';
+      return [...sel.querySelectorAll('optgroup')]
+        .map(g => g.label + ': ' + [...g.querySelectorAll('option')].map(o => o.value).join(', '));
+      });
+    };
+    check('unkeyed, it offers everybody by section', await picker(),
+      ['BNN: Andi Rosmini, Lalu Aenal, Yuyak', 'UNE: Wira UNE', 'UNN 1: Budi UNN1']);
+
+    await ev(page, () => { switchTab('setting', null); jcEdit(); });
+    check('BNN · Workers drops onto Seed Planting', await drag(page, 'BNN · Workers', 'PN:seed_planting'), 'dropped');
+    check('and UNN 1 · Workers beside it', await drag(page, 'UNN 1 · Workers', 'PN:seed_planting'), 'dropped');
+    check('the cell carries the two groups', await cellChips(page, 'PN:seed_planting'),
+      ['BNN · Workers', 'UNN 1 · Workers']);
+    await ev(page, () => jcSave());
+    await page.waitForTimeout(300);
+    check('Save wrote them under PN',
+      await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:PN:seed_planting') || {}).txt_value),
+      'BNN|General Worker,UNN1|General Worker');
+
+    /* THE OPTGROUP IS THE GROUP — "可以看到这三个职位" — and the Field
+       Conductor is gone, which is the whole of 有些职位不能做. */
+    check('the dropdown now shows the dragged GROUPS and only their people',
+      await picker(), ['BNN · Workers: Andi Rosmini, Yuyak', 'UNN 1 · Workers: Budi UNN1']);
+
+    /* AND THE COLUMNS ARE STILL THE MONTH LIST, never the groups: two
+       people were made eligible and the sheet shows neither until the
+       office picks one. That is 轮流, and it is why this is not the
+       other six. */
+    const cols = () => ev(page, () => {
+      const tbl = document.getElementById('payroll-table');
+      const txt = tbl ? tbl.textContent : '';
+      return ['Andi Rosmini', 'Yuyak', 'Budi UNN1'].filter(n => txt.includes(n));
+    });
+    check('eligible is not the same as on the sheet', await cols(), []);
+    await ev(page, () => {
+      const sel = document.getElementById('sp-new-name');
+      sel.value = 'Yuyak'; addSeedPlantingWorker();
+    });
+    await page.waitForTimeout(300);
+    check('…and the one picked IS', await cols(), ['Yuyak']);
+    check('who then leaves the dropdown, being on the list already',
+      /Yuyak/.test(JSON.stringify(await picker())), false);
+    if (process.env.SHOT) { await page.screenshot({ path: process.env.SHOT + '/sp_picker.png' }); }
     check('no page error', errs, []);
     await page.close();
   }

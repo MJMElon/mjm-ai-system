@@ -2060,6 +2060,9 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
    onto it. It is on the card because leaving it off is what made somebody
    count the rows and ask; it is muted and takes no drop, because a cell
    that looks like the ones above it is a cell people will try to drop on. */
+/* A job whose default is not a group (Seed Planting): the cell says what
+   it falls back to in words, because there is no chip that could. */
+.jc-any{font-style:italic;}
 .jc-elsewhere th.jc-job{color:var(--text-faint);}
 .jc-elsewhere td{font-size:12px;color:var(--text-faint);line-height:1.5;}
 
