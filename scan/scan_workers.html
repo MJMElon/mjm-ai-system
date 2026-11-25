@@ -1016,7 +1016,8 @@ const BOARD_OTHER = '(other)';
    holds it, because a row going while somebody sits in it would drop them
    into Other. The eight built in cannot be removed. */
 const BUILTIN_ROLE_COUNT = ROLES.length;
-let customRoles = [];
+let customRoles = [];   // what the board shows (the draft while editing)
+let savedRoles  = [];   // what nops_maint_config holds
 const isCustomRole = r => customRoles.some(x => x.toLowerCase() === String(r).trim().toLowerCase());
 
 function applyCustomRoles(list) {
@@ -1036,11 +1037,25 @@ async function loadCustomRoles() {
   try {
     const { data, error } = await _supabase.from('nops_maint_config')
       .select('txt_value').eq('key', 'worker_roles').maybeSingle();
-    if (error || !data) { applyCustomRoles([]); return; }
+    if (error || !data) { savedRoles = []; applyCustomRoles([]); return; }
     const list = JSON.parse(data.txt_value || '[]');
     applyCustomRoles(Array.isArray(list) ? list : []);
-  } catch (e) { applyCustomRoles([]); }
+    savedRoles = customRoles.slice();
+  } catch (e) { savedRoles = []; applyCustomRoles([]); }
 }
+
+/* AN ADDED OR REMOVED ROLE IS PART OF THE DRAFT, like a moved name. The
+   office added a role, pressed Cancel expecting it gone, and it had been
+   written the moment the window closed. So the window only changes what the
+   board SHOWS; Save writes it and Cancel puts the saved list back. */
+const roleChanges = () => {
+  const a = new Set(customRoles.map(r => r.toLowerCase()));
+  const b = new Set(savedRoles.map(r => r.toLowerCase()));
+  let n = 0;
+  a.forEach(r => { if (!b.has(r)) n++; });
+  b.forEach(r => { if (!a.has(r)) n++; });
+  return n;
+};
 
 async function writeCustomRoles(list) {
   const { error } = await _supabase.from('nops_maint_config').upsert({
@@ -1070,12 +1085,7 @@ async function saveCustomRole() {
   if (/['"<>\\]/.test(name)) { say('Letters, numbers and spaces only.'); return; }
   if (/^others?$/i.test(name)) { say('"Other" is kept for roles nobody recognises. Pick another name.'); return; }
   if (isKnownRole(name)) { say(`"${name}" is already a row on the board.`); return; }
-  $('rf-save').disabled = true;
-  await loadCustomRoles();                       // somebody else may have added one meanwhile
-  const err = await writeCustomRoles(customRoles.concat([name]));
-  $('rf-save').disabled = false;
-  if (err) { say('Could not save: ' + err.message); return; }
-  await loadCustomRoles();
+  applyCustomRoles(customRoles.concat([name]));   // the draft: nothing written until Save
   closeModal('role-modal');
   renderWorkers();
 }
@@ -1086,11 +1096,7 @@ async function removeCustomRole(name) {
       'You do not have permission to change the board. Ask an admin to grant it in Module Assess Control.')) return;
   const held = workers.filter(w => boardRoleOf(boardPos(w)) === name);
   if (held.length) { alert(`${held.length} worker(s) still hold "${name}" (Show inactive counts too). Move them to another row first.`); return; }
-  if (!confirm(`Remove the role "${name}" from the board?`)) return;
-  await loadCustomRoles();
-  const err = await writeCustomRoles(customRoles.filter(r => r.toLowerCase() !== name.toLowerCase()));
-  if (err) { alert('Could not save: ' + err.message); return; }
-  await loadCustomRoles();
+  applyCustomRoles(customRoles.filter(r => r.toLowerCase() !== name.toLowerCase()));
   renderWorkers();
 }
 
@@ -1135,6 +1141,9 @@ let _bdSaving  = false;
 
 const boardEditing = () => !!boardDraft;
 const boardMoves   = () => Object.keys(boardDraft || {}).length;
+/* Everything Save would write: the names moved and the roles added or
+   taken off. This is what lights Save and what Cancel asks about. */
+const boardChanges = () => boardMoves() + (boardDraft ? roleChanges() : 0);
 
 /* Where a name is drawn: the draft if it has been moved, the register
    otherwise. `boardRoleOf` reads `.role` only, so a draft entry answers it
@@ -1326,7 +1335,7 @@ function renderWorkerBoard() {
      than hidden: a button that appears halfway through is a button nobody
      knows is coming, and the count beside it is where somebody reads how
      many moves are being held. Cancel is how you leave with none. */
-  const n = boardMoves();
+  const n = boardChanges();
   const btns = !canEdit ? ''
     : editing
       ? `<button class="btn" onclick="boardCancel()">Cancel</button>
@@ -1336,8 +1345,8 @@ function renderWorkerBoard() {
 
   const when = editing
     ? `<span class="bd-bar-live">Editing</span> &middot; ` + (n
-        ? `${n} ${n === 1 ? 'name has' : 'names have'} been moved and
-           <b>nothing is saved yet</b> — press Save, or Cancel to put them back.`
+        ? `${n} ${n === 1 ? 'change' : 'changes'} and
+           <b>nothing is saved yet</b> — press Save, or Cancel to undo.`
         : `drag a name to move it. Nothing is written until you press Save.`)
     : esc(lastUpdatedLine());
 
@@ -1406,10 +1415,11 @@ function boardEdit() {
    simply the way out of edit mode and asks nothing — a confirm over an
    empty draft is a box people learn to dismiss. */
 function boardCancel() {
-  const n = boardMoves();
-  if (n && !confirm(`Put ${n} ${n === 1 ? 'name' : 'names'} back where ${n === 1 ? 'it was' : 'they were'}?\n\n`
+  const n = boardChanges();
+  if (n && !confirm(`Undo ${n} ${n === 1 ? 'change' : 'changes'}?\n\n`
       + 'Nothing has been saved, so the board goes back to the register as it stands.')) return;
   boardDraft = null;
+  applyCustomRoles(savedRoles);
   renderWorkers();
 }
 
@@ -1429,12 +1439,23 @@ async function boardSave() {
   if (!mayDo('workers', 'manage',
       'You do not have permission to move a worker. Ask an admin to grant it in Module Assess Control.')) return;
   const ids = Object.keys(boardDraft);
-  if (!ids.length) return;
+  const rolesMoved = roleChanges() > 0;
+  if (!ids.length && !rolesMoved) return;
 
   const btn = $('bd-save');
   _bdSaving = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
+    /* The roles first: a name moved into a role added in the same edit
+       needs the role to exist when the board is drawn again. */
+    if (rolesMoved) {
+      const err = await writeCustomRoles(customRoles.slice());
+      if (err) {
+        alert('The roles could not be saved: ' + err.message + '\n\nNothing has been saved. Press Save again.');
+        return;
+      }
+      savedRoles = customRoles.slice();
+    }
     const now = new Date().toISOString();
     const jobs = ids.map(k => {
       const id = Number(k);
@@ -1490,7 +1511,7 @@ async function boardSave() {
    browser's is asked for instead. Only ever raised over moves that really
    are unsaved. */
 window.addEventListener('beforeunload', (e) => {
-  if (!boardMoves()) return;
+  if (!boardChanges()) return;
   e.preventDefault();
   e.returnValue = '';
 });

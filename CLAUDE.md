@@ -6040,8 +6040,12 @@ nursery work; the record's own tick decides the sheets, which `saveWorker`
 writes for every nursery worker. That matters because the phone's copy of
 `ROLES` (FC-Portal `maintenance/helpers.js`) and `shared_job_crew.js` do not
 know an added role. An added row offers a cross only while nobody, active or
-not, holds it; the eight built-in rows cannot be removed. Saving a role is
-its own write, not part of the board's draft. Nothing to run in the database.
+not, holds it; the eight built-in rows cannot be removed. **An added or
+removed role is part of the board's DRAFT**, like a moved name: it lights
+Save and counts as a change, Save writes it (`roleChanges`, `boardChanges`),
+and Cancel puts the saved list back. It was its own write for a day, and the
+office added Mata Malam, pressed Cancel, and found it saved. Nothing to run
+in the database.
 `tests/the_office_adds_a_role_row.cjs`.
 
 ### The board is a RECORD until somebody presses Edit

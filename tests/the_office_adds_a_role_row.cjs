@@ -231,21 +231,40 @@ const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x)
     yes(names.includes('Security'), 'Security is a row now');
     is(names.indexOf('Security') > names.indexOf('Driver'), true, 'after the built-in rows');
     if (process.env.SHOT) { await page.setViewportSize({ width: 1300, height: 1100 }); await page.screenshot({ path: process.env.SHOT, fullPage: true }); }
-    const cfg = await page.evaluate(() => (window.__ROWS.nops_maint_config || []).find((r) => r.key === 'worker_roles'));
-    is(cfg && JSON.parse(cfg.txt_value), ['Security'], 'stored in nops_maint_config worker_roles');
+    const cfgOf = () => page.evaluate(() => {
+      const r = (window.__ROWS.nops_maint_config || []).find((x) => x.key === 'worker_roles');
+      return r ? JSON.parse(r.txt_value) : null; });
+    is(await cfgOf(), null, 'NOTHING is written when the window closes -- it is part of the draft');
+    yes(await page.$eval('#bd-save', (e) => !e.disabled), 'Save lights up for the added role');
+    is(await page.$eval('#bd-save .bd-bar-n', (e) => e.textContent.trim()), '1', 'and counts it as one change');
     yes(await page.evaluate(() => ROLES.includes('Security') && isKnownRole('security')), 'and it is a role the record can pick');
     await page.evaluate(() => openWorker(null, 'BNN', 'Security'));
     await page.waitForTimeout(150);
     is(await page.$eval('#wf-role', (e) => e.value), 'Security', 'Add person in that row opens the form on the new role');
     await page.evaluate(() => closeModal('worker-modal'));
+    await page.click('#bd-save'); await page.waitForTimeout(400);
+    is(await cfgOf(), ['Security'], 'Save writes it to nops_maint_config worker_roles');
+    yes((await rowNames(page)).includes('Security'), 'and the row stays after Save');
+    await page.evaluate(() => boardEdit()); await page.waitForTimeout(150);
 
     console.log('\n-- 3. remove: only while nobody holds it --');
     is(await page.$$eval('.bd-role-x', (e) => e.length), 1, 'the empty added row offers a cross');
     page.on('dialog', (d) => d.accept());
     await page.click('.bd-role-x'); await page.waitForTimeout(300);
-    yes(!(await rowNames(page)).includes('Security'), 'removed');
-    const cfg2 = await page.evaluate(() => (window.__ROWS.nops_maint_config || []).find((r) => r.key === 'worker_roles'));
-    is(JSON.parse(cfg2.txt_value), [], 'and taken off the stored list');
+    yes(!(await rowNames(page)).includes('Security'), 'removed from the board');
+    is(await cfgOf(), ['Security'], 'but still stored until Save');
+    await page.click('#bd-save'); await page.waitForTimeout(400);
+    is(await cfgOf(), [], 'Save takes it off the stored list');
+
+    console.log('\n-- 3b. Cancel throws an added role away (the office bug) --');
+    await page.evaluate(() => boardEdit()); await page.waitForTimeout(150);
+    await page.click('.bd-role-add');
+    await page.fill('#rf-name', 'Mata Malam');
+    await page.click('#rf-save'); await page.waitForTimeout(200);
+    yes((await rowNames(page)).includes('Mata Malam'), 'Mata Malam is drawn while editing');
+    await page.click('button[onclick="boardCancel()"]'); await page.waitForTimeout(300);
+    yes(!(await rowNames(page)).includes('Mata Malam'), 'Cancel takes it off the board');
+    is(await cfgOf(), [], 'and nothing was ever written');
     await page.close();
 
     console.log('\n-- 4. a held added role cannot be removed, and the built-in ones never can --');
