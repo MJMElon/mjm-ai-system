@@ -3767,21 +3767,38 @@ function _spWorkerSelect(st) {
   }
 
   const prev = st.prevNames.filter(w => !have.has(w.toLowerCase()) && !onReg.has(w.toLowerCase()));
-  const opt = n => `<option value="${esc(n)}">${esc(n)}</option>`;
-  const groups = bands.map(b =>
-    `<optgroup label="${esc(b.label)}">${b.names.map(opt).join('')}</optgroup>`).join('');
+  if (prev.length) bands.push({ label: t('pay.spLastMonth'), names: prev });
+  /* THE DROPDOWN IS THE POSITIONS, AND THE PEOPLE ARE A TICK LIST UNDER IT.
+     *"我在setting里面放了BNN UNN1 UNN2 worker 所以这里的选项也只有三个"*,
+     then *"选了后 就出现namelist去tick它"*. The first version put every
+     person in one long dropdown under optgroup headings -- and the skinned
+     select draws no optgroup, so the office saw a flat wall of names and
+     none of the three positions they had dragged. So the dropdown offers
+     the GROUPS, and picking one draws that group own people as ticks; Add
+     takes every name ticked. `_spBands` is what was drawn, so the list a
+     tick reads is the list the office was shown. */
+  _spBands = bands;
   return `<select id="sp-new-name" class="sp-pick" onchange="_spPickWorker(this.value)">
-    <option value="">${esc(t('pay.spPickWorker'))}</option>
-    ${groups}
-    ${prev.length ? `<optgroup label="${esc(t('pay.spLastMonth'))}">${prev.map(opt).join('')}</optgroup>` : ''}
+    <option value="">${esc(t('pay.spPickGroup'))}</option>
+    ${bands.map((b, i) => `<option value="g${i}">${esc(b.label)} (${b.names.length})</option>`).join('')}
     <option value="__other">${esc(t('pay.spOtherName'))}</option>
-  </select>`;
+  </select><span id="sp-pick-list" class="sp-pick-list" style="display:none;"></span>`;
 }
+let _spBands = [];
 function _spPickWorker(v) {
   const box = document.getElementById('sp-new-name-other');
-  if (!box) return;
-  box.style.display = v === '__other' ? '' : 'none';
-  if (v === '__other') box.focus();
+  if (box) {
+    box.style.display = v === '__other' ? '' : 'none';
+    if (v === '__other') box.focus();
+  }
+  const list = document.getElementById('sp-pick-list');
+  if (!list) return;
+  const b = /^g\d+$/.test(v || '') ? _spBands[+v.slice(1)] : null;
+  if (!b) { list.style.display = 'none'; list.innerHTML = ''; return; }
+  list.style.display = '';
+  list.innerHTML = b.names.length
+    ? b.names.map(n => `<label class="sp-pick-item"><input type="checkbox" class="sp-pick-tick" value="${esc(n)}"> ${esc(n)}</label>`).join('')
+    : `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`;
 }
 
 /* ADD BATCH IS A DROPDOWN of the batches planted in the two months before
@@ -3863,6 +3880,17 @@ function addSeedPlantingWorker() {
   const el = document.getElementById('sp-new-name');
   if (!st || st.noTable || !el) return;
   const other = document.getElementById('sp-new-name-other');
+  /* A GROUP picked: every name ticked under it goes on, in one save. */
+  if (/^g\d+$/.test(el.value)) {
+    const ticked = [...document.querySelectorAll('#sp-pick-list .sp-pick-tick:checked')]
+      .map(x => String(x.value || '').replace(/\s+/g, ' ').trim())
+      .filter(n => n && !st.names.some(w => w.toLowerCase() === n.toLowerCase()));
+    if (!ticked.length) { alert(t('pay.spTickSome')); return; }
+    st.names.push(...ticked);
+    _spSaveNames(m);
+    renderPayroll();
+    return;
+  }
   const raw = el.value === '__other' ? (other ? other.value : '') : el.value;
   const name = String(raw || '').replace(/\s+/g, ' ').trim();
   if (!name) { (el.value === '__other' && other ? other : el).focus(); return; }
@@ -5420,7 +5448,7 @@ const I18N = {
     'pay.jobSeed':'Seed Planting', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
     'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
-    'pay.spPickWorker':'Pick a worker…', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
+    'pay.spPickWorker':'Pick a worker…', 'pay.spPickGroup':'Pick a position…', 'pay.spTickSome':'Tick at least one name, then press Add.', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
     'pay.spPickBatch':'Pick a batch…', 'pay.spNoLateBatch':'No batch from the last two months',
     'pay.spCheck':'Check', 'pay.spUncheckTip':'Checked — this row is on the Seed Planting payroll. Press to uncheck and correct it.',
     'pay.spCheckOff':'Batch {b}: the workers add up to {k}, but {q} were planted.\n\nCheck it anyway? It goes to the payroll as keyed.',
@@ -5628,7 +5656,7 @@ const I18N = {
     'pay.jobSeed':'Penanaman Benih', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
     'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
-    'pay.spPickWorker':'Pilih pekerja…', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
+    'pay.spPickWorker':'Pilih pekerja…', 'pay.spPickGroup':'Pilih jawatan…', 'pay.spTickSome':'Tanda sekurang-kurangnya satu nama, kemudian tekan Tambah.', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
     'pay.spPickBatch':'Pilih batch…', 'pay.spNoLateBatch':'Tiada batch dari dua bulan lepas',
     'pay.spCheck':'Semak', 'pay.spUncheckTip':'Disemak — baris ini dalam gaji Seed Planting. Tekan untuk nyahsemak dan betulkan.',
     'pay.spCheckOff':'Batch {b}: jumlah pekerja {k}, tetapi {q} ditanam.\n\nSemak juga? Ia masuk gaji seperti diisi.',

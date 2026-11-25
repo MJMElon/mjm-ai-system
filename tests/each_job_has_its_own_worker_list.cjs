@@ -477,8 +477,10 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       return ev(page, () => {
       const sel = document.getElementById('sp-new-name');
       if (!sel) return 'no #sp-new-name';
-      return [...sel.querySelectorAll('optgroup')]
-        .map(g => g.label + ': ' + [...g.querySelectorAll('option')].map(o => o.value).join(', '));
+      /* The dropdown is the groups; each group's people are the ticks
+         drawn when it is picked, read here off what was drawn. */
+      return (typeof _spBands === 'undefined' ? [] : _spBands)
+        .map(g => g.label + ': ' + g.names.join(', '));
       });
     };
     check('unkeyed, it offers everybody by section', await picker(),
@@ -512,7 +514,10 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     check('eligible is not the same as on the sheet', await cols(), []);
     await ev(page, () => {
       const sel = document.getElementById('sp-new-name');
-      sel.value = 'Yuyak'; addSeedPlantingWorker();
+      sel.value = 'g0'; _spPickWorker('g0');
+      [...document.querySelectorAll('#sp-pick-list .sp-pick-tick')]
+        .forEach(x => { x.checked = x.value === 'Yuyak'; });
+      addSeedPlantingWorker();
     });
     await page.waitForTimeout(300);
     check('…and the one picked IS', await cols(), ['Yuyak']);

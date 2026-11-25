@@ -307,11 +307,21 @@ const sheetOf = (page) => page.evaluate(() => {
   // ── 5. The names, from a dropdown ──
   const bar = await page.evaluate(() => [...document.querySelectorAll('#payroll-names .sp-chip')].map(c => c.firstChild.textContent));
   check('the month list is drawn above the table', bar.slice(0, 2), ['Siti', 'Rina']);
-  const opts = await page.evaluate(() => [...document.querySelectorAll('#sp-new-name optgroup')].map(g =>
-    g.label + ': ' + [...g.querySelectorAll('option')].map(o => o.value).join(',')));
+  /* The dropdown is the POSITIONS; picking one draws its people as ticks
+     -- *"选了后 就出现namelist去tick它"*. */
+  const opts = await page.evaluate(() => typeof _spBands === 'undefined' ? ['no _spBands'] :
+    _spBands.map(b => b.label + ': ' + b.names.join(',')));
   check('Add worker is a dropdown of the active register by section, without names already on the list',
     opts, ['PN: Ani', 'UNN1: Nur Aina', 'Last month: Ana,Budi']);
-  await page.evaluate(() => { const s = document.getElementById('sp-new-name'); s.value = 'Nur Aina'; addSeedPlantingWorker(); });
+  check('the dropdown offers the groups, never the people',
+    await page.evaluate(() => [...document.querySelectorAll('#sp-new-name option')].map(o => o.value)),
+    ['', 'g0', 'g1', 'g2', '__other']);
+  await page.evaluate(() => { const s = document.getElementById('sp-new-name'); s.value = 'g1'; _spPickWorker('g1'); });
+  check('picking a group draws its people as ticks',
+    await page.evaluate(() => [...document.querySelectorAll('#sp-pick-list .sp-pick-tick')].map(x => x.value)), ['Nur Aina']);
+  await page.evaluate(() => { addSeedPlantingWorker(); });
+  check('Add with nothing ticked adds nobody and says so', /Tick at least one/.test(dialogs.pop() || ''), true);
+  await page.evaluate(() => { document.querySelector('#sp-pick-list .sp-pick-tick').checked = true; addSeedPlantingWorker(); });
   await page.waitForTimeout(200);
   check('picking one adds it and saves the month',
     await page.evaluate(() => window.__NAMES.map(x => [x.row.month, x.row.names, x.opt && x.opt.onConflict])),
@@ -416,7 +426,7 @@ const sheetOf = (page) => page.evaluate(() => {
     rows: [...document.querySelectorAll('#payroll-table tbody tr')].filter(tr =>
             !tr.classList.contains('sp-job-row') && !tr.classList.contains('sp-head')
          && !tr.classList.contains('sp-sub-row')).length,
-    offer: [...document.querySelectorAll('#payroll-names button')].map(b => b.textContent.trim()).find(x => /last month/i.test(x)) || ''
+    offer: [...document.querySelectorAll('#payroll-names button[onclick*="useLastMonth"]')].map(b => b.textContent.trim()).find(x => /last month/i.test(x)) || ''
   }));
   /* Four rows, not two: the same two batches under each of the two jobs. */
   check('no names yet: the batches still show, with no worker columns', [empty.rows, empty.cols],
