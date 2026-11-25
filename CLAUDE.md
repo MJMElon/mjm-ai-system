@@ -10457,6 +10457,14 @@ figures are cleared, because its column would only come back as a name off
 the list. A figure saved under a name that is no longer on the list still
 gets a column, marked ⚠.
 
+**THE ADD WORKER DROPDOWN IS THE POSITIONS, and picking one draws its people
+as TICKS** — *"我在setting里面放了BNN UNN1 UNN2 worker 所以这里的选项也只有三
+个"*, *"选了后 就出现namelist去tick它"*. The groups are the ones dragged onto
+Seed Planting on Worker List for Each Job (by register section where none
+are), then Last month; Add takes every name ticked. It was one dropdown of
+people under optgroups, and the skinned select draws no optgroup, so the
+office saw a flat wall of names. `_spBands` is what was drawn.
+
 **Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
 The figures go into `nops_seed_planting_batch_workers`, one record per
 batch (`shared/RUN_ME_seed_planting_workers.sql`), with the ledger figure
