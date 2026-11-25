@@ -13791,7 +13791,35 @@ async function _cullFollowGroups() {
   _cmOpenDraft(true);
   let added = 0;
   cullGroups.forEach(g => { added += _cullAddGroupPeople(g); });
-  if (!added) { cmDraft = null; return; }
+  /* AND IT TAKES OFF, which it did not for a day -- *"我把surnano和amri拿掉
+     了 为什么还在"*, *"这个东西是live的 但是不影响前面的月份"*. Somebody no
+     longer standing in any dragged group of their kind leaves the rule, and
+     the save ENDS them at this month, so every month before it goes on
+     paying who it paid. Asked per KIND: the Field Conductor list is only
+     followed once an FC group has been dragged, and the every-nursery list
+     once any other group has, so a list nobody has dragged for is left as
+     it stands rather than emptied. */
+  const k = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const want = { admin: [], fc: [] };
+  const kinds = new Set();
+  cullGroups.forEach(g => {
+    const p = MJMJobCrew.splitGroup(g);
+    if (!p) return;
+    const kind = p.role === 'Field Conductor' ? 'fc' : 'admin';
+    const nursery = kind === 'fc' ? ((CI.sectionOf && CI.sectionOf(p.section)) || p.section) : '';
+    kinds.add(kind);
+    _jcNames(g).forEach(nm => want[kind].push({ name: nm, nursery }));
+  });
+  const stays = (r) => want[r.kind].some(w => (r.kind !== 'fc' || k(w.nursery) === k(r.nursery))
+    && (k(w.name) === k(r.name) || (CI.resolveName && CI.resolveName(r.name, [w.name], x => x).row === w.name)));
+  let removed = 0;
+  for (let i = cmDraft.people.length - 1; i >= 0; i--) {
+    const r = cmDraft.people[i];
+    if (r.active === false || !kinds.has(r.kind) || stays(r)) continue;
+    if (r.id == null) cmDraft.people.splice(i, 1); else r.active = false;
+    removed++;
+  }
+  if (!added && !removed) { cmDraft = null; return; }
   await cmSave();
   if (cmDraft && cmDraft.viaJc) { cmDraft = null; _cmRedraw(); }
 }

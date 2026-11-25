@@ -617,9 +617,14 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       window.__DB.nops_cull_monitoring_people.filter(r => r.from_month === M)
         .map(r => r.kind + ':' + r.nursery + ':' + r.worker_name).sort(), M),
       ['admin::Florence', 'fc:UNN1:Akbar']);
-    check('the rows already there are untouched',
+    /* LIVE, and the month it changes in is the month it moves -- *"什么月份
+       改就影响什么月份 但是在那个月份里的所有变动都是live的"*. Rousell (UNE ·
+       Admin) and Lalu (BNN · FC) stand in no group dragged here, so they come
+       off from THIS month; their rows are ENDED, never deleted, and every
+       earlier month still pays them. */
+    check('people in no dragged group are ended at this month, never deleted',
       await ev(page, () => window.__DB.nops_cull_monitoring_people.filter(r => r.id < 100)
-        .map(r => r.until_month)), [null, null]);
+        .map(r => r.until_month)), [M, M]);
     check('the groups are stored, so the row reads them after a reload', await ev(page, () =>
       (window.__DB.nops_maint_config.find(r => r.key === 'cull_monitoring_groups') || {}).txt_value),
       'OTHERS|Admin,UNN1|Field Conductor');
@@ -658,6 +663,35 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       /Surnano/.test(document.getElementById('cm-set-body').textContent)), true);
     check('…and the row still shows the group, not a name', await ev(page, () =>
       [...document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip')].map(c => c.textContent.trim())), ['OTHERS · Admin']);
+    check('no page error', errs, []);
+    await page.close();
+  }
+
+  /* ── 9. AND TAKES OFF: live, earlier months untouched ──────────────── */
+  console.log('— 9. somebody taken out of a dragged group leaves the rule from this month');
+  {
+    const d = new Date();
+    const M = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const reg = REGISTER.concat([
+      { id: 7, full_name: 'Florence', section: 'OTHERS', role: 'Admin', active: true },
+      { id: 9, full_name: 'Sunarno',  section: 'OTHERS', role: 'General Worker', active: true },
+    ]);
+    const db = { mjmnpayroll_workers: reg,
+      nops_maint_config: [{ key: 'cull_monitoring_groups', txt_value: 'OTHERS|Admin' }],
+      nops_cull_monitoring_rate: [{ id: 1, kind: 'admin', from_month: '2026-01', rm: 20 }],
+      nops_cull_monitoring_people: [
+        { id: 21, kind: 'admin', nursery: '', worker_id: 7, worker_name: 'Florence', from_month: '2026-01', until_month: null },
+        { id: 22, kind: 'admin', nursery: '', worker_id: 9, worker_name: 'Sunarno',  from_month: '2026-01', until_month: null },
+        { id: 23, kind: 'fc', nursery: 'BNN', worker_id: 3, worker_name: 'Lalu Aenal', from_month: '2026-01', until_month: null }] };
+    const { page, errs } = await boot(browser, db, 'setting');
+    await page.waitForTimeout(1500);
+    check('Sunarno is ENDED at this month, not deleted, so earlier months keep him', await ev(page, () =>
+      window.__DB.nops_cull_monitoring_people.map(r => r.worker_name + ':' + (r.until_month || '-')).sort()),
+      ['Florence:-', 'Lalu Aenal:-', 'Sunarno:' + M]);
+    check('…the FC list, which no FC group was dragged for, is left alone', await ev(page, () =>
+      /Lalu Aenal/.test(document.getElementById('cm-set-body').textContent)), true);
+    check('…and the card no longer names Sunarno', await ev(page, () =>
+      /Sunarno/.test(document.getElementById('cm-set-body').textContent)), false);
     check('no page error', errs, []);
     await page.close();
   }
