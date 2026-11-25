@@ -345,6 +345,81 @@
            no longer has text to hold it open. The status pill one column
            over is what says why it is closed. */
         .reserv-empty-finished{border-style:solid;border-color:#e2e8f0;background:#e9edf2;min-height:31px;cursor:default;}
+        /* ── A LOCKED ROW: the reservation is fixed until somebody unlocks it.
+           The lock button sits in the Customers cell, the outline says it
+           from across the table, and the chips lose their grip and cross. */
+        .mat-lock-btn{display:inline-flex;align-items:center;gap:4px;border:1px solid #cbd5e1;background:#fff;color:#64748b;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:800;cursor:pointer;line-height:1.2;white-space:nowrap;}
+        .mat-lock-btn:hover{border-color:#b45309;color:#b45309;}
+        .mat-lock-btn.is-locked{background:#fef3c7;border-color:#f59e0b;color:#92400e;}
+        .mat-lock-bar{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;}
+        .mat-lock-who{font-size:11px;font-weight:700;color:#92400e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        tr.mat-row-locked > td.col-alloc{background:#fffbeb;}
+        tr.mat-row-locked .reserv-chip{cursor:default;border-color:#fcd34d;background:#fffdf5;}
+        tr.mat-row-locked .reserv-chip:hover{transform:none;box-shadow:none;}
+        /* Sold out, culled and closed rows sit under this line, the live ones above it. */
+        .mat-done-divider td{background:#f1f5f9;color:#475569;font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:8px 10px;border-top:2px solid #cbd5e1;border-bottom:1px solid #e2e8f0;}
+        tr.mat-done-row > td{background:#fafbfc;}
+        tr.mat-done-row > td.col-prod{color:#64748b;}
+
+        /* ── Waiting List & PO ── */
+        .wait-icon{background:linear-gradient(135deg,#8b5cf6,#6d28d9)!important;box-shadow:0 4px 12px rgba(139,92,246,.30)!important;}
+        .wait-tab-n{display:inline-block;margin-left:4px;background:rgba(100,116,139,.15);border-radius:999px;padding:0 6px;font-size:11px;}
+        .mat-loc-btn.active .wait-tab-n{background:rgba(255,255,255,.25);}
+        .wait-add-btn{border:none;background:#6d28d9;color:#fff;border-radius:10px;padding:8px 14px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;white-space:nowrap;}
+        .wait-add-btn:hover{background:#5b21b6;}
+        .wait-month-strip{display:flex;flex-wrap:wrap;gap:6px;padding:10px 18px;border-bottom:1px solid #f1f5f9;background:#faf5ff;}
+        .wait-month-chip{font-size:11px;font-weight:800;color:#5b21b6;background:#fff;border:1px solid #ddd6fe;border-radius:999px;padding:3px 10px;white-space:nowrap;}
+        .wait-month-chip.is-active{background:#6d28d9;color:#fff;border-color:#6d28d9;}
+        .wait-form{padding:14px 18px;border-bottom:1px solid #e2e8f0;background:#fbfaff;}
+        .wait-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+        .wait-form-grid label{display:flex;flex-direction:column;gap:4px;}
+        .wait-form-grid label > span{font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
+        .wait-form-grid input{border:1px solid #cbd5e1;border-radius:9px;padding:7px 9px;font-size:13px;font-weight:600;color:#0f172a;background:#fff;min-width:0;}
+        .wait-form-grid input:focus{outline:none;border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.15);}
+        .wait-form-wide{grid-column:span 4;}
+        .wait-form-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px;}
+        .wait-form-msg{flex:1;font-size:12px;font-weight:700;color:#b91c1c;}
+        .wait-btn{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:9px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;}
+        .wait-btn:hover{background:#f8fafc;}
+        .wait-btn-primary{background:#6d28d9;border-color:#6d28d9;color:#fff;}
+        .wait-btn-primary:hover{background:#5b21b6;}
+        .wait-btn:disabled{opacity:.55;cursor:default;}
+        .wait-banner{padding:10px 18px;font-size:12px;font-weight:700;color:#92400e;background:#fffbeb;border-bottom:1px solid #fde68a;}
+        .wait-table{width:100%;border-collapse:collapse;}
+        .wait-table th{font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:9px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;white-space:nowrap;}
+        .wait-table td{font-size:13px;color:#1e293b;padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+        .wait-table td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:800;}
+        .wait-table tr.wait-this-month > td{background:#faf5ff;}
+        .wait-table tfoot td{font-weight:900;background:#f8fafc;border-top:1px solid #e2e8f0;}
+        .wait-empty{text-align:center;padding:22px 10px!important;color:#94a3b8;font-size:12px!important;font-weight:700;}
+        .wait-status{border:1px solid #cbd5e1;border-radius:8px;padding:4px 6px;font-size:12px;font-weight:800;background:#fff;}
+        .wait-status.st-waiting{color:#b45309;border-color:#fcd34d;background:#fffbeb;}
+        .wait-status.st-allocated{color:#047857;border-color:#6ee7b7;background:#ecfdf5;}
+        .wait-status.st-cancelled{color:#64748b;}
+        /* The select is skinned (shared_cf_select.js hides the native one), so
+           the status colour has to be on the BUTTON the skin draws. */
+        .cf-wrap:has(> select.wait-status.st-waiting) > .cf-btn{color:#b45309;border-color:#fcd34d;background:#fffbeb;}
+        .cf-wrap:has(> select.wait-status.st-allocated) > .cf-btn{color:#047857;border-color:#6ee7b7;background:#ecfdf5;}
+        .cf-wrap:has(> select.wait-status.st-cancelled) > .cf-btn{color:#64748b;}
+        .wait-act-th{width:84px;}
+        .wait-ico{border:1px solid #e2e8f0;background:#fff;border-radius:8px;width:30px;height:30px;font-size:13px;cursor:pointer;color:#475569;}
+        .wait-ico:hover{border-color:#7c3aed;color:#6d28d9;}
+        .wait-ico.del:hover{border-color:#ef4444;color:#b91c1c;}
+        @media (max-width:767.98px){ .wait-form-grid{grid-template-columns:1fr 1fr;} .wait-form-wide{grid-column:span 2;} }
+
+        /* The floating Allocate Orders button can be dragged out of the way;
+           a press that moved it is not a click. */
+        .invmap-hchip{border:1.5px solid #fcd34d;background:#fff;color:#92400e;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:900;cursor:pointer;white-space:nowrap;}
+        .invmap-hchip:hover{background:#fffbeb;}
+        .invmap-hchip.active{background:#d97706;border-color:#d97706;color:#fff;}
+        .invmap-hinput-wrap{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:900;color:#92400e;}
+        .invmap-hinput-wrap input{width:64px;border:1.5px solid #fcd34d;border-radius:8px;padding:3px 6px;font-size:12px;font-weight:800;color:#78350f;background:#fff;}
+        .invmap-height-note{margin-top:6px;font-size:11px;font-weight:700;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:5px 8px;}
+        .invmap-h-cell{font-size:11px;font-weight:900;color:#b45309;white-space:nowrap;text-align:right;}
+        .invmap-h-date{display:block;font-size:11px;font-weight:600;color:#94a3b8;}
+        .invmap-batch-h{color:#92400e;}
+        .alloc-fab{touch-action:none;}
+        .alloc-fab.fab-dragging{cursor:grabbing;transition:none;transform:none;}
 
         /* Inventory map plot labels */
         .invmap-plot-shape{transition:all .2s ease-in-out;cursor:pointer;}
@@ -497,28 +572,6 @@
          tabs, the gearing slider) went with them — see the note at the
          top of operation_stock_sales.js. -->
 
-    <!-- ── Capacity Heatmap (matured vs reserved by nursery × month) ── -->
-    <!-- Sits ABOVE the maturity allocation so admins watch live utilisation while dragging cards. -->
-    <div>
-        <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🔥 Capacity Heatmap</h2>
-        </div>
-        <div class="dash-card p-3 scroll-x-fade">
-            <div id="heatmap-area" class="min-w-[700px]">
-                <div class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading heatmap…</div>
-            </div>
-            <div class="flex items-center gap-2 mt-3 text-[9px] font-bold text-slate-500 flex-wrap">
-                <span class="uppercase tracking-widest">Legend:</span>
-                <span class="heat-cell heat-0" style="padding:2px 8px;">0–20%</span>
-                <span class="heat-cell heat-1" style="padding:2px 8px;">20–40%</span>
-                <span class="heat-cell heat-2" style="padding:2px 8px;">40–60%</span>
-                <span class="heat-cell heat-3" style="padding:2px 8px;">60–80%</span>
-                <span class="heat-cell heat-4" style="padding:2px 8px;">80–100%</span>
-                <span class="heat-cell heat-5" style="padding:2px 8px;">Oversold</span>
-            </div>
-        </div>
-    </div>
-
     <!-- ── Monthly Maturity Allocation ── -->
     <div>
         <div id="active-month-banner" class="hidden text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2"></div>
@@ -602,6 +655,89 @@
              "Monthly Maturity allocation too many notes, remove it". What
              each column means is in its heading's hover. -->
     </div>
+
+    <!-- ── Waiting List & PO ──
+         The office: "我也需要有一个可以 key in record的地方，一个waiting list，
+         或者是一个可以key PO的地方。这样就知道什么在pending着". Demand that has
+         no AL yet — a customer asking, a PO received — so it is on a screen
+         beside the stock it will be allocated against, instead of in
+         somebody's notebook. It sits UNDER the allocation table, because
+         that table is where the matching is done. -->
+    <div>
+        <div class="dash-card overflow-hidden" id="wait-card">
+            <div class="mat-card-head">
+                <div class="mat-card-title flex-wrap">
+                    <div class="mat-card-title-icon wait-icon">📝</div>
+                    <div class="mat-card-title-text">Waiting List &amp; PO</div>
+                    <div id="wait-status-tabs" class="flex gap-1.5 ml-1">
+                        <button class="mat-loc-btn active" data-wst="waiting"   onclick="setWaitStatusFilter('waiting')">Waiting <span class="wait-tab-n" id="wait-n-waiting">0</span></button>
+                        <button class="mat-loc-btn" data-wst="allocated" onclick="setWaitStatusFilter('allocated')">Allocated <span class="wait-tab-n" id="wait-n-allocated">0</span></button>
+                        <button class="mat-loc-btn" data-wst="cancelled" onclick="setWaitStatusFilter('cancelled')">Cancelled <span class="wait-tab-n" id="wait-n-cancelled">0</span></button>
+                        <button class="mat-loc-btn" data-wst="all"       onclick="setWaitStatusFilter('all')">All</button>
+                    </div>
+                </div>
+                <button type="button" id="wait-add-btn" onclick="openWaitForm()" class="wait-add-btn">＋ Add record</button>
+            </div>
+            <div id="wait-month-strip" class="wait-month-strip hidden"></div>
+            <div id="wait-form" class="wait-form hidden">
+                <div class="wait-form-grid">
+                    <label><span>Date</span><input type="date" id="wf-date"></label>
+                    <label><span>Customer *</span><input type="text" id="wf-customer" placeholder="Customer name"></label>
+                    <label><span>PO number</span><input type="text" id="wf-po" placeholder="PO / reference"></label>
+                    <label><span>Breed</span><input type="text" id="wf-breed" list="wf-breed-list" placeholder="Any breed"></label>
+                    <label><span>Quantity *</span><input type="number" id="wf-qty" min="1" step="1" placeholder="0"></label>
+                    <label><span>Wanted month</span><input type="month" id="wf-month"></label>
+                    <label class="wait-form-wide"><span>Remark</span><input type="text" id="wf-remark" placeholder="Anything the next person should know"></label>
+                </div>
+                <datalist id="wf-breed-list"></datalist>
+                <div class="wait-form-foot">
+                    <span id="wf-msg" class="wait-form-msg"></span>
+                    <button type="button" class="wait-btn" onclick="closeWaitForm()">Cancel</button>
+                    <button type="button" class="wait-btn wait-btn-primary" id="wf-save" onclick="saveWaitEntry()">Save</button>
+                </div>
+            </div>
+            <div id="wait-banner" class="hidden wait-banner"></div>
+            <div class="scroll-x-fade">
+                <table class="wait-table min-w-[900px]">
+                    <thead><tr>
+                        <th>Date</th><th>Customer</th><th>PO No.</th><th>Breed</th>
+                        <th class="text-right">Qty</th><th>Wanted month</th><th>Remark</th>
+                        <th>Status</th><th class="wait-act-th"></th>
+                    </tr></thead>
+                    <tbody id="wait-rows">
+                        <tr><td colspan="9" class="wait-empty">Loading…</td></tr>
+                    </tbody>
+                    <tfoot id="wait-foot"></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Capacity Heatmap (matured vs reserved by nursery × month) ── -->
+    <!-- Sits BELOW the maturity allocation and the waiting list now: the
+         office asked for the two swapped ("Capacity heatmap 和 Monthly
+         Maturity Allocation换位置") — the allocation table is the working
+         area, the heatmap is what somebody glances at after. -->
+    <div>
+        <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🔥 Capacity Heatmap</h2>
+        </div>
+        <div class="dash-card p-3 scroll-x-fade">
+            <div id="heatmap-area" class="min-w-[700px]">
+                <div class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading heatmap…</div>
+            </div>
+            <div class="flex items-center gap-2 mt-3 text-[9px] font-bold text-slate-500 flex-wrap">
+                <span class="uppercase tracking-widest">Legend:</span>
+                <span class="heat-cell heat-0" style="padding:2px 8px;">0–20%</span>
+                <span class="heat-cell heat-1" style="padding:2px 8px;">20–40%</span>
+                <span class="heat-cell heat-2" style="padding:2px 8px;">40–60%</span>
+                <span class="heat-cell heat-3" style="padding:2px 8px;">60–80%</span>
+                <span class="heat-cell heat-4" style="padding:2px 8px;">80–100%</span>
+                <span class="heat-cell heat-5" style="padding:2px 8px;">Oversold</span>
+            </div>
+        </div>
+    </div>
+
 
     </div>
     <!-- /STOCK PANE -->
@@ -837,6 +973,25 @@
                             </div>
                         </div>
 
+                        <!-- Height filter — the office: "在 seedling height audit
+                             可以拿到最latest的高度 … filter 150cm以上的，就可以看到是在
+                             什么plot什么batch". A batch's height is its LATEST audit
+                             (_buildInvmapHeights); a batch never measured is not
+                             above anything, so a filter leaves it out. -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filter by Height</div>
+                                <button id="invmap-height-clear" onclick="setInvmapMinHeight(null)" class="hidden text-[10px] font-black text-rose-600 hover:underline">clear ✕</button>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <button class="invmap-hchip" data-hmin="100" onclick="setInvmapMinHeight(100)">≥ 100 cm</button>
+                                <button class="invmap-hchip" data-hmin="120" onclick="setInvmapMinHeight(120)">≥ 120 cm</button>
+                                <button class="invmap-hchip" data-hmin="150" onclick="setInvmapMinHeight(150)">≥ 150 cm</button>
+                                <label class="invmap-hinput-wrap">≥ <input id="invmap-height-input" type="number" min="1" step="1" placeholder="cm" oninput="onInvmapHeightInput(this.value)"> cm</label>
+                            </div>
+                            <div id="invmap-height-note" class="invmap-height-note hidden"></div>
+                        </div>
+
                         <!-- By-batch/by-plot list (always visible; filtered when a breed is selected) -->
                         <div id="invmap-side-body" class="overflow-y-auto pr-1 -mr-1" style="max-height:55vh;">
                             <div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">Loading…</div>
@@ -980,7 +1135,8 @@
 </div>
 
 <script src="../shared/shared_stock_analysis.js?v=1"></script>
-<script src="operation_stock_sales.js?v=26"></script>
+<script src="../shared/shared_people.js?v=1"></script>
+<script src="operation_stock_sales.js?v=27"></script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>
