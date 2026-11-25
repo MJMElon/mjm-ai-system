@@ -13320,9 +13320,68 @@ function _jcElsewhere() {
   const own = (window.MJMJobCrew && MJMJobCrew.JOBS) || [];
   return PAYROLL_VIEW_KEYS.filter(j => !own.includes(j));
 }
-const JC_SET_ELSEWHERE = {
-  cull_incentive: 'Named people at their own rates — set in Culling Monitoring above.',
-};
+const JC_SET_ELSEWHERE = {};
+
+/* ── CULLING MONITORING IS EDITED HERE TOO, through the SAME draft ───────
+   The office, over that row: *"culling monitoring也要在这里改"*. A group
+   still cannot go on it -- it pays NAMED people at their own rates, and a
+   group carries no price -- so the row takes no drop. What it takes is the
+   NAMES: the two paid on every nursery and each nursery's own Field
+   Conductor, added, removed and swapped right here.
+
+   ONE RULE, ONE WRITER. The row edits `cmDraft`, the draft the Culling
+   Monitoring card above edits, and Save hands it to `cmSave` -- so a
+   change made here is DATED exactly as one made there: it starts at this
+   month, a removal is an end date, and September goes on paying who
+   September paid. A second writer of that table would be a second answer
+   to who is paid, which is the fault this file has a heading about.
+
+   THE PRICES STAY ABOVE. This card is who does the work; what it pays is
+   the card above, and two boxes for one price is two places to disagree.
+
+   `viaJc` on the draft says which card is editing it, so the card above
+   reads it as its saved self until Save -- never two Save buttons over
+   one change. A draft already open above is left to that card. */
+function _jcCullRowHtml() {
+  const CI = window.MJMCullIncentive;
+  if (!CI) return '<span class="jb-none">The Culling Monitoring rule did not load.</span>';
+  const D = (jobCrewDraft && cmDraft && cmDraft.viaJc) ? cmDraft : null;
+  if (D) {
+    const line = (kind) => D.people.filter(r => r.kind === kind && r.active !== false)
+      .map(r => {
+        const i = D.people.indexOf(r);
+        return `<div class="jc-cm-row">${_cmPicker(r, i)}`
+          + (kind === 'fc' ? _cmNurseryPick(r, i) : '')
+          + `<button type="button" class="cm-x" title="Take off the rule"
+               onclick="cmRemove(${i})">&times;</button></div>`;
+      }).join('');
+    return `<div class="jc-cm"><div class="jc-cm-h">Admin</div>${line('admin') || '<div class="jb-none">Nobody</div>'}
+      <div class="jc-cm-h">Field Conductor</div>${line('fc') || '<div class="jb-none">Nobody</div>'}
+      <div class="jc-cm-add">
+        <button type="button" class="row-add" onclick="cmAdd('admin')">+ Add (every nursery)</button>
+        <button type="button" class="row-add" onclick="cmAdd('fc')">+ Add Field Conductor</button>
+      </div>
+      <div class="jb-note">Drag a group from the Team Board onto this row: an <b>FC</b> group goes on
+        the Field Conductor list for its own nursery, any other group (Admin) on the list paid on
+        every nursery.</div>
+      <div class="jb-note">Saving starts the change at ${esc(_cmMonthName())}; every month before
+        it keeps who it paid. The prices are set in Culling Monitoring above.</div></div>`;
+  }
+  const adm = (CI.RULE.everyPlot || []).map(p => esc(p.name));
+  const fc = (CI.RULE.ownNursery || []).map(p =>
+    `${esc(p.name)} <span class="jc-cm-w">${esc(p.nursery)}</span>`);
+  const note = !jobCrewDraft ? ''
+    : (cmDraft ? '<div class="jb-note">Being edited in Culling Monitoring above.</div>'
+      : (CI.ruleSource && CI.ruleSource() !== 'office'
+        ? '<div class="jb-note">This is the list built into the system. Run '
+          + '<code>shared/RUN_ME_cull_monitoring_rule_dated.sql</code> once and it can be changed here.</div>'
+        : ''));
+  const list = (xs) => xs.length ? xs.map(x => `<div class="jc-cm-row jc-cm-name">${x}</div>`).join('')
+    : '<div class="jb-none">Nobody</div>';
+  return `<div class="jc-cm">
+      <div class="jc-cm-h">Admin <span class="jc-cm-w">every nursery</span></div>${list(adm)}
+      <div class="jc-cm-h">Field Conductor <span class="jc-cm-w">own nursery</span></div>${list(fc)}${note}</div>`;
+}
 
 /* ── THE DEFAULT IS NOT DRAWN, AND THAT CHANGED WHAT A DROP DOES ─────────
    The card opened with a dashed `BNN · Workers DEFAULT` chip in every cell
@@ -13519,8 +13578,10 @@ function renderJobCrewSetting() {
      be, and takes no drop — a row that merely LOOKS different while still
      taking a group would write a crew nothing reads. */
   const elsewhere = _jcElsewhere().map(j =>
-    `<tr class="jc-elsewhere"><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
-    + `<td>${esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}</td>`
+    `<tr class="jc-elsewhere${j === 'cull_incentive' ? ' jc-cull' : ''}"><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
+    + `<td${j === 'cull_incentive' && editing && cmDraft && cmDraft.viaJc
+         ? ` class="jc-cell jc-cm-drop" ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcCullDrop(event)"` : ''}>${j === 'cull_incentive' ? _jcCullRowHtml()
+         : esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}</td>`
     + `</tr>`).join('');
 
   box.innerHTML = `<div class="jc-pal${editing ? ' jc-pal-live' : ''}">${palette}</div>
@@ -13556,9 +13617,21 @@ function renderJobCrewSetting() {
 function jcEdit() {
   if (!maySetting()) return;
   jobCrewDraft = _jcState();
+  /* Culling Monitoring's names open with the rest, unless the card above
+     is already editing them. Only a keyed rule can be: the built-in list
+     has no rows to date a change against. */
+  const CI = window.MJMCullIncentive;
+  if (!cmDraft && CI && CI.ruleSource && CI.ruleSource() === 'office') {
+    _cmOpenDraft(true);
+    renderCullMonitoringSetting();
+  }
   renderJobCrewSetting();
 }
-function jcCancel() { jobCrewDraft = null; renderJobCrewSetting(); }
+function jcCancel() {
+  jobCrewDraft = null;
+  if (cmDraft && cmDraft.viaJc) { cmDraft = null; renderCullMonitoringSetting(); }
+  renderJobCrewSetting();
+}
 
 function jcDragStart(ev, g) {
   if (!jobCrewDraft) { ev.preventDefault(); return; }
@@ -13598,6 +13671,41 @@ function jcDrop(ev, job) {
   });
   renderJobCrewSetting();
 }
+/* ── A GROUP DROPPED ON CULLING MONITORING IS ITS PEOPLE, BY NAME ───────
+   *"我drag admin and FC过去culling monitoring 这里就会出现他们的名字"*. The
+   rule pays NAMED people, so a drop does not store the group: it reads who
+   is in it TODAY and adds each name to the draft, exactly as + Add would.
+   An FC group goes on the Field Conductor list for ITS OWN nursery (the
+   section the group says); any other group -- Admin -- goes on the list
+   paid on every nursery. A name already on that list is not added twice,
+   and nothing is written until Save, which is the dated `cmSave`. */
+function jcCullDrop(ev) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('jb-cell-over');
+  const g = _jcDrag;
+  _jcDrag = null;
+  if (!g || !jobCrewDraft || !cmDraft || !cmDraft.viaJc) return;
+  const p = MJMJobCrew.splitGroup(g);
+  if (!p) return;
+  const CI = window.MJMCullIncentive;
+  const kind = p.role === 'Field Conductor' ? 'fc' : 'admin';
+  const nursery = kind === 'fc' ? ((CI.sectionOf && CI.sectionOf(p.section)) || p.section) : '';
+  const k = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  /* Already on that list is asked through the CLAIM own resolver, because
+     the rule spells a name short (Florence) where the register spells it
+     out -- a plain compare would put her on twice. */
+  const on = cmDraft.people
+    .filter(r => r.kind === kind && r.active !== false && (kind !== 'fc' || k(r.nursery) === k(nursery)));
+  const already = (nm) => on.some(r => k(r.name) === k(nm)
+    || (CI.resolveName && CI.resolveName(r.name, [nm], x => x).row === nm));
+  _jcNames(g).forEach(nm => {
+    if (already(nm)) return;
+    on.push({ name: nm });
+    cmDraft.people.push({ id: null, kind, name: nm, workerId: _cmWorkerId(nm), nursery, active: true });
+  });
+  _cmRedraw();
+}
+
 /* OFF EVERY NURSERY IT IS ON, never only the one the chip was drawn from:
    the row shows one chip per group however many cells hold it, so a × that
    cleared one of them would leave a chip on screen that looks removed and
@@ -13633,6 +13741,10 @@ async function jcSave() {
   _jcSaving = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
+    /* Culling Monitoring FIRST, through its own writer: a refusal there
+       (nobody left on either list, a write the database would not take)
+       keeps both drafts on screen, rather than saving half of one press. */
+    if (cmDraft && cmDraft.viaJc && !(await cmSave())) return;
     const now = new Date().toISOString();
     const next = {};
     const rows = Object.keys(draft).map(cell => {
@@ -13757,7 +13869,7 @@ function renderCullMonitoringSetting() {
   if (cmDraft || !CI || !CI.loadRule || !_supabase || _cmRuleAsked === M) return;
   _cmRuleAsked = M;
   CI.loadRule(_supabase, M).then(
-    (r) => { if (!cmDraft) renderCullMonitoringSetting();
+    (r) => { if (!cmDraft) { renderCullMonitoringSetting(); renderJobCrewSetting(); }
              if (!(r && r.ready)) _cmRuleAsked = ''; },
     (e) => { console.warn('[maint] Culling Monitoring rule not read:', e); _cmRuleAsked = ''; });
 }
@@ -13834,17 +13946,24 @@ function cmEdit() {
      MOVED, and whether the row it is moving was ever in force in an earlier
      month. A name swapped on a row that started in January is January's
      conductor being replaced, and January has to keep him. */
+  _cmOpenDraft(false);
+  renderCullMonitoringSetting();
+  renderJobCrewSetting();
+}
+/* The draft, opened from either card. `viaJc` says which card edits it. */
+function _cmOpenDraft(viaJc) {
+  const CI = window.MJMCullIncentive;
   const take = (p, kind, nursery) => ({ id: p.id, kind, nursery,
     name: p.name, workerId: p.workerId, from: p.from || '', active: true,
     wasName: p.name, wasNursery: nursery });
-  cmDraft = {
+  cmDraft = { viaJc: !!viaJc,
     rate: { admin: _cmRate('admin'), fc: _cmRate('fc'), target: _cmRate('target') },
     people: (CI.RULE.everyPlot || []).map(p => take(p, 'admin', ''))
       .concat((CI.RULE.ownNursery || []).map(p => take(p, 'fc', p.nursery)))
   };
-  renderCullMonitoringSetting();
 }
-function cmCancel() { cmDraft = null; renderCullMonitoringSetting(); }
+function _cmRedraw() { renderCullMonitoringSetting(); renderJobCrewSetting(); }
+function cmCancel() { cmDraft = null; _cmRedraw(); }
 function cmSetRate(kind, v) { if (cmDraft) cmDraft.rate[kind] = v === '' ? '' : Number(v); }
 function cmSetName(i, v) {
   if (!cmDraft || !cmDraft.people[i]) return;
@@ -13858,7 +13977,7 @@ function cmRemove(i) {
      taking somebody off the rule is a record and not a deletion. */
   if (cmDraft.people[i].id == null) cmDraft.people.splice(i, 1);
   else cmDraft.people[i].active = false;
-  renderCullMonitoringSetting();
+  _cmRedraw();
 }
 function cmAdd(kind) {
   if (!cmDraft) return;
@@ -13871,7 +13990,7 @@ function cmAdd(kind) {
   }
   cmDraft.people.push({ id: null, kind, name: names[0], workerId: _cmWorkerId(names[0]),
     nursery: kind === 'fc' ? ((CI.NURSERIES && CI.NURSERIES[0]) || 'BNN') : '', active: true });
-  renderCullMonitoringSetting();
+  _cmRedraw();
 }
 
 /* THE MONTH AN EDIT STARTS FROM. Settings carries no month picker — it is
@@ -13889,16 +14008,16 @@ function _cmMonthName(ym) {
 }
 
 async function cmSave() {
-  if (!cmDraft) return;
+  if (!cmDraft) return true;
   const d = cmDraft, M = cmMonth();
   const bad = ['admin', 'fc'].filter(k => !(Number(d.rate[k]) >= 0));
-  if (bad.length) { alert('A price has to be a number, and not less than nought.'); return; }
+  if (bad.length) { alert('A price has to be a number, and not less than nought.'); return false; }
   /* A target of nought or less is every plot off the incentive at once, and
      it is not a number anybody means to key. */
   if (!(Number(d.rate.target) >= 1)) {
     alert('The target has to be at least 1 day.\n\n'
         + 'A target of nought would take every plot off Culling Monitoring.');
-    return;
+    return false;
   }
   /* A rule with nobody on it pays nobody, and it is the one save somebody
      makes by accident -- the last Remove on a block. Said, and refused. */
@@ -13906,7 +14025,7 @@ async function cmSave() {
   if (!liveOf('admin').length && !liveOf('fc').length) {
     alert('Nobody is on either list, so this would pay nobody at all.\n\n'
         + 'Add somebody, or press Cancel.');
-    return;
+    return false;
   }
   const btn = document.getElementById('cm-save');
   const was = btn ? btn.innerHTML : '';
@@ -13977,14 +14096,44 @@ async function cmSave() {
     /* The money is priced off the rule, so every month on screen is now
        showing a figure worked out under the old one. */
     _cullCache = {};
-    renderCullMonitoringSetting();
+    _cmRedraw();
+    return true;
   } catch (e) {
     console.warn('[maint] Culling Monitoring rule not saved:', e);
     alert('The rule was NOT saved.\n\n' + ((e && e.message) || e)
         + '\n\nNothing on screen has been thrown away — press Save again, or Cancel.');
+    return false;
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = was; }
   }
+}
+
+/* The name and nursery pickers, shared by this card and by the Culling
+   Monitoring row of Worker List for Each Job. Both edit ONE draft, so they
+   draw it with ONE pair of controls.
+
+   THE NAME IS A DROPDOWN OFF THE REGISTER, never a typed box: a worker is
+   the register ROW, and a name keyed by hand that the register cannot
+   place is money leaving the claim with nothing saying it had gone. A name
+   already on the rule that is NOT on the register keeps its place in its
+   own list and says so -- it is the row somebody has to settle. Which
+   register row a name resolves to is the CLAIM own rule, because the names
+   on the rule are short and the register spells them out. */
+function _cmPicker(r, i) {
+  const CI = window.MJMCullIncentive;
+  const names = cmRegisterNames();
+  const on = CI && CI.resolveName ? (CI.resolveName(r.name, names, x => x).row || '') : '';
+  const opts = names.map(nm =>
+    `<option value="${esc(nm)}"${nm === on ? ' selected' : ''}>${esc(nm)}</option>`).join('');
+  const stray = on ? ''
+    : `<option value="${esc(r.name)}" selected>${esc(r.name)} — not on the register</option>`;
+  return `<select class="cm-pick" onchange="cmSetName(${i}, this.value)">${stray}${opts}</select>`;
+}
+function _cmNurseryPick(r, i) {
+  const CI = window.MJMCullIncentive;
+  const opts = (CI.NURSERIES.length ? CI.NURSERIES : ['BNN', 'UNN1', 'UNN2']).map(n =>
+    `<option value="${esc(n)}"${n === r.nursery ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  return `<select class="cm-pick cm-pick-n" onchange="cmSetNursery(${i}, this.value)">${opts}</select>`;
 }
 
 function _cmSettingHtml() {
@@ -13993,7 +14142,10 @@ function _cmSettingHtml() {
     return '<div class="set-empty">The Culling Monitoring rule did not load, '
       + 'so this page cannot say what it is set to. Reload the page.</div>';
   }
-  const D = cmDraft;                       // non-null only while editing
+  /* A draft opened from Worker List for Each Job is edited THERE, so this
+     card reads it as its saved self until that Save -- one set of controls
+     for one draft, never two Save buttons for the same change. */
+  const D = cmDraft && !cmDraft.viaJc ? cmDraft : null;   // non-null only while editing here
   const rate = (k) => D ? D.rate[k] : _cmRate(k);
   const live = (k) => D ? D.people.filter(r => r.kind === k && r.active !== false)
                         : (k === 'admin' ? CI.RULE.everyPlot : CI.RULE.ownNursery);
@@ -14035,24 +14187,7 @@ function _cmSettingHtml() {
      place is money leaving the claim with nothing saying it had gone. A
      name already on the rule that is NOT on the register keeps its place in
      its own list and says so — it is the row somebody has to settle. */
-  const names = cmRegisterNames();
-  const picker = (r, i) => {
-    /* Which register row this name resolves to is the CLAIM's own rule --
-       the names on the rule are short and the register spells them out, so
-       an exact match alone marks five people the claim pays perfectly well
-       as strangers. */
-    const on = CI.resolveName ? (CI.resolveName(r.name, names, x => x).row || '') : '';
-    const opts = names.map(nm =>
-      `<option value="${esc(nm)}"${nm === on ? ' selected' : ''}>${esc(nm)}</option>`).join('');
-    const stray = on ? ''
-      : `<option value="${esc(r.name)}" selected>${esc(r.name)} — not on the register</option>`;
-    return `<select class="cm-pick" onchange="cmSetName(${i}, this.value)">${stray}${opts}</select>`;
-  };
-  const nurseryPick = (r, i) => {
-    const opts = (CI.NURSERIES.length ? CI.NURSERIES : ['BNN', 'UNN1', 'UNN2']).map(n =>
-      `<option value="${esc(n)}"${n === r.nursery ? ' selected' : ''}>${esc(n)}</option>`).join('');
-    return `<select class="cm-pick cm-pick-n" onchange="cmSetNursery(${i}, this.value)">${opts}</select>`;
-  };
+  const picker = _cmPicker, nurseryPick = _cmNurseryPick;
 
   const block = (kind, title, perLine) => {
     const rows = live(kind);
