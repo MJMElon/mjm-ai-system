@@ -422,7 +422,7 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     check('a row set elsewhere is ONE cell, like every other row',
       (rows || []).filter(r => r.elsewhere).map(r => r.cells), [1]);
     check('Culling Monitoring names who it pays, on its own row',
-      (rows || []).some(r => r.elsewhere && /Admin/.test(r.says) && /Field Conductor/.test(r.says)), true);
+      (rows || []).some(r => r.elsewhere && /Rousell|Florence/.test(r.says) && / FC/.test(r.says)), true);
 
     /* THE DROP IS THE THING THAT MUST NOT WORK. A row that merely LOOKS
        different while still taking a group would write a crew nothing
@@ -574,7 +574,7 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     await ev(page, () => { cmDraft = null; jobCrewDraft = null; jcEdit(); });
     await page.waitForTimeout(900);
     check('Edit before the rule is read still opens the names', await ev(page, () =>
-      [!!cmDraft && cmDraft.viaJc, !!document.querySelector('#jc-set-body tr.jc-cull select.cm-pick')]), [true, true]);
+      [!!cmDraft && cmDraft.viaJc, !!document.querySelector('#jc-set-body tr.jc-cull .jc-x')]), [true, true]);
     await ev(page, () => jcCancel());
     const row = () => ev(page, () => { const tr = document.querySelector('#jc-set-body tr.jc-cull');
       return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : 'no row'; });
@@ -582,8 +582,11 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     await ev(page, () => jcEdit());
     check('Edit opens the names here, not on the card above',
       await ev(page, () => [!!cmDraft && cmDraft.viaJc,
-        !!document.querySelector('#jc-set-body tr.jc-cull select.cm-pick'),
+        document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip .jc-x').length > 0,
         !!document.getElementById('cm-save')]), [true, true, false]);
+    check('the row is chips like the rows above, no pickers and no buttons', await ev(page, () =>
+      [document.querySelectorAll('#jc-set-body tr.jc-cull select').length,
+       document.querySelectorAll('#jc-set-body tr.jc-cull button.row-add').length]), [0, 0]);
     const dropCull = (label) => ev(page, (label) => {
       const chip = [...document.querySelectorAll('#jc-set-body .jc-pal .jc-chip')]
         .find(c => c.textContent.trim() === label);
@@ -601,9 +604,9 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       .map(r => r.kind + ':' + (r.nursery || '') + ':' + r.name).sort());
     check('Admin goes on every nursery, FC on its own nursery, nobody twice', await live(),
       ['admin::Florence', 'admin::Rousell Wayne', 'fc:BNN:Lalu Aenal', 'fc:UNN1:Akbar']);
-    check('…and the names are on the row', await ev(page, () =>
-      [...document.querySelectorAll('#jc-set-body tr.jc-cull select.cm-pick:not(.cm-pick-n)')].map(s => s.value).sort()),
-      ['Akbar', 'Florence', 'Lalu Aenal', 'Rousell Wayne']);
+    check('…and the names are chips on the row', await ev(page, () =>
+      [...document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip')].map(c => c.childNodes[0].textContent.trim()).sort()),
+      ['Akbar · UNN1 FC', 'Florence', 'Lalu Aenal · BNN FC', 'Rousell Wayne']);
     await ev(page, () => jcSave());
     await page.waitForTimeout(500);
     check('saved through the dated writer: the two new rows start this month', await ev(page, (M) =>

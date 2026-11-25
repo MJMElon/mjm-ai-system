@@ -13345,42 +13345,26 @@ const JC_SET_ELSEWHERE = {};
 function _jcCullRowHtml() {
   const CI = window.MJMCullIncentive;
   if (!CI) return '<span class="jb-none">The Culling Monitoring rule did not load.</span>';
+  /* THE SAME CHIPS AS EVERY ROW ABOVE -- *"不要这样 要跟上面的一样"*. The
+     rule pays NAMED people, so a chip is a PERSON rather than a group: the
+     two paid on every nursery read as their name, a Field Conductor as his
+     name and the nursery he is paid on. Dropping a group adds its people;
+     the cross takes one off. No pickers and no buttons, like the rows above. */
   const D = (jobCrewDraft && cmDraft && cmDraft.viaJc) ? cmDraft : null;
-  if (D) {
-    const line = (kind) => D.people.filter(r => r.kind === kind && r.active !== false)
-      .map(r => {
-        const i = D.people.indexOf(r);
-        return `<div class="jc-cm-row">${_cmPicker(r, i)}`
-          + (kind === 'fc' ? _cmNurseryPick(r, i) : '')
-          + `<button type="button" class="cm-x" title="Take off the rule"
-               onclick="cmRemove(${i})">&times;</button></div>`;
-      }).join('');
-    return `<div class="jc-cm"><div class="jc-cm-h">Admin</div>${line('admin') || '<div class="jb-none">Nobody</div>'}
-      <div class="jc-cm-h">Field Conductor</div>${line('fc') || '<div class="jb-none">Nobody</div>'}
-      <div class="jc-cm-add">
-        <button type="button" class="row-add" onclick="cmAdd('admin')">+ Add (every nursery)</button>
-        <button type="button" class="row-add" onclick="cmAdd('fc')">+ Add Field Conductor</button>
-      </div>
-      <div class="jb-note">Drag a group from the Team Board onto this row: an <b>FC</b> group goes on
-        the Field Conductor list for its own nursery, any other group (Admin) on the list paid on
-        every nursery.</div>
-      <div class="jb-note">Saving starts the change at ${esc(_cmMonthName())}; every month before
-        it keeps who it paid. The prices are set in Culling Monitoring above.</div></div>`;
-  }
-  const adm = (CI.RULE.everyPlot || []).map(p => esc(p.name));
-  const fc = (CI.RULE.ownNursery || []).map(p =>
-    `${esc(p.name)} <span class="jc-cm-w">${esc(p.nursery)}</span>`);
-  const note = !jobCrewDraft ? ''
-    : (cmDraft ? '<div class="jb-note">Being edited in Culling Monitoring above.</div>'
-      : (CI.ruleSource && CI.ruleSource() !== 'office'
-        ? '<div class="jb-note">This is the list built into the system. Run '
-          + '<code>shared/RUN_ME_cull_monitoring_rule_dated.sql</code> once and it can be changed here.</div>'
-        : ''));
-  const list = (xs) => xs.length ? xs.map(x => `<div class="jc-cm-row jc-cm-name">${x}</div>`).join('')
-    : '<div class="jb-none">Nobody</div>';
-  return `<div class="jc-cm">
-      <div class="jc-cm-h">Admin <span class="jc-cm-w">every nursery</span></div>${list(adm)}
-      <div class="jc-cm-h">Field Conductor <span class="jc-cm-w">own nursery</span></div>${list(fc)}${note}</div>`;
+  const list = D
+    ? D.people.filter(r => r.active !== false).map(r => ({ r, i: D.people.indexOf(r) }))
+    : (CI.RULE.everyPlot || []).map(p => ({ r: { kind: 'admin', name: p.name } }))
+        .concat((CI.RULE.ownNursery || []).map(p => ({ r: { kind: 'fc', name: p.name, nursery: p.nursery } })));
+  list.sort((a, b) => (a.r.kind === b.r.kind ? 0 : a.r.kind === 'admin' ? -1 : 1));
+  const chips = list.map(({ r, i }) => {
+    const tip = r.kind === 'fc' ? `Field Conductor, paid on ${r.nursery} only` : 'Paid on every nursery';
+    const label = r.kind === 'fc' ? `${esc(r.name)} · ${esc(r.nursery)} FC` : esc(r.name);
+    const x = D ? `<button type="button" class="jc-x" title="Take off the rule"
+         aria-label="Remove ${esc(r.name)}" onclick="cmRemove(${i})">&times;</button>` : '';
+    return `<span class="jb-chip jc-chip" title="${esc(tip)}">${label}${x}</span>`;
+  }).join('');
+  if (chips) return chips;
+  return D ? '<span class="jc-drop-here">Drag a group here</span>' : '<span class="jb-none">Nobody</span>';
 }
 
 /* ── THE DEFAULT IS NOT DRAWN, AND THAT CHANGED WHAT A DROP DOES ─────────
@@ -13579,8 +13563,10 @@ function renderJobCrewSetting() {
      taking a group would write a crew nothing reads. */
   const elsewhere = _jcElsewhere().map(j =>
     `<tr class="jc-elsewhere${j === 'cull_incentive' ? ' jc-cull' : ''}"><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
-    + `<td${j === 'cull_incentive' && editing && cmDraft && cmDraft.viaJc
-         ? ` class="jc-cell jc-cm-drop" ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcCullDrop(event)"` : ''}>${j === 'cull_incentive' ? _jcCullRowHtml()
+    + `<td${j !== 'cull_incentive' ? ''
+         : editing && cmDraft && cmDraft.viaJc
+         ? ` class="jc-cell jc-cm-drop" ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcCullDrop(event)"`
+         : ' class="jc-cell"'}>${j === 'cull_incentive' ? _jcCullRowHtml()
          : esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}</td>`
     + `</tr>`).join('');
 
