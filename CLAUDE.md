@@ -10908,6 +10908,32 @@ modal already drew, so the paper cannot disagree with the screen.
 `tests/an_al_shows_its_collections.cjs`; its stub projects a read to the
 columns asked for, which is the only way the fault shows. Nothing to run.
 
+## An AL balance is worked out from its DOs, and the DATABASE stores it
+
+`shared_al_orders.balance_quantity` was written by six screens, each as the
+old stored figure minus this DO, or as ordered minus what that page had
+loaded. A stale read anywhere won: on 25 Nov 2026 **82 of 429 ALs** were
+wrong, **81 too high**, and the phone Consent and DO Signing pages showed it.
+
+**The rule is the office Booking page own** (`fetchData` in
+`operation/operation_booking.html`): ordered less the `total_qty` of every DO
+on that AL that is not `Cancelled` and has no `[CANCELLED]` in its remark.
+Three copies, change all three:
+
+- `shared/RUN_ME_al_balance_is_the_dos.sql`: `al_delivered_qty`, a BEFORE
+  trigger on `shared_al_orders` that REPLACES whatever balance a screen sent,
+  and an AFTER trigger on `shared_do_records` that works the AL out again
+  when a DO is added, edited, cancelled, moved or deleted. So a stale write
+  from any app, any version, lands as the right figure.
+- `Mobile/src/lib/alBalance.js`: Consent and DO Signing work it out from the
+  DOs, paged past 1,000, and fall back to the stored figure with no line.
+- the office Booking page itself.
+
+**No screen writes the balance any more** in the office (Booking edit,
+Delivery add and delete, `mobile/mobile_do_signing.html`) or in the Admin
+Portal send. The FC Portal and the Sales Web still send one; the trigger
+replaces it. `Mobile/tests/the_al_balance_is_the_booking_figure.cjs`.
+
 ## A maturity row says how old its seedlings are
 
 Under each Maturity Date on Monthly Maturity Allocation, small and muted:
