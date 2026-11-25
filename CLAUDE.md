@@ -11550,6 +11550,18 @@ Capacity Heatmap (the heatmap was on top; they asked for the two swapped).
 
 `tests/maturity_lock_waiting_list_and_height.cjs` drives all of it.
 
+- **The Inventory Map counts what STANDS in a field plot**: `Transplanted`
+  and `Cull3_Transfer` in (a -R plot is filled by nothing else), never the
+  holding trays (`invmapIsHoldingTray`: Premium Care, Double-Tone). A batch
+  leaves a plot once its 3rd Culling carries a drone map OR leaves nothing
+  standing (Remaining Balance less Culled); a row keyed with nothing culled
+  and no map is NOT done (`_invmapCull3Done`, N1 / 255 read No batch). A -R
+  plot has no boundary of its own, so it is shown on its parent's label and
+  in the parent's window (`invmapReplantsOf`). With no filter the side list
+  runs in plot sequence (`invmapPlotCmp`: nursery, letters, number, -R).
+  `tests/invmap_n1_and_replant.cjs`.
+
+
 ## Available stock is 10 MONTHS and above, or 1.5 m and above
 
 The Stock Analysis Dashboard's rule (`classify` in
