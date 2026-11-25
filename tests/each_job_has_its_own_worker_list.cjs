@@ -516,7 +516,7 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       const sel = document.getElementById('sp-new-name');
       sel.value = 'g0'; _spPickWorker('g0');
       [...document.querySelectorAll('#sp-pick-list .sp-pick-tick')]
-        .forEach(x => { x.checked = x.value === 'Yuyak'; });
+        .forEach(x => { x.checked = x.value === 'Yuyak'; _spTick(x.value, x.checked); });
       addSeedPlantingWorker();
     });
     await page.waitForTimeout(300);

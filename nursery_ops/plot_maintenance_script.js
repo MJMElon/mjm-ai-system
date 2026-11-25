@@ -3660,9 +3660,6 @@ function _spDrawNames(m, st) {
   const chips = st.names.map((w, i) =>
     `<span class="sp-chip">${esc(w)}<button type="button" class="sp-chip-x" title="${esc(t('pay.spRemove'))}"
       onclick="removeSeedPlantingWorker(${i})" aria-label="${esc(t('pay.spRemove'))} ${esc(w)}">×</button></span>`).join('');
-  const copy = !st.names.length && st.prevNames.length
-    ? `<button type="button" class="btn btn-sm" onclick="useLastMonthSeedPlantingNames()">${esc(t('pay.spCopyPrev', { n: st.prevNames.length }))}</button>`
-    : '';
   box.innerHTML = `<div class="sp-names">
     <span class="sp-names-lbl">${esc(t('pay.spWorkers', { m }))}</span>
     ${chips || `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`}
@@ -3671,7 +3668,6 @@ function _spDrawNames(m, st) {
       <input type="text" id="sp-new-name-other" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}" style="display:none;"
         onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingWorker();}">
       <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingWorker()">+ ${esc(t('pay.spAdd'))}</button>
-      ${copy}
     </span></div>${_spBatchBar(m, st)}`;
 }
 
@@ -3778,27 +3774,60 @@ function _spWorkerSelect(st) {
      takes every name ticked. `_spBands` is what was drawn, so the list a
      tick reads is the list the office was shown. */
   _spBands = bands;
+  /* FLEXI: a group picked is OPENED and stays open, and the dropdown goes
+     back to its prompt so the next group can be picked as well --
+     *"我现在选了BNN worker然后就不能选UNN1 worker了 我要flexi的"*. Ticks
+     ride across every open group and across redraws, keyed by name, so a
+     morning can be put together from BNN and UNN 1 in one Add. A group
+     already open is not offered again. A new month starts with nothing
+     open and nothing ticked. */
+  const m = getMonth();
+  if (_spPick.month !== m) _spPick = { month: m, open: [], ticked: new Set() };
+  const labels = new Set(bands.map(b => b.label));
+  _spPick.open = _spPick.open.filter(l => labels.has(l));
+  const offered = new Set(bands.flatMap(b => b.names.map(n => n.toLowerCase())));
+  [..._spPick.ticked].forEach(n => { if (!offered.has(n.toLowerCase())) _spPick.ticked.delete(n); });
+  const openSet = new Set(_spPick.open);
+  const lists = _spPick.open.map(l => {
+    const bd = bands.find(x => x.label === l);
+    const ticks = bd.names.map(n => `<label class="sp-pick-item"><input type="checkbox" class="sp-pick-tick" value="${esc(n)}"${
+      _spPick.ticked.has(n) ? ' checked' : ''} onchange="_spTick(this.value, this.checked)"> ${esc(n)}</label>`).join('');
+    return `<span class="sp-pick-group"><span class="sp-pick-head">${esc(l)}
+      <button type="button" class="sp-chip-x" onclick="_spCloseGroup(${JSON.stringify(l).replace(/"/g, '&quot;')})"
+        title="${esc(t('pay.spRemove'))}" aria-label="${esc(t('pay.spRemove'))} ${esc(l)}">×</button></span>${ticks}</span>`;
+  }).join('');
   return `<select id="sp-new-name" class="sp-pick" onchange="_spPickWorker(this.value)">
     <option value="">${esc(t('pay.spPickGroup'))}</option>
-    ${bands.map((b, i) => `<option value="g${i}">${esc(b.label)} (${b.names.length})</option>`).join('')}
+    ${bands.map((b, i) => openSet.has(b.label) ? ''
+      : `<option value="g${i}">${esc(b.label)} (${b.names.length})</option>`).join('')}
     <option value="__other">${esc(t('pay.spOtherName'))}</option>
-  </select><span id="sp-pick-list" class="sp-pick-list" style="display:none;"></span>`;
+  </select><span id="sp-pick-list" class="sp-pick-list"${lists ? '' : ' style="display:none;"'}>${lists}</span>`;
 }
 let _spBands = [];
+let _spPick = { month: '', open: [], ticked: new Set() };
+function _spRedrawNames() {
+  const m = getMonth(), st = _spCache[m];
+  if (st) _spDrawNames(m, st);
+}
 function _spPickWorker(v) {
   const box = document.getElementById('sp-new-name-other');
   if (box) {
     box.style.display = v === '__other' ? '' : 'none';
     if (v === '__other') box.focus();
   }
-  const list = document.getElementById('sp-pick-list');
-  if (!list) return;
   const b = /^g\d+$/.test(v || '') ? _spBands[+v.slice(1)] : null;
-  if (!b) { list.style.display = 'none'; list.innerHTML = ''; return; }
-  list.style.display = '';
-  list.innerHTML = b.names.length
-    ? b.names.map(n => `<label class="sp-pick-item"><input type="checkbox" class="sp-pick-tick" value="${esc(n)}"> ${esc(n)}</label>`).join('')
-    : `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`;
+  if (!b) return;
+  if (!_spPick.open.includes(b.label)) _spPick.open.push(b.label);
+  _spRedrawNames();
+}
+function _spTick(name, on) {
+  if (on) _spPick.ticked.add(name); else _spPick.ticked.delete(name);
+}
+function _spCloseGroup(label) {
+  _spPick.open = _spPick.open.filter(l => l !== label);
+  const bd = _spBands.find(x => x.label === label);
+  if (bd) bd.names.forEach(n => _spPick.ticked.delete(n));
+  _spRedrawNames();
 }
 
 /* ADD BATCH IS A DROPDOWN of the batches planted in the two months before
@@ -3880,24 +3909,27 @@ function addSeedPlantingWorker() {
   const el = document.getElementById('sp-new-name');
   if (!st || st.noTable || !el) return;
   const other = document.getElementById('sp-new-name-other');
-  /* A GROUP picked: every name ticked under it goes on, in one save. */
-  if (/^g\d+$/.test(el.value)) {
-    const ticked = [...document.querySelectorAll('#sp-pick-list .sp-pick-tick:checked')]
-      .map(x => String(x.value || '').replace(/\s+/g, ' ').trim())
-      .filter(n => n && !st.names.some(w => w.toLowerCase() === n.toLowerCase()));
+  /* EVERY NAME TICKED, in every open group, goes on in one save. Other
+     with a name typed goes on beside them. */
+  const ticked = [..._spPick.ticked]
+    .map(x => String(x || '').replace(/\s+/g, ' ').trim())
+    .filter(n => n && !st.names.some(w => w.toLowerCase() === n.toLowerCase()));
+  if (el.value !== '__other') {
     if (!ticked.length) { alert(t('pay.spTickSome')); return; }
     st.names.push(...ticked);
+    _spPick = { month: m, open: [], ticked: new Set() };
     _spSaveNames(m);
     renderPayroll();
     return;
   }
-  const raw = el.value === '__other' ? (other ? other.value : '') : el.value;
+  const raw = other ? other.value : '';
   const name = String(raw || '').replace(/\s+/g, ' ').trim();
-  if (!name) { (el.value === '__other' && other ? other : el).focus(); return; }
+  if (!name) { (other || el).focus(); return; }
   if (st.names.some(w => w.toLowerCase() === name.toLowerCase())) {
     alert(t('pay.spDup', { w: name })); return;
   }
-  st.names.push(name);
+  st.names.push(...ticked.filter(n => n.toLowerCase() !== name.toLowerCase()), name);
+  _spPick = { month: m, open: [], ticked: new Set() };
   _spSaveNames(m);
   renderPayroll();
 }
@@ -3927,13 +3959,8 @@ function removeSeedPlantingWorker(i) {
   renderPayroll();
 }
 
-function useLastMonthSeedPlantingNames() {
-  const m = getMonth(), st = _spCache[m];
-  if (!st || st.noTable || st.names.length) return;
-  st.names = st.prevNames.slice();
-  _spSaveNames(m);
-  renderPayroll();
-}
+/* "Use last month names" came off -- *删掉*. Last month people are still
+   offered as their own group in the Add dropdown, ticked like any other. */
 
 /* A figure keyed against one worker on one tray-day. Kept on the page at
    once, written a moment later, and the sheet redrawn with the cursor put
@@ -5453,8 +5480,7 @@ const I18N = {
     'pay.spCheck':'Check', 'pay.spUncheckTip':'Checked — this row is on the Seed Planting payroll. Press to uncheck and correct it.',
     'pay.spCheckOff':'Batch {b}: the workers add up to {k}, but {q} were planted.\n\nCheck it anyway? It goes to the payroll as keyed.',
     'pay.spUncheckQ':'Uncheck batch {b}?\n\nIt comes off the Seed Planting payroll until somebody checks it again.',
-    'pay.spLocked':'Batch {b} is Checked, so it is on the payroll as it stands. Uncheck it first to change a figure.',
-    'pay.spCopyPrev':'Use last month\u2019s names ({n})', 'pay.spDup':'{w} is already on this month\u2019s list.',
+    'pay.spLocked':'Batch {b} is Checked, so it is on the payroll as it stands. Uncheck it first to change a figure.', 'pay.spDup':'{w} is already on this month\u2019s list.',
     'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
     'pay.spRemoveQ':'Remove {w} from the {m} list?',
     'pay.spBatches':'Batches added by hand:', 'pay.spNoBatches':'None. A batch planted too late for its own month can be added here.',
@@ -5671,8 +5697,7 @@ const I18N = {
     'pay.spCheck':'Semak', 'pay.spUncheckTip':'Disemak — baris ini dalam gaji Seed Planting. Tekan untuk nyahsemak dan betulkan.',
     'pay.spCheckOff':'Batch {b}: jumlah pekerja {k}, tetapi {q} ditanam.\n\nSemak juga? Ia masuk gaji seperti diisi.',
     'pay.spUncheckQ':'Nyahsemak batch {b}?\n\nIa keluar dari gaji Seed Planting sehingga disemak semula.',
-    'pay.spLocked':'Batch {b} sudah disemak, jadi ia dalam gaji seperti sekarang. Nyahsemak dahulu untuk menukar angka.',
-    'pay.spCopyPrev':'Guna nama bulan lepas ({n})', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
+    'pay.spLocked':'Batch {b} sudah disemak, jadi ia dalam gaji seperti sekarang. Nyahsemak dahulu untuk menukar angka.', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
     'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
     'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',
     'pay.spBatches':'Batch ditambah sendiri:', 'pay.spNoBatches':'Tiada. Batch yang ditanam terlalu lewat untuk bulannya boleh ditambah di sini.',
