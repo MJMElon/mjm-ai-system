@@ -10250,6 +10250,34 @@ of those bars and the other is Work Records, which answered the first run
 with *Monthly Watering Record* on it. `PAYROLL_VIEW_KEYS` is no use to it
 either: a script-scope `const` is not on `window`.
 
+#### AND CULLING MONITORING IS EDITED ON THIS CARD TOO, by dragging people onto it
+
+*"culling monitoring也要在这里改"*, then *"我drag admin and FC过去culling
+monitoring 这里就会出现他们的名字"*. The row no longer only points at the card
+above: it shows the two lists, **ADMIN** (paid on every nursery) and **FIELD
+CONDUCTOR** (paid on their own nursery), and in Edit it takes a drop.
+
+- **A GROUP DROPPED HERE IS ITS PEOPLE, BY NAME** (`jcCullDrop`). The rule
+  pays named people at their own rates, so the group is not stored: who is
+  in it today is added to the draft, exactly as + Add would. An FC group
+  goes on the Field Conductor list for its own nursery; any other group
+  (Admin) on the every-nursery list. A name already on that list is not
+  added twice, asked through the claim own `resolveName` because the rule
+  spells names short.
+- **ONE DRAFT, ONE WRITER.** The row edits `cmDraft`, the same draft the
+  Culling Monitoring card edits, and `jcSave` hands it to `cmSave` FIRST, so
+  a change made here is DATED like one made there (starts this month, a
+  removal is an end date) and a refusal keeps both drafts on screen.
+  `viaJc` on the draft says which card edits it; the card above reads it as
+  its saved self until Save, so there are never two Save buttons over one
+  change. `_cmPicker` / `_cmNurseryPick` are the one pair of controls.
+- **THE PRICES STAY ON THE CARD ABOVE.** Two boxes for one price is two
+  places to disagree. Only a KEYED rule opens here; the built-in list says
+  which SQL file to run.
+
+Section 7 of `tests/each_job_has_its_own_worker_list.cjs`. Nothing to run in
+the database.
+
 #### AND SEED PLANTING TAKES A DRAG, which is NOT what the other seven do
 
 Told that dragging a group onto Seed Planting would first need PN workers
