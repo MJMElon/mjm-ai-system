@@ -6016,6 +6016,22 @@ Two things fall out:
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 
+### A role row the office adds by hand
+
+The rows down the side of the Team Board were a fixed list. In Edit, the
+corner over them carries **+ Add role**: a small window takes the name, and
+the role becomes a row on the board and a choice on the worker record. It is
+stored as a JSON list in `nops_maint_config`, key `worker_roles`, and is
+appended to `ROLES` / `BOARD_ROLES` IN PLACE (`applyCustomRoles`), so every
+reader of those lists takes it. An added role is a KNOWN role, so not general
+nursery work; the record's own tick decides the sheets, which `saveWorker`
+writes for every nursery worker. That matters because the phone's copy of
+`ROLES` (FC-Portal `maintenance/helpers.js`) and `shared_job_crew.js` do not
+know an added role. An added row offers a cross only while nobody, active or
+not, holds it; the eight built-in rows cannot be removed. Saving a role is
+its own write, not part of the board's draft. Nothing to run in the database.
+`tests/the_office_adds_a_role_row.cjs`.
+
 ### The board is a RECORD until somebody presses Edit
 
 The office asked for it in one line, over a screenshot of the board: *"help

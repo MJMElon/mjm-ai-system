@@ -85,6 +85,12 @@
   /* A name too long for its column is cut with an ellipsis rather than
      wrapped: the row heights stay level, and the whole name is on the hover
      and one click away on their record. */
+  /* The corner over the role names: where a role is added, in Edit only. */
+  .bd-corner .bd-role-add { font-size: 11px; font-weight: 700; color: var(--ink, #1b4332);
+    background: #fff; border: 1px dashed #94a3b8; border-radius: 8px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+  .bd-corner .bd-role-add:hover { border-color: var(--ink, #1b4332); background: #f0fdf4; }
+  .bd-role-x { margin-left: 6px; border: 0; background: none; color: #b91c1c; font-size: 12px;
+    cursor: pointer; padding: 0 2px; line-height: 1; }
   .bd-cell-in .wchip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ── A face against a name ─────────────────────────────────────────────
@@ -258,6 +264,26 @@
   </section>
 </div>
 
+<!-- A role the office adds by hand. Its own act with its own Save, like
+     adding a worker: not part of the board's draft. -->
+<div class="modal-bg" id="role-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-top"><div class="modal-title">Add Role</div>
+      <button class="modal-x" onclick="closeModal('role-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="frow"><label>Role name</label>
+        <input id="rf-name" maxlength="40" placeholder="e.g. Security"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();saveCustomRole();}"></div>
+      <div id="rf-why" style="font-size:11.5px;color:var(--text-faint);margin-top:6px;">
+        A new row on the board, and a role you can pick on a worker's record.</div>
+    </div>
+    <div class="modal-foot">
+      <span style="flex:1"></span>
+      <button class="btn" onclick="closeModal('role-modal')">Cancel</button>
+      <button class="btn btn-primary" id="rf-save" onclick="saveCustomRole()">Add Role</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="worker-modal">
   <div class="modal">
     <div class="modal-top"><div class="modal-title" id="worker-modal-title">Add Worker</div>
@@ -950,11 +976,107 @@ const BOARD_ROLES = [
   { key: 'Gardener',                  label: 'Gardener'            },
   { key: 'Driver',                    label: 'Driver'              }
 ];
+const BUILTIN_BOARD_COUNT = BOARD_ROLES.length;
 /* A role typed before the list existed, or none at all. A row for them,
    because the alternative is a worker who is on the register and nowhere on
    the board. It should be EMPTY on a register nobody has keyed free text
    into, and a name appearing in it is the thing to go and look at. */
 const BOARD_OTHER = '(other)';
+
+/* ── ROLES THE OFFICE ADDS BY HAND ─────────────────────────────────────
+   The office: a new kind of job turns up and the rows down the side were
+   fixed. "+ Add role" in the corner over them (Edit only) adds one. It is
+   stored as a JSON list in nops_maint_config, key worker_roles, and is
+   appended to ROLES and BOARD_ROLES IN PLACE, so every reader of those two
+   (the board, the role picker, isKnownRole) takes it without knowing.
+
+   Known, so NOT general nursery work: a worker given an added role is not
+   on the Work Maintenance tick sheets unless the box on their record says so.
+   The phone's copy of ROLES (FC-Portal maintenance/helpers.js) does not know
+   an added role, which is why the record's own switch is what decides there;
+   saveWorker writes it for every nursery worker.
+
+   An added role can be taken off again only while nobody, active or not,
+   holds it, because a row going while somebody sits in it would drop them
+   into Other. The eight built in cannot be removed. */
+const BUILTIN_ROLE_COUNT = ROLES.length;
+let customRoles = [];
+const isCustomRole = r => customRoles.some(x => x.toLowerCase() === String(r).trim().toLowerCase());
+
+function applyCustomRoles(list) {
+  ROLES.splice(BUILTIN_ROLE_COUNT);
+  BOARD_ROLES.splice(BUILTIN_BOARD_COUNT);
+  customRoles = [];
+  (list || []).forEach(r => {
+    const name = String(r || '').trim();
+    if (!name || ROLES.some(x => x.toLowerCase() === name.toLowerCase())) return;
+    customRoles.push(name);
+    ROLES.push(name);
+    BOARD_ROLES.push({ key: name, label: name, custom: true });
+  });
+}
+
+async function loadCustomRoles() {
+  try {
+    const { data, error } = await _supabase.from('nops_maint_config')
+      .select('txt_value').eq('key', 'worker_roles').maybeSingle();
+    if (error || !data) { applyCustomRoles([]); return; }
+    const list = JSON.parse(data.txt_value || '[]');
+    applyCustomRoles(Array.isArray(list) ? list : []);
+  } catch (e) { applyCustomRoles([]); }
+}
+
+async function writeCustomRoles(list) {
+  const { error } = await _supabase.from('nops_maint_config').upsert({
+    key: 'worker_roles', txt_value: JSON.stringify(list),
+    note: 'Roles added by hand on the Worker System board',
+    updated_by: userEmail || null, updated_at: new Date().toISOString()
+  }, { onConflict: 'key' });
+  return error;
+}
+
+function openAddRole() {
+  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
+  $('rf-name').value = '';
+  $('rf-why').textContent = 'A new row on the board, and a role you can pick on a worker\'s record.';
+  $('rf-why').style.color = '';
+  openModal('role-modal');
+  setTimeout(() => $('rf-name').focus(), 30);
+}
+
+async function saveCustomRole() {
+  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
+  if (!mayDo('workers', 'manage',
+      'You do not have permission to change the board. Ask an admin to grant it in Module Assess Control.')) return;
+  const name = $('rf-name').value.trim().replace(/\s+/g, ' ');
+  const say = (t) => { $('rf-why').textContent = t; $('rf-why').style.color = '#b91c1c'; };
+  if (!name) { say('Type the role name.'); return; }
+  if (/['"<>\\]/.test(name)) { say('Letters, numbers and spaces only.'); return; }
+  if (/^others?$/i.test(name)) { say('"Other" is kept for roles nobody recognises. Pick another name.'); return; }
+  if (isKnownRole(name)) { say(`"${name}" is already a row on the board.`); return; }
+  $('rf-save').disabled = true;
+  await loadCustomRoles();                       // somebody else may have added one meanwhile
+  const err = await writeCustomRoles(customRoles.concat([name]));
+  $('rf-save').disabled = false;
+  if (err) { say('Could not save: ' + err.message); return; }
+  await loadCustomRoles();
+  closeModal('role-modal');
+  renderWorkers();
+}
+
+async function removeCustomRole(name) {
+  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
+  if (!mayDo('workers', 'manage',
+      'You do not have permission to change the board. Ask an admin to grant it in Module Assess Control.')) return;
+  const held = workers.filter(w => boardRoleOf(boardPos(w)) === name);
+  if (held.length) { alert(`${held.length} worker(s) still hold "${name}" (Show inactive counts too). Move them to another row first.`); return; }
+  if (!confirm(`Remove the role "${name}" from the board?`)) return;
+  await loadCustomRoles();
+  const err = await writeCustomRoles(customRoles.filter(r => r.toLowerCase() !== name.toLowerCase()));
+  if (err) { alert('Could not save: ' + err.message); return; }
+  await loadCustomRoles();
+  renderWorkers();
+}
 
 function boardRoleOf(w) {
   const r = String(w.role || '').trim().toLowerCase();
@@ -1048,7 +1170,8 @@ function renderWorkerBoard() {
   const head =
     `<tr class="bd-divs"><th class="bd-corner"></th>` +
     cols.map(d => `<th colspan="${d.sections.length}"><span class="bd-div">${esc(d.name)}</span></th>`).join('') +
-    `</tr><tr class="bd-secs"><th class="bd-corner"></th>` +
+    `</tr><tr class="bd-secs"><th class="bd-corner">${editing && canEdit
+        ? '<button class="bd-role-add" onclick="openAddRole()" title="Add a new role row">+ Add role</button>' : ''}</th>` +
     flat.map(c => `<th><span class="bd-sec">${esc(c)}</span></th>`).join('') +
     `</tr>`;
 
@@ -1071,7 +1194,11 @@ function renderWorkerBoard() {
                   ondrop="boardDrop(event, '${esc(c)}', '${esc(r.key)}')">
                 <div class="bd-cell-in">${chips}${add}</div></td>`;
     }).join('');
-    return `<tr><th class="bd-role"><span class="bd-role-name">${esc(r.label)}</span>
+    /* Only an added role, only in Edit, only while nobody at all holds it. */
+    const held = r.custom && workers.some(w => boardRoleOf(boardPos(w)) === r.key);
+    const rx = (r.custom && editing && canEdit && !held)
+      ? `<button class="bd-role-x" onclick="removeCustomRole('${esc(r.key)}')" title="Remove this role">&#10005;</button>` : '';
+    return `<tr><th class="bd-role"><span class="bd-role-name">${esc(r.label)}</span>${rx}
                   <span class="bd-role-count">${total}</span></th>${cells}</tr>`;
   }).join('');
 
@@ -1801,6 +1928,7 @@ async function saveWorker() {
        line does not change under the office a second later; it fails open,
        so a profile table that cannot be read costs nothing but the name. */
     if (typeof MJMPeople !== 'undefined') { try { await MJMPeople.load(_supabase); } catch (_) {} }
+    await loadCustomRoles();
     await loadWorkers();
     addOrphanSections();
     renderWorkers();
