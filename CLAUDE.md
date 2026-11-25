@@ -10346,6 +10346,15 @@ muted line under the table: *A cell with nothing in it is unchanged — that
 job keeps the list its sheet has always used. A cell reading Nobody is an
 answer.*
 
+**AND THE PEOPLE-COUNT CAME OFF THE PALETTE CHIPS** — *"名字后面的人数也不
+用"*, the same pass. It read `BNN · Workers 9`, which is how many that group
+stands for TODAY: a figure that moves with the register, is not what
+somebody dragging is choosing between, and put a second number on every one
+of nineteen chips. **The names are still on the hover**, which is where a
+question about who is in a group is actually answered, so nothing was lost
+but the badge. `.jc-n` went with it rather than being left in the
+stylesheet.
+
 **Nothing to run in the database.** The whole of it is on the card.
 `tests/each_job_has_its_own_worker_list.cjs` is 56 checks and **10 fail on
 the previous card**. Section 2b is the pair that says the rule survived the

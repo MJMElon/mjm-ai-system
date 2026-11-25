@@ -12826,8 +12826,12 @@ function _jcChipHtml(g, opts) {
   const x = opts.removable
     ? `<button type="button" class="jc-x" title="Take this group off" aria-label="Remove ${esc(_jcGroupLabel(g))}"
          onclick="jcRemove('${esc(opts.cell)}','${esc(g)}')">&times;</button>` : '';
-  const count = opts.palette ? ` <span class="jc-n">${names.length}</span>` : '';
-  return `<span class="${cls}" title="${esc(tip)}"${drag}>${esc(_jcGroupLabel(g))}${count}${x}</span>`;
+  /* NO COUNT AFTER THE NAME — the office took it off (*"名字后面的人数也不
+     用"*). It said how many people a group stands for TODAY, which is a
+     figure that moves with the register and is not what somebody dragging
+     is choosing. The NAMES are still on the hover, which is where a
+     question about who is in a group is actually answered. */
+  return `<span class="${cls}" title="${esc(tip)}"${drag}>${esc(_jcGroupLabel(g))}${x}</span>`;
 }
 
 function renderJobCrewSetting() {

@@ -199,9 +199,17 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       await ev(page, () => /default/i.test(document.getElementById('jc-set-body').textContent)), false);
     check('…but the card still says what an empty cell does',
       await ev(page, () => /unchanged/i.test((document.querySelector('#jc-set-body .jc-empty-note') || {}).textContent || '')), true);
-    check('the palette offers the Team Board groups with their counts',
+    /* THE NAME AND NOTHING ELSE — the office took the people-count off
+       (*"名字后面的人数也不用"*). It moved with the register and was not
+       what somebody dragging is choosing; the names are on the hover. */
+    check('the palette offers the Team Board groups, named and nothing more',
       await ev(page, () => [...document.querySelectorAll('#jc-set-body .jc-pal .jc-chip')].map(c => c.textContent.replace(/\s+/g, ' ').trim())),
-      ['BNN · FC 1', 'BNN · Workers 2', 'UNN 1 · Workers 1', 'UNE · Workers 1']);
+      ['BNN · FC', 'BNN · Workers', 'UNN 1 · Workers', 'UNE · Workers']);
+    check('…and the names are still on the hover',
+      await ev(page, () => { const c = [...document.querySelectorAll('#jc-set-body .jc-pal .jc-chip')]
+        .find(x => x.textContent.trim() === 'BNN · Workers');
+        return c ? c.getAttribute('title') : 'no chip'; }),
+      'Andi Rosmini, Yuyak');
     /* An empty cell before and after proves nothing on its own, so the gate
        is asked as the DRAFT not existing — and the same drag landing one
        line down, once Edit is pressed, is the control. */
