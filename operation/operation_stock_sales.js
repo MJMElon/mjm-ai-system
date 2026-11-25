@@ -4247,7 +4247,15 @@
        not a plot to take off the map. */
     function _invmapCull3Done(log) {
         if (!log) return false;
-        if (/MapQty:\s*\d+/.test(String(log.remark || ''))) return true;
+        const rm = String(log.remark || '');
+        if (/MapQty:\s*\d+/.test(rm)) return true;
+        // A row keyed with no drone map is only finished when nothing is left
+        // standing on it: Remaining Balance less Culled. N1 / 255 read
+        // "Remaining Balance: 5690, Culled: 0" and was taken off the map as
+        // done, which is a row half filled in, not a plot culled.
+        const rem = rm.match(/Remaining Balance:\s*(-?\d+)/);
+        const cul = rm.match(/Culled:\s*(-?\d+)/);
+        if (rem) return (Number(rem[1]) - (cul ? Number(cul[1]) : 0)) <= 0;
         return Number(log.quantity_change) === 0;
     }
     function _buildInvmapCompleted(rows) {
@@ -4272,7 +4280,7 @@
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,breed_name,quantity_change')
-                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
+                    .in('transaction_type', ['Transplanted','Cull3_Transfer']),
                 _supabase.from('shared_collection_bookings')
                     .select('plot_name,nursery_name,batch_name,collection_qty,status')
                     .eq('status', 'completed'),
@@ -4315,8 +4323,13 @@
             // Aggregate full qty + breed per (plot, batch).
             const fullByPlotBatch = {};
             const breedByPlotBatch = {};
+            // What stands in a field plot: transplants in, and 3rd-culling
+            // transfers in (a -R plot is filled by nothing else). The holding
+            // trays (Premium Care, Double-Tone) are pre-nursery and are not
+            // field plots, so they are not on this map.
             (transRes.data || []).forEach(l => {
                 if (!l.plot_name || !l.batch_name) return;
+                if (invmapIsHoldingTray(l.plot_name)) return;
                 const key = l.plot_name + '|' + l.batch_name;
                 fullByPlotBatch[key] = (fullByPlotBatch[key] || 0) + (l.quantity_change || 0);
                 if (l.breed_name && !breedByPlotBatch[key]) breedByPlotBatch[key] = l.breed_name;
@@ -4628,6 +4641,33 @@
     }
 
     const INVMAP_NURSERY_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2'];
+    // The -R plots of a parent: N5 -> N5-R, N5-R2. A -R plot has no
+    // boundary drawn of its own, so its seedlings are shown on the parent.
+    function invmapReplantsOf(plot) {
+        const k = String(plot || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!k || /R\d*$/.test(k) && String(plot).indexOf('-') >= 0) return [];
+        return Object.keys(_invmap.plotBatches || {}).filter(n => {
+            const nk = String(n).toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return String(n).indexOf('-') >= 0 && nk.indexOf(k + 'R') === 0 && /^\d*$/.test(nk.slice(k.length + 1));
+        }).sort();
+    }
+    function invmapIsHoldingTray(plot) {
+        const k = String(plot || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return k.indexOf('PREMIUM') >= 0 || k.indexOf('DOUBLETONE') >= 0 || k.indexOf('DTONE') >= 0;
+    }
+    // Plot order: nursery tab order, then the plot letters, then its number,
+    // then any -R suffix — B2 before B10, N5 before N5-R.
+    function invmapPlotCmp(a, b, plotToNursery) {
+        const order = (INVMAP_NURSERY_ORDER || []);
+        const nk = n => { const k = String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); const i = order.indexOf(k); return i < 0 ? 99 : i; };
+        const d = nk(plotToNursery && plotToNursery[a]) - nk(plotToNursery && plotToNursery[b]);
+        if (d) return d;
+        const sp = x => { const m = String(x).toUpperCase().match(/^([A-Z]*)\s*0*(\d*)(.*)$/) || []; return [m[1] || '', m[2] ? Number(m[2]) : 0, m[3] || '']; };
+        const A = sp(a), B = sp(b);
+        if (A[0] !== B[0]) return A[0] < B[0] ? -1 : 1;
+        if (A[1] !== B[1]) return A[1] - B[1];
+        return A[2] < B[2] ? -1 : (A[2] > B[2] ? 1 : 0);
+    }
     function invmapNurseryTabs(list) {
         const nk = v => String(v || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
         return (list || [])
@@ -4710,11 +4750,20 @@
             const hLabel = tall
                 ? `<div class="invmap-batch-line invmap-batch-h" title="Latest height audit ${_invFmtDate(tall.date)} · ${_hFmt(tall.avg)} cm">↕ ${invmapMapHeight(tall.avg)}</div>`
                 : '';
+            const rLabel = invmapReplantsOf(p.plot_name).map(rp => {
+                let rb = _invmap.plotBatches[rp] || [];
+                if (_invmap.selectedBreed) rb = rb.filter(b => b.breed === _invmap.selectedBreed);
+                if (_invmap.batchSearch)   rb = rb.filter(b => batchMatchesSearch(b.batch));
+                if (_invmap.minHeight != null) rb = rb.filter(b => batchPassesHeight(rp, b.batch));
+                const bal = rb.reduce((t, b) => t + b.balance, 0);
+                return rb.length ? `<div class="invmap-batch-line" title="${escapeHtml(rp)} has no boundary of its own, so it is shown on ${escapeHtml(p.plot_name)}">+ ${escapeHtml(rp)} · ${bal.toLocaleString('en-MY')}</div>` : '';
+            }).join('');
             labels.innerHTML += `
                 <div class="invmap-label" style="left:${cx}%; top:${cy}%; ${dimStyle}">
                     <div class="invmap-plot-tag">${p.plot_name}</div>
                     ${emptyLabel}
                     ${hLabel}
+                    ${rLabel}
                 </div>`;
             // A COLLECTION PLOT gets a lorry driving in to it and back out,
             // over and over — the office: "for collection plot, create a
@@ -4816,7 +4865,9 @@
         }
         const byPlot = {};
         pairs.forEach(r => { (byPlot[r.plot] = byPlot[r.plot] || []).push(r); });
-        body.innerHTML = Object.entries(byPlot).map(([plot, list]) => {
+        const p2n = {};
+        _invmap.plots.forEach(p => { p2n[p.plot_name] = p.nursery_name; });
+        body.innerHTML = Object.entries(byPlot).sort((x, y) => invmapPlotCmp(x[0], y[0], p2n)).map(([plot, list]) => {
             const totFull = list.reduce((s,b)=>s+b.full,0);
             const totColl = list.reduce((s,b)=>s+b.collected,0);
             const totBal  = list.reduce((s,b)=>s+b.balance,0);
@@ -4906,8 +4957,34 @@
            list of what is still standing, and a line about what is not is
            noise on a screen read all day. _invmap.hiddenComplete still holds
            the count if anything ever wants it. */
+        const fmtR = n => Number(n||0).toLocaleString('en-MY');
+        const rSection = invmapReplantsOf(plotName).map(rp => {
+            let rb = _invmap.plotBatches[rp] || [];
+            if (_invmap.selectedBreed) rb = rb.filter(b => b.breed === _invmap.selectedBreed);
+            if (_invmap.minHeight != null) rb = rb.filter(b => batchPassesHeight(rp, b.batch));
+            if (!rb.length) return '';
+            const tb = rb.reduce((t, b) => t + b.balance, 0);
+            return `<div class="invmap-r-section mt-4">
+                <div class="flex items-baseline justify-between mb-1">
+                    <div class="text-[10px] font-black text-violet-600 uppercase tracking-widest">${escapeHtml(rp)}</div>
+                    <div class="text-[10px] font-black text-slate-500">Balance ${fmtR(tb)}</div>
+                </div>
+                <table class="w-full text-left"><thead><tr class="border-b border-slate-200">
+                    <th class="py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
+                    <th class="py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
+                    <th class="py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Full</th>
+                    <th class="py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Collected</th>
+                    <th class="py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Balance</th>
+                </tr></thead><tbody>${rb.map(b => `<tr class="border-b border-slate-50">
+                    <td class="py-1.5 text-sm font-black text-slate-800">#${b.batch}</td>
+                    <td class="py-1.5 text-[11px] text-slate-500">${b.breed}</td>
+                    <td class="py-1.5 text-sm text-right tabular-nums">${fmtR(b.full)}</td>
+                    <td class="py-1.5 text-sm text-right tabular-nums text-blue-700">${fmtR(b.collected)}</td>
+                    <td class="py-1.5 text-sm text-right tabular-nums font-black ${b.balance > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmtR(b.balance)}</td>
+                </tr>`).join('')}</tbody></table></div>`;
+        }).join('');
         if (!batches.length) {
-            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>';
+            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>' + rSection;
         } else {
             const totFull = batches.reduce((s,b)=>s+b.full,0);
             const totColl = batches.reduce((s,b)=>s+b.collected,0);
@@ -4962,6 +5039,7 @@
                             </tr>`).join('')}
                         </tbody>
                     </table>
+                    ${rSection}
                 </div>
                 <div id="invmap-modal-height" class="hidden">
                     <div class="flex items-baseline justify-between mb-2">
