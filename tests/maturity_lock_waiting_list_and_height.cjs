@@ -173,6 +173,22 @@ const WAIT = [
     yes(`at ${w}px wide nothing is off to the side (overflow ${fit}px)`, fit <= 1);
   }
   await page.setViewportSize({ width: 1600, height: 1000 });
+  // Plot-R hides After 10% Culling: a full-width row spanning 12 there gave
+  // the fixed table an EMPTY 12th column, squeezing Customers and leaving a
+  // blank band right of Plot Balance (the office screenshot, History 11).
+  const pr = await page.evaluate(() => {
+    const was = activeMonthKey;
+    activeMonthKey = PR_TAB_KEY; renderMaturityTable();
+    const t = document.querySelector('.mat-table');
+    const ths = [...t.querySelectorAll('thead tr:not(.mat-group-row) th')].filter(h => getComputedStyle(h).display !== 'none');
+    const spans = [...t.querySelectorAll('tbody td[colspan]')].map(td => +td.getAttribute('colspan'));
+    const sum = ths.reduce((s, h) => s + h.getBoundingClientRect().width, 0);
+    const out = { shown: ths.length, spans, gap: Math.round(t.getBoundingClientRect().width - sum) };
+    activeMonthKey = was; renderMaturityTable();
+    return out;
+  });
+  check('on Plot-R a full-width row spans the 11 columns shown, never 12', pr.spans.every(n => n === pr.shown) && pr.shown === 11, true);
+  yes(`on Plot-R the columns fill the table, no phantom column (gap ${pr.gap}px)`, Math.abs(pr.gap) <= 2);
 
   console.log('\n4. Lock and unlock write the row');
   await page.click('tr[data-batch-key="701||U1"] .mat-lock-btn');

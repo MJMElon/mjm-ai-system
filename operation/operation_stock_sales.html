@@ -342,6 +342,16 @@
         .reserv-chip-x:hover{background:#fca5a5;color:white;}
         .reserv-empty{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1.5px dashed #cbd5e1;border-radius:9px;background:#fafbfc;font-size:9px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}
         .reserv-empty-emoji{font-size:11px;line-height:1;}
+        /* A row with no customer had a loud dashed box reading DROP CARD
+           HERE, on every row, which on Plot-R is most of the table. It is
+           a faint outline now and only says so while a card is dragged
+           (the row carries drop-target / drop-hover) or the row is hovered. */
+        .mat-table .reserv-empty{border:1px dashed #e2e8f0;background:transparent;color:#cbd5e1;padding:5px 8px;transition:all .12s;}
+        .mat-table .reserv-empty .reserv-empty-emoji{display:none;}
+        .mat-table tbody tr:hover .reserv-empty{border-color:#cbd5e1;color:#94a3b8;}
+        .mat-table tbody tr.drop-target .reserv-empty{border-color:#93c5fd;color:#1d4ed8;background:#eff6ff;}
+        .mat-table tbody tr.drop-hover .reserv-empty{border:1.5px solid #1d4ed8;color:#1d4ed8;background:#dbeafe;}
+        .mat-table tbody tr.drop-target .reserv-empty .reserv-empty-emoji,.mat-table tbody tr.drop-hover .reserv-empty .reserv-empty-emoji{display:inline;}
         /* A Finished row's empty allocation cell is a plain grey block — the
            office asked for the lock icon and its sentence to go. min-height
            keeps it the size of the Drop card here cell beside it, since it
@@ -1176,7 +1186,7 @@
 
 <script src="../shared/shared_stock_analysis.js?v=2"></script>
 <script src="../shared/shared_people.js?v=1"></script>
-<script src="operation_stock_sales.js?v=28"></script>
+<script src="operation_stock_sales.js?v=29"></script>
 <!-- Page-access guard: this page can be locked per user in the module's
      Module Assess Control (operation_user_access.html). Fails open on read errors. -->
 <script src="../shared/shared_supabase.js"></script>

@@ -433,7 +433,7 @@
             renderMaturityTable();
         } catch(e) {
             console.warn('Maturity load error:', e);
-            document.getElementById('maturity-rows').innerHTML = `<tr><td colspan="12" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load maturity data</td></tr>`;
+            document.getElementById('maturity-rows').innerHTML = `<tr><td colspan="${matColCount()}" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load maturity data</td></tr>`;
         }
     }
 
@@ -717,7 +717,9 @@
         const isPR = table.classList.contains('pr-view');
         let cg = table.querySelector('colgroup.mat-cols');
         if (!cg) { cg = document.createElement('colgroup'); cg.className = 'mat-cols'; table.insertBefore(cg, table.firstChild); }
-        const prod = MAT_COL_W.prod.filter((w, i) => !(isPR && i === 5));
+        // On Plot-R the After 10% Culling column is hidden; its width goes
+        // to Breed, so a long breed name is not cut short beside empty room.
+        const prod = MAT_COL_W.prod.filter((w, i) => !(isPR && i === 5)).map((w, i) => (isPR && i === 3) ? w + MAT_COL_W.prod[5] : w);
         const seq = allocFirst ? [...prod, ...MAT_COL_W.alloc, ...MAT_COL_W.plot] : [...prod, ...MAT_COL_W.plot, ...MAT_COL_W.alloc];
         cg.innerHTML = seq.map(w => w ? `<col style="width:${w}%">` : '<col>').join('');
         const gr = table.querySelector('thead tr.mat-group-row');
@@ -766,6 +768,11 @@
     }
     window.setMatGroupOrder = setMatGroupOrder;
 
+    // How many columns a full-width row must span. Plot-R hides After 10%
+    // Culling, so it has 11; a colspan of 12 there makes a fixed-layout
+    // table grow an EMPTY twelfth column, which squeezed Customers and left
+    // a blank band to the right of Plot Balance on the Plot-R tab.
+    function matColCount() { return activeMonthKey === PR_TAB_KEY ? 11 : 12; }
     function updateMaturityHeaders() {
         const isPR = activeMonthKey === PR_TAB_KEY;
         const table = document.querySelector('.mat-table');
@@ -999,7 +1006,7 @@
         if (!rows.length) {
             const inLoc = _matLocFilter !== 'ALL' ? ` in ${_matLocFilter}` : '';
             const emptyMsg = isPR ? `No transfer (Plot-R) plots${inLoc}` : `No maturity allocations for this month${inLoc}`;
-            tbody.innerHTML = `<tr><td colspan="12" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${matColCount()}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
             tfoot.innerHTML = '';
             renderDoUnmatched();
             renderMatReleased();
@@ -1185,7 +1192,7 @@
                 .sort((a, b) => b.r.matureDate - a.r.matureDate);
 
             if (!liveRows.length) {
-                bodyHtml += `<tr><td colspan="12" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No transfer (Plot-R) plots with balance — everything is in History below</div></td></tr>`;
+                bodyHtml += `<tr><td colspan="${matColCount()}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No transfer (Plot-R) plots with balance — everything is in History below</div></td></tr>`;
             } else {
                 liveRows.forEach(x => {
                     bodyHtml += x.b.html;
@@ -1196,7 +1203,7 @@
             if (historyRows.length) {
                 bodyHtml += `
                     <tr class="mat-history-toggle" onclick="toggleMatHistory()">
-                        <td colspan="12">🕘 History — ${historyRows.length} transfer plot${historyRows.length === 1 ? '' : 's'} already Sold Out or Culled <span id="mat-history-caret">▸ show</span></td>
+                        <td colspan="${matColCount()}">🕘 History — ${historyRows.length} transfer plot${historyRows.length === 1 ? '' : 's'} already Sold Out or Culled <span id="mat-history-caret">▸ show</span></td>
                     </tr>`;
                 // Rebuilt WITH the history class — the figures and statuses
                 // are identical, only the row hides until the toggle opens.
@@ -1222,7 +1229,7 @@
             };
             live.forEach(x => add(x, x.b.html));
             if (done.length) {
-                bodyHtml += `<tr class="mat-done-divider"><td colspan="12">Sold out · Culled · Closed — ${done.length} row${done.length === 1 ? '' : 's'}</td></tr>`;
+                bodyHtml += `<tr class="mat-done-divider"><td colspan="${matColCount()}">Sold out · Culled · Closed — ${done.length} row${done.length === 1 ? '' : 's'}</td></tr>`;
                 done.forEach(x => add(x, x.b.html.replace('<tr class="', '<tr class="mat-done-row ')));
             }
         }
