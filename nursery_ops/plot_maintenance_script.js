@@ -10426,24 +10426,260 @@ async function recPinRecord(f, row) {
   const why = recPinRefusal(f, row);
   if (why) { alert('That record cannot go on that row.\n\n' + why); return; }
   if (!_supabase) { alert('Not connected to the database.'); return; }
+  openRecMerge(f, row);
+}
+
+/* ── THE DROP IS A MERGE, AND A DISAGREEMENT IS ASKED ─────────────────────
+   *"每一次merge 你要看有什么部分不一样 有的就跟着有的 例如下面的没有工人
+   上的有工人那就跟着上的 上的有日期下的没有 就跟有日期的 但是chemical部分
+   会不一样 如果不一样 你要让我选哪一个是对的 还是两个都不对 我可以manual
+   改"*.
+
+   THE TWO ROWS BECOME ONE, and the one that stays is the SCHEDULE ROW —
+   that is the row the office checks, the row the claim pays, and the row
+   that carries the round. The record becomes its waiting submission, which
+   is what writing `week_no` does.
+
+   THREE STATES PER FIELD, and the office named all three:
+
+     ONE SIDE HAS IT      the other is empty, so there is nothing to decide
+                          and nothing is asked. *有的就跟着有的.*
+     THEY AGREE           nothing to decide either.
+     THEY DIFFER          the dialog asks, and offers a third answer —
+                          neither, key it — because *两个都不对* is a real
+                          outcome and a dialog with two wrong options is a
+                          dialog somebody has to cancel out of.
+
+   TWO FIELDS ARE DELIBERATELY NOT MERGED, AND THE WORKER IS ONE OF THEM —
+   which the dialog has to SAY, in a row of its own, because the worker is
+   the office's own first example (*下面的没有工人 上的有工人*) and a dialog
+   silent about the field somebody named reads as the dialog ignoring them:
+
+     THE CREW. A tick is MONEY, and it is written when the Field Conductor
+     APPROVES the record (`syncTicks`), not when the office files it
+     against a round. Copying a name here would either credit somebody for
+     work nobody has signed off, or — written as a remark — put a sentence
+     on the row that LOOKS like a credit and pays nobody. So it is shown
+     with the day it lands on the sheet, and it is not asked about.
+
+     THE QUANTITY. The office settled this one themselves — *"link的
+     capacity完全不要管手机送进来的，我要link这个summary report"* — and the
+     reason stands: the phone sends the balance of the batches ticked, as
+     at the day it was SAVED, counting neither culling, which is not the
+     figure the claim is reconciled against. The row keeps the link.
+
+   THE CHEMICAL IS COMPARED ON `chemKey`, which is what the pairing itself
+   uses: the office writes *Round 3: Antracol 50gm + Bond 15mL* and the
+   worker writes *Antracol 50gm + Bond 15mL*, and those are the same
+   chemical under a round label. Asking about that would be a question with
+   one answer, every time. Two genuinely different chemicals is a question,
+   and it is asked.
+
+   AND THE ROUND LABEL SURVIVES THE ANSWER. A row with no `_src` — one
+   somebody keyed by hand — takes its WEEK off the "Round N:" on the front
+   of its chemical (`rowWeek` falls back to `recRound`), so writing a bare
+   chemical over it would silently move the row to another round. The
+   prefix is put back. */
+let _recMerge = null;
+
+const REC_MERGE_FIELDS = [
+  /* ISO, which is what `applyFieldRecords` writes into this cell, so a day
+     taken off the record at the merge is stored exactly as the field sync
+     would have stored it. */
+  { key: 'tarikh', label: 'Date', kind: 'date',
+    rec: (f) => String(f.work_date || '').slice(0, 10),
+    row: (r) => (r.tarikh && r.tarikh !== '-') ? String(r.tarikh) : '',
+    show: (v) => (v ? _tarikhDisplay(v) : ''),
+    /* COMPARED AS DAYS. The office keys 21/11/2026 and the record carries
+       2026-11-21; on a string compare those are a disagreement and the
+       dialog would ask a question with one answer. */
+    agree: (a, b) => {
+      const x = _mvParseDate(a), y = _mvParseDate(b);
+      return (x != null && y != null) ? x === y : a === b;
+    } },
+  { key: 'racun', label: 'Chemical', kind: 'text',
+    rec: (f) => String(f.chemical || '').trim(),
+    row: (r) => String(r.racun || '').trim(),
+    agree: (a, b) => MJMMaintField.chemKey(a) === MJMMaintField.chemKey(b) },
+  { key: 'batch', label: 'Batch', kind: 'text',
+    rec: (f) => String(f.batch_name || '').trim(),
+    row: (r) => String(r.batch || '').trim(),
+    /* The set rule every batch comparison here uses, so "255, 271" and
+       "271,255" are one answer and a stray space asks nothing. */
+    agree: (a, b) => {
+      const bl = (typeof PlotMovement !== 'undefined' && PlotMovement.batchList)
+        ? PlotMovement.batchList : (v) => String(v || '').split(/[^0-9A-Za-z]+/).filter(Boolean);
+      const k = (v) => [...new Set(bl(v))].sort().join('|');
+      return k(a) === k(b);
+    } },
+  { key: 'remark', label: 'Remark', kind: 'text',
+    rec: (f) => String(f.remark || '').trim(),
+    row: (r) => String(r.remark || '').trim() },
+  /* SHOWN AND NEVER MERGED — see the note above. It is last because it is
+     the one row nobody has to do anything about. */
+  { key: 'worker', label: 'Worker', kind: 'locked',
+    rec: (f) => _rejWorkedBy(f),
+    row: () => '',
+    note: 'credited when the Field Conductor approves the record' },
+];
+
+/* WHAT THE MERGE WOULD DO, field by field. Pure, so the test drives the
+   real rule rather than reading the dialog back. */
+function recMergeRows(f, row) {
+  return REC_MERGE_FIELDS.map((d) => {
+    const a = d.rec(f) || '', b = d.row(row) || '';
+    let state;
+    if (d.kind === 'locked') state = a ? 'locked' : 'empty';
+    else if (!a && !b) state = 'empty';
+    else if (!b) state = 'rec';                       // only the record has it
+    else if (!a) state = 'row';                       // only the row has it
+    else if (d.agree ? d.agree(a, b) : a === b) state = 'same';
+    else state = 'differ';
+    return { key: d.key, label: d.label, kind: d.kind, rec: a, row: b, state,
+             note: d.note || '', show: d.show || ((v) => v) };
+  });
+}
+
+function openRecMerge(f, row) {
+  const fields = recMergeRows(f, row);
+  _recMerge = { f, row, fields, pick: {}, typed: {} };
+  fields.forEach((x) => { if (x.state === 'differ') _recMerge.pick[x.key] = 'rec'; });
+  const el = (id) => document.getElementById(id);
+  el('rec-merge-title').textContent = 'Merge into ' + _scheduleRowLabel(row);
+  el('rec-merge-sub').textContent =
+    `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name}`
+    + `${f.work_date ? ' · ' + _tarikhDisplay(f.work_date) : ''}`
+    + `${_rejWorkedBy(f) ? ' · ' + _rejWorkedBy(f) : ''}`;
+  el('rec-merge-list').innerHTML = fields.map(_recMergeFieldHtml).join('');
+  el('rec-merge-modal').classList.add('open');
+}
+function closeRecMerge() {
+  _recMerge = null;
+  document.getElementById('rec-merge-modal').classList.remove('open');
+}
+
+function _recMergeFieldHtml(x) {
+  const v = (s) => esc(x.show(s)) || '<span class="rm-none">empty</span>';
+  if (x.state === 'empty') return '';
+  if (x.state === 'same') {
+    return `<div class="rm-row rm-agree" data-f="${esc(x.key)}">
+      <div class="rm-lab">${esc(x.label)}</div>
+      <div class="rm-val">${v(x.row)}<span class="rm-tag">both agree</span></div></div>`;
+  }
+  if (x.state === 'locked') {
+    return `<div class="rm-row rm-locked" data-f="${esc(x.key)}">
+      <div class="rm-lab">${esc(x.label)}</div>
+      <div class="rm-val">${v(x.rec)}<span class="rm-tag">${esc(x.note)}</span></div></div>`;
+  }
+  if (x.state === 'rec' || x.state === 'row') {
+    const from = x.state === 'rec' ? 'from the record' : 'already on the row';
+    return `<div class="rm-row rm-taken" data-f="${esc(x.key)}">
+      <div class="rm-lab">${esc(x.label)}</div>
+      <div class="rm-val">${v(x.state === 'rec' ? x.rec : x.row)}<span class="rm-tag">${from}</span></div></div>`;
+  }
+  const opt = (which, val, note) =>
+    `<label class="rm-opt"><input type="radio" name="rm-${esc(x.key)}" value="${which}"
+       ${which === 'rec' ? 'checked' : ''} onchange="recMergePick('${esc(x.key)}','${which}')">
+     <span>${v(val)}<span class="rm-tag">${note}</span></span></label>`;
+  return `<div class="rm-row rm-differ" data-f="${esc(x.key)}">
+    <div class="rm-lab">${esc(x.label)}<span class="rm-q">which is right?</span></div>
+    <div class="rm-opts">
+      ${opt('rec', x.rec, 'the record')}
+      ${opt('row', x.row, 'the row')}
+      <label class="rm-opt"><input type="radio" name="rm-${esc(x.key)}" value="own"
+         onchange="recMergePick('${esc(x.key)}','own')">
+        <span>Neither — key it</span></label>
+      <input class="rm-own" id="rm-own-${esc(x.key)}" type="${x.kind === 'date' ? 'date' : 'text'}"
+        placeholder="${esc(x.label)}" disabled oninput="recMergeTyped('${esc(x.key)}',this.value)">
+    </div></div>`;
+}
+
+function recMergePick(key, which) {
+  if (!_recMerge) return;
+  _recMerge.pick[key] = which;
+  const box = document.getElementById('rm-own-' + key);
+  if (box) { box.disabled = which !== 'own'; if (which === 'own') box.focus(); }
+}
+function recMergeTyped(key, v) { if (_recMerge) _recMerge.typed[key] = v; }
+
+/* What each field ends up as, off the picks. A field nobody had to decide
+   answers with whichever side has it — *有的就跟着有的* — and a field the
+   office keyed answers with what they keyed. */
+function recMergeResult() {
+  const m = _recMerge;
+  if (!m) return {};
+  const out = {};
+  m.fields.forEach((x) => {
+    /* A LOCKED FIELD IS WRITTEN BY NOBODY HERE. Left to fall through it
+       would land in the `differ` branch and be written as an ordinary
+       value — the crew as a remark, which is the one shape this must not
+       have. */
+    if (x.state === 'empty' || x.state === 'locked') return;
+    if (x.state === 'rec') out[x.key] = { value: x.rec, byHand: false };
+    else if (x.state === 'row' || x.state === 'same') out[x.key] = { value: x.row, byHand: false };
+    else {
+      const p = m.pick[x.key] || 'rec';
+      if (p === 'own') out[x.key] = { value: String(m.typed[x.key] || '').trim(), byHand: true };
+      else out[x.key] = { value: p === 'rec' ? x.rec : x.row, byHand: false };
+    }
+  });
+  return out;
+}
+
+async function recMergeApply() {
+  const m = _recMerge;
+  if (!m) return;
+  const { f, row } = m;
+  /* ASKED AGAIN, because the dialog has been on screen while somebody may
+     have checked the row or changed what this login may do. */
+  if (!mayMaintAct('approve', 'view')) { closeRecMerge(); return; }
+  const why = recPinRefusal(f, row);
+  if (why) { alert('That record cannot go on that row.\n\n' + why); closeRecMerge(); return; }
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+
+  const res = recMergeResult();
+  const blank = m.fields.filter((x) => x.state === 'differ'
+    && (m.pick[x.key] === 'own') && !String(m.typed[x.key] || '').trim());
+  if (blank.length) { alert('Key a value for: ' + blank.map((x) => x.label).join(', ')); return; }
+
+  /* THE ROUND IS WHAT PAIRS THEM, and it goes to the database first: a
+     merge that wrote the office row and then failed on the record would
+     leave a row carrying a worker's day with nothing waiting on it. */
   const w = MJMMaintField.rowWeek(row);
-  const what = `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · `
-             + `${_tarikhDisplay(f.work_date)}${_rejWorkedBy(f) ? ' · ' + _rejWorkedBy(f) : ''}`;
-  if (!confirm(`File this record against that round?\n\n    ${what}\n\n`
-             + `    ${_scheduleRowLabel(row)}\n\n`
-             + `It stops reading as off the schedule and waits for approval on that `
-             + `row instead. Only the ROUND is written — the day, the plot, the job `
-             + `and who did it are untouched.`)) return;
   const { error } = await _supabase.from('nops_maint_field_records')
     .update({ week_no: w }).eq('id', f.id);
   if (error) {
-    /* A database without the column refuses the whole update. The record is
-       exactly as it was, so say so rather than leaving a screen that looks
-       as though it took. */
     alert('Could not file it against that round: ' + (error.message || error));
     return;
   }
+
+  const live = (records || []).find((r) => String(r.id) === String(row.id)) || row;
+  Object.keys(res).forEach((k) => {
+    let v = res[k].value;
+    if (k === 'racun') v = _recKeepRound(live, v);
+    if (String(live[k] || '') === String(v || '')) return;
+    live[k] = v;
+    /* A VALUE THE OFFICE KEYED IS THEIR ANSWER, and the field sync must not
+       fill it in again later — the mark `_tarikhByHand` / `_batchByHand`
+       has always meant exactly that. A value taken off the record is the
+       field's own first answer and carries no mark. */
+    if (res[k].byHand && k === 'tarikh') { live._tarikhByHand = 1; delete live._fromFieldDate; }
+    if (res[k].byHand && k === 'batch')  { live._batchByHand  = 1; delete live._fromFieldBatch; }
+  });
+  persistRecords();
+  closeRecMerge();
   await _reloadSubmissions();
+}
+
+/* THE ROUND LABEL IS PUT BACK. `rowWeek` reads the week off the slot where
+   a row has one and off "Round N:" where it does not, so a bare chemical
+   written over a hand-keyed row would move it to another round without a
+   word. */
+function _recKeepRound(row, chem) {
+  const n = MJMMaintField.recRound(row && row.racun);
+  if (!n) return chem;
+  if (MJMMaintField.recRound(chem)) return chem;
+  return `Round ${n}: ${chem}`;
 }
 
 /* OUT AGAIN, by the same gesture it went in with. The week goes back to the

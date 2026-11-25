@@ -11529,6 +11529,81 @@ plot first, so a weeding row on another plot is refused for the plot and the
 job test is never reached), and the checked row has to be a round the record
 does NOT fall in, or it pairs with it and is never loose to begin with.
 
+##### AND THE DROP IS A MERGE: take the side that HAS it, ask where they differ
+
+The office, over a drag in progress: *"现在我要drag去下面一个 每一次merge 你
+要看有什么部分不一样 有的就跟着有的 例如下面的没有工人 上的有工人那就跟着上
+的 上的有日期下的没有 就跟有日期的 但是chemical部分会不一样 如果不一样 你要
+让我选哪一个是对的 还是两个都不对 我可以manual改"*.
+
+**THE TWO ROWS BECOME ONE, AND THE ONE THAT STAYS IS THE SCHEDULE ROW.**
+That is the row the office checks, the row the claim pays and the row that
+carries the round; the record becomes its waiting submission, which is what
+writing `week_no` already did. So the drag did not change — what it opens
+did.
+
+**THREE STATES PER FIELD, and the office named all three.** A field only one
+side has, or one both sides agree on, is **STATED and never asked**: a choice
+with one answer is a question nobody has to read, and a dialog of them is a
+dialog people click through. A disagreement is asked, with **neither, key
+it** as a third answer, because *两个都不对* is a real outcome and a pair of
+wrong options is a dialog somebody has to cancel out of.
+
+**TWO FIELDS ARE NOT MERGED, AND THE WORKER IS ONE OF THEM** — which is the
+office's own FIRST example (*下面的没有工人 上的有工人*), so it cannot simply
+be absent: a dialog silent about the field somebody named reads as the dialog
+ignoring them. It has a row of its own, shown and not asked:
+
+| | |
+|---|---|
+| **the CREW** | a tick is MONEY, written when the Field Conductor APPROVES (`syncTicks`). Copying a name here would either credit somebody for work nobody signed off, or — written as a remark — put a sentence on the row that LOOKS like a credit and pays nobody. The row says when it lands instead. |
+| **the QUANTITY** | the office settled this one themselves — *"link的capacity完全不要管手机送进来的，我要link这个summary report"*. The phone sends the balance of the batches ticked as at the day it was SAVED, counting neither culling, which is not the figure the claim is reconciled against. It is not a field of the dialog at all. |
+
+**THE OFFICE'S OWN EXAMPLE PAIR AGREES, and that is the reading they may want
+to correct.** Their screenshot pointed at the chemical as the thing that
+differs: *Antracol 50gm + Bond 15mL* on the record against *Round 3: Antracol
+50gm + Bond 15mL* on the row. Compared on the pairing's own `chemKey`, which
+strips `^Round N:`, those are ONE chemical wearing a round label — so nothing
+is asked, and only a genuinely different chemical raises the question.
+Section 1 of the test asserts it, so a change to that reading fails here.
+
+Five more things, and three are rules this file already has:
+
+- **THE BATCH IS A SET and the DATE is a DAY.** `255, 271` against
+  `271, 255` is one answer, matched through `PlotMovement.batchList` like
+  every other batch comparison here; `21/11/2026` against `2026-11-21` is
+  one day. Compared as strings either would be a question with one answer.
+- **A VALUE THE OFFICE KEYED IS MARKED AS THEIRS** (`_tarikhByHand` /
+  `_batchByHand`), which is exactly what that mark has always meant, so the
+  field sync does not answer a question they have answered. A value taken
+  off the RECORD carries no mark: it is the field's own first answer, and
+  `applyFieldRecords` fills only an empty cell anyway.
+- **THE ROUND LABEL IS PUT BACK ON A CHEMICAL** (`_recKeepRound`). `rowWeek`
+  reads the week off the slot where a row has one and off `Round N:` where
+  it does not, so a bare chemical written over a hand-keyed row would move
+  it to another round with nothing saying so.
+- **THE ROUND GOES TO THE DATABASE FIRST.** A merge that wrote the office
+  row and then failed on the record would leave a row carrying a worker's
+  day with nothing waiting on it.
+- **ASKED AGAIN AT THE APPLY**, both the permission and `recPinRefusal`: the
+  dialog has been on screen, and the row may have been Checked under it.
+- **IT IS STYLED OFF THE PAGE ROOT TOKENS AND NEVER `--wr-*`.** Those are
+  declared on `#tab-record` and the dialog is drawn at body level, so a
+  `var(--wr-muted)` in there resolves to nothing at all — the same shape as
+  the tint fault one section up, one selector along.
+
+`tests/a_merge_takes_the_side_that_has_it.cjs` is 42 checks and **30 fail on
+the previous page**. `recMergeRows` is pure — states in, states out — so
+section 1 drives the real rule rather than reading the dialog back. Two
+things its fixture had to learn, both of which make the whole file pass over
+what it is for: **no row may be the record's own round**, or the record pairs
+and there is no loose row to drag (the first version wrote one as Round 3
+against a week-3 record and every drag check read *no draggable loose row*);
+and **only ONE side may carry the remark**, or the *one side has it* rule —
+the office's own first sentence — is tested nowhere.
+
+**Nothing to run in the database.** The whole of it is on the screen.
+
 ## Worker Activity downloads ONE job, for the nurseries ticked
 
 The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果

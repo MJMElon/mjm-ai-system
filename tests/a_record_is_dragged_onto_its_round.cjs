@@ -273,9 +273,19 @@ const seedFn = () => {
 
   try {
   console.log('\n3. The drop writes the ROUND, on that record, and nothing else');
+  /* THE DROP OPENS THE MERGE DIALOG and the write is behind its Merge
+     button — a field only one side has is taken, and a disagreement is
+     asked. `a_merge_takes_the_side_that_has_it.cjs` is all of that; what
+     this section is still about is the ROUND, which is the one thing the
+     drag itself decides. */
   await clearWrites();
   const d = await drag(9101, 602);
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(200);
+  check('the drop itself writes nothing', (await writes()).length, 0);
+  check('…it opens the merge dialog', await ev(() =>
+    document.getElementById('rec-merge-modal').classList.contains('open')), true);
+  await ev(() => recMergeApply());
+  await page.waitForTimeout(250);
   const w = await writes();
   check('one write', (w.filter ? w : []).length, 1);
   const only = (w[0] || {});
