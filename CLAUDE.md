@@ -6140,16 +6140,32 @@ work appeared was a figure on a claim.
 So Worker Record has a fifth tab. It is DATE · PLOT · WORK · QTY and a
 column per worker, the same shape as the four beside it.
 
-**THE CREW IS READ-ONLY HERE, and that is not an omission.** The FC Portal
-is the only writer of a transplanting CREW in either repository. A tick box
-over a name here would be a second writer of somebody's pay with no rule
-about who may move it — which is exactly what the sheet's own
-`transplant_edit` permission exists to govern. The test asserts the renderer
-puts no handler on a cell of its own.
+**THE CREW WAS READ-ONLY HERE, AND THE OFFICE ASKED FOR IT OPEN** — *"每一个
+员工是用打勾的形式 打勾的下面才是数量 所以如果FC tick错人/填错号码 我们都可以改
+所以后面的check还要加一个edit选项"*. Every worker cell is a TICK with that
+worker's share under it, and **Edit** beside Check opens ONE row: tick or
+untick a name, and on the split job (polybag filling) key the figure under
+it; on the other three the figure divides by itself, off `tpShare` on the
+draft. That makes the office a second writer of the crew, and what keeps it
+safe is rules this file already has:
 
-**The one column the office does write is CHECKED** — see the section below.
-It was read-only in full for exactly as long as the claim was paid straight
-off the conductor's record.
+- **A CHECKED ROW IS NOT EDITED.** No Edit until somebody Unchecks it —
+  changing what was agreed starts with taking the agreement back. The
+  trigger would clear the tick anyway; a tick vanishing under somebody is
+  worse than a button they cannot press yet.
+- **A job recorded as NOT DONE is not edited here** — turning that answer
+  into a crew is a different decision from correcting one.
+- **`wrAllows` is asked at Edit AND at Save**, so a verified sheet refuses
+  in JavaScript.
+- **ONE write, only the crew**: `workers`, plus `total_qty` where the job
+  splits — the same two the phone writes. A crew of nobody is refused.
+- **The existing `Authenticated write` policy already allows it**, so
+  nothing to run in the database.
+
+`tests/the_office_corrects_a_transplant_crew.cjs` drives the real page with
+an `update` that LANDS (`SHOT=/path.png` draws an open row).
+
+**The office also writes CHECKED** — see the section below.
 
 **The share is the CLAIM's rule, and a test holds the two together.** One
 worker's figure is the quantity keyed against their name where the job
@@ -11160,6 +11176,32 @@ internal (BA form, remark) is printed. It is built from the rows the
 modal already drew, so the paper cannot disagree with the screen.
 `tests/an_al_shows_its_collections.cjs`; its stub projects a read to the
 columns asked for, which is the only way the fault shows. Nothing to run.
+
+## An AL balance is worked out from its DOs, and the DATABASE stores it
+
+`shared_al_orders.balance_quantity` was written by six screens, each as the
+old stored figure minus this DO, or as ordered minus what that page had
+loaded. A stale read anywhere won: on 25 Nov 2026 **82 of 429 ALs** were
+wrong, **81 too high**, and the phone Consent and DO Signing pages showed it.
+
+**The rule is the office Booking page own** (`fetchData` in
+`operation/operation_booking.html`): ordered less the `total_qty` of every DO
+on that AL that is not `Cancelled` and has no `[CANCELLED]` in its remark.
+Three copies, change all three:
+
+- `shared/RUN_ME_al_balance_is_the_dos.sql`: `al_delivered_qty`, a BEFORE
+  trigger on `shared_al_orders` that REPLACES whatever balance a screen sent,
+  and an AFTER trigger on `shared_do_records` that works the AL out again
+  when a DO is added, edited, cancelled, moved or deleted. So a stale write
+  from any app, any version, lands as the right figure.
+- `Mobile/src/lib/alBalance.js`: Consent and DO Signing work it out from the
+  DOs, paged past 1,000, and fall back to the stored figure with no line.
+- the office Booking page itself.
+
+**No screen writes the balance any more** in the office (Booking edit,
+Delivery add and delete, `mobile/mobile_do_signing.html`) or in the Admin
+Portal send. The FC Portal and the Sales Web still send one; the trigger
+replaces it. `Mobile/tests/the_al_balance_is_the_booking_figure.cjs`.
 
 ## A maturity row says how old its seedlings are
 

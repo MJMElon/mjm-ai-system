@@ -1287,9 +1287,9 @@ async function saveNewDO() {
     return;
   }
 
-  // Deduct balance on AL
+  // The database lowers the AL balance itself (shared/RUN_ME_al_balance_is_the_dos.sql).
+  // Only the screen copy moves.
   const newBalance = (activeAL.balance_quantity ?? 0) - doQty;
-  await _supabase.from('shared_al_orders').update({ balance_quantity: newBalance }).eq('id', activeAL.id);
   activeAL.balance_quantity = newBalance;
 
   // Update cached alData too
@@ -1747,9 +1747,9 @@ async function saveScanDO() {
     return;
   }
 
-  // Deduct AL balance
+  // The database lowers the AL balance itself (shared/RUN_ME_al_balance_is_the_dos.sql).
+  // Only the screen copy moves.
   const newBalance = (activeAL.balance_quantity ?? 0) - totalQty;
-  await _supabase.from('shared_al_orders').update({ balance_quantity: newBalance }).eq('id', activeAL.id);
   activeAL.balance_quantity = newBalance;
   const idx = alData.findIndex(r => r.id === activeAL.id);
   if (idx > -1) alData[idx].balance_quantity = newBalance;
