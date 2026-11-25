@@ -205,14 +205,14 @@ async function open(browser, port, level, tab) {
     is(await page.$$eval('[data-nv] .text-2xl ~ div', (d) => d.length), 0, 'each block is its title and its qty, nothing under them');
     is(await page.$$eval('#list-note, #rp-note', (d) => d.length), 0, 'and no line beside the search bar');
     const rowsOf = () => page.$$eval('#list-table tbody tr', (t) => t.map((r) => [...r.children].map((c) => c.textContent.replace(/\s+/g, ' ').trim())));
-    is(await page.$$eval('#list-table thead th', (t) => t.map((h) => h.textContent.trim())), ['Seal range ▲', 'Qty', 'Customer', 'Consent date', ''],
+    is(await page.$$eval('#list-table thead th', (t) => t.map((h) => h.textContent.trim())), ['Seal range ▼', 'Qty', 'Customer', 'Consent date', ''],
       'Seal with Customer reads like Seal used: range, qty, customer, consent date, and a button');
-    is(await rowsOf(), [['009601 – 010000', '400', 'Ah Seng FarmAL-1234', '03 Oct 2026', 'Key DO'],
-      ['010001 – 012000', '2,000', 'Kebun Maju ⚠ 1AL-1240', '05 Oct 2026', 'View consent Key DO']],
-      'one flat list in seal-number order across customers, and a run part-scanned still reads as one start and end');
+    is(await rowsOf(), [['010001 – 012000', '2,000', 'Kebun Maju ⚠ 1AL-1240', '05 Oct 2026', 'View consent Key DO'],
+      ['009601 – 010000', '400', 'Ah Seng FarmAL-1234', '03 Oct 2026', 'Key DO']],
+      'one flat list NEWEST FIRST across customers, and a run part-scanned still reads as one start and end');
     is((await page.$eval('#list-table', (e) => e.textContent)).includes('009001'), false, 'a used seal is not listed as with the customer');
     await page.click('#nv-sort');
-    is((await rowsOf()).map((r) => r[0]), ['010001 – 012000', '009601 – 010000'], 'pressing Seal range turns it to descending');
+    is((await rowsOf()).map((r) => r[0]), ['009601 – 010000', '010001 – 012000'], 'pressing Seal range turns it to ascending');
     await page.click('#nv-sort');
     await page.click('#list-table [data-consent]');
     await page.waitForFunction(() => /Signature/.test(document.getElementById('modal-body').textContent), null, { timeout: 3000 }).catch(() => {});
@@ -475,7 +475,8 @@ async function open(browser, port, level, tab) {
     page = await open(browser, port, 'normal');
     await page.waitForSelector('#list-table [data-keydo]', { timeout: 5000 });
     await page.evaluate(() => { window.__RPCDATA.seal_settle_scan = { __error: 'Some of these seals were scanned already. Key only the seals that were not scanned.' }; });
-    await page.click('#list-table [data-keydo]');
+    await page.evaluate(() => [...document.querySelectorAll('#list-table tbody tr')]
+      .find((r) => r.textContent.includes('009601')).querySelector('[data-keydo]').click());
     await page.waitForSelector('#kd-start', { timeout: 3000 });
     is([await page.$eval('#kd-start', (e) => e.value), await page.$eval('#kd-end', (e) => e.value)], ['009601', '010000'],
       'Key DO on a Seal with Customer row opens on that range, to be narrowed to what was not scanned');

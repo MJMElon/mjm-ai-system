@@ -1212,13 +1212,19 @@ function renderBlocks() {
 }
 document.querySelectorAll('[data-nv]').forEach((el) => el.addEventListener('click', () => {
   nurseryView = el.dataset.nv;
+  nurserySort = nurserySortOf[nurseryView] || 'asc';
   renderBlocks(); renderList();
 }));
 
 // Every list is in seal-number order, whoever the seals went to; the Seal
 // range heading turns it round.
-let nurserySort = 'asc';
-function toggleNurserySort() { nurserySort = nurserySort === 'asc' ? 'desc' : 'asc'; renderList(); }
+// Seal with Customer opens NEWEST FIRST -- the office asked for it, the
+// consent signed this morning being the one somebody is looking for. The
+// other two lists keep seal-number order rising. Each list remembers its own
+// direction, so turning one round does not turn the others.
+const nurserySortOf = { cust: 'desc', cab: 'asc', used: 'asc' };
+let nurserySort = nurserySortOf.cust;
+function toggleNurserySort() { nurserySort = nurserySortOf[nurseryView] = nurserySort === 'asc' ? 'desc' : 'asc'; renderList(); }
 function sortHead() {
   return '<th><button type="button" id="nv-sort" onclick="toggleNurserySort()" class="uppercase tracking-[.12em] font-black" style="color:inherit" title="Sort by seal number">Seal range '
     + (nurserySort === 'asc' ? '▲' : '▼') + '</button></th>';
