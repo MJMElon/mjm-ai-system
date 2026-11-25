@@ -3667,7 +3667,7 @@ function _spDrawNames(m, st) {
       ${_spWorkerSelect(st)}
       <input type="text" id="sp-new-name-other" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}" style="display:none;"
         onkeydown="if(event.key==='Enter'){event.preventDefault();addSeedPlantingWorker();}">
-      <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingWorker()">+ ${esc(t('pay.spAdd'))}</button>
+      <button type="button" id="sp-name-confirm" class="btn btn-sm btn-primary" onclick="addSeedPlantingWorker()"${_spPick.open.length ? '' : ' style="display:none;"'}>${esc(t('pay.spConfirm'))}</button>
     </span></div>${_spBatchBar(m, st)}`;
 }
 
@@ -3688,7 +3688,7 @@ function _spBatchBar(m, st) {
     ${out}
     <span class="sp-names-add">
       ${_spBatchSelect(m, st)}
-      <button type="button" class="btn btn-sm btn-primary" onclick="addSeedPlantingBatch()">+ ${esc(t('pay.spAddBatch'))}</button>
+      <button type="button" id="sp-batch-confirm" class="btn btn-sm btn-primary" onclick="addSeedPlantingBatch()" style="display:none;">${esc(t('pay.spConfirm'))}</button>
     </span></div>`;
 }
 
@@ -3815,6 +3815,10 @@ function _spPickWorker(v) {
     box.style.display = v === '__other' ? '' : 'none';
     if (v === '__other') box.focus();
   }
+  /* Confirm shows only once there is something to confirm: a group open,
+     or Other picked. No standing Add button (*"不用 直到选的时候 按confirm"*). */
+  const ok = document.getElementById('sp-name-confirm');
+  if (ok) ok.style.display = (v === '__other' || _spPick.open.length) ? '' : 'none';
   const b = /^g\d+$/.test(v || '') ? _spBands[+v.slice(1)] : null;
   if (!b) return;
   if (!_spPick.open.includes(b.label)) _spPick.open.push(b.label);
@@ -3846,7 +3850,9 @@ function _spBatchSelect(m, st) {
       .map(b => `<option value="${esc(b)}">${esc(b)} · ${esc(_spDay(st.home[b]))} · ${(st.homeQty[b] || 0).toLocaleString(USAGE_LOCALE)}${st.moved[b] ? ' (' + esc(st.moved[b]) + ')' : ''}</option>`)
       .join('');
   }
-  return `<select id="sp-new-batch" class="sp-pick">
+  /* NO STANDING ADD BUTTON -- *"add worker add batch 不用 直到选的时候 按
+     confirm就直接下去"*. Confirm appears once something is picked. */
+  return `<select id="sp-new-batch" class="sp-pick" onchange="(function(v){var c=document.getElementById('sp-batch-confirm');if(c)c.style.display=v?'':'none';})(this.value)">
     <option value="">${esc(t(opts ? 'pay.spPickBatch' : 'pay.spNoLateBatch'))}</option>${opts}
   </select>`;
 }
@@ -5474,8 +5480,8 @@ const I18N = {
     'pay.qtyHoles':'Qty to fill',
     'pay.jobSeed':'Seed Planting', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
-    'pay.spNamePh':'Worker name', 'pay.spAdd':'Add worker', 'pay.spRemove':'Remove',
-    'pay.spPickWorker':'Pick a worker…', 'pay.spPickGroup':'Pick a position…', 'pay.spTickSome':'Tick at least one name, then press Add.', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
+    'pay.spNamePh':'Worker name', 'pay.spConfirm':'Confirm', 'pay.spRemove':'Remove',
+    'pay.spPickWorker':'Pick a worker…', 'pay.spPickGroup':'Pick a position…', 'pay.spTickSome':'Tick at least one name, then press Confirm.', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
     'pay.spPickBatch':'Pick a batch…', 'pay.spNoLateBatch':'No batch from the last two months',
     'pay.spCheck':'Check', 'pay.spUncheckTip':'Checked — this row is on the Seed Planting payroll. Press to uncheck and correct it.',
     'pay.spCheckOff':'Batch {b}: the workers add up to {k}, but {q} were planted.\n\nCheck it anyway? It goes to the payroll as keyed.',
@@ -5484,7 +5490,7 @@ const I18N = {
     'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
     'pay.spRemoveQ':'Remove {w} from the {m} list?',
     'pay.spBatches':'Batches added by hand:', 'pay.spNoBatches':'None. A batch planted too late for its own month can be added here.',
-    'pay.spBatchPh':'Batch no.', 'pay.spAddBatch':'Add batch', 'pay.spPlantedOn':'planted {d}',
+    'pay.spBatchPh':'Batch no.', 'pay.spPlantedOn':'planted {d}',
     'pay.spMovedOut':'Moved out of this month: {list}',
     'pay.spNoSuchBatch':'Batch {b} has no Seed Planting on any batch report.',
     'pay.spBatchHere':'Batch {b} is already on the {m} sheet.',
@@ -5691,8 +5697,8 @@ const I18N = {
     'pay.qtyHoles':'Kuantiti diisi',
     'pay.jobSeed':'Penanaman Benih', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
-    'pay.spNamePh':'Nama pekerja', 'pay.spAdd':'Tambah pekerja', 'pay.spRemove':'Buang',
-    'pay.spPickWorker':'Pilih pekerja…', 'pay.spPickGroup':'Pilih jawatan…', 'pay.spTickSome':'Tanda sekurang-kurangnya satu nama, kemudian tekan Tambah.', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
+    'pay.spNamePh':'Nama pekerja', 'pay.spConfirm':'Sahkan', 'pay.spRemove':'Buang',
+    'pay.spPickWorker':'Pilih pekerja…', 'pay.spPickGroup':'Pilih jawatan…', 'pay.spTickSome':'Tanda sekurang-kurangnya satu nama, kemudian tekan Sahkan.', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
     'pay.spPickBatch':'Pilih batch…', 'pay.spNoLateBatch':'Tiada batch dari dua bulan lepas',
     'pay.spCheck':'Semak', 'pay.spUncheckTip':'Disemak — baris ini dalam gaji Seed Planting. Tekan untuk nyahsemak dan betulkan.',
     'pay.spCheckOff':'Batch {b}: jumlah pekerja {k}, tetapi {q} ditanam.\n\nSemak juga? Ia masuk gaji seperti diisi.',
@@ -5701,7 +5707,7 @@ const I18N = {
     'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
     'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',
     'pay.spBatches':'Batch ditambah sendiri:', 'pay.spNoBatches':'Tiada. Batch yang ditanam terlalu lewat untuk bulannya boleh ditambah di sini.',
-    'pay.spBatchPh':'No. batch', 'pay.spAddBatch':'Tambah batch', 'pay.spPlantedOn':'ditanam {d}',
+    'pay.spBatchPh':'No. batch', 'pay.spPlantedOn':'ditanam {d}',
     'pay.spMovedOut':'Dipindah keluar bulan ini: {list}',
     'pay.spNoSuchBatch':'Batch {b} tiada Seed Planting dalam mana-mana laporan batch.',
     'pay.spBatchHere':'Batch {b} sudah ada dalam {m}.',

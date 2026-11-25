@@ -10469,6 +10469,9 @@ a group picked stays OPEN under the dropdown, the dropdown goes back to its
 prompt and stops offering the open ones, ticks ride across groups and
 redraws (`_spPick`), and one Add takes them all. The *Use last month names*
 button came off (*删掉*); last month is a group in the dropdown instead.
+**And there is no standing Add button on either bar** (*"add worker add batch
+不用 直到选的时候 按confirm就直接下去"*): Confirm appears once a position is
+open, Other is picked, or a batch is chosen, and it does what Add did.
 
 **Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
 The figures go into `nops_seed_planting_batch_workers`, one record per
