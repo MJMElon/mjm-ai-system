@@ -672,6 +672,34 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
   color:#065f46;background:#ecfdf5;border:1.5px solid #a7f3d0;border-radius:999px;padding:6px 14px;margin-right:6px;vertical-align:middle;}
 .chk-btn.chk-locked{cursor:not-allowed;opacity:.55;}
 
+/* ─── WAITING FOR THE CONDUCTOR ───
+   A Pending row that somebody has already done. AMBER and never green: a
+   green mark here would read as the green Checked badge two cells along,
+   which means the opposite — settled. Amber is the colour this module
+   already uses for "somebody has answered and nobody has agreed yet".
+
+   It sits in the DATE cell because that cell is otherwise a dash on such a
+   row: the record is unverified, so applyFieldRecords has filled no date,
+   no batch and no quantity, and the chip carries the day the worker says
+   they did it. Smaller than the Checked badge, deliberately — it is a
+   state the row is passing through, not a signature. */
+/* UNDER the date and never beside it. `.rec-table` is table-layout:fixed,
+   so the date column is 103px whatever is put in it and an inline chip
+   runs straight over the Work Type column of the row beneath — which
+   makes two rows unreadable instead of one. Block, and only as wide as
+   its own text, so it sits on a line of its own inside the cell. In the
+   foot's loose rows it is inline in a colspan cell with room to spare,
+   which is why that one keeps the whole sentence. */
+.rec-waiting{display:block;width:fit-content;max-width:100%;font-size:11px;
+  font-weight:900;letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:#92400e;background:#fffbeb;border:1.5px solid #fde68a;
+  border-radius:999px;padding:2px 8px;margin:3px 0 0;}
+.rec-row-loose .rec-waiting{display:inline-block;margin:0;}
+/* A row for work that matched no scheduled round. Tinted the same amber,
+   very lightly, so it reads as one block at the foot rather than as rows
+   somebody has to notice are different. */
+.rec-row-loose > td{background:#fffdf5;}
+
 /* ─── AUDIT VERDICT ───
    The Auditor Portal's answer for this job, in that portal's own two
    colours so the same verdict looks the same on both screens. Read-only:
@@ -1925,21 +1953,6 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 /* The nursery and month line under the head: a subtitle, not a second title. */
 #tab-record .page-hdr{margin:0 0 10px;}
 #tab-record .page-hdr-title{font-size:15px;font-weight:600;color:var(--wr-muted);letter-spacing:0;}
-
-/* ── The progress strip: two lines of figures over two slim bars ── */
-#tab-record #rec-metrics{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:12px 28px;
-  margin:0 0 14px;padding:12px 16px;background:#fff;border:1px solid var(--wr-line);border-radius:var(--wr-r);}
-@media(max-width:900px){#tab-record #rec-metrics{grid-template-columns:1fr;}}
-.rp-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px;margin-bottom:7px;}
-.rp-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--wr-text);margin-right:2px;}
-.rp-item{display:inline-flex;align-items:baseline;gap:6px;padding-left:14px;border-left:1px solid var(--wr-line);}
-.rp-lbl{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--wr-muted);}
-.rp-val{font-size:15px;font-weight:700;color:var(--wr-text);font-variant-numeric:tabular-nums;}
-.rp-pend .rp-val{color:var(--wr-amber);}
-.rp-pct{margin-left:auto;font-size:13px;font-weight:700;color:var(--wr-ink);font-variant-numeric:tabular-nums;}
-.rp-bar{height:6px;border-radius:99px;background:#e9eeeb;overflow:hidden;}
-.rp-bar>span{display:block;height:100%;border-radius:99px;background:var(--wr-ink);transition:width .3s;}
-.rp-repair .rp-bar{height:4px;}
 
 /* ── The toolbar: one height, one radius, one light border ── */
 #recview-list .toolbar{gap:8px;margin-bottom:12px;}

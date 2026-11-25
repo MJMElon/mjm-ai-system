@@ -91,12 +91,22 @@ async function boot(opts) {
     window.Chart = class { constructor() {} update() {} destroy() {} resize() {} };
 
     function makeQuery(table) {
-      const st = { nots: [], eqs: [], op: 'select', cols: '', patch: null, single: false };
+      const st = { nots: [], iss: [], eqs: [], op: 'select', cols: '', patch: null, single: false };
       const base = () => (window.__DB[table] || (window.__DB[table] = []));
       const rows = () => {
         let out = base().slice();
         st.nots.forEach(([c, op, v]) => {
           if (op === 'is' && v === null) out = out.filter((r) => r[c] != null);
+        });
+        /* `.is(col, null)` IS A FILTER, and a stub that drops it is blunter
+           than the database. It was ignored here while every fixture held
+           only rejected records, so nothing noticed; the moment a reader
+           asked for the UNapproved ones (`is verified_at null` AND `is
+           rejected_at null`) the refused record came back as one waiting,
+           and the page drew a chip the real table would never have fed it.
+           A stub that accepts anything signs off work the database refuses. */
+        st.iss.forEach(([c, v]) => {
+          if (v === null) out = out.filter((r) => r[c] == null);
         });
         st.eqs.forEach(([c, v]) => { out = out.filter((r) => String(r[c]) === String(v)); });
         return out;
@@ -147,6 +157,7 @@ async function boot(opts) {
         if (p === 'then')   return (a, b) => Promise.resolve(run()).then(a, b);
         if (p === 'select') return (c) => { st.cols = c || ''; return q; };
         if (p === 'not')    return (c, op, v) => { st.nots.push([c, op, v]); return q; };
+        if (p === 'is')     return (c, v) => { st.iss.push([c, v]); return q; };
         if (p === 'eq')     return (c, v) => { st.eqs.push([c, v]); return q; };
         if (p === 'update') return (patch) => { st.op = 'update'; st.patch = patch; return q; };
         if (p === 'delete') return () => { st.op = 'delete'; return q; };
@@ -179,13 +190,25 @@ async function boot(opts) {
 
   /* The page redirects when MJMAccess denies, and the Setting tab and the
      admin-only buttons hang off isAdminOf — so it answers yes to everything,
-     which is the person this screen is for. */
+     which is the person this screen is for.
+
+     AND `permissions()` HAS TO SAY THE MODULE LEVEL, which an empty object
+     does not. `mayMaintAct` reads `nursery_ops_actions.maintenance` first
+     and, finding nothing, falls back to `_nopsLevel() !== 'none'` — so a
+     `{}` here is not "answers yes to everything", it is NO to every action
+     gate, Approve included. It read `{}` until `approveSubmission` grew
+     that gate, and then this file stopped halfway through with its approve
+     and delete sections never asked: the stub was answering a question
+     about the office as though nobody had ever been given the module.
+     A level and no actions is also the office's real shape — nobody has
+     keyed a per-action tick, so the module decides. */
   await page.route('**/shared_access.js', (r) => r.fulfill({
     status: 200, contentType: 'application/javascript',
     body: `window.MJMAccess = new Proxy({}, { get(t, k) {
       if (k === 'user') return () => ({ id:'u1', email:'elon.mjm@gmail.com', full_name:'Elon Ting' });
       if (k === 'load') return async () => true;
-      if (k === 'perms' || k === 'permissions' || k === 'profile') return () => ({});
+      if (k === 'perms' || k === 'permissions' || k === 'profile')
+        return () => ({ modules: { nursery_ops: 'admin' } });
       if (k === 'normalize') return (x) => x || {};
       if (k === 'then') return undefined;
       return () => true;
@@ -272,12 +295,21 @@ const recText = (page) => page.evaluate(() =>
     const secs = await page.evaluate(() => ({
       approvedOpen: document.getElementById('recsec-approved').classList.contains('active'),
       rejectedOpen: document.getElementById('recsec-rejected').classList.contains('active'),
+      pendingOn: document.getElementById('recsec-btn-pending').classList.contains('active'),
       tabs: [...document.querySelectorAll('#recview-list > .subtabs-bar .subtab-btn')]
               .map((b) => (b.textContent || '').replace(/\s+/g, ' ').trim())
     }));
-    check('the list has two sections, named on their own tabs',
-          secs.tabs, ['✓ Approved', '⛔ Rejected 1']);
-    checkTrue('…and opens on the approved one', secs.approvedOpen);
+    /* THREE SECTIONS NOW, and the emoji have gone. The office split
+       Approved into Pending and Approved — *"approved 分成 pending &
+       approved"* — and the module's one design pass took the emoji off
+       every tab and title. Neither moved a key: `recsec-approved` is still
+       the pane, which is why `approvedOpen` is true on the Pending tab —
+       Pending and Approved share it, so what says which one is open is the
+       BUTTON. A count is drawn only where there is something to count, the
+       same rule the Rejected badge follows, so Pending is bare here. */
+    check('the list has three sections, named on their own tabs',
+          secs.tabs, ['Pending', 'Approved', 'Rejected 1']);
+    checkTrue('…and opens on Pending', secs.pendingOn);
     checkFalse('…with the sent-back one behind its tab, not stacked below',
                secs.rejectedOpen);
 
@@ -369,11 +401,32 @@ const recText = (page) => page.evaluate(() =>
           [writes[0].patch.rejected_at, writes[0].patch.rejected_by, writes[0].patch.reject_reason],
           [null, null, null]);
 
+    /* AND "THE APPROVED LIST" IS A TAB NOW, which is the office's own split
+       and is what this check was always describing: the row leaves Pending
+       the moment it is signed off and turns up under Approved. Read on
+       Pending it is correctly absent, so it is read where it went — and the
+       pair is asked, because "gone from Pending" alone would pass just as
+       well over a row that went nowhere at all. */
+    const stillPending = await recText(page);
+    checkFalse('it is GONE from Pending, which is what approving it means',
+               stillPending.includes(SHOWN_DATE));
+    await page.evaluate(() =>
+      switchRecSection('approved', document.getElementById('recsec-btn-approved')));
+    await page.waitForTimeout(150);
     const after = await recText(page);
     checkTrue('IT FLOWED BACK INTO THE APPROVED LIST — the scheduled row now '
             + 'carries the day it was worked', after.includes(SHOWN_DATE));
     checkTrue('…the batch the worker ticked', after.includes('252'));
-    checkTrue('…and the quantity he counted', after.includes('1,400'));
+    /* AND NOT THE QUANTITY, which is the office's own later decision:
+       *"link的capacity完全不要管手机送进来的，我要link这个summary report"*.
+       The phone's figure is the balance of the batches ticked as at the day
+       it was SAVED and counts neither culling, so it disagreed with the one
+       report the office reconciles against — `applyFieldRecords` writes the
+       date and the batches and no quantity at all. This check asked for
+       1,400 and had been unreachable since the run started dying at the
+       approve above, so it never said so. */
+    checkFalse('…and NOT the quantity, which the link works out itself',
+               after.includes('1,400'));
     await page.close();
   }
 

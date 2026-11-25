@@ -153,6 +153,52 @@ IMMUTABLE
 AS $$ SELECT upper(regexp_replace(COALESCE(s, ''), '[^a-zA-Z0-9]', '', 'g')); $$;
 
 
+-- The plot a replant plot is the replant OF, as a worker_key, or NULL for a
+-- plot that is not a replant at all. B3-R is B3, B4-R2 is B4, and a split
+-- area B4-R#A is judged by its plot.
+--
+-- IT EXISTS BECAUSE A -R PLOT IS MADE MID-MONTH. A 3rd-culling transfer
+-- lands on ground that was not a plot the day before, so a boundary keyed at
+-- the start of the month cannot name it -- and worker_key compares on letters
+-- and digits, which makes B3 and B3R two keys. The office: 月头 没有B3-R
+-- 结果15号那天B3-R出现 … 如果两边都有做 B3 和 B3-R都要按. And the reason:
+-- 可能B3已经没有苗了 要cull了 但是B3-R没出现 他们就会按B3 结果B3的balance
+-- 其实是要被cull的 -- the replant is where the seedlings now are and the
+-- parent is the ground about to be culled.
+--
+-- No regular expression, unlike worker_key above: split_part with position
+-- and translate do the same work, and this file is pasted into the SQL
+-- Editor, which has choked on one.
+--
+-- SHARED RULE -- replantParent() in Barcode_Counter
+-- src/modules/maintenance/plotBatches.js, which is the phone own copy and
+-- answers in plotKey spelling rather than worker_key. Change one, change the
+-- other.
+CREATE OR REPLACE FUNCTION public.worker_replant_parent(s TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  WITH n AS (
+    SELECT upper(btrim(split_part(COALESCE(s, ''), '#', 1))) AS v
+  ), p AS (
+    SELECT v,
+           position('-R' in v)            AS at,
+           split_part(v, '-R', 1)         AS head,
+           substr(v, position('-R' in v) + 2) AS tail
+      FROM n
+  )
+  SELECT CASE
+           WHEN at > 1
+            AND btrim(head) <> ''
+            AND (tail = '' OR translate(tail, '0123456789', '') = '')
+           THEN public.worker_key(head)
+           ELSE NULL
+         END
+    FROM p;
+$$;
+
+
 -- ── 5. Sessions in, worker out ──────────────────────────────────────────
 
 -- The one gate every other function goes through. Returns the worker row, or
@@ -363,6 +409,18 @@ AS $$ DELETE FROM mjmnpayroll_worker_sessions WHERE token = p_token; $$;
 -- the real plot list. Everything the worker portal shows is filtered here,
 -- in the database, rather than in the phone: a boundary enforced only by
 -- what the screen draws is not a boundary.
+--
+-- A PLOT WHOSE REPLANT PARENT IS ON THE LIST IS ON THE LIST, which is the
+-- one OR at the end. See worker_replant_parent above for why. It travels ONE
+-- WAY ONLY: a boundary naming B3 opens B3-R, because the replant IS the
+-- parent own ground moved, and a boundary naming B3-R does NOT open B3,
+-- because the office put that worker on the replant. NULL IN (...) is never
+-- TRUE, so an ordinary plot simply does not match that branch, and an EMPTY
+-- plot list still means nobody.
+--
+-- The row keeps the REPLANT own spelling, because worker_submit_maint takes
+-- the plot name back from this function: a morning on B3-R is filed under
+-- B3-R and never under B3, which is the whole point of the office asking.
 CREATE OR REPLACE FUNCTION public.worker_plots(p_token UUID)
 RETURNS TABLE (nursery_name TEXT, plot_name TEXT)
 LANGUAGE plpgsql
@@ -395,6 +453,8 @@ BEGIN
                  SELECT public.worker_key(x) FROM jsonb_array_elements_text(nur) AS x))
        AND (jsonb_typeof(plt) <> 'array'
             OR public.worker_key(p.plot_name) IN (
+                 SELECT public.worker_key(x) FROM jsonb_array_elements_text(plt) AS x)
+            OR public.worker_replant_parent(p.plot_name) IN (
                  SELECT public.worker_key(x) FROM jsonb_array_elements_text(plt) AS x))
      ORDER BY p.nursery_name, p.plot_name;
 END;
@@ -894,6 +954,7 @@ GRANT EXECUTE ON FUNCTION public.worker_signin(TEXT)                     TO anon
 GRANT EXECUTE ON FUNCTION public.worker_whoami(UUID)                     TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.worker_signout(UUID)                    TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.worker_plots(UUID)                      TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.worker_replant_parent(TEXT)             TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.worker_plot_batches(UUID)               TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.worker_submit_maint(UUID, JSONB)        TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.worker_my_records(UUID, INT)            TO anon, authenticated;
