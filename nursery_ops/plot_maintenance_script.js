@@ -13643,6 +13643,10 @@ function renderJobCrewSetting() {
     corner.innerHTML = editing || !maySetting() ? ''
       : `<button class="btn btn-sm cm-set-open" onclick="jcEdit()">&#9998; Edit</button>`;
   }
+  /* The rule, the register and the stored groups arrive in no fixed order,
+     so the follow is asked again whenever this card draws; it does its work
+     once, when all three are in hand. */
+  _cullFollowGroups();
 }
 
 function jcEdit() {
