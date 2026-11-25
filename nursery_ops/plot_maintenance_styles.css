@@ -701,11 +701,30 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
    it used to sit under, and the tag beside the waiting chip is what used to
    be that heading. Slate and not amber: the amber chip beside it is the
    state the row is in, and this is a fact about the schedule. */
-.rec-row-loose > td{background:#fffdf5;}
+/* THE TINT IS NOT HERE. `#recview-list .rec-table tbody td` sets a white
+   background with an ID in the selector, so nothing written as a class can
+   reach it — these rows live in the WORK RECORDS block at the end of this
+   file and are tinted there. Written here it looked right in the source and
+   did nothing on the screen, which is the one shape of wrong a stylesheet
+   must not have. */
 .rec-loose-tag{display:inline-block;font-size:10.5px;font-weight:800;
   letter-spacing:.3px;white-space:nowrap;color:#475569;background:#f1f5f9;
   border:1.5px solid #e2e8f0;border-radius:999px;padding:2px 8px;
   margin-left:6px;cursor:help;}
+/* ─── DRAGGED ONTO THE ROUND IT BELONGS TO ───
+   The grab cursor is the whole of what says a row can be picked up, so it
+   is on the row only where there IS a round to drop it on. The rows that
+   can take it are outlined while it is in the air — a drop target nobody
+   can see is a gesture somebody has to be told about. */
+.rec-row-drag{cursor:grab;}
+.rec-row-drag:active{cursor:grabbing;}
+/* The two tints are in the WORK RECORDS block, for the reason above. */
+/* The way back off a round. A SIBLING of the chip and not a child, the rule
+   the rejected signup and the audit board already follow. */
+.rec-unpin{display:inline-block;margin-left:4px;padding:0 4px;border:0;
+  background:transparent;color:#92400e;font-size:13px;font-weight:900;
+  line-height:1;cursor:pointer;border-radius:4px;vertical-align:middle;}
+.rec-unpin:hover{background:#fef3c7;}
 
 /* ─── AUDIT VERDICT ───
    The Auditor Portal's answer for this job, in that portal's own two
@@ -1996,6 +2015,20 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
   border-bottom:1px solid var(--wr-line);border-left:none;border-right:none;background:#fff;vertical-align:middle;}
 #recview-list .rec-table tbody tr:not(.plot-group-row):hover td{background:var(--wr-hover);}
 #recview-list .rec-table tr.rec-row-checked td{background:#fbfdfc;}
+/* ── A RECORD NO ROUND CLAIMS, AND WHERE IT MAY BE DROPPED ──
+   Written HERE and not beside the markup rules four hundred lines up,
+   because `#recview-list .rec-table tbody td` carries an ID and sets white:
+   a class rule cannot reach it, however many times it is repeated. */
+#recview-list .rec-table tr.rec-row-loose td{background:#fffdf5;}
+#recview-list .rec-table tr.rec-drop-ok td{background:#dcfce7;
+  box-shadow:inset 0 1px 0 #86efac,inset 0 -1px 0 #86efac;}
+#recview-list .rec-table tr.rec-drop-over td{background:#86efac;
+  box-shadow:inset 0 2px 0 var(--wr-ink),inset 0 -2px 0 var(--wr-ink);}
+/* The hover rule above is the same weight and comes first, so a lit row
+   under the pointer would otherwise go back to the ordinary hover tint
+   half way through a drag. */
+#recview-list .rec-table tbody tr.rec-drop-ok:hover td{background:#dcfce7;}
+#recview-list .rec-table tbody tr.rec-drop-over:hover td{background:#86efac;}
 #recview-list .rec-table td.rc-date{font-weight:600;color:var(--wr-text);white-space:nowrap;}
 #recview-list .rec-table td.rc-plot{text-align:center;font-weight:700;color:var(--wr-ink);}
 #recview-list .rec-table td.rc-batch{text-align:left;color:var(--wr-muted);}
