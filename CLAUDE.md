@@ -8533,6 +8533,22 @@ chosen for the office -- both are offered, marked before and after.
 
 `tests/seal_dashboard.cjs` holds the office page.
 
+### NELOS for seals starts at 050001, and Seal with Customer opens newest first
+
+The office: remove the NELOS cases for seal 050000 or before, and raise
+nothing for those numbers again. `shared/RUN_ME_seal_nelos_starts_at_050001.sql`
+is `seal_settings.nelos_from_no` (50001) and ONE BEFORE INSERT trigger on
+`seal_problems`, `b_seal_nelos_from`, which drops a problem whose HIGHEST seal
+is under it. Every check files through that insert, so it covers every check
+in every file, the gap check on each DO save included. A range reaching
+050001 is kept whole; a problem naming no seal is kept. The old problems and
+every case holding nothing else were DELETED, comments with them; the seals,
+consents, scans and DOs were not touched.
+
+Seal with Customer opens NEWEST FIRST (`nurserySortOf`); the cabinet and Seal
+used still rise, and each list keeps its own direction. A customer run is
+still joined by `mergeRuns` wherever the numbers are consecutive.
+
 ## A consent downloads as a PDF, built from the saved row
 
 The Admin Portal's Customer Consent history carries a **PDF** button on every
