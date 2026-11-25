@@ -38,6 +38,29 @@
         .lp-chip { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid #e8dcc8; background: #fdfaf4; font-weight: 700; font-size: 12px; color: #5c3d1e; cursor: pointer; }
         .lp-chip:hover { border-color: #6aa83c; color: #4a7a2e; }
         .lp-chip.on { background: #4a7a2e; border-color: #4a7a2e; color: #fdfaf4; }
+        /* Map view: the Inventory Map pattern, one shape per plot. */
+        .lp-legend { display:flex; flex-wrap:wrap; gap:12px; font-size:11px; font-weight:700; color:#8a7a68; }
+        .lp-legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+        .lp-tabs { display:flex; gap:8px; flex-wrap:wrap; background:#f1ead9; border:1px solid #e8dcc8; border-radius:16px; padding:6px; }
+        .lp-tab { padding:8px 16px; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.08em; border-radius:12px; color:#8a7a68; background:#fdfaf4; border:1.5px solid transparent; cursor:pointer; }
+        .lp-tab:hover { color:#3d2610; }
+        .lp-tab.on { background:#4a7a2e; color:#fdfaf4; border-color:#3f6a26; }
+        .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
+        .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
+        .lp-stage.drag { cursor:grabbing; }
+        .lp-map-img { max-height:calc(min(70vh, 640px) - 24px); width:auto; display:block; user-select:none; -webkit-user-drag:none; }
+        .lp-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+        .lp-shape { pointer-events:auto; cursor:pointer; transition:fill .2s, stroke-width .2s; }
+        .lp-shape:hover { stroke-width:.8; }
+        .lp-labels { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+        .lp-label { position:absolute; display:flex; flex-direction:column; align-items:center; text-align:center; transform:translate(-50%,-50%) scale(calc(1 / var(--lp-z, 1))); transform-origin:center center; max-width:140px; }
+        .lp-tag { font-size:10px; font-weight:900; background:#fff; padding:2px 7px; border-radius:6px; color:#3d2610; border:1px solid #e8dcc8; text-transform:uppercase; letter-spacing:.04em; box-shadow:0 2px 6px rgba(61,38,16,.15); }
+        .lp-line { font-size:9px; font-weight:800; line-height:1.15; color:#3d2610; background:rgba(255,255,255,.88); padding:1px 5px; border-radius:4px; margin-top:2px; white-space:nowrap; }
+        .lp-line.empty { color:#8a7a68; font-weight:700; background:transparent; }
+        .lp-zoom { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; gap:4px; z-index:5; background:#fff; border-radius:10px; padding:4px; border:1px solid #e8dcc8; box-shadow:0 4px 10px rgba(61,38,16,.12); }
+        .lp-zbtn { width:28px; height:28px; border:none; background:#fff; color:#5c3d1e; font-weight:900; font-size:14px; border-radius:6px; cursor:pointer; }
+        .lp-zbtn:hover { background:#f1ead9; }
+        .lp-zlvl { font-size:9px; font-weight:800; color:#8a7a68; text-align:center; padding:2px 0; border-top:1px solid #e8dcc8; border-bottom:1px solid #e8dcc8; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
@@ -51,6 +74,20 @@
             <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
         </div>
         <div class="hidden md:block w-[90px]"></div>
+    </div>
+
+    <div id="lp-map" class="panel p-6 mb-6 hidden">
+        <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+            <div class="lp-chip-label">Map · click a plot for its cycles</div>
+            <div class="lp-legend">
+                <span><i style="background:#f59e0b"></i>In the field</span>
+                <span><i style="background:#3b82f6"></i>Being culled</span>
+                <span><i style="background:#22c55e"></i>3rd culled</span>
+                <span><i style="background:#94a3b8"></i>No batch</span>
+            </div>
+        </div>
+        <div id="lp-map-tabs" class="lp-tabs mb-4"></div>
+        <div id="lp-map-body"></div>
     </div>
 
     <div class="panel p-6 mb-6 space-y-3">
@@ -179,6 +216,146 @@
     const nf = n => (n ? Number(n).toLocaleString('en-MY') : '');
     const dash = v => (v ? nf(v) : '–');
     let MODEL = null;
+    let MAPS = {};        // nursery key -> map image url
+    let PLOT_SHAPES = {}; // plot key -> { name, nur, pts } from shared_plots.map_top
+    let MAP_NUR = '';
+    const MAP_ZOOM = {};
+    const MAP_FILL = {
+        none:     ['rgba(148,163,184,.22)', '#94a3b8'],
+        field:    ['rgba(251,191,36,.40)',  '#f59e0b'],
+        culling:  ['rgba(96,165,250,.40)',  '#3b82f6'],
+        finished: ['rgba(74,222,128,.40)',  '#22c55e'],
+    };
+
+    // ── Map view ──────────────────────────────────────────────
+    // Colour is how far the plot has got through its 3rd cull, read off the
+    // same figures the list shows. The pct is 3rd culled over the adjusted
+    // transplant, so it is the same answer the table gives.
+    function mapStateOf(p) {
+        if (!p || !p.batches.length || p.tAdj <= 0) return { key: 'none', pct: 0 };
+        const pct = Math.round(Math.min(100, (p.c3 / p.tAdj) * 100));
+        if (p.c3 <= 0) return { key: 'field', pct };
+        if (p.c3 >= p.tAdj) return { key: 'finished', pct: 100 };
+        return { key: 'culling', pct };
+    }
+    const fmtN = n => Number(n || 0).toLocaleString('en-MY');
+    function mapPlotIndex() {
+        const idx = {};
+        MODEL.groups.forEach(g => g.plots.forEach(p => { idx[lpPlotKey(p.plot)] = p; }));
+        return idx;
+    }
+    function renderMap() {
+        const box = document.getElementById('lp-map');
+        const keys = NURSERY_ORDER.filter(k => MAPS[k]);
+        if (!keys.length) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        if (!keys.includes(MAP_NUR)) MAP_NUR = keys.includes(NUR) ? NUR : keys[0];
+        document.getElementById('lp-map-tabs').innerHTML = keys.map(k =>
+            `<button type="button" class="lp-tab${k === MAP_NUR ? ' on' : ''}" data-map="${k}">${NURSERY_LABEL[k]}</button>`).join('');
+        drawMap();
+    }
+    function openPlotFromMap(name) {
+        showPlot(name);
+        document.getElementById('lp-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function drawMap() {
+        const k = MAP_NUR;
+        const body = document.getElementById('lp-map-body');
+        const idx = mapPlotIndex();
+        const z = MAP_ZOOM[k] || (MAP_ZOOM[k] = { z: 1, x: 0, y: 0 });
+        body.innerHTML = `
+            <div class="lp-viewport" id="lp-viewport">
+                <div class="lp-stage" id="lp-stage">
+                    <div class="relative inline-block">
+                        <img class="lp-map-img" src="${MAPS[k]}" alt="Map ${NURSERY_LABEL[k]}" draggable="false">
+                        <svg class="lp-svg" id="lp-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                        <div class="lp-labels" id="lp-labels"></div>
+                    </div>
+                </div>
+                <div class="lp-zoom">
+                    <button type="button" class="lp-zbtn" data-z="0.25" title="Zoom in">+</button>
+                    <div class="lp-zlvl" id="lp-zlvl"></div>
+                    <button type="button" class="lp-zbtn" data-z="-0.25" title="Zoom out">−</button>
+                    <button type="button" class="lp-zbtn" data-z="reset" title="Reset zoom">↺</button>
+                </div>
+            </div>`;
+        const svg = document.getElementById('lp-svg');
+        const labels = document.getElementById('lp-labels');
+        const vp = document.getElementById('lp-viewport');
+        const stage = document.getElementById('lp-stage');
+
+        Object.values(PLOT_SHAPES).filter(s => s.nur === k).forEach(s => {
+            const p = idx[lpPlotKey(s.name)];
+            const st = mapStateOf(p);
+            const [fill, stroke] = MAP_FILL[st.key];
+            const ptsStr = s.pts.map(pt => pt.x + ',' + pt.y).join(' ');
+            const cx = s.pts.reduce((a, pt) => a + pt.x, 0) / s.pts.length;
+            const cy = s.pts.reduce((a, pt) => a + pt.y, 0) / s.pts.length;
+            const tip = p ? `Transplanted ${fmtN(p.tAdj)} · 2nd cull ${fmtN(p.c2)} · 3rd cull ${fmtN(p.c3)}` : 'Nothing recorded';
+            svg.insertAdjacentHTML('beforeend',
+                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name}: ${tip}</title></polygon>`);
+            const line = st.key === 'none'
+                ? '<div class="lp-line empty">No batch</div>'
+                : `<div class="lp-line" title="${tip}">${st.pct}% 3rd culled</div>`;
+            labels.insertAdjacentHTML('beforeend',
+                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}</div>`);
+        });
+        svg.addEventListener('click', e => {
+            const el = e.target.closest && e.target.closest('.lp-shape');
+            if (el) openPlotFromMap(el.dataset.plot);
+        });
+
+        const apply = () => {
+            stage.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.z})`;
+            labels.style.setProperty('--lp-z', z.z);
+            document.getElementById('lp-zlvl').textContent = Math.round(z.z * 100) + '%';
+        };
+        const zoomTo = (nz, cx = 0, cy = 0) => {
+            const old = z.z;
+            z.z = Math.max(0.6, Math.min(5, nz));
+            const f = z.z / old;
+            z.x = (z.x - cx) * f + cx;
+            z.y = (z.y - cy) * f + cy;
+            if (z.z <= 1.01) { z.z = 1; z.x = 0; z.y = 0; }
+            apply();
+        };
+        body.querySelectorAll('.lp-zbtn').forEach(b => b.addEventListener('click', () => {
+            if (b.dataset.z === 'reset') { z.z = 1; z.x = 0; z.y = 0; apply(); }
+            else zoomTo(z.z + Number(b.dataset.z));
+        }));
+        vp.addEventListener('wheel', e => {
+            e.preventDefault();
+            const r = vp.getBoundingClientRect();
+            zoomTo(z.z + (e.deltaY < 0 ? 0.15 : -0.15), e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2);
+        }, { passive: false });
+        let last = null;
+        vp.addEventListener('pointerdown', e => {
+            if (e.target.closest('.lp-zoom')) return;
+            last = { x: e.clientX, y: e.clientY };
+            stage.classList.add('drag');
+        });
+        vp.addEventListener('pointermove', e => {
+            if (!last) return;
+            z.x += e.clientX - last.x;
+            z.y += e.clientY - last.y;
+            last = { x: e.clientX, y: e.clientY };
+            apply();
+        });
+        const endDrag = () => { last = null; stage.classList.remove('drag'); };
+        vp.addEventListener('pointerup', endDrag);
+        vp.addEventListener('pointerleave', endDrag);
+        vp.addEventListener('pointercancel', endDrag);
+        apply();
+    }
+    function setNursery(k) {
+        NUR = k;
+        if (MAPS[k]) MAP_NUR = k;
+        fillNurserySelect();
+        fillPlotSelect('');
+        renderList();
+        renderMap();
+        showList();
+    }
 
     function showList() {
         fillPlotSelect('');
@@ -222,6 +399,8 @@
         const p = MODEL.groups.flatMap(g => g.plots).find(x => x.plot === name);
         if (!p) return;
         NUR = p.nursery;
+        if (MAPS[p.nursery]) MAP_NUR = p.nursery;
+        renderMap();
         fillNurserySelect();
         fillPlotSelect(p.plot);
         document.getElementById('lp-list').classList.add('hidden');
@@ -248,18 +427,30 @@
         document.getElementById('lp-status').classList.remove('hidden');
         document.getElementById('lp-status').textContent = 'Loading…';
         try {
-            const [plots, rows] = await Promise.all([
-                lpFetchAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name').order('plot_name')),
+            const [plots, rows, nurs] = await Promise.all([
+                lpFetchAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name, map_top').order('plot_name')),
                 lpFetchAll(() => _supabase.from('shared_inventory_logs')
                     .select('id, plot_name, transaction_type, transaction_date, quantity_change, batch_name, remark, created_at')
                     .in('transaction_type', ['Transplanted', 'Stock_Calibration', '2nd_Culling', '3rd_Culling'])
                     .order('id', { ascending: true })),
+                _supabase.from('operation_nurseries').select('name, map_image_url').then(r => (r.data || []), () => []),
             ]);
+            MAPS = {};
+            (nurs || []).forEach(n => { if (n.map_image_url) MAPS[lpNurKey(n.name)] = n.map_image_url; });
+            PLOT_SHAPES = {};
+            (plots || []).forEach(p => {
+                if (lpIsReplant(p.plot_name) || !String(p.map_top || '').startsWith('[')) return;
+                try {
+                    const nk = lpNurKey(p.nursery_name);
+                    PLOT_SHAPES[lpPlotKey(p.plot_name)] = { name: p.plot_name, nur: NURSERY_ORDER.includes(nk) ? nk : 'OTHER', pts: JSON.parse(p.map_top) };
+                } catch (e) { /* a shape that will not parse is simply not drawn */ }
+            });
             MODEL = buildPlotHistory(plots, rows);
             document.getElementById('lp-status').classList.add('hidden');
             fillNurserySelect();
             fillPlotSelect('');
             renderList();
+            renderMap();
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
             if (deep) showPlot(deep); else showList();
         } catch (e) {
@@ -271,11 +462,11 @@
     document.getElementById('lp-nursery-row').addEventListener('click', e => {
         const b = e.target.closest('button[data-nur]');
         if (!b) return;
-        NUR = b.dataset.nur;
-        fillNurserySelect();
-        fillPlotSelect('');
-        renderList();
-        showList();
+        setNursery(b.dataset.nur);
+    });
+    document.getElementById('lp-map-tabs').addEventListener('click', e => {
+        const b = e.target.closest('button[data-map]');
+        if (b) setNursery(b.dataset.map);
     });
     document.getElementById('lp-plot-row').addEventListener('click', e => {
         const b = e.target.closest('button[data-plot]');
