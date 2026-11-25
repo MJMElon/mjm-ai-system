@@ -75,7 +75,7 @@ export async function checkStock(db, args = {}, now = new Date()) {
     logs(db, "Transplanted", LOGCOLS),
     logs(db, "Cull3_Transfer", LOGCOLS),
     logs(db, "3rd_Culling", "batch_name,plot_name,quantity_change,remark"),
-    logs(db, "Seeds_Received", "batch_name,breed_name"),
+    logs(db, "Seeds_Received", "batch_name,breed_name,transaction_date,created_at"),
     logs(db, "Row_Verification", "batch_name,plot_name"),
     one(db, "operation_batch_verifications", "batch_name,stage"),
     one(db, "shared_plots", "plot_name,nursery_name"),
@@ -146,14 +146,14 @@ export async function checkStock(db, args = {}, now = new Date()) {
   };
   const lines = [
     `Stock as at ${asOf}${args.breed ? " (breed matching \"" + args.breed + "\")" : ""}:`,
-    `- Available stock: ${fmt(available)} seedlings (matured ${fmt(result.matured)} + reached 1.5 m ${fmt(result.reached_1_5m)})`,
-    `- Maturing next month: ${fmt(nextNew)}`,
+    `- Available stock: ${fmt(available)} seedlings (10 months & above ${fmt(result.matured)} + 1.5 m & above ${fmt(result.reached_1_5m)})`,
+    `- Turning 10 months next month: ${fmt(nextNew)}`,
     ...breeds.map((b) => `  · ${b.breed}: ${fmt(b.available)} over ${b.plots} plot${b.plots === 1 ? "" : "s"}`),
     `- Actual order still to deliver (all breeds): ${fmt(actual)} over ${open.length} order${open.length === 1 ? "" : "s"}` +
       (result.orders_unticked_by_office ? ` (${result.orders_unticked_by_office} unticked by the office, not counted)` : ""),
     `- Available minus actual order (all breeds): ${c.available - actual >= 0 ? "+" : ""}${fmt(c.available - actual)}`,
     ...notes.map((n) => "Note: " + n),
-    "Figures are the Stock Analysis Dashboard's: Plot Balance (after 10% culling, less DOs) of plots matured by the end of this month or measured at 1.5 m or more.",
+    "Figures are the Stock Analysis Dashboard's: Plot Balance (after 10% culling, less DOs) of plots whose seedlings are 10 months old or more (from the seed-in date) or measured at 1.5 m or more.",
   ];
   return { text: lines.join("\n"), data: result };
 }

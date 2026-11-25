@@ -4,7 +4,11 @@
    a ledger small enough to add up by hand, on a clock frozen at
    17 Nov 2026 (30 days in the month, 14 of them still to come):
 
-   STOCK (Plot Balance = transplanted x 90% less DOs; matures +9 months)
+   STOCK (Plot Balance = transplanted x 90% less DOs). Available = seedlings
+   10 MONTHS OLD OR MORE (off the batch seed-in date) or measured at 1.5 m.
+   U7 / 274: transplanted Jan, so "matured" by the old +9 months rule, but
+   its seeds went in 25 Jan: it turns 10 months on 26 Nov, so it is NOT
+   available today and is counted in November's forecast stock (450).
      U1 / 250  1,000 in Jan → matured Oct, 200 out on a DO   →   700  matured
      U2 / 260  2,000 in Feb → matures Nov                     → 1,800  matured
      U3 / 270  3,000 in Apr → Jan 2027, measured 155 cm      → 2,700  reached 1.5 m
@@ -104,7 +108,7 @@ const tl = (plot, batch, qty, date) => ({ transaction_type: 'Transplanted', plot
   breed_name: 'AA Hybrida 1S', quantity_change: qty, remark: 'Transplant. Date: ' + date, created_at: date + 'T00:00:00Z' });
 const ROWS = {
   operation_nurseries: [{ id: 1, name: 'UNN 1' }],
-  shared_plots: ['U1','U2','U3','U4','U5','U6'].map(p => ({ plot_name: p, nursery_name: 'UNN 1' })),
+  shared_plots: ['U1','U2','U3','U4','U5','U6','U7'].map(p => ({ plot_name: p, nursery_name: 'UNN 1' })),
   shared_inventory_logs: [
     tl('U1', '250', 1000, '2026-01-10'),
     tl('U2', '260', 2000, '2026-02-20'),
@@ -112,6 +116,11 @@ const ROWS = {
     tl('U4', '271', 1000, '2026-03-15'),
     tl('U5', '272', 1000, '2026-01-05'),
     tl('U6', '273', 1000, '2026-04-20'),
+    tl('U7', '274', 500, '2026-01-08'),
+    ...[['250', '2025-12-01'], ['260', '2026-01-10'], ['270', '2026-04-01'], ['271', '2026-02-10'],
+        ['272', '2025-12-15'], ['273', '2026-03-20'], ['274', '2026-01-25']].map(([b, d]) => ({
+      transaction_type: 'Seeds_Received', batch_name: b, breed_name: 'AA Hybrida 1S', quantity_change: 1,
+      transaction_date: d, created_at: d + 'T00:00:00Z', remark: '' })),
     { transaction_type: '3rd_Culling', plot_name: 'U5', batch_name: '272', quantity_change: 1000,
       remark: '3rd Culling. DestType: main MapQty: 1000 CullDate:2026-10-20' }
   ],
@@ -191,30 +200,35 @@ const check = (name, got, want) => {
   console.log('2. the three cards');
   const vals = await txt('#invmap-analysis .sa-card .sa-value');
   check('Actual Order is what is still owed, cash-unpaid left out', vals[0], '7,000');
-  check('Available Stock is matured + reached 1.5 m', vals[1], '5,200');
+  check('Available Stock is 10 months & above + 1.5 m & above', vals[1], '5,200');
   check('Available − Actual Order', vals[2], '−1,800');
   check('the gap reads short', await page.evaluate(() => document.querySelectorAll('#invmap-analysis .sa-gap-neg').length), 1);
   const subs = await txt('#invmap-analysis .sa-card .sa-sub');
-  check('the stock card names its two parts', subs[1].startsWith('Matured 2,500 + Reached 1.5 m 2,700'), true);
+  check('the stock card names its two parts', subs[1].startsWith('10 months & above 2,500 + 1.5 m & above 2,700'), true);
 
   console.log('3. the forecast');
   const frows = await page.evaluate(() => [...document.querySelectorAll('#invmap-analysis .sa-fcol .sa-frow')]
     .map(r => [...r.children].map(c => c.textContent.replace(/\s+/g, ' ').trim()).join(' ')));
   check('Nov: estimated collection', frows[0], 'Estimated collection 700');
-  check('Nov: stock available', frows[1], 'Stock available 5,200');
-  check('Nov: balance after', frows[2], 'Balance after +4,700 Enough');
+  check('Nov: stock available is what is on hand + what turns 10 months later in Nov', frows[1], 'Stock available 5,650');
+  check('Nov: balance after', frows[2], 'Balance after +5,150 Enough');
   check('Dec: estimated collection', frows[3], 'Estimated collection 1,600');
-  check('Dec: stock available is what is left + what matures in Dec', frows[4], 'Stock available 5,600');
-  check('Dec: balance after', frows[5], 'Balance after +4,000 Enough');
-  check('the month columns are named', await txt('#invmap-analysis .sa-ftitle'), ['November 2026', 'December 2026']);
+  check('Dec: stock available is what is left + what turns 10 months in Dec', frows[4], 'Stock available 6,050');
+  check('Dec: balance after', frows[5], 'Balance after +4,450 Enough');
+  check('Jan: estimated collection', frows[6], 'Estimated collection 600');
+  check('Jan: stock available is what is left + what turns 10 months in Jan', frows[7], 'Stock available 5,350');
+  check('Jan: balance after', frows[8], 'Balance after +4,750 Enough');
+  check('three month columns: this month and the next two', await txt('#invmap-analysis .sa-ftitle'), ['November 2026', 'December 2026', 'January 2027']);
 
   console.log('4. the Available Stock window');
   await page.evaluate(() => document.querySelector('#invmap-analysis .sa-card.sa-stock').click());
   const heads = await txt('#sa-modal .sa-mhead');
-  check('the window shows the two parts', heads, ['Matured by end of November 2026 2,500', 'Reached 1.5 m, not yet matured 2,700']);
+  check('the window shows the two parts', heads, ['10 months & above 2,500', '1.5 m & above, under 10 months 2,700']);
   const plots = await page.evaluate(() => [...document.querySelectorAll('#sa-modal .sa-table')].map(t =>
     [...t.querySelectorAll('tbody tr')].map(r => r.children[0].textContent + '/' + r.children[6].textContent)));
-  check('matured plots, culled one left out', plots[0], ['U1/700', 'U2/1,800']);
+  check('10 months and above, culled one left out, U7 (matured by date, 9 months old) NOT in it', plots[0], ['U1/700', 'U2/1,800']);
+  const ages = await page.evaluate(() => [...document.querySelectorAll('#sa-modal .sa-table')][0] ? [...[...document.querySelectorAll('#sa-modal .sa-table')][0].querySelectorAll('tbody tr')].map(r => r.children[4].textContent) : []);
+  check('the age of each, off the seed-in date', ages, ['11 months', '10 months']);
   check('the tall plot, 149.9 cm left out', plots[1], ['U3/2,700']);
   check('the window is open', await page.evaluate(() => !document.getElementById('sa-modal').classList.contains('hidden')), true);
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace(/\.png$/, '') + '-window.png' });
@@ -224,8 +238,8 @@ const check = (name, got, want) => {
   console.log('5. the forecast window');
   await page.evaluate(() => openStockAnalysisWindow('forecast'));
   const fr = await page.evaluate(() => [...document.querySelectorAll('#sa-modal tbody tr')].map(r => [...r.children].map(c => c.textContent)));
-  check('Alpha: balance, pace, booked, est. Nov, booked Dec, est. Dec', fr[0], ['Alpha', 'ORD1', '3,000', '600', '500', '500', '0', '600']);
-  check('Beta: no history, its Dec booking', fr[1], ['Beta', 'ORD2', '4,000', '0', '0', '0', '1,000', '1,000']);
+  check('Alpha: balance, pace, then booked and est. for Nov, Dec, Jan', fr[0], ['Alpha', 'ORD1', '3,000', '600', '500', '500', '0', '600', '0', '600']);
+  check('Beta: no history, its Dec booking', fr[1], ['Beta', 'ORD2', '4,000', '0', '0', '0', '1,000', '1,000', '0', '0']);
   check('Gamma is not in it', fr.length, 2);
   await page.evaluate(() => closeStockAnalysisWindow());
 

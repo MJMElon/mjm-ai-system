@@ -9783,6 +9783,50 @@ function renderRecords() {
   const sortedPlots = Object.keys(plotGroups).sort(plotOrder);
 
   let html = '';
+  /* THE LOOSE ROWS GO FIRST, above the plots, when the Pending tab is open. */
+  /* WHAT NO SCHEDULE ROW CLAIMS, at the foot and under its own heading.
+     Never folded in among the plots: these are not rows the office planned,
+     they are work that arrived and found nothing to attach to — the exact
+     thing `_fieldUnpaired` has been counting in silence. The heading is
+     what makes the list honest; the rows are drawn in the same table, so
+     one body and one renderer still serve the whole tab. */
+  /* PENDING ONLY. These are records nobody has approved, so on the Approved
+     tab they would be the one thing that tab promises not to hold. The
+     WAITING CHIP above is deliberately NOT gated the same way: a row the
+     conductor approved off one record can still have a second waiting on
+     it, and a chip hidden there would be a submission invisible on both
+     tabs — which is the silence this whole split exists to end. */
+  if (_recSection === 'pending' && waitingLoose.length) {
+    const byPlot = {};
+    waitingLoose.forEach((f) => {
+      (byPlot[f.plot_name || '—'] = byPlot[f.plot_name || '—'] || []).push(f);
+    });
+    html += `<tr class="plot-group-row"><td colspan="12" class="rec-group-cell">
+      <span class="rec-group-plot">${esc(t('rec.looseHead'))}</span>
+      <span class="rec-group-sub">${esc(t('rec.looseSub'))}</span></td></tr>`;
+    Object.keys(byPlot).sort(plotOrder).forEach((plot) => {
+      byPlot[plot].slice()
+        .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
+                     || (a.id || 0) - (b.id || 0))
+        .forEach((f) => {
+          const jenis = _rejJenis(f);
+          html += `<tr class="rec-row-loose">
+            <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
+            <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
+            <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
+            <td class="rc-plot">${esc(f.plot_name || '—')}</td>
+            <td class="rc-batch">${esc(f.batch_name || '—')}</td>
+            <td class="rc-qty">${f.qty == null || f.qty === '' ? '—' : numMY(Number(f.qty))}</td>
+            <td class="rc-track">—</td>
+            <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
+            <td class="rc-c" colspan="4">
+              <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
+            </td>
+          </tr>`;
+        });
+    });
+  }
+
   sortedPlots.forEach(plot => {
     /* Inside a plot: the four jobs in the order the rest of the page already
        puts them, and inside each job the days in the order they happened.
@@ -9832,49 +9876,6 @@ function renderRecords() {
       </tr>`;
     });
   });
-  /* WHAT NO SCHEDULE ROW CLAIMS, at the foot and under its own heading.
-     Never folded in among the plots: these are not rows the office planned,
-     they are work that arrived and found nothing to attach to — the exact
-     thing `_fieldUnpaired` has been counting in silence. The heading is
-     what makes the list honest; the rows are drawn in the same table, so
-     one body and one renderer still serve the whole tab. */
-  /* PENDING ONLY. These are records nobody has approved, so on the Approved
-     tab they would be the one thing that tab promises not to hold. The
-     WAITING CHIP above is deliberately NOT gated the same way: a row the
-     conductor approved off one record can still have a second waiting on
-     it, and a chip hidden there would be a submission invisible on both
-     tabs — which is the silence this whole split exists to end. */
-  if (_recSection === 'pending' && waitingLoose.length) {
-    const byPlot = {};
-    waitingLoose.forEach((f) => {
-      (byPlot[f.plot_name || '—'] = byPlot[f.plot_name || '—'] || []).push(f);
-    });
-    html += `<tr class="plot-group-row"><td colspan="12" class="rec-group-cell">
-      <span class="rec-group-plot">${esc(t('rec.looseHead'))}</span>
-      <span class="rec-group-sub">${esc(t('rec.looseSub'))}</span></td></tr>`;
-    Object.keys(byPlot).sort(plotOrder).forEach((plot) => {
-      byPlot[plot].slice()
-        .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
-                     || (a.id || 0) - (b.id || 0))
-        .forEach((f) => {
-          const jenis = _rejJenis(f);
-          html += `<tr class="rec-row-loose">
-            <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
-            <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
-            <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
-            <td class="rc-plot">${esc(f.plot_name || '—')}</td>
-            <td class="rc-batch">${esc(f.batch_name || '—')}</td>
-            <td class="rc-qty">${f.qty == null || f.qty === '' ? '—' : numMY(Number(f.qty))}</td>
-            <td class="rc-track">—</td>
-            <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
-            <td class="rc-c" colspan="4">
-              <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
-            </td>
-          </tr>`;
-        });
-    });
-  }
-
   tbody.innerHTML = html;
   _recTabCounts(filtered, waitingLoose);
   /* The route thumbnails, for the rows that end up on screen. */

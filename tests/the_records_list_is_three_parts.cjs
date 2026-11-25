@@ -235,23 +235,26 @@ async function boot(browser) {
   } catch (e) { fail++; console.log('  FAIL 3. waiting -- ' + String(e.message).split('\n')[0]); }
 
   try {
-  console.log('\n4. A submission no scheduled round claims is at the foot, named');
+  console.log('\n4. A submission no scheduled round claims is at the top, named');
   const r = await rows();
   const loose = (r.filter ? r : []).filter((x) => x.loose);
   check('B5 is drawn', loose.length && loose[0].cells[3], 'B5');
   check('with the worker on it', loose.length ? /Rahim/.test(loose[0].cells[7]) : 'no row', true);
   const head = await ev(() => {
-    const tr = [...document.querySelectorAll('#rec-body tr.plot-group-row')].pop();
+    const tr = document.querySelector('#rec-body tr.plot-group-row');
     return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : 'no heading';
   });
   check('under a heading that says what it is',
         /on no scheduled row/i.test(head), true);
-  /* It must NOT be folded in among the plots: these are not rows the office
-     planned, and a list that mixed them would be the office reading work
-     they never scheduled as a round they did. */
+  /* It sits ABOVE the plots, as one block, and is never mixed in among the
+     scheduled rows: these are not rows the office planned, and a list that
+     mixed them would be the office reading work they never scheduled as a
+     round they did. The office asked for it at the top, so it is checked as
+     a block before the first scheduled row. */
   const order = (r.filter ? r : []).map((x) => (x.loose ? 'L' : x.group ? 'G' : 'R')).join('');
+  const li = order.indexOf('L'), lj = order.lastIndexOf('L');
   check('and never mixed in among the scheduled rows',
-        /^[GR]+G L*$/.test(order.replace(/L/g, ' L').replace(/ +/, ' ')) || order.lastIndexOf('R') < order.indexOf('L'),
+        li >= 0 && lj >= li && !/R/.test(order.slice(li, lj + 1)) && (order.indexOf('R') < 0 || lj < order.indexOf('R')),
         true);
   } catch (e) { fail++; console.log('  FAIL 4. loose -- ' + String(e.message).split('\n')[0]); }
 

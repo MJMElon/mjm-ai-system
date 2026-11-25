@@ -7,8 +7,8 @@
 --      Every row reads unlocked until somebody presses Lock.
 --   2. A new table, shared_stock_waiting_list, for demand with no AL yet:
 --      the day, the customer, the PO, the breed, the quantity, the month
---      it is wanted in, a remark, and a status (waiting, allocated,
---      cancelled). Read and written by the same office staff test as
+--      it is wanted in, a remark, and a status (waiting, contacted,
+--      confirmed, cancelled). Read and written by the same office staff test as
 --      shared_plot_allocations (_mjm_ops_staff).
 --
 -- Nothing already stored is changed. Safe to run twice.
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.shared_stock_waiting_list (
   qty           INTEGER NOT NULL CHECK (qty > 0),
   wanted_month  TEXT,
   remark        TEXT,
-  status        TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'allocated', 'cancelled')),
+  status        TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'contacted', 'confirmed', 'cancelled')),
   created_by    TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by    TEXT,

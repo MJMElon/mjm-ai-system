@@ -11463,4 +11463,44 @@ Capacity Heatmap (the heatmap was on top; they asked for the two swapped).
   a batch never measured is left out while a filter is on. The sidebar shows
   each batch's height and audit date, and the map label the tallest batch.
 
+- **The lock is a Material Design icon BEFORE the Maturity Date**
+  (`matLockIconHtml`, lock / lock_open paths), its hover naming who and
+  when; a locked row is orange end to end (`tr.mat-row-locked`), so
+  everybody sees the plot cannot be given to anybody else.
+- **The table fits the screen**: no minimum width, column widths in PER
+  CENT (`MAT_COL_W`), tighter padding. The test measures no sideways
+  overflow at 1280 and 1440 wide.
+- **The waiting list has four statuses**: Waiting, Contacted, Confirmed,
+  Cancelled (`shared/RUN_ME_waiting_list_four_statuses.sql`). A row saved
+  as Allocated reads as Confirmed (`_waitSt`), and the SQL moves it. The
+  month strip counts everything not Cancelled as open.
+- **The Inventory Map** tabs are PN, BNN, UNN 1, UNN 2 in that order and
+  no UNE (`invmapNurseryTabs`); a plot label carries no % collected, a
+  height under 100 cm reads `<100 cm` (`invmapMapHeight`), and a
+  COLLECTION PLOT (something already out on a DO and balance still left)
+  has an orange lorry driving in from the foot of the map and back, on a
+  loop (`.invmap-lorry`, parked still under reduced motion).
+
 `tests/maturity_lock_waiting_list_and_height.cjs` drives all of it.
+
+## Available stock is 10 MONTHS and above, or 1.5 m and above
+
+The Stock Analysis Dashboard's rule (`classify` in
+`shared/shared_stock_analysis.js`, the AI agent's copy under
+`supabase/functions/_shared/` byte for byte) was "matured by the end of
+this month" (transplant + 9 months). The office: *"available stock must
+show 10 months and above seedlings and also 1.5 m or above plot qty"*.
+
+- **Age is off the batch SEED-IN date**, days / 30.44 as the Batch Record
+  counts it, as at TODAY: a row is available from the day it turns 10
+  months (`readyDate`, seed-in + 305 days). A row with no seed-in date
+  falls back to the old Maturity Date rule rather than vanishing.
+- **Rows not yet available are filed by the month they turn 10 months**
+  (`upcoming`), and the **Collection forecast is three months**: this
+  month (stock on hand plus what turns 10 months later this month), then
+  the next two, each carrying what the month before left. `_saForecast`
+  takes an order month by month and never more than its balance.
+- `tests/stock_analysis_dashboard.cjs` and
+  `tests/the_mcp_reads_the_dashboard.cjs` share a ledger where U7 is
+  matured by the old rule and only 9 months old, so it is NOT available.
+  **The Edge Function must be redeployed** for the agent to answer by it.
