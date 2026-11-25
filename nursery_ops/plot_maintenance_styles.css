@@ -720,10 +720,15 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
    its own text, so it sits on a line of its own inside the cell. In the
    loose rows it is inline in a colspan cell with room to spare, which is
    why that one keeps the whole sentence. */
-.rec-waiting{display:block;width:fit-content;max-width:100%;font-size:11px;
-  font-weight:900;letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;color:#92400e;background:#fffbeb;border:1.5px solid #fde68a;
-  border-radius:999px;padding:2px 8px;margin:3px 0 0;}
+/* THE DAY SOMEBODY CLAIMS, AND IT IS NEVER CUT OFF.
+   It was a pill — border, padding, radius — which is 19px of chrome round
+   an 11-character date in a 103px fixed column, so `21 Nov 2026` printed
+   as `21 Nov 2...` and the date was the part that went. No chrome, and
+   `white-space:normal` so a long one WRAPS rather than truncating: two
+   short lines say the day, an ellipsis does not. The hourglass is what
+   tells it from the row's own date on a row that has both. */
+.rec-waiting{display:block;font-size:11px;font-weight:900;letter-spacing:.2px;
+  white-space:normal;color:#92400e;margin:2px 0 0;}
 .rec-row-loose .rec-waiting{display:inline-block;margin:0;}
 /* A row for work that matched no scheduled round, sitting IN its own plot's
    group — the office asked for it down there (*"放下去楼下"*). So the tint

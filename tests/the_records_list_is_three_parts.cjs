@@ -147,6 +147,12 @@ async function boot(browser) {
       row({ id: 601, plot: 'B1', tarikh: '04-11-2026', qty: 2341, _fieldIds: [9001] }),
       row({ id: 602, plot: 'B1', racun: 'Round 2: Antracol 50gm + Bond 15mL' }),
       row({ id: 603, plot: 'B2', jenis: 'Merumput', racun: 'Round 1: Manual' }),
+      /* THE OFFICE'S OWN N20-R, which is the one shape that makes the two
+         dates a QUESTION: a row carrying a day of its OWN, with a
+         submission underneath it claiming another. They read
+         `10 Nov 2026` over `21 Nov 2...` and asked what it meant. */
+      row({ id: 604, plot: 'B4', jenis: 'Merumput', tarikh: '10-11-2026',
+            racun: 'Round 3: Manual' }),
     ];
     pendingFieldRecords = [
       { id: 9101, plot_name: 'B2', work_type: 'weeding', jenis: 'Merumput',
@@ -167,6 +173,12 @@ async function boot(browser) {
       { id: 9103, plot_name: 'B1', work_type: 'weeding', jenis: 'Merumput',
         chemical: 'Manual', qty: 120, work_date: '2026-11-14', week_no: 2,
         schedule_month: m, worked_by: 'Hadi', reported_by: 'Hadi',
+        verified_at: null, rejected_at: null },
+      /* Pairs with 604 (B4 weeding round 3), so it lands as a chip on a
+         row that already shows a date of its own. */
+      { id: 9104, plot_name: 'B4', work_type: 'weeding', jenis: 'Merumput',
+        chemical: 'Manual', qty: 450, work_date: '2026-11-21', week_no: 3,
+        schedule_month: m, worked_by: 'Anton', reported_by: 'Anton',
         verified_at: null, rejected_at: null },
     ];
     rejectedFieldRecords = [];
@@ -205,8 +217,8 @@ async function boot(browser) {
   await open('pending');
   const r = await rows();
   const plots = (r.filter ? r : []).filter((x) => !x.group && !x.loose).map((x) => x.cells[3]);
-  check('the two unapproved rows are here', plots.sort(), ['B1', 'B2']);
-  check('and the approved one is NOT', plots.indexOf('B1') >= 0 && plots.length === 2, true);
+  check('the unapproved rows are here', plots.sort(), ['B1', 'B2', 'B4']);
+  check('and the approved one is NOT', plots.indexOf('B1') >= 0 && plots.length === 3, true);
   } catch (e) { fail++; console.log('  FAIL 2. pending -- ' + String(e.message).split('\n')[0]); }
 
   try {
@@ -217,7 +229,8 @@ async function boot(browser) {
                     chip: tr.querySelector('.rec-waiting').textContent.replace(/\s+/g, ' ').trim() })));
   check('the B2 row says somebody is waiting on it', (waiting[0] || {}).plot, 'B2');
   check('and the day they say they did it', /12 Nov/.test((waiting[0] || {}).chip || ''), true);
-  check('only that row carries one', waiting.length, 1);
+  /* B2 (no date of its own) and B4 (one of its own) — the two shapes. */
+  check('two rows carry one', waiting.length, 2);
   /* THE WHOLE SENTENCE IS IN THE TOOLTIP, and the chip is the day alone.
      `.rec-table` is table-layout:fixed, so the date column is 103px
      whatever goes in it: written out in full the chip is 260px and runs
@@ -243,6 +256,48 @@ async function boot(browser) {
   check('the tooltip names who did it', /Siti/.test((fit || {}).tip || ''), true);
   check('…and says it is waiting for approval', /waiting/i.test((fit || {}).tip || ''), true);
   check('the chip stays INSIDE its own cell', (fit || {}).inside, true);
+  /* AND IT IS NOT CUT OFF, which the check above cannot see and which is
+     the whole of what the office reported: *"直接放日期啊 干嘛这样"* over a
+     chip reading `21 Nov 2...`. A pill with `text-overflow:ellipsis`
+     always FITS its cell — it fits by throwing the date away, which is
+     the one thing the cell is there to say. So the rendered width is
+     asked against the SCROLL width, and the day is asked for in full. */
+  const whole = await ev(() => {
+    const row = [...document.querySelectorAll('#rec-body tr')]
+      .find((tr) => tr.querySelector('.rec-waiting') && !tr.classList.contains('rec-row-loose'));
+    const el = row && row.querySelector('.rec-waiting');
+    if (!el) return 'no chip';
+    return { clipped: el.scrollWidth > el.clientWidth + 1,
+             text: el.textContent.replace(/\s+/g, ' ').trim() };
+  });
+  check('nothing of it is clipped', (whole || {}).clipped, false);
+  check('…so the whole day is readable', /12 Nov 2026/.test((whole || {}).text || ''), true);
+  /* THE OFFICE'S OWN N20-R: a row with a day of its own and a claim under
+     it. *"这什么意思"* — two dates one above the other with nothing
+     between them is a question, so the claim wears a mark the row's own
+     date does not. Asked of the CELL, because what they were reading is
+     the two lines together. */
+  const both = await ev(() => {
+    const row = [...document.querySelectorAll('#rec-body tr')]
+      .find((tr) => tr.children[3] && tr.children[3].textContent.trim() === 'B4'
+                 && tr.querySelector('.rec-waiting'));
+    if (!row) return 'no B4 row';
+    const td = row.children[0], el = row.querySelector('.rec-waiting');
+    return { cell: td.textContent.replace(/\s+/g, ' ').trim(),
+             claim: el.textContent.replace(/\s+/g, ' ').trim(),
+             own: td.firstChild ? String(td.firstChild.textContent || '').trim() : '',
+             clipped: el.scrollWidth > el.clientWidth + 1 };
+  });
+  check('the row keeps its own day', (both || {}).own, '10 Nov 2026');
+  check('…and the claim is the other day, in full',
+        /21 Nov 2026/.test((both || {}).claim || ''), true);
+  check('…not cut off either', (both || {}).clipped, false);
+  /* ONE GLYPH IS WHAT ANSWERS "这什么意思" at a glance: without it the cell
+     is two bare dates and the hover is the only thing that says which is
+     which. */
+  check('…and is marked as a claim rather than a second date',
+        /⏳/.test((both || {}).claim || ''), true);
+  check('the row own date carries no such mark', /⏳/.test((both || {}).own || ''), false);
   /* AMBER, NEVER GREEN. Green here is the Checked badge two cells along,
      which means the opposite — settled. */
   const amber = await ev(() => {
@@ -349,7 +404,7 @@ async function boot(browser) {
   }));
   /* Two unapproved rows plus the two submissions nothing claims. A count
      that disagrees with its own list is the whole risk in splitting a tab. */
-  check('Pending counts 4', n.pending, '4');
+  check('Pending counts 5', n.pending, '5');
   check('Approved counts 1', n.approved, '1');
   } catch (e) { fail++; console.log('  FAIL 6. counts -- ' + String(e.message).split('\n')[0]); }
 
