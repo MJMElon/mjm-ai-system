@@ -10464,6 +10464,14 @@ Seed Planting on Worker List for Each Job (by register section where none
 are), then Last month; Add takes every name ticked. It was one dropdown of
 people under optgroups, and the skinned select draws no optgroup, so the
 office saw a flat wall of names. `_spBands` is what was drawn.
+**And it is FLEXI** (*"选了BNN worker然后就不能选UNN1 worker了 我要flexi的"*):
+a group picked stays OPEN under the dropdown, the dropdown goes back to its
+prompt and stops offering the open ones, ticks ride across groups and
+redraws (`_spPick`), and one Add takes them all. The *Use last month names*
+button came off (*删掉*); last month is a group in the dropdown instead.
+**And there is no standing Add button on either bar** (*"add worker add batch
+不用 直到选的时候 按confirm就直接下去"*): Confirm appears once a position is
+open, Other is picked, or a batch is chosen, and it does what Add did.
 
 **Each worker keys their own figure**, as the office chose (*每人填自己种的数量*).
 The figures go into `nops_seed_planting_batch_workers`, one record per
@@ -11738,6 +11746,18 @@ Capacity Heatmap (the heatmap was on top; they asked for the two swapped).
   outline that lights only on hover and while a card is dragged.
 
 `tests/maturity_lock_waiting_list_and_height.cjs` drives all of it.
+
+- **The Inventory Map counts what STANDS in a field plot**: `Transplanted`
+  and `Cull3_Transfer` in (a -R plot is filled by nothing else), never the
+  holding trays (`invmapIsHoldingTray`: Premium Care, Double-Tone). A batch
+  leaves a plot once its 3rd Culling carries a drone map OR leaves nothing
+  standing (Remaining Balance less Culled); a row keyed with nothing culled
+  and no map is NOT done (`_invmapCull3Done`, N1 / 255 read No batch). A -R
+  plot has no boundary of its own, so it is shown on its parent's label and
+  in the parent's window (`invmapReplantsOf`). With no filter the side list
+  runs in plot sequence (`invmapPlotCmp`: nursery, letters, number, -R).
+  `tests/invmap_n1_and_replant.cjs`.
+
 
 ## Available stock is 10 MONTHS and above, or 1.5 m and above
 
