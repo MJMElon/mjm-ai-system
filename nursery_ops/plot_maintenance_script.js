@@ -13620,12 +13620,24 @@ function jcEdit() {
   /* Culling Monitoring's names open with the rest, unless the card above
      is already editing them. Only a keyed rule can be: the built-in list
      has no rows to date a change against. */
-  const CI = window.MJMCullIncentive;
-  if (!cmDraft && CI && CI.ruleSource && CI.ruleSource() === 'office') {
-    _cmOpenDraft(true);
-    renderCullMonitoringSetting();
-  }
+  _jcOpenCullDraft();
   renderJobCrewSetting();
+  /* THE RULE MAY NOT HAVE BEEN READ YET. Edit pressed before the read
+     lands found the built-in list and opened nothing, so the row stayed
+     read-only for the whole edit. Ask, and open the names once it answers. */
+  const CI = window.MJMCullIncentive;
+  if (!cmDraft && CI && CI.loadRule && _supabase) {
+    CI.loadRule(_supabase, cmMonth()).then(() => {
+      if (jobCrewDraft && _jcOpenCullDraft()) renderJobCrewSetting();
+    }, () => {});
+  }
+}
+function _jcOpenCullDraft() {
+  const CI = window.MJMCullIncentive;
+  if (cmDraft || !CI || !CI.ruleSource || CI.ruleSource() !== 'office') return false;
+  _cmOpenDraft(true);
+  renderCullMonitoringSetting();
+  return true;
 }
 function jcCancel() {
   jobCrewDraft = null;
