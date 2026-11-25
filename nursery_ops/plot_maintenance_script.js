@@ -2275,13 +2275,13 @@ function renderTransplantingPayroll() {
   /* CAPACITY HELD BACK IS NAMED, never silently missing. A claim short of
      work reads exactly like a quiet month -- the fault the payroll file is
      most careful about -- and the same sentence is printed on the claim
-     itself. */
+     itself. THE SENTENCE BESIDE IT CAME OFF at the office own request
+     (不要这些字): the label and the figure say it, on screen and on paper. */
   if (heldRows) {
     h += `<tr class="jumlah-tr" style="background:#fffbeb;">
       <td class="th-left" colspan="3" style="color:#92400e;">${t('pay.tpHeldLabel')}</td>
       <td style="color:#92400e;">${heldCap ? heldCap.toLocaleString() : '—'}</td>
-      <td colspan="${wk.length + 2}" style="text-align:left;color:#92400e;font-weight:600;">
-        ${t('pay.tpHeld').replace('{n}', heldRows)}</td></tr>`;
+      <td colspan="${wk.length + 2}"></td></tr>`;
   }
   /* AND A JOB NOBODY DID IS SAID TOO, in slate rather than amber: held work
      is a question waiting for the office, and this is an answer that is
@@ -4226,7 +4226,7 @@ function downloadPayrollPDF(opts) {
         cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpHeldLabel'), { bold: true, size: 8.5, fill: HELD });
         cell(xs[3], y, widths[3], ROW_H + 4, heldCap ? heldCap.toLocaleString('en-MY') : '—', { bold: true, size: 8.5, nowrap: true, fill: HELD });
         cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
-             t('pay.tpHeld').replace('{n}', heldRows), { size: 6.5, fill: HELD, align: 'left' });
+             '', { size: 6.5, fill: HELD, align: 'left' });
         y += ROW_H + 4;
       }
       /* And a job nobody did, in grey rather than amber: held work is a
