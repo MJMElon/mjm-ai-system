@@ -6016,6 +6016,34 @@ Two things fall out:
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 
+### Inactive workers are in one card UNDER the board, never in a column
+
+The office: two inactive UNN 1 workers appeared in the Workers column the
+moment Show inactive was ticked, among the people who work there. So the
+columns and the Waiting to be allocated queue are the ACTIVE register only
+(`onBoard`), and Show inactive draws everybody who is not, left or a
+rejected signup, in one grey **Inactive** card under the board, in two groups
+(Left / inactive, Registration rejected), each name saying where it was
+filed. A name there is not draggable; opening it and setting Active is how
+it comes back. An orphan column therefore never returns for an inactive
+person. `tests/inactive_workers_sit_under_the_board.cjs`.
+
+### A role row the office adds by hand
+
+The rows down the side of the Team Board were a fixed list. In Edit, the
+corner over them carries **+ Add role**: a small window takes the name, and
+the role becomes a row on the board and a choice on the worker record. It is
+stored as a JSON list in `nops_maint_config`, key `worker_roles`, and is
+appended to `ROLES` / `BOARD_ROLES` IN PLACE (`applyCustomRoles`), so every
+reader of those lists takes it. An added role is a KNOWN role, so not general
+nursery work; the record's own tick decides the sheets, which `saveWorker`
+writes for every nursery worker. That matters because the phone's copy of
+`ROLES` (FC-Portal `maintenance/helpers.js`) and `shared_job_crew.js` do not
+know an added role. An added row offers a cross only while nobody, active or
+not, holds it; the eight built-in rows cannot be removed. Saving a role is
+its own write, not part of the board's draft. Nothing to run in the database.
+`tests/the_office_adds_a_role_row.cjs`.
+
 ### The board is a RECORD until somebody presses Edit
 
 The office asked for it in one line, over a screenshot of the board: *"help

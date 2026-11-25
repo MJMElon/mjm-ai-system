@@ -341,13 +341,16 @@ const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x)
       yes(c2.includes('Others') && c2.includes('Estate'),
         'while the company own sections keep their columns, empty or not');
 
-      /* Show inactive brings the person back, so the column comes with them
-         — the one standing there is still somebody to be moved. */
+      /* An inactive worker is never in a column now: Show inactive draws
+         them in the Inactive card UNDER the board, so the orphan column
+         stays away and the person is listed there instead. */
       await p2.click('#w-show-inactive');
       await p2.waitForTimeout(120);
       const c3 = await colNames(p2);
-      yes(c3.some((c) => /not in the nursery list/i.test(c)),
-        'ticking Show inactive brings the orphan column back with its person');
+      yes(!c3.some((c) => /not in the nursery list/i.test(c)),
+        'ticking Show inactive does not bring an orphan column back for an inactive person');
+      yes((await p2.$$eval('.off-wrap .wchip', (e) => e.map((x) => x.textContent))).some((t) => /Moved Away/.test(t)),
+        'the inactive person is listed in the Inactive card instead');
       is(await inRow(p2, 'Other'), null, 'and the Other row is still not drawn');
       await p2.close();
     }
