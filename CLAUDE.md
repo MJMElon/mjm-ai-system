@@ -11604,6 +11604,55 @@ the office's own first sentence — is tested nowhere.
 
 **Nothing to run in the database.** The whole of it is on the screen.
 
+##### AND THE DRAG DID NOTHING, because LAST MONTH'S ROWS were deciding
+
+The office pressed OK on the confirm and sent the screen back: *"我按ok了无事
+发生"*. An N2 record dated **21 Nov**, P & D, dropped on **N2 Round 3** — and
+nothing moved.
+
+**BOTH HALVES OF THAT ARE ONE LINE, and the first one is the real fault: the
+record was never off the schedule at all.** 21 Nov is week 3 and the row is
+Round 3, so the two match perfectly — and `_submissionScheduleRow` was
+reading `records.filter(plot match)`, **every month of it**. `fieldKey` is
+(job, plot, ROUND) and carries NO MONTH, and the schedule draws the same
+rounds every month, so one record matched November's round 3, October's and
+September's alike. `ids.length !== 1` is *more than one row matches, refuse
+to answer* — which is right where it is a real ambiguity and catastrophic
+here, because the ambiguity was invented by the reader.
+
+**THEN THE DRAG COULD NOT FIX IT, which is the half the office saw.** The
+write sets `week_no` to the row's own round, the row is Round 3 and the
+record already carried week 3 — so it wrote the value that was there, the
+re-read found the same three rows, and the screen did not move. A gesture
+that writes what is already written and reports nothing is indistinguishable
+from a dead button.
+
+**AND IT RUNS THE OTHER WAY TOO, which is worse and was invisible.** Where
+this month has NO row of that round and another month does, the record was
+placed on the OTHER MONTH'S row — so it carried no chip anywhere (that row is
+never drawn here) and was not loose either. **A record on no screen at all**,
+which is the fault this board exists to stop, arriving through the very
+function written to stop it.
+
+**The pool is the record's own month** (`_recInMonth`, the page's own EXACT
+test). That narrows nothing real: every other reader of `records` — the
+table itself, `payrollRowsFor`, `applyFieldRecords` — is already month-
+scoped, so a row this rejects is a row that is not on screen in that month
+anyway, and pairing a chip to one was pairing it to something nobody can see.
+
+**IT WAS PROVED BEFORE IT WAS FIXED**, by driving the shipped `index` and
+`pair` over one record and the same row repeated per month: *November alone →
+1 row, PLACED; November and October → 2 rows, LOOSE; Nov, Oct and September →
+3 rows, LOOSE.*
+
+Section 8 of `tests/a_record_is_dragged_onto_its_round.cjs` holds it and **all
+3 of its checks fail on the previous code**, the last naming the record that
+had gone quiet. The fixture needed last month's rows in it, which is the
+point: **a fixture of one month cannot see a rule that reads every month**,
+and the twenty-five checks above it passed over this the whole time.
+
+**Nothing to run in the database.**
+
 ## Worker Activity downloads ONE job, for the nurseries ticked
 
 The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果

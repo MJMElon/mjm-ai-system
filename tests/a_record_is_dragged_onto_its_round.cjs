@@ -155,6 +155,16 @@ const seedFn = () => {
     row({ id: 603, plot: 'B1', jenis: 'Merumput', racun: 'Round 2: Manual' }),
     row({ id: 604, plot: 'B9', racun: 'Round 2: Antracol 50gm + Bond 15mL' }),
     row({ id: 605, plot: 'B1', racun: 'Round 4: Antracol 50gm + Bond 15mL', checked: 1 }),
+    /* LAST MONTH'S ROWS, and they are the office's own N2 fault in
+       miniature: the schedule draws the same rounds every month, and
+       `fieldKey` is (job, plot, ROUND) with no month on it. Pairing a
+       record against these as well found three rows where one was wanted
+       and drew a perfectly placeable record as NOT ON SCHEDULE — which no
+       drag could then fix, because the round it was dropped on was the
+       round it already carried. */
+    row({ id: 651, plot: 'B1', _month: 'Oct 2026' }),
+    row({ id: 652, plot: 'B1', _month: 'Oct 2026', racun: 'Round 3: Antracol 50gm + Bond 15mL' }),
+    row({ id: 653, plot: 'B1', _month: 'Oct 2026', jenis: 'Merumput', racun: 'Round 2: Manual' }),
   ];
   pendingFieldRecords = [
     { id: 9101, plot_name: 'B1', work_type: 'pd',
@@ -169,6 +179,14 @@ const seedFn = () => {
       chemical: 'Antracol 50gm + Bond 15mL', qty: 100, work_date: '2026-11-21',
       week_no: 3, schedule_month: m, worked_by: 'Anton',
       reported_by: 'Anton', verified_at: null, rejected_at: null },
+    /* A record that matches its OWN month perfectly — B1 weeding, round 2,
+       which is row 603 — and whose only trouble is that October has the
+       same round on the same plot. It must be PLACED, not drawn as off the
+       schedule. */
+    { id: 9103, plot_name: 'B1', work_type: 'weeding', jenis: 'Merumput',
+      chemical: 'Manual', qty: 300, work_date: '2026-11-10',
+      week_no: 2, schedule_month: m, worked_by: 'Siti',
+      reported_by: 'Siti', verified_at: null, rejected_at: null },
   ];
   rejectedFieldRecords = [];
   fieldRecords = [];
@@ -411,6 +429,50 @@ const seedFn = () => {
   check('…and no way back is drawn either', unpin, 0);
   await p2.close();
   } catch (e) { fail++; console.log('  FAIL 7. permission -- ' + String(e.message).split('\n')[0]); }
+
+  try {
+  console.log('\n8. LAST MONTH\'S ROWS DO NOT DECIDE THIS MONTH\'S RECORD');
+  /* The office pressed OK on the confirm and nothing happened, over an N2
+     record dated 21 Nov — week 3 — dropped on N2 Round 3. Both halves fall
+     out of one line: `_submissionScheduleRow` compared the record against
+     EVERY month's rows, and `fieldKey` is (job, plot, ROUND) with no month
+     in it, so the schedule's own repeated rounds made one record match
+     several rows. Then `ids.length !== 1` drew it as off the schedule, and
+     the drag wrote the round it already carried. */
+  await seed();
+  await page.waitForTimeout(250);
+  const placed = await ev(() => {
+    const out = {};
+    (pendingFieldRecords || []).forEach((f) => {
+      let r = null; try { r = _submissionScheduleRow(f); } catch (_) {}
+      out[f.id] = r ? String(r.id) : 'loose';
+    });
+    return out;
+  });
+  /* 9103 is B1 weeding round 2 and so is row 603, THIS month. October's
+     653 is the same job, plot and round and must not take it away. */
+  check('a record that matches its own month is placed on THAT row',
+        (placed || {})['9103'], '603');
+  /* 9101 is week 3 and November has no round 3 — October's 652 does. A
+     record placed on a row the month never draws is a record that vanishes
+     off the screen altogether, which is worse than one wearing a tag. */
+  check('…and one that matches only LAST month is loose, not filed there',
+        (placed || {})['9101'], 'loose');
+  /* AND THE WORST OF IT, which a count of what IS drawn passes straight
+     over: a record filed against a row the month never draws has no chip
+     anywhere and is not loose either, so it is on no screen at all. Asked
+     per record — is this one findable — and not as a total. */
+  const lost = await ev(() => {
+    const drawn = new Set([...document.querySelectorAll('#rec-body tr[data-rec-id]')]
+      .map((tr) => tr.getAttribute('data-rec-id')));
+    const loose = [...document.querySelectorAll('#rec-body tr.rec-row-loose')].length;
+    return (pendingFieldRecords || []).filter((f) => {
+      let r = null; try { r = _submissionScheduleRow(f); } catch (_) {}
+      return r ? !drawn.has(String(r.id)) : loose === 0;
+    }).map((f) => f.id);
+  });
+  check('no record is filed against a row this month never draws', lost, []);
+  } catch (e) { fail++; console.log('  FAIL 8. cross-month -- ' + String(e.message).split('\n')[0]); }
 
   if (SHOT) {
     await seed();

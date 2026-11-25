@@ -10276,7 +10276,23 @@ function _submissionScheduleRow(f) {
   const month = f.schedule_month || MJMMaintField.isoMonthLabel(f.work_date);
   if (!month) return null;
   const pk   = MJMMaintField.plotKey;
-  const pool = records.filter((r) => pk(r.plot) === pk(f.plot_name));
+  /* THE RECORD'S OWN MONTH, AND THAT IS NOT A TIDY-UP — it is the whole of
+     why a record the office could see was perfectly placeable read as off
+     the schedule, and why dragging it did NOTHING.
+
+     `fieldKey` is (job, plot, ROUND) and carries no month, and the schedule
+     draws the same rounds every month — so N2 P & D Round 3 exists in
+     November, in October and in September alike. Pairing one record
+     against every month's rows therefore found THREE rows, and
+     `ids.length !== 1` is read as *more than one row matches, refuse to
+     answer*, which draws the record as NOT ON SCHEDULE.
+
+     And then the drag could not fix it: the record is week 3, the row it
+     is dropped on is Round 3, so the write set the round it already
+     carried, the re-read found the same three rows, and the office pressed
+     OK over a screen that did not move. */
+  const pool = records.filter((r) => pk(r.plot) === pk(f.plot_name)
+                                  && _recInMonth(r, month));
   if (!pool.length) return null;
   const idx  = MJMMaintField.index([f], month);
   // skipChecked:false on purpose — a CHECKED row is one the office has
