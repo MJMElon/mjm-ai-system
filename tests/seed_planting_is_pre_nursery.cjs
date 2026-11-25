@@ -316,12 +316,35 @@ const sheetOf = (page) => page.evaluate(() => {
   check('the dropdown offers the groups, never the people',
     await page.evaluate(() => [...document.querySelectorAll('#sp-new-name option')].map(o => o.value)),
     ['', 'g0', 'g1', 'g2', '__other']);
+  /* NO STANDING ADD BUTTON -- *"add worker add batch 不用 直到选的时候 按
+     confirm就直接下去"*. Confirm shows only once something is picked. */
+  const shown = (id) => page.evaluate((id) => { const b = document.getElementById(id);
+    return b ? getComputedStyle(b).display !== 'none' : 'no #' + id; }, id);
+  check('no Add worker / Add batch buttons left',
+    await page.evaluate(() => [...document.querySelectorAll('#payroll-names button')].map(b => b.textContent.trim())
+      .filter(x => /^\+?\s*Add (worker|batch)/i.test(x))), []);
+  check('Confirm is hidden before a position is picked', await shown('sp-name-confirm'), false);
   await page.evaluate(() => { const s = document.getElementById('sp-new-name'); s.value = 'g1'; _spPickWorker('g1'); });
+  check('…and shows once one is', await shown('sp-name-confirm'), true);
   check('picking a group draws its people as ticks',
+    await page.evaluate(() => [...document.querySelectorAll('#sp-pick-list .sp-pick-tick')].map(x => x.value)), ['Nur Aina']);
+  /* FLEXI -- *"选了BNN worker然后就不能选UNN1 worker了 我要flexi的"*: a
+     second group opens beside the first, and the dropdown stops offering
+     the ones already open. */
+  await page.evaluate(() => { _spPickWorker('g0'); });
+  check('a second group opens beside the first',
+    await page.evaluate(() => [...document.querySelectorAll('#sp-pick-list .sp-pick-head')].map(h => h.firstChild.textContent.trim())),
+    ['UNN1', 'PN']);
+  check('…and the dropdown offers only what is not open yet',
+    await page.evaluate(() => [...document.querySelectorAll('#sp-new-name option')].map(o => o.value)),
+    ['', 'g2', '__other']);
+  if (process.env.SHOT) await page.locator('#payroll-names').screenshot({ path: process.env.SHOT });
+  await page.evaluate(() => { _spCloseGroup('PN'); });
+  check('× closes a group again',
     await page.evaluate(() => [...document.querySelectorAll('#sp-pick-list .sp-pick-tick')].map(x => x.value)), ['Nur Aina']);
   await page.evaluate(() => { addSeedPlantingWorker(); });
   check('Add with nothing ticked adds nobody and says so', /Tick at least one/.test(dialogs.pop() || ''), true);
-  await page.evaluate(() => { document.querySelector('#sp-pick-list .sp-pick-tick').checked = true; addSeedPlantingWorker(); });
+  await page.evaluate(() => { const x = document.querySelector('#sp-pick-list .sp-pick-tick'); x.checked = true; _spTick(x.value, true); addSeedPlantingWorker(); });
   await page.waitForTimeout(200);
   check('picking one adds it and saves the month',
     await page.evaluate(() => window.__NAMES.map(x => [x.row.month, x.row.names, x.opt && x.opt.onConflict])),
@@ -341,6 +364,12 @@ const sheetOf = (page) => page.evaluate(() => {
   check('Add batch offers the last two months, newest first, with the day and the total',
     await page.evaluate(() => [...document.querySelectorAll('#sp-new-batch option')].map(o => o.textContent.trim())),
     ['Pick a batch…', '277 · 28/09/2026 · 3,760']);
+  check('batch Confirm is hidden until a batch is picked', await page.evaluate(() => {
+    const c = document.getElementById('sp-batch-confirm'); if (!c) return 'no #sp-batch-confirm';
+    const before = getComputedStyle(c).display === 'none';
+    const sel = document.getElementById('sp-new-batch'); sel.value = '277'; sel.dispatchEvent(new Event('change'));
+    return [before, getComputedStyle(document.getElementById('sp-batch-confirm')).display !== 'none'];
+  }), [true, true]);
   await page.evaluate(() => { document.getElementById('sp-new-batch').value = '277'; addSeedPlantingBatch(); });
   await page.waitForTimeout(700);
   check('the office is asked, naming both months', /^confirm: Move batch 277 from Sep 2026 to Oct 2026\?/.test(dialogs.pop() || ''), true);
@@ -431,10 +460,19 @@ const sheetOf = (page) => page.evaluate(() => {
   /* Four rows, not two: the same two batches under each of the two jobs. */
   check('no names yet: the batches still show, with no worker columns', [empty.rows, empty.cols],
     [4, ['Planted date', 'Batch', 'Qty planted', 'Keyed by workers', 'Checked']]);
-  check('…and last month is offered, counted', empty.offer, 'Use last month’s names (2)');
-  await c.page.evaluate(() => useLastMonthSeedPlantingNames());
+  /* The one-press button came off at the office request (删掉); last
+     month is a group in the dropdown now, picked and ticked. */
+  check('no Use last month button any more', empty.offer, '');
+  await c.page.evaluate(() => {
+    const i = _spBands.findIndex(b => /last month/i.test(b.label));
+    _spPickWorker('g' + i);
+  });
+  await c.page.evaluate(() => {
+    document.querySelectorAll('#sp-pick-list .sp-pick-tick').forEach(x => { x.checked = true; _spTick(x.value, true); });
+    addSeedPlantingWorker();
+  });
   await c.page.waitForTimeout(200);
-  check('one press makes them this month’s', await c.page.evaluate(() => window.__NAMES.map(x => [x.row.month, x.row.names])),
+  check('last month is a group, picked and ticked in one Add', await c.page.evaluate(() => window.__NAMES.map(x => [x.row.month, x.row.names])),
     [['Oct 2026', ['Ana', 'Budi']]]);
   check('no page errors there', c.errs, []);
 
