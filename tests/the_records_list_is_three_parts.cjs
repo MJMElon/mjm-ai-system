@@ -301,8 +301,10 @@ async function boot(browser) {
     return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(),
                   tip: el.getAttribute('title') || '' } : 'no tag';
   });
-  check('the row says no scheduled round claims it',
-        /no scheduled round/i.test((tag || {}).text || ''), true);
+  /* THE OFFICE'S OWN WORDS, asked for as written: *"后面小remark not on
+     schedule"*. */
+  check('the row says it is not on the schedule',
+        /not on schedule/i.test((tag || {}).text || ''), true);
   check('…and the hover says what to do about it',
         /schedule/i.test((tag || {}).tip || ''), true);
   /* B5 IS ON THE SCHEDULE FOR NOTHING THIS MONTH, so its group line cannot

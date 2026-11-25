@@ -5535,7 +5535,11 @@ const I18N = {
        its hover — so the fact travels with the work instead of sitting above
        the plots. `looseOnly` is the group sub-line of a plot the schedule
        has nothing for this month. */
-    'rec.looseTag':'No scheduled round',
+    /* THE OFFICE'S OWN WORDS — *"后面小remark not on schedule"*. It read
+       "No scheduled round", which says the same thing in words nobody
+       used; a tag one word off the one somebody asked for is a tag they
+       have to ask about. */
+    'rec.looseTag':'Not on schedule',
     'rec.looseOnly':'Nothing on the schedule this month',
     'rec.looseSub':'Work that reached the office and matched no round this month — add the round on the schedule, or approve it and check where it lands',
     'rec.nonePending':'Nothing is waiting — every row here has been approved',
@@ -5733,7 +5737,7 @@ const I18N = {
     'rec.partPendingSub':'Semua baris jadual yang ditanda dan belum diluluskan, serta kerja yang direkod pekerja yang masih menunggu Field Conductor',
     'rec.waiting':'Menunggu kelulusan',
     'rec.waitingTip':'Seorang pekerja merekod kerja ini dan belum ada Field Conductor meluluskannya, jadi tiada apa-apa sampai ke baris ini — tiada tarikh, batch atau kuantiti. Luluskan di Verify Hub dan ia berpindah ke Diluluskan.',
-    'rec.looseTag':'Tiada pusingan jadual',
+    'rec.looseTag':'Tiada dalam jadual',
     'rec.looseOnly':'Tiada dalam jadual bulan ini',
     'rec.looseSub':'Kerja yang sampai ke pejabat tetapi tidak sepadan dengan mana-mana pusingan bulan ini',
     'rec.nonePending':'Tiada yang menunggu — semua baris di sini sudah diluluskan',
