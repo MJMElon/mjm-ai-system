@@ -14,8 +14,9 @@
 --   UNN1  Akbar
 --   UNN2  Azhar
 --
--- Only audits saved from now on raise a case. Older Unsatisfactory audits
--- keep no case until someone raises one by hand.
+-- The feature starts on 1 December 2026. Only an audit dated on or after
+-- that day raises a case. Older Unsatisfactory audits keep no case, and
+-- an old audit changed to Unsatisfactory later raises none either.
 
 ALTER TABLE public.audit_maintenance_audits
   ADD COLUMN IF NOT EXISTS nelos_case_id BIGINT;
@@ -39,6 +40,9 @@ BEGIN
     RETURN NEW;
   END IF;
   IF NEW.nelos_case_id IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.date < DATE '2026-12-01' THEN
     RETURN NEW;
   END IF;
   IF to_regclass('public.nelos_cases') IS NULL THEN
