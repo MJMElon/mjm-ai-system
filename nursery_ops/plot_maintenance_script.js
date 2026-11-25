@@ -9670,14 +9670,31 @@ function _recTabCounts(filtered, loose) {
    row waiting for the conductor was drawn exactly like one nobody has been
    to. It names WHO, because that is the thing the row cannot otherwise
    say, and the DAY they say they did it — not agreed yet, which is why it
-   sits in a chip rather than in the date cell proper. */
+   sits in a chip rather than in the date cell proper.
+
+   THE CHIP SHOWS THE DAY AND THE SENTENCE IS THE TOOLTIP, and that is the
+   table's shape deciding rather than taste: `.rec-table` is
+   `table-layout:fixed`, so the date column is 103px whatever is put in it
+   and a cell cannot grow to fit. The first version wrote the whole of it
+   out — *Waiting for approval · 12 Nov 2026 · Siti* — which is 260px, so
+   it ran 159px clear of its own cell and straight over the Work Type
+   column of the row beneath. A chip that overlaps the column beside it is
+   worse than no chip, because it makes the row underneath unreadable too.
+   The DAY is what earns the space: a pending row has no date of its own —
+   the office has keyed none and the field fills none until it is verified
+   — so this cell is otherwise a dash, and the one thing it can usefully
+   say is that a worker claims the 12th. Several waiting records read as
+   the earliest and a +n, and every name is in the tooltip. */
 function _waitingChip(list) {
   if (!Array.isArray(list) || !list.length) return '';
   const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
   const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
-  const label = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
+  const short = (day ? _tarikhDisplay(day) : t('rec.waiting'))
+    + (list.length > 1 ? ' +' + (list.length - 1) : '');
+  const full = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
     .filter(Boolean).join(' · ');
-  return ` <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(label)}</span>`;
+  return ` <span class="rec-waiting" title="${esc(full + ' — ' + t('rec.waitingTip'))}">`
+       + `${esc(short)}</span>`;
 }
 
 /* ══════════════════════════════════════════════════════════════

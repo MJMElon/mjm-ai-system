@@ -133,7 +133,11 @@ async function boot(browser) {
      for the conductor. And a submission on B5, which the office scheduled
      nothing for this month — the replant case, and what _fieldUnpaired has
      been counting in silence. */
-  await ev(() => {
+  /* A FUNCTION, because section 9 empties it to reach the two empty states
+     and the SHOT block below has to draw a list with something in it — a
+     picture of the screen taken after the last check is a picture of the
+     last check, not of the screen. */
+  const seed = () => ev(() => {
     const m = getMonth();
     const row = (o) => Object.assign({
       tarikh: '-', jenis: 'Penyemburan racun kulat dan serangga',
@@ -157,6 +161,7 @@ async function boot(browser) {
     rejectedFieldRecords = [];
     renderRecords();
   });
+  await seed();
   await page.waitForTimeout(250);
 
   const tabs = () => ev(() => [...document.querySelectorAll('.rec-tabs .subtab-btn')]
@@ -200,9 +205,26 @@ async function boot(browser) {
     .map((tr) => ({ plot: tr.children[3].textContent.trim(),
                     chip: tr.querySelector('.rec-waiting').textContent.replace(/\s+/g, ' ').trim() })));
   check('the B2 row says somebody is waiting on it', (waiting[0] || {}).plot, 'B2');
-  check('and the chip names who did it', /Siti/.test((waiting[0] || {}).chip || ''), true);
   check('and the day they say they did it', /12 Nov/.test((waiting[0] || {}).chip || ''), true);
   check('only that row carries one', waiting.length, 1);
+  /* THE WHOLE SENTENCE IS IN THE TOOLTIP, and the chip is the day alone.
+     `.rec-table` is table-layout:fixed, so the date column is 103px
+     whatever goes in it: written out in full the chip is 260px and runs
+     clear of its own cell, over the Work Type column of the row BENEATH,
+     which makes two rows unreadable rather than one. So the sentence is
+     asked of the title and the CELL is measured. Both halves, because a
+     chip that fits by having lost the information is not a fix. */
+  const fit = await ev(() => {
+    const el = document.querySelector('#rec-body .rec-waiting');
+    if (!el) return 'no chip';
+    const td = el.closest('td');
+    return { tip: el.getAttribute('title') || '',
+             inside: Math.round(el.getBoundingClientRect().right)
+                  <= Math.round(td.getBoundingClientRect().right) };
+  });
+  check('the tooltip names who did it', /Siti/.test((fit || {}).tip || ''), true);
+  check('…and says it is waiting for approval', /waiting/i.test((fit || {}).tip || ''), true);
+  check('the chip stays INSIDE its own cell', (fit || {}).inside, true);
   /* AMBER, NEVER GREEN. Green here is the Checked badge two cells along,
      which means the opposite — settled. */
   const amber = await ev(() => {
@@ -296,10 +318,18 @@ async function boot(browser) {
   if (SHOT) {
     const fs = require('fs');
     try { fs.mkdirSync(SHOT, { recursive: true }); } catch (_) {}
-    await ev(() => { renderRecords(); });
+    await seed();                       // section 9 emptied it
+    /* The side nav is OPEN by default and lies OVER the first four columns,
+       so a shot taken without collapsing it is a picture of the nav. */
+    await ev(() => { try { toggleNav(); } catch (_) {} window.scrollTo(0, 0); });
+    /* The frame's padding-left TRANSITIONS (.2s) when the nav folds, and a
+       fullPage shot resizes the viewport under a position:fixed nav — both
+       draw the content sliding under the rail, which is the picture and
+       not the page. Waited out, and taken at the viewport. */
+    await page.waitForTimeout(600);
     for (const w of ['pending', 'approved', 'rejected']) {
       await open(w);
-      await page.screenshot({ path: SHOT + '/records-' + w + '.png', fullPage: true });
+      await page.screenshot({ path: SHOT + '/records-' + w + '.png', fullPage: false });
     }
     console.log('\n  drew ' + SHOT + '/records-{pending,approved,rejected}.png');
   }

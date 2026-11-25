@@ -11011,8 +11011,19 @@ was nobody's.
   than restating it. **The first version got this wrong** and the neighbour
   test caught it.
 - **A WAITING SUBMISSION IS NAMED ON THE ROW IT BELONGS TO** — an amber chip
-  in the date cell carrying the day and who worked it, paired through
-  `_submissionScheduleRow`, which is the rule Delete already uses. The
+  in the date cell carrying the day, with the sentence and the name in its
+  tooltip, paired through `_submissionScheduleRow`, which is the rule Delete
+  already uses. **THE CHIP IS THE DAY BECAUSE THE TABLE IS
+  `table-layout:fixed`**: the date column is 103px whatever is put in it, so
+  the first version — *Waiting for approval · 12 Nov 2026 · Siti*, 260px —
+  ran 159px clear of its own cell and over the Work Type column of the row
+  BENEATH, making two rows unreadable instead of one. The day is what earns
+  that space: a pending row has no date of its own (the office keyed none,
+  and the field fills none until it is verified), so the cell is otherwise a
+  dash and the one useful thing it can say is that a worker claims the 12th.
+  Block, `width:fit-content`, so it sits on its own line under the dash. The
+  loose rows at the foot keep the whole sentence, their cell being a
+  `colspan` with room to spare. The test measures the cell. The
   counts behind it are built on EVERY tab and only the DRAWING is gated,
   because a count that moved with the tab is a count nobody can trust; the
   first version gated the lot and Pending read 2 where it should read 3
