@@ -10055,7 +10055,20 @@ function _waitingChip(list) {
   if (!Array.isArray(list) || !list.length) return '';
   const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
   const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
-  const short = (day ? _tarikhDisplay(day) : t('rec.waiting'))
+  /* JUST THE DAY, AND NEVER CUT OFF — *"直接放日期啊 干嘛这样"*. It was a
+     pill, and a pill is its border, its padding and its radius: 19px of
+     chrome round an 11-character date in a column that is 103px whatever
+     is put in it, so `21 Nov 2026` came out as `21 Nov 2...` and the one
+     thing the cell was there to say was the part that got trimmed.
+
+     THE HOURGLASS IS WHAT THE PILL WAS FOR, and it is why this is not
+     simply a bare amber date. A row can carry a day of its own AND a
+     submission claiming another — the office met exactly that on N20-R,
+     `10 Nov 2026` with `21 Nov 2…` under it, and asked what it meant. Two
+     dates one above the other with nothing between them is a question;
+     one glyph answers it in the width of a space. The sentence and the
+     name stay in the hover, where there is room for them. */
+  const short = '⏳ ' + (day ? _tarikhDisplay(day) : t('rec.waiting'))
     + (list.length > 1 ? ' +' + (list.length - 1) : '');
   const full = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
     .filter(Boolean).join(' · ');
