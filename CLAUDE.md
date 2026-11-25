@@ -11687,6 +11687,39 @@ and the twenty-five checks above it passed over this the whole time.
 
 **Nothing to run in the database.**
 
+##### AND THE CHIP WAS A PILL, so the DATE was the part it threw away
+
+Two messages, and the second is what the first was really about. *"直接放日期
+啊 干嘛这样"* over a chip reading **`21 Nov 2...`**, then *"这什么意思"* over
+an N20-R row reading **`10 Nov 2026`** with that same clipped chip under it.
+
+**A PILL IS ITS BORDER, ITS PADDING AND ITS RADIUS — 19px of chrome round an
+eleven-character date, in a column that is 103px whatever is put in it.** So
+`21 Nov 2026` did not fit and `text-overflow:ellipsis` trimmed it, and what
+it trimmed was the one thing the cell was there to say. No chrome now, and
+**`white-space:normal`**: a long one WRAPS, because two short lines say the
+day and an ellipsis does not.
+
+**AND THE CHECK THAT SHOULD HAVE CAUGHT IT PASSED, which is the part worth
+keeping.** *"the chip stays INSIDE its own cell"* was green the whole time —
+**a pill with an ellipsis always fits its cell; it fits by throwing the
+content away.** Its own comment even said *"a chip that fits by having lost
+the information is not a fix"* and then measured only the box. The check is
+`scrollWidth > clientWidth` now, beside asking for the day in full.
+
+**THE SECOND MESSAGE IS WHY THIS IS NOT SIMPLY A BARE AMBER DATE.** A row can
+carry a day of its OWN and a submission claiming another — the office's N20-R
+exactly — and two dates one above the other with nothing between them is a
+question. **One glyph answers it in the width of a space** (`⏳`), and the
+sentence and the name stay in the hover where there is room. The row's own
+date carries no mark, and the test asserts both halves.
+
+The fixture grew B4 for it: **the dash case cannot test this**, because a
+cell with one date in it reads the same whatever the other line is marked
+with. **5 of the section's 14 checks fail on the previous page.**
+
+**Nothing to run in the database.**
+
 ## Worker Activity downloads ONE job, for the nurseries ticked
 
 The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果
