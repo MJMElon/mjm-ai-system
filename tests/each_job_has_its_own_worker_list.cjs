@@ -631,6 +631,37 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     await page.close();
   }
 
+  /* ── 8. THE GROUP IS FOLLOWED ─────────────────────────────────────────
+     "我刚刚try 把surnano drag去admin ... 为什么这里不跟着变动". Somebody
+     moved into a group already dragged onto Culling Monitoring joins the
+     rule on the next load, dated this month, through the same save. */
+  console.log('— 8. somebody moved into a dragged group joins the rule');
+  {
+    const d = new Date();
+    const M = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const reg = REGISTER.concat([
+      { id: 7, full_name: 'Florence', section: 'OTHERS', role: 'Admin', active: true },
+      { id: 9, full_name: 'Surnano',  section: 'OTHERS', role: 'Admin', active: true },
+    ]);
+    const db = { mjmnpayroll_workers: reg,
+      nops_maint_config: [{ key: 'cull_monitoring_groups', txt_value: 'OTHERS|Admin' }],
+      nops_cull_monitoring_rate: [{ id: 1, kind: 'admin', from_month: '2026-01', rm: 20 }],
+      nops_cull_monitoring_people: [
+        { id: 21, kind: 'admin', nursery: '', worker_id: 7, worker_name: 'Florence', from_month: '2026-01', until_month: null }] };
+    const { page, errs } = await boot(browser, db, 'setting');
+    await page.waitForTimeout(1500);
+    check('Surnano is on the rule from this month, nobody added twice', await ev(page, (M) =>
+      window.__DB.nops_cull_monitoring_people.filter(r => !r.until_month)
+        .map(r => r.worker_name + ':' + r.from_month).sort(), M),
+      ['Florence:2026-01', 'Surnano:' + M]);
+    check('…and the card above names him', await ev(page, () =>
+      /Surnano/.test(document.getElementById('cm-set-body').textContent)), true);
+    check('…and the row still shows the group, not a name', await ev(page, () =>
+      [...document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip')].map(c => c.textContent.trim())), ['OTHERS · Admin']);
+    check('no page error', errs, []);
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
