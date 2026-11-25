@@ -672,6 +672,25 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
   color:#065f46;background:#ecfdf5;border:1.5px solid #a7f3d0;border-radius:999px;padding:6px 14px;margin-right:6px;vertical-align:middle;}
 .chk-btn.chk-locked{cursor:not-allowed;opacity:.55;}
 
+/* ─── WAITING FOR THE CONDUCTOR ───
+   A Pending row that somebody has already done. AMBER and never green: a
+   green mark here would read as the green Checked badge two cells along,
+   which means the opposite — settled. Amber is the colour this module
+   already uses for "somebody has answered and nobody has agreed yet".
+
+   It sits in the DATE cell because that cell is otherwise a dash on such a
+   row: the record is unverified, so applyFieldRecords has filled no date,
+   no batch and no quantity, and the chip carries the day the worker says
+   they did it. Smaller than the Checked badge, deliberately — it is a
+   state the row is passing through, not a signature. */
+.rec-waiting{display:inline-block;font-size:11px;font-weight:900;letter-spacing:.3px;
+  white-space:nowrap;color:#92400e;background:#fffbeb;border:1.5px solid #fde68a;
+  border-radius:999px;padding:3px 9px;margin-left:6px;vertical-align:middle;}
+/* A row for work that matched no scheduled round. Tinted the same amber,
+   very lightly, so it reads as one block at the foot rather than as rows
+   somebody has to notice are different. */
+.rec-row-loose > td{background:#fffdf5;}
+
 /* ─── AUDIT VERDICT ───
    The Auditor Portal's answer for this job, in that portal's own two
    colours so the same verdict looks the same on both screens. Read-only:

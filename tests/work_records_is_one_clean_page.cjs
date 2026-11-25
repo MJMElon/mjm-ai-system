@@ -179,6 +179,17 @@ async function boot(browser) {
   await ev(() => { records.pop(); renderRecords(); });
 
   } catch (e) { fail++; console.log('  FAIL '+'2. A new record moves the strip on its own'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
+
+  /* THE PAGE OPENS ON PENDING, so everything below has to say which tab it
+     is about. Sections 3 to 6 are the APPROVED table and its icons — the
+     checked row only exists there, Check being what makes a row approved —
+     so they are asked of it. Pending is the same table asked a different
+     question (one body, one renderer), so an alignment or an icon measured
+     on one is measured on both; what is NOT the same is which rows are in
+     it, and `the_records_list_is_three_parts.cjs` is where that lives. */
+  await ev(() => { switchRecSection('approved', document.getElementById('recsec-btn-approved')); });
+  await page.waitForTimeout(150);
+
   try {
   console.log('\n3. Every column sits where its type says, heading and cells alike');
   const align = await ev(() => {
@@ -251,13 +262,22 @@ async function boot(browser) {
 
   } catch (e) { fail++; console.log('  FAIL '+'6. Pressing them still does what the words did'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
   try {
-  console.log('\n7. Approved / Rejected are text tabs with a green underline');
+  console.log('\n7. Pending / Approved / Rejected are text tabs with a green underline');
+  /* Asked of whichever tab is ACTIVE rather than of Approved by name, so a
+     fourth part, or a different one opening first, does not fail a check
+     about how a tab is DRAWN. The three are still named, because a tab
+     missing from the bar is what this is really protecting. */
   const tabs = await ev(() => {
-    const a = document.getElementById('recsec-btn-approved'), s = getComputedStyle(a);
-    const r = getComputedStyle(document.getElementById('recsec-btn-rejected'));
-    return [s.backgroundColor, s.color, s.boxShadow.includes('rgb(13, 92, 55)'), r.color];
+    const ids = ['recsec-btn-pending', 'recsec-btn-approved', 'recsec-btn-rejected'];
+    const el = ids.map((i) => document.getElementById(i));
+    if (el.some((e) => !e)) return { missing: ids.filter((i) => !document.getElementById(i)) };
+    const on = el.find((e) => e.classList.contains('active')), s = getComputedStyle(on);
+    const off = el.find((e) => !e.classList.contains('active'));
+    return { three: el.length, fill: s.backgroundColor, ink: s.color,
+             rule: s.boxShadow.includes('rgb(13, 92, 55)'), idle: getComputedStyle(off).color };
   });
-  check('active: no fill, green text and underline; idle: grey', tabs, ['rgba(0, 0, 0, 0)', 'rgb(13, 92, 55)', true, 'rgb(107, 122, 114)']);
+  check('active: no fill, green text and underline; idle: grey', tabs,
+        { three: 3, fill: 'rgba(0, 0, 0, 0)', ink: 'rgb(13, 92, 55)', rule: true, idle: 'rgb(107, 122, 114)' });
 
   } catch (e) { fail++; console.log('  FAIL '+'7. Approved / Rejected are text tabs with a green underline'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
   try {

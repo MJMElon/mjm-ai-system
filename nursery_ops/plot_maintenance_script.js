@@ -5337,6 +5337,14 @@ const I18N = {
     /* The two parts of the list — approved work, and what was sent back. */
     'rec.partApproved':'Approved',
     'rec.partApprovedSub':'The month’s scheduled jobs, with the submissions a Field Conductor has signed off filled in',
+    'rec.partPending':'Pending',
+    'rec.partPendingSub':'Every ticked schedule row that nobody has approved yet, and the work a worker recorded that is still waiting for a Field Conductor',
+    'rec.waiting':'Waiting for approval',
+    'rec.waitingTip':'A worker recorded this job and no Field Conductor has approved it yet, so nothing of it has reached the row — no date, no batch, no quantity. Approve it in the Verify Hub and it moves to Approved.',
+    'rec.looseHead':'Recorded on a phone, on no scheduled row',
+    'rec.looseSub':'Work that reached the office and matched no round this month — add the round on the schedule, or approve it and check where it lands',
+    'rec.nonePending':'Nothing is waiting — every row here has been approved',
+    'rec.noneApproved':'Nothing approved yet — it is all still in Pending',
     'rec.partRejected':'Rejected',
     'rec.partRejectedSub':'Records a Field Conductor refused — approve one and it flows back into the approved section',
     'rej.workedBy':'Worked By', 'rej.reportedBy':'Reported By',
@@ -5531,6 +5539,14 @@ const I18N = {
     /* Dua bahagian senarai — kerja yang diluluskan, dan yang dihantar balik. */
     'rec.partApproved':'Diluluskan',
     'rec.partApprovedSub':'Kerja berjadual bulan ini, bersama rekod yang telah disahkan oleh Field Conductor',
+    'rec.partPending':'Belum Lulus',
+    'rec.partPendingSub':'Semua baris jadual yang ditanda dan belum diluluskan, serta kerja yang direkod pekerja yang masih menunggu Field Conductor',
+    'rec.waiting':'Menunggu kelulusan',
+    'rec.waitingTip':'Seorang pekerja merekod kerja ini dan belum ada Field Conductor meluluskannya, jadi tiada apa-apa sampai ke baris ini — tiada tarikh, batch atau kuantiti. Luluskan di Verify Hub dan ia berpindah ke Diluluskan.',
+    'rec.looseHead':'Direkod di telefon, tiada baris jadual',
+    'rec.looseSub':'Kerja yang sampai ke pejabat tetapi tidak sepadan dengan mana-mana pusingan bulan ini',
+    'rec.nonePending':'Tiada yang menunggu — semua baris di sini sudah diluluskan',
+    'rec.noneApproved':'Belum ada yang diluluskan — semuanya masih di Belum Lulus',
     'rec.partRejected':'Ditolak',
     'rec.partRejectedSub':'Rekod yang ditolak Field Conductor — luluskan dan ia kembali ke bahagian diluluskan',
     'rej.workedBy':'Dibuat Oleh', 'rej.reportedBy':'Dilapor Oleh',
@@ -6374,6 +6390,86 @@ async function loadRejectedFieldRecords() {
     }
     rejectedFieldRecords = res.data || [];
   } catch (e) { console.warn('[maint] sent-back records unavailable:', e); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WORK THE FIELD HAS DONE AND NOBODY HAS APPROVED YET
+
+   The office asked the Records list to read as three parts: *"rejected保留,
+   approved 分成 pending & approved, tick了的schedule全部会在这里出现+worker
+   做了的工 但是还没被approved也会在这里出现, approved的就是FC approved了
+   的"*.
+
+   The first half of Pending needed no read -- a ticked schedule row with
+   nothing agreed against it is already in `records`, and `_recApproved` is
+   what tells the two tabs apart. THE SECOND HALF HAD NO READER AT ALL.
+   `loadFieldRecords` is `_verifiedOnly` by design, so a job a worker saved
+   and a conductor has not signed reaches no row, no cell and no list: on
+   this page it was indistinguishable from work nobody had done.
+
+   So it is read, on the same shape as the sent-back list beside it and for
+   the same reason -- these are the two states a submission can be in that
+   are NOT the one `fieldRecords` carries.
+
+   IT IS KEPT OUT OF `fieldRecords`, which is the whole point. Everything
+   downstream of that array treats a member as work that HAPPENED: the
+   dates, the batches, the payroll ticks. An unapproved record has not been
+   agreed, and counting it would be this page deciding that unchecked work
+   counts -- the one thing the verified-only read exists to stop.
+   ══════════════════════════════════════════════════════════════ */
+let pendingFieldRecords = [];
+/* Neither signed nor sent back. Both halves are needed: without the second
+   every refusal would also read as waiting, and the same record would stand
+   in two of the three tabs at once. */
+const _pendingOnly = (q) => q.is('verified_at', null).is('rejected_at', null);
+
+async function loadPendingFieldRecords() {
+  if (!_supabase) return;
+  const cols = 'id, work_date, plot_name, work_type, jenis, chemical, batch_name, '
+             + 'week_no, schedule_month, qty, remark, worked_by, reported_by, '
+             + 'nursery_name, verified_at, rejected_at';
+  try {
+    let res = await _mvFetchAll(() => _pendingOnly(
+      _supabase.from('nops_maint_field_records').select(cols)).order('id', { ascending: true }));
+    // The batch columns arrive with shared/add_maint_field_batch.sql; without
+    // them the select 400s, so fall back to what every copy of the table has.
+    if (res.error && /column .* does not exist|schema cache/i.test(String(res.error.message || ''))) {
+      res = await _mvFetchAll(() => _pendingOnly(
+        _supabase.from('nops_maint_field_records')
+          .select('id, work_date, plot_name, work_type, jenis, chemical, qty, remark, '
+                + 'worked_by, reported_by, nursery_name, verified_at, rejected_at'))
+        .order('id', { ascending: true }));
+    }
+    if (res.error) {
+      /* A database with no rejected_at predates
+         shared/add_maint_field_reject.sql. Nothing can have been sent back
+         there, so "neither signed nor sent back" is just "not signed" and
+         the narrower read is the right answer rather than no answer. */
+      if (/rejected_at/i.test(String(res.error.message || ''))) {
+        res = await _mvFetchAll(() => _supabase.from('nops_maint_field_records')
+          .select('id, work_date, plot_name, work_type, jenis, chemical, qty, remark, '
+                + 'worked_by, reported_by, nursery_name, verified_at')
+          .is('verified_at', null).order('id', { ascending: true }));
+      }
+    }
+    if (res.error) {
+      /* No verified_at at all and nothing here can tell work waiting for a
+         signature from work that has one. An EMPTY list, never the whole
+         table: a page that showed every record as waiting would send the
+         office to approve rows that were approved months ago. */
+      if (/verified_at/i.test(String(res.error.message || ''))) {
+        console.warn('[maint] this database has no verified_at column on '
+          + 'nops_maint_field_records, so work waiting for a signature cannot '
+          + 'be told from work that has one. Nothing is listed as waiting. '
+          + 'Run shared/add_maint_field_verify.sql.');
+        pendingFieldRecords = [];
+        return;
+      }
+      console.warn('[maint] records waiting for approval unavailable:', res.error.message);
+      return;
+    }
+    pendingFieldRecords = res.data || [];
+  } catch (e) { console.warn('[maint] records waiting for approval unavailable:', e); }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -7850,7 +7946,11 @@ function switchRecordView(view) {
    Both are drawn on every renderRecords() whichever is open — they are two
    tables, not two queries, and keeping the hidden one current means the
    count on the tab is right without the section having been visited. */
-let _recSection = 'approved';
+/* PENDING IS WHERE THE PAGE OPENS. The office split one tab in three and
+   the one that was active was Approved — but Pending is both the work to do
+   and the bulk of what that tab already held, so landing on Approved would
+   have read as a month of rows vanishing. */
+let _recSection = 'pending';
 function switchRecSection(section, btn) {
   /* LEAVING THE TAB DROPS THE SELECTION. Coming back to a list carrying
      ticks somebody made before they went somewhere else is a delete made
@@ -7863,8 +7963,19 @@ function switchRecSection(section, btn) {
   if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   document.querySelectorAll('#recview-list .recsec').forEach(p => p.classList.remove('active'));
-  const el = document.getElementById('recsec-' + section);
+  /* PENDING AND APPROVED SHARE ONE PANE, and that is the whole reason this
+     is a filter rather than a second table. They are the same twelve
+     columns over the same rows asked a different question, so a pane each
+     would be two copies of a wide table, two tbody ids and two renderers —
+     which is how the two come to disagree about a row. The tab is read by
+     renderRecords; see `sectioned` there. */
+  const el = document.getElementById(
+    section === 'rejected' ? 'recsec-rejected' : 'recsec-approved');
   if (el) el.classList.add('active');
+  /* Rejected redraws itself from renderRecords, so one call answers all
+     three — and it has to be a call, because the rows on screen are not the
+     rows this tab wants. */
+  try { renderRecords(); } catch (e) { console.warn('[maint] records:', e); }
 }
 
 /* Schedule sub-tabs: P&D / Manuring / Weeding / Interrow. */
@@ -9270,6 +9381,20 @@ function _recProgressHtml(m) {
       ${bar(m.fixed, m.repair)}</div>`;
 }
 
+/* ── APPROVED, AND IT IS ONE SENTENCE IN ONE PLACE ────────────────────────
+   A row is approved when the field did it and the conductor signed it off.
+   `_fieldIds` is only ever set from loadFieldRecords, which is
+   `_verifiedOnly`, so a linked row is work that has been through both
+   hands. The old Gaia tick still counts where somebody set it: it was the
+   only way to say "done" before the portal existed.
+
+   It was written out inline for the DONE count and nowhere else. It decides
+   which of two TABS a row lands in now, so a second copy of it would be the
+   strip at the top disagreeing with the table under it about the same row.
+   ─────────────────────────────────────────────────────────────────────── */
+const _recApproved = (r) =>
+  (Array.isArray(r._fieldIds) && r._fieldIds.length > 0) || !!r.gaia;
+
 function renderRecords() {
   const jF   = document.getElementById('rf-filter-jenis').value;
   const pF   = document.getElementById('rf-filter-plot').value;
@@ -9307,6 +9432,38 @@ function renderRecords() {
     return true;
   });
 
+  /* WHICH OF THE TWO TABS THIS ROW IS IN. The office split the list in
+     three and said what each one holds: Pending is every ticked schedule
+     row that is not agreed yet, Approved is *"FC approved了的"*. One table,
+     one body and one renderer serve both -- see switchRecSection for why
+     they share a pane -- so the tab is a FILTER here and nothing more.
+
+     The filters above run first on purpose: the plot dropdown and the
+     counts beside it answer for the whole month, whichever tab is open, or
+     the same nursery would offer two different plot lists.
+
+     Rejected keeps a pane of its own, so this table is HIDDEN while that
+     tab is open and what it holds is not on screen; `filtered` is simply
+     the least surprising thing to leave in it. */
+  const sectioned = _recSection === 'rejected' ? filtered
+    : filtered.filter((r) => _recApproved(r) === (_recSection === 'approved'));
+
+  /* THE PLOT LINE COUNTS THE MONTH, NEVER THE TAB.
+     "Task : 2/3" is how far through a plot the work is, which is a fact
+     about the PLOT and not about which tab is open. Asked of the tab's own
+     slice it says nothing at all: every Pending group would read 0/N and
+     every Approved one N/N, by construction, because that is what the two
+     tabs ARE. Counted off `filtered` it reads the same on both and is the
+     one thing on that row somebody can act on — B1 is 2 of 3 done whether
+     you are looking at the two that are or the one that is not.
+     It also asks `_recApproved` rather than restating it: this count and
+     the tab underneath it must agree about a row. */
+  const plotDone = {}, plotAll = {};
+  filtered.forEach((r) => {
+    plotAll[r.plot] = (plotAll[r.plot] || 0) + 1;
+    if (_recApproved(r)) plotDone[r.plot] = (plotDone[r.plot] || 0) + 1;
+  });
+
   // Metrics count only current nursery records
   const nurseryRecs = records.filter(r => nurseryPlots.includes(r.plot) && _recInMonth(r, mF));
   const total  = nurseryRecs.length;
@@ -9316,7 +9473,7 @@ function renderRecords() {
      both hands. The old Gaia tick still counts where somebody set it: it was
      the only way to say "done" before the portal existed, and rows carrying
      one are rows somebody answered. Nothing is taken away by reading it. */
-  const done   = nurseryRecs.filter(r => (Array.isArray(r._fieldIds) && r._fieldIds.length) || r.gaia).length;
+  const done   = nurseryRecs.filter(_recApproved).length;
   const pend   = total - done;
   const pct    = (n) => (total ? Math.round(n / total * 100) : 0);
   /* A REPAIR CASE is a job the auditor failed. That is the whole of it: the
@@ -9340,9 +9497,66 @@ function renderRecords() {
   pSel.innerHTML = `<option value="">${t('rec.allPlot')}</option>` +
     plotPool.map(p => `<option${p===curP?' selected':''}>${p}</option>`).join('');
 
+  /* ── WORK WAITING FOR THE CONDUCTOR ────────────────────────────────────
+     The second half of what the office asked Pending to hold: *"worker做了
+     的工 但是还没被approved也会在这里出现"*.
+
+     An unapproved submission is PAIRED TO ITS SCHEDULE ROW rather than
+     listed beside it, because most of them have one — the worker ticked a
+     task the office planned — and a list that showed both would draw the
+     same morning twice. That is the "still looks duplicate" screenshot, and
+     it would be deserved here.
+
+     `_submissionScheduleRow` is the rule and is reused rather than
+     restated: it refuses to answer where more than one row matches, which
+     is right — a chip put on the wrong round is worse than one on no round.
+     Whatever it cannot place is drawn at the foot under its own heading,
+     because a record that reached the office and attached to nothing is the
+     one thing this list must not swallow. The replant a worker ticks on the
+     15th is exactly that until somebody presses Save Schedule. */
+  const waitingOn = {};      // schedule row id → [submission, …]
+  const waitingLoose = [];   // submissions no row claims
+  /* WORKED OUT ON EVERY TAB, never only on Pending. The COUNT on the
+     Pending tab is drawn whichever tab is open, and a tab whose number
+     changes depending on where you are standing is worse than a tab with no
+     number: the first version skipped this on Approved and Pending then
+     read 2 over a list of 3. Only the DRAWING is per tab. */
+  {
+    const pk = MJMMaintField.plotKey;
+    pendingFieldRecords.forEach((f) => {
+      if (!nurseryPlots.some((p) => pk(p) === pk(f.plot_name))) return;
+      /* The record's OWN month, read the way _submissionScheduleRow reads
+         it — the month it was filed under, or the month its day falls in.
+         A second rule here would pair a record this list had decided was
+         another month's. */
+      const fm = f.schedule_month || MJMMaintField.isoMonthLabel(f.work_date);
+      if (fm !== mF) return;
+      /* The three filters above the table apply to these rows too, or
+         narrowing to one plot leaves another plot's work on screen. */
+      if (jF && _rejJenis(f) !== jF) return;
+      if (pF && pk(f.plot_name) !== pk(pF)) return;
+      if (dF) {
+        const d = f.work_date || '';
+        if (!`${d} ${_tarikhDisplay(d)}`.toLowerCase().includes(dF)) return;
+      }
+      let row = null;
+      try { row = _submissionScheduleRow(f); } catch (_) { row = null; }
+      if (row) (waitingOn[row.id] = waitingOn[row.id] || []).push(f);
+      else waitingLoose.push(f);
+    });
+  }
+
   const tbody = document.getElementById('rec-body');
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${t('rec.none')}</td></tr>`;
+  if (!sectioned.length && !waitingLoose.length) {
+    /* WHICH tab is empty, because the three mean different things and the
+       one sentence read as all of them. "Nothing matches" over Approved on
+       a month of finished work is the office hunting for a fault; what it
+       means is that everything is still waiting. */
+    const why = filtered.length
+      ? (_recSection === 'approved' ? 'rec.noneApproved' : 'rec.nonePending')
+      : 'rec.none';
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${esc(t(why))}</td></tr>`;
+    _recTabCounts(filtered, waitingLoose);
     return;
   }
 
@@ -9357,7 +9571,7 @@ function renderRecords() {
      then anything after it — so B3-R sits behind B3 here the same way it does
      there. */
   const plotGroups = {};
-  filtered.forEach(r => {
+  sectioned.forEach(r => {
     if (!plotGroups[r.plot]) plotGroups[r.plot] = [];
     plotGroups[r.plot].push(r);
   });
@@ -9377,7 +9591,7 @@ function renderRecords() {
     html += `<tr class="plot-group-row">
       <td colspan="12" class="rec-group-cell">
         <span class="rec-group-plot">Plot ${plot}</span>
-        <span class="rec-group-sub">Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}</span>
+        <span class="rec-group-sub">Task : ${plotDone[plot] || 0}/${plotAll[plot] || 0}</span>
       </td>
     </tr>`;
     recs.forEach(r => {
@@ -9387,7 +9601,7 @@ function renderRecords() {
          moving. The tint is very light on purpose: it marks the row without
          fighting the figures on it. */
       html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
-        <td class="rc-date">${_dateCell(r)}</td>
+        <td class="rc-date">${_dateCell(r)}${_waitingChip(waitingOn[r.id])}</td>
         <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
         <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
         <td class="rc-plot">${r.plot}</td>
@@ -9413,9 +9627,85 @@ function renderRecords() {
       </tr>`;
     });
   });
+  /* WHAT NO SCHEDULE ROW CLAIMS, at the foot and under its own heading.
+     Never folded in among the plots: these are not rows the office planned,
+     they are work that arrived and found nothing to attach to — the exact
+     thing `_fieldUnpaired` has been counting in silence. The heading is
+     what makes the list honest; the rows are drawn in the same table, so
+     one body and one renderer still serve the whole tab. */
+  /* PENDING ONLY. These are records nobody has approved, so on the Approved
+     tab they would be the one thing that tab promises not to hold. The
+     WAITING CHIP above is deliberately NOT gated the same way: a row the
+     conductor approved off one record can still have a second waiting on
+     it, and a chip hidden there would be a submission invisible on both
+     tabs — which is the silence this whole split exists to end. */
+  if (_recSection === 'pending' && waitingLoose.length) {
+    const byPlot = {};
+    waitingLoose.forEach((f) => {
+      (byPlot[f.plot_name || '—'] = byPlot[f.plot_name || '—'] || []).push(f);
+    });
+    html += `<tr class="plot-group-row"><td colspan="12" class="rec-group-cell">
+      <span class="rec-group-plot">${esc(t('rec.looseHead'))}</span>
+      <span class="rec-group-sub">${esc(t('rec.looseSub'))}</span></td></tr>`;
+    Object.keys(byPlot).sort(plotOrder).forEach((plot) => {
+      byPlot[plot].slice()
+        .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
+                     || (a.id || 0) - (b.id || 0))
+        .forEach((f) => {
+          const jenis = _rejJenis(f);
+          html += `<tr class="rec-row-loose">
+            <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
+            <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
+            <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
+            <td class="rc-plot">${esc(f.plot_name || '—')}</td>
+            <td class="rc-batch">${esc(f.batch_name || '—')}</td>
+            <td class="rc-qty">${f.qty == null || f.qty === '' ? '—' : numMY(Number(f.qty))}</td>
+            <td class="rc-track">—</td>
+            <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
+            <td class="rc-c" colspan="4">
+              <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
+            </td>
+          </tr>`;
+        });
+    });
+  }
+
   tbody.innerHTML = html;
+  _recTabCounts(filtered, waitingLoose);
   /* The route thumbnails, for the rows that end up on screen. */
   try { _trackMinis(); } catch (_) {}
+}
+
+/* The two counts on the tabs, off the SAME filtered list the table is drawn
+   from — so a number on a tab and the rows behind it cannot disagree. The
+   Rejected tab keeps its own badge, which counts the nursery rather than
+   the filter and says so in renderRejectedSubmissions. */
+function _recTabCounts(filtered, loose) {
+  const set = (id, n) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = n ? String(n) : '';
+    el.style.display = n ? '' : 'none';
+  };
+  const approved = filtered.filter(_recApproved).length;
+  set('rec-count-approved', approved);
+  set('rec-count-pending', filtered.length - approved + (loose || []).length);
+}
+
+/* The amber mark on a Pending row that somebody has already done. Nothing
+   on the row said so before: the field record is unverified, so
+   applyFieldRecords has filled no date, no batch and no quantity, and a
+   row waiting for the conductor was drawn exactly like one nobody has been
+   to. It names WHO, because that is the thing the row cannot otherwise
+   say, and the DAY they say they did it — not agreed yet, which is why it
+   sits in a chip rather than in the date cell proper. */
+function _waitingChip(list) {
+  if (!Array.isArray(list) || !list.length) return '';
+  const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
+  const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
+  const label = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
+    .filter(Boolean).join(' · ');
+  return ` <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(label)}</span>`;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -9644,7 +9934,8 @@ function _signingAs() {
    record from one of them to the other or out of both, and a list rebuilt
    from a stale array shows the row still sitting where it was. */
 async function _reloadSubmissions() {
-  await Promise.all([loadFieldRecords(), loadRejectedFieldRecords()]);
+  await Promise.all([loadFieldRecords(), loadRejectedFieldRecords(),
+                     loadPendingFieldRecords()]);
   try { applyFieldRecords(getNursery(), getMonth()); }
   catch (e) { console.warn('[maint] field sync failed:', e); }
   renderRecords();
@@ -11558,6 +11849,7 @@ async function initDb() {
       // beside it rather than on demand, so the refusals are on screen the
       // first time the page paints instead of a beat later.
       loadRejectedFieldRecords(),
+      loadPendingFieldRecords(),
       // And what the auditor made of them, for the Audit column.
       loadMaintAudits(),
       // The Setting tab's own four lists, and the plot names they hang off.

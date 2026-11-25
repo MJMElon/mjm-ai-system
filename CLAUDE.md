@@ -10955,6 +10955,103 @@ name.
 **18 of its 26 checks fail on the previous page**, each by name. Nothing to
 run in the database.
 
+### The Records list is THREE parts, and one of them had no reader at all
+
+The office, over the *Approved | Rejected 1* tabs: *"我要把这一部分 分成3个
+部分，rejected保留，approved 分成 pending & approved, tick了的schedule全部会在
+这里出现+worker做了的工 但是还没被approved也会在这里出现，approved的就是FC
+approved了的。"*
+
+**TWO OF THE THREE SENTENCES WERE A FILTER THE PAGE ALREADY HAD AS A COUNT,
+AND THE THIRD HAD NO READER ANYWHERE.** That is the whole shape of this
+change, and it is worth separating before reading any of the code:
+
+| | |
+|---|---|
+| *tick了的schedule全部会在这里出现* | every ticked schedule row. Already drawn — it is the list. |
+| *approved的就是FC approved了的* | already computed, as the DONE count in the strip, written out inline and read by nothing else. |
+| *worker做了的工 但是还没被approved* | **nothing read it.** `loadFieldRecords` is `_verifiedOnly` and `loadRejectedFieldRecords` is `_rejectedOnly`, so a record a worker had sent up and nobody had looked at yet was on NO screen in the office — not under Approved, which it is not, and not under Rejected, which it is not either. |
+
+That third row is the one this is really about. A worker records a morning,
+the conductor has not got to it, and the office had no way to see that it
+had arrived — so *"did my work reach you"* could only be answered out of the
+database. **The silence was by construction**, the shape this file keeps
+finding: two readers each asked a narrow question and the gap between them
+was nobody's.
+
+- **`_recApproved` IS ONE SENTENCE IN ONE PLACE.** A row is approved when
+  the field did it and the conductor signed it off — `_fieldIds` is only
+  ever set from the verified-only reader, and the old Gaia tick still counts
+  where somebody set it, that having been the only way to say "done" before
+  the portal existed. It was written out inline for the DONE count and
+  nowhere else; it decides which of two TABS a row lands in now, so a second
+  copy would be a tab disagreeing with the row on it.
+- **ONE TABLE, ONE BODY, ONE RENDERER.** Pending and Approved are the same
+  twelve columns over the same rows asked a different question, so they
+  SHARE the pane and the tab is a `filter` in `renderRecords` and nothing
+  more. A pane each would be two copies of a wide table, two tbody ids and
+  two renderers, which is how two screens come to disagree about a row.
+  Rejected keeps its own pane, as it always had.
+- **THE PLOT LINE COUNTS THE MONTH, NEVER THE TAB.** *"Task : 2/3"* is how
+  far through a plot the work is, which is a fact about the PLOT and not
+  about which tab is open. Asked of the tab's own slice it can say nothing
+  at all — every Pending group reads 0/N and every Approved one N/N, by
+  construction, because that is what the two tabs ARE. It is counted off the
+  filtered month, so B1 reads 2 of 3 whether you are looking at the two that
+  are done or the one that is not. It asks `_recApproved` as well, rather
+  than restating it. **The first version got this wrong** and the neighbour
+  test caught it.
+- **A WAITING SUBMISSION IS NAMED ON THE ROW IT BELONGS TO** — an amber chip
+  in the date cell carrying the day and who worked it, paired through
+  `_submissionScheduleRow`, which is the rule Delete already uses. The
+  counts behind it are built on EVERY tab and only the DRAWING is gated,
+  because a count that moved with the tab is a count nobody can trust; the
+  first version gated the lot and Pending read 2 where it should read 3
+  while Approved was open.
+- **AND THE CHIP IS DELIBERATELY NOT GATED TO PENDING, where the loose rows
+  are.** A row the conductor approved off one record can still have a second
+  waiting on it, and a chip hidden on Approved would be a submission
+  invisible on BOTH tabs — which is the exact silence this split exists to
+  end.
+- **WORK NO SCHEDULE ROW CLAIMS IS AT THE FOOT, UNDER ITS OWN HEADING**, and
+  on Pending only. These are not rows the office planned; they are work that
+  arrived and attached to nothing — what `_fieldUnpaired` has been counting
+  in silence. Folded in among the plots they would read as planned work. On
+  the Approved tab they would be the one thing that tab promises not to hold.
+- **AN EMPTY TAB SAYS WHICH TAB IS EMPTY.** *"No records found"* over Pending
+  means everything is approved, which is good news; over Approved it means
+  nothing has been signed off yet, which is not. One sentence for both is the
+  screen declining to answer the only question somebody has.
+- **The reader fails back twice.** `loadPendingFieldRecords` names
+  `rejected_at` and `verified_at`, and a database without either refuses the
+  WHOLE select over a column it has not got — so each refusal drops the
+  column it names and asks again, the ladder `loadFieldRecords` already uses.
+
+**Nothing to run in the database.** Both columns have existed since
+`add_maint_field_verify.sql` and `add_maint_field_reject.sql`; the whole of
+this is on the screen.
+
+`tests/the_records_list_is_three_parts.cjs` is 25 checks and **18 fail on the
+previous page**. Three neighbours had to learn the split, and two of them
+were already lying about something else:
+
+- **`maint_sent_back.cjs` was dying halfway**, with its approve and delete
+  sections never asked — its `MJMAccess` stub returned `{}` from
+  `permissions()` under a comment reading *"it answers yes to everything"*,
+  which is the opposite of what that does: `mayMaintAct` falls back to the
+  MODULE LEVEL, and an empty object is no level, so every action gate
+  answered NO. It reads `{modules:{nursery_ops:'admin'}}` now and the file
+  runs to the end, 96 checks. **Its stub also ignored `.is(col, null)`**,
+  which is blunter than the database and is why a REFUSED record came back
+  as one waiting — a stub that accepts anything signs off work the database
+  refuses. And the check under the approve asked for the QUANTITY to flow in
+  from the phone, which the office had removed months ago (*"link的capacity
+  完全不要管手机送进来的"*); unreachable, it never said so.
+- **`work_records_is_one_clean_page.cjs`** reads the APPROVED table, so it
+  presses that tab — the checked row only exists there, Check being what
+  makes a row approved — and its tab check asks whichever tab is ACTIVE
+  rather than Approved by name.
+
 ## Worker Activity downloads ONE job, for the nurseries ticked
 
 The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果
