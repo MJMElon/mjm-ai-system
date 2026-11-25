@@ -2044,8 +2044,6 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .jc-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;white-space:nowrap;}
 .jc-n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#e8f0eb;
   color:var(--green-text);font-size:10.5px;font-weight:800;text-align:center;}
-.jc-def{border-style:dashed;color:var(--text-mute,#5d6b63);}
-.jc-dtag{font-size:10px;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;}
 .jc-x{border:0;background:none;padding:0 0 0 2px;margin:0;font-size:15px;line-height:1;cursor:pointer;color:var(--text-faint);}
 .jc-x:hover{color:var(--danger,#c0392b);}
 .jc-tbl{width:100%;border-collapse:collapse;}
@@ -2063,6 +2061,14 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 /* A job whose default is not a group (Seed Planting): the cell says what
    it falls back to in words, because there is no chip that could. */
 .jc-any{font-style:italic;}
+/* NOTHING DRAGGED. In view it is a genuinely empty cell — the office asked
+   for the default chips off, and an empty cell is what lets the ones that
+   ARE set be picked out at a glance. In edit it is a faint slot saying what
+   to do with it, because an empty cell nobody can see the edge of is not
+   obviously something to drop on. */
+.jc-drop-here{font-size:11.5px;font-style:italic;color:var(--text-faint);
+  border:1px dashed var(--border);border-radius:999px;padding:3px 9px;display:inline-block;}
+.jc-empty-note b{color:var(--green-text);font-weight:800;}
 .jc-elsewhere th.jc-job{color:var(--text-faint);}
 .jc-elsewhere td{font-size:12px;color:var(--text-faint);line-height:1.5;}
 

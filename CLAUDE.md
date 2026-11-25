@@ -10153,14 +10153,17 @@ job's sheet for that nursery.
   `shared/shared_job_crew.js` rather than restated, so *BNN · Workers* is
   exactly the list BNN's sheet showed before (the per-worker switch and the
   unlabelled-nursery fallback included). Every other role is matched exactly.
-- **A DROP ADDS, never moves** — a crew can do several jobs, so one group
-  goes onto as many cells as it is dragged onto; the × takes it off. A cell
-  greyed `—` is a job Where Each Job Is Done says is not done there.
-- **NOTHING KEYED IS THE OLD LIST**, drawn on the card as the nursery's own
-  Workers marked *default*. Save writes a cell left as it stood as
-  **`default`** (read as no row at all), so a nursery whose register is
-  empty keeps the old `nops_maint_workers` fallback. An emptied cell is
-  saved as `''`, which is an answer: nobody.
+- **ONE GROUP GOES ONTO AS MANY CELLS AS IT IS DRAGGED ONTO** — a crew can
+  do several jobs — and the × takes it off. A cell greyed `—` is a job Where
+  Each Job Is Done says is not done there. **A drop onto an EMPTY cell gives
+  that cell exactly what was dropped**; see the sub-section on the defaults
+  coming off, which is where that changed and why.
+- **NOTHING KEYED IS THE OLD LIST**, and the cell is EMPTY — it was drawn as
+  the nursery's own Workers marked *default* until the office took the
+  eighteen of them off. Save writes a cell nobody dragged into as
+  **`default`** (read as no row at all), so a nursery whose register is empty
+  keeps the old `nops_maint_workers` fallback. An emptied cell is saved as
+  `''`, which is an answer: nobody.
 - **THE CLAIM PAYS THE SAME LIST.** `jobWorkers(n, job)` on the page and
   `maintJobNames(n, ym, code)` in `npayroll_script.js` both ask the shared
   file; a tick under a name a job's list does not hold has no column on the
@@ -10261,15 +10264,14 @@ Five things in it:
   what they read there is what they put there.
 - **THE DEFAULT IS NOT A GROUP, and it could not be.** Every other job falls
   back to its own nursery's General Workers; `PN · Workers` stands for
-  nobody. `_jcDefault(n, job)` answers an EMPTY list through `JC_ANY_DEFAULT`
-  and three things fall out of that one fact rather than being special
-  cases: the cell draws *Everybody on the register — drag a group to narrow
-  it*, a drag starts from nothing, and **clearing every chip serialises to
-  exactly the default**, so Save writes DEFAULT and the dropdown goes back to
-  offering everybody. That last one is deliberately NOT the other seven's
-  answer, where an emptied cell is `''` meaning nobody: nobody here is a
-  dropdown with nothing in it, which is a sheet that cannot be used, and the
-  office drags to NARROW rather than to close.
+  nobody. So the cell draws *Everybody on the register — drag a group to
+  narrow it* — **the one cell in the table that says its own fallback**,
+  because it is the only one the line under the table does not cover, and a
+  blank cell there reads as a job nobody can be picked for. **An EMPTIED
+  cell here saves as DEFAULT**, deliberately NOT the other seven's answer,
+  where an emptied cell is `''` meaning nobody: nobody here is a dropdown
+  with nothing in it, which is a sheet that cannot be used, and the office
+  drags to NARROW rather than to close.
 - **`onReg` IS THE WHOLE REGISTER EITHER WAY.** It is what keeps a name out
   of the *Last month* band, so narrowing it would hand back under that
   heading exactly the people the office had just excluded.
@@ -10294,6 +10296,64 @@ groups the columns, which is the one reading this is not.
 asynchronously, so the first open has no dropdown while every later one
 reads a cached month and answers at once, and a check that did not wait
 would be reading the race rather than the rule.
+
+#### THE DEFAULT CHIPS CAME OFF, and taking the PAINT off is not taking the RULE off
+
+The card opened with a dashed `BNN · Workers DEFAULT` chip in every cell
+nobody had keyed — what that cell answers today, said on the cell. The
+office counted eighteen of them and took the lot off in one line:
+*"default的全部不要 我自己drag"*.
+
+**THEY ARE RIGHT ABOUT THE SCREEN.** The one question this table is read
+for is WHICH CELLS HAVE BEEN SET, and eighteen identical chips make a table
+nobody has ever touched look completely full — the cells that ARE set have
+to be picked out of a wall of cells that only look set. An empty cell
+answers it at a glance.
+
+**WHAT MUST NOT CHANGE IS WHAT AN UNTOUCHED CELL DOES**, and that is a
+different sentence from what it DRAWS. An absent answer is nobody having
+been asked: `jobWorkers` falls back to that nursery's own list for a cell
+with no row, exactly as every sheet did before this card existed. Reading
+the removal as *unkeyed means nobody* would empty six jobs in three
+nurseries, and the claim with them, between the deploy and the office
+finishing eighteen drags. So this is the paint and not the rule.
+
+Two things did move, and both fall out of the chip being gone rather than
+being a second decision:
+
+- **A DROP ONTO AN EMPTY CELL GIVES WHAT WAS DROPPED.** It used to be added
+  to the default, which was honest while the default was a chip sitting in
+  the cell and is a lie once the cell is blank. **What it costs:** dragging
+  UNE onto BNN P & D now REPLACES BNN's own workers rather than standing
+  beside them, and keeping both is two drags. It is also the office's own
+  first sentence working as written — drag BNN Workers onto P & D and the
+  sheet shows exactly BNN's workers.
+- **A CELL DRAGGED TO EXACTLY ITS OWN NURSERY'S WORKERS IS STORED
+  LITERALLY**, where `isDef` used to serialise it as DEFAULT. That was
+  invisible while the default was drawn as a chip; with the chip gone it
+  would read as the drag being thrown away on the next load.
+
+**THREE EMPTY STATES, THREE APPEARANCES**, because two of them are opposite
+answers and one blank cell cannot stand for both: nothing dragged (the
+sheet is unchanged — blank in view, a faint *Drag a group here* slot in
+edit), every chip taken off (**Nobody**), and a job whose default is
+everybody (its own sentence, above).
+
+**SAID ONCE, NOT EIGHTEEN TIMES.** The chips were one sentence written into
+every cell; it still has to be said somewhere, because an empty cell and a
+cell reading Nobody look near enough alike and one of them pays nobody. One
+muted line under the table: *A cell with nothing in it is unchanged — that
+job keeps the list its sheet has always used. A cell reading Nobody is an
+answer.*
+
+**Nothing to run in the database.** The whole of it is on the card.
+`tests/each_job_has_its_own_worker_list.cjs` is 56 checks and **10 fail on
+the previous card**. Section 2b is the pair that says the rule survived the
+paint: **Save with nothing dragged writes DEFAULT everywhere and moves no
+sheet**, and a drag of the nursery's own Workers comes back as a chip
+rather than vanishing. Its *a drop before Edit does nothing* check had to
+start asking for the DRAFT as well — an empty cell before and an empty cell
+after is true whatever the gate did.
 
 ### Worker Activity was two parts, and Seed Planting is the Pre Nursery one
 

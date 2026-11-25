@@ -186,33 +186,91 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     const db = { mjmnpayroll_workers: REGISTER, nops_maint_config: [] };
     const { page, errs } = await boot(browser, db, 'setting');
     check('the card is on Settings', await ev(page, () => !!document.getElementById('jc-set-body')), true);
-    check('an unkeyed cell shows its own nursery workers, as the default',
+    /* THE DEFAULT CHIPS ARE OFF — *"default的全部不要 我自己drag"*. Eighteen
+       dashed `BNN · Workers DEFAULT` chips made a table nobody had touched
+       look full, so the cells that ARE set could not be picked out. An
+       unkeyed cell is EMPTY now, and what it does is said once under the
+       table instead of eighteen times inside it. */
+    check('an unkeyed cell is empty — no default chip anywhere on it',
       await ev(page, () => { const td = document.querySelector('#jc-set-body td[data-cell="BNN:pd"]');
-        return td ? [td.querySelectorAll('.jc-def').length, td.textContent.includes('BNN · Workers')] : 'no cell'; }),
-      [1, true]);
+        return td ? [td.querySelectorAll('.jc-chip').length, td.textContent.trim()] : 'no cell'; }),
+      [0, '']);
+    check('…and the word DEFAULT is nowhere on the card',
+      await ev(page, () => /default/i.test(document.getElementById('jc-set-body').textContent)), false);
+    check('…but the card still says what an empty cell does',
+      await ev(page, () => /unchanged/i.test((document.querySelector('#jc-set-body .jc-empty-note') || {}).textContent || '')), true);
     check('the palette offers the Team Board groups with their counts',
       await ev(page, () => [...document.querySelectorAll('#jc-set-body .jc-pal .jc-chip')].map(c => c.textContent.replace(/\s+/g, ' ').trim())),
       ['BNN · FC 1', 'BNN · Workers 2', 'UNN 1 · Workers 1', 'UNE · Workers 1']);
-    check('a drop before Edit does nothing', await (async () => { await drag(page, 'UNE · Workers', 'BNN:pd'); return cellChips(page, 'BNN:pd'); })(), ['BNN · Workers']);
+    /* An empty cell before and after proves nothing on its own, so the gate
+       is asked as the DRAFT not existing — and the same drag landing one
+       line down, once Edit is pressed, is the control. */
+    check('a drop before Edit does nothing',
+      await (async () => { await drag(page, 'UNE · Workers', 'BNN:pd');
+        return [await cellChips(page, 'BNN:pd'), await ev(page, () => jobCrewDraft)]; })(),
+      [[], null]);
     if (process.env.SHOT) { await ev(page, () => document.getElementById('jc-set-body').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_view.png' }); }
     await ev(page, () => jcEdit());
     check('drop UNE · Workers on BNN P & D', await drag(page, 'UNE · Workers', 'BNN:pd'), 'dropped');
     check('drop BNN · FC on BNN P & D', await drag(page, 'BNN · FC', 'BNN:pd'), 'dropped');
-    check('the cell now carries three groups', await cellChips(page, 'BNN:pd'), ['BNN · Workers', 'UNE · Workers', 'BNN · FC']);
-    check('dropping the same group twice adds it once', await (async () => { await drag(page, 'BNN · FC', 'BNN:pd'); return (await cellChips(page, 'BNN:pd')).length; })(), 3);
-    check('Manuring was not touched', await cellChips(page, 'BNN:manuring'), ['BNN · Workers']);
+    /* WHAT YOU SEE IS WHAT YOU GET. A drop onto an empty cell used to be
+       added to the default, which was honest while the default was a chip
+       in the cell and is a lie once it is blank — so BNN's own workers are
+       NOT quietly in here beside the two that were dropped. */
+    check('the cell carries exactly what was dropped, and not the old default',
+      await cellChips(page, 'BNN:pd'), ['UNE · Workers', 'BNN · FC']);
+    check('dropping the same group twice adds it once', await (async () => { await drag(page, 'BNN · FC', 'BNN:pd'); return (await cellChips(page, 'BNN:pd')).length; })(), 2);
+    check('Manuring was not touched', await cellChips(page, 'BNN:manuring'), []);
     if (process.env.SHOT) { await ev(page, () => document.getElementById('jc-set-body').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_edit.png' }); }
     check('nothing was written before Save', await ev(page, () => (window.__WRITES || []).length), 0);
     await ev(page, () => jcSave());
     await page.waitForTimeout(300);
     check('Save wrote the cell as its groups',
       await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:BNN:pd') || {}).txt_value),
-      'BNN|General Worker,UNE|General Worker,BNN|Field Conductor');
-    check('and a cell left as it stood as DEFAULT',
+      'UNE|General Worker,BNN|Field Conductor');
+    check('and a cell nobody dragged into as DEFAULT',
       await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:BNN:manuring') || {}).txt_value), 'default');
-    check('BNN P & D now shows its workers, the UNE crew and its FC',
-      await sheetCols(page, 'pd'), ['Andi Rosmini', 'Yuyak', 'Lalu Aenal', 'Wira UNE']);
-    check('BNN Manuring is unchanged', await sheetCols(page, 'manuring'), ['Andi Rosmini', 'Yuyak']);
+    check('BNN P & D now shows the UNE crew and its FC, and not its own workers',
+      await sheetCols(page, 'pd'), ['Lalu Aenal', 'Wira UNE']);
+    /* THE RULE THE DEFAULT CHIPS WERE ONLY EVER A PICTURE OF. Taking them
+       off is paint; an untouched cell still falls back to the nursery's own
+       list, or six jobs in three nurseries would empty themselves — and the
+       claim with them — between the deploy and eighteen drags. */
+    check('BNN Manuring is unchanged, although its cell is empty', await sheetCols(page, 'manuring'), ['Andi Rosmini', 'Yuyak']);
+    check('no page error', errs, []);
+    await page.close();
+  }
+
+  /* ── 2b. THE TWO THINGS THE EMPTY CELLS MUST NOT HAVE BROKEN ────────────
+     Pressing Save on a table of empty cells must change no sheet, because
+     an empty cell is nobody having been asked and not nobody; and a drag
+     of the nursery's OWN workers must be stored as a drag, where it used
+     to serialise as DEFAULT — invisible while the default was a chip, and
+     with the chip gone it would read as the drag being thrown away. */
+  console.log('— 2b. Save with nothing dragged moves nothing, and an own-workers drag is stored');
+  {
+    const db = { mjmnpayroll_workers: REGISTER, nops_maint_config: [] };
+    const { page, errs } = await boot(browser, db, 'setting');
+    await ev(page, () => { jcEdit(); jcSave(); });
+    await page.waitForTimeout(300);
+    check('every cell nobody touched is written as DEFAULT',
+      await ev(page, () => (window.__DB.nops_maint_config || [])
+        .filter(r => r.key.indexOf('job_crew:') === 0)
+        .every(r => r.txt_value === 'default')), true);
+    check('…and every sheet reads exactly what it read before',
+      [await sheetCols(page, 'pd'), await sheetCols(page, 'manuring')],
+      [['Andi Rosmini', 'Yuyak'], ['Andi Rosmini', 'Yuyak']]);
+
+    await ev(page, () => { switchTab('setting', null); jcEdit(); });
+    check('drop BNN · Workers on BNN Weeding', await drag(page, 'BNN · Workers', 'BNN:weeding'), 'dropped');
+    await ev(page, () => jcSave());
+    await page.waitForTimeout(300);
+    check('it is stored as the group, never folded back into DEFAULT',
+      await ev(page, () => (window.__DB.nops_maint_config.find(r => r.key === 'job_crew:BNN:weeding') || {}).txt_value),
+      'BNN|General Worker');
+    check('…so the chip is still on the cell after the save',
+      await cellChips(page, 'BNN:weeding'), ['BNN · Workers']);
+    check('and the sheet reads the same either way', await sheetCols(page, 'weeding'), ['Andi Rosmini', 'Yuyak']);
     check('no page error', errs, []);
     await page.close();
   }

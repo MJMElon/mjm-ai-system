@@ -12737,33 +12737,66 @@ const JC_SET_ELSEWHERE = {
   cull_incentive: 'Named people at their own rates — set in Culling Monitoring above.',
 };
 
+/* ── THE DEFAULT IS NOT DRAWN, AND THAT CHANGED WHAT A DROP DOES ─────────
+   The card opened with a dashed `BNN · Workers DEFAULT` chip in every cell
+   nobody had keyed — what that cell answers today, said on the cell. The
+   office looked at eighteen of them and took the lot off in one line:
+   *"default的全部不要 我自己drag"*.
+
+   THEY ARE RIGHT ABOUT THE SCREEN. The one question this table is read for
+   is WHICH CELLS HAVE BEEN SET, and eighteen identical chips make a table
+   nobody has ever touched look completely full — the cells that ARE set
+   have to be picked out of a wall of cells that only look set. An empty
+   cell answers it at a glance.
+
+   WHAT MUST NOT CHANGE IS WHAT AN UNTOUCHED CELL DOES, and the two are not
+   the same sentence. An absent answer is nobody having been asked:
+   `jobWorkers` falls back to that nursery's own list for a cell with no
+   row, exactly as every sheet did before this card existed. Reading the
+   removal as *unkeyed means nobody* would empty six jobs in three
+   nurseries, and the claim with them, between the deploy and the office
+   finishing eighteen drags. So this is the PAINT and not the rule, and ONE
+   LINE under the table says what an empty cell does — a cell that is
+   silent about a rule deciding who is paid is the fault this file keeps
+   finding.
+
+   TWO THINGS DID MOVE, and both fall out of the chip being gone rather
+   than being a second decision:
+
+     · A DROP ONTO AN EMPTY CELL GIVES WHAT WAS DROPPED. It used to add to
+       the default, which was honest while the default was a chip sitting
+       in the cell and is a lie once the cell is blank. What you see is
+       what you get — so dragging UNE onto BNN P & D now REPLACES BNN's own
+       workers rather than standing beside them, and keeping both is two
+       drags. That is also the office's own first sentence working as
+       written: drag BNN Workers onto P & D and the sheet shows exactly
+       BNN's workers.
+     · A CELL DRAGGED TO EXACTLY ITS OWN NURSERY'S WORKERS IS STORED
+       LITERALLY, where it used to serialise as DEFAULT. That was invisible
+       while the default was drawn as a chip; with the chip gone it would
+       read as the drag being thrown away on the next load.
+
+   THREE EMPTY STATES, THREE APPEARANCES, because two of them are opposite
+   answers and a blank cell cannot stand for both: nothing dragged (the
+   sheet is unchanged), every chip taken off (nobody), and a job whose
+   default is everybody (the sentence below). */
+
 /* ── A JOB WHOSE DEFAULT IS NOT A GROUP ──────────────────────────────────
    Every other job falls back to its own nursery's General Workers, which
    is what its sheet drew before this card existed. SEED PLANTING CANNOT:
    the office said it plainly — *"pre nursery 是没有工人的"* — and the Team
    Board bears them out, PN carrying one Field Conductor and no Workers at
-   all. A `PN · Workers` chip there would be a default standing for nobody.
+   all. A `PN · Workers` chip there would have been a default standing for
+   nobody.
 
    What it falls back to is what its dropdown has always offered: EVERYBODY
-   on the register. So `_jcDefault` answers an EMPTY list for it, which does
-   three things at once and none of them is a special case —
-
-     · the cell draws the sentence below rather than a chip;
-     · a drag starts from nothing and adds the one group dropped;
-     · and clearing every chip serialises to exactly the default, so Save
-       writes DEFAULT and the dropdown goes back to offering everybody.
-
-   That last one is deliberately NOT the other six's answer, where an
-   emptied cell saves as `''` meaning nobody. Nobody here is a dropdown
-   with nothing in it, which is a sheet that cannot be used, and the office
-   drags to NARROW the list rather than to close it. */
+   on the register. So an EMPTIED cell here saves as DEFAULT rather than as
+   `''`, which is deliberately NOT the other six's answer: nobody on this
+   job is a dropdown with nothing in it, which is a sheet that cannot be
+   used, and the office drags to NARROW the list rather than to close it. */
 const JC_ANY_DEFAULT = {
   seed_planting: 'Everybody on the register — drag a group to narrow it',
 };
-
-function _jcDefault(n, job) {
-  return JC_ANY_DEFAULT[job] ? [] : [MJMJobCrew.group(n, MJMJobCrew.GENERAL)];
-}
 function _jcSectionName(s) { return MAINT_NURSERIES.includes(s) ? nurseryShort(s) : s; }
 function _jcGroupLabel(g) {
   const p = MJMJobCrew.splitGroup(g);
@@ -12787,14 +12820,14 @@ function _jcState() {
 function _jcChipHtml(g, opts) {
   const names = _jcNames(g);
   const tip = names.length ? names.join(', ') : 'Nobody in this group today';
-  const cls = 'jb-chip jc-chip' + (opts.def ? ' jc-def' : '');
+  const cls = 'jb-chip jc-chip';
   const drag = opts.palette && opts.editing
     ? ` draggable="true" ondragstart="jcDragStart(event,'${esc(g)}')" ondragend="jcDragEnd(event)"` : '';
   const x = opts.removable
     ? `<button type="button" class="jc-x" title="Take this group off" aria-label="Remove ${esc(_jcGroupLabel(g))}"
          onclick="jcRemove('${esc(opts.cell)}','${esc(g)}')">&times;</button>` : '';
   const count = opts.palette ? ` <span class="jc-n">${names.length}</span>` : '';
-  return `<span class="${cls}" title="${esc(tip)}"${drag}>${esc(_jcGroupLabel(g))}${count}${opts.def ? ' <span class="jc-dtag">default</span>' : ''}${x}</span>`;
+  return `<span class="${cls}" title="${esc(tip)}"${drag}>${esc(_jcGroupLabel(g))}${count}${x}</span>`;
 }
 
 function renderJobCrewSetting() {
@@ -12823,16 +12856,17 @@ function renderJobCrewSetting() {
       const cell = `${n}:${j}`;
       if (!on.includes(n)) return `<td class="jc-off" title="${esc(jobLabel(j))} is not done in ${esc(nurseryShort(n))} (Where Each Job Is Done)">—</td>`;
       const keyed = state[cell];
-      const list = keyed || _jcDefault(n, j);
-      /* An empty list means two different things, so it has to say which:
-         nobody was dragged onto a job whose default is everybody, or every
-         chip was taken off one whose default is a group. */
-      const none = JC_ANY_DEFAULT[j]
-        ? `<span class="jb-none jc-any">${esc(JC_ANY_DEFAULT[j])}</span>`
-        : `<span class="jb-none">Nobody</span>`;
-      const chips = list.length
-        ? list.map(g => _jcChipHtml(g, { def: !keyed, removable: editing, cell })).join('')
-        : none;
+      /* THREE EMPTY STATES AND THEY ARE NOT ONE. Nothing dragged leaves the
+         sheet exactly as it was; every chip taken off is NOBODY; and a job
+         whose default is everybody says so on the cell, being the only cell
+         in the table whose fallback is not the line underneath it. Drawn
+         alike, the first two would be one blank cell standing for a sheet
+         that works and a sheet that pays nobody. */
+      let chips;
+      if (keyed && keyed.length) chips = keyed.map(g => _jcChipHtml(g, { removable: editing, cell })).join('');
+      else if (JC_ANY_DEFAULT[j]) chips = `<span class="jb-none jc-any">${esc(JC_ANY_DEFAULT[j])}</span>`;
+      else if (!keyed) chips = editing ? `<span class="jc-drop-here">Drag a group here</span>` : '';
+      else chips = `<span class="jb-none">Nobody</span>`;
       const drop = editing
         ? ` ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcDrop(event,'${esc(cell)}')"` : '';
       return `<td class="jc-cell" data-cell="${esc(cell)}"${drop}>${chips}</td>`;
@@ -12852,10 +12886,19 @@ function renderJobCrewSetting() {
   box.innerHTML = `<div class="jc-pal${editing ? ' jc-pal-live' : ''}">${palette}</div>
     <div class="tbl-wrap jc-wrap"><table class="jc-tbl"><thead>${head}</thead>`
     + `<tbody>${body}${elsewhere}</tbody></table></div>`
+    /* SAID ONCE, NOT EIGHTEEN TIMES. The default chips were this sentence
+       written into every cell, which is what the office took off. It still
+       has to be said somewhere: an empty cell and a cell reading Nobody
+       look near enough alike, and one of them pays nobody. */
+    + `<div class="jb-note jc-empty-note">A cell with nothing in it is <b>unchanged</b> —
+         that job keeps the list its sheet has always used. A cell reading
+         <b>Nobody</b> is an answer.</div>`
     + (editing
       ? `<div class="jb-note">Drag a group from the Team Board above onto a job. Its
            people become that job&rsquo;s columns on Worker Activity for that
-           nursery, and the salary claim pays the same list.</div>
+           nursery, and the salary claim pays the same list. A drop gives the cell
+           exactly what was dropped, so to keep a nursery&rsquo;s own workers as well,
+           drag those too.</div>
          <div class="lst-foot">
            <button class="btn" onclick="jcCancel()">Cancel</button>
            <button class="btn btn-primary" id="jc-save-btn" onclick="jcSave()">Save</button>
@@ -12898,8 +12941,10 @@ function jcDrop(ev, cell) {
   const g = _jcDrag;
   _jcDrag = null;
   if (!g || !jobCrewDraft || !(cell in jobCrewDraft)) return;
-  const [n, j] = cell.split(':');
-  const list = (jobCrewDraft[cell] || _jcDefault(n, j)).slice();
+  /* FROM NOTHING, never from the default. The default is not on the cell
+     any more, so adding to it would put a group in the cell that nobody
+     dropped there. */
+  const list = (jobCrewDraft[cell] || []).slice();
   if (list.includes(g)) return;                 // already on it
   list.push(g);
   jobCrewDraft[cell] = list;
@@ -12907,16 +12952,22 @@ function jcDrop(ev, cell) {
 }
 function jcRemove(cell, g) {
   if (!jobCrewDraft || !(cell in jobCrewDraft)) return;
-  const [n, j] = cell.split(':');
-  jobCrewDraft[cell] = (jobCrewDraft[cell] || _jcDefault(n, j)).filter(x => x !== g);
+  jobCrewDraft[cell] = (jobCrewDraft[cell] || []).filter(x => x !== g);
   renderJobCrewSetting();
 }
 
-/* One nops_maint_config row per nursery per job. A cell still showing its
-   default is written as DEFAULT — the same answer as no row at all — and a
-   cell somebody put back to exactly the default group is too, so the sheet
-   goes on taking that nursery's old fallback list where its register is
-   empty. The permission is asked again at the write. */
+/* One nops_maint_config row per nursery per job. A cell NOBODY DRAGGED INTO
+   is written as DEFAULT — the same answer as no row at all — so its sheet
+   goes on taking that nursery's old fallback list, which is what makes
+   pressing Save on a table full of empty cells change nothing.
+
+   A cell dragged to exactly that nursery's own Workers is NOT folded back
+   into DEFAULT. It used to be, which was invisible while the default was
+   drawn as a chip and would now read as the drag being thrown away. The
+   one emptied cell that still saves as DEFAULT is a job whose default is
+   everybody, for the reason written above JC_ANY_DEFAULT.
+
+   The permission is asked again at the write. */
 async function jcSave() {
   if (!jobCrewDraft || _jcSaving) return;
   if (!maySetting()) { alert('Setting is not open to you.'); return; }
@@ -12931,7 +12982,7 @@ async function jcSave() {
     const rows = Object.keys(draft).map(cell => {
       const [n, j] = cell.split(':');
       const list = draft[cell];
-      const isDef = !list || MJMJobCrew.serialise(list) === MJMJobCrew.serialise(_jcDefault(n, j));
+      const isDef = !list || (!!JC_ANY_DEFAULT[j] && !list.length);
       if (!isDef) next[cell] = MJMJobCrew.parse(list.join(','));
       return {
         key: MJMJobCrew.configKey(n, j),

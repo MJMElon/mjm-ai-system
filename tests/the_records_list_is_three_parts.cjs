@@ -214,8 +214,15 @@ async function boot(browser) {
      which makes two rows unreadable rather than one. So the sentence is
      asked of the title and the CELL is measured. Both halves, because a
      chip that fits by having lost the information is not a fix. */
+  /* THE PLOT ROW'S CHIP, never simply the first `.rec-waiting` in the body.
+     The unclaimed-submissions block was moved ABOVE the plots, and its own
+     rows carry the whole sentence as text with only the explanation in the
+     title — so a bare querySelector started measuring that one instead and
+     reported a working chip as having lost its name. */
   const fit = await ev(() => {
-    const el = document.querySelector('#rec-body .rec-waiting');
+    const row = [...document.querySelectorAll('#rec-body tr')]
+      .find((tr) => tr.querySelector('.rec-waiting') && !tr.classList.contains('rec-row-loose'));
+    const el = row && row.querySelector('.rec-waiting');
     if (!el) return 'no chip';
     const td = el.closest('td');
     return { tip: el.getAttribute('title') || '',
@@ -228,7 +235,9 @@ async function boot(browser) {
   /* AMBER, NEVER GREEN. Green here is the Checked badge two cells along,
      which means the opposite — settled. */
   const amber = await ev(() => {
-    const el = document.querySelector('#rec-body .rec-waiting');
+    const row = [...document.querySelectorAll('#rec-body tr')]
+      .find((tr) => tr.querySelector('.rec-waiting') && !tr.classList.contains('rec-row-loose'));
+    const el = row && row.querySelector('.rec-waiting');
     return el ? getComputedStyle(el).color : 'no chip';
   });
   check('the chip is amber and not the settled green', amber, 'rgb(146, 64, 14)');
