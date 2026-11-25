@@ -9502,9 +9502,40 @@ function _recIconBtn(icon, cls, onclick, label, tip) {
    It was written out inline for the DONE count and nowhere else. It decides
    which of two TABS a row lands in now, so a second copy of it would be the
    strip at the top disagreeing with the table under it about the same row.
+
+   ── AND A CHECKED ROW IS APPROVED, which the first version missed ────────
+
+   The office found two of their own rows under Pending — U13, 07 Nov, both
+   wearing ✓ CHECKED — and said where they belong: *"现在在pending 这两行是
+   当初我在approved那边手动加的 要进去approved而不是pending"*.
+
+   THEY WERE KEYED BY HAND, so there is no field record behind them and
+   nobody ever set Gaia: on the two tests above they read as not approved.
+   And **nothing anybody could do would ever move them off Pending** —
+   there is no submission to approve — which is the one thing a to-do list
+   must not hold: *a list of work nobody can do is a list nobody reads*.
+
+   CHECKED IS A SIGNATURE, and the strongest one on this page. Only
+   `toggleChecked` sets it, by a deliberate press; it writes `qtyFrozen` so
+   the figure stops being a formula, `syncTicks` refuses to touch the row
+   afterwards, and it is what puts the row on the payroll claim. A row the
+   office has settled and is being PAID on cannot be waiting for a
+   conductor.
+
+   It also closes a way an approved row could fall BACK into Pending on its
+   own: `applyFieldRecords` drops `_fieldIds` when a record stops pairing
+   and leaves the values, so a row that really was verified would have
+   reappeared under Pending with nothing saying why. Checked holds it.
+
+   WHAT THIS DELIBERATELY DOES NOT DO: a hand-keyed row that is NOT checked
+   stays in Pending. That is the office's own first sentence — *"tick了的
+   schedule全部会在这里出现"* — a row they have keyed and not yet agreed is
+   exactly what Pending is for, and reading every hand-keyed row as approved
+   would leave Pending holding nothing but unmatched phone submissions.
    ─────────────────────────────────────────────────────────────────────── */
 const _recApproved = (r) =>
-  (Array.isArray(r._fieldIds) && r._fieldIds.length > 0) || !!r.gaia;
+  (Array.isArray(r._fieldIds) && r._fieldIds.length > 0) || !!r.gaia
+  || !!r.checked;
 
 function renderRecords() {
   const jF   = document.getElementById('rf-filter-jenis').value;

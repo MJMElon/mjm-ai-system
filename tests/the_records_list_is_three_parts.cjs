@@ -304,7 +304,49 @@ async function boot(browser) {
   } catch (e) { fail++; console.log('  FAIL 8. the plot line -- ' + String(e.message).split('\n')[0]); }
 
   try {
-  console.log('\n9. An empty tab says WHICH tab is empty');
+  console.log('\n9. A row the office keyed and CHECKED is approved');
+  /* The office's own two rows: keyed by hand, so no field record and no
+     Gaia tick, and then Checked. Theirs were U13 and this fixture is BNN,
+     so they are keyed on B7 — the nursery filter runs BEFORE the tab split,
+     so a UNN plot here draws on neither tab and both checks pass for the
+     wrong reason, which is what the first run of this did. On `_fieldIds || gaia` alone they read as
+     pending — and NOTHING anybody could do would ever move them off that
+     tab, there being no submission to approve. Checked is a signature:
+     only a deliberate press sets it, it freezes the figure, and it is what
+     puts the row on the payroll claim.
+     The UNCHECKED twin is the control, and it is what makes this a test of
+     the rule rather than of the plot: without it, "the checked one is in
+     Approved" passes just as well on a page that sent every hand-keyed row
+     there, which is the office's own first sentence broken. */
+  await ev(() => {
+    const m = getMonth();
+    const hand = (o) => Object.assign({
+      tarikh: '07-11-2026', jenis: 'Penyemburan racun kulat dan serangga',
+      racun: 'Round 1: Antracol 50gm + Bond 15mL', batch: '264, 262, 256',
+      qty: 6309, carlos: 0, gaia: 0, remark: '', _month: m }, o);
+    records.push(hand({ id: 701, plot: 'B7', checked: 1, qtyFrozen: 6309 }));
+    records.push(hand({ id: 702, plot: 'B7', racun: 'Round 1: Cyper 60mL + Bond 15mL' }));
+    renderRecords();
+  });
+  /* Read by the CHEMICAL, because the two rows are alike in every other
+     cell — same plot, same day, same job, same batches, same figure, which
+     is exactly the pair the office sent over. Keyed on plot and date the
+     twin answers for the checked one and "not in Pending" passes for the
+     wrong reason, which is what the second run of this did. */
+  const chemOn = async (w) => { await open(w);
+    const rs = await rows();
+    return rs.filter((r) => !r.group && !r.loose && /^B7$/.test(r.cells[3]))
+             .map((r) => r.cells[2]); };
+  const appr = await chemOn('approved');
+  const pend = await chemOn('pending');
+  check('the CHECKED row is in Approved', (appr || []).some((s) => /Antracol/.test(s)), true);
+  check('…and not in Pending', (pend || []).some((s) => /Antracol/.test(s)), false);
+  check('the unchecked twin is still in Pending', (pend || []).filter((s) => /Cyper/.test(s)).length, 1);
+  await ev(() => { records = records.filter((r) => r.id !== 701 && r.id !== 702); renderRecords(); });
+  } catch (e) { fail++; console.log('  FAIL 9. checked is approved -- ' + String(e.message).split('\n')[0]); }
+
+  try {
+  console.log('\n10. An empty tab says WHICH tab is empty');
   await ev(() => { pendingFieldRecords = []; records = records.filter((r) => r.id === 601); renderRecords(); });
   await open('pending');
   const msg = await ev(() => (document.querySelector('#rec-body td') || {}).textContent || '');
@@ -313,7 +355,7 @@ async function boot(browser) {
   await ev(() => { records = records.map((r) => Object.assign({}, r, { _fieldIds: [], gaia: 0 })); renderRecords(); });
   const msg2 = await ev(() => (document.querySelector('#rec-body td') || {}).textContent || '');
   check('Approved empty reads as still in Pending', /pending/i.test(msg2), true);
-  } catch (e) { fail++; console.log('  FAIL 9. empty -- ' + String(e.message).split('\n')[0]); }
+  } catch (e) { fail++; console.log('  FAIL 10. empty -- ' + String(e.message).split('\n')[0]); }
 
   if (SHOT) {
     const fs = require('fs');

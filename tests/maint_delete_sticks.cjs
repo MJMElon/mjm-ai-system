@@ -363,6 +363,15 @@ const ticked = (page, plot) => page.evaluate((p) => {
     });
     const isChecked = () => page.evaluate(() =>
       /Checked/.test(document.querySelector('#rec-body').textContent));
+    /* CHECKING MOVES THE ROW, so this section has to follow it. Checked is
+       the office agreeing the row, which is exactly what Pending means a
+       row is still waiting for — so the row leaves that tab the moment it
+       is pressed, the same way an answered chip leaves the audit board,
+       and the counts on the two tabs move with it. Uncheck is then one tab
+       along rather than one press, which is the cost of it. */
+    const openTab = (w) => page.evaluate((x) => {
+      const b = document.getElementById('recsec-btn-' + x); if (b) b.click();
+    }, w);
 
     check('an unchecked row offers Check, Edit and Del',
           await btns(), ['✓ Check', 'Edit', 'Del']);
@@ -372,6 +381,9 @@ const ticked = (page, plot) => page.evaluate((p) => {
         .find((tr) => tr.children.length > 3 && /Antracol/.test(tr.textContent));
       r.querySelector('.btn-check').click();
     });
+    await page.waitForTimeout(120);
+    check('the row LEAVES Pending the moment it is checked', await btns(), null);
+    await openTab('approved');
     await page.waitForTimeout(120);
     checkTrue('it checks', await isChecked());
     checkTrue('…AND IT OFFERS UNCHECK, not a dead end',
@@ -392,7 +404,9 @@ const ticked = (page, plot) => page.evaluate((p) => {
     checkTrue('…including that the quantity goes back to being read live',
               /read live from the batch report/i.test(asked[0] || ''))
     checkFalse('AND IT IS UNCHECKED', await isChecked());
-    check('…back to the three buttons it started with',
+    await openTab('pending');
+    await page.waitForTimeout(120);
+    check('…and it is back on Pending, with the three buttons it started with',
           await btns(), ['✓ Check', 'Edit', 'Del']);
     await page.close();
   }
