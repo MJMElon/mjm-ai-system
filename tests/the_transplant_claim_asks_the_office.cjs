@@ -302,7 +302,10 @@ console.log('\n── 7. the sheet totals what the claim pays ──');
   yes(/if \(skipped\) skipRows\+\+;/.test(r),
       'and a job recorded as not done is counted apart from both');
   yes(/pay\.tpNotDoneFoot/.test(r), 'and the sheet says so under the total');
-  yes(/if \(agreed\(r\)\) totals\[w\] \+= share;/.test(r),
+  /* The worker cell moved into _tpWorkerCell when every worker became a
+     tick with the figure under it; the rule went with it unchanged. */
+  yes(/_tpWorkerCell\(r, w, byName\[w\], agreed\(r\)/.test(r)
+      && /if \(isAgreed\) addTotal\(share\);/.test(lift(SHEET, 'function _tpWorkerCell(r, w, on, isAgreed, skipped, addTotal)')),
       'a worker column totals only the rows the office has agreed');
 
   /* THE TWO HELPERS BOTH SHEETS SHARE, driven rather than read off a line:

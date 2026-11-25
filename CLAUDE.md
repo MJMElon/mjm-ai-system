@@ -6140,16 +6140,32 @@ work appeared was a figure on a claim.
 So Worker Record has a fifth tab. It is DATE · PLOT · WORK · QTY and a
 column per worker, the same shape as the four beside it.
 
-**THE CREW IS READ-ONLY HERE, and that is not an omission.** The FC Portal
-is the only writer of a transplanting CREW in either repository. A tick box
-over a name here would be a second writer of somebody's pay with no rule
-about who may move it — which is exactly what the sheet's own
-`transplant_edit` permission exists to govern. The test asserts the renderer
-puts no handler on a cell of its own.
+**THE CREW WAS READ-ONLY HERE, AND THE OFFICE ASKED FOR IT OPEN** — *"每一个
+员工是用打勾的形式 打勾的下面才是数量 所以如果FC tick错人/填错号码 我们都可以改
+所以后面的check还要加一个edit选项"*. Every worker cell is a TICK with that
+worker's share under it, and **Edit** beside Check opens ONE row: tick or
+untick a name, and on the split job (polybag filling) key the figure under
+it; on the other three the figure divides by itself, off `tpShare` on the
+draft. That makes the office a second writer of the crew, and what keeps it
+safe is rules this file already has:
 
-**The one column the office does write is CHECKED** — see the section below.
-It was read-only in full for exactly as long as the claim was paid straight
-off the conductor's record.
+- **A CHECKED ROW IS NOT EDITED.** No Edit until somebody Unchecks it —
+  changing what was agreed starts with taking the agreement back. The
+  trigger would clear the tick anyway; a tick vanishing under somebody is
+  worse than a button they cannot press yet.
+- **A job recorded as NOT DONE is not edited here** — turning that answer
+  into a crew is a different decision from correcting one.
+- **`wrAllows` is asked at Edit AND at Save**, so a verified sheet refuses
+  in JavaScript.
+- **ONE write, only the crew**: `workers`, plus `total_qty` where the job
+  splits — the same two the phone writes. A crew of nobody is refused.
+- **The existing `Authenticated write` policy already allows it**, so
+  nothing to run in the database.
+
+`tests/the_office_corrects_a_transplant_crew.cjs` drives the real page with
+an `update` that LANDS (`SHOT=/path.png` draws an open row).
+
+**The office also writes CHECKED** — see the section below.
 
 **The share is the CLAIM's rule, and a test holds the two together.** One
 worker's figure is the quantity keyed against their name where the job

@@ -1892,12 +1892,10 @@ function lockDoWorkers(doId) {
    them on his own portal (TransplantSheet) and they land in
    nops_transplant_field_records; this tab is the office reading them.
 
-   ONE COLUMN ON IT IS WRITABLE, AND IT IS THE SIGNATURE. The crew is the
-   conductor's answer and is still changed on his portal and nowhere else --
-   a tick box over a name here would be a second writer of somebody's pay
-   with no rule about who may move it, which is the fault the sheet already
-   guards with its own `transplant_edit` permission. What the office writes
-   is CHECKED: it has been through the row and agreed it, and that is the one
+   THE OFFICE WRITES TWO THINGS ON IT. The crew can be CORRECTED here, on an
+   unchecked row, through Edit -- see the section beside _tpWorkerCell for
+   the rules that keep a second writer safe. And the office writes
+   CHECKED: it has been through the row and agreed it, and that is the one
    thing that sends it to the salary claim.
 
    Until this existed the claim was paid straight off the conductor's own
@@ -2185,6 +2183,8 @@ function renderTransplantingPayroll() {
   }
 
   const rows = transplantingRows(n, m);
+  /* A row opened for correcting on another nursery or month is let go. */
+  if (_tpEdit && !rows.some(r => r.id === _tpEdit.id)) _tpEdit = null;
   /* THE NAMES ON THE RECORDS, not the register's general-worker list.
 
      Every other tab here is a tick sheet: the office decides who did the
@@ -2232,7 +2232,10 @@ function renderTransplantingPayroll() {
          nought from tpRowCap itself, so the PDF of this sheet gets that half
          without knowing this rule exists. */
       const skipped = tpNotDone(r);
-      const rowCap = tpRowCap(r);
+      /* THE ROW BEING CORRECTED is drawn off the draft, so its ticks, its
+         figures and the total beside them move as the office ticks. */
+      const editing = !!(_tpEdit && _tpEdit.id === r.id);
+      const rowCap = editing ? tpRowCap(_tpDraftRecord(r)) : tpRowCap(r);
       /* THE TOTAL IS WHAT THE CLAIM PAYS. A row nobody has agreed is not on
          the claim, so counting it in the foot here would hand the office a
          figure the claim does not quote and no way to see which. Held rows
@@ -2251,20 +2254,12 @@ function renderTransplantingPayroll() {
         <td${skipped ? ' style="color:var(--text-faint);font-weight:600;"' : ''}>${
           skipped ? esc(t('pay.tpNotDoneCell'))
                   : (rowCap ? rowCap.toLocaleString() : '—')}</td>
-        ${wk.map(w => {
-          const on = byName[w];
-          if (!on) return '<td></td>';
-          const share = tpShare(r, on);
-          /* Shown either way -- who did the work is what the sheet is for --
-             and totalled only where the office has agreed the row, so the
-             foot of this sheet is the claim and not a wish. */
-          if (agreed(r)) totals[w] += share;
-          return `<td class="${agreed(r) ? 'ticked' : ''}" style="font-weight:700;${
-            agreed(r) ? '' : 'opacity:.5;'}" title="${esc(w)}${
-            agreed(r) ? '' : ' — not Checked, so not on the claim'}">${capFmt(share)}</td>`;
-        }).join('')}
+        ${wk.map((w, wi) => editing
+          ? _tpEditWorkerCell(r, w, wi, agreed(r), (share) => { totals[w] += share; })
+          : _tpWorkerCell(r, w, byName[w], agreed(r), skipped, (share) => { totals[w] += share; })
+        ).join('')}
         <td style="font-weight:700;${agreed(r) ? '' : 'opacity:.5;'}">${capFmt(rowCap)}</td>
-        <td style="white-space:nowrap;">${_tpCheckCell(r, key)}</td>
+        <td style="white-space:nowrap;">${editing ? _tpEditButtons() : _tpCheckCell(r, key) + _tpEditCell(r, key)}</td>
       </tr>`;
     });
   }
@@ -2340,6 +2335,150 @@ function _tpCheckCell(r, key) {
   }
   return `<button class="btn btn-sm btn-check" onclick="toggleTransplantChecked(${r.id})"
       title="Mark as checked — ONLY a checked row reaches the salary claim">✓ Check</button>`;
+}
+
+/* ══ A WORKER IS A TICK, AND THE FIGURE SITS UNDER IT ══
+   The office, over this sheet: *"每一个员工是用打勾的形式 打勾的下面才是数量
+   所以如果FC tick错人/填错号码 我们都可以改 所以后面的check还要加一个edit
+   选项"*.
+
+   So every worker cell is a tick box with that worker's share under it, and
+   EDIT beside Check opens ONE row: tick or untick a name, and on the split
+   job (polybag filling) key the figure under it. The other three jobs divide
+   the plot's own figure equally among the crew, so their figure under the
+   tick moves by itself as the crew changes -- tpShare, the claim's own rule,
+   on the draft.
+
+   THIS MAKES THE OFFICE A SECOND WRITER OF THE CREW, and the rules that keep
+   that safe are all ones this file already has:
+
+   - A CHECKED ROW IS NOT EDITED. Edit is offered only on a row nobody has
+     agreed; changing what was agreed starts with Uncheck, the same order
+     Culling Monitoring follows. The trigger would take the tick off anyway
+     (nops_transplant_clear_check clears it when the crew or a figure moves),
+     but a tick vanishing under somebody is worse than a button they cannot
+     press yet.
+   - A JOB NOBODY DID is not edited here: that answer is the conductor's, and
+     turning it into a crew is a different decision from correcting one.
+   - A VERIFIED SHEET refuses, in JavaScript (wrAllows), at the start AND at
+     the save -- a class cannot stop a call.
+   - ONE WRITE, ONLY THE CREW: workers, and total_qty where the job splits,
+     the same two the phone writes. Nothing else on the row moves.
+   - A crew of nobody is refused. An empty crew pays nobody and reads on
+     every screen as a crew somebody forgot. */
+let _tpEdit = null;   // { id, crew: { name: qty } } -- null = not editing
+
+function _tpTickBox(on, enabled, w) {
+  return `<input type="checkbox" class="tp-tick" ${on ? 'checked' : ''} ${enabled ? '' : 'disabled'}`
+    + ` style="width:16px;height:16px;cursor:${enabled ? 'pointer' : 'default'};accent-color:#1b4332;"`
+    + (enabled ? ` onchange="tpEditTick(${JSON.stringify(w).replace(/"/g, '&quot;')}, this.checked)"` : '')
+    + ` aria-label="${esc(w)}">`;
+}
+/* View mode: ticked or not, the figure under the tick. */
+function _tpWorkerCell(r, w, on, isAgreed, skipped, addTotal) {
+  if (!on) return `<td class="tp-wcell" style="text-align:center;">${skipped ? '' : _tpTickBox(false, false, w)}</td>`;
+  const share = tpShare(r, on);
+  /* Shown either way -- who did the work is what the sheet is for -- and
+     totalled only where the office has agreed the row, so the foot of this
+     sheet is the claim and not a wish. */
+  if (isAgreed) addTotal(share);
+  return `<td class="tp-wcell ${isAgreed ? 'ticked' : ''}" style="text-align:center;font-weight:700;${
+    isAgreed ? '' : 'opacity:.5;'}" title="${esc(w)}${
+    isAgreed ? '' : ' — not Checked, so not on the claim'}">${_tpTickBox(true, false, w)}`
+    + `<div class="tp-share">${capFmt(share)}</div></td>`;
+}
+/* The record as the draft would leave it -- what tpShare and tpRowCap are
+   asked of while a row is open, so the figures move with the ticks. */
+function _tpDraftRecord(r) {
+  if (!_tpEdit || _tpEdit.id !== r.id) return r;
+  const old = {};
+  (Array.isArray(r.workers) ? r.workers : []).forEach(w => { if (w && w.name) old[String(w.name)] = w; });
+  const workers = Object.keys(_tpEdit.crew).map(name =>
+    Object.assign({}, old[name] || {}, { name, qty: _tpEdit.crew[name] }));
+  return Object.assign({}, r, { workers });
+}
+function _tpEditWorkerCell(r, w, wi, isAgreed, addTotal) {
+  const job = TP_JOB[r.work_type];
+  const on = Object.prototype.hasOwnProperty.call(_tpEdit.crew, w);
+  let under = '';
+  if (on) {
+    const d = _tpDraftRecord(r);
+    const share = tpShare(d, d.workers.find(x => x.name === w));
+    if (isAgreed) addTotal(share);
+    under = job && job.split
+      ? `<input type="number" min="0" step="1" class="tp-qty" id="tp-qty-${wi}"
+           value="${_tpEdit.crew[w] == null ? '' : esc(_tpEdit.crew[w])}"
+           onchange="tpEditQty(${JSON.stringify(w).replace(/"/g, '&quot;')}, this.value)"
+           style="width:76px;margin-top:3px;padding:2px 4px;text-align:right;border:1px solid #cbd5e1;border-radius:6px;">`
+      : `<div class="tp-share">${capFmt(share)}</div>`;
+  }
+  return `<td class="tp-wcell tp-editing" style="text-align:center;background:#f0fdf4;">${_tpTickBox(on, true, w)}${under}</td>`;
+}
+/* EDIT beside Check: only on a row that can be corrected. */
+function _tpEditCell(r, key) {
+  if (tpNotDone(r) || r.checked_at || _tpEdit) return '';
+  return ` <button class="btn btn-sm tp-edit-btn" onclick="tpEditStart(${r.id})"
+      title="Correct who did this job, and the figure each of them did">✎ Edit</button>`;
+}
+function _tpEditButtons() {
+  return `<button class="btn btn-sm btn-check tp-save-btn" onclick="tpEditSave()">Save</button>`
+    + ` <button class="btn btn-sm tp-cancel-btn" onclick="tpEditCancel()">Cancel</button>`;
+}
+function _tpRecordOf(id) {
+  const key = _tpPayrollKey(getNursery(), getMonth());
+  return (_tpRecordsCache[key] || []).find(x => x.id === id) || null;
+}
+function tpEditStart(id) {
+  if (!wrAllows('transplanting')) return;
+  const r = _tpRecordOf(id);
+  if (!r) return;
+  if (r.checked_at) { alert('This row is Checked. Uncheck it first, then correct it.'); return; }
+  if (tpNotDone(r)) return;
+  const crew = {};
+  (Array.isArray(r.workers) ? r.workers : []).forEach(w => {
+    if (w && w.name) crew[String(w.name)] = w.qty == null ? null : Number(w.qty);
+  });
+  _tpEdit = { id, crew };
+  renderPayroll();
+}
+function tpEditTick(name, on) {
+  if (!_tpEdit) return;
+  if (on) { if (!(name in _tpEdit.crew)) _tpEdit.crew[name] = null; }
+  else delete _tpEdit.crew[name];
+  renderPayroll();
+}
+function tpEditQty(name, v) {
+  if (!_tpEdit || !(name in _tpEdit.crew)) return;
+  _tpEdit.crew[name] = v === '' || v == null ? null : Number(v);
+  renderPayroll();
+}
+function tpEditCancel() { _tpEdit = null; renderPayroll(); }
+async function tpEditSave() {
+  if (!_tpEdit || !_supabase) return;
+  if (!wrAllows('transplanting')) return;
+  const r = _tpRecordOf(_tpEdit.id);
+  if (!r) { _tpEdit = null; renderPayroll(); return; }
+  if (r.checked_at) { alert('This row was Checked meanwhile. Uncheck it first, then correct it.'); return; }
+  const job = TP_JOB[r.work_type];
+  /* The register order, so the crew reads the way the sheet's columns do. */
+  const { wk } = tpWorkerColumns(getNursery(), transplantingRows(getNursery(), getMonth()));
+  const names = Object.keys(_tpEdit.crew).sort((a, b) => wk.indexOf(a) - wk.indexOf(b));
+  if (!names.length) { alert('Tick at least one worker. A crew of nobody pays nobody.'); return; }
+  if (job && job.split) {
+    const bad = names.filter(n => { const q = _tpEdit.crew[n]; return q == null || !isFinite(q) || q < 0; });
+    if (bad.length) { alert('Key the quantity under each ticked name: ' + bad.join(', ')); return; }
+  }
+  const workers = _tpDraftRecord(r).workers
+    .sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name))
+    .map(w => ({ name: w.name, qty: w.qty == null || w.qty === '' ? null : Number(w.qty) }));
+  const patch = { workers };
+  if (job && job.split) patch.total_qty = workers.reduce((n, w) => n + (Number(w.qty) || 0), 0);
+  const { error } = await _supabase.from('nops_transplant_field_records')
+    .update(patch).eq('id', r.id);
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  Object.assign(r, patch);
+  _tpEdit = null;
+  renderPayroll();
 }
 
 /* ONE WRITE, ONE COLUMN PAIR. It sends `checked_at` and `checked_by` and
@@ -5244,7 +5383,7 @@ const I18N = {
     'pay.spUnmoveQ':'Take batch {b} off {m}?\n\nIt goes back to {back}, the month it was planted in. Figures already keyed go with it.',
     'pay.spNoMoveTable':'Batches cannot be added by hand yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase.',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
-    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. The crew itself is his answer and is changed on the FC Portal.',
+    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. A wrong name or a wrong figure: press Edit on an unchecked row, correct the ticks and the figures under them, and Save.',
     'pay.checked':'Checked',
     'pay.tpHeldLabel':'Held back',
     'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
@@ -5449,7 +5588,7 @@ const I18N = {
     'pay.spUnmoveQ':'Keluarkan batch {b} dari {m}?\n\nIa kembali ke {back}, bulan ia ditanam. Angka yang sudah diisi ikut sekali.',
     'pay.spNoMoveTable':'Batch belum boleh ditambah sendiri: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase.',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
-    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Senarai pekerja adalah jawapan beliau dan diubah di FC Portal.',
+    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Nama atau angka salah: tekan Edit pada baris yang belum disemak, betulkan tanda dan angka di bawahnya, dan Simpan.',
     'pay.checked':'Disemak',
     'pay.tpHeldLabel':'Ditahan',
     'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
