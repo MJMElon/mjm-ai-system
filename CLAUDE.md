@@ -10270,7 +10270,13 @@ CONDUCTOR** (paid on their own nursery), and in Edit it takes a drop.
   removal is an end date) and a refusal keeps both drafts on screen.
   `viaJc` on the draft says which card edits it; the card above reads it as
   its saved self until Save, so there are never two Save buttons over one
-  change. `_cmPicker` / `_cmNurseryPick` are the one pair of controls.
+  change.
+- **IT IS CHIPS, LIKE EVERY ROW ABOVE** (*"不要这样 要跟上面的一样"*). It
+  shipped for an hour as name pickers, nursery pickers and two + Add
+  buttons. Now each person is a chip: a name for the every-nursery list,
+  `Name · BNN FC` for a Field Conductor, a cross in Edit. Groups are dragged
+  on; there is no picker and no button on this row. Swapping one name for
+  another is a cross and a drag, or the Culling Monitoring card above.
 - **THE PRICES STAY ON THE CARD ABOVE.** Two boxes for one price is two
   places to disagree. Only a KEYED rule opens here; the built-in list says
   which SQL file to run.

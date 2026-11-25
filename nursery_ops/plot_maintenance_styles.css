@@ -2157,21 +2157,7 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .sp-pick-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;}
 .sp-pick-head{flex-basis:100%;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#1b4332;}
 
-/* Culling Monitoring row on Worker List for Each Job: the names, edited
-   through the same draft as the Culling Monitoring card. The skinned
-   select carries width:100% INLINE, so only !important sizes it. */
+/* Culling Monitoring row on Worker List for Each Job: named people as
+   chips, the same chips as every row above. */
 .jc-elsewhere.jc-cull th.jc-job{color:var(--green-dark,#1b4332);}
 .jc-elsewhere.jc-cull td{color:var(--text);font-size:13px;}
-.jc-cm{display:flex;flex-direction:column;gap:6px;max-width:460px;}
-.jc-cm-h{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--green-dark,#1b4332);margin-top:4px;}
-.jc-cm-row{display:flex;align-items:center;gap:8px;}
-.jc-cm-name{font-weight:600;padding:2px 0;}
-.jc-cm-row > select.cm-pick,
-.jc-cm-row > .cf-wrap{flex:1 1 auto !important;width:auto !important;min-width:0;}
-.jc-cm-row > select.cm-pick-n,
-.jc-cm-row > .cf-wrap:has(> select.cm-pick-n){flex:0 0 96px !important;width:96px !important;}
-.jc-cm-row .cm-x{flex:0 0 30px;}
-.jc-cm-w{font-size:11px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--text-faint);}
-.jc-cm-add{display:flex;gap:8px;flex-wrap:wrap;}
-.jc-cm-add .row-add{flex:1 1 0;}
