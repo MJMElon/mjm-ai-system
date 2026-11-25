@@ -11317,3 +11317,37 @@ Before a system is chosen, and on a deep link naming a real raising system,
 the From System rule stands. The drawer also re-reads the titles each time
 it opens. The two raise forms on real modules are untouched.
 `tests/the_hub_category_list_follows_the_system.cjs`. Nothing to run.
+
+## A maturity row can be LOCKED, and the waiting list sits under it
+
+Seedling Sales Control → Stock Allocation, in the office's order: the
+Monthly Maturity Allocation table, then **Waiting List & PO**, then the
+Capacity Heatmap (the heatmap was on top; they asked for the two swapped).
+
+- **A locked row keeps its customers** (`locked`, `locked_by`, `locked_at`
+  on `shared_plot_allocations`, `shared/RUN_ME_maturity_lock_and_waiting_list.sql`).
+  The 🔓 Lock button is in the Customers cell. Locked: the chips lose their
+  grip and ×, no card or chip lands on the row, and the page-load flow-back
+  leaves it alone (it reads red instead). **The paint is not the gate**:
+  `removeAllocation`, `moveAllocationToBatch`, `allocateOrderToBatch`, the
+  drag start and the drop (`matRowLocked`) each refuse in code. A culled or
+  closed-out row is offered no lock. A database without the columns reads
+  every row unlocked, and pressing Lock names the SQL file.
+- **Month tabs draw open / pending on top and Sold Out, Culled and Closed
+  under a divider** (`MAT_DONE_STATUSES`). The status is `buildRow`'s own,
+  the split is stable, and every row is still in the totals. Plot-R keeps
+  its History toggle.
+- **Waiting List & PO** (`shared_stock_waiting_list`) is demand with no AL
+  yet: day, customer, PO, breed, qty, wanted month, remark, status (Waiting
+  / Allocated / Cancelled). It writes nothing else. The month strip totals
+  what is waiting per wanted month, and the month open on the table above is
+  lit there and on its rows. A missing table is SAID, never an empty list.
+- **The Allocate Orders button can be dragged** anywhere; a press that moved
+  it is not a click, and the place is kept per machine
+  (`mjm_alloc_fab_pos`), clamped inside the window.
+- **Inventory Map: Filter by Height** (≥100 / ≥120 / ≥150 cm or a typed
+  figure). A batch passes on its LATEST height audit (`_buildInvmapHeights`);
+  a batch never measured is left out while a filter is on. The sidebar shows
+  each batch's height and audit date, and the map label the tallest batch.
+
+`tests/maturity_lock_waiting_list_and_height.cjs` drives all of it.
