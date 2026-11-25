@@ -268,6 +268,73 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     await page.close();
   }
 
+  /* ── 5. EVERY JOB ON WORKER ACTIVITY IS ON THIS CARD ───────────────────
+     The office counted the two lists against each other and found this one
+     two short — "这一部分少了culling和seed planting 吧". The two are there
+     now, SAYING where their crew is set instead of offering a drop that
+     would be a second writer.
+
+     IT IS ASKED AS "EVERY SHEET IS ON THE CARD", not as "these two rows
+     exist": a ninth sheet added next year is short again under a check
+     that names the two, and the whole fault was a list going quietly
+     short. */
+  console.log('— 5. every Worker Activity sheet is on the card, draggable or not');
+  {
+    const { page, errs } = await boot(browser, { mjmnpayroll_workers: REGISTER, nops_maint_config: [] }, 'setting');
+    const rows = await ev(page, () => [...document.querySelectorAll('#jc-set-body .jc-tbl tbody tr')]
+      .map(tr => ({
+        job: tr.querySelector('th.jc-job').textContent.trim(),
+        elsewhere: tr.classList.contains('jc-elsewhere'),
+        cells: [...tr.querySelectorAll('td')].length,
+        says: (tr.querySelector('.jc-elsewhere, td[colspan]') || {}).textContent || '',
+      })));
+    /* THE SIDE BAR ITSELF, never PAYROLL_VIEW_KEYS — that is a script-scope
+       const and so is not on window (the trap this codebase already names
+       about seedAuditPhotoState), and it is also the list the office
+       actually counted.
+
+       FOUND THROUGH ONE OF ITS OWN BUTTONS, never by `.pn-sub`: there are
+       TWO of those bars and the other is Work Records, which answered this
+       with Monthly Watering Record on it. `_syncSubNav` says the same in
+       its own comment. */
+    const sheets = await ev(page, () => {
+      const bar = document.getElementById('pn-subtab-pd').closest('.pn-sub');
+      return [...bar.querySelectorAll('.pn-subtab')].map(b => b.textContent.trim());
+    });
+    check('the card lists every sheet the side bar does',
+      (rows || []).map(r => r.job).sort(), (sheets || []).sort());
+    check('…and six of them take a drop, which is the Team Board half',
+      (rows || []).filter(r => !r.elsewhere).length, 6);
+    check('…and the other two say so instead',
+      (rows || []).filter(r => r.elsewhere).map(r => r.job).sort(),
+      ['Culling Monitoring', 'Seed Planting & Hyplug']);
+    check('a row set elsewhere is ONE cell across the nurseries, never four empty ones',
+      (rows || []).filter(r => r.elsewhere).map(r => r.cells), [1, 1]);
+    check('Seed Planting says the names are keyed per month',
+      (rows || []).some(r => r.elsewhere && /keyed by hand, one list per month/.test(r.says)), true);
+    check('Culling Monitoring points at its own card',
+      (rows || []).some(r => r.elsewhere && /Culling Monitoring above/.test(r.says)), true);
+
+    /* THE DROP IS THE THING THAT MUST NOT WORK. A row that merely LOOKS
+       different while still taking a group would write a crew nothing
+       reads, which is worse than the silence it replaced. */
+    await ev(page, () => jcEdit());
+    check('no drop target on a row set elsewhere',
+      await ev(page, () => document.querySelectorAll('#jc-set-body tr.jc-elsewhere td[data-cell]').length), 0);
+    check('and nothing can be keyed against either job',
+      await ev(page, () => ['cull_incentive', 'seed_planting']
+        .filter(j => Object.keys(jobCrewDraft || {}).some(k => k.endsWith(':' + j)))), []);
+    await ev(page, () => jcSave());
+    await page.waitForTimeout(300);
+    check('Save writes a row for the six and for neither of the two',
+      await ev(page, () => (window.__DB.nops_maint_config || [])
+        .map(r => r.key).filter(k => k.indexOf('job_crew:') === 0)
+        .some(k => /cull_incentive|seed_planting/.test(k))), false);
+    if (process.env.SHOT) { await ev(page, () => document.getElementById('jc-set-body').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_elsewhere.png' }); }
+    check('no page error', errs, []);
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -2056,6 +2056,12 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .jc-cell{min-width:150px;}
 .jc-cell .jc-chip{margin:2px 4px 2px 0;}
 .jc-off{color:var(--text-faint);text-align:center !important;}
+/* A job whose crew is NOT a Team Board group, so there is nothing to drag
+   onto it. It is on the card because leaving it off is what made somebody
+   count the rows and ask; it is muted and takes no drop, because a cell
+   that looks like the ones above it is a cell people will try to drop on. */
+.jc-elsewhere th.jc-job{color:var(--text-faint);}
+.jc-elsewhere td{font-size:12px;color:var(--text-faint);line-height:1.5;}
 
 
 /* A Work Records entry whose record is not set up yet (Night Watchman,

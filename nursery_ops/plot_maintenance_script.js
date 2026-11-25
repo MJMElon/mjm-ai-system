@@ -12616,6 +12616,43 @@ const JC_SECTION_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'OTHERS'];
 function _jcJobs() {
   return ((window.MJMJobCrew && MJMJobCrew.JOBS) || []).filter(j => PAYROLL_VIEW_KEYS.includes(j));
 }
+
+/* ── THE TWO JOBS WHOSE CREW IS NOT A TEAM BOARD GROUP ───────────────────
+   The office counted the sheets on Worker Activity against the rows on
+   this card and found two short — *"这一部分少了culling和seed planting
+   吧"*. They are right about the count, and the two are left off on
+   purpose, which is the half the card never said. **A LIST THAT IS
+   QUIETLY SHORT READS AS A LIST WITH A BUG IN IT**, which is the shape
+   this file keeps finding, and the proof here is that somebody had to
+   ask.
+
+   NEITHER CREW IS A GROUP, and that is why dragging one onto this card
+   would be wrong rather than merely unnecessary:
+
+     · **Seed Planting & Hyplug names are KEYED BY HAND**, one list per
+       month, on the sheet itself — the office asked for exactly that
+       (*"这个月的工人名字需要manual key"*) because the Pre Nursery crew
+       is not a section of its own on the register, so there is no group
+       to drag. A second way to name them here is two writers and two
+       answers, which is the fault this file has a heading about.
+     · **Culling Monitoring pays NAMED PEOPLE AT THEIR OWN RATES** — RM 20
+       to each of two on every nursery and RM 50 to that nursery's own
+       Field Conductor. A group carries no price, so this card cannot
+       hold the rule even if it held the names.
+
+   IT IS DERIVED, never a second hand-written list: whatever Worker
+   Activity has and `MJMJobCrew.JOBS` does not. A job added to one and
+   not the other turns up here by itself rather than going quiet again. */
+function _jcElsewhere() {
+  const own = (window.MJMJobCrew && MJMJobCrew.JOBS) || [];
+  return PAYROLL_VIEW_KEYS.filter(j => !own.includes(j));
+}
+const JC_SET_ELSEWHERE = {
+  seed_planting: 'Names are keyed by hand, one list per month, on the sheet itself — '
+    + 'the Pre Nursery crew is not a section of its own on the register.',
+  cull_incentive: 'Named people at their own rates — set in Culling Monitoring above.',
+};
+
 function _jcDefault(n) { return [MJMJobCrew.group(n, MJMJobCrew.GENERAL)]; }
 function _jcSectionName(s) { return MAINT_NURSERIES.includes(s) ? nurseryShort(s) : s; }
 function _jcGroupLabel(g) {
@@ -12686,8 +12723,19 @@ function renderJobCrewSetting() {
     }).join('')}</tr>`;
   }).join('');
 
+  /* ONE cell across every nursery, because the answer is not per nursery:
+     neither of these is set here at all. Four columns repeating one
+     sentence is noise, and the row beside it on Where Each Job Is Done
+     already says which nurseries the job is done in. */
+  const elsewhere = _jcElsewhere().map(j =>
+    `<tr class="jc-elsewhere"><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
+    + `<td colspan="${MAINT_NURSERIES.length}">`
+    + `${esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}`
+    + `</td></tr>`).join('');
+
   box.innerHTML = `<div class="jc-pal${editing ? ' jc-pal-live' : ''}">${palette}</div>
-    <div class="tbl-wrap jc-wrap"><table class="jc-tbl"><thead>${head}</thead><tbody>${body}</tbody></table></div>`
+    <div class="tbl-wrap jc-wrap"><table class="jc-tbl"><thead>${head}</thead>`
+    + `<tbody>${body}${elsewhere}</tbody></table></div>`
     + (editing
       ? `<div class="jb-note">Drag a group from the Team Board above onto a job. Its
            people become that job&rsquo;s columns on Worker Activity for that

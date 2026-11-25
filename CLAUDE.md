@@ -10172,10 +10172,57 @@ job's sheet for that nursery.
 
 Storage is `nops_maint_config`, one row per nursery per job, key
 `job_crew:<NURSERY>:<job>`, groups in `txt_value`. **Nothing to run in the
-database.** Seed Planting keeps its own hand-picked list and Culling
-Monitoring its own named people, so neither is on the card.
+database.**
 `ROLES` in the shared file is the third copy of the Team Board's
 `BOARD_ROLES` — change one, change the others.
+
+#### THE TWO JOBS THAT TAKE NO GROUP ARE ON THE CARD, SAYING SO
+
+Seed Planting and Culling Monitoring were left off, which was right, and
+the card did not say it — so the office counted the sheets on Worker
+Activity against the rows here and asked: *"这一部分少了culling和seed
+planting 吧"*. **A LIST THAT IS QUIETLY SHORT READS AS A LIST WITH A BUG IN
+IT**, the shape this file keeps finding, and somebody having to ask is the
+proof it cost something.
+
+**NEITHER CREW IS A GROUP, which is why dragging one here would be wrong
+rather than merely unnecessary:**
+
+- **Seed Planting & Hyplug names are KEYED BY HAND**, one list per month, on
+  the sheet itself. The office asked for that (*"这个月的工人名字需要manual
+  key"*) because the Pre Nursery crew is **not a section of its own on the
+  register** — there is literally no group to drag, and a second way to name
+  them here is two writers and two answers.
+- **Culling Monitoring pays NAMED PEOPLE AT THEIR OWN RATES** — RM 20 to each
+  of two on every nursery and RM 50 to that nursery's own Field Conductor. A
+  group carries no price, so this card could not hold the rule even if it
+  held the names. It is set on the **Culling Monitoring** card above.
+
+Three things in it:
+
+- **IT IS DERIVED**, never a second hand-written list: whatever Worker
+  Activity has and `MJMJobCrew.JOBS` does not (`_jcElsewhere`). A ninth sheet
+  added next year turns up here by itself rather than going quiet again, and
+  section 5 of the test asks it as *every sheet is on the card* rather than
+  naming the two — a check that named them would be short in exactly the same
+  way the card was.
+- **THE DROP IS THE THING THAT MUST NOT WORK.** A row that merely LOOKS
+  different while still taking a group would write a crew nothing reads,
+  which is worse than the silence it replaced. The row carries no
+  `data-cell` and no drop handler, and the test asserts both and that Save
+  writes no row for either job.
+- **ONE cell across the nurseries**, because the answer is not per nursery:
+  neither is set here at all. Four columns repeating one sentence is noise,
+  and the row beside it on Where Each Job Is Done — which has always listed
+  all eight — says which nurseries the job is done in.
+
+**Nothing to run in the database.** Section 5 is 10 checks and **5 fail on
+the previous card**, the first in the office's own count: six rows against
+eight sheets. Its sheet list is read off the side bar **through one of its
+own buttons** (`#pn-subtab-pd`.closest), never by `.pn-sub` — there are two
+of those bars and the other is Work Records, which answered the first run
+with *Monthly Watering Record* on it. `PAYROLL_VIEW_KEYS` is no use to it
+either: a script-scope `const` is not on `window`.
 
 `tests/each_job_has_its_own_worker_list.cjs` drives the real card and the
 real drag, opens the sheet and reads its columns, and lifts the claim's
