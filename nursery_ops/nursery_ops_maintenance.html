@@ -23,7 +23,7 @@
        note in CLAUDE.md on the plate being the module. -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cg transform='translate(9.6 9.6) scale(1.8667)' fill='%23ffffff'%3E%3Cpath d='M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z'/%3E%3C/g%3E%3C/svg%3E">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=121">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=124">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -274,8 +274,19 @@
              the subtabs-bar class because switchRecSection finds its
              siblings through it; rec-tabs restyles only this pair. -->
         <div class="subtabs-bar rec-tabs">
-          <button class="subtab-btn active" id="recsec-btn-approved"
-                  onclick="switchRecSection('approved',this)"><span data-i18n="rec.partApproved">Approved</span></button>
+          <!-- THREE PARTS, the office's own split: "rejected保留, approved
+               分成 pending & approved". Pending is every ticked schedule row
+               that is not agreed yet, PLUS the work a worker recorded that
+               nobody has approved; Approved is what the FC signed off.
+
+               Pending and Approved point at the SAME pane below — one table,
+               one tbody, one renderer, with switchRecSection setting a
+               filter. Two panes would be two copies of a twelve-column
+               table, which is how the two come to disagree about a row. -->
+          <button class="subtab-btn active" id="recsec-btn-pending"
+                  onclick="switchRecSection('pending',this)"><span data-i18n="rec.partPending">Pending</span> <span class="rec-part-count" id="rec-count-pending"></span></button>
+          <button class="subtab-btn" id="recsec-btn-approved"
+                  onclick="switchRecSection('approved',this)"><span data-i18n="rec.partApproved">Approved</span> <span class="rec-part-count" id="rec-count-approved"></span></button>
           <button class="subtab-btn" id="recsec-btn-rejected"
                   onclick="switchRecSection('rejected',this)"><span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
         </div>
@@ -564,8 +575,16 @@
           <div style="font-size:13px;font-weight:700;color:var(--text-head);">Mega Jutamas Sdn Bhd</div>
           <div style="font-size:12px;font-weight:600;color:var(--text-muted);" id="payroll-form-line"></div>
         </div>
-        <!-- One form covering all four work types, not just the open sub-tab. -->
-        <button class="btn" style="font-size:12px;" onclick="downloadPayrollPDF()" data-i18n="btn.claimPdf">⬇ Salary Claim Form (PDF)</button>
+        <!-- DOWNLOAD THE JOB ON SCREEN, for one, two or three nurseries.
+             An icon, as the office asked; the window it opens says what is
+             being downloaded and asks which nurseries. -->
+        <button type="button" class="btn wr-dl-btn" id="wr-dl-btn" onclick="openWrDownload()"
+                style="width:38px;height:36px;padding:0;display:inline-flex;align-items:center;justify-content:center;"
+                title="Download PDF" aria-label="Download PDF">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        </button>
       </div>
       <!-- VERIFY & LOCK. Above the names bar and the table, because it is
            about both of them and because that is where the payroll module
@@ -1008,6 +1027,27 @@
 </div>
 
 <!-- ═══ PDF DOWNLOAD MODAL ═══ -->
+<!-- WORKER ACTIVITY DOWNLOAD: the job on screen, for the nurseries ticked.
+     Filled by openWrDownload(). -->
+<div class="modal-overlay" id="wr-dl-modal" onclick="if(event.target===this)closeWrDownload()">
+  <div class="modal" style="width:440px;">
+    <div class="modal-top">
+      <div class="modal-title" id="wr-dl-title">Download</div>
+      <button class="modal-close" onclick="closeWrDownload()" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="wr-dl-sub" style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;"></div>
+      <div id="wr-dl-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div id="wr-dl-note" style="font-size:11.5px;color:var(--text-faint);margin-top:12px;line-height:1.5;">
+        Each nursery starts its own page. A sheet with few workers prints portrait; one with many prints landscape.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeWrDownload()">Cancel</button>
+      <button class="btn btn-primary" id="wr-dl-go" onclick="wrDownloadGo()">Download PDF</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="pdf-modal">
   <div class="modal" style="width:420px;">
     <div class="modal-top">
@@ -1077,7 +1117,7 @@
      page's own, and the office asked for it here; the rules are shared, so
      the file is shared. -->
 <script src="../shared/shared_npayroll_lock.js?v=3"></script>
-<script src="plot_maintenance_script.js?v=197"></script>
+<script src="plot_maintenance_script.js?v=203"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

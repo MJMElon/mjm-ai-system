@@ -33,20 +33,41 @@ const win = {};
 vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'shared', 'shared_palms.js'), 'utf8'), { window: win });
 const P = win.MJMPalms;
 
-// ── the FC Portal copy, lifted out of data.js ────────────────────────────
+// ── the FC Portal copy ───────────────────────────────────────────────────
+// isReplantPlot MOVED to src/modules/maintenance/plotBatches.js the day a
+// worker boundary had to carry a plot's replant: that file imports nothing,
+// where palms/data.js pulls in supabase, so it is the only place in that
+// repository a plot-name rule can live without dragging a module in behind
+// it. palms/data.js re-exports it, which is where the PALMS screens have
+// always read it, and the sweep at the end of this file asserts it does not
+// go back to keeping a copy.
 const DATA = fs.readFileSync(path.join(FC, 'data.js'), 'utf8');
-const lift = (src, start) => {
+const PLOTB = fs.readFileSync(
+  path.join(FC, '..', 'maintenance', 'plotBatches.js'), 'utf8');
+const lift = (src, start, where) => {
   const a = src.indexOf(start);
-  if (a < 0) throw new Error('not found: ' + start);
+  if (a < 0) throw new Error('not found: ' + start + (where ? ' in ' + where : ''));
   let depth = 0, i = src.indexOf('{', a);
   for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}' && --depth === 0) break; }
   return src.slice(a, i + 1).replace(/^export /, '');
 };
+// The two consts the rule is written out of, lifted rather than restated —
+// one regex answers both "is this a replant" and "whose", which is the whole
+// reason they live together.
+const liftLine = (src, name) => {
+  const a = src.indexOf('const ' + name);
+  if (a < 0) throw new Error('not found: const ' + name);
+  return src.slice(a, src.indexOf('\n', a));
+};
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(lift(DATA, 'export function isReplantPlot') + '\n' +
+vm.runInContext(
+  liftLine(PLOTB, 'REPLANT_OF') + '\n' +
+  liftLine(PLOTB, 'bareName') + '\n' +
+  lift(PLOTB, 'export function isReplantPlot', 'plotBatches.js') + '\n' +
   "const NURSERIES = { BNN: { prefix: 'B', count: 3, plots: null } };\n" +
-  lift(DATA, 'export function plotsOf') + '\nglobalThis.R = isReplantPlot; globalThis.plotsOf = plotsOf; globalThis.N = NURSERIES;', ctx);
+  lift(DATA, 'export function plotsOf', 'palms/data.js') +
+  '\nglobalThis.R = isReplantPlot; globalThis.plotsOf = plotsOf; globalThis.N = NURSERIES;', ctx);
 
 const NAMES = ['B4', 'B4-R', 'B4-R2', 'b4-r', 'B4-R#A', 'B4#A', 'U10', 'N1-R', 'B14', 'BR4', 'B4-RX', ' B4-R '];
 const WANT  = [false, true, true, true, true, false, false, true, false, false, false, true];
@@ -97,8 +118,25 @@ const MAP = fs.readFileSync(path.join(ROOT, 'shared', 'shared_plot_map.js'), 'ut
 check('the map filters only when asked (skipReplant)',
   /if \(lo\.skipReplant && global\.MJMPalms && MJMPalms\.isReplantPlot\)/.test(MAP), true);
 const BOARD = fs.readFileSync(path.join(ROOT, 'nursery_ops', 'nursery_ops_palms_board.html'), 'utf8');
+/* ASKED OF THE PROPERTY, NOT THE SPELLING. This pinned the exact line it was
+   written against -- `MAP_SCOPE = allowed ? { … } : { … }` -- and the office
+   then asked for PN and UNE off the map ("PN UNE不需要出现在这里"), which made
+   the nursery list unconditional and left the ternary behind. A check pinned
+   to a line fails on a change that altered nothing it was about, which is a
+   lesson this repository already carries one screen along; and this one could
+   not even be SEEN, because the test died on a missing path before reaching
+   it. What it is protecting is that EVERY assignment of MAP_SCOPE asks for
+   the replants to be left off, so a second branch added later cannot quietly
+   put them back.
+
+   The empty `let MAP_SCOPE = {}` is left out: it is a placeholder, and
+   reloadMap -- the only other thing that reads it -- can only run after a
+   boundary has been redrawn or a plot hidden, which is after the real scope
+   has been set. */
+const scopes = (BOARD.match(/MAP_SCOPE\s*=\s*\{[^}]*\}/g) || [])
+  .filter((s) => !/=\s*\{\s*\}/.test(s));
 check('the PALMS board asks for it on every load',
-  /MAP_SCOPE = allowed \? \{ nurseries: visible, skipReplant: true \} : \{ skipReplant: true \};/.test(BOARD), true);
+  scopes.length > 0 && scopes.every((s) => /skipReplant:\s*true/.test(s)), true);
 const LIFE = fs.readFileSync(path.join(ROOT, 'nursery_ops', 'nursery_ops_plot_life.html'), 'utf8');
 check('Life of Plot does not — a -R plot is real ground with maintenance on it', /skipReplant/.test(LIFE), false);
 

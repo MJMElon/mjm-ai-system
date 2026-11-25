@@ -1092,8 +1092,8 @@ function syncJobNurseries() {
   syncNurseryCircles();
 }
 
-function payrollRowsFor(type) {
-  const n = getNursery();
+function payrollRowsFor(type, nursery) {
+  const n = nursery || getNursery();
   const plots = NURSERY_PLOTS[n] || [];
   const jenis = PAYROLL_TYPES[type].jenis;
   /* Plot, then the day the work was done.
@@ -1892,12 +1892,10 @@ function lockDoWorkers(doId) {
    them on his own portal (TransplantSheet) and they land in
    nops_transplant_field_records; this tab is the office reading them.
 
-   ONE COLUMN ON IT IS WRITABLE, AND IT IS THE SIGNATURE. The crew is the
-   conductor's answer and is still changed on his portal and nowhere else --
-   a tick box over a name here would be a second writer of somebody's pay
-   with no rule about who may move it, which is the fault the sheet already
-   guards with its own `transplant_edit` permission. What the office writes
-   is CHECKED: it has been through the row and agreed it, and that is the one
+   THE OFFICE WRITES TWO THINGS ON IT. The crew can be CORRECTED here, on an
+   unchecked row, through Edit -- see the section beside _tpWorkerCell for
+   the rules that keep a second writer safe. And the office writes
+   CHECKED: it has been through the row and agreed it, and that is the one
    thing that sends it to the salary claim.
 
    Until this existed the claim was paid straight off the conductor's own
@@ -2185,6 +2183,8 @@ function renderTransplantingPayroll() {
   }
 
   const rows = transplantingRows(n, m);
+  /* A row opened for correcting on another nursery or month is let go. */
+  if (_tpEdit && !rows.some(r => r.id === _tpEdit.id)) _tpEdit = null;
   /* THE NAMES ON THE RECORDS, not the register's general-worker list.
 
      Every other tab here is a tick sheet: the office decides who did the
@@ -2232,7 +2232,10 @@ function renderTransplantingPayroll() {
          nought from tpRowCap itself, so the PDF of this sheet gets that half
          without knowing this rule exists. */
       const skipped = tpNotDone(r);
-      const rowCap = tpRowCap(r);
+      /* THE ROW BEING CORRECTED is drawn off the draft, so its ticks, its
+         figures and the total beside them move as the office ticks. */
+      const editing = !!(_tpEdit && _tpEdit.id === r.id);
+      const rowCap = editing ? tpRowCap(_tpDraftRecord(r)) : tpRowCap(r);
       /* THE TOTAL IS WHAT THE CLAIM PAYS. A row nobody has agreed is not on
          the claim, so counting it in the foot here would hand the office a
          figure the claim does not quote and no way to see which. Held rows
@@ -2251,20 +2254,12 @@ function renderTransplantingPayroll() {
         <td${skipped ? ' style="color:var(--text-faint);font-weight:600;"' : ''}>${
           skipped ? esc(t('pay.tpNotDoneCell'))
                   : (rowCap ? rowCap.toLocaleString() : '—')}</td>
-        ${wk.map(w => {
-          const on = byName[w];
-          if (!on) return '<td></td>';
-          const share = tpShare(r, on);
-          /* Shown either way -- who did the work is what the sheet is for --
-             and totalled only where the office has agreed the row, so the
-             foot of this sheet is the claim and not a wish. */
-          if (agreed(r)) totals[w] += share;
-          return `<td class="${agreed(r) ? 'ticked' : ''}" style="font-weight:700;${
-            agreed(r) ? '' : 'opacity:.5;'}" title="${esc(w)}${
-            agreed(r) ? '' : ' — not Checked, so not on the claim'}">${capFmt(share)}</td>`;
-        }).join('')}
+        ${wk.map((w, wi) => editing
+          ? _tpEditWorkerCell(r, w, wi, agreed(r), (share) => { totals[w] += share; })
+          : _tpWorkerCell(r, w, byName[w], agreed(r), skipped, (share) => { totals[w] += share; })
+        ).join('')}
         <td style="font-weight:700;${agreed(r) ? '' : 'opacity:.5;'}">${capFmt(rowCap)}</td>
-        <td style="white-space:nowrap;">${_tpCheckCell(r, key)}</td>
+        <td style="white-space:nowrap;">${editing ? _tpEditButtons() : _tpCheckCell(r, key) + _tpEditCell(r, key)}</td>
       </tr>`;
     });
   }
@@ -2280,13 +2275,13 @@ function renderTransplantingPayroll() {
   /* CAPACITY HELD BACK IS NAMED, never silently missing. A claim short of
      work reads exactly like a quiet month -- the fault the payroll file is
      most careful about -- and the same sentence is printed on the claim
-     itself. */
+     itself. THE SENTENCE BESIDE IT CAME OFF at the office own request
+     (不要这些字): the label and the figure say it, on screen and on paper. */
   if (heldRows) {
     h += `<tr class="jumlah-tr" style="background:#fffbeb;">
       <td class="th-left" colspan="3" style="color:#92400e;">${t('pay.tpHeldLabel')}</td>
       <td style="color:#92400e;">${heldCap ? heldCap.toLocaleString() : '—'}</td>
-      <td colspan="${wk.length + 2}" style="text-align:left;color:#92400e;font-weight:600;">
-        ${t('pay.tpHeld').replace('{n}', heldRows)}</td></tr>`;
+      <td colspan="${wk.length + 2}"></td></tr>`;
   }
   /* AND A JOB NOBODY DID IS SAID TOO, in slate rather than amber: held work
      is a question waiting for the office, and this is an answer that is
@@ -2340,6 +2335,150 @@ function _tpCheckCell(r, key) {
   }
   return `<button class="btn btn-sm btn-check" onclick="toggleTransplantChecked(${r.id})"
       title="Mark as checked — ONLY a checked row reaches the salary claim">✓ Check</button>`;
+}
+
+/* ══ A WORKER IS A TICK, AND THE FIGURE SITS UNDER IT ══
+   The office, over this sheet: *"每一个员工是用打勾的形式 打勾的下面才是数量
+   所以如果FC tick错人/填错号码 我们都可以改 所以后面的check还要加一个edit
+   选项"*.
+
+   So every worker cell is a tick box with that worker's share under it, and
+   EDIT beside Check opens ONE row: tick or untick a name, and on the split
+   job (polybag filling) key the figure under it. The other three jobs divide
+   the plot's own figure equally among the crew, so their figure under the
+   tick moves by itself as the crew changes -- tpShare, the claim's own rule,
+   on the draft.
+
+   THIS MAKES THE OFFICE A SECOND WRITER OF THE CREW, and the rules that keep
+   that safe are all ones this file already has:
+
+   - A CHECKED ROW IS NOT EDITED. Edit is offered only on a row nobody has
+     agreed; changing what was agreed starts with Uncheck, the same order
+     Culling Monitoring follows. The trigger would take the tick off anyway
+     (nops_transplant_clear_check clears it when the crew or a figure moves),
+     but a tick vanishing under somebody is worse than a button they cannot
+     press yet.
+   - A JOB NOBODY DID is not edited here: that answer is the conductor's, and
+     turning it into a crew is a different decision from correcting one.
+   - A VERIFIED SHEET refuses, in JavaScript (wrAllows), at the start AND at
+     the save -- a class cannot stop a call.
+   - ONE WRITE, ONLY THE CREW: workers, and total_qty where the job splits,
+     the same two the phone writes. Nothing else on the row moves.
+   - A crew of nobody is refused. An empty crew pays nobody and reads on
+     every screen as a crew somebody forgot. */
+let _tpEdit = null;   // { id, crew: { name: qty } } -- null = not editing
+
+function _tpTickBox(on, enabled, w) {
+  return `<input type="checkbox" class="tp-tick" ${on ? 'checked' : ''} ${enabled ? '' : 'disabled'}`
+    + ` style="width:16px;height:16px;cursor:${enabled ? 'pointer' : 'default'};accent-color:#1b4332;"`
+    + (enabled ? ` onchange="tpEditTick(${JSON.stringify(w).replace(/"/g, '&quot;')}, this.checked)"` : '')
+    + ` aria-label="${esc(w)}">`;
+}
+/* View mode: ticked or not, the figure under the tick. */
+function _tpWorkerCell(r, w, on, isAgreed, skipped, addTotal) {
+  if (!on) return `<td class="tp-wcell" style="text-align:center;">${skipped ? '' : _tpTickBox(false, false, w)}</td>`;
+  const share = tpShare(r, on);
+  /* Shown either way -- who did the work is what the sheet is for -- and
+     totalled only where the office has agreed the row, so the foot of this
+     sheet is the claim and not a wish. */
+  if (isAgreed) addTotal(share);
+  return `<td class="tp-wcell ${isAgreed ? 'ticked' : ''}" style="text-align:center;font-weight:700;${
+    isAgreed ? '' : 'opacity:.5;'}" title="${esc(w)}${
+    isAgreed ? '' : ' — not Checked, so not on the claim'}">${_tpTickBox(true, false, w)}`
+    + `<div class="tp-share">${capFmt(share)}</div></td>`;
+}
+/* The record as the draft would leave it -- what tpShare and tpRowCap are
+   asked of while a row is open, so the figures move with the ticks. */
+function _tpDraftRecord(r) {
+  if (!_tpEdit || _tpEdit.id !== r.id) return r;
+  const old = {};
+  (Array.isArray(r.workers) ? r.workers : []).forEach(w => { if (w && w.name) old[String(w.name)] = w; });
+  const workers = Object.keys(_tpEdit.crew).map(name =>
+    Object.assign({}, old[name] || {}, { name, qty: _tpEdit.crew[name] }));
+  return Object.assign({}, r, { workers });
+}
+function _tpEditWorkerCell(r, w, wi, isAgreed, addTotal) {
+  const job = TP_JOB[r.work_type];
+  const on = Object.prototype.hasOwnProperty.call(_tpEdit.crew, w);
+  let under = '';
+  if (on) {
+    const d = _tpDraftRecord(r);
+    const share = tpShare(d, d.workers.find(x => x.name === w));
+    if (isAgreed) addTotal(share);
+    under = job && job.split
+      ? `<input type="number" min="0" step="1" class="tp-qty" id="tp-qty-${wi}"
+           value="${_tpEdit.crew[w] == null ? '' : esc(_tpEdit.crew[w])}"
+           onchange="tpEditQty(${JSON.stringify(w).replace(/"/g, '&quot;')}, this.value)"
+           style="width:76px;margin-top:3px;padding:2px 4px;text-align:right;border:1px solid #cbd5e1;border-radius:6px;">`
+      : `<div class="tp-share">${capFmt(share)}</div>`;
+  }
+  return `<td class="tp-wcell tp-editing" style="text-align:center;background:#f0fdf4;">${_tpTickBox(on, true, w)}${under}</td>`;
+}
+/* EDIT beside Check: only on a row that can be corrected. */
+function _tpEditCell(r, key) {
+  if (tpNotDone(r) || r.checked_at || _tpEdit) return '';
+  return ` <button class="btn btn-sm tp-edit-btn" onclick="tpEditStart(${r.id})"
+      title="Correct who did this job, and the figure each of them did">✎ Edit</button>`;
+}
+function _tpEditButtons() {
+  return `<button class="btn btn-sm btn-check tp-save-btn" onclick="tpEditSave()">Save</button>`
+    + ` <button class="btn btn-sm tp-cancel-btn" onclick="tpEditCancel()">Cancel</button>`;
+}
+function _tpRecordOf(id) {
+  const key = _tpPayrollKey(getNursery(), getMonth());
+  return (_tpRecordsCache[key] || []).find(x => x.id === id) || null;
+}
+function tpEditStart(id) {
+  if (!wrAllows('transplanting')) return;
+  const r = _tpRecordOf(id);
+  if (!r) return;
+  if (r.checked_at) { alert('This row is Checked. Uncheck it first, then correct it.'); return; }
+  if (tpNotDone(r)) return;
+  const crew = {};
+  (Array.isArray(r.workers) ? r.workers : []).forEach(w => {
+    if (w && w.name) crew[String(w.name)] = w.qty == null ? null : Number(w.qty);
+  });
+  _tpEdit = { id, crew };
+  renderPayroll();
+}
+function tpEditTick(name, on) {
+  if (!_tpEdit) return;
+  if (on) { if (!(name in _tpEdit.crew)) _tpEdit.crew[name] = null; }
+  else delete _tpEdit.crew[name];
+  renderPayroll();
+}
+function tpEditQty(name, v) {
+  if (!_tpEdit || !(name in _tpEdit.crew)) return;
+  _tpEdit.crew[name] = v === '' || v == null ? null : Number(v);
+  renderPayroll();
+}
+function tpEditCancel() { _tpEdit = null; renderPayroll(); }
+async function tpEditSave() {
+  if (!_tpEdit || !_supabase) return;
+  if (!wrAllows('transplanting')) return;
+  const r = _tpRecordOf(_tpEdit.id);
+  if (!r) { _tpEdit = null; renderPayroll(); return; }
+  if (r.checked_at) { alert('This row was Checked meanwhile. Uncheck it first, then correct it.'); return; }
+  const job = TP_JOB[r.work_type];
+  /* The register order, so the crew reads the way the sheet's columns do. */
+  const { wk } = tpWorkerColumns(getNursery(), transplantingRows(getNursery(), getMonth()));
+  const names = Object.keys(_tpEdit.crew).sort((a, b) => wk.indexOf(a) - wk.indexOf(b));
+  if (!names.length) { alert('Tick at least one worker. A crew of nobody pays nobody.'); return; }
+  if (job && job.split) {
+    const bad = names.filter(n => { const q = _tpEdit.crew[n]; return q == null || !isFinite(q) || q < 0; });
+    if (bad.length) { alert('Key the quantity under each ticked name: ' + bad.join(', ')); return; }
+  }
+  const workers = _tpDraftRecord(r).workers
+    .sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name))
+    .map(w => ({ name: w.name, qty: w.qty == null || w.qty === '' ? null : Number(w.qty) }));
+  const patch = { workers };
+  if (job && job.split) patch.total_qty = workers.reduce((n, w) => n + (Number(w.qty) || 0), 0);
+  const { error } = await _supabase.from('nops_transplant_field_records')
+    .update(patch).eq('id', r.id);
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + error.message); return; }
+  Object.assign(r, patch);
+  _tpEdit = null;
+  renderPayroll();
 }
 
 /* ONE WRITE, ONE COLUMN PAIR. It sends `checked_at` and `checked_by` and
@@ -3798,38 +3937,65 @@ function _fmtRate(r) {
 
    Capacity only — no money. Pay is worked out in the Nursery Payroll,
    which reads this same record. */
-function downloadPayrollPDF() {
-  const { jsPDF } = window.jspdf;
-  /* THE TAB ON SCREEN DECIDES WHAT IS PRINTED. Pressed on Transplanting it
-     printed the four maintenance sheets regardless, which is the office
-     asking for one thing and getting another -- "当我在transplanting的tab，
-     我要下载的是transplanting的资料". Transplanting is a wider sheet (a Work
-     column and a number in every worker cell, not a tick), so it takes the
-     wide page; the four tick sheets keep the tall one they have always had. */
-  const tpView = _payrollView === 'transplanting';
-  /* Seed Planting is the Pre Nursery's own sheet, a figure in every worker
-     cell like Transplanting, so it takes the wide page too. */
-  /* Both Pre Nursery sheets take the wide page: they are the same table
-     with the same worker columns, and only the job differs. */
-  const spView = !!SP_VIEWS[_payrollView];
-  const wide = tpView || spView;
-  const doc = new jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
-  const PW = wide ? 297 : 210, PH = wide ? 210 : 297, MARGIN = 25;
-  const CONTENT_W = PW - MARGIN * 2;      // 160 mm
-  const MID = PW / 2;
+function downloadPayrollPDF(opts) {
+  /* ONE JOB, ONE OR MORE NURSERIES, ONE FILE. The office asked for a
+     download on every job of Worker Activity -- *"全部应该要有一个Download
+     button for 不同的工作 ... 我要一次可以download 1个/2个/3个 nursery"* -- so
+     the file is the job on screen and nothing else (it used to print all
+     four maintenance sheets whichever was open), each nursery starting on
+     a page of its own. Called with no argument it prints the job and the
+     nursery on screen, which is what every older caller meant.
 
-  const n = spView ? SP_NURSERY : getNursery(), m = getMonth();
-  const TYPES = ['pd', 'manuring', 'weeding', 'interrow'];
-  /* Each job draws ITS OWN worker list (Settings → Worker List for Each
-     Job), so the page asks per type; `wk` is every name on any of the four,
-     which is what "is there anybody at all" is a question about. */
-  const wkOfType = {};
-  TYPES.forEach(ty => { wkOfType[ty] = jobWorkers(n, ty); });
-  let wk = [...new Set(TYPES.flatMap(ty => wkOfType[ty]))];
-
-  if (!wide && !wk.length) {
-    alert(t('pay.noWorkers'));
+     PORTRAIT OR LANDSCAPE IS DECIDED PER NURSERY, by whether its worker
+     columns fit across the tall page without splitting (`orientFor`). A
+     crew of six is a portrait sheet; a crew of fourteen is a landscape one.
+     jsPDF lets every page carry its own shape, so a file holding a small
+     crew and a big one has both. */
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('The PDF library has not loaded — usually the internet connection.\n\nReload the page and try again.');
     return;
+  }
+  const { jsPDF } = window.jspdf;
+  opts = opts || {};
+  const JOB = opts.job || _payrollView;
+  const m = getMonth();
+  const spView = !!SP_VIEWS[JOB];
+  const tpView = JOB === 'transplanting';
+  const lsView = JOB === 'loading_seedlings';
+  const ciView = JOB === 'cull_incentive';
+  const MAINT_TYPE = PAYROLL_TYPES[JOB] ? JOB : null;
+  const NURS = spView ? [SP_NURSERY]
+    : ((opts.nurseries && opts.nurseries.length) ? opts.nurseries.slice() : [getNursery()]);
+  const JOB_TITLE = spView ? t('tab.seedPlanting') : (MAINT_TYPE ? t(PAYROLL_TYPES[JOB].label) : jobLabel(JOB));
+
+  let doc = null, ORIENT = 'portrait';
+  let PW = 210, PH = 297;
+  const MARGIN = 25;
+  let CONTENT_W = PW - MARGIN * 2;
+  let MID = PW / 2;
+  function setGeom(o) {
+    ORIENT = o;
+    PW = o === 'landscape' ? 297 : 210; PH = o === 'landscape' ? 210 : 297;
+    CONTENT_W = PW - MARGIN * 2; MID = PW / 2;
+  }
+  /* Every page after the first goes through here, so it keeps the shape the
+     section chose -- a bare addPage() would fall back to the first page's. */
+  function newPage() { doc.addPage('a4', ORIENT); }
+  function startSection(o) {
+    setGeom(o);
+    if (!doc) doc = new jsPDF({ orientation: o, unit: 'mm', format: 'a4' });
+    else newPage();
+  }
+  let n = NURS[0];
+
+  /* What fits across the TALL page: the job's fixed columns, then the
+     narrowest a worker column may be. More workers than that is landscape. */
+  const FIX_OF = { tick: 77, loading: 116, transplanting: 131, seed: 96, cull: 0 };
+  const MINW_OF = { tick: 8, loading: 8, transplanting: 11, seed: 12, cull: 1 };
+  function orientFor(kind, cols) {
+    if (kind === 'cull') return 'portrait';
+    const fit = Math.floor((210 - MARGIN * 2 - FIX_OF[kind]) / MINW_OF[kind]);
+    return cols <= fit ? 'portrait' : 'landscape';
   }
 
   const HEAD_FILL = [232, 240, 235], TOTAL_FILL = [219, 236, 226], ZEBRA = [250, 252, 251];
@@ -3921,7 +4087,9 @@ function downloadPayrollPDF() {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
     doc.text('MEGA JUTAMAS SDN BHD', MID, y + 5, { align: 'center' });
     doc.setFontSize(12);
-    doc.text(t('pay.form').toUpperCase(), MID, y + 12, { align: 'center' });
+    /* THE JOB IS IN THE TITLE, so a sheet in a pile says what it is --
+       *"记得要有title 这样我才知道这是Loading Seedlings的"*. */
+    doc.text((t('pay.form') + ' — ' + JOB_TITLE).toUpperCase(), MID, y + 12, { align: 'center' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
     doc.text(`${NURSERY_NAMES[n] || n} (${nurseryShort(n)})  ·  ${t('pay.month')} ${m}`, MID, y + 19, { align: 'center' });
     doc.setDrawColor(13, 122, 71); doc.setLineWidth(0.6);
@@ -3945,11 +4113,6 @@ function downloadPayrollPDF() {
      -- and what is held back is said under them, exactly as on screen. */
   function drawTransplantingSheet() {
     const key = _tpPayrollKey(n, m);
-    if (_tpRecordsCache[key] === undefined || _tpRecordsLoading[key]) {
-      alert(t('pay.loading'));
-      return;
-    }
-    if (_tpRecordsErr[key]) { alert(_tpRecordsErr[key]); return; }
     const rows = transplantingRows(n, m);
     const { wk: cols } = tpWorkerColumns(n, rows);
     const agreed = (r) => tpAgreed(key, r);
@@ -3964,7 +4127,7 @@ function downloadPayrollPDF() {
     if (!tchunks.length) tchunks.push([]);
 
     tchunks.forEach((chunk, ci) => {
-      if (ci) doc.addPage();
+      if (ci) newPage();
       const part = tchunks.length > 1
         ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
         : '';
@@ -4001,7 +4164,7 @@ function downloadPayrollPDF() {
         });
         rows.forEach((r, ri) => {
           if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
-            doc.addPage();
+            newPage();
             y = titleBlock(label, part);
             drawHead();
           }
@@ -4063,7 +4226,7 @@ function downloadPayrollPDF() {
         cell(xs[0], y, widths[0] + widths[1] + widths[2], ROW_H + 4, t('pay.tpHeldLabel'), { bold: true, size: 8.5, fill: HELD });
         cell(xs[3], y, widths[3], ROW_H + 4, heldCap ? heldCap.toLocaleString('en-MY') : '—', { bold: true, size: 8.5, nowrap: true, fill: HELD });
         cell(xs[4], y, CONTENT_W - (xs[4] - MARGIN), ROW_H + 4,
-             t('pay.tpHeld').replace('{n}', heldRows), { size: 6.5, fill: HELD, align: 'left' });
+             '', { size: 6.5, fill: HELD, align: 'left' });
         y += ROW_H + 4;
       }
       /* And a job nobody did, in grey rather than amber: held work is a
@@ -4084,7 +4247,6 @@ function downloadPayrollPDF() {
       doc.setTextColor(0, 0, 0);
     });
 
-    doc.save(`Worker_Record_Transplanting_${n}_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
   /* THE PRE NURSERY SHEET: the batch report's rows, and what each worker
@@ -4098,10 +4260,8 @@ function downloadPayrollPDF() {
      this is the rule that was there, asked once more. */
   function drawSeedPlantingSheet() {
     const st = _spCache[m];
-    if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
     const rows = st.rows, saved = st.saved;
     const { wk: cols } = spWorkerColumns(rows, saved, st.names);
-    if (!cols.length) { alert(t('pay.spNoNames')); return; }
     const fig = v => v ? Number(v).toLocaleString('en-MY') : '';
 
     const W_DATE = 24, W_BATCH = 24, W_QTY = 24, W_SUM = 26;
@@ -4114,7 +4274,7 @@ function downloadPayrollPDF() {
     SP_JOBS.forEach((j) => {
       const job = j.job, label = t(j.label);
       chunks.forEach((chunk, ci) => {
-        if (started) doc.addPage();
+        if (started) newPage();
         started = true;
         const part = chunks.length > 1
           ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${cols.length}`
@@ -4145,7 +4305,7 @@ function downloadPayrollPDF() {
         } else {
           const floor = PH - MARGIN - 20;
           rows.forEach((r, ri) => {
-            if (y + ROW_H > floor) { doc.addPage(); y = titleBlock(label, part); drawHead(); }
+            if (y + ROW_H > floor) { newPage(); y = titleBlock(label, part); drawHead(); }
             const sv = saved[_spKey(r.key, job)];
             const cells = (sv && sv.workers) || {};
             const keyed = _spKeyed(sv);
@@ -4177,40 +4337,29 @@ function downloadPayrollPDF() {
         doc.setTextColor(0, 0, 0);
       });
     });
-    doc.save(`Worker_Record_Pre_Nursery_${m.replace(/\s+/g, '_')}.pdf`);
   }
 
-  /* Column widths for one chunk of workers. The three fixed columns and the
-     per-worker total keep their size; the workers share what is left. */
-  const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
-  const FIXED = W_DATE + W_PLOT + W_CAP + W_PER;   // 77 mm, leaving 83 mm
-  const MIN_WK = 8;
-  const maxPerPage = Math.max(1, Math.floor((CONTENT_W - FIXED) / MIN_WK));
-
-  // Split the worker list only when it genuinely will not fit.
-  const chunksOf = (list) => {
-    const out = [];
-    for (let i = 0; i < list.length; i += maxPerPage) out.push(list.slice(i, i + maxPerPage));
-    return out;
-  };
-  let chunks = chunksOf(wk);
-
   const ROW_H = 8;
-  if (tpView) { drawTransplantingSheet(); return; }
-  if (spView) { drawSeedPlantingSheet(); return; }
-  let firstPage = true;
 
-  TYPES.forEach(type => {
+  /* ONE MAINTENANCE SHEET -- P & D, Manuring, Weeding or Interrow -- for the
+     nursery `n`. Column widths for one chunk of workers: the three fixed
+     columns and the per-worker total keep their size; the workers share
+     what is left, split onto further pages only when they will not fit. */
+  function drawMaintSheet(type) {
+    const W_DATE = 22, W_PLOT = 13, W_CAP = 21, W_PER = 21;
+    const FIXED = W_DATE + W_PLOT + W_CAP + W_PER;   // 77 mm
+    const MIN_WK = 8;
+    const maxPerPage = Math.max(1, Math.floor((CONTENT_W - FIXED) / MIN_WK));
     const cfg = PAYROLL_TYPES[type];
-    const rows = payrollRowsFor(type);
+    const rows = payrollRowsFor(type, n);
     const store = payrollData[payrollKey(n, m, type)] || {};
-    wk = wkOfType[type];
-    chunks = chunksOf(wk);
+    const wk = jobWorkers(n, type);
+    let chunks = [];
+    for (let i = 0; i < wk.length; i += maxPerPage) chunks.push(wk.slice(i, i + maxPerPage));
     if (!chunks.length) chunks = [[]];
 
     chunks.forEach((chunk, ci) => {
-      if (!firstPage) doc.addPage();
-      firstPage = false;
+      if (ci) newPage();
 
       const part = chunks.length > 1
         ? `${t('pay.workersRange')} ${ci * maxPerPage + 1}–${ci * maxPerPage + chunk.length} ${t('pay.ofTotal')} ${wk.length}`
@@ -4254,7 +4403,7 @@ function downloadPayrollPDF() {
         });
         rows.forEach((r, ri) => {
           if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
-            doc.addPage();
+            newPage();
             y = titleBlock(t(cfg.label), part);
             drawHead();
           }
@@ -4295,9 +4444,278 @@ function downloadPayrollPDF() {
       doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
       doc.setTextColor(0, 0, 0);
     });
-  });
+  }
 
-  doc.save(`Worker_Record_${n}_${m.replace(/\s+/g, '_')}.pdf`);
+  /* LOADING SEEDLINGS, as the tab draws it: Date, Customer, DO Number, the
+     plot's Nursery, the quantity this nursery's gang loaded, a tick per
+     worker and each one's share. Every figure is loadingSeedlingsRows' own,
+     so the paper cannot disagree with the screen. */
+  function drawLoadingSheet() {
+    const W_DATE = 18, W_CUST = 30, W_DO = 22, W_NUR = 14, W_QTY = 14, W_PER = 18;
+    const FIXED = W_DATE + W_CUST + W_DO + W_NUR + W_QTY + W_PER;   // 116 mm
+    const per = Math.max(1, Math.floor((CONTENT_W - FIXED) / 8));
+    const label = t('tab.loadingSeedlings');
+    const rows = loadingSeedlingsRows(n, m);
+    const wk = jobWorkers(n, 'loading_seedlings');
+    let chunks = [];
+    for (let i = 0; i < wk.length; i += per) chunks.push(wk.slice(i, i + per));
+    if (!chunks.length) chunks = [[]];
+    chunks.forEach((chunk, ci) => {
+      if (ci) newPage();
+      const part = chunks.length > 1
+        ? `${t('pay.workersRange')} ${ci * per + 1}–${ci * per + chunk.length} ${t('pay.ofTotal')} ${wk.length}`
+        : '';
+      let y = titleBlock(label, part);
+      const wkW = chunk.length ? (CONTENT_W - FIXED) / chunk.length : 0;
+      const custW = chunk.length ? W_CUST : W_CUST + (CONTENT_W - FIXED);
+      const widths = [W_DATE, custW, W_DO, W_NUR, W_QTY, ...chunk.map(() => wkW), W_PER];
+      const xs = []; let x = MARGIN;
+      widths.forEach(w => { xs.push(x); x += w; });
+      const iPer = widths.length - 1;
+      const HEAD_H = headerHeightFor(chunk.length ? chunk : ['']);
+      const drawHead = () => {
+        cell(xs[0], y, widths[0], HEAD_H, t('pay.date'), { bold: true, size: 8, fill: HEAD_FILL });
+        cell(xs[1], y, widths[1], HEAD_H, t('pay.customer'), { bold: true, size: 8, fill: HEAD_FILL });
+        cell(xs[2], y, widths[2], HEAD_H, t('pay.doNumber'), { bold: true, size: 7.5, fill: HEAD_FILL });
+        cell(xs[3], y, widths[3], HEAD_H, t('pay.doNursery'), { bold: true, size: 7, fill: HEAD_FILL });
+        cell(xs[4], y, widths[4], HEAD_H, t('pay.qtyLoaded'), { bold: true, size: 7, fill: HEAD_FILL });
+        chunk.forEach((w, i) => vHeaderCell(xs[5 + i], y, widths[5 + i], HEAD_H, w));
+        cell(xs[iPer], y, widths[iPer], HEAD_H, t('pay.perWorker'), { bold: true, size: 7, fill: HEAD_FILL });
+        y += HEAD_H;
+      };
+      drawHead();
+      const totals = {}; chunk.forEach(w => totals[w] = 0);
+      let capTotal = 0;
+      if (!rows.length) {
+        cell(MARGIN, y, CONTENT_W, 14, t('pay.noDOs'), { size: 9 });
+        y += 14;
+      } else {
+        const floor = PH - MARGIN - 20;
+        rows.forEach(({ d, qty }, ri) => {
+          if (y + ROW_H > floor) { newPage(); y = titleBlock(label, part); drawHead(); }
+          const cells = (d.worked_by_by_nursery || {})[n] || [];
+          // The share is divided among EVERY ticked worker, not just those
+          // on this page, so splitting the sheet moves no figure.
+          const ticked = wk.filter(w => cells.includes(w));
+          const share = ticked.length ? qty / ticked.length : 0;
+          chunk.forEach(w => { if (cells.includes(w)) totals[w] += share; });
+          capTotal += qty;
+          const z = ri % 2 ? ZEBRA : null;
+          cell(xs[0], y, widths[0], ROW_H, d.delivery_date ? _tarikhDisplay(String(d.delivery_date).slice(0, 10)) : '—',
+               { size: 7.5, nowrap: true, fill: z });
+          cell(xs[1], y, widths[1], ROW_H, d.remark || '—', { size: 7, fill: z, align: 'left' });
+          cell(xs[2], y, widths[2], ROW_H, d.do_number || '—', { size: 7.5, nowrap: true, fill: z });
+          cell(xs[3], y, widths[3], ROW_H, _doPlotNurseries(d).join(' / ') || '—', { size: 7, nowrap: true, fill: z });
+          cell(xs[4], y, widths[4], ROW_H, qty.toLocaleString('en-MY'), { size: 8, nowrap: true, fill: z });
+          chunk.forEach((w, i) => {
+            cell(xs[5 + i], y, widths[5 + i], ROW_H, '', { fill: z });
+            if (cells.includes(w)) drawTick(xs[5 + i], y, widths[5 + i], ROW_H);
+          });
+          cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(share), { size: 8, bold: true, nowrap: true, fill: z });
+          y += ROW_H;
+        });
+      }
+      const grand = chunk.reduce((sm, w) => sm + totals[w], 0);
+      cell(xs[0], y, widths[0] + widths[1] + widths[2] + widths[3], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
+      cell(xs[4], y, widths[4], ROW_H + 1, capTotal ? capTotal.toLocaleString('en-MY') : '—', { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL });
+      chunk.forEach((w, i) => cell(xs[5 + i], y, widths[5 + i], ROW_H + 1, capFmt(totals[w]),
+           { bold: true, size: 7.5, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iPer], y, widths[iPer], ROW_H + 1, capFmt(grand), { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL });
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+    });
+  }
+
+  /* CULLING MONITORING: the plots that earn it, their two days, the
+     duration and who it pays -- then the plots transplanted this month that
+     do not, with the reason. No worker columns, so always the tall page. */
+  function drawCullSheet() {
+    const ym = monthLabelToInput(m);
+    const rows = cullIncentiveRows(n, ym);
+    const qualify = rows.filter(r => r.counts);
+    const other = rows.filter(r => !r.counts && !(r.override && r.override.action === 'remove'));
+    const who = MJMCullIncentive.whoEarns(n).join(', ');
+    const label = t('tab.cullIncentive') + ' — Saringan to Transplanting within ' + MJMCullIncentive.TARGET_DAYS + ' days';
+    const W = [10, 16, 28, 28, 18, 0, 22];
+    W[5] = CONTENT_W - W.reduce((a, b) => a + b, 0);
+    const xs = []; let x = MARGIN; W.forEach(w => { xs.push(x); x += w; });
+    let y = titleBlock(label, '');
+    const HEAD_H = 10;
+    const floor = PH - MARGIN - 20;
+    const head = (cols) => {
+      cols.forEach((c, i) => cell(xs[i], y, W[i], HEAD_H, c, { bold: true, size: 7.5, fill: HEAD_FILL }));
+      y += HEAD_H;
+    };
+    const page = (hd) => { if (y + ROW_H > floor) { newPage(); y = titleBlock(label, ''); head(hd); } };
+    const H1 = ['No.', t('pay.plot'), 'Saringan started', 'Transplanting ended', 'Days', 'Who gets it', t('pay.checked')];
+    head(H1);
+    if (!qualify.length) { cell(MARGIN, y, CONTENT_W, 12, 'No plot qualifies this month.', { size: 9 }); y += 12; }
+    qualify.forEach((r, i) => {
+      page(H1);
+      const z = i % 2 ? ZEBRA : null;
+      cell(xs[0], y, W[0], ROW_H, String(i + 1), { size: 8, fill: z });
+      cell(xs[1], y, W[1], ROW_H, r.plot, { size: 8.5, bold: true, nowrap: true, fill: z });
+      cell(xs[2], y, W[2], ROW_H, _cullPd(r.start), { size: 8, nowrap: true, fill: z });
+      cell(xs[3], y, W[3], ROW_H, _cullPd(r.end), { size: 8, nowrap: true, fill: z });
+      cell(xs[4], y, W[4], ROW_H, r.days == null ? '—' : String(r.days), { size: 8.5, bold: true, fill: z });
+      cell(xs[5], y, W[5], ROW_H, who || '—', { size: 7, fill: z, align: 'left' });
+      if (r.check) { cell(xs[6], y, W[6], ROW_H, '', { fill: z }); drawTick(xs[6], y, W[6], ROW_H); }
+      else cell(xs[6], y, W[6], ROW_H, 'Not checked', { size: 6.5, nowrap: true, fill: z });
+      y += ROW_H;
+    });
+    const held = qualify.filter(r => !r.check).length;
+    cell(MARGIN, y, CONTENT_W, ROW_H + 1,
+         `${qualify.length - held} of ${qualify.length} plot(s) checked — sent to the payroll` + (held ? ` · ${held} not checked yet — not paid` : ''),
+         { bold: true, size: 8, fill: TOTAL_FILL });
+    y += ROW_H + 1;
+    if (other.length) {
+      y += 6;
+      const H2 = ['No.', t('pay.plot'), 'Saringan started', 'Transplanting ended', 'Days', 'Why not', ''];
+      if (y + HEAD_H + ROW_H > floor) { newPage(); y = titleBlock(label, ''); }
+      cell(MARGIN, y, CONTENT_W, 8, 'Transplanted this month and NOT earning it', { bold: true, size: 8.5, fill: [243, 244, 246] });
+      y += 8;
+      head(H2);
+      other.forEach((r, i) => {
+        page(H2);
+        const z = i % 2 ? ZEBRA : null;
+        cell(xs[0], y, W[0], ROW_H, String(i + 1), { size: 8, fill: z });
+        cell(xs[1], y, W[1], ROW_H, r.plot, { size: 8.5, bold: true, nowrap: true, fill: z });
+        cell(xs[2], y, W[2], ROW_H, _cullPd(r.start), { size: 8, nowrap: true, fill: z });
+        cell(xs[3], y, W[3], ROW_H, _cullPd(r.end), { size: 8, nowrap: true, fill: z });
+        cell(xs[4], y, W[4], ROW_H, r.days == null ? '—' : String(r.days), { size: 8.5, fill: z });
+        cell(xs[5], y, W[5] + W[6], ROW_H, _cullWhy(r), { size: 7.5, fill: z, align: 'left' });
+        y += ROW_H;
+      });
+    }
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+    doc.text(t('pay.autoNote'), MID, PH - MARGIN + 6, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+  }
+
+  /* Is everything this file needs actually in memory? Asked BEFORE a page
+     is drawn, so a nursery still loading costs one sentence and not a file
+     with a hole in it. wrDownloadGo loads all of it first. */
+  for (const nn of NURS) {
+    if (tpView) {
+      const k = _tpPayrollKey(nn, m);
+      if (_tpRecordsCache[k] === undefined || _tpRecordsLoading[k]) { alert(t('pay.loading')); return; }
+      if (_tpRecordsErr[k]) { alert(_tpRecordsErr[k]); return; }
+    } else if (lsView) {
+      const k = _doPayrollKey(nn, m);
+      if (_doRecordsCache[k] === undefined || _doRecordsLoading[k]) { alert(t('pay.loading')); return; }
+      if (_doRecordsErr[k]) { alert(_doRecordsErr[k]); return; }
+    } else if (ciView) {
+      const ym = monthLabelToInput(m);
+      if (!window.MJMCullIncentive || !_cullCache[ym] || _cullLoading[ym]) { alert(t('pay.loading')); return; }
+    } else if (spView) {
+      const st = _spCache[m];
+      if (!st || _spLoading[m]) { alert(_spErr[m] || t('pay.loading')); return; }
+      if (!spWorkerColumns(st.rows, st.saved, st.names).wk.length) { alert(t('pay.spNoNames')); return; }
+    }
+  }
+  if (MAINT_TYPE && !NURS.some(nn => jobWorkers(nn, MAINT_TYPE).length)) {
+    alert(t('pay.noWorkers'));
+    return;
+  }
+
+  NURS.forEach(nn => {
+    n = nn;
+    if (MAINT_TYPE) {
+      startSection(orientFor('tick', jobWorkers(n, MAINT_TYPE).length));
+      drawMaintSheet(MAINT_TYPE);
+    } else if (lsView) {
+      startSection(orientFor('loading', jobWorkers(n, 'loading_seedlings').length));
+      drawLoadingSheet();
+    } else if (tpView) {
+      startSection(orientFor('transplanting', tpWorkerColumns(n, transplantingRows(n, m)).wk.length));
+      drawTransplantingSheet();
+    } else if (spView) {
+      const st = _spCache[m];
+      startSection(orientFor('seed', spWorkerColumns(st.rows, st.saved, st.names).wk.length));
+      drawSeedPlantingSheet();
+    } else if (ciView) {
+      startSection('portrait');
+      drawCullSheet();
+    }
+  });
+  if (!doc) return;
+  /* The file names the job and every nursery in it. */
+  const jobPart = spView ? 'Pre_Nursery'
+    : String(JOB_TITLE).replace(/&/g, 'and').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const nurPart = spView ? '' : NURS.join('_') + '_';
+  doc.save(`Worker_Record_${jobPart}_${nurPart}${m.replace(/\s+/g, '_')}.pdf`);
+}
+
+/* ── THE DOWNLOAD WINDOW ────────────────────────────────────────────────
+   The icon on Worker Activity opens this. It names the job on screen and
+   the month, offers a tick per nursery that job is done in, and builds ONE
+   file. The data a nursery not on screen needs is read first, so ticking
+   UNN 2 from the BNN screen is not a file with an empty UNN 2 in it. */
+function wrDownloadNurseries(job) {
+  if (SP_VIEWS[job]) return [SP_NURSERY];
+  if (job === 'cull_incentive')
+    return (window.MJMCullIncentive && MJMCullIncentive.NURSERIES) || ['BNN', 'UNN1', 'UNN2'];
+  return jobNurseries(job);
+}
+function wrDownloadTitle(job) {
+  if (SP_VIEWS[job]) return t('tab.seedPlanting');
+  if (PAYROLL_TYPES[job]) return t(PAYROLL_TYPES[job].label);
+  return jobLabel(job);
+}
+function openWrDownload() {
+  const job = _payrollView, list = wrDownloadNurseries(job);
+  /* The nursery on screen starts ticked; one this job is not done in
+     (PN on a main-nursery job) starts on the first that it is. */
+  const cur = list.includes(getNursery()) ? getNursery() : list[0];
+  document.getElementById('wr-dl-title').textContent = 'Download — ' + wrDownloadTitle(job);
+  document.getElementById('wr-dl-sub').textContent =
+    t('pay.month') + ' ' + getMonth() + (list.length > 1 ? ' · tick one or more nurseries' : '');
+  document.getElementById('wr-dl-list').innerHTML = list.map(k => `
+    <label class="chk-label"><input type="checkbox" class="wr-dl-n" value="${esc(k)}"
+      ${(k === cur || list.length === 1) ? 'checked' : ''} onchange="wrDownloadSync()">
+      <span>${esc(NURSERY_NAMES[k] || k)} (${esc(nurseryShort(k))})</span></label>`).join('');
+  wrDownloadSync();
+  document.getElementById('wr-dl-modal').classList.add('open');
+}
+function closeWrDownload() { document.getElementById('wr-dl-modal').classList.remove('open'); }
+function wrDownloadPicked() {
+  return [...document.querySelectorAll('#wr-dl-list .wr-dl-n')].filter(i => i.checked).map(i => i.value);
+}
+function wrDownloadSync() {
+  const go = document.getElementById('wr-dl-go');
+  if (go) go.disabled = !wrDownloadPicked().length;
+}
+async function wrDownloadGo() {
+  const job = _payrollView, picked = wrDownloadPicked();
+  if (!picked.length) return;
+  const go = document.getElementById('wr-dl-go');
+  const was = go.textContent;
+  go.disabled = true; go.textContent = 'Preparing…';
+  try {
+    const m = getMonth();
+    if (job === 'transplanting') {
+      for (const nn of picked) {
+        const k = _tpPayrollKey(nn, m);
+        if (_tpRecordsCache[k] === undefined && !_tpRecordsLoading[k]) await loadTransplantRecordsForPayroll(nn, m);
+      }
+    } else if (job === 'loading_seedlings') {
+      for (const nn of picked) {
+        const k = _doPayrollKey(nn, m);
+        if (_doRecordsCache[k] === undefined && !_doRecordsLoading[k]) await loadDoRecordsForPayroll(nn, m);
+      }
+    } else if (job === 'cull_incentive') {
+      const ym = monthLabelToInput(m);
+      if (_cullCache[ym] === undefined && !_cullLoading[ym]) await loadCullIncentiveForPayroll(ym);
+    }
+    closeWrDownload();
+    downloadPayrollPDF({ job, nurseries: picked });
+  } catch (e) {
+    console.error('[maint] download:', e);
+    alert('The PDF could not be made:\n\n' + ((e && e.message) || e));
+  } finally {
+    go.textContent = was; wrDownloadSync();
+  }
 }
 
 /* ── Piece rates (one rate card for all nurseries) ── */
@@ -4965,7 +5383,7 @@ const I18N = {
     'pay.spUnmoveQ':'Take batch {b} off {m}?\n\nIt goes back to {back}, the month it was planted in. Figures already keyed go with it.',
     'pay.spNoMoveTable':'Batches cannot be added by hand yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase.',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
-    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. The crew itself is his answer and is changed on the FC Portal.',
+    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. A wrong name or a wrong figure: press Edit on an unchecked row, correct the ticks and the figures under them, and Save.',
     'pay.checked':'Checked',
     'pay.tpHeldLabel':'Held back',
     'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
@@ -5043,12 +5461,7 @@ const I18N = {
     'rec.auditOkTip':'The auditor checked this job and passed it',
     'rec.auditBadTip':'The auditor checked this job and did not pass it',
     'rec.allJenis':'All Work Types', 'rec.allPlot':'All Plots', 'rec.filterDate':'Filter by date…',
-    'rec.totalTasks':'Total Tasks', 'rec.gaiaDone':'Gaia Done', 'rec.gaiaPending':'Gaia Pending',
-    'rec.pendingTask':'Pending Task', 'rec.repairCase':'Total Repair Case',
-    'rec.doneOf':'{n} done \u00b7 {pct}%', 'rec.repairedOf':'{n} repaired \u00b7 {pct}%',
-    'rec.workProgress':'Work progress', 'rec.repairProgress':'Repair progress',
-    'rec.completedN':'Completed', 'rec.pendingN':'Pending', 'rec.repairCases':'Repair cases',
-    'rec.repairedN':'Repaired', 'rec.remainingN':'Remaining', 'rec.actions':'Actions',
+    'rec.actions':'Actions',
     'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Track Record', 'rec.trackView':'View track', 'rec.trackNone':'No walk was recorded for this job.',
     'rec.nelos':'Nelos Case', 'rec.repaired':'Done Repair',
@@ -5058,6 +5471,14 @@ const I18N = {
     /* The two parts of the list — approved work, and what was sent back. */
     'rec.partApproved':'Approved',
     'rec.partApprovedSub':'The month’s scheduled jobs, with the submissions a Field Conductor has signed off filled in',
+    'rec.partPending':'Pending',
+    'rec.partPendingSub':'Every ticked schedule row that nobody has approved yet, and the work a worker recorded that is still waiting for a Field Conductor',
+    'rec.waiting':'Waiting for approval',
+    'rec.waitingTip':'A worker recorded this job and no Field Conductor has approved it yet, so nothing of it has reached the row — no date, no batch, no quantity. Approve it in the Verify Hub and it moves to Approved.',
+    'rec.looseHead':'Recorded on a phone, on no scheduled row',
+    'rec.looseSub':'Work that reached the office and matched no round this month — add the round on the schedule, or approve it and check where it lands',
+    'rec.nonePending':'Nothing is waiting — every row here has been approved',
+    'rec.noneApproved':'Nothing approved yet — it is all still in Pending',
     'rec.partRejected':'Rejected',
     'rec.partRejectedSub':'Records a Field Conductor refused — approve one and it flows back into the approved section',
     'rej.workedBy':'Worked By', 'rej.reportedBy':'Reported By',
@@ -5170,7 +5591,7 @@ const I18N = {
     'pay.spUnmoveQ':'Keluarkan batch {b} dari {m}?\n\nIa kembali ke {back}, bulan ia ditanam. Angka yang sudah diisi ikut sekali.',
     'pay.spNoMoveTable':'Batch belum boleh ditambah sendiri: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase.',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
-    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Senarai pekerja adalah jawapan beliau dan diubah di FC Portal.',
+    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Nama atau angka salah: tekan Edit pada baris yang belum disemak, betulkan tanda dan angka di bawahnya, dan Simpan.',
     'pay.checked':'Disemak',
     'pay.tpHeldLabel':'Ditahan',
     'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
@@ -5237,12 +5658,7 @@ const I18N = {
     'rec.auditOkTip':'Juruaudit telah memeriksa kerja ini dan meluluskannya',
     'rec.auditBadTip':'Juruaudit telah memeriksa kerja ini dan tidak meluluskannya',
     'rec.allJenis':'Semua Jenis Kerja', 'rec.allPlot':'Semua Plot', 'rec.filterDate':'Tapis ikut tarikh…',
-    'rec.totalTasks':'Jumlah Tugasan', 'rec.gaiaDone':'Gaia Selesai', 'rec.gaiaPending':'Gaia Belum',
-    'rec.pendingTask':'Tugasan Belum Siap', 'rec.repairCase':'Jumlah Kes Pembaikan',
-    'rec.doneOf':'{n} siap \u00b7 {pct}%', 'rec.repairedOf':'{n} dibaiki \u00b7 {pct}%',
-    'rec.workProgress':'Kemajuan kerja', 'rec.repairProgress':'Kemajuan pembaikan',
-    'rec.completedN':'Siap', 'rec.pendingN':'Belum', 'rec.repairCases':'Kes pembaikan',
-    'rec.repairedN':'Dibaiki', 'rec.remainingN':'Baki', 'rec.actions':'Tindakan',
+    'rec.actions':'Tindakan',
     'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Rekod Laluan', 'rec.trackView':'Lihat laluan', 'rec.trackNone':'Tiada laluan direkodkan untuk kerja ini.',
     'rec.nelos':'Kes Nelos', 'rec.repaired':'Pembaikan Selesai',
@@ -5252,6 +5668,14 @@ const I18N = {
     /* Dua bahagian senarai — kerja yang diluluskan, dan yang dihantar balik. */
     'rec.partApproved':'Diluluskan',
     'rec.partApprovedSub':'Kerja berjadual bulan ini, bersama rekod yang telah disahkan oleh Field Conductor',
+    'rec.partPending':'Belum Lulus',
+    'rec.partPendingSub':'Semua baris jadual yang ditanda dan belum diluluskan, serta kerja yang direkod pekerja yang masih menunggu Field Conductor',
+    'rec.waiting':'Menunggu kelulusan',
+    'rec.waitingTip':'Seorang pekerja merekod kerja ini dan belum ada Field Conductor meluluskannya, jadi tiada apa-apa sampai ke baris ini — tiada tarikh, batch atau kuantiti. Luluskan di Verify Hub dan ia berpindah ke Diluluskan.',
+    'rec.looseHead':'Direkod di telefon, tiada baris jadual',
+    'rec.looseSub':'Kerja yang sampai ke pejabat tetapi tidak sepadan dengan mana-mana pusingan bulan ini',
+    'rec.nonePending':'Tiada yang menunggu — semua baris di sini sudah diluluskan',
+    'rec.noneApproved':'Belum ada yang diluluskan — semuanya masih di Belum Lulus',
     'rec.partRejected':'Ditolak',
     'rec.partRejectedSub':'Rekod yang ditolak Field Conductor — luluskan dan ia kembali ke bahagian diluluskan',
     'rej.workedBy':'Dibuat Oleh', 'rej.reportedBy':'Dilapor Oleh',
@@ -6095,6 +6519,86 @@ async function loadRejectedFieldRecords() {
     }
     rejectedFieldRecords = res.data || [];
   } catch (e) { console.warn('[maint] sent-back records unavailable:', e); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WORK THE FIELD HAS DONE AND NOBODY HAS APPROVED YET
+
+   The office asked the Records list to read as three parts: *"rejected保留,
+   approved 分成 pending & approved, tick了的schedule全部会在这里出现+worker
+   做了的工 但是还没被approved也会在这里出现, approved的就是FC approved了
+   的"*.
+
+   The first half of Pending needed no read -- a ticked schedule row with
+   nothing agreed against it is already in `records`, and `_recApproved` is
+   what tells the two tabs apart. THE SECOND HALF HAD NO READER AT ALL.
+   `loadFieldRecords` is `_verifiedOnly` by design, so a job a worker saved
+   and a conductor has not signed reaches no row, no cell and no list: on
+   this page it was indistinguishable from work nobody had done.
+
+   So it is read, on the same shape as the sent-back list beside it and for
+   the same reason -- these are the two states a submission can be in that
+   are NOT the one `fieldRecords` carries.
+
+   IT IS KEPT OUT OF `fieldRecords`, which is the whole point. Everything
+   downstream of that array treats a member as work that HAPPENED: the
+   dates, the batches, the payroll ticks. An unapproved record has not been
+   agreed, and counting it would be this page deciding that unchecked work
+   counts -- the one thing the verified-only read exists to stop.
+   ══════════════════════════════════════════════════════════════ */
+let pendingFieldRecords = [];
+/* Neither signed nor sent back. Both halves are needed: without the second
+   every refusal would also read as waiting, and the same record would stand
+   in two of the three tabs at once. */
+const _pendingOnly = (q) => q.is('verified_at', null).is('rejected_at', null);
+
+async function loadPendingFieldRecords() {
+  if (!_supabase) return;
+  const cols = 'id, work_date, plot_name, work_type, jenis, chemical, batch_name, '
+             + 'week_no, schedule_month, qty, remark, worked_by, reported_by, '
+             + 'nursery_name, verified_at, rejected_at';
+  try {
+    let res = await _mvFetchAll(() => _pendingOnly(
+      _supabase.from('nops_maint_field_records').select(cols)).order('id', { ascending: true }));
+    // The batch columns arrive with shared/add_maint_field_batch.sql; without
+    // them the select 400s, so fall back to what every copy of the table has.
+    if (res.error && /column .* does not exist|schema cache/i.test(String(res.error.message || ''))) {
+      res = await _mvFetchAll(() => _pendingOnly(
+        _supabase.from('nops_maint_field_records')
+          .select('id, work_date, plot_name, work_type, jenis, chemical, qty, remark, '
+                + 'worked_by, reported_by, nursery_name, verified_at, rejected_at'))
+        .order('id', { ascending: true }));
+    }
+    if (res.error) {
+      /* A database with no rejected_at predates
+         shared/add_maint_field_reject.sql. Nothing can have been sent back
+         there, so "neither signed nor sent back" is just "not signed" and
+         the narrower read is the right answer rather than no answer. */
+      if (/rejected_at/i.test(String(res.error.message || ''))) {
+        res = await _mvFetchAll(() => _supabase.from('nops_maint_field_records')
+          .select('id, work_date, plot_name, work_type, jenis, chemical, qty, remark, '
+                + 'worked_by, reported_by, nursery_name, verified_at')
+          .is('verified_at', null).order('id', { ascending: true }));
+      }
+    }
+    if (res.error) {
+      /* No verified_at at all and nothing here can tell work waiting for a
+         signature from work that has one. An EMPTY list, never the whole
+         table: a page that showed every record as waiting would send the
+         office to approve rows that were approved months ago. */
+      if (/verified_at/i.test(String(res.error.message || ''))) {
+        console.warn('[maint] this database has no verified_at column on '
+          + 'nops_maint_field_records, so work waiting for a signature cannot '
+          + 'be told from work that has one. Nothing is listed as waiting. '
+          + 'Run shared/add_maint_field_verify.sql.');
+        pendingFieldRecords = [];
+        return;
+      }
+      console.warn('[maint] records waiting for approval unavailable:', res.error.message);
+      return;
+    }
+    pendingFieldRecords = res.data || [];
+  } catch (e) { console.warn('[maint] records waiting for approval unavailable:', e); }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -7571,7 +8075,11 @@ function switchRecordView(view) {
    Both are drawn on every renderRecords() whichever is open — they are two
    tables, not two queries, and keeping the hidden one current means the
    count on the tab is right without the section having been visited. */
-let _recSection = 'approved';
+/* PENDING IS WHERE THE PAGE OPENS. The office split one tab in three and
+   the one that was active was Approved — but Pending is both the work to do
+   and the bulk of what that tab already held, so landing on Approved would
+   have read as a month of rows vanishing. */
+let _recSection = 'pending';
 function switchRecSection(section, btn) {
   /* LEAVING THE TAB DROPS THE SELECTION. Coming back to a list carrying
      ticks somebody made before they went somewhere else is a delete made
@@ -7584,8 +8092,19 @@ function switchRecSection(section, btn) {
   if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   document.querySelectorAll('#recview-list .recsec').forEach(p => p.classList.remove('active'));
-  const el = document.getElementById('recsec-' + section);
+  /* PENDING AND APPROVED SHARE ONE PANE, and that is the whole reason this
+     is a filter rather than a second table. They are the same twelve
+     columns over the same rows asked a different question, so a pane each
+     would be two copies of a wide table, two tbody ids and two renderers —
+     which is how the two come to disagree about a row. The tab is read by
+     renderRecords; see `sectioned` there. */
+  const el = document.getElementById(
+    section === 'rejected' ? 'recsec-rejected' : 'recsec-approved');
   if (el) el.classList.add('active');
+  /* Rejected redraws itself from renderRecords, so one call answers all
+     three — and it has to be a call, because the rows on screen are not the
+     rows this tab wants. */
+  try { renderRecords(); } catch (e) { console.warn('[maint] records:', e); }
 }
 
 /* Schedule sub-tabs: P&D / Manuring / Weeding / Interrow. */
@@ -8972,24 +9491,51 @@ function _recIconBtn(icon, cls, onclick, label, tip) {
     + `stroke-linejoin="round" aria-hidden="true">${_REC_ICONS[icon]}</svg>`
     + `<span class="sr-only">${esc(label)}</span></button>`;
 }
-function _recProgressHtml(m) {
-  const pc = (n, of) => (of ? Math.round(n / of * 100) : 0);
-  const fig = (n) => Number(n || 0).toLocaleString('en-MY');
-  const bar = (n, of) => `<div class="rp-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" `
-    + `aria-valuenow="${pc(n, of)}"><span style="width:${pc(n, of)}%"></span></div>`;
-  const item = (lbl, n, cls) => `<span class="rp-item${cls ? ' ' + cls : ''}"><span class="rp-lbl">${lbl}</span>`
-    + `<b class="rp-val">${fig(n)}</b></span>`;
-  return `<div class="rp-group rp-work">
-      <div class="rp-line"><span class="rp-title">${t('rec.workProgress')}</span>
-        ${item(t('rec.totalTasks'), m.total)}${item(t('rec.completedN'), m.done)}${item(t('rec.pendingN'), m.pend, 'rp-pend')}
-        <span class="rp-pct">${pc(m.done, m.total)}%</span></div>
-      ${bar(m.done, m.total)}</div>
-    <div class="rp-group rp-repair">
-      <div class="rp-line"><span class="rp-title">${t('rec.repairProgress')}</span>
-        ${item(t('rec.repairCases'), m.repair)}${item(t('rec.repairedN'), m.fixed)}${item(t('rec.remainingN'), m.repair - m.fixed, m.repair - m.fixed ? 'rp-pend' : '')}
-        <span class="rp-pct">${m.repair ? pc(m.fixed, m.repair) + '%' : '—'}</span></div>
-      ${bar(m.fixed, m.repair)}</div>`;
-}
+
+/* ── APPROVED, AND IT IS ONE SENTENCE IN ONE PLACE ────────────────────────
+   A row is approved when the field did it and the conductor signed it off.
+   `_fieldIds` is only ever set from loadFieldRecords, which is
+   `_verifiedOnly`, so a linked row is work that has been through both
+   hands. The old Gaia tick still counts where somebody set it: it was the
+   only way to say "done" before the portal existed.
+
+   It was written out inline for the DONE count and nowhere else. It decides
+   which of two TABS a row lands in now, so a second copy of it would be the
+   strip at the top disagreeing with the table under it about the same row.
+
+   ── AND A CHECKED ROW IS APPROVED, which the first version missed ────────
+
+   The office found two of their own rows under Pending — U13, 07 Nov, both
+   wearing ✓ CHECKED — and said where they belong: *"现在在pending 这两行是
+   当初我在approved那边手动加的 要进去approved而不是pending"*.
+
+   THEY WERE KEYED BY HAND, so there is no field record behind them and
+   nobody ever set Gaia: on the two tests above they read as not approved.
+   And **nothing anybody could do would ever move them off Pending** —
+   there is no submission to approve — which is the one thing a to-do list
+   must not hold: *a list of work nobody can do is a list nobody reads*.
+
+   CHECKED IS A SIGNATURE, and the strongest one on this page. Only
+   `toggleChecked` sets it, by a deliberate press; it writes `qtyFrozen` so
+   the figure stops being a formula, `syncTicks` refuses to touch the row
+   afterwards, and it is what puts the row on the payroll claim. A row the
+   office has settled and is being PAID on cannot be waiting for a
+   conductor.
+
+   It also closes a way an approved row could fall BACK into Pending on its
+   own: `applyFieldRecords` drops `_fieldIds` when a record stops pairing
+   and leaves the values, so a row that really was verified would have
+   reappeared under Pending with nothing saying why. Checked holds it.
+
+   WHAT THIS DELIBERATELY DOES NOT DO: a hand-keyed row that is NOT checked
+   stays in Pending. That is the office's own first sentence — *"tick了的
+   schedule全部会在这里出现"* — a row they have keyed and not yet agreed is
+   exactly what Pending is for, and reading every hand-keyed row as approved
+   would leave Pending holding nothing but unmatched phone submissions.
+   ─────────────────────────────────────────────────────────────────────── */
+const _recApproved = (r) =>
+  (Array.isArray(r._fieldIds) && r._fieldIds.length > 0) || !!r.gaia
+  || !!r.checked;
 
 function renderRecords() {
   const jF   = document.getElementById('rf-filter-jenis').value;
@@ -9028,6 +9574,38 @@ function renderRecords() {
     return true;
   });
 
+  /* WHICH OF THE TWO TABS THIS ROW IS IN. The office split the list in
+     three and said what each one holds: Pending is every ticked schedule
+     row that is not agreed yet, Approved is *"FC approved了的"*. One table,
+     one body and one renderer serve both -- see switchRecSection for why
+     they share a pane -- so the tab is a FILTER here and nothing more.
+
+     The filters above run first on purpose: the plot dropdown and the
+     counts beside it answer for the whole month, whichever tab is open, or
+     the same nursery would offer two different plot lists.
+
+     Rejected keeps a pane of its own, so this table is HIDDEN while that
+     tab is open and what it holds is not on screen; `filtered` is simply
+     the least surprising thing to leave in it. */
+  const sectioned = _recSection === 'rejected' ? filtered
+    : filtered.filter((r) => _recApproved(r) === (_recSection === 'approved'));
+
+  /* THE PLOT LINE COUNTS THE MONTH, NEVER THE TAB.
+     "Task : 2/3" is how far through a plot the work is, which is a fact
+     about the PLOT and not about which tab is open. Asked of the tab's own
+     slice it says nothing at all: every Pending group would read 0/N and
+     every Approved one N/N, by construction, because that is what the two
+     tabs ARE. Counted off `filtered` it reads the same on both and is the
+     one thing on that row somebody can act on — B1 is 2 of 3 done whether
+     you are looking at the two that are or the one that is not.
+     It also asks `_recApproved` rather than restating it: this count and
+     the tab underneath it must agree about a row. */
+  const plotDone = {}, plotAll = {};
+  filtered.forEach((r) => {
+    plotAll[r.plot] = (plotAll[r.plot] || 0) + 1;
+    if (_recApproved(r)) plotDone[r.plot] = (plotDone[r.plot] || 0) + 1;
+  });
+
   // Metrics count only current nursery records
   const nurseryRecs = records.filter(r => nurseryPlots.includes(r.plot) && _recInMonth(r, mF));
   const total  = nurseryRecs.length;
@@ -9037,7 +9615,7 @@ function renderRecords() {
      both hands. The old Gaia tick still counts where somebody set it: it was
      the only way to say "done" before the portal existed, and rows carrying
      one are rows somebody answered. Nothing is taken away by reading it. */
-  const done   = nurseryRecs.filter(r => (Array.isArray(r._fieldIds) && r._fieldIds.length) || r.gaia).length;
+  const done   = nurseryRecs.filter(_recApproved).length;
   const pend   = total - done;
   const pct    = (n) => (total ? Math.round(n / total * 100) : 0);
   /* A REPAIR CASE is a job the auditor failed. That is the whole of it: the
@@ -9061,9 +9639,66 @@ function renderRecords() {
   pSel.innerHTML = `<option value="">${t('rec.allPlot')}</option>` +
     plotPool.map(p => `<option${p===curP?' selected':''}>${p}</option>`).join('');
 
+  /* ── WORK WAITING FOR THE CONDUCTOR ────────────────────────────────────
+     The second half of what the office asked Pending to hold: *"worker做了
+     的工 但是还没被approved也会在这里出现"*.
+
+     An unapproved submission is PAIRED TO ITS SCHEDULE ROW rather than
+     listed beside it, because most of them have one — the worker ticked a
+     task the office planned — and a list that showed both would draw the
+     same morning twice. That is the "still looks duplicate" screenshot, and
+     it would be deserved here.
+
+     `_submissionScheduleRow` is the rule and is reused rather than
+     restated: it refuses to answer where more than one row matches, which
+     is right — a chip put on the wrong round is worse than one on no round.
+     Whatever it cannot place is drawn at the foot under its own heading,
+     because a record that reached the office and attached to nothing is the
+     one thing this list must not swallow. The replant a worker ticks on the
+     15th is exactly that until somebody presses Save Schedule. */
+  const waitingOn = {};      // schedule row id → [submission, …]
+  const waitingLoose = [];   // submissions no row claims
+  /* WORKED OUT ON EVERY TAB, never only on Pending. The COUNT on the
+     Pending tab is drawn whichever tab is open, and a tab whose number
+     changes depending on where you are standing is worse than a tab with no
+     number: the first version skipped this on Approved and Pending then
+     read 2 over a list of 3. Only the DRAWING is per tab. */
+  {
+    const pk = MJMMaintField.plotKey;
+    pendingFieldRecords.forEach((f) => {
+      if (!nurseryPlots.some((p) => pk(p) === pk(f.plot_name))) return;
+      /* The record's OWN month, read the way _submissionScheduleRow reads
+         it — the month it was filed under, or the month its day falls in.
+         A second rule here would pair a record this list had decided was
+         another month's. */
+      const fm = f.schedule_month || MJMMaintField.isoMonthLabel(f.work_date);
+      if (fm !== mF) return;
+      /* The three filters above the table apply to these rows too, or
+         narrowing to one plot leaves another plot's work on screen. */
+      if (jF && _rejJenis(f) !== jF) return;
+      if (pF && pk(f.plot_name) !== pk(pF)) return;
+      if (dF) {
+        const d = f.work_date || '';
+        if (!`${d} ${_tarikhDisplay(d)}`.toLowerCase().includes(dF)) return;
+      }
+      let row = null;
+      try { row = _submissionScheduleRow(f); } catch (_) { row = null; }
+      if (row) (waitingOn[row.id] = waitingOn[row.id] || []).push(f);
+      else waitingLoose.push(f);
+    });
+  }
+
   const tbody = document.getElementById('rec-body');
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${t('rec.none')}</td></tr>`;
+  if (!sectioned.length && !waitingLoose.length) {
+    /* WHICH tab is empty, because the three mean different things and the
+       one sentence read as all of them. "Nothing matches" over Approved on
+       a month of finished work is the office hunting for a fault; what it
+       means is that everything is still waiting. */
+    const why = filtered.length
+      ? (_recSection === 'approved' ? 'rec.noneApproved' : 'rec.nonePending')
+      : 'rec.none';
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${esc(t(why))}</td></tr>`;
+    _recTabCounts(filtered, waitingLoose);
     return;
   }
 
@@ -9078,7 +9713,7 @@ function renderRecords() {
      then anything after it — so B3-R sits behind B3 here the same way it does
      there. */
   const plotGroups = {};
-  filtered.forEach(r => {
+  sectioned.forEach(r => {
     if (!plotGroups[r.plot]) plotGroups[r.plot] = [];
     plotGroups[r.plot].push(r);
   });
@@ -9098,7 +9733,7 @@ function renderRecords() {
     html += `<tr class="plot-group-row">
       <td colspan="12" class="rec-group-cell">
         <span class="rec-group-plot">Plot ${plot}</span>
-        <span class="rec-group-sub">Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}</span>
+        <span class="rec-group-sub">Task : ${plotDone[plot] || 0}/${plotAll[plot] || 0}</span>
       </td>
     </tr>`;
     recs.forEach(r => {
@@ -9108,7 +9743,7 @@ function renderRecords() {
          moving. The tint is very light on purpose: it marks the row without
          fighting the figures on it. */
       html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
-        <td class="rc-date">${_dateCell(r)}</td>
+        <td class="rc-date">${_dateCell(r)}${_waitingChip(waitingOn[r.id])}</td>
         <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
         <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
         <td class="rc-plot">${r.plot}</td>
@@ -9134,9 +9769,102 @@ function renderRecords() {
       </tr>`;
     });
   });
+  /* WHAT NO SCHEDULE ROW CLAIMS, at the foot and under its own heading.
+     Never folded in among the plots: these are not rows the office planned,
+     they are work that arrived and found nothing to attach to — the exact
+     thing `_fieldUnpaired` has been counting in silence. The heading is
+     what makes the list honest; the rows are drawn in the same table, so
+     one body and one renderer still serve the whole tab. */
+  /* PENDING ONLY. These are records nobody has approved, so on the Approved
+     tab they would be the one thing that tab promises not to hold. The
+     WAITING CHIP above is deliberately NOT gated the same way: a row the
+     conductor approved off one record can still have a second waiting on
+     it, and a chip hidden there would be a submission invisible on both
+     tabs — which is the silence this whole split exists to end. */
+  if (_recSection === 'pending' && waitingLoose.length) {
+    const byPlot = {};
+    waitingLoose.forEach((f) => {
+      (byPlot[f.plot_name || '—'] = byPlot[f.plot_name || '—'] || []).push(f);
+    });
+    html += `<tr class="plot-group-row"><td colspan="12" class="rec-group-cell">
+      <span class="rec-group-plot">${esc(t('rec.looseHead'))}</span>
+      <span class="rec-group-sub">${esc(t('rec.looseSub'))}</span></td></tr>`;
+    Object.keys(byPlot).sort(plotOrder).forEach((plot) => {
+      byPlot[plot].slice()
+        .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
+                     || (a.id || 0) - (b.id || 0))
+        .forEach((f) => {
+          const jenis = _rejJenis(f);
+          html += `<tr class="rec-row-loose">
+            <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
+            <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
+            <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
+            <td class="rc-plot">${esc(f.plot_name || '—')}</td>
+            <td class="rc-batch">${esc(f.batch_name || '—')}</td>
+            <td class="rc-qty">${f.qty == null || f.qty === '' ? '—' : numMY(Number(f.qty))}</td>
+            <td class="rc-track">—</td>
+            <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
+            <td class="rc-c" colspan="4">
+              <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
+            </td>
+          </tr>`;
+        });
+    });
+  }
+
   tbody.innerHTML = html;
+  _recTabCounts(filtered, waitingLoose);
   /* The route thumbnails, for the rows that end up on screen. */
   try { _trackMinis(); } catch (_) {}
+}
+
+/* The two counts on the tabs, off the SAME filtered list the table is drawn
+   from — so a number on a tab and the rows behind it cannot disagree. The
+   Rejected tab keeps its own badge, which counts the nursery rather than
+   the filter and says so in renderRejectedSubmissions. */
+function _recTabCounts(filtered, loose) {
+  const set = (id, n) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = n ? String(n) : '';
+    el.style.display = n ? '' : 'none';
+  };
+  const approved = filtered.filter(_recApproved).length;
+  set('rec-count-approved', approved);
+  set('rec-count-pending', filtered.length - approved + (loose || []).length);
+}
+
+/* The amber mark on a Pending row that somebody has already done. Nothing
+   on the row said so before: the field record is unverified, so
+   applyFieldRecords has filled no date, no batch and no quantity, and a
+   row waiting for the conductor was drawn exactly like one nobody has been
+   to. It names WHO, because that is the thing the row cannot otherwise
+   say, and the DAY they say they did it — not agreed yet, which is why it
+   sits in a chip rather than in the date cell proper.
+
+   THE CHIP SHOWS THE DAY AND THE SENTENCE IS THE TOOLTIP, and that is the
+   table's shape deciding rather than taste: `.rec-table` is
+   `table-layout:fixed`, so the date column is 103px whatever is put in it
+   and a cell cannot grow to fit. The first version wrote the whole of it
+   out — *Waiting for approval · 12 Nov 2026 · Siti* — which is 260px, so
+   it ran 159px clear of its own cell and straight over the Work Type
+   column of the row beneath. A chip that overlaps the column beside it is
+   worse than no chip, because it makes the row underneath unreadable too.
+   The DAY is what earns the space: a pending row has no date of its own —
+   the office has keyed none and the field fills none until it is verified
+   — so this cell is otherwise a dash, and the one thing it can usefully
+   say is that a worker claims the 12th. Several waiting records read as
+   the earliest and a +n, and every name is in the tooltip. */
+function _waitingChip(list) {
+  if (!Array.isArray(list) || !list.length) return '';
+  const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
+  const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
+  const short = (day ? _tarikhDisplay(day) : t('rec.waiting'))
+    + (list.length > 1 ? ' +' + (list.length - 1) : '');
+  const full = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
+    .filter(Boolean).join(' · ');
+  return ` <span class="rec-waiting" title="${esc(full + ' — ' + t('rec.waitingTip'))}">`
+       + `${esc(short)}</span>`;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -9365,7 +10093,8 @@ function _signingAs() {
    record from one of them to the other or out of both, and a list rebuilt
    from a stale array shows the row still sitting where it was. */
 async function _reloadSubmissions() {
-  await Promise.all([loadFieldRecords(), loadRejectedFieldRecords()]);
+  await Promise.all([loadFieldRecords(), loadRejectedFieldRecords(),
+                     loadPendingFieldRecords()]);
   try { applyFieldRecords(getNursery(), getMonth()); }
   catch (e) { console.warn('[maint] field sync failed:', e); }
   renderRecords();
@@ -11279,6 +12008,7 @@ async function initDb() {
       // beside it rather than on demand, so the refusals are on screen the
       // first time the page paints instead of a beat later.
       loadRejectedFieldRecords(),
+      loadPendingFieldRecords(),
       // And what the auditor made of them, for the Audit column.
       loadMaintAudits(),
       // The Setting tab's own four lists, and the plot names they hang off.

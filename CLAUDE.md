@@ -6140,16 +6140,32 @@ work appeared was a figure on a claim.
 So Worker Record has a fifth tab. It is DATE · PLOT · WORK · QTY and a
 column per worker, the same shape as the four beside it.
 
-**THE CREW IS READ-ONLY HERE, and that is not an omission.** The FC Portal
-is the only writer of a transplanting CREW in either repository. A tick box
-over a name here would be a second writer of somebody's pay with no rule
-about who may move it — which is exactly what the sheet's own
-`transplant_edit` permission exists to govern. The test asserts the renderer
-puts no handler on a cell of its own.
+**THE CREW WAS READ-ONLY HERE, AND THE OFFICE ASKED FOR IT OPEN** — *"每一个
+员工是用打勾的形式 打勾的下面才是数量 所以如果FC tick错人/填错号码 我们都可以改
+所以后面的check还要加一个edit选项"*. Every worker cell is a TICK with that
+worker's share under it, and **Edit** beside Check opens ONE row: tick or
+untick a name, and on the split job (polybag filling) key the figure under
+it; on the other three the figure divides by itself, off `tpShare` on the
+draft. That makes the office a second writer of the crew, and what keeps it
+safe is rules this file already has:
 
-**The one column the office does write is CHECKED** — see the section below.
-It was read-only in full for exactly as long as the claim was paid straight
-off the conductor's record.
+- **A CHECKED ROW IS NOT EDITED.** No Edit until somebody Unchecks it —
+  changing what was agreed starts with taking the agreement back. The
+  trigger would clear the tick anyway; a tick vanishing under somebody is
+  worse than a button they cannot press yet.
+- **A job recorded as NOT DONE is not edited here** — turning that answer
+  into a crew is a different decision from correcting one.
+- **`wrAllows` is asked at Edit AND at Save**, so a verified sheet refuses
+  in JavaScript.
+- **ONE write, only the crew**: `workers`, plus `total_qty` where the job
+  splits — the same two the phone writes. A crew of nobody is refused.
+- **The existing `Authenticated write` policy already allows it**, so
+  nothing to run in the database.
+
+`tests/the_office_corrects_a_transplant_crew.cjs` drives the real page with
+an `update` that LANDS (`SHOT=/path.png` draws an open row).
+
+**The office also writes CHECKED** — see the section below.
 
 **The share is the CLAIM's rule, and a test holds the two together.** One
 worker's figure is the quantity keyed against their name where the job
@@ -9797,6 +9813,142 @@ B4-R2 both go; a split area is judged by its plot.
   because a phone can be holding a list cached before this.
 
 `tests/no_replant_plot_on_palms.cjs` runs both copies over the same names.
+**`isReplantPlot` MOVED out of `palms/data.js`** the day a worker boundary
+had to carry a replant — see below — into
+`src/modules/maintenance/plotBatches.js`, which imports nothing where
+`palms/data.js` pulls in supabase, so it is the only place in that repository
+a plot-name rule can live without dragging a module in behind it. `data.js`
+re-exports **the same function object**, which is what the PALMS screens have
+always read, and the test asserts the identity rather than that the two agree
+today. Its lift had to follow; and doing that **surfaced a stale check nobody
+could see** — *"the PALMS board asks for it on every load"* pinned the exact
+spelling of a line the office's own *"PN UNE不需要出现在这里"* had since
+rewritten, and the test had been dying on a missing path before it ever got
+there. It asks the PROPERTY now: every non-empty `MAP_SCOPE` carries
+`skipReplant`.
+
+### A WORKER BOUNDED TO A PLOT IS BOUNDED TO ITS REPLANT
+
+The office, and the second sentence is the whole of why it matters: *"如果
+worker做工的那天某plot-R有在 要show出来 … 月头 没有B3-R 结果15号那天B3-R出现
+所以worker那边要live update B3-R 出现 如果有做B3-R就按B3-R 如果两边都有做
+B3 和 B3-R都要按 是为了避免可能B3已经没有苗了 要cull了 但是B3-R没出现 他们就
+会按B3 结果B3的balance其实是要被cull的"*.
+
+**A -R PLOT IS MADE MID-MONTH, so a boundary cannot name it.** A
+3rd-culling transfer lands on ground that was not a plot the day before, and
+the boundary was keyed on the 1st — so the office would have to re-key every
+bounded worker the morning one appears. Both key rules make this exact: the
+phone's `plotKey` **keeps the dash** (deliberately — B3 and B3-R are two
+plots with two balances) and the database's `worker_key` strips it, so `B3`
+and `B3R` are two keys either way and **the replant sat outside the boundary
+for ever**.
+
+**WHAT THAT COST IS THE OFFICE'S OWN SENTENCE.** The replant is where the
+seedlings now are; the parent is the ground about to be culled. A worker
+handed only the parent ticks the parent, and the morning is recorded against
+a balance on its way out — which is the figure the claim then prices.
+
+**THE DATABASE IS THE HALF THAT DECIDES, and the screen fix alone would have
+been worse than nothing.** `worker_plots()` is the single gate: the phone
+lists what it returns and `worker_submit_maint` refuses a save against
+anything it does not, raising 42501. Its own comment says why — *a boundary
+enforced only by what the screen draws is not a boundary* — so a release
+with only `workerPlotFilter` changed would show the plot and then refuse the
+save, **after the walk**. `shared/RUN_ME_worker_boundary_carries_the_replant
+.sql` is that half and `create_worker_portal.sql` carries the same body.
+
+Five things in it, and three are rules this file already has:
+
+- **IT TRAVELS ONE WAY ONLY.** A boundary naming B3 opens B3-R, because the
+  replant IS the parent's own ground moved and whoever was trusted with B3 is
+  who the -R plot was made out of. A boundary naming B3-R does **not** open
+  B3: the office put that worker on the replant, and the parent is other
+  seedlings and somebody else's morning.
+- **THE ROW KEEPS THE REPLANT'S OWN SPELLING**, which is the whole point of
+  the ask. `worker_submit_maint` takes the plot name back from
+  `worker_plots` rather than keeping what the phone sent, so a morning on
+  B3-R is filed under **B3-R** and never under B3 — the office's per-plot
+  figures stay apart, and that is what lets them see the parent is empty.
+- **THE NURSERY BOUNDARY STILL WINS.** A worker narrowed to UNN 2 and named
+  U7 does not gain U7-R, because U7-R is in UNN 1. That is the office's own
+  scoping working, and it is the line somebody would otherwise report as
+  this change failing, so the check **names it as its own reason** rather
+  than lumping it in with a replant nobody's parent covers.
+- **An EMPTY plot list still means nobody** and **no plot list is still no
+  filter**, by construction — no key matches either way, and `NULL IN (...)`
+  is never TRUE, so an ordinary plot simply does not match the new branch.
+  A worker with no list is most of them and is untouched.
+- **The boundary is a LIST OF NAMES, not a join.** A worker bounded to `B14`
+  gains `B14-R` even though Seedling Stock has no `B14` row at all. That
+  fell out rather than being decided, and it is right: the office keyed the
+  parent, so the replant of it is theirs.
+
+**`worker_replant_parent` carries NO regular expression**, unlike
+`worker_key` beside it, because this file is pasted into the SQL Editor —
+`split_part`, `position` and `translate` do the same work.
+
+**WHAT IS NOT CLAIMED, and it is named rather than buried: the two copies
+disagree on a plot name with a SPACE in it.** `plotKey` splits on
+whitespace, being also the reader for a delivery order's plot (`U15 (UPB
+PREMIER HYBRID)`), so it reads `U 7-R` as `U` where `worker_key` reads it as
+`U7`. Unreachable unless the office keys a space inside a plot name, and for
+such a name **the boundary already mismatched before any of this** —
+`plotKey('U 7')` is `U` and `plotKey('U7')` is `U7`. Closing it means moving
+`plotKey`, which moves the movement-report agreement everything here rests
+on. Left, and left said; the test asserts the shape instead of pretending.
+
+**TWO THINGS OUTSIDE ALL OF THIS HAVE TO BE TRUE** before B3-R reaches any
+worker, and neither is code: **`shared_plots` must carry the B3-R row**
+(Seedling Stock → System Settings → Add Plot, the one door), and the office
+must press **Save Schedule** after `seedReplantRounds` seeds the -R rounds,
+because that function writes a DRAFT and does not publish. Without either
+there is no B3-R task for anybody to tick, and the boundary is not what is
+wrong.
+
+`tests/no_replant_plot_on_palms.cjs` keeps the shared-rule half;
+`Barcode_Counter/tests/a_boundary_carries_the_replant.cjs` is the phone half
+and **7 of its 33 checks fail on the previous code**, the headline one in the
+office's own terms (*and B3-R, which appeared on the 15th → got false*). It
+**lifts `workerPlotFilter` out of the shipped file** rather than importing
+it, because that module pulls in supabase and the outbox and stubbing a dozen
+modules to reach one pure function is a thicker fixture than the function.
+Its section 4 reads the SQL, so a release that ships one half fails here.
+
+#### AND THE BOUNDARY WAS THE WRONG LAYER: there was no ROW to tick
+
+The office answered the above with **不对** and their own November, and they
+were right — the boundary is still owed, and it opened a door into a room
+with nothing in it. **The worker's list IS the office schedule**
+(`periodTasks` is `mergeWeekTasks` and nothing else), so a plot the office
+could not name on the 1st has no row on the 15th whatever the database now
+accepts. The phone half is written up in `Barcode_Counter/CLAUDE.md`; what
+matters from THIS side is the three office facts it rests on, each checked
+before anything was built:
+
+- **`seedReplantRounds` pushes a -R plot into `NURSERY_PLOTS` off the
+  LEDGER**, at the top of `autoSyncRecords`, with nobody pressing Save — so
+  `applyFieldRecords`' `if (!plots.includes(r.plot)) return;` does not drop a
+  B3-R record.
+- **The Worker Record tick is keyed on the FIELD RECORD'S OWN id**
+  (`store[rec.id]`), not on a schedule row, so the capacity is counted even
+  with no planned round to pair against. Without that this would have been
+  *"a plot the salary claim does not know pays nobody"* again.
+- **An unpaired record is NAMED**, in `_fieldUnpaired` — *verified work that
+  reached the office and attached to nothing*. So the gap between the phone
+  offering a round and the office planning one is visible, and pressing Save
+  Schedule closes it.
+
+**AND THE PHONE IS DELIBERATELY LOOSER THAN `seedReplantRounds`.** That rule
+seeds the rounds whose week STARTS on or after the transfer day; the phone
+offers the replant as soon as something is standing in it, because the office
+asked for the 15th and asked for it live. The schedule PLANS what is owed and
+the phone OFFERS what a worker may record — two questions — and an offered
+row nobody ticks costs nothing. Do not "fix" one to the other without asking.
+
+**Nothing to run in the database.** `worker_plot_batches` already answers
+`qty > 0` joined to `worker_plots`, so the replant's seedlings were in the
+phone's hand the moment the boundary carried the plot.
 
 ## The overlay is pinned to a WRAPPER, so the wrapper has to be the photo
 
@@ -10753,20 +10905,29 @@ heading is centred, and that figures are tabular. **11 of its tables fail
 on the previous code**, each by name. `AUDIT=1` prints every table's grid,
 `SHOT=/dir` draws each tab and `VW=400` draws them at phone width.
 
-## Work Records is one clean page, and the dashboard is a strip
+## Work Records is one clean page, and the dashboard is GONE
 
 The office asked for the Work Records page redesigned: *"MINIMIZE THE
 DASHBOARD. MAXIMIZE THE WORKING AREA."* MJM green stays the one brand
 colour; everything else is white, a light grey and colour only where it says
 something.
 
-- **The three summary cards are ONE strip** (`_recProgressHtml`): Work
-  progress (total, completed, pending, %) and Repair progress (cases,
-  repaired, remaining, %), each over a slim green-on-grey bar. **The figures
-  are the same four counts `renderRecords` always worked out**, by the same
-  rules (done = verified field record or the old Gaia tick; a repair case =
-  an Unsatisfactory audit), so nothing is counted differently — only drawn
-  smaller. Under ~90px on a desk; the two halves stack on a phone.
+- **The three summary cards became ONE strip, and the strip then came off
+  the page**, which is the same sentence taken one step further. Nothing is
+  counted differently by it going: `renderRecords` still works out the four
+  figures (done = verified field record or the old Gaia tick; a repair case
+  = an Unsatisfactory audit) and the plot line and the tab counts are drawn
+  from them. **What it cost was paid late and is the thing to learn from
+  it**: the removal took the markup and the call and left `_recProgressHtml`
+  defined and called by nothing, thirteen rules of CSS, FOURTEEN i18n keys
+  in both languages, and seven red checks in
+  `work_records_is_one_clean_page.cjs` — so for a week the next person could
+  not tell their own red from somebody else's. All of it is swept now, and
+  sections 1 and 2 of that test hold the ABSENCE by name, every piece of it,
+  which is what this file already says a removal is owed: *a half-removal
+  that leaves the handler or the stylesheet behind is caught*. `rec.actions`
+  shared those i18n lines and is LIVE — the Actions heading, by `data-i18n`
+  in the page — so the test asks for it to still be there.
 - **Check / Edit / Del are icon buttons** (`_recIconBtn`), on the approved
   list and the sent-back list alike. **Each carries its old WORD as hidden
   text** (`.sr-only`) as well as a tooltip and an `aria-label`, so a screen
@@ -10818,6 +10979,170 @@ name.
 `tests/work_records_has_four_entries.cjs` serves the repository itself;
 **18 of its 26 checks fail on the previous page**, each by name. Nothing to
 run in the database.
+
+### The Records list is THREE parts, and one of them had no reader at all
+
+The office, over the *Approved | Rejected 1* tabs: *"我要把这一部分 分成3个
+部分，rejected保留，approved 分成 pending & approved, tick了的schedule全部会在
+这里出现+worker做了的工 但是还没被approved也会在这里出现，approved的就是FC
+approved了的。"*
+
+**TWO OF THE THREE SENTENCES WERE A FILTER THE PAGE ALREADY HAD AS A COUNT,
+AND THE THIRD HAD NO READER ANYWHERE.** That is the whole shape of this
+change, and it is worth separating before reading any of the code:
+
+| | |
+|---|---|
+| *tick了的schedule全部会在这里出现* | every ticked schedule row. Already drawn — it is the list. |
+| *approved的就是FC approved了的* | already computed, as the DONE count in the strip, written out inline and read by nothing else. |
+| *worker做了的工 但是还没被approved* | **nothing read it.** `loadFieldRecords` is `_verifiedOnly` and `loadRejectedFieldRecords` is `_rejectedOnly`, so a record a worker had sent up and nobody had looked at yet was on NO screen in the office — not under Approved, which it is not, and not under Rejected, which it is not either. |
+
+That third row is the one this is really about. A worker records a morning,
+the conductor has not got to it, and the office had no way to see that it
+had arrived — so *"did my work reach you"* could only be answered out of the
+database. **The silence was by construction**, the shape this file keeps
+finding: two readers each asked a narrow question and the gap between them
+was nobody's.
+
+- **`_recApproved` IS ONE SENTENCE IN ONE PLACE.** A row is approved when
+  the field did it and the conductor signed it off — `_fieldIds` is only
+  ever set from the verified-only reader, and the old Gaia tick still counts
+  where somebody set it, that having been the only way to say "done" before
+  the portal existed. It was written out inline for the DONE count and
+  nowhere else; it decides which of two TABS a row lands in now, so a second
+  copy would be a tab disagreeing with the row on it.
+- **AND A CHECKED ROW IS APPROVED, which the first version missed.** The
+  office found two of their own under Pending — U13, 07 Nov, both wearing
+  ✓ CHECKED — and said where they belong: *"现在在pending 这两行是当初我在
+  approved那边手动加的 要进去approved而不是pending"*. They were KEYED BY
+  HAND, so there is no field record behind them and nobody ever set Gaia,
+  and on the two tests above they read as not approved — **with nothing
+  anybody could ever do to move them**, there being no submission to
+  approve. That is the one thing a to-do list must not hold.
+  **Checked is a signature, and the strongest one on this page**: only
+  `toggleChecked` sets it, by a deliberate press; it writes `qtyFrozen` so
+  the figure stops being a formula, `syncTicks` refuses the row afterwards,
+  and it is what puts the row on the payroll claim. A row the office has
+  settled and is being PAID on cannot be waiting for a conductor. It also
+  closes a way an approved row could fall BACK into Pending on its own —
+  `applyFieldRecords` drops `_fieldIds` when a record stops pairing and
+  leaves the values, so a row that really was verified would have
+  reappeared under Pending with nothing saying why.
+  **WHAT IT COSTS, and it is a visible change rather than a detail:
+  pressing Check MOVES the row off Pending.** That is what Checked now
+  means — the office agreeing it is exactly what Pending says the row is
+  waiting for — so the row leaving IS the answer, the same way an answered
+  chip leaves the audit board, and the two counts move with it. Uncheck is
+  then one TAB along rather than one press.
+  **A hand-keyed row that is NOT checked stays in Pending**, deliberately:
+  that is the office's own first sentence, *"tick了的schedule全部会在这里出
+  现"*, and reading every hand-keyed row as approved would leave Pending
+  holding nothing but unmatched phone submissions.
+- **ONE TABLE, ONE BODY, ONE RENDERER.** Pending and Approved are the same
+  twelve columns over the same rows asked a different question, so they
+  SHARE the pane and the tab is a `filter` in `renderRecords` and nothing
+  more. A pane each would be two copies of a wide table, two tbody ids and
+  two renderers, which is how two screens come to disagree about a row.
+  Rejected keeps its own pane, as it always had.
+- **THE PLOT LINE COUNTS THE MONTH, NEVER THE TAB.** *"Task : 2/3"* is how
+  far through a plot the work is, which is a fact about the PLOT and not
+  about which tab is open. Asked of the tab's own slice it can say nothing
+  at all — every Pending group reads 0/N and every Approved one N/N, by
+  construction, because that is what the two tabs ARE. It is counted off the
+  filtered month, so B1 reads 2 of 3 whether you are looking at the two that
+  are done or the one that is not. It asks `_recApproved` as well, rather
+  than restating it. **The first version got this wrong** and the neighbour
+  test caught it.
+- **A WAITING SUBMISSION IS NAMED ON THE ROW IT BELONGS TO** — an amber chip
+  in the date cell carrying the day, with the sentence and the name in its
+  tooltip, paired through `_submissionScheduleRow`, which is the rule Delete
+  already uses. **THE CHIP IS THE DAY BECAUSE THE TABLE IS
+  `table-layout:fixed`**: the date column is 103px whatever is put in it, so
+  the first version — *Waiting for approval · 12 Nov 2026 · Siti*, 260px —
+  ran 159px clear of its own cell and over the Work Type column of the row
+  BENEATH, making two rows unreadable instead of one. The day is what earns
+  that space: a pending row has no date of its own (the office keyed none,
+  and the field fills none until it is verified), so the cell is otherwise a
+  dash and the one useful thing it can say is that a worker claims the 12th.
+  Block, `width:fit-content`, so it sits on its own line under the dash. The
+  loose rows at the foot keep the whole sentence, their cell being a
+  `colspan` with room to spare. The test measures the cell. The
+  counts behind it are built on EVERY tab and only the DRAWING is gated,
+  because a count that moved with the tab is a count nobody can trust; the
+  first version gated the lot and Pending read 2 where it should read 3
+  while Approved was open.
+- **AND THE CHIP IS DELIBERATELY NOT GATED TO PENDING, where the loose rows
+  are.** A row the conductor approved off one record can still have a second
+  waiting on it, and a chip hidden on Approved would be a submission
+  invisible on BOTH tabs — which is the exact silence this split exists to
+  end.
+- **WORK NO SCHEDULE ROW CLAIMS IS AT THE FOOT, UNDER ITS OWN HEADING**, and
+  on Pending only. These are not rows the office planned; they are work that
+  arrived and attached to nothing — what `_fieldUnpaired` has been counting
+  in silence. Folded in among the plots they would read as planned work. On
+  the Approved tab they would be the one thing that tab promises not to hold.
+- **AN EMPTY TAB SAYS WHICH TAB IS EMPTY.** *"No records found"* over Pending
+  means everything is approved, which is good news; over Approved it means
+  nothing has been signed off yet, which is not. One sentence for both is the
+  screen declining to answer the only question somebody has.
+- **The reader fails back twice.** `loadPendingFieldRecords` names
+  `rejected_at` and `verified_at`, and a database without either refuses the
+  WHOLE select over a column it has not got — so each refusal drops the
+  column it names and asks again, the ladder `loadFieldRecords` already uses.
+
+**Nothing to run in the database.** Both columns have existed since
+`add_maint_field_verify.sql` and `add_maint_field_reject.sql`; the whole of
+this is on the screen.
+
+`tests/the_records_list_is_three_parts.cjs` is 25 checks and **18 fail on the
+previous page**. Three neighbours had to learn the split, and two of them
+were already lying about something else:
+
+- **`maint_sent_back.cjs` was dying halfway**, with its approve and delete
+  sections never asked — its `MJMAccess` stub returned `{}` from
+  `permissions()` under a comment reading *"it answers yes to everything"*,
+  which is the opposite of what that does: `mayMaintAct` falls back to the
+  MODULE LEVEL, and an empty object is no level, so every action gate
+  answered NO. It reads `{modules:{nursery_ops:'admin'}}` now and the file
+  runs to the end, 96 checks. **Its stub also ignored `.is(col, null)`**,
+  which is blunter than the database and is why a REFUSED record came back
+  as one waiting — a stub that accepts anything signs off work the database
+  refuses. And the check under the approve asked for the QUANTITY to flow in
+  from the phone, which the office had removed months ago (*"link的capacity
+  完全不要管手机送进来的"*); unreachable, it never said so.
+- **`work_records_is_one_clean_page.cjs`** reads the APPROVED table, so it
+  presses that tab — the checked row only exists there, Check being what
+  makes a row approved — and its tab check asks whichever tab is ACTIVE
+  rather than Approved by name.
+
+## Worker Activity downloads ONE job, for the nurseries ticked
+
+The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果
+少人可以是 Portrait 的，如果人多就是 print Landscape的。我要一次可以download
+1个/2个/3个 nursery。记得要有title ... Download button用Icon就可以了。"*
+
+- **The button is an icon** (`#wr-dl-btn`) and opens a window
+  (`openWrDownload`) naming the job on screen and the month, with a tick per
+  nursery that job is done in (`wrDownloadNurseries`: the job scope; Culling
+  Monitoring its own three; Seed Planting the Pre Nursery only).
+- **The file is the job on screen and nothing else.** It used to print all
+  four maintenance sheets whichever was open. `downloadPayrollPDF({ job,
+  nurseries })` draws one section per nursery, each starting its own page;
+  called bare it prints the job and nursery on screen, as before.
+- **Portrait or landscape is decided per nursery** (`orientFor`): portrait
+  while that crew's worker columns fit across the tall page without
+  splitting, landscape otherwise. Every later page goes through `newPage()`,
+  because a bare `addPage()` takes the FIRST page's shape.
+- **The title says the job** (`WORKER RECORD — LOADING SEEDLINGS`) and so does
+  the file name, with every nursery in it.
+- **Loading Seedlings and Culling Monitoring had no paper at all**;
+  `drawLoadingSheet` and `drawCullSheet` are theirs, off the same rows the
+  tabs draw (`loadingSeedlingsRows`, `cullIncentiveRows`).
+- `wrDownloadGo` reads the data a nursery not on screen needs (transplanting,
+  DOs, culling) BEFORE the file is made.
+
+`tests/every_job_downloads_by_nursery.cjs` serves the repository itself;
+23 checks, all failing on the previous page. Nothing to run in the database.
 
 ## The Sales Web publishes what the Monthly Maturity Allocation says is left
 
@@ -10878,6 +11203,32 @@ internal (BA form, remark) is printed. It is built from the rows the
 modal already drew, so the paper cannot disagree with the screen.
 `tests/an_al_shows_its_collections.cjs`; its stub projects a read to the
 columns asked for, which is the only way the fault shows. Nothing to run.
+
+## An AL balance is worked out from its DOs, and the DATABASE stores it
+
+`shared_al_orders.balance_quantity` was written by six screens, each as the
+old stored figure minus this DO, or as ordered minus what that page had
+loaded. A stale read anywhere won: on 25 Nov 2026 **82 of 429 ALs** were
+wrong, **81 too high**, and the phone Consent and DO Signing pages showed it.
+
+**The rule is the office Booking page own** (`fetchData` in
+`operation/operation_booking.html`): ordered less the `total_qty` of every DO
+on that AL that is not `Cancelled` and has no `[CANCELLED]` in its remark.
+Three copies, change all three:
+
+- `shared/RUN_ME_al_balance_is_the_dos.sql`: `al_delivered_qty`, a BEFORE
+  trigger on `shared_al_orders` that REPLACES whatever balance a screen sent,
+  and an AFTER trigger on `shared_do_records` that works the AL out again
+  when a DO is added, edited, cancelled, moved or deleted. So a stale write
+  from any app, any version, lands as the right figure.
+- `Mobile/src/lib/alBalance.js`: Consent and DO Signing work it out from the
+  DOs, paged past 1,000, and fall back to the stored figure with no line.
+- the office Booking page itself.
+
+**No screen writes the balance any more** in the office (Booking edit,
+Delivery add and delete, `mobile/mobile_do_signing.html`) or in the Admin
+Portal send. The FC Portal and the Sales Web still send one; the trigger
+replaces it. `Mobile/tests/the_al_balance_is_the_booking_figure.cjs`.
 
 ## A maturity row says how old its seedlings are
 

@@ -1,17 +1,23 @@
 /* WORK RECORDS IS ONE CLEAN PAGE
 
    The office asked for the Work Records page redesigned: MJM green kept as
-   the one brand colour, the three summary cards replaced by ONE slim progress
-   strip, a compact toolbar, text tabs, a table whose columns sit where the
-   type of what is in them says, neutral chemical labels, one size of track
-   picture, and Check / Edit / Delete as icons that do exactly what the words
-   did.
+   the one brand colour, a compact toolbar, text tabs, a table whose columns
+   sit where the type of what is in them says, neutral chemical labels, one
+   size of track picture, and Check / Edit / Delete as icons that do exactly
+   what the words did.
+
+   The three summary cards became ONE slim progress strip here, and the
+   strip was then taken off the page altogether. Sections 1 and 2 held its
+   figures against the rows they were counted from; they hold the REMOVAL
+   now -- see the comment on section 1 for why that is the thing left to
+   get wrong.
 
    This drives the real page with a month of rows in three states -- open,
    done in the field, checked and settled, one failed by the auditor and
-   repaired -- and asks all of it of the screen, the figures in the strip
-   against the rows they are counted from, and every icon against the
-   handler it calls.
+   repaired -- and asks all of it of the screen, and every icon against the
+   handler it calls. The rows are split across Pending and Approved since
+   the office asked for that, so it presses the tab it is about; which rows
+   land where is `the_records_list_is_three_parts.cjs`.
 
    Run with a static server on 8777 serving the repository root.
    SHOT=/dir draws the page; VW=400 draws it at phone width.            */
@@ -146,39 +152,71 @@ async function boot(browser) {
   await page.waitForTimeout(200);
 
   try {
-  console.log('\n1. The three cards are ONE slim strip, counted off the rows');
-  const strip = await ev(() => {
-    const box = document.getElementById('rec-metrics');
-    const r = box.getBoundingClientRect();
-    const vals = [...box.querySelectorAll('.rp-group')].map(g =>
-      [...g.querySelectorAll('.rp-item .rp-val')].map(v => v.textContent).concat(g.querySelector('.rp-pct').textContent));
-    return { cards: box.querySelectorAll('.metric-card').length, h: Math.round(r.height), vals,
-             bars: [...box.querySelectorAll('.rp-bar > span')].map(s => s.style.width),
-             fill: getComputedStyle(box.querySelector('.rp-bar > span')).backgroundColor,
-             rest: getComputedStyle(box.querySelector('.rp-bar')).backgroundColor };
-  });
-  check('no large cards are left', strip.cards, 0);
-  check('work: 6 tasks, 4 done, 2 pending, 67%', strip.vals[0], ['6', '4', '2', '67%']);
-  check('repair: 2 cases, 1 repaired, 1 left, 50%', strip.vals[1], ['2', '1', '1', '50%']);
-  check('the bars are filled to the same percentages', strip.bars, ['67%', '50%']);
-  check('green for done, light grey for the rest', [strip.fill, strip.rest], ['rgb(13, 92, 55)', 'rgb(233, 238, 235)']);
-  /* On a desk the two halves sit side by side; on a phone they stack, which
-     is the right answer for a 400px screen, so the height is a desk rule. */
-  if (+(process.env.VW || 1600) >= 1000) check('the strip is no taller than 90px', strip.h <= 90 ? 'ok' : strip.h, 'ok');
+  /* ── AND THEN THE STRIP CAME OFF, so this asserts the ABSENCE ──────────
+     The three cards became one slim strip here, and the strip itself was
+     then removed from the page — MAXIMIZE THE WORKING AREA, taken one step
+     further. These two sections held its figures against the rows they were
+     counted from; they hold the removal now, because the ONE thing left to
+     get wrong about a strip that is gone is a half-removal. It went with
+     `_recProgressHtml` still defined and called by nothing, thirteen rules
+     of CSS, fourteen i18n keys in both languages, and these two sections
+     red — so the next person could not tell their own red from this. Every
+     piece is asked for by name: a strip put back has to put its test back.
+     ───────────────────────────────────────────────────────────────────── */
+  console.log('\n1. The progress strip is GONE, and nothing of it is left behind');
+  const gone = await ev(() => ({
+    box:  !!document.getElementById('rec-metrics'),
+    bits: document.querySelectorAll('.rp-group, .rp-bar, .rp-item, .rp-line, .rp-pct').length,
+    cards: document.querySelectorAll('#tab-record .metric-card').length,
+  }));
+  check('no #rec-metrics on the page', gone.box, false);
+  check('…and not one piece of it drawn', gone.bits, 0);
+  check('…nor the large cards it replaced', gone.cards, 0);
 
-  } catch (e) { fail++; console.log('  FAIL '+'1. The three cards are ONE slim strip, counted off the rows'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
+  const src = require('fs');
+  const js  = src.readFileSync(__dirname + '/../nursery_ops/plot_maintenance_script.js', 'utf8');
+  const css = src.readFileSync(__dirname + '/../nursery_ops/plot_maintenance_styles.css', 'utf8');
+  check('the builder is not left in the file, called by nothing',
+        js.includes('_recProgressHtml'), false);
+  check('…nor its stylesheet', /#rec-metrics|\.rp-bar\b/.test(css), false);
+  /* The fourteen keys the strip was the only reader of. `rec.actions` sat on
+     the same lines and is LIVE — it is the Actions heading, by data-i18n in
+     the page — so it is asked for rather than swept with them. */
+  const deadKeys = ['rec.workProgress', 'rec.repairProgress', 'rec.totalTasks',
+    'rec.completedN', 'rec.pendingN', 'rec.repairCases', 'rec.repairedN',
+    'rec.remainingN', 'rec.pendingTask', 'rec.repairCase', 'rec.doneOf',
+    'rec.repairedOf', 'rec.gaiaDone', 'rec.gaiaPending'];
+  check('…nor a single one of its i18n keys, in either language',
+        deadKeys.filter((k) => js.includes("'" + k + "'")), []);
+  check('and rec.actions, which shared those lines, is still there',
+        js.includes("'rec.actions'"), true);
+
+  } catch (e) { fail++; console.log('  FAIL '+'1. The progress strip is GONE'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
   try {
-  console.log('\n2. A new record moves the strip on its own');
+  console.log('\n2. A new record still redraws the list on its own');
+  /* What section 2 was really protecting is that the page answers to the
+     list rather than to a reload — the strip was only where it showed. */
   const moved = await ev(() => {
-    records.push(Object.assign({}, records[3], { id: 507, plot: 'B3', gaia: 1 }));
+    records.push(Object.assign({}, records[3], { id: 507, plot: 'B9', gaia: 0 }));
     renderRecords();
-    return [...document.querySelectorAll('#rec-metrics .rp-work .rp-val')].map(v => v.textContent)
-      .concat(document.querySelector('#rec-metrics .rp-work .rp-pct').textContent);
+    const txt = (document.getElementById('rec-body').textContent || '');
+    records.pop(); renderRecords();
+    return [txt.includes('B9'), (document.getElementById('rec-body').textContent || '').includes('B9')];
   });
-  check('7 tasks, 5 done, 2 pending, 71%', moved, ['7', '5', '2', '71%']);
-  await ev(() => { records.pop(); renderRecords(); });
+  check('a row added shows, and taken away goes', moved, [true, false]);
 
-  } catch (e) { fail++; console.log('  FAIL '+'2. A new record moves the strip on its own'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
+  } catch (e) { fail++; console.log('  FAIL '+'2. A new record still redraws the list on its own'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
+
+  /* THE PAGE OPENS ON PENDING, so everything below has to say which tab it
+     is about. Sections 3 to 6 are the APPROVED table and its icons — the
+     checked row only exists there, Check being what makes a row approved —
+     so they are asked of it. Pending is the same table asked a different
+     question (one body, one renderer), so an alignment or an icon measured
+     on one is measured on both; what is NOT the same is which rows are in
+     it, and `the_records_list_is_three_parts.cjs` is where that lives. */
+  await ev(() => { switchRecSection('approved', document.getElementById('recsec-btn-approved')); });
+  await page.waitForTimeout(150);
+
   try {
   console.log('\n3. Every column sits where its type says, heading and cells alike');
   const align = await ev(() => {
@@ -251,13 +289,22 @@ async function boot(browser) {
 
   } catch (e) { fail++; console.log('  FAIL '+'6. Pressing them still does what the words did'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
   try {
-  console.log('\n7. Approved / Rejected are text tabs with a green underline');
+  console.log('\n7. Pending / Approved / Rejected are text tabs with a green underline');
+  /* Asked of whichever tab is ACTIVE rather than of Approved by name, so a
+     fourth part, or a different one opening first, does not fail a check
+     about how a tab is DRAWN. The three are still named, because a tab
+     missing from the bar is what this is really protecting. */
   const tabs = await ev(() => {
-    const a = document.getElementById('recsec-btn-approved'), s = getComputedStyle(a);
-    const r = getComputedStyle(document.getElementById('recsec-btn-rejected'));
-    return [s.backgroundColor, s.color, s.boxShadow.includes('rgb(13, 92, 55)'), r.color];
+    const ids = ['recsec-btn-pending', 'recsec-btn-approved', 'recsec-btn-rejected'];
+    const el = ids.map((i) => document.getElementById(i));
+    if (el.some((e) => !e)) return { missing: ids.filter((i) => !document.getElementById(i)) };
+    const on = el.find((e) => e.classList.contains('active')), s = getComputedStyle(on);
+    const off = el.find((e) => !e.classList.contains('active'));
+    return { three: el.length, fill: s.backgroundColor, ink: s.color,
+             rule: s.boxShadow.includes('rgb(13, 92, 55)'), idle: getComputedStyle(off).color };
   });
-  check('active: no fill, green text and underline; idle: grey', tabs, ['rgba(0, 0, 0, 0)', 'rgb(13, 92, 55)', true, 'rgb(107, 122, 114)']);
+  check('active: no fill, green text and underline; idle: grey', tabs,
+        { three: 3, fill: 'rgba(0, 0, 0, 0)', ink: 'rgb(13, 92, 55)', rule: true, idle: 'rgb(107, 122, 114)' });
 
   } catch (e) { fail++; console.log('  FAIL '+'7. Approved / Rejected are text tabs with a green underline'+' -- could not be asked: ' + String(e.message).split('\n')[0]); }
   try {

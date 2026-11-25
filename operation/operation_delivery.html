@@ -1553,10 +1553,8 @@ function linesMissingBatch(container) {
             const { error: doError } = await _supabase.from('shared_do_records').delete().eq('id', id); 
             if (doError) return alert(doError.message); 
             
-            if (parentAL) { 
-                const newBalance = parentAL.balance_quantity + doRec.total_qty; 
-                await _supabase.from('shared_al_orders').update({ balance_quantity: newBalance }).eq('id', parentAL.id); 
-            } 
+            // The AL balance goes back up by itself: the database works it out
+            // from the DOs (shared/RUN_ME_al_balance_is_the_dos.sql).
             
             alert("DO Deleted successfully. Stock restored to AL."); 
             closeModal('manage-do-modal'); 
@@ -1788,8 +1786,9 @@ function linesMissingBatch(container) {
                 const { data: doRow, error: doErr } = await _supabase.from('shared_do_records').insert([doPayload]).select('do_number').single();
                 if (!doErr && doRow && doRow.do_number) doPayload.do_number = doRow.do_number;
                 if (!doErr) {
-                    const newBalance = parentAL.balance_quantity - doTotalQty;
-                    await _supabase.from('shared_al_orders').update({ balance_quantity: newBalance }).eq('id', parentAL.id);
+                    // The database lowers the AL balance itself (shared/
+                    // RUN_ME_al_balance_is_the_dos.sql). Only the screen copy moves.
+                    const newBalance = (parentAL._calc_balance ?? parentAL.balance_quantity) - doTotalQty;
                     parentAL.balance_quantity = newBalance; parentAL._calc_balance = newBalance;
                     // Push the standardized DO PDF onto the customer's order
                     // (portal documents + timeline). Best-effort.
