@@ -5322,12 +5322,7 @@ const I18N = {
     'rec.auditOkTip':'The auditor checked this job and passed it',
     'rec.auditBadTip':'The auditor checked this job and did not pass it',
     'rec.allJenis':'All Work Types', 'rec.allPlot':'All Plots', 'rec.filterDate':'Filter by date…',
-    'rec.totalTasks':'Total Tasks', 'rec.gaiaDone':'Gaia Done', 'rec.gaiaPending':'Gaia Pending',
-    'rec.pendingTask':'Pending Task', 'rec.repairCase':'Total Repair Case',
-    'rec.doneOf':'{n} done \u00b7 {pct}%', 'rec.repairedOf':'{n} repaired \u00b7 {pct}%',
-    'rec.workProgress':'Work progress', 'rec.repairProgress':'Repair progress',
-    'rec.completedN':'Completed', 'rec.pendingN':'Pending', 'rec.repairCases':'Repair cases',
-    'rec.repairedN':'Repaired', 'rec.remainingN':'Remaining', 'rec.actions':'Actions',
+    'rec.actions':'Actions',
     'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Track Record', 'rec.trackView':'View track', 'rec.trackNone':'No walk was recorded for this job.',
     'rec.nelos':'Nelos Case', 'rec.repaired':'Done Repair',
@@ -5524,12 +5519,7 @@ const I18N = {
     'rec.auditOkTip':'Juruaudit telah memeriksa kerja ini dan meluluskannya',
     'rec.auditBadTip':'Juruaudit telah memeriksa kerja ini dan tidak meluluskannya',
     'rec.allJenis':'Semua Jenis Kerja', 'rec.allPlot':'Semua Plot', 'rec.filterDate':'Tapis ikut tarikh…',
-    'rec.totalTasks':'Jumlah Tugasan', 'rec.gaiaDone':'Gaia Selesai', 'rec.gaiaPending':'Gaia Belum',
-    'rec.pendingTask':'Tugasan Belum Siap', 'rec.repairCase':'Jumlah Kes Pembaikan',
-    'rec.doneOf':'{n} siap \u00b7 {pct}%', 'rec.repairedOf':'{n} dibaiki \u00b7 {pct}%',
-    'rec.workProgress':'Kemajuan kerja', 'rec.repairProgress':'Kemajuan pembaikan',
-    'rec.completedN':'Siap', 'rec.pendingN':'Belum', 'rec.repairCases':'Kes pembaikan',
-    'rec.repairedN':'Dibaiki', 'rec.remainingN':'Baki', 'rec.actions':'Tindakan',
+    'rec.actions':'Tindakan',
     'rec.uncheck':'Uncheck', 'rec.edit':'Edit', 'rec.del':'Del', 'rec.checkedChip':'Checked',
     'rec.track':'Rekod Laluan', 'rec.trackView':'Lihat laluan', 'rec.trackNone':'Tiada laluan direkodkan untuk kerja ini.',
     'rec.nelos':'Kes Nelos', 'rec.repaired':'Pembaikan Selesai',
@@ -9361,24 +9351,6 @@ function _recIconBtn(icon, cls, onclick, label, tip) {
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" `
     + `stroke-linejoin="round" aria-hidden="true">${_REC_ICONS[icon]}</svg>`
     + `<span class="sr-only">${esc(label)}</span></button>`;
-}
-function _recProgressHtml(m) {
-  const pc = (n, of) => (of ? Math.round(n / of * 100) : 0);
-  const fig = (n) => Number(n || 0).toLocaleString('en-MY');
-  const bar = (n, of) => `<div class="rp-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" `
-    + `aria-valuenow="${pc(n, of)}"><span style="width:${pc(n, of)}%"></span></div>`;
-  const item = (lbl, n, cls) => `<span class="rp-item${cls ? ' ' + cls : ''}"><span class="rp-lbl">${lbl}</span>`
-    + `<b class="rp-val">${fig(n)}</b></span>`;
-  return `<div class="rp-group rp-work">
-      <div class="rp-line"><span class="rp-title">${t('rec.workProgress')}</span>
-        ${item(t('rec.totalTasks'), m.total)}${item(t('rec.completedN'), m.done)}${item(t('rec.pendingN'), m.pend, 'rp-pend')}
-        <span class="rp-pct">${pc(m.done, m.total)}%</span></div>
-      ${bar(m.done, m.total)}</div>
-    <div class="rp-group rp-repair">
-      <div class="rp-line"><span class="rp-title">${t('rec.repairProgress')}</span>
-        ${item(t('rec.repairCases'), m.repair)}${item(t('rec.repairedN'), m.fixed)}${item(t('rec.remainingN'), m.repair - m.fixed, m.repair - m.fixed ? 'rp-pend' : '')}
-        <span class="rp-pct">${m.repair ? pc(m.fixed, m.repair) + '%' : '—'}</span></div>
-      ${bar(m.fixed, m.repair)}</div>`;
 }
 
 /* ── APPROVED, AND IT IS ONE SENTENCE IN ONE PLACE ────────────────────────

@@ -10889,20 +10889,29 @@ heading is centred, and that figures are tabular. **11 of its tables fail
 on the previous code**, each by name. `AUDIT=1` prints every table's grid,
 `SHOT=/dir` draws each tab and `VW=400` draws them at phone width.
 
-## Work Records is one clean page, and the dashboard is a strip
+## Work Records is one clean page, and the dashboard is GONE
 
 The office asked for the Work Records page redesigned: *"MINIMIZE THE
 DASHBOARD. MAXIMIZE THE WORKING AREA."* MJM green stays the one brand
 colour; everything else is white, a light grey and colour only where it says
 something.
 
-- **The three summary cards are ONE strip** (`_recProgressHtml`): Work
-  progress (total, completed, pending, %) and Repair progress (cases,
-  repaired, remaining, %), each over a slim green-on-grey bar. **The figures
-  are the same four counts `renderRecords` always worked out**, by the same
-  rules (done = verified field record or the old Gaia tick; a repair case =
-  an Unsatisfactory audit), so nothing is counted differently — only drawn
-  smaller. Under ~90px on a desk; the two halves stack on a phone.
+- **The three summary cards became ONE strip, and the strip then came off
+  the page**, which is the same sentence taken one step further. Nothing is
+  counted differently by it going: `renderRecords` still works out the four
+  figures (done = verified field record or the old Gaia tick; a repair case
+  = an Unsatisfactory audit) and the plot line and the tab counts are drawn
+  from them. **What it cost was paid late and is the thing to learn from
+  it**: the removal took the markup and the call and left `_recProgressHtml`
+  defined and called by nothing, thirteen rules of CSS, FOURTEEN i18n keys
+  in both languages, and seven red checks in
+  `work_records_is_one_clean_page.cjs` — so for a week the next person could
+  not tell their own red from somebody else's. All of it is swept now, and
+  sections 1 and 2 of that test hold the ABSENCE by name, every piece of it,
+  which is what this file already says a removal is owed: *a half-removal
+  that leaves the handler or the stylesheet behind is caught*. `rec.actions`
+  shared those i18n lines and is LIVE — the Actions heading, by `data-i18n`
+  in the page — so the test asks for it to still be there.
 - **Check / Edit / Del are icon buttons** (`_recIconBtn`), on the approved
   list and the sent-back list alike. **Each carries its old WORD as hidden
   text** (`.sr-only`) as well as a tooltip and an `aria-label`, so a screen
