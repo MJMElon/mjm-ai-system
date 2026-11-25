@@ -11011,6 +11011,33 @@ was nobody's.
   the portal existed. It was written out inline for the DONE count and
   nowhere else; it decides which of two TABS a row lands in now, so a second
   copy would be a tab disagreeing with the row on it.
+- **AND A CHECKED ROW IS APPROVED, which the first version missed.** The
+  office found two of their own under Pending — U13, 07 Nov, both wearing
+  ✓ CHECKED — and said where they belong: *"现在在pending 这两行是当初我在
+  approved那边手动加的 要进去approved而不是pending"*. They were KEYED BY
+  HAND, so there is no field record behind them and nobody ever set Gaia,
+  and on the two tests above they read as not approved — **with nothing
+  anybody could ever do to move them**, there being no submission to
+  approve. That is the one thing a to-do list must not hold.
+  **Checked is a signature, and the strongest one on this page**: only
+  `toggleChecked` sets it, by a deliberate press; it writes `qtyFrozen` so
+  the figure stops being a formula, `syncTicks` refuses the row afterwards,
+  and it is what puts the row on the payroll claim. A row the office has
+  settled and is being PAID on cannot be waiting for a conductor. It also
+  closes a way an approved row could fall BACK into Pending on its own —
+  `applyFieldRecords` drops `_fieldIds` when a record stops pairing and
+  leaves the values, so a row that really was verified would have
+  reappeared under Pending with nothing saying why.
+  **WHAT IT COSTS, and it is a visible change rather than a detail:
+  pressing Check MOVES the row off Pending.** That is what Checked now
+  means — the office agreeing it is exactly what Pending says the row is
+  waiting for — so the row leaving IS the answer, the same way an answered
+  chip leaves the audit board, and the two counts move with it. Uncheck is
+  then one TAB along rather than one press.
+  **A hand-keyed row that is NOT checked stays in Pending**, deliberately:
+  that is the office's own first sentence, *"tick了的schedule全部会在这里出
+  现"*, and reading every hand-keyed row as approved would leave Pending
+  holding nothing but unmatched phone submissions.
 - **ONE TABLE, ONE BODY, ONE RENDERER.** Pending and Approved are the same
   twelve columns over the same rows asked a different question, so they
   SHARE the pane and the tab is a `filter` in `renderRecords` and nothing
