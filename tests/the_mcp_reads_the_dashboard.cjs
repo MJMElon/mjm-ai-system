@@ -62,11 +62,18 @@ const DB = {
     tl('U1', '250', 1000, '2026-01-10'), tl('U2', '260', 2000, '2026-02-20'),
     tl('U3', '270', 3000, '2026-04-05'), tl('U4', '271', 1000, '2026-03-15'),
     tl('U5', '272', 1000, '2026-01-05'), tl('U6', '273', 1000, '2026-04-20'),
+    // Seed-in dates: available is 10 months and above. U7 matured by the old
+    // +9 months rule but turns 10 months on 26 Nov, so it is not available.
+    tl('U7', '274', 500, '2026-01-08'),
+    ...[['250', '2025-12-01'], ['260', '2026-01-10'], ['270', '2026-04-01'], ['271', '2026-02-10'],
+        ['272', '2025-12-15'], ['273', '2026-03-20'], ['274', '2026-01-25']].map(([b, d]) => ({
+      transaction_type: 'Seeds_Received', batch_name: b, breed_name: 'AA Hybrida 1S', quantity_change: 1,
+      transaction_date: d, created_at: d + 'T00:00:00Z', remark: '' })),
     { transaction_type: '3rd_Culling', plot_name: 'U5', batch_name: '272', quantity_change: 1000,
       remark: '3rd Culling. DestType: main MapQty: 1000 CullDate:2026-10-20' },
   ]),
   operation_batch_verifications: [{ batch_name: '272', stage: 'cull_3' }],
-  shared_plots: ['U1', 'U2', 'U3', 'U4', 'U5', 'U6'].map((p) => ({ plot_name: p, nursery_name: 'UNN 1' })),
+  shared_plots: ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7'].map((p) => ({ plot_name: p, nursery_name: 'UNN 1' })),
   shared_plot_allocations: [],
   shared_do_records: withIds([{ do_number: 'DO-ORD1001', al_number: null, delivery_date: '2026-11-03', total_qty: 200,
     status: 'Issued', remark: '', plot_1: 'U1', batch_1: '250', qty_1: 200 }]),
@@ -225,8 +232,8 @@ const server = http.createServer((req, res) => {
   console.log('2. check_stock is the dashboard');
   let s = await call('check_stock');
   check('available stock is the dashboard figure', s.structuredContent.available_stock, 5200);
-  check('matured / reached 1.5 m', [s.structuredContent.matured, s.structuredContent.reached_1_5m], [2500, 2700]);
-  check('maturing next month', s.structuredContent.maturing_next_month, 900);
+  check('10 months & above / 1.5 m & above', [s.structuredContent.matured, s.structuredContent.reached_1_5m], [2500, 2700]);
+  check('turning 10 months next month', s.structuredContent.maturing_next_month, 900);
   check('actual order owed, cash-unpaid left out', s.structuredContent.actual_order_balance, 7000);
   check('available minus actual order', s.structuredContent.available_minus_actual_order, -1800);
   check('by breed', s.structuredContent.by_breed.map((b) => [b.breed, b.available, b.plots]), [['AA Hybrida 1S', 5200, 3]]);
