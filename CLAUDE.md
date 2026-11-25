@@ -11541,6 +11541,13 @@ Capacity Heatmap (the heatmap was on top; they asked for the two swapped).
   has an orange lorry driving in from the foot of the map and back, on a
   loop (`.invmap-lorry`, parked still under reduced motion).
 
+- **A full-width row spans the columns SHOWN** (`matColCount()`: 11 on
+  Plot-R, which hides After 10% Culling, 12 elsewhere). A `colspan="12"` on
+  Plot-R made the fixed table grow an EMPTY twelfth column, which squeezed
+  Customers and left a blank band right of Plot Balance. On Plot-R the
+  hidden column width goes to Breed. The DROP CARD HERE box is a faint
+  outline that lights only on hover and while a card is dragged.
+
 `tests/maturity_lock_waiting_list_and_height.cjs` drives all of it.
 
 ## Available stock is 10 MONTHS and above, or 1.5 m and above
