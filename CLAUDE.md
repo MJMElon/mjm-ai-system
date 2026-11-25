@@ -11324,11 +11324,10 @@ was nobody's.
   waiting on it, and a chip hidden on Approved would be a submission
   invisible on BOTH tabs — which is the exact silence this split exists to
   end.
-- **WORK NO SCHEDULE ROW CLAIMS IS AT THE FOOT, UNDER ITS OWN HEADING**, and
-  on Pending only. These are not rows the office planned; they are work that
-  arrived and attached to nothing — what `_fieldUnpaired` has been counting
-  in silence. Folded in among the plots they would read as planned work. On
-  the Approved tab they would be the one thing that tab promises not to hold.
+- **WORK NO SCHEDULE ROW CLAIMS SITS UNDER ITS OWN PLOT**, and on Pending
+  only — see the sub-section below, which is the office overruling the block
+  this bullet used to describe. On the Approved tab it would be the one thing
+  that tab promises not to hold.
 - **AN EMPTY TAB SAYS WHICH TAB IS EMPTY.** *"No records found"* over Pending
   means everything is approved, which is good news; over Approved it means
   nothing has been signed off yet, which is not. One sentence for both is the
@@ -11362,6 +11361,54 @@ were already lying about something else:
   presses that tab — the checked row only exists there, Check being what
   makes a row approved — and its tab check asks whichever tab is ACTIVE
   rather than Approved by name.
+
+#### AND THE BLOCK CAME DOWN INTO THE PLOTS: 放下去楼下
+
+The unclaimed submissions were a block of their own ABOVE the plots, under
+*"RECORDED ON A PHONE, ON NO SCHEDULED ROW"*, on the argument written out in
+the bullet above: these are not rows the office planned, and folded in among
+the plots they would read as planned work. The office looked at two U7
+records sitting up there and overruled it in one line: *"放下去楼下 就是U7
+interrow 14.11就放去U7那边"*.
+
+**THEY ARE RIGHT ABOUT HOW THE LIST IS READ, and the argument for the block
+was about the DATA rather than about the reading.** Somebody going through a
+month works down it PLOT BY PLOT, so a block at the top is a second place to
+look for U7 — U7's own work was in two parts of one screen and the part up
+there was the part nobody was looking for. A fact about a record does not
+have to be said by WHERE the record is put.
+
+So it is said on the row instead: the row keeps its amber *Waiting for
+approval* chip, keeps its tint, and wears a slate tag reading **No scheduled
+round** whose hover carries the sentence that used to be the block's
+subtitle. Four things in it:
+
+- **IT IS SORTED IN, not appended to its plot.** The loose record is given
+  the four fields `_recRowOrder` reads — a shim and never a record, every
+  cell of the row it draws coming off the submission itself — so it lands on
+  the day and the job it belongs to rather than at the bottom of the plot.
+- **A PLOT THE SCHEDULE HAS NOTHING FOR STILL GETS ITS GROUP**, or the
+  record would be on no screen at all, which is the whole fault the block
+  was raised for. `sortedPlots` is the union of the plots with rows and the
+  plots with loose records.
+- **ITS GROUP LINE DOES NOT READ "Task : 0/0".** Nought of nought is not
+  progress, and on the one plot that is here only because a worker recorded
+  something it reads as work that went missing. It says *Nothing on the
+  schedule this month*.
+- **THE TAG IS SLATE AND THE CHIP IS AMBER.** The chip is the state the row
+  is in — somebody has answered and nobody has agreed — and the tag is a
+  fact about the schedule. Two amber pills side by side would read as one
+  sentence broken in half.
+
+Section 4 of `tests/the_records_list_is_three_parts.cjs` is this, and **6 of
+its 35 checks fail on the previous page**. Its fixture had to grow a second
+loose record, on **B1, which carries two scheduled rounds** — the office's
+own U7 shape. B5, the only loose record there was, is on a plot the schedule
+has nothing for, so every check about it passes just as green on a page that
+draws the block: a fixture whose every loose record is on a plot with
+nothing else on it cannot see where the records were put. The check is
+written as **which group the row falls under**, not as a position in the
+list, because what the office asked for is where it is FILED.
 
 ## Worker Activity downloads ONE job, for the nurseries ticked
 

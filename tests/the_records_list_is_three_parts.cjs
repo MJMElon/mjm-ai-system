@@ -157,6 +157,17 @@ async function boot(browser) {
         chemical: 'Manual', qty: 300, work_date: '2026-11-15', week_no: 3,
         schedule_month: m, worked_by: 'Rahim', reported_by: 'Rahim',
         verified_at: null, rejected_at: null },
+      /* THE OFFICE'S OWN CASE, which B5 cannot test: a submission that
+         matches no round on a plot the schedule DOES carry rows for.
+         *"放下去楼下 就是U7 interrow 14.11就放去U7那边"* — B1 has two P & D
+         rounds and no weeding round, so this one has nowhere to pair and
+         has to come to rest inside B1's own group. A fixture whose every
+         loose record is on a plot with nothing else on it passes just as
+         green on a page that draws them in a block of their own. */
+      { id: 9103, plot_name: 'B1', work_type: 'weeding', jenis: 'Merumput',
+        chemical: 'Manual', qty: 120, work_date: '2026-11-14', week_no: 2,
+        schedule_month: m, worked_by: 'Hadi', reported_by: 'Hadi',
+        verified_at: null, rejected_at: null },
     ];
     rejectedFieldRecords = [];
     renderRecords();
@@ -244,27 +255,76 @@ async function boot(browser) {
   } catch (e) { fail++; console.log('  FAIL 3. waiting -- ' + String(e.message).split('\n')[0]); }
 
   try {
-  console.log('\n4. A submission no scheduled round claims is at the top, named');
+  console.log('\n4. A submission no scheduled round claims sits under ITS OWN PLOT');
   const r = await rows();
   const loose = (r.filter ? r : []).filter((x) => x.loose);
-  check('B5 is drawn', loose.length && loose[0].cells[3], 'B5');
-  check('with the worker on it', loose.length ? /Rahim/.test(loose[0].cells[7]) : 'no row', true);
-  const head = await ev(() => {
-    const tr = document.querySelector('#rec-body tr.plot-group-row');
-    return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : 'no heading';
+  check('both are drawn', (loose.map ? loose : []).map((x) => x.cells[3]).sort(), ['B1', 'B5']);
+  check('with the worker on it',
+        loose.length ? /Rahim|Hadi/.test(loose[0].cells[7]) : 'no row', true);
+  /* THE OFFICE'S OWN SENTENCE, and the one check that cannot pass on the
+     previous page: the B1 submission is inside B1's group, under B1's own
+     heading, not in a block above the plots. Read as the group the row
+     falls under rather than as a position, because what the office asked
+     for is where it is FILED. */
+  const under = await ev(() => {
+    const out = [];
+    let plot = null;
+    [...document.querySelectorAll('#rec-body tr')].forEach((tr) => {
+      if (tr.classList.contains('plot-group-row')) {
+        const p = tr.querySelector('.rec-group-plot');
+        plot = p ? p.textContent.replace(/\s+/g, ' ').trim() : '';
+        return;
+      }
+      if (tr.classList.contains('rec-row-loose')) {
+        out.push({ plot: tr.children[3].textContent.trim(), group: plot });
+      }
+    });
+    return out;
   });
-  check('under a heading that says what it is',
-        /on no scheduled row/i.test(head), true);
-  /* It sits ABOVE the plots, as one block, and is never mixed in among the
-     scheduled rows: these are not rows the office planned, and a list that
-     mixed them would be the office reading work they never scheduled as a
-     round they did. The office asked for it at the top, so it is checked as
-     a block before the first scheduled row. */
-  const order = (r.filter ? r : []).map((x) => (x.loose ? 'L' : x.group ? 'G' : 'R')).join('');
-  const li = order.indexOf('L'), lj = order.lastIndexOf('L');
-  check('and never mixed in among the scheduled rows',
-        li >= 0 && lj >= li && !/R/.test(order.slice(li, lj + 1)) && (order.indexOf('R') < 0 || lj < order.indexOf('R')),
-        true);
+  check('the B1 submission is filed under Plot B1',
+        ((under.filter ? under : []).find((x) => x.plot === 'B1') || {}).group, 'Plot B1');
+  check('…and B5 under Plot B5',
+        ((under.filter ? under : []).find((x) => x.plot === 'B5') || {}).group, 'Plot B5');
+  /* NO BLOCK ABOVE THE PLOTS ANY MORE. The heading it used to carry is
+     gone with it, so a half-removal that leaves the block drawn and the
+     rows folded in as well — the same morning twice — fails here. */
+  const heads = await ev(() => [...document.querySelectorAll('#rec-body tr.plot-group-row')]
+    .map((tr) => tr.textContent.replace(/\s+/g, ' ').trim()));
+  check('no "on no scheduled row" block is drawn',
+        (heads.some ? heads : []).some((h) => /on no scheduled row/i.test(h)), false);
+  /* WHAT THE BLOCK WAS FOR IS STILL SAID, on the row: a record that
+     reached the office and attached to nothing is the one thing this list
+     must not swallow, so the tag says so and its hover carries the
+     sentence that used to be the block's subtitle. */
+  const tag = await ev(() => {
+    const el = document.querySelector('#rec-body tr.rec-row-loose .rec-loose-tag');
+    return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(),
+                  tip: el.getAttribute('title') || '' } : 'no tag';
+  });
+  check('the row says no scheduled round claims it',
+        /no scheduled round/i.test((tag || {}).text || ''), true);
+  check('…and the hover says what to do about it',
+        /schedule/i.test((tag || {}).tip || ''), true);
+  /* B5 IS ON THE SCHEDULE FOR NOTHING THIS MONTH, so its group line cannot
+     read "Task : 0/0" — a count of nothing dressed as progress, on the one
+     plot that is here only because a worker recorded something. */
+  const b5line = await ev(() => {
+    const tr = [...document.querySelectorAll('#rec-body tr.plot-group-row')]
+      .find((x) => /Plot B5$/.test(((x.querySelector('.rec-group-plot') || {}).textContent || '').trim()));
+    const s = tr && tr.querySelector('.rec-group-sub');
+    return s ? s.textContent.replace(/\s+/g, ' ').trim() : 'no line';
+  });
+  check('a plot with nothing scheduled says so instead of 0/0',
+        b5line, 'Nothing on the schedule this month');
+  /* AND A PLOT THAT HAS BOTH still counts its scheduled rows. B1 carries
+     two rounds and one loose record; its line is about the rounds. */
+  const b1line = await ev(() => {
+    const tr = [...document.querySelectorAll('#rec-body tr.plot-group-row')]
+      .find((x) => /Plot B1$/.test(((x.querySelector('.rec-group-plot') || {}).textContent || '').trim()));
+    const s = tr && tr.querySelector('.rec-group-sub');
+    return s ? s.textContent.replace(/\s+/g, ' ').trim() : 'no line';
+  });
+  check('…and a plot that has both still counts its rounds', b1line, 'Task : 1/2');
   } catch (e) { fail++; console.log('  FAIL 4. loose -- ' + String(e.message).split('\n')[0]); }
 
   try {
@@ -285,9 +345,9 @@ async function boot(browser) {
     pending: (document.getElementById('rec-count-pending') || {}).textContent,
     approved: (document.getElementById('rec-count-approved') || {}).textContent,
   }));
-  /* Two unapproved rows plus the one submission nothing claims. A count
+  /* Two unapproved rows plus the two submissions nothing claims. A count
      that disagrees with its own list is the whole risk in splitting a tab. */
-  check('Pending counts 3', n.pending, '3');
+  check('Pending counts 4', n.pending, '4');
   check('Approved counts 1', n.approved, '1');
   } catch (e) { fail++; console.log('  FAIL 6. counts -- ' + String(e.message).split('\n')[0]); }
 
