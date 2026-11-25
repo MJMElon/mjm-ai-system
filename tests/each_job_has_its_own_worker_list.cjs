@@ -567,6 +567,15 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     const { page, errs } = await boot(browser, db, 'setting');
     await page.waitForFunction(() => window.MJMCullIncentive && MJMCullIncentive.ruleSource() === 'office',
       { timeout: 8000 }).catch(() => {});
+    /* EDIT PRESSED BEFORE THE RULE IS READ still opens the names once it
+       lands: the office pressed Edit and the row stayed read-only. */
+    await ev(page, () => { MJMCullIncentive.loadRule = ((f) => (s, m) =>
+      new Promise(r => setTimeout(r, 400)).then(() => f(s, m)))(MJMCullIncentive.loadRule); });
+    await ev(page, () => { cmDraft = null; jobCrewDraft = null; jcEdit(); });
+    await page.waitForTimeout(900);
+    check('Edit before the rule is read still opens the names', await ev(page, () =>
+      [!!cmDraft && cmDraft.viaJc, !!document.querySelector('#jc-set-body tr.jc-cull select.cm-pick')]), [true, true]);
+    await ev(page, () => jcCancel());
     const row = () => ev(page, () => { const tr = document.querySelector('#jc-set-body tr.jc-cull');
       return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : 'no row'; });
     check('the row names who is paid today', /Rousell Wayne/.test(await row()) && /Lalu Aenal/.test(await row()), true);
