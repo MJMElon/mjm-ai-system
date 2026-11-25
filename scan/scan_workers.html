@@ -168,6 +168,22 @@
                     text-transform: uppercase; color: #a16207; margin-bottom: 7px; }
   .pend-rej .wchip { opacity: .72; }
 
+  /* Everybody inactive, in one card UNDER the board: grey, because they are
+     not part of the working picture, and only there with Show inactive. */
+  .off-wrap { padding: 14px 16px; margin-top: 14px; border-left: 4px solid #94a3b8; background: #f8fafc; }
+  .off-title { font-size: 12px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #475569; }
+  .off-count { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11px;
+               font-weight: 800; color: #475569; background: #e2e8f0; }
+  .off-wrap .pend-why { color: #64748b; }
+  .off-wrap .pend-rej, .off-wrap .off-grp { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
+  .off-wrap .pend-rej-title { color: #64748b; }
+  /* Grey says inactive here; the strike-through the board uses for one is
+     not needed in a card that is all inactive, and it makes names hard to read. */
+  .off-wrap .wchip { text-decoration: none; color: #64748b; }
+  .off-wrap .wchip span, .off-wrap .off-where { text-decoration: none; }
+  .off-wrap .wchip > span:nth-child(2) { text-transform: uppercase; }
+  .off-where { margin-left: 6px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: none; }
+
   /* ── The strip: Edit / Cancel / Save, and when this was last touched ───
      ABOVE the board and not under it. The last-updated line has been on
      this page since the board was drawn and the office asked for it again,
@@ -1138,7 +1154,16 @@ function renderWorkerBoard() {
   const canEdit = may('workers', 'manage');
   const editing = boardEditing();
   const shown   = workers.filter(workerShown);
-  const at = (sec, role) => shown.filter(w => {
+  /* INACTIVE IS NOT ON THE BOARD, ticked or not. The office: an inactive
+     worker sitting in a column, among the people who work there, is in the
+     way, and nobody is looking for them there. So the columns and the queue
+     are the ACTIVE register only, and Show inactive draws everybody who is
+     not -- left, or a rejected signup -- in one card UNDER the board, where
+     they are out of the way and still one click from their record. */
+  const isOff   = w => w.active === false || isRejected(w);
+  const onBoard = shown.filter(w => !isOff(w));
+  const offList = shown.filter(isOff);
+  const at = (sec, role) => onBoard.filter(w => {
     const p = boardPos(w);
     return (p.section || '') === sec && boardRoleOf(p) === role;
   });
@@ -1152,7 +1177,7 @@ function renderWorkerBoard() {
      added. A worker is only hidden here by Show inactive, which redraws, so
      the column comes back with them. */
   const orphan = new Set(SECTIONS.filter(s => s.orphan).map(s => s.code));
-  const peopled = (c) => shown.some(w => (boardPos(w).section || '') === c);
+  const peopled = (c) => onBoard.some(w => (boardPos(w).section || '') === c);
   const cols = boardColumns()
     .map(d => ({ ...d, sections: d.sections.filter(c => !orphan.has(c) || peopled(c)) }))
     .filter(d => d.sections.length);
@@ -1220,9 +1245,10 @@ function renderWorkerBoard() {
   /* The draft decides here too, so a name dragged out of the queue leaves
      it at once — the queue is a count of work left to do, and one that
      still carried somebody already filed would be counting it twice. */
-  const noSection = shown.filter(w => !String(boardPos(w).section || '').trim());
-  const pending   = noSection.filter(w => !isRejected(w));
-  const rejected  = noSection.filter(w =>  isRejected(w));
+  const noSection = onBoard.filter(w => !String(boardPos(w).section || '').trim());
+  const pending   = noSection;
+  const rejected  = offList.filter(w =>  isRejected(w));
+  const leftList  = offList.filter(w => !isRejected(w));
 
   const pendChip = (w, offer) => `
         <span class="pend-item">
@@ -1236,13 +1262,37 @@ function renderWorkerBoard() {
                      title="Reject ${esc(w.full_name)}'s registration">&#10005;</button>`
           : ''}</span>`;
 
-  const rejectedHtml = rejected.length ? `
-      <div class="pend-rej">
-        <div class="pend-rej-title">Registration rejected · ${rejected.length}</div>
-        <div class="pend-list">${rejected.map(w => pendChip(w, false)).join('')}</div>
+  /* Where an inactive worker was filed, so a list of names off the board
+     still says which nursery and which job each one had. */
+  const offChip = (w) => {
+    const where = [w.section, boardRoleOf(w) === BOARD_OTHER ? (w.role || '') :
+      (BOARD_ROLES.find(b => b.key === boardRoleOf(w)) || {}).label].filter(Boolean).join(' · ');
+    return `
+        <span class="pend-item">
+          <span class="wchip wchip-off" onclick="openWorker(${w.id})"
+                title="${esc(workerTitle(w))}"
+                >${faceHtml(w)}<span>${esc(w.full_name)}</span>${where
+                  ? `<small class="off-where">${esc(where)}</small>` : ''}</span></span>`;
+  };
+
+  const offGroup = (cls, title, list) => list.length ? `
+      <div class="${cls}">
+        <div class="pend-rej-title">${title} · ${list.length}</div>
+        <div class="pend-list">${list.map(offChip).join('')}</div>
       </div>` : '';
 
-  const pendingHtml = (pending.length || rejected.length) ? `
+  const inactiveHtml = offList.length ? `
+    <div class="card off-wrap">
+      <div class="pend-head">
+        <span class="off-title">Inactive</span>
+        <span class="off-count">${offList.length}</span>
+        <span class="pend-why">Not on the board. Open a name and set them Active to put them back.</span>
+      </div>
+      ${offGroup('off-grp', 'Left / inactive', leftList)}
+      ${offGroup('pend-rej', 'Registration rejected', rejected)}
+    </div>` : '';
+
+  const pendingHtml = pending.length ? `
     <div class="card pend-wrap">
       ${pending.length ? `<div class="pend-head">
         <span class="pend-title">Waiting to be allocated</span>
@@ -1252,7 +1302,6 @@ function renderWorkerBoard() {
           : canEdit ? ' — press Edit above to file one' : ''}.</span>
       </div>
       <div class="pend-list">${pending.map(w => pendChip(w, editing)).join('')}</div>` : ''}
-      ${rejectedHtml}
     </div>` : '';
 
   const hiddenNote = (workers.some(w => w.active === false) && !$('w-show-inactive').checked)
@@ -1299,7 +1348,8 @@ function renderWorkerBoard() {
      </div>
      ${pendingHtml}
      <div class="card bd-wrap"><table class="bd"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-     ${note.trim() ? `<p class="foot-note">${note.trim()}</p>` : ''}`;
+     ${note.trim() ? `<p class="foot-note">${note.trim()}</p>` : ''}
+     ${inactiveHtml}`;
 }
 
 /* WHEN THE REGISTER WAS LAST TOUCHED, AND BY WHOM — on the strip above the

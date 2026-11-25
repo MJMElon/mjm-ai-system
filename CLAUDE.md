@@ -6016,6 +6016,18 @@ Two things fall out:
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 
+### Inactive workers are in one card UNDER the board, never in a column
+
+The office: two inactive UNN 1 workers appeared in the Workers column the
+moment Show inactive was ticked, among the people who work there. So the
+columns and the Waiting to be allocated queue are the ACTIVE register only
+(`onBoard`), and Show inactive draws everybody who is not, left or a
+rejected signup, in one grey **Inactive** card under the board, in two groups
+(Left / inactive, Registration rejected), each name saying where it was
+filed. A name there is not draggable; opening it and setting Active is how
+it comes back. An orphan column therefore never returns for an inactive
+person. `tests/inactive_workers_sit_under_the_board.cjs`.
+
 ### A role row the office adds by hand
 
 The rows down the side of the Team Board were a fixed list. In Edit, the
