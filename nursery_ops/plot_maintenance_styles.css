@@ -400,6 +400,36 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
 .modal-body{padding:18px 24px;}
 .modal-footer{padding:14px 24px 18px;border-top:1.5px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
 
+/* ── THE MERGE DIALOG (a submitted record into a scheduled round) ──
+   One row per field. A field only ONE side has, or one both agree on, is
+   STATED and not asked: a choice with one answer is a question nobody has
+   to read. A disagreement IS a choice and carries an amber edge, so the
+   rows that want an answer are the rows that look different.
+   IT IS STYLED OFF THE PAGE ROOT TOKENS AND NEVER THE `--wr-*` ONES: those
+   are declared on `#tab-record`, and this dialog is drawn at body level, so
+   a `var(--wr-muted)` in here resolves to nothing at all. */
+#rec-merge-list .rm-row{padding:9px 0;border-bottom:1px solid var(--border-light,#e6ebe8);}
+#rec-merge-list .rm-row:last-child{border-bottom:0;}
+#rec-merge-list .rm-lab{font-size:10.5px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--text-muted);margin-bottom:3px;}
+#rec-merge-list .rm-q{margin-left:7px;font-weight:700;letter-spacing:0;
+  text-transform:none;color:#b45309;}
+#rec-merge-list .rm-val{font-size:13px;color:var(--text-body);}
+#rec-merge-list .rm-none{color:var(--text-faint);font-style:italic;}
+#rec-merge-list .rm-tag{margin-left:7px;font-size:10.5px;font-weight:700;
+  color:var(--text-faint);}
+#rec-merge-list .rm-locked .rm-lab,#rec-merge-list .rm-locked .rm-val{opacity:.75;}
+#rec-merge-list .rm-differ{background:#fffbeb;border-left:3px solid #f59e0b;
+  padding:9px 9px 9px 10px;margin:5px 0;border-radius:0 6px 6px 0;}
+#rec-merge-list .rm-opts{display:flex;flex-direction:column;gap:5px;margin-top:4px;}
+#rec-merge-list .rm-opt{display:flex;align-items:flex-start;gap:7px;
+  font-size:13px;color:var(--text-body);cursor:pointer;}
+#rec-merge-list .rm-opt input{margin-top:3px;flex:0 0 auto;}
+#rec-merge-list .rm-own{width:100%;height:32px;margin-top:3px;padding:0 9px;
+  font-family:var(--font);font-size:13px;color:var(--text-body);
+  border:1.5px solid var(--border);border-radius:6px;background:#fff;}
+#rec-merge-list .rm-own:disabled{background:#f8fafc;color:var(--text-faint);}
+
 /* The work editor is a table — every plot down, every week across — and the
    office asked for it to take the WHOLE screen rather than a dialog's worth
    of it, now that Next lets somebody work straight through a nursery's four
