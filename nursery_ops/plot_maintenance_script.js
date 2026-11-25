@@ -9688,6 +9688,7 @@ function renderRecords() {
       }
       /* The same work as an approved round is not waiting for anybody. */
       if (_coveredByChecked(f, coveredKeys)) return;
+      if (_coveredByVerifiedMorning(f, fieldRecords)) return;
       let row = null;
       try { row = _submissionScheduleRow(f); } catch (_) { row = null; }
       if (row) (waitingOn[row.id] = waitingOn[row.id] || []).push(f);
@@ -10107,6 +10108,35 @@ function _coveredByChecked(f, keys) {
   const j = _rejJenis(f);
   if (!w || !j) return false;
   return keys.has(MJMMaintField.fieldKey(j, f.plot_name, w));
+}
+
+/* THE SAME WORKER, THE SAME MORNING, ALREADY VERIFIED.
+
+   A Field Conductor sometimes keys a crew's job for them, naming each worker
+   in the worked_by list. The worker's own phone can then send the same
+   morning again — often days later, once the phone has signal. That second
+   record is the same work, so it is not waiting for anybody.
+
+   Same work means all four of: same plot, same job, same day, and the same
+   worker — either the worker who sent this record is the one who sent the
+   verified record, or they are named in its crew. The verified record wins.
+   Nothing is rejected, verified or written.
+
+   The plot is part of the test on purpose. One worker weeding five plots on
+   one day is five jobs, and a test without the plot merged them. */
+function _coveredByVerifiedMorning(f, verified) {
+  const j = _rejJenis(f);
+  const pk = MJMMaintField.plotKey;
+  const me = String(f.reported_by || '').trim().toLowerCase();
+  if (!j || !f.work_date || !me || !verified || !verified.length) return false;
+  return verified.some((v) => {
+    if (String(v.id) === String(f.id)) return false;
+    if (v.work_date !== f.work_date) return false;
+    if (pk(v.plot_name) !== pk(f.plot_name)) return false;
+    if ((v.jenis || MJMMaintField.JENIS[v.work_type] || '') !== j) return false;
+    if (String(v.reported_by || '').trim().toLowerCase() === me) return true;
+    return MJMMaintField.credits(v).some((n) => n.trim().toLowerCase() === me);
+  });
 }
 
 /* How that row reads in a confirm box — enough to recognise it by. */

@@ -33,7 +33,8 @@ const MJMMaintField = globalThis.MJMMaintField;
 const JENIS_BY_WORK = (f) => f.jenis || MJMMaintField.JENIS[f.work_type] || '';
 const _rejJenis = JENIS_BY_WORK;
 
-const code = [lift('_recInMonth'), lift('_checkedRoundKeys'), lift('_coveredByChecked')].join('\n');
+const code = [lift('_recInMonth'), lift('_checkedRoundKeys'), lift('_coveredByChecked'),
+  lift('_coveredByVerifiedMorning')].join('\n');
 
 /* The schedule the way the office holds it: one element per row, `_src`
    naming its slot. Only the fields the rule reads. */
@@ -54,7 +55,7 @@ const SCHEDULE = [
    does, so they are evaluated with this schedule as their `records`. */
 const api = new Function(
   'MJMMaintField', '_rejJenis', 'records',
-  `${code}\nreturn { _checkedRoundKeys, _coveredByChecked };`
+  `${code}\nreturn { _checkedRoundKeys, _coveredByChecked, _coveredByVerifiedMorning };`
 )(MJMMaintField, _rejJenis, SCHEDULE);
 const keys = api._checkedRoundKeys('Nov 2026');
 
@@ -98,5 +99,47 @@ ok('a record with no job cannot be matched, so it is not covered',
    api._coveredByChecked({ id: 9014, plot_name: 'U1', jenis: '', work_type: '', work_date: '2026-11-13', week_no: 2 }, keys), false);
 ok('no checked rows at all covers nothing',
    api._coveredByChecked({ id: 9015, plot_name: 'U1', jenis: 'Membaja', work_date: '2026-11-13', week_no: 2 }, new Set()), false);
+
+console.log('\nThe same worker, the same morning, already verified');
+
+/* Verified records as the page holds them (fieldRecords), with the crew
+   list the Field Conductor keyed in worked_by. Taken from the real rows. */
+const VERIFIED = [
+  // Handan keyed U15 manuring 7 Nov for a crew that includes Haerul
+  { id: 2914, work_date: '2026-11-07', plot_name: 'U15', jenis: 'Membaja', reported_by: 'Handan',
+    worked_by: 'Haerul, Hamzan Wadi, Mahnum, Mahsiruddin, Muazzin, Muhamad Fauzan, Repi, Wina' },
+  // Repi's own weeding on U10 on 5 Nov
+  { id: 9100, work_date: '2026-11-05', plot_name: 'U10', jenis: 'Merumput', reported_by: 'Repi', worked_by: null },
+];
+const pend = (o) => Object.assign({ id: 1, work_date: '2026-11-05', plot_name: 'U5', jenis: 'Merumput',
+  reported_by: 'Repi' }, o);
+
+ok('Haerul 7 Nov U15 manuring: named in the crew of a verified record -> same work',
+   api._coveredByVerifiedMorning(pend({ id: 3364, work_date: '2026-11-07', plot_name: 'U15',
+     jenis: 'Membaja', reported_by: 'Haerul' }), VERIFIED), true);
+ok('Repi 7 Nov U15 manuring (3312): named in the crew -> same work',
+   api._coveredByVerifiedMorning(pend({ id: 3312, work_date: '2026-11-07', plot_name: 'U15',
+     jenis: 'Membaja', reported_by: 'Repi' }), VERIFIED), true);
+ok('the same worker on the same plot, job and day as a verified record -> same work',
+   api._coveredByVerifiedMorning(pend({ id: 9200, work_date: '2026-11-05', plot_name: 'U10',
+     jenis: 'Merumput', reported_by: 'Repi' }), VERIFIED), true);
+ok('the same worker and job on a DIFFERENT plot the same day is a different job',
+   api._coveredByVerifiedMorning(pend({ id: 3285, work_date: '2026-11-05', plot_name: 'U5',
+     jenis: 'Merumput', reported_by: 'Repi' }), VERIFIED), false);
+ok('a worker who is NOT in the crew, same plot, job and day, is not covered',
+   api._coveredByVerifiedMorning(pend({ id: 9300, work_date: '2026-11-07', plot_name: 'U15',
+     jenis: 'Membaja', reported_by: 'Awaludin' }), VERIFIED), false);
+ok('the same worker on the same plot and day but a different job is not covered',
+   api._coveredByVerifiedMorning(pend({ id: 9301, work_date: '2026-11-07', plot_name: 'U15',
+     jenis: 'Penyemburan racun kulat dan serangga', reported_by: 'Haerul' }), VERIFIED), false);
+ok('the same worker on the same plot and job but a different day is not covered',
+   api._coveredByVerifiedMorning(pend({ id: 9302, work_date: '2026-11-18', plot_name: 'U15',
+     jenis: 'Membaja', reported_by: 'Haerul' }), VERIFIED), false);
+ok('a record never covers itself',
+   api._coveredByVerifiedMorning(pend({ id: 2914, work_date: '2026-11-07', plot_name: 'U15',
+     jenis: 'Membaja', reported_by: 'Handan' }), VERIFIED), false);
+ok('with nothing verified, nothing is covered',
+   api._coveredByVerifiedMorning(pend({ id: 3364, work_date: '2026-11-07', plot_name: 'U15',
+     jenis: 'Membaja', reported_by: 'Haerul' }), []), false);
 
 console.log(`\n${n} checks passed`);
