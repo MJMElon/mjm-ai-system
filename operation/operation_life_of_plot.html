@@ -204,6 +204,8 @@
         table.lp-rec tr.plotrow td.batch { cursor:pointer; color:#2f6b1f; text-decoration:underline; text-decoration-color:rgba(47,107,31,.35); text-underline-offset:3px; }
         table.lp-rec tr.plotrow td.batch:hover { text-decoration-color:#2f6b1f; }
         table.lp-rec td.has-tip { cursor:help; }
+        table.lp-x td.var-tip { cursor:help; text-decoration:underline dotted #b07a3a; text-underline-offset:3px; }
+        #lp-tip { white-space:pre-wrap !important; max-width:360px; }
         table.lp-rec td.has-tip:hover { background:#e4efd6 !important; }
         #lp-tip { position:fixed; z-index:50; pointer-events:none; background:#2b2116; color:#fdfaf4; font-size:12px; font-weight:600; line-height:1.5; padding:8px 11px; border-radius:10px; white-space:pre; box-shadow:0 8px 20px rgba(0,0,0,.25); display:none; }
         table.lp-rec td.sum { color:#5c3d1e; }
@@ -379,6 +381,9 @@
             day,
             sortDay: day || lpLatest(use.map(sessDay)) || lpLatest(use.map(r => String(r.created_at || '').slice(0, 10))),
             rows: use.length,
+            // Why the drone map and the culled qty disagree: Tab 6 own MismatchNote.
+            note: use.map(r => { const m = String(r.remark || '').match(/MismatchNote:(\S+)/); if (!m) return ''; try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; } })
+                     .filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join('\n') || null,
         };
     }
     function lpEarliest(days) { return days.filter(Boolean).sort()[0] || null; }
@@ -615,7 +620,7 @@
                         tDate, tByMonth, tDays: Object.values(tDays).sort((x, y) => x.day.localeCompare(y.day)),
                         tQty, adj, tAdj: tQty + adj,
                         c2Date: c2.day, c2Qty: c2.qty, c2Alive: c2.alive, c2Has: c2.rows > 0,
-                        c3Date: c3.day, c3Sort: c3.sortDay, c3Qty: c3.qty, c3Map: c3.map, c3Has: c3.rows > 0,
+                        c3Date: c3.day, c3Sort: c3.sortDay, c3Qty: c3.qty, c3Map: c3.map, c3Has: c3.rows > 0, c3Note: c3.note,
                     };
                 }).sort((x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch));
                 return {
@@ -996,6 +1001,22 @@
     }
     const lpPct = (n, d) => (d > 0 ? ((n || 0) / d * 100).toFixed(2) + '%' : '–');
     const lpVar = v => (v == null ? '–' : (v > 0 ? '+' : '') + nf(v) || '0');
+    /* A 3rd culling variance carries the batch report own explanation on hover
+       (the office: "如果3rd culling有variance 这个variance也是加一个hover"). */
+    const lpAttr = t => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const lpVarCell = (v, tip) => v ? `<td class="has-tip var-tip" data-tip="${lpAttr(tip)}">${lpVar(v)}</td>` : `<td>${lpVar(v)}</td>`;
+    function lpBindTips(root) {
+        let tip = document.getElementById('lp-tip');
+        if (!tip) { tip = document.createElement('div'); tip.id = 'lp-tip'; document.body.appendChild(tip); }
+        root.querySelectorAll('td.has-tip').forEach(td => {
+            td.addEventListener('mouseenter', () => { tip.textContent = td.dataset.tip; tip.style.display = 'block'; });
+            td.addEventListener('mousemove', e => {
+                const w = tip.offsetWidth, x = e.clientX + 14 + w > innerWidth ? e.clientX - w - 14 : e.clientX + 14;
+                tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+            });
+            td.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+        });
+    }
     // A card saved before the drone count existed has the picture and no number,
     // and reads as tallying — shown, never stored (the batch report T3_DRONE_FROM rule).
     const LP_DRONE_FROM = '2026-10-23T00:00:00Z';
@@ -1078,7 +1099,7 @@
                 // 3rd culling: pending culling, drone count, variance, culling rate; nothing
                 // keyed yet is due the 9th month after transplant.
                 c3: c3On(b) ? `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
-                      + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td>` : null,
+                      + lpVarCell(m3 - c3, 'Batch ' + b.batch + '\n' + (b.c3Note || 'No reason written on the batch report')) + `<td class="cull">${lpPct(c3, b.tAdj)}</td>` : null,
                 c3Est: c3On(b) ? null : lpEst(b.tDate, LP_EST_C3),
             });
         }));
@@ -1105,7 +1126,7 @@
            + `<tfoot><tr class="tot"><td class="l">Total · plot</td>`
            + `<td class="s1"></td><td>${dash(c.tAdj)}</td>`
            + (bs.some(b => b.c2Has) ? `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>` : `<td class="s1" colspan="4"></td>`)
-           + (bs.some(c3On) ? `<td class="s1"></td><td>${dash(c3Tot)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c3Tot)}</td><td>${lpPct(c3Tot, c.tAdj)}</td>` : `<td class="s1" colspan="5"></td>`)
+           + (bs.some(c3On) ? `<td class="s1"></td><td>${dash(c3Tot)}</td><td>${dash(map3)}</td>${lpVarCell(map3 - c3Tot, bs.filter(b => c3On(b) && (b.c3Map || 0) !== (b.c3Has ? b.c3Qty : 0)).map(b => 'Batch ' + b.batch + ': ' + (b.c3Note || 'No reason written on the batch report')).join('\n'))}<td>${lpPct(c3Tot, c.tAdj)}</td>` : `<td class="s1" colspan="5"></td>`)
            + `</tr></tfoot>`
            + `</table></div>`;
         h = h.replace(/>–</g, '><span class="mute">–</span><');
@@ -1139,6 +1160,7 @@
             ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
         document.getElementById('lp-note').textContent = '';
+        lpBindTips(document.getElementById('lp-timeline-box'));
         // The 3rd culling waits on the sales; draw again once they are read.
         if (!(ROT && ROT.done)) ensureRot().then(() => {
             if (VIEW === 'plots' && location.hash === '#plot=' + encodeURIComponent(p.plot)) showPlot(p.plot);
@@ -1290,6 +1312,7 @@
                + `<button type="button" class="lp-ce-x" data-cx="${i}" title="Remove">×</button></div><div class="lp-ce-drop">Drop a batch here</div></div>`;
         h += cyc.slice().reverse().map(c => cycleHtml(c, p).replace('class="panel lp-cyc"', `class="panel lp-cyc lp-ce-cyc" data-ci="${c.n - 1}"`)).join('');
         box.innerHTML = h;
+        lpBindTips(box);
         let dragKey = null;
         box.querySelectorAll('.lp-ce-cyc tbody tr[data-b]').forEach(tr => {
             tr.draggable = true; tr.classList.add('lp-ce-row');
@@ -1485,16 +1508,7 @@
         const t = document.getElementById('lp-rec-table');
         t.innerHTML = h;
         // Each figure floats the batches it is made of.
-        let tip = document.getElementById('lp-tip');
-        if (!tip) { tip = document.createElement('div'); tip.id = 'lp-tip'; document.body.appendChild(tip); }
-        t.querySelectorAll('td.has-tip').forEach(td => {
-            td.addEventListener('mouseenter', () => { tip.textContent = td.dataset.tip; tip.style.display = 'block'; });
-            td.addEventListener('mousemove', e => {
-                const w = tip.offsetWidth, x = e.clientX + 14 + w > innerWidth ? e.clientX - w - 14 : e.clientX + 14;
-                tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px';
-            });
-            td.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
-        });
+        lpBindTips(t);
                 // Only the plot NAME opens the plot (the office: "我按plot名字才带我去plot").
         t.querySelectorAll('tr.plotrow td.batch').forEach(td => td.addEventListener('click', () => {
             showPlot(td.parentElement.dataset.plot);

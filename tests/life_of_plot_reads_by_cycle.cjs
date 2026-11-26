@@ -419,6 +419,26 @@ const DATA = {
   ok(e10.length === 0, 'no page errors', e10);
   await p10.close();
 
+  console.log('11. a 3rd culling variance floats the batch report explanation');
+  const e11 = [];
+  const d11 = Object.assign({}, DATA, { shared_inventory_logs: DATA.shared_inventory_logs.map(r =>
+    r.transaction_type === '3rd_Culling' && r.batch_name === '228'
+      ? Object.assign({}, r, { remark: 'Culled. MapQty: 200 CullDate: 2026-06-12 MismatchNote:' + encodeURIComponent('22 dead found after the drone flew') }) : r) });
+  const p11 = await openPage(d11, e11);
+  await p11.goto(B + '/operation/operation_life_of_plot.html#plot=B11');
+  await p11.waitForSelector('.lp-cyc', { timeout: 8000 }).catch(() => {});
+  await p11.waitForTimeout(500);
+  const v11 = await p11.evaluate(() => [...document.querySelectorAll('#lp-timeline-box td.var-tip')].map(td => td.textContent + '|' + td.dataset.tip));
+  ok(v11.length === 2 && v11[0] === '+22|Batch 228\n22 dead found after the drone flew', 'the 228 variance (+22) carries the batch report reason on hover', v11);
+  ok(v11[1] === '+22|Batch 228: 22 dead found after the drone flew', 'the plot total variance lists the reason too', v11[1]);
+  await p11.hover('#lp-timeline-box td.var-tip');
+  const t11 = await p11.evaluate(() => { const t = document.getElementById('lp-tip'); return t && t.style.display === 'block' ? t.textContent : null; });
+  ok(t11 && /22 dead found/.test(t11), 'hovering shows it', t11);
+  const z11 = await p11.evaluate(() => [...document.querySelectorAll('#lp-timeline-box tbody tr[data-b="229"] td.var-tip')].length);
+  ok(z11 === 0, 'a variance of nought carries no hover', z11);
+  ok(e11.length === 0, 'no page errors', e11);
+  await p11.close();
+
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
