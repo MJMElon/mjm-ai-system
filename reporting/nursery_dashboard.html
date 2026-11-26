@@ -651,15 +651,15 @@ function saPlotsOf(sharedPlots, nursery) {
 const saBatchKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/^BATCH\s*:?\s*/, '').split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
 function saRound(fills, sales, ym) {
   const from = saShift(ym, -13);   // the same month last year counts
-  let cum = 0, older = 0, mine = 0;
+  let cum = 0, older = 0, mine = 0; const olderB = [];
   Object.keys(sales || {}).forEach(b => {
     const inRound = Object.keys((fills || {})[b] || {}).some(m => m > from && m <= ym);
     Object.keys(sales[b]).forEach(m => {
       if (m > ym) return;
-      if (inRound) { cum += sales[b][m]; if (m === ym) mine += sales[b][m]; } else if (m === ym) older += sales[b][m];
+      if (inRound) { cum += sales[b][m]; if (m === ym) mine += sales[b][m]; } else if (m === ym) { older += sales[b][m]; if (sales[b][m] && !olderB.includes(b)) olderB.push(b); }
     });
   });
-  return { cum, older, mine };
+  return { cum, older, mine, olderB: olderB.sort((x, y) => (parseInt(x, 10) || 0) - (parseInt(y, 10) || 0) || x.localeCompare(y)) };
 }
 /* plots: names; capacity: {key: qty}; transplants / sales: [{plot, day, qty}]. */
 function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
@@ -684,11 +684,11 @@ function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
     for (let m = 1; m <= 12; m++) {
       const ym = year + '-' + String(m).padStart(2, '0');
       const col = c(ym), tr = t(ym);
-      const rd = col > 0 ? saRound(TB[k], SB[k], ym) : { cum: 0, older: 0, mine: 0 };
+      const rd = col > 0 ? saRound(TB[k], SB[k], ym) : { cum: 0, older: 0, mine: 0, olderB: [] };
       const cum = rd.cum;
       months.push({
         ym, future: !!todayYM && ym > todayYM,
-        col, colCum: cum, colOlder: rd.older, colMine: rd.mine, colPct: cap > 0 && cum > 0 ? Math.floor(cum / cap * 100) : null,
+        col, colCum: cum, colOlder: rd.older, colOlderB: rd.olderB, colMine: rd.mine, colPct: cap > 0 && cum > 0 ? Math.floor(cum / cap * 100) : null,
         colPlan: Math.round(t(saShift(ym, -9)) * 0.9),
         tr, trPlan: t(saShift(ym, -10)),
       });
@@ -1414,7 +1414,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
           hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
         } else if (x.col > 0) {
           // Only batches of the round before were sold this month.
-          hs += `<div class="sa-cell old" title="${esc(tipT)}">${nf(x.col)}<small>Earlier round</small></div>`;
+          hs += `<div class="sa-cell old" title="${esc(tipT)}">${nf(x.col)}<small>${esc((x.colOlderB || []).length ? 'Batch ' + x.colOlderB.join(', ') : 'Earlier round')}</small></div>`;
         } else if (x.colPlan > 0) {
           hs += `<div class="sa-cell pc${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.colPlan)}</div>`;
         } else hs += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
