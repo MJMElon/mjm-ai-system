@@ -1417,7 +1417,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       const ym = year + '-' + String(i + 1).padStart(2, '0');
       return `<div class="sa-mh${ym === curYM ? ' now' : ''}">${m}</div>`;
     }).join('');
-    const plotCell = r => `<div class="sa-plot"><b>${esc(r.plot)}</b><span>${r.cap ? nf(r.cap) + ' seedlings' : 'No capacity keyed'}</span></div>`;
+    const plotCell = r => `<div class="sa-plot"><b>${esc(r.plot)}</b></div>`;
     let hs = head, ht = head;
     rows.forEach((r, ri) => {
       if (ri) { hs += '<div class="sa-gap"></div>'; ht += '<div class="sa-gap"></div>'; }

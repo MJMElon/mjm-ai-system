@@ -186,7 +186,7 @@ const server = http.createServer((req, res) => {
     return { plots: c.plots, cells: c.cells, tcells: x.cells, tplots: x.plots, months: c.months, tmonths: x.months };
   });
   ok(G && G.months.join() === 'Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec' && G.tmonths.join() === G.months.join(), 'twelve month columns in each of the two tables, in English', G && G.months);
-  ok(G && G.plots[0] === 'B12,352 seedlings' && G.plots.length === 2 && G.tplots.join() === G.plots.join(), 'B1 named with its capacity, 2,352 seedlings, in both tables; two BNN plots', G && G.plots);
+  ok(G && G.plots[0] === 'B1' && G.plots.length === 2 && G.tplots.join() === G.plots.join(), 'B1 named by its plot only, no seedling count, in both tables; two BNN plots', G && G.plots);
   if (G) {
     const b1c = G.cells.slice(0, 12), b1t = G.tcells.slice(0, 12);
     ok(b1c[3].t === '873%' && /c1/.test(b1c[3].cls), 'B1 April collection reads 87 · 3%, the lightest shade', b1c[3]);
