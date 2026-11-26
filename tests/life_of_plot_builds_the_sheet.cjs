@@ -6,7 +6,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'operation', 'operation_l
 const block = src.slice(src.indexOf('// ── BEGIN build'), src.indexOf('// ── END build'));
 const NURSERY_LABEL = { BNN: 'BNN', UNN1: 'UNN 1', UNN2: 'UNN 2', OTHER: 'Not in Seedling Stock' };
 const NURSERY_ORDER = ['BNN', 'UNN1', 'UNN2', 'OTHER'];
-const { buildPlotHistory } = new Function('NURSERY_LABEL', 'NURSERY_ORDER', block + '\nreturn { buildPlotHistory };')(NURSERY_LABEL, NURSERY_ORDER);
+const { buildPlotHistory, buildTransplantYear, lpYears } = new Function('NURSERY_LABEL', 'NURSERY_ORDER', block + '\nreturn { buildPlotHistory, buildTransplantYear, lpYears: typeof lpYears === "function" ? lpYears : null };')(NURSERY_LABEL, NURSERY_ORDER);
 
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) { pass++; console.log('  ok   ' + m); } else { fail++; console.log('  FAIL ' + m + (d !== undefined ? ' -> ' + JSON.stringify(d) : '')); } };
@@ -66,6 +66,41 @@ ok(b265.adj !== -177, 'an unapproved -50 transplanting calibration is not counte
 console.log('3. what is left out');
 ok(!plotOf('B4-R') && !m.groups.flatMap(g => g.plots).some(p => /-R/.test(p.plot)), 'a -R replant plot has no timeline');
 ok(plotOf('B14') && plotOf('B14').batches.length === 0 && plotOf('B14').tAdj === 0, 'a plot with nothing recorded still shows, empty');
+
+console.log('4. a plot is read by CYCLE, never mixed (the office B11, from its own sheet)');
+{
+  const c3 = (plot, b, date, qty) => ({ plot_name: plot, transaction_type: '3rd_Culling', transaction_date: null, quantity_change: qty, batch_name: b, remark: `3rd Culling. Culled: ${qty} MapQty: ${qty} CullDate:${date}` });
+  const c2 = (plot, b, date, qty) => ({ plot_name: plot, transaction_type: '2nd_Culling', transaction_date: null, quantity_change: qty, batch_name: b, remark: `2nd Culling. Dead: ${qty}. CullDate: ${date}` });
+  const r2 = [
+    T('B11', '228', '2025-05-22', 3074), T('B11', '229', '2025-05-22', 9047),
+    c2('B11', '228', '2025-09-14', 95), c2('B11', '229', '2025-09-14', 69),
+    c3('B11', '228', '2026-06-12', 178), c3('B11', '229', '2026-06-12', 2884),
+    T('B11', '263', '2026-07-22', 1646), T('B11', '265', '2026-07-24', 7453),
+    { plot_name: 'B11', transaction_type: 'Stock_Calibration', transaction_date: '2026-08-26', quantity_change: -127, batch_name: '265', remark: 'Report: Transplanting. Plot: B11. [APPROVED by x]' },
+    c2('B11', '263', '2026-11-12', 60), c2('B11', '265', '2026-11-12', 41),
+    T('B11', '269', '2026-09-10', 3168), T('B11', '271', '2026-10-24', 135),
+    T('B4', '242', '2026-01-18', 1000),
+  ];
+  const m2 = buildPlotHistory([{ plot_name: 'B11', nursery_name: 'BNN' }, { plot_name: 'B4', nursery_name: 'BNN' }, { plot_name: 'B13', nursery_name: 'BNN' }], r2);
+  const p11 = m2.groups.flatMap(g => g.plots).find(p => p.plot === 'B11');
+  const cy = p11.cycles || [];
+  ok(cy.length === 2, 'B11 has two cycles', cy.length);
+  ok(cy[0] && cy[0].batches.map(b => b.batch).join() === '228,229' && cy[0].tAdj === 12121 && cy[0].start === '2025-05-22' && cy[0].end === '2026-06-12',
+     'cycle 1: 228 + 229, 12,121 transplanted, 22 May 2025 to its 3rd cull 12 Jun 2026 (the sheet total 12,121)', cy[0] && [cy[0].batches.map(b => b.batch), cy[0].tAdj, cy[0].start, cy[0].end]);
+  ok(cy[1] && cy[1].batches.map(b => b.batch).join() === '263,265,269,271' && cy[1].tAdj === 12275 && cy[1].current && !cy[1].end,
+     'cycle 2: 263, 265, 269, 271 — 12,275 transplanted, running now (the sheet total 12,275)', cy[1] && [cy[1].batches.map(b => b.batch), cy[1].tAdj, cy[1].end]);
+  ok(cy[1] && cy[1].c2 === 101 && cy[0].c3 === 3062, 'each cycle carries its own culls: cycle 2 2nd cull 101, cycle 1 3rd cull 3,062', cy[1] && [cy[1].c2, cy[0].c3]);
+
+  console.log('5. the transplant record by year is the office sheet');
+  const R = buildTransplantYear(m2, 2026);
+  const bnn = R.groups.find(g => g.key === 'BNN');
+  const row = n => bnn.plots.find(p => p.plot === n);
+  ok(row('B11').months.join() === '0,0,0,0,0,0,8972,0,3168,135,0,0', 'B11 2026: Jul 8,972 (1,646 + 7,453 − 127), Sep 3,168, Oct 135 — as the office sheet reads', row('B11').months);
+  ok(row('B4').months[0] === 1000 && row('B13') && row('B13').total === 0, 'B4 Jan 1,000; B13 keeps its empty row', [row('B4').months[0], row('B13') && row('B13').total]);
+  ok(bnn.months[6] === 8972 && bnn.total === 1000 + 8972 + 3168 + 135, 'the BNN total row adds the plots', [bnn.months[6], bnn.total]);
+  ok(R.thisY[6] === 8972 && R.thisCum[11] === R.total && R.prevY[4] === 12121, 'summary: 2026 by month and cumulative, and 2025 beside it (May 2025: 12,121)', [R.thisY[6], R.thisCum[11], R.prevY[4]]);
+  ok(lpYears && lpYears(m2).join() === '2025,2026', 'the years offered are the years with a transplant', lpYears && lpYears(m2));
+}
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

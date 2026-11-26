@@ -12156,3 +12156,26 @@ as Pending.
   count it yet.
 
 `tests/an_added_job_is_a_section_of_its_own.cjs`.
+
+## Life of Plot reads a plot by CYCLE, and carries the Transplant Record by year
+
+`operation/operation_life_of_plot.html`. A plot is filled, grown and 3rd
+culled, then filled again, and each of those is a CYCLE. Its capacity is what
+was transplanted in that cycle, never the plot's whole history added up.
+`lpCycles` is the rule: batches in transplant-date order, and a batch
+transplanted AFTER the latest 3rd culling of the cycle before it starts a new
+one. A plot opens as one card per cycle, newest first, each card with its own
+dates, days and total. The office's Census & Drone Counting sheet lays B11 out
+the same way: 228 + 229 = 12,121, then 263 to 271 = 12,275. The map colours
+and the list read the CURRENT cycle.
+
+The side bar's **Transplant record by year** (`buildTransplantYear`) is the
+office's *Transplant Record 2026* sheet: a row for every plot Seedling Stock
+holds, a column per month, a total per nursery, and the year with the one
+before it on top. The figure is the transplant record PLUS the approved
+calibration, which lands in the batch's transplant month. That is how the
+sheet reads B11 in July 2026: 8,972 = 1,646 + 7,453 - 127.
+
+`tests/life_of_plot_builds_the_sheet.cjs` (builder) and
+`tests/life_of_plot_reads_by_cycle.cjs` (the real page) hold it. Nothing to
+run in the database.
