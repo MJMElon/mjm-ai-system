@@ -127,7 +127,8 @@
   /* The module above it is off, so this does nothing until it goes back on.
      Still settable — the answer is kept — but it should not look live. */
   .pt-dim { opacity:.4; }
-  .pt-cell.m-cant.on .sw { background:#f59e0b; }
+  /* A switch with nothing yet behind its ON (CANNOT_YET) is the SAME purple
+     as every other: the office asked for no orange. Its hover still says why. */
 
   .btn { padding:10px 20px; border:0; border-radius:12px; cursor:pointer;
          background:#7c3aed; color:white; font-family:inherit;
@@ -272,9 +273,8 @@
            everybody. What is left is the one thing the table cannot say —
            that a tick is stored and not yet obeyed — and it says it on the
            row itself as well as here. -->
-      <!-- No paragraph here. An amber switch is one with nothing behind its ON
-           yet, and hovering it says which and why — that is the whole of what
-           used to be written out underneath. -->
+      <!-- No paragraph here. A switch with nothing behind its ON yet says
+           so on hover, and is drawn the same purple as the rest. -->
       <div class="flex items-center gap-3" style="margin-top:14px;">
         <button class="btn" id="m-save" onclick="savePortals()">Save switches</button>
         <span id="m-status" class="muted"></span>
@@ -521,16 +521,19 @@ const MATA_MALAM_FUNCTIONS = [
    minutes. See shared/RUN_ME_worker_photos.sql, which has to have been run
    for this switch to mean anything.
 
-   Scan / Delivery Order / PALMS / Culling: the Worker Portal has no such
-   screen built yet. The switch is here because the decision is yours to record
+   Scan / Delivery Order: the Worker Portal has no such screen built yet.
+   PALMS / Culling / NELOS / Pending Verification reach the Worker Portal only
+   through the floating dock, which is drawn only for a staff sign-in. The switch is here because the decision is yours to record
    — and the day one of them is built it arrives already set the way you set
    it, rather than appearing on every worker's phone unannounced. */
 const CANNOT_YET = {
   worker: {
     scan:    'No Scan Barcode Counter on a worker phone yet — off is obeyed, on waits for one.',
     do:      'No Issue Collection DO screen on a worker phone yet — off is obeyed, on waits for one.',
-    palms:   'No PALMS screen on a worker phone yet — off is obeyed, on waits for one.',
-    culling: 'No Culling Calculator on a worker phone yet — off is obeyed, on waits for one.'
+    palms:   'Only on the dock (the M coin), on a phone also signed in as staff.',
+    culling: 'Only on the dock (the M coin), on a phone also signed in as staff.',
+    nelos:   'Only on the dock (the M coin), on a phone also signed in as staff.',
+    verify:  'Only on the dock (the M coin), on a phone also signed in as staff.'
   }
 };
 
@@ -560,7 +563,13 @@ const PORTAL_MODULES = {
        the other. */
     { key:'siram_go',    name:'Siram Go' },
     { key:'palms',       name:'PALMS' },
-    { key:'culling',     name:'Culling Calculator' }
+    { key:'culling',     name:'Culling Calculator' },
+    /* Two more actions of the floating dock (the M coin). Every action on
+       the dock obeys the column of the portal it is drawn over, ticked to
+       show. The keys are spelled in DOCK_ACTION_KEY in Barcode_Counter
+       src/lib/portalSettings.js too. Change one, change the other. */
+    { key:'nelos',       name:'NELOS' },
+    { key:'verify',      name:'Pending Verification' }
   ],
   /* Every module the company has, not only the two the Worker Portal draws
      today. Whether a worker sees a module is decided here and nowhere else, so
@@ -580,6 +589,8 @@ const PORTAL_MODULES = {
     { key:'siram_go',    name:'Siram Go' },
     { key:'palms',       name:'PALMS' },
     { key:'culling',     name:'Culling Calculator' },
+    { key:'nelos',       name:'NELOS' },
+    { key:'verify',      name:'Pending Verification' },
     /* Not on the office outline, because that outline is the FC PORTAL
        column and this module is the Worker Portal's alone. Absent from one
        column is not the same as gone. */
@@ -663,8 +674,8 @@ function drawPortals() {
 
     /* The caveat is not written across the row any more — five lines of red
        under five names is a wall of text on a screen that is meant to be read
-       across, not down. The switch still carries it: amber rather than
-       purple, and the sentence on hover. The note under the table says which
+       across, not down. The switch still carries it, as the sentence
+       on hover; it is drawn purple like the rest. The note under the table says which
        ones and why, once. */
 
     return `<tr class="${r.kind === 'fn' ? 'pt-sub' : 'pt-mod'}">

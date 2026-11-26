@@ -241,7 +241,7 @@ const RECS = [
     const secs = [];
     let cur = null;
     [...tbl.querySelectorAll('tbody tr')].forEach(tr => {
-      if (tr.classList.contains('sp-job-row')) { cur = { band: tr.textContent.trim(), head: [], body: [], foot: [] }; secs.push(cur); return; }
+      if (tr.classList.contains('sp-job-row')) { cur = { band: (tr.querySelector('.sp-job-name') || tr).textContent.trim(), head: [], body: [], foot: [] }; secs.push(cur); return; }
       if (!cur) return;
       if (tr.classList.contains('sp-head')) { cur.head = [...tr.children].map(th => th.textContent.trim()); return; }
       if (tr.classList.contains('sp-sub-row')) { cur.foot = cells(tr); return; }

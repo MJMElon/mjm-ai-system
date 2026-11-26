@@ -11639,13 +11639,71 @@ the information is not a fix"* and then measured only the box. The check is
 **THE SECOND MESSAGE IS WHY THIS IS NOT SIMPLY A BARE AMBER DATE.** A row can
 carry a day of its OWN and a submission claiming another — the office's N20-R
 exactly — and two dates one above the other with nothing between them is a
-question. **One glyph answers it in the width of a space** (`⏳`), and the
-sentence and the name stay in the hover where there is room. The row's own
-date carries no mark, and the test asserts both halves.
+question. The answer was **one glyph in the width of a space** (`⏳`), with
+the sentence and the name in the hover. **That lasted a day — see below.**
 
 The fixture grew B4 for it: **the dash case cannot test this**, because a
 cell with one date in it reads the same whatever the other line is marked
-with. **5 of the section's 14 checks fail on the previous page.**
+with.
+
+**Nothing to run in the database.**
+
+##### AND THE GLYPH WAS AN ABSTRACTION TOO: 我不知道这是什么意思
+
+The office opened U12 and read **`⏳ 25 Nov 2026 +1`** under a dash, and
+said the plainest thing there is: *"我不知道这是什么意思"*.
+
+**THEY HAD BEEN TOLD, IN CHAT, THE DAY BEFORE, AND THAT IS THE PART TO
+LEARN FROM.** A glyph means nothing to somebody who has not been told what
+it stands for, and a sentence said in a message is said ONCE, to ONE
+person, on ONE day. This file already had the rule two screens along —
+*a screen that can answer a question and instead prints an abstraction is
+the screen that made somebody ask it* — and the cell had **three** of
+them: the hourglass, the `+1`, and a bare date standing under a dash with
+nothing saying whose day it was.
+
+**SO THE SENTENCE IS IN THE CELL**, on every chip, and the count is in
+words (`rec.waitingN`, *2 records*). The hover keeps the worker NAMES,
+which are the one thing there is genuinely no room for.
+
+**IT IS THE SAME SENTENCE ON TWENTY ROWS AND THAT IS THE POINT.** The
+argument against was noise, and it is wrong here: this is the Pending tab,
+where every chip means the same thing, and repeating it is what makes the
+tab readable. The office has now asked what it means twice.
+
+Four things in it, and the last is what it cost:
+
+- **ONE FACT TO A LINE** — the sentence, the day, the count. The column is
+  the narrowest on the row and the sentence is the longest thing on the
+  page, so the two cannot share a line at any width this table can afford.
+- **THE SENTENCE MAY WRAP AND THE DAY MAY NOT.** *WAITING FOR* over
+  *APPROVAL* reads perfectly well; `21 Nov` over `2026` does not, and a
+  date in two pieces is most of the way back to `21 Nov 2...`. So the day
+  has a line to itself with `nowrap`, and **the date column is given a
+  width of its own** — `table-layout:fixed` with no widths shares the
+  minimum equally, about 94px, of which the cell's padding leaves under
+  75. The other eleven give up about 3px apiece, and all eleven are short
+  or already wrap.
+- **NO ELLIPSIS ANYWHERE IN THE CHIP.** That is what let the date go the
+  first time, and a rule that trims is a rule that will trim the one thing
+  the cell is for.
+- **IT IS THE SAME WORDS AS THE LOOSE ROWS**, which have carried
+  `rec.waiting` in their colspan cell all along. Two wordings for one
+  state is how they drift.
+
+**The sentence has to earn its own test.** *"no bare +n is left"* and *"no
+glyph is left standing in for the sentence"* are asserted as ABSENCES, as
+hard as the words are asserted present, or the next person adds a glyph
+back beside them and every check stays green.
+
+`tests/the_records_list_is_three_parts.cjs` is 48 checks and **7 fail on
+the previous page**. Its fixture grew a SECOND worker on B2's round —
+*"one waiting record per row cannot test a count at all"*, and `+1` was
+half of what the office could not read. The one-line checks are **measured
+against the rendered line-height**, because a width in the stylesheet
+proves nothing about the font that renders it; and the probe finds a
+SCHEDULED row's chip, since the loose rows write the sentence as plain
+text, carry none of the chip's spans, and come first in the list.
 
 **Nothing to run in the database.**
 
@@ -11928,3 +11986,14 @@ show 10 months and above seedlings and also 1.5 m or above plot qty"*.
   `tests/the_mcp_reads_the_dashboard.cjs` share a ledger where U7 is
   matured by the old rule and only 9 months old, so it is NOT available.
   **The Edge Function must be redeployed** for the agent to answer by it.
+
+## The M coin follows Portal View & Function, per portal
+
+Every action on the phone dock (PALMS, Culling Calculator, NELOS, Pending
+Verification, Mata Malam, Siram Go) is a row of System Setting → Portal View
+& Function, and the dock reads the column of the portal it is drawn over:
+the Worker Portal column on `/worker`, the FC Portal column elsewhere. NELOS
+and Pending Verification are new rows (`nelos`, `verify`); absent is ticked,
+so nothing moved until somebody unticks one. The keys are `DOCK_ACTION_KEY`
+in Barcode_Counter `src/lib/portalSettings.js` too. Nothing to run in the
+database.

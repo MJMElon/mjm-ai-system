@@ -1009,6 +1009,38 @@ const JOB_SCOPE_WAS = { seed_planting: 'pre' };
 let jobScopes = {};          // job key → 'pre' | 'main' | 'both', only what is KEYED
 const JOB_SCOPE_PREFIX = 'job_scope:';
 
+/* ── JOBS THE OFFICE ADDS ──────────────────────────────────────────────
+   "这边要可以add job", then what a job carries when it is added: its
+   name, where it is done (Pre / Main / Both), whether it has a side bar
+   entry of its own or sits under an existing job's sheet the way Mengisi
+   Tanah ke Hyplug sits under Seed Planting, and where its quantity comes
+   from. Its PRICE is set on Nursery Payroll → Settings → Piece Rate, which
+   lists the job as Pending until it has one. And "添加后这里同步增加": the job is a row on
+   Worker List for Each Job as soon as it is saved.
+
+   ONE nops_maint_config row, `custom_jobs`, a JSON list. The key is made
+   once (`cj_` + a time stamp) and never changes, so a renamed job keeps
+   its scope and its crew rows. Nothing to run in the database. */
+const CUSTOM_JOBS_KEY = 'custom_jobs';
+const CJ_QTY_FROM = { plot: 'Plot seedlings', batch: 'Batch planted qty', keyed: 'Keyed by workers' };
+let customJobs = [];          // [{ key, label, sidebar, under, qtyFrom }]
+let jobCustomDraft = null;    // the list while Where Each Job Is Done is being edited
+function _cjParse(v) {
+  try {
+    const a = JSON.parse(String(v || '[]'));
+    return Array.isArray(a) ? a.filter(j => j && /^cj_[a-z0-9]+$/.test(String(j.key || '')) && String(j.label || '').trim()) : [];
+  } catch (_) { return []; }
+}
+function customJob(key, list) { return (list || customJobs).find(j => j.key === key) || null; }
+function allJobKeys(list) { return PAYROLL_VIEW_KEYS.concat((list || customJobs).map(j => j.key)); }
+/* MJMJobCrew.JOBS is read by every reader of the crew rows, so an added
+   job is put into it IN PLACE, the way applyCustomRoles feeds ROLES. */
+function _cjFeedCrew(list) {
+  const J = window.MJMJobCrew && MJMJobCrew.JOBS;
+  if (!J) return;
+  (list || customJobs).forEach(j => { if (!J.includes(j.key)) J.push(j.key); });
+}
+
 function jobScopeOf(key) {
   const keyed = jobScopes[key];
   return JOB_SCOPE_ROWS.includes(keyed) ? keyed : (JOB_SCOPE_WAS[key] || 'main');
@@ -1027,6 +1059,8 @@ function jobNurseries(key) { return scopeNurseries(jobScopeOf(key)); }
    here — the same rule the section head follows, so one wording and one
    language toggle. */
 function jobLabel(key) {
+  const cj = customJob(key, jobCustomDraft || customJobs) || customJob(key);
+  if (cj) return cj.label;
   const btn = document.getElementById('pn-subtab-' + key);
   const span = btn && btn.querySelector('[data-i18n]');
   if (span) return t(span.getAttribute('data-i18n'));
@@ -3256,8 +3290,52 @@ const SP_VIEWS = { seed_planting: 'seed' };
    one job it heads. */
 const SP_JOBS = [
   { job: 'seed',   label: 'pay.jobSeed' },
-  { job: 'hyplug', label: 'pay.jobHyplug' },
+  { job: 'hyplug', label: 'pay.jobHyplug', removable: true },
 ];
+
+/* A MONTH WITH NO SOIL FILLING TAKES THE BAND OFF. The office:
+   *"这个mengisi tanah某些月份是没有的 所以要有一个按钮是可以删掉这部分的"*.
+   It is a MARK on the month and never a deletion -- one nops_maint_config
+   row, `sp_job_off:<month>`, naming the jobs taken off -- so the band comes
+   back with one press of Add back, and no figure is touched. It is refused
+   while any figure is keyed against that job this month: a band taken off
+   over figures would hide work the claim still pays. An unreadable mark
+   reads as nothing taken off, so the band shows -- the fail-open every
+   other gate here follows. */
+const SP_OFF_PREFIX = 'sp_job_off:';
+function _spJobOff(st, job) { return !!(st && st.off && st.off.includes(job)); }
+function _spJobHasFigures(st, job) {
+  return !!st && st.rows.some(r => _spKeyed(st.saved[_spKey(r.key, job)]) > 0);
+}
+async function setSeedPlantingJobOff(job, on) {
+  if (!wrAllows('seed_planting')) return;
+  const m = getMonth();
+  const st = _spCache[m];
+  const j = SP_JOBS.find(x => x.job === job);
+  if (!st || !j || !j.removable) return;
+  if (on && _spJobHasFigures(st, job)) {
+    alert(t('pay.spOffHasFigures', { j: t(j.label) }));
+    return;
+  }
+  const next = (st.off || []).filter(x => x !== job);
+  if (on) next.push(job);
+  const { error } = await _supabase.from('nops_maint_config').upsert({
+    key: SP_OFF_PREFIX + m,
+    txt_value: next.join(','),
+    note: 'Pre Nursery jobs not done this month (their band is taken off the '
+        + 'Seed Planting & Hyplug sheet). Work Maintenance, Worker Activity.',
+    updated_by: (typeof userEmail !== 'undefined' && userEmail) || window.currentUserEmail || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+  if (error) {
+    alert('Could not save — ' + (error.message || 'try again')
+      + (/txt_value/i.test(error.message || '')
+        ? '\n\nRun shared/RUN_ME_nops_maint_config.sql in the Supabase SQL Editor once, then try again.' : ''));
+    return;
+  }
+  st.off = next;
+  renderPayroll();
+}
 function _spKey(batch, job) { return String(batch) + '|' + (job || 'seed'); }
 
 /* THE JOB IS SENT ONLY BY A DATABASE THAT HAS THE COLUMN. Naming a column a
@@ -3365,6 +3443,13 @@ async function loadSeedPlantingForPayroll(m) {
     if (me) { noMoveTable = true; console.warn('[maint] seed planting batches read:', me.message); }
     else (mv || []).forEach(r => { if (r.batch_name && r.month) moved[String(r.batch_name).trim()] = r.month; });
     const rows = seedPlantingRows(logs, m, moved);
+    /* The jobs taken off this month. Unreadable reads as none. */
+    let off = [];
+    const { data: oc, error: oe } = await _supabase.from('nops_maint_config')
+      .select('key, txt_value').eq('key', SP_OFF_PREFIX + m)
+      .then(r => r, e => ({ error: e }));
+    if (oe) console.warn('[maint] seed planting jobs off read:', oe.message);
+    else (oc || []).forEach(r => { off = String(r.txt_value || '').split(',').map(x => x.trim()).filter(Boolean); });
 
     /* Asked by the BATCHES on this sheet, not by the month written on the
        record: a batch keyed under September and then moved into October
@@ -3433,7 +3518,7 @@ async function loadSeedPlantingForPayroll(m) {
       if (b && d && (!home[b] || d < home[b])) home[b] = d;
       if (b && d) homeQty[b] = (homeQty[b] || 0) + (Number(l.quantity_change) || 0);
     });
-    _spCache[m] = { rows, saved, names, prevNames, noTable, noJob, moved, noMoveTable, home, homeQty };
+    _spCache[m] = { rows, saved, names, prevNames, noTable, noJob, moved, noMoveTable, home, homeQty, off };
   } catch (e) {
     _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
   } finally {
@@ -3507,7 +3592,7 @@ function renderSeedPlantingPayroll() {
        boxes whose save the database will refuse. Seed Planting is
        unaffected -- those rows save as they always have. */
     const noJob = !!(st && !st.noTable && st.noJob);
-    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol') : t('pay.spHint');
+    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol') : '';
     hint.classList.toggle('pay-hint-warn', noTable || noJob);
   }
   if (_spLoading[m] || !st) {
@@ -3530,6 +3615,12 @@ function renderSeedPlantingPayroll() {
      下两部分就好"* -- which is also how the claim they flow into is laid
      out, so the screen and the paper read the same way round. */
   const section = (j) => {
+    if (_spJobOff(st, j.job)) {
+      return `<tr class="sp-job-row sp-job-off"><td class="sp-job" colspan="${span}"><span class="sp-job-name">${esc(t(j.label))}</span>
+        <span class="sp-off-note">${esc(t('pay.spOffNote', { m }))}</span>
+        <button type="button" class="btn btn-sm sp-job-btn" data-sp-add="${j.job}"
+          onclick="setSeedPlantingJobOff('${j.job}', false)">${esc(t('pay.spOffAdd'))}</button></td></tr>`;
+    }
     /* The soil filling half cannot be stored without the column; the seed
        half always can, because that is the row the table has always had. */
     const shut = st.noTable || (st.noJob && j.job !== 'seed');
@@ -3556,7 +3647,7 @@ function renderSeedPlantingPayroll() {
           : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
         body += `<tr>
           <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
-          <td class="plot-td">${esc(r.batch)}</td>
+          <td class="sp-batch">${esc(r.batch)}</td>
           <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
           ${wk.map((w, wi) => {
             const v = cells[w];
@@ -3573,7 +3664,11 @@ function renderSeedPlantingPayroll() {
     /* The band names the job and nothing else. Its own total sits under its
        own rows: one figure under both would be two jobs added together, and
        they are not the same thing even where the unit is. */
-    return `<tr class="sp-job-row"><td class="sp-job" colspan="${span}">${esc(t(j.label))}</td></tr>
+    const rm = j.removable && !st.noTable
+      ? `<button type="button" class="btn btn-sm sp-job-btn" data-sp-remove="${j.job}"
+          title="${esc(t('pay.spOffTip'))}" onclick="setSeedPlantingJobOff('${j.job}', true)">✕ ${esc(t('pay.spOffRemove'))}</button>`
+      : '';
+    return `<tr class="sp-job-row"><td class="sp-job" colspan="${span}"><span class="sp-job-name">${esc(t(j.label))}</span>${rm}</td></tr>
       <tr class="sp-head">
         ${payTh(t('pay.spPlantedDate'), 100)}
         ${payTh(t('pay.batch'), 96)}
@@ -3662,7 +3757,7 @@ function _spDrawNames(m, st) {
       onclick="removeSeedPlantingWorker(${i})" aria-label="${esc(t('pay.spRemove'))} ${esc(w)}">×</button></span>`).join('');
   box.innerHTML = `<div class="sp-names">
     <span class="sp-names-lbl">${esc(t('pay.spWorkers', { m }))}</span>
-    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`}
+    ${chips}
     <span class="sp-names-add">
       ${_spWorkerSelect(st)}
       <input type="text" id="sp-new-name-other" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}" style="display:none;"
@@ -3675,17 +3770,12 @@ function _spDrawNames(m, st) {
 function _spBatchBar(m, st) {
   if (st.noMoveTable) return `<div class="sp-names sp-names-warn">${esc(t('pay.spNoMoveTable'))}</div>`;
   const ins = Object.keys(st.moved).filter(b => st.moved[b] === m).sort();
-  const outs = Object.keys(st.moved).filter(b => st.moved[b] !== m && st.home[b] && _spMonthOfDate(st.home[b]) === m).sort();
   const chips = ins.map(b =>
     `<span class="sp-chip">${esc(b)}<span class="sp-chip-sub">${esc(t('pay.spPlantedOn', { d: _spDay(st.home[b] || '') }))}</span><button type="button" class="sp-chip-x" title="${esc(t('pay.spRemove'))}"
       onclick="removeSeedPlantingBatch('${esc(b).replace(/'/g, "\\'")}')" aria-label="${esc(t('pay.spRemove'))} ${esc(b)}">×</button></span>`).join('');
-  const out = outs.length
-    ? `<span class="sp-names-none">${esc(t('pay.spMovedOut', { list: outs.map(b => b + ' → ' + st.moved[b]).join(', ') }))}</span>`
-    : '';
   return `<div class="sp-names">
     <span class="sp-names-lbl">${esc(t('pay.spBatches'))}</span>
-    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoBatches'))}</span>`}
-    ${out}
+    ${chips}
     <span class="sp-names-add">
       ${_spBatchSelect(m, st)}
       <button type="button" id="sp-batch-confirm" class="btn btn-sm btn-primary" onclick="addSeedPlantingBatch()" style="display:none;">${esc(t('pay.spConfirm'))}</button>
@@ -4387,7 +4477,7 @@ function downloadPayrollPDF(opts) {
     for (let i = 0; i < cols.length; i += per) chunks.push(cols.slice(i, i + per));
 
     let started = false;
-    SP_JOBS.forEach((j) => {
+    SP_JOBS.filter(j => !_spJobOff(st, j.job)).forEach((j) => {
       const job = j.job, label = t(j.label);
       chunks.forEach((chunk, ci) => {
         if (started) newPage();
@@ -5473,13 +5563,15 @@ const I18N = {
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
     'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
-    'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
-    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Pre Nursery payroll, where it is priced. The sheet carries BOTH Pre Nursery jobs, one under the other: sowing the seed on top, and filling the hyplug trays with soil below it, each with its own figures and its own Check.',
+    'pay.spNone':'No seed planting in {m}.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug cannot save yet: run shared/RUN_ME_hyplug_soil.sql in Supabase. The rows below are read from the batch report as normal, and Seed Planting is unaffected.',
     'pay.qtyHoles':'Qty to fill',
     'pay.jobSeed':'Seed Planting', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
-    'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
+    'pay.spOffRemove':'Remove for this month', 'pay.spOffTip':'This job was not done this month: take its section off. Add it back any time.',
+    'pay.spOffAdd':'+ Add back', 'pay.spOffNote':'not done in {m}',
+    'pay.spOffHasFigures':'{j} still has figures keyed this month. Clear them first, then remove the section.',
+    'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet.',
     'pay.spNamePh':'Worker name', 'pay.spConfirm':'Confirm', 'pay.spRemove':'Remove',
     'pay.spPickWorker':'Pick a worker…', 'pay.spPickGroup':'Pick a position…', 'pay.spTickSome':'Tick at least one name, then press Confirm.', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
     'pay.spPickBatch':'Pick a batch…', 'pay.spNoLateBatch':'No batch from the last two months',
@@ -5489,9 +5581,8 @@ const I18N = {
     'pay.spLocked':'Batch {b} is Checked, so it is on the payroll as it stands. Uncheck it first to change a figure.', 'pay.spDup':'{w} is already on this month\u2019s list.',
     'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
     'pay.spRemoveQ':'Remove {w} from the {m} list?',
-    'pay.spBatches':'Batches added by hand:', 'pay.spNoBatches':'None. A batch planted too late for its own month can be added here.',
+    'pay.spBatches':'Batches added by hand:',
     'pay.spBatchPh':'Batch no.', 'pay.spPlantedOn':'planted {d}',
-    'pay.spMovedOut':'Moved out of this month: {list}',
     'pay.spNoSuchBatch':'Batch {b} has no Seed Planting on any batch report.',
     'pay.spBatchHere':'Batch {b} is already on the {m} sheet.',
     'pay.spMoveQ':'Move batch {b} from {from} to {m}?\n\nIt leaves the {from} sheet and is counted here instead. Figures already keyed go with it.',
@@ -5589,6 +5680,7 @@ const I18N = {
     'rec.partPending':'Pending',
     'rec.partPendingSub':'Every ticked schedule row that nobody has approved yet, and the work a worker recorded that is still waiting for a Field Conductor',
     'rec.waiting':'Waiting for approval',
+    'rec.waitingN':'{n} records',
     'rec.waitingTip':'A worker recorded this job and no Field Conductor has approved it yet, so nothing of it has reached the row — no date, no batch, no quantity. Approve it in the Verify Hub and it moves to Approved.',
     /* `looseHead` is GONE with the block it was a heading for. The sentence
        is said on the row itself now — `looseTag` in the cell, `looseSub` on
@@ -5690,13 +5782,15 @@ const I18N = {
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
     'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
     'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
-    'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
-    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Pre Nursery, di mana ia diberi harga. Helaian ini membawa KEDUA-DUA kerja Pre Nursery, satu di bawah satu lagi: menanam benih di atas, mengisi tanah ke hyplug di bawahnya, masing-masing dengan angka dan Check sendiri.',
+    'pay.spNone':'Tiada penanaman benih pada {m}.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug belum boleh disimpan: jalankan shared/RUN_ME_hyplug_soil.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa, dan Penanaman Benih tidak terjejas.',
     'pay.qtyHoles':'Kuantiti diisi',
     'pay.jobSeed':'Penanaman Benih', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
-    'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
+    'pay.spOffRemove':'Buang untuk bulan ini', 'pay.spOffTip':'Kerja ini tidak dibuat bulan ini: buang bahagiannya. Boleh tambah semula bila-bila masa.',
+    'pay.spOffAdd':'+ Tambah semula', 'pay.spOffNote':'tidak dibuat pada {m}',
+    'pay.spOffHasFigures':'{j} masih ada angka bulan ini. Kosongkan dahulu, kemudian buang bahagian ini.',
+    'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini.',
     'pay.spNamePh':'Nama pekerja', 'pay.spConfirm':'Sahkan', 'pay.spRemove':'Buang',
     'pay.spPickWorker':'Pilih pekerja…', 'pay.spPickGroup':'Pilih jawatan…', 'pay.spTickSome':'Tanda sekurang-kurangnya satu nama, kemudian tekan Sahkan.', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
     'pay.spPickBatch':'Pilih batch…', 'pay.spNoLateBatch':'Tiada batch dari dua bulan lepas',
@@ -5706,9 +5800,8 @@ const I18N = {
     'pay.spLocked':'Batch {b} sudah disemak, jadi ia dalam gaji seperti sekarang. Nyahsemak dahulu untuk menukar angka.', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
     'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
     'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',
-    'pay.spBatches':'Batch ditambah sendiri:', 'pay.spNoBatches':'Tiada. Batch yang ditanam terlalu lewat untuk bulannya boleh ditambah di sini.',
+    'pay.spBatches':'Batch ditambah sendiri:',
     'pay.spBatchPh':'No. batch', 'pay.spPlantedOn':'ditanam {d}',
-    'pay.spMovedOut':'Dipindah keluar bulan ini: {list}',
     'pay.spNoSuchBatch':'Batch {b} tiada Seed Planting dalam mana-mana laporan batch.',
     'pay.spBatchHere':'Batch {b} sudah ada dalam {m}.',
     'pay.spMoveQ':'Pindah batch {b} dari {from} ke {m}?\n\nIa keluar dari {from} dan dikira di sini. Angka yang sudah diisi ikut sekali.',
@@ -5795,6 +5888,7 @@ const I18N = {
     'rec.partPending':'Belum Lulus',
     'rec.partPendingSub':'Semua baris jadual yang ditanda dan belum diluluskan, serta kerja yang direkod pekerja yang masih menunggu Field Conductor',
     'rec.waiting':'Menunggu kelulusan',
+    'rec.waitingN':'{n} rekod',
     'rec.waitingTip':'Seorang pekerja merekod kerja ini dan belum ada Field Conductor meluluskannya, jadi tiada apa-apa sampai ke baris ini — tiada tarikh, batch atau kuantiti. Luluskan di Verify Hub dan ia berpindah ke Diluluskan.',
     'rec.looseTag':'Tiada dalam jadual',
     'rec.looseOnly':'Tiada dalam jadual bulan ini',
@@ -9324,6 +9418,26 @@ function _dateCell(r) {
        + `${_datesDisplay(ds)}</span>`;
 }
 
+/* THE DASH GOES WHERE THE CHIP SPEAKS — *"符号 - 就不用了"*, over a cell
+   reading `-` above WAITING FOR APPROVAL and a day.
+
+   The dash means the office has keyed no date, and on an ordinary row that
+   is worth saying: an empty cell reads as a column that failed to draw.
+   Under a chip it says nothing the chip does not already say, in a place
+   where it reads as a CONTRADICTION — a dash over a date, with nothing
+   between them to say the two are about different things.
+
+   It is only ever the DASH that goes. A row carrying a day of its own keeps
+   it whatever is underneath (the office's own N20-R: `10 Nov 2026` with a
+   claim for the 21st under it), because those really are two facts and
+   dropping either is the one thing this cell must not do. */
+function _dateWithChip(r, list) {
+  const chip = _waitingChip(list);
+  const cell = _dateCell(r);
+  if (chip && cell === '-') return chip;
+  return cell + chip;
+}
+
 const _mvPlotKey    = PlotMovement.plotKey;
 const _mvBatchKey   = PlotMovement.batchKey;
 const _mvBatchList  = PlotMovement.batchList;
@@ -9982,7 +10096,7 @@ function renderRecords() {
       html += `<tr${r.checked ? ' class="rec-row-checked"' : ''} data-rec-id="${r.id}"`
         + ` ondragover="recDragOver(event,${r.id})" ondragleave="recDragLeave(event)"`
         + ` ondrop="recDrop(event,${r.id})">
-        <td class="rc-date">${_dateCell(r)}${_waitingChip(waitingOn[r.id])}</td>
+        <td class="rc-date">${_dateWithChip(r, waitingOn[r.id])}</td>
         <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
         <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
         <td class="rc-plot">${r.plot}</td>
@@ -10055,21 +10169,28 @@ function _waitingChip(list) {
   if (!Array.isArray(list) || !list.length) return '';
   const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
   const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
-  /* JUST THE DAY, AND NEVER CUT OFF — *"直接放日期啊 干嘛这样"*. It was a
-     pill, and a pill is its border, its padding and its radius: 19px of
-     chrome round an 11-character date in a column that is 103px whatever
-     is put in it, so `21 Nov 2026` came out as `21 Nov 2...` and the one
-     thing the cell was there to say was the part that got trimmed.
+  /* IT SAYS IT IN WORDS, and the hourglass that was here is the reason it
+     has to. It was a pill reading `21 Nov 2...`, which trimmed away the one
+     thing the cell was there to say; the pill came off and a `⏳` went in
+     its place, on the argument that a row can carry a day of its own AND a
+     submission claiming another, and that one glyph tells them apart in the
+     width of a space. The office read `⏳ 25 Nov 2026 +1` on U12 and asked
+     *"我不知道这是什么意思"*.
 
-     THE HOURGLASS IS WHAT THE PILL WAS FOR, and it is why this is not
-     simply a bare amber date. A row can carry a day of its own AND a
-     submission claiming another — the office met exactly that on N20-R,
-     `10 Nov 2026` with `21 Nov 2…` under it, and asked what it meant. Two
-     dates one above the other with nothing between them is a question;
-     one glyph answers it in the width of a space. The sentence and the
-     name stay in the hover, where there is room for them. */
-  const short = '⏳ ' + (day ? _tarikhDisplay(day) : t('rec.waiting'))
-    + (list.length > 1 ? ' +' + (list.length - 1) : '');
+     THEY HAD BEEN TOLD, IN CHAT, AND THAT IS THE PART TO LEARN FROM: a
+     glyph means nothing to somebody who has not been told, and a sentence
+     said in a message is said once to one person on one day. This file
+     already has the rule, two screens along — *a screen that can answer a
+     question and instead prints an abstraction is the screen that made
+     somebody ask it*. There were THREE abstractions in that cell: the
+     hourglass, the `+1`, and a bare date standing under a dash with
+     nothing saying whose day it was.
+
+     So the sentence is IN the cell, on every chip, and the count is in
+     words. It is the same sentence on twenty rows and that is the point —
+     this is the Pending tab, where every chip means the same thing, and
+     the office has now asked what it means twice. The hover keeps the
+     worker names, which are the one thing there is no room for. */
   const full = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
     .filter(Boolean).join(' · ');
   /* THE WAY BACK OFF A ROUND, offered only on a record whose round is not
@@ -10088,8 +10209,18 @@ function _waitingChip(list) {
     `<button type="button" class="rec-unpin" title="Take this record off this round"`
     + ` aria-label="Take this record off this round"`
     + ` onclick="recUnpinRecord(${f.id})">&times;</button>`).join('');
+  /* ONE FACT TO A LINE, and the day is the one that must never break.
+     The column is the narrowest on the row and the sentence is the
+     longest thing on the page, so the two cannot share a line at any
+     width this table can afford; stacked, each line is whole and the
+     sentence wrapping over two reads perfectly well, where a date broken
+     across two does not. */
   return ` <span class="rec-waiting" title="${esc(full + ' — ' + t('rec.waitingTip'))}">`
-       + `${esc(short)}</span>${x}`;
+       + `<span class="rw-lab">${esc(t('rec.waiting'))}</span>`
+       + (day ? `<span class="rw-day">${esc(_tarikhDisplay(day))}</span>` : '')
+       + (list.length > 1
+           ? `<span class="rw-n">${esc(t('rec.waitingN', { n: list.length }))}</span>` : '')
+       + `</span>${x}`;
 }
 
 /* The round on the record is not the week its own work date falls in. */
@@ -12975,6 +13106,11 @@ async function loadSettingLists() {
   ((tsRes && tsRes.data) || []).forEach(r => { traySize[r.nursery] = +r.per_tray || 0; });
   const cfg = ((cfgRes && cfgRes.data) || []).find(r => r.key === 'pump_coverage');
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
+  {
+    const cr = ((cfgRes && cfgRes.data) || []).find(r => r && r.key === CUSTOM_JOBS_KEY);
+    customJobs = cr ? _cjParse(cr.txt_value) : [];
+    _cjFeedCrew();
+  }
   try { jobCrews = window.MJMJobCrew ? MJMJobCrew.readConfig((cfgRes && cfgRes.data) || []) : {}; }
   catch (e) { jobCrews = {}; console.warn('[maint] job worker lists:', e); }
   {
@@ -12986,7 +13122,7 @@ async function loadSettingLists() {
     if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
     const key = String(r.key).slice(JOB_SCOPE_PREFIX.length);
     const v = String(r.txt_value || '').trim().toLowerCase();
-    if (PAYROLL_VIEW_KEYS.includes(key) && JOB_SCOPE_ROWS.includes(v)) jobScopes[key] = v;
+    if (allJobKeys().includes(key) && JOB_SCOPE_ROWS.includes(v)) jobScopes[key] = v;
   });
   chemicals   = (chRes && chRes.data) || [];
   fertilisers = (feRes && feRes.data) || [];
@@ -13145,17 +13281,24 @@ const JOB_ROW_NAME = { pre: 'Pre Nursery', main: 'Main Nursery', both: 'Both' };
 
 function _jsScopes() {
   const out = {};
-  PAYROLL_VIEW_KEYS.forEach(k => { out[k] = jobScopeOf(k); });
+  allJobKeys().forEach(k => { out[k] = jobScopeOf(k); });
   return out;
 }
 
 function _jsRowHtml(scope, scopes, editing) {
-  const jobs = PAYROLL_VIEW_KEYS.filter(k => scopes[k] === scope);
+  const list = editing ? jobCustomDraft : customJobs;
+  const jobs = allJobKeys(list).filter(k => scopes[k] === scope);
   const circles = scopeNurseries(scope).map(nurseryShort).join(' · ');
   const chips = jobs.length
-    ? jobs.map(k => `<span class="jb-chip"${editing ? ' draggable="true"' : ''}
+    ? jobs.map(k => {
+        const cj = customJob(k, list);
+        const sub = cj && !cj.sidebar && cj.under ? `<span class="jb-under">under ${esc(jobLabel(cj.under))}</span>` : '';
+        const x = cj && editing ? `<button type="button" class="jb-x" data-cj-remove="${esc(k)}" title="Remove this job"
+            onclick="jsRemoveJob('${esc(k)}')">×</button>` : '';
+        return `<span class="jb-chip${cj ? ' jb-chip-cj' : ''}"${editing ? ' draggable="true"' : ''}
           ondragstart="jsDragStart(event,'${esc(k)}')" ondragend="jsDragEnd(event)"
-        >${esc(jobLabel(k))}</span>`).join('')
+        >${esc(jobLabel(k))}${sub}${x}</span>`;
+      }).join('')
     /* An empty row STANDS, because it is where a job is dragged. The Team
        Board keeps a company section's column up for the same reason. */
     : `<span class="jb-none">${editing ? 'Drag a job here' : 'No job'}</span>`;
@@ -13174,10 +13317,8 @@ function renderJobScopeSetting() {
   const scopes = editing ? jobScopeDraft : _jsScopes();
   box.innerHTML = JOB_SCOPE_ROWS.map(s => _jsRowHtml(s, scopes, editing)).join('')
     + (editing
-      ? `<div class="jb-note">The side bar lists every job whatever row it is
-           in; it is the nursery circles above a sheet that follow this. Saving
-           writes all three rows.</div>
-         <div class="lst-foot">
+      ? `<div class="lst-foot">
+           <button class="btn jb-add" id="js-add-job" onclick="jsOpenAddJob()">+ Add job</button>
            <button class="btn" onclick="jsCancel()">Cancel</button>
            <button class="btn btn-primary" id="js-save-btn" onclick="jsSave()">Save</button>
          </div>`
@@ -13191,9 +13332,79 @@ function renderJobScopeSetting() {
 function jsEdit() {
   if (!maySetting()) return;
   jobScopeDraft = _jsScopes();
+  jobCustomDraft = customJobs.map(j => Object.assign({}, j));
   renderJobScopeSetting();
 }
-function jsCancel() { jobScopeDraft = null; renderJobScopeSetting(); }
+function jsCancel() { jobScopeDraft = null; jobCustomDraft = null; jsCloseAddJob(); renderJobScopeSetting(); }
+
+/* The Add job dialog. Never prompt(): a job carries six answers. */
+function jsOpenAddJob() {
+  if (!jobScopeDraft || !maySetting()) return;
+  jsCloseAddJob();
+  const opts = PAYROLL_VIEW_KEYS.map(k => `<option value="${esc(k)}">${esc(jobLabel(k))}</option>`).join('');
+  const d = document.createElement('div');
+  d.id = 'jb-dlg';
+  d.className = 'jb-dlg-back';
+  d.innerHTML = `<div class="jb-dlg" role="dialog" aria-modal="true" aria-labelledby="jb-dlg-h">
+      <div class="jb-dlg-h" id="jb-dlg-h">Add job</div>
+      <label class="jb-f"><span>Job name</span><input type="text" id="jb-name" maxlength="60" placeholder="e.g. Racun Rumput"></label>
+      <label class="jb-f"><span>Where it is done</span><select id="jb-scope">
+        <option value="main">Main Nursery (BNN · UNN 1 · UNN 2)</option>
+        <option value="pre">Pre Nursery (PN)</option>
+        <option value="both">Both</option></select></label>
+      <div class="jb-f"><span>Side bar</span>
+        <label class="jb-r"><input type="radio" name="jb-sb" value="own" checked onchange="jsAddJobSide()"> Its own entry</label>
+        <label class="jb-r"><input type="radio" name="jb-sb" value="under" onchange="jsAddJobSide()"> Under an existing job</label>
+        <select id="jb-under" disabled>${opts}</select></div>
+      <label class="jb-f"><span>Quantity from</span><select id="jb-qty">
+        ${Object.keys(CJ_QTY_FROM).map(k => `<option value="${k}">${esc(CJ_QTY_FROM[k])}</option>`).join('')}</select></label>
+      <div class="jb-dlg-err" id="jb-err"></div>
+      <div class="lst-foot">
+        <button class="btn" onclick="jsCloseAddJob()">Cancel</button>
+        <button class="btn btn-primary" id="jb-add-go" onclick="jsAddJob()">Add</button>
+      </div></div>`;
+  d.addEventListener('mousedown', e => { if (e.target === d) jsCloseAddJob(); });
+  document.body.appendChild(d);
+  const n = document.getElementById('jb-name');
+  if (n) n.focus();
+}
+function jsAddJobSide() {
+  const u = document.getElementById('jb-under');
+  const r = document.querySelector('input[name="jb-sb"]:checked');
+  if (u) u.disabled = !(r && r.value === 'under');
+}
+function jsCloseAddJob() { const d = document.getElementById('jb-dlg'); if (d) d.remove(); }
+function jsAddJob() {
+  if (!jobScopeDraft || !jobCustomDraft || !maySetting()) return;
+  const v = id => (document.getElementById(id) || {}).value || '';
+  const err = document.getElementById('jb-err');
+  const say = m => { if (err) err.textContent = m; };
+  const label = v('jb-name').trim().replace(/\s+/g, ' ');
+  const kk = x => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!label) return say('Key the job name.');
+  if (allJobKeys(jobCustomDraft).some(k => kk(jobLabel(k)) === kk(label))) return say(`${label} is already a job.`);
+  const side = (document.querySelector('input[name="jb-sb"]:checked') || {}).value || 'own';
+  /* THE PRICE IS SET ON THE PAYROLL, not here: "价钱在这里订". Nursery
+     Payroll → Settings → Piece Rate lists this job as Pending until it has
+     one. */
+  const scope = JOB_SCOPE_ROWS.includes(v('jb-scope')) ? v('jb-scope') : 'main';
+  const job = {
+    key: 'cj_' + Date.now().toString(36),
+    label, sidebar: side !== 'under',
+    under: side === 'under' && PAYROLL_VIEW_KEYS.includes(v('jb-under')) ? v('jb-under') : null,
+    qtyFrom: CJ_QTY_FROM[v('jb-qty')] ? v('jb-qty') : 'keyed',
+  };
+  jobCustomDraft.push(job);
+  jobScopeDraft[job.key] = scope;
+  jsCloseAddJob();
+  renderJobScopeSetting();
+}
+function jsRemoveJob(key) {
+  if (!jobCustomDraft) return;
+  jobCustomDraft = jobCustomDraft.filter(j => j.key !== key);
+  delete jobScopeDraft[key];
+  renderJobScopeSetting();
+}
 
 function jsDragStart(ev, key) {
   if (!jobScopeDraft) { ev.preventDefault(); return; }
@@ -13238,20 +13449,28 @@ async function jsSave() {
   if (!maySetting()) { alert('Setting is not open to you.'); return; }
   if (!_supabase) { alert('Not signed in — nothing was saved.'); return; }
   const draft = jobScopeDraft;
+  const cjDraft = jobCustomDraft || customJobs;
   const btn = document.getElementById('js-save-btn');
   _jsSaving = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     const now = new Date().toISOString();
+    const by = (typeof userEmail !== 'undefined' && userEmail) || window.currentUserEmail || null;
     const { error } = await _supabase.from('nops_maint_config').upsert(
-      PAYROLL_VIEW_KEYS.map(k => ({
+      allJobKeys(cjDraft).map(k => ({
         key: JOB_SCOPE_PREFIX + k,
         txt_value: draft[k],
         note: 'Which nurseries this job is done in: pre, main or both. Keyed on '
             + 'Work Maintenance, Settings, Where Each Job Is Done.',
-        updated_by: (typeof userEmail !== 'undefined' && userEmail) || null,
+        updated_by: by,
         updated_at: now,
-      })), { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+      })).concat((cjDraft.length || customJobs.length) ? [{
+        key: CUSTOM_JOBS_KEY,
+        txt_value: JSON.stringify(cjDraft),
+        note: 'Jobs the office added on Where Each Job Is Done: name, side bar or under which job, quantity source. Priced on Nursery Payroll, Piece Rate.',
+        updated_by: by,
+        updated_at: now,
+      }] : []), { onConflict: 'key' }).then(r => r, e => ({ error: e }));
     if (error) {
       /* A database old enough to have no txt_value refuses the whole write.
          Dropping the column and writing anyway would store eight rows
@@ -13264,8 +13483,13 @@ async function jsSave() {
       return;
     }
     jobScopes = Object.assign({}, draft);
+    customJobs = cjDraft.map(j => Object.assign({}, j));
+    _cjFeedCrew();
     jobScopeDraft = null;
+    jobCustomDraft = null;
     renderJobScopeSetting();
+    /* 添加后这里同步增加: the Worker List card gains or loses the row now. */
+    try { if (typeof renderJobCrewSetting === 'function') renderJobCrewSetting(); } catch (e) { console.warn('[maint] job crew redraw:', e); }
     /* The side bar does not re-order — every job is in it whatever row it
        is in — but the circles over Worker Activity do move, so a sheet
        left open behind this card is put right before anybody goes back. */
@@ -13310,7 +13534,8 @@ const CULL_GROUPS_KEY = 'cull_monitoring_groups';
 const JC_SECTION_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'OTHERS'];
 
 function _jcJobs() {
-  return ((window.MJMJobCrew && MJMJobCrew.JOBS) || []).filter(j => PAYROLL_VIEW_KEYS.includes(j));
+  const own = ((window.MJMJobCrew && MJMJobCrew.JOBS) || []).filter(j => PAYROLL_VIEW_KEYS.includes(j));
+  return own.concat(customJobs.map(j => j.key));
 }
 
 /* ── THE TWO JOBS WHOSE CREW IS NOT A TEAM BOARD GROUP ───────────────────
