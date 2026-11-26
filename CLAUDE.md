@@ -12204,7 +12204,10 @@ PALMS page in a frame under the same side bar (`PALMS_PAGES`, `#view=palms-board
 pages stay their own: they check their own access and write their own
 records. With `?embed=1`, `shared_palms_nav.js` hides their ribbon, their
 own side bar and the NELOS dock, so only one side bar is on screen; opened
-on their own they are exactly as before. Section 3 of
+on their own they are exactly as before. Embedded, they also wear Life of
+Plot colours (*PALMS的颜色跟着大主题走*): `retheme()` swaps their teal and slate
+for its cream, brown and green, and `THEME_CSS` does the Tailwind classes. The
+stage MAP colours are data and are not touched. Section 3 of
 `tests/life_of_plot_reads_by_cycle.cjs`.
 
 **The nursery is chosen ONCE, top right** (`#lp-head-nur`), on Plots & cycles
