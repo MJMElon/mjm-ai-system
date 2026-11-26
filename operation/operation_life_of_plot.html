@@ -107,6 +107,7 @@
         .lp-rot-c.c2 { background:#DDA04B; border-color:#DDA04B; color:#3F2A08; }
         .lp-rot-c.c3 { background:#B8730E; border-color:#B8730E; color:#fff; }
         .lp-rot-c.t1 { background:#2E7D4F; border-color:#2E7D4F; color:#fff; }
+        .lp-rot-c.old { background:#fff; border:1px solid #DDA04B; color:#8a7a68; font-weight:600; }
         .lp-rot-c.pc { border:2px dashed #B8732A; color:#8a7a68; font-weight:600; }
         .lp-rot-c.pt { border:2px dashed #2E7D4F; color:#8a7a68; font-weight:600; }
         /* One cycle, one table read across: a rule before each part, its heading coloured. */
@@ -375,32 +376,49 @@
         const y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + by;
         return (y + Math.floor(m / 12)) + '-' + String(((m % 12) + 12) % 12 + 1).padStart(2, '0');
     }
-    /* The collection % is CUMULATIVE: what has gone out since the plot was
-       last filled (the latest earlier month with a transplant), over its
-       capacity. SHARED RULE: saCumulative on the Nursery Dashboard. */
-    function lpCumulative(tByYm, sByYm, ym) {
-        const lastT = Object.keys(tByYm || {}).filter(m => m < ym && tByYm[m] > 0).sort().pop() || '';
-        return Object.keys(sByYm || {}).filter(m => m > lastT && m <= ym).reduce((a, m) => a + (sByYm[m] || 0), 0);
+    /* The collection % is CUMULATIVE over the CURRENT ROUND only: the batches
+       transplanted into the plot from the same month a year before (the
+       plans count). A sale of an older batch is the round before, counted apart
+       (`older`). SHARED RULE: saRound on the Nursery Dashboard. */
+    const lpBatchKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/^BATCH\s*:?\s*/, '').split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
+    function lpRound(fills, sales, ym) {
+        const from = lpShiftYM(ym, -13);   // the same month last year counts
+        let cum = 0, older = 0, mine = 0;
+        Object.keys(sales || {}).forEach(b => {
+            const inRound = Object.keys((fills || {})[b] || {}).some(m => m > from && m <= ym);
+            Object.keys(sales[b]).forEach(m => {
+                if (m > ym) return;
+                if (inRound) { cum += sales[b][m]; if (m === ym) mine += sales[b][m]; } else if (m === ym) older += sales[b][m];
+            });
+        });
+        return { cum, older, mine };
     }
     function lpRotation(model, nursery, year, sales, caps, todayYM) {
         const g = model.groups.find(x => x.key === nursery);
-        const S = {};
+        const S = {}, SB = {};
         (sales || []).forEach(r => {
             const k = lpPlotKey(r.plot), ym = String(r.day || '').slice(0, 7);
             if (!k || ym.length !== 7) return;
             (S[k] = S[k] || {})[ym] = (S[k][ym] || 0) + (Number(r.qty) || 0);
+            const pb = ((SB[k] = SB[k] || {})[lpBatchKey(r.batch)] = (SB[k] || {})[lpBatchKey(r.batch)] || {});
+            pb[ym] = (pb[ym] || 0) + (Number(r.qty) || 0);
         });
         return (g ? g.plots : []).map(p => {
             const k = lpPlotKey(p.plot), cap = Number((caps || {})[k]) || 0;
             const tm = {};
-            p.batches.forEach(b => Object.keys(b.tByMonth).forEach(ym => { tm[ym] = (tm[ym] || 0) + b.tByMonth[ym]; }));
+            const fills = {};
+            p.batches.forEach(b => Object.keys(b.tByMonth).forEach(ym => {
+                tm[ym] = (tm[ym] || 0) + b.tByMonth[ym];
+                const f = (fills[lpBatchKey(b.batch)] = fills[lpBatchKey(b.batch)] || {});
+                f[ym] = (f[ym] || 0) + b.tByMonth[ym];
+            }));
             const t = ym => tm[ym] || 0, c = ym => (S[k] && S[k][ym]) || 0;
             const months = [];
             for (let m = 1; m <= 12; m++) {
                 const ym = year + '-' + String(m).padStart(2, '0');
-                const col = c(ym), cum = col > 0 ? lpCumulative(tm, S[k], ym) : 0;
-                months.push({ ym, future: !!todayYM && ym > todayYM, col, colCum: cum,
-                    colPct: cap > 0 && col > 0 ? Math.floor(cum / cap * 100) : null,
+                const col = c(ym), rd = col > 0 ? lpRound(fills, SB[k], ym) : { cum: 0, older: 0, mine: 0 }, cum = rd.cum;
+                months.push({ ym, future: !!todayYM && ym > todayYM, col, colCum: cum, colOlder: rd.older, colMine: rd.mine,
+                    colPct: cap > 0 && cum > 0 ? Math.floor(cum / cap * 100) : null,
                     colPlan: Math.round(t(lpShiftYM(ym, -9)) * 0.9), tr: t(ym), trPlan: t(lpShiftYM(ym, -10)) });
             }
             return { plot: p.plot, key: k, cap, months };
@@ -892,13 +910,13 @@
         const soft = (pr, what) => pr.catch(e => { ROT.missing.push(what + ': ' + (e && e.message ? e.message : e)); return []; });
         ROT = { missing: [], sales: [], caps: {} };
         const [dos, caps] = await Promise.all([
-            soft(lpFetchAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5').order('id', { ascending: true })), 'delivery orders'),
+            soft(lpFetchAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5, batch_1, batch_2, batch_3, batch_4, batch_5').order('id', { ascending: true })), 'delivery orders'),
             soft(lpFetchAll(() => _supabase.from('nops_maint_plot_qty').select('nursery, plot, qty').order('plot')), 'plot capacity'),
         ]);
         (dos || []).forEach(d => {
             if (d.status === 'Cancelled' || String(d.remark || '').includes('[CANCELLED]')) return;
             const day = String(d.delivery_date || '').slice(0, 10);
-            for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) ROT.sales.push({ plot: d['plot_' + i], day, qty: q }); }
+            for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) ROT.sales.push({ plot: d['plot_' + i], batch: d['batch_' + i], day, qty: q }); }
         });
         (caps || []).forEach(r => { if (Number(r.qty) > 0) (ROT.caps[lpNurKey(r.nursery)] = ROT.caps[lpNurKey(r.nursery)] || {})[lpPlotKey(r.plot)] = Number(r.qty); });
     }
@@ -933,11 +951,12 @@
         rows.forEach(r => {
             hs += plotCell(r); ht += plotCell(r);
             r.months.forEach(x => {
-                const tip = `${r.plot} · ${x.ym} · Collected ${fmtN(x.col)} · cumulative ${fmtN(x.colCum)}${x.colPct != null ? ' (' + x.colPct + '% of capacity)' : ''} · Plan ${fmtN(x.colPlan)}`;
-                if (x.col > 0) {
+                const tip = `${r.plot} · ${x.ym} · Collected ${fmtN(x.col)} · this round so far ${fmtN(x.colCum)}${x.colPct != null ? ' (' + x.colPct + '% of capacity)' : ''}${x.colOlder ? ' · ' + fmtN(x.colOlder) + ' of an earlier round, not counted' : ''} · Plan ${fmtN(x.colPlan)}`;
+                if (x.colMine > 0) {
                     const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
                     hs += `<div class="lp-rot-c ${cls}" title="${tip}">${fmtN(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
-                } else if (x.colPlan > 0) hs += `<div class="lp-rot-c pc${x.future ? ' fut' : ''}" title="${tip}"><small>Plan</small>${fmtN(x.colPlan)}</div>`;
+                } else if (x.col > 0) hs += `<div class="lp-rot-c old" title="${tip}">${fmtN(x.col)}<small>Earlier round</small></div>`;
+                else if (x.colPlan > 0) hs += `<div class="lp-rot-c pc${x.future ? ' fut' : ''}" title="${tip}"><small>Plan</small>${fmtN(x.colPlan)}</div>`;
                 else hs += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
                 const tipT = `${r.plot} · ${x.ym} · Transplanted ${fmtN(x.tr)} · Plan ${fmtN(x.trPlan)}`;
                 if (x.tr > 0) ht += `<div class="lp-rot-c t1" title="${tipT}">${fmtN(x.tr)}</div>`;

@@ -192,8 +192,8 @@ const DATA = {
   const re = [];
   const pr = await openPage(Object.assign({}, DATA, {
     shared_do_records: [
-      { id: 1, delivery_date: '2026-04-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 1200 },
-      { id: 3, delivery_date: '2026-05-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 600 },
+      { id: 1, delivery_date: '2026-04-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 1200, batch_1: '229' },
+      { id: 3, delivery_date: '2026-05-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 600, batch_1: '228 (B11)' },
       { id: 2, delivery_date: '2026-04-12', status: 'Cancelled', remark: '', plot_1: 'B11', qty_1: 9999 } ],
     nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B11', qty: 12000 }] }), re);
   await pr.goto(B + '/operation/operation_life_of_plot.html#view=rotation');

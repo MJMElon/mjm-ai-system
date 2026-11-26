@@ -12289,11 +12289,18 @@ Work Maintenance capacity read the first time the view opens. The nursery is
 the tabs top right (its own chip row only with no nursery map), with a year
 row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
 
-**The collection % is CUMULATIVE** (the office: "我要cumulative上去的"): what
-has gone out of the plot since it was last filled, over its capacity — the run
-starts after the latest EARLIER month with a transplant, so a refilled plot
-starts again from nought. The FIGURE in the cell is cumulative as well (the
-office: "数字也要cumulative"); the hover still gives the month own collection. `saCumulative` / `lpCumulative`, the same rule twice.
+**The collection is CUMULATIVE over the CURRENT ROUND only** (the office:
+"我要cumulative上去的", "数字也要cumulative", then "cumulative的部分也要考虑cycle
+例如225 和 242 247 是两个cycle" and "不要真的全部cumulative"). The round at a
+month is the batches transplanted into the plot from the same month a year
+before up to it; the cell shows what those batches have sold so far
+and that over the capacity. A month whose sales are only of an older batch
+reads `Earlier round` with no %. Batches match on the batch number
+(`saBatchKey` / `lpBatchKey`, the batch report own key: `232 (B13)` is 232).
+`saRound` / `lpRound`, the same rule twice; the site audit test asserts them
+cell for cell. The check that found it: before this, every plot over 100
+percent carried the August CAL-BNN / CAL-UNN delivery orders of batches
+224 to 233, the round before (`shared/CHECK_why_collection_goes_over_100.sql`).
 
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
