@@ -151,15 +151,14 @@ const DATA = {
   await p2.close();
   ok(pageErrs === 0, 'no page errors on Life of Plot', errs.slice(0, pageErrs));
 
-  console.log('4. with a nursery map on screen, its tabs choose the nursery and the row below is not drawn');
+  console.log('4. with a nursery map on screen, the map chooses: no Nursery or Plot chips below');
   const pm = await openPage(Object.assign({}, DATA, { operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }] }), []);
   await pm.goto(B + '/operation/operation_life_of_plot.html');
   await pm.waitForSelector('#lp-map-tabs button', { timeout: 8000 }).catch(() => {});
-  const nr = await pm.evaluate(() => ({ row: getComputedStyle(document.getElementById('lp-nursery-row')).display,
-    label: getComputedStyle(document.getElementById('lp-nursery-label')).display,
-    plots: [...document.querySelectorAll('#lp-plot-row button')].map(b => b.textContent.trim()) }));
-  ok(nr.row === 'none' && nr.label === 'none', 'the Nursery row and its label are hidden', nr);
-  ok(nr.plots.join() === 'All plots,B11,B13', 'the plot row follows the map nursery (BNN), no All nurseries', nr.plots);
+  const nr = await pm.evaluate(() => ({ pick: getComputedStyle(document.getElementById('lp-pick')).display,
+    list: [...document.querySelectorAll('#lp-plots tr.plotrow')].map(r => r.dataset.plot) }));
+  ok(nr.pick === 'none', 'the Nursery and Plot chooser is not drawn; the map chooses both', nr);
+  ok(nr.list.join() === 'B11,B13', 'the list follows the map nursery (BNN)', nr.list);
   await pm.close();
 
   await browser.close(); server.close();
