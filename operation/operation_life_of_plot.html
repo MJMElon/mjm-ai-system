@@ -173,7 +173,7 @@
     <div class="mb-3"><a id="lp-back" href="operation_dashboard.html" class="lp-back inline-block">&#8592; Back</a></div>
     <div class="panel p-6 mb-3 text-center">
         <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
-        <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
+        <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub"></p>
     </div>
     <!-- ONE nursery choice for the whole page: the plot map and PALMS both
          follow it, so neither draws tabs of its own. -->
@@ -208,14 +208,12 @@
             <div id="lp-rot-year" class="lp-chips"></div>
         </div>
         <div class="panel p-6 mb-6">
-            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-sales-t">Pusingan Jualan</div>
-                <div class="lp-rot-s">Collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-sales-t">Pusingan Jualan</div></div>
                 <div class="lp-legend"><span><i style="background:#F5E6C8"></i>Collected &lt;40%</span><span><i style="background:#DDA04B"></i>40–79%</span><span><i style="background:#B8730E"></i>&ge;80%</span><span><i style="border:2px dashed #B8732A;background:#fff"></i>Collection plan</span></div></div>
             <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-sales"></div></div>
         </div>
         <div class="panel p-6 mb-6">
-            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-tr-t">Pusingan Transplant</div>
-                <div class="lp-rot-s">Transplanting plan = what was transplanted 10 months earlier.</div></div>
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-tr-t">Pusingan Transplant</div></div>
                 <div class="lp-legend"><span><i style="background:#2E7D4F"></i>Transplanted</span><span><i style="border:2px dashed #2E7D4F;background:#fff"></i>Transplanting plan</span></div></div>
             <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-tr"></div></div>
             <p class="text-[11px] font-bold text-[#8a7a68] mt-3" id="lp-rot-note"></p>
@@ -230,13 +228,12 @@
         <div class="panel overflow-x-auto">
             <table class="lp lp-rec" id="lp-rec-table"></table>
         </div>
-        <p class="text-[11px] font-bold text-[#8a7a68] mt-3">Transplanted into each main plot by month, approved calibration included, on the transplant record date. Click a plot for its cycles.</p>
     </div>
 
     <div id="lp-plots-view">
     <div id="lp-map" class="panel p-6 mb-6 hidden">
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-            <div class="lp-chip-label">Map · click a plot for its cycles</div>
+            <div class="lp-chip-label">Map</div>
         </div>
         <div id="lp-map-tabs" class="hidden"></div>
         <div id="lp-map-body"></div>
@@ -850,7 +847,7 @@
         document.getElementById('lp-list').classList.remove('hidden');
         document.getElementById('lp-detail').classList.add('hidden');
         document.getElementById('lp-title').textContent = 'Life of Plot';
-        document.getElementById('lp-sub').textContent = 'Every plot, and what happened to it. Click a plot for its timeline.';
+        document.getElementById('lp-sub').textContent = '';
         history.replaceState(null, '', location.pathname);
     }
 
@@ -962,23 +959,23 @@
                 // Transplanting: the day and how many went in (the office: only these two)
                 + `<td class="l s1">${b.tDate || '–'}</td><td>${nf(b.tAdj) || '0'}</td>`
                 // 2nd culling: alive, dead, culling rate
-                + `<td class="s1">${nf(alive) || '0'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
+                + `<td class="l s1">${b.c2Date || '–'}</td><td>${nf(alive) || '0'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
                 // 3rd culling: pending culling, drone count, variance, culling rate
-                + `<td class="cull s1">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
+                + `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
                 + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td></tr>`;
         }));
         h += `<div class="lp-x-wrap"><table class="lp lp-x">`
-           + `<colgroup><col><col span="2" class="c-t"><col span="3" class="c-2"><col span="4" class="c-3"></colgroup>`
+           + `<colgroup><col><col span="2" class="c-t"><col span="4" class="c-2"><col span="5" class="c-3"></colgroup>`
            + `<thead><tr class="grp-h"><th class="l" rowspan="2">Batch</th>`
-           + `<th class="s1 g-t" colspan="2">Transplanting</th><th class="s1 g-c" colspan="3">2nd Culling</th><th class="s1 g-c" colspan="4">3rd Culling</th></tr>`
+           + `<th class="s1 g-t" colspan="2">Transplanting</th><th class="s1 g-c" colspan="4">2nd Culling</th><th class="s1 g-c" colspan="5">3rd Culling</th></tr>`
            + `<tr><th class="l s1">Date</th><th>Transplanted</th>`
-           + `<th class="s1">Alive</th><th>Dead</th><th>Culling rate (%)</th>`
-           + `<th class="s1">Pending culling</th><th>Drone Count</th><th>Variance</th><th>Culling rate (%)</th></tr></thead>`
+           + `<th class="l s1">Date</th><th>Alive</th><th>Dead</th><th>Culling rate (%)</th>`
+           + `<th class="l s1">Date</th><th>Pending culling</th><th>Drone Count</th><th>Variance</th><th>Culling rate (%)</th></tr></thead>`
            + `<tbody>${body}</tbody>`
            + `<tfoot><tr class="tot"><td class="l">Total · plot</td>`
            + `<td class="s1"></td><td>${dash(c.tAdj)}</td>`
-           + `<td class="s1">${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
-           + `<td class="s1">${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td></tr></tfoot>`
+           + `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
+           + `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td></tr></tfoot>`
            + `</table></div>`;
         h = h.replace(/>–</g, '><span class="mute">–</span><');
         return h + '</div>';
@@ -999,12 +996,12 @@
         // which plot or view is open is the line under it.
         document.getElementById('lp-title').textContent = 'Life of Plot';
         const nurLabel = NURSERY_LABEL[p.nursery];
-        document.getElementById('lp-sub').textContent = p.plot + ' · ' + nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
+        document.getElementById('lp-sub').textContent = p.plot + ' · ' + nurLabel;
         history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
         document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
             ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
-        document.getElementById('lp-note').textContent = 'Laid out as the office plot sheet, read the way the batch report reads them: the transplant off Tab 3, the 2nd and 3rd culling off Tabs 5 and 6 (the newest save of each plot). Transplanted is after approved calibration; every rate is over it.';
+        document.getElementById('lp-note').textContent = '';
     }
 
     // ── Side bar: Plots & cycles, or the Transplant record by year ──
@@ -1027,17 +1024,17 @@
             const fr = document.getElementById('lp-palms-frame');
             if (fr.getAttribute('src') !== pg.href) fr.setAttribute('src', pg.href);
             document.getElementById('lp-title').textContent = 'Life of Plot';
-            document.getElementById('lp-sub').textContent = pg.title + ' · ' + pg.sub;
+            document.getElementById('lp-sub').textContent = pg.title;
             if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
             syncPalmsNursery();
         } else if (VIEW === 'rotation') {
             document.getElementById('lp-title').textContent = 'Life of Plot';
-            document.getElementById('lp-sub').textContent = 'Pusingan Jualan & Transplant · collection and transplanting by plot and month, against plan.';
+            document.getElementById('lp-sub').textContent = 'Pusingan Jualan & Transplant';
             if (!quiet) history.replaceState(null, '', '#view=rotation');
             renderRotation();
         } else if (VIEW === 'record') {
             document.getElementById('lp-title').textContent = 'Life of Plot';
-            document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
+            document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR;
             if (!quiet) history.replaceState(null, '', '#view=record&year=' + REC_YEAR);
             renderRecord();
         } else if (!quiet) {
@@ -1126,7 +1123,7 @@
         years.sort();
         if (!REC_YEAR || !years.includes(REC_YEAR)) REC_YEAR = years.includes(nowY) ? nowY : years[years.length - 1];
         document.getElementById('lp-title').textContent = 'Life of Plot';
-        document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
+        document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR;
         document.getElementById('lp-year-row').innerHTML = years.slice().reverse().map(y => chip('year', y, y, y === REC_YEAR)).join('');
         const R = buildTransplantYear(MODEL, REC_YEAR);
         const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

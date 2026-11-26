@@ -12249,7 +12249,9 @@ zoom; the key shows the colour, the cat and the stage name and nothing more.
 The Plot chip row has no All plots chip (*all plot 不需要存在*), and the cycle
 table is drawn calm (*看了眼睛很痛*): ordinary-case muted headings,
 regular-weight figures, a faint tint per section, a soft stripe, dashes
-greyed. The delivery orders are read once
+greyed. **No explanation lines anywhere on the page** (*我再说一次 我不要看到
+废话*): the line under the title is only the plot and its nursery, or the
+view name; no notes under the tables or the grids. The delivery orders are read once
 (`ensureRot`) and the map is coloured again when they land.
 
 **Pusingan Jualan over 100 percent**: the cumulative run starts after the
@@ -12306,7 +12308,8 @@ and the B11 tab), checked figure for figure against B11:
   和 culling rate*): Transplanting is Date and Transplanted; 2nd Culling is Alive,
   Dead, Culling rate; 3rd Culling is Pending culling, Drone Count, Variance (drone
   less pending) and Culling rate (pending over transplanted). The Tab 3 drone
-  count and the 2nd culling date and variance came off.
+  count and the 2nd culling variance came off. Both cullings keep their Date
+  (*2nd cull and 3rd cull都要date*).
 
 **And it is ONE table read across, not three stacked** (the office: "改成横着
 的吧 … batch就不用写那么多次"): a row per batch, the batch written once, then
