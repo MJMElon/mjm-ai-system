@@ -354,6 +354,17 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     yes(!(await page.isVisible('#wl-roles')), 'no Manage Roles');
     await page.close();
 
+    console.log('\n-- 9. the page sits in the middle --');
+    page = await open(browser, port);
+    await page.setViewportSize({ width: 1900, height: 900 });
+    const pad = await page.evaluate(() => getComputedStyle(document.body).paddingLeft);
+    is(pad, '0px', 'no payroll side-bar padding on this page');
+    const m = await page.evaluate(() => { const r = document.getElementById('main').getBoundingClientRect();
+      /* measured against BODY: the stylesheet reserves a scrollbar gutter on the right */
+      return [Math.round(r.left), Math.round(document.body.getBoundingClientRect().right - r.right)]; });
+    yes(Math.abs(m[0] - m[1]) <= 2, 'the page has the same margin left and right -> ' + JSON.stringify(m));
+    await page.close();
+
     if (process.env.SHOT) {
       page = await open(browser, port);
       await page.setViewportSize({ width: 1280, height: 900 });

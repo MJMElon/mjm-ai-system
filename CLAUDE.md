@@ -6078,6 +6078,10 @@ replaces it).
   showing that. A NEW worker is ticked from the role until somebody touches
   the boxes: Water Pump Operator does Siram Go, a Mata Malam / Night
   Watchman / Penjaga Malam role does Mata Malam.
+- **The page borrows `npayroll/npayroll_styles.css`**, which pads BODY for
+  the payroll side bar whenever `#main` is shown. This page has no side bar,
+  so its own style sets that padding back to 0, or the whole page sits right
+  of centre. Section 9 of the test measures it.
 - **The Jobs row is drawn only for a General Worker or a Water Pump
   Operator** (`roleHasJobs`), and before a role is chosen it is hidden. For
   any other role Save writes `maint_general` NULL (the sheets follow the

@@ -47,6 +47,10 @@
      from that page's markup — so this page states its own. Wide, because the
      board has six sections across it, but never touching the edge of the
      screen. */
+  /* npayroll_styles.css pads BODY for the payroll side bar whenever #main
+     is shown. This page borrows that stylesheet and has no side bar, so the
+     padding pushed everything right of centre. */
+  body:has(#main:not(.hidden)) { padding-left:0 !important; }
   .wrap { max-width:1560px; margin:0 auto; padding:20px 26px 48px; }
   @media (max-width:640px) { .wrap { padding:16px 14px 36px; } }
   .page-back { display:inline-flex; align-items:center; gap:7px; margin-bottom:14px;
