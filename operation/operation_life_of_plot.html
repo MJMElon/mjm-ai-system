@@ -13,7 +13,6 @@
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_staff_gate.js"></script>
     <script src="../shared/shared_access.js"></script>
-    <script src="../shared/shared_palms.js?v=7"></script>
     <style>
         /* Batch Record's look, so the two read as one system. */
         body { background-color: #f8f4ec; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; }
@@ -90,25 +89,6 @@
         .lp-cyc-d { font-size:12px; font-weight:700; color:#5c3d1e; }
         .lp-cyc-cap { margin-left:auto; font-size:12px; font-weight:700; color:#8a7a68; }
         .lp-cyc-cap b { font-size:16px; color:#3d2610; font-weight:900; }
-        /* PALMS on the plot map: the colour switch, the stage line, and each cycle's stage strip. */
-        .lp-mode { display:inline-flex; border:1px solid #e8dcc8; border-radius:10px; overflow:hidden; }
-        .lp-mode button { border:none; background:#fff; padding:6px 12px; font-size:11px; font-weight:800; color:#5c3d1e; cursor:pointer; }
-        .lp-mode button.on { background:#4a7a2e; color:#fdfaf4; }
-        .lp-line.late { color:#b91c1c; }
-        .lp-now { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; padding:14px 18px; margin-bottom:16px; }
-        .lp-now-k { font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#8a7a68; }
-        .lp-now-v { font-size:13px; font-weight:800; color:#3d2610; }
-        .lp-now-v.late { color:#b91c1c; }
-        .lp-now-go { margin-left:auto; border:1px solid #4a7a2e; color:#4a7a2e; background:#fff; border-radius:10px; padding:7px 12px; font-size:12px; font-weight:800; cursor:pointer; }
-        .lp-now-go:hover { background:#4a7a2e; color:#fdfaf4; }
-        .lp-stg { display:flex; flex-wrap:wrap; gap:6px; padding:4px 18px 12px; }
-        .lp-stg-k { font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#8a7a68; align-self:center; margin-right:4px; }
-        .lp-stg-c { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#3d2610; background:#fbf6ec; border:1px solid #e8dcc8; border-radius:8px; padding:4px 8px; }
-        .lp-stg-c i { width:9px; height:9px; border-radius:3px; display:inline-block; }
-        .lp-stg-c.run { border-color:#4a7a2e; background:#eef5e8; }
-        .lp-stg-c .d { color:#8a7a68; font-weight:700; }
-        .lp-stg-none { font-size:11px; font-weight:700; color:#94a3b8; align-self:center; }
-        .stage-late { color:#b91c1c; font-weight:800; }
         /* Transplant record: the office sheet, a column per month. */
         table.lp tr.grp td { text-align:left; }
         table.lp-rec th, table.lp-rec td { padding:9px 10px; }
@@ -136,8 +116,9 @@
     <div class="lp-shell">
     <aside class="lp-side panel" id="lp-side">
         <div class="lp-side-h">Life of Plot</div>
-        <button type="button" class="lp-side-b on" data-view="plots"><span class="lp-side-i">&#9638;</span>Plot Map</button>
+        <button type="button" class="lp-side-b on" data-view="plots"><span class="lp-side-i">&#9638;</span>Plots &amp; cycles</button>
         <button type="button" class="lp-side-b" data-view="record"><span class="lp-side-i">&#9776;</span>Transplant record by year</button>
+        <button type="button" class="lp-side-b" data-view="palms-board"><span class="lp-side-i">&#9673;</span>PALMS</button>
         <!-- Settings is the whole module's, so it sits apart at the foot. -->
         <button type="button" class="lp-side-b lp-side-foot" data-view="palms-stages"><span class="lp-side-i">&#9881;</span>Settings</button>
     </aside>
@@ -165,14 +146,13 @@
     <div id="lp-plots-view">
     <div id="lp-map" class="panel p-6 mb-6 hidden">
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-            <div class="flex items-center gap-3 flex-wrap">
-                <div class="lp-chip-label">Map · click a plot for its stages and cycles</div>
-                <div class="lp-mode" id="lp-mode">
-                    <button type="button" data-mode="palms">PALMS stage</button>
-                    <button type="button" data-mode="cycle">Cycle status</button>
-                </div>
+            <div class="lp-chip-label">Map · click a plot for its cycles</div>
+            <div class="lp-legend">
+                <span><i style="background:#f59e0b"></i>In the field</span>
+                <span><i style="background:#3b82f6"></i>Being culled</span>
+                <span><i style="background:#22c55e"></i>3rd culled</span>
+                <span><i style="background:#94a3b8"></i>No batch</span>
             </div>
-            <div class="lp-legend" id="lp-legend"></div>
         </div>
         <div id="lp-map-tabs" class="hidden"></div>
         <div id="lp-map-body"></div>
@@ -193,7 +173,6 @@
 
     <div id="lp-detail" class="hidden">
         <button id="lp-up" class="lp-back mb-4">&#8592; All plots</button>
-        <div id="lp-now-box"></div>
         <div id="lp-timeline-box"></div>
         <p id="lp-note" class="text-[11px] font-bold text-[#8a7a68] mt-3"></p>
     </div>
@@ -400,85 +379,6 @@
         return { key: 'culling', pct };
     }
     const fmtN = n => Number(n || 0).toLocaleString('en-MY');
-    /* ── PALMS on the same map ──────────────────────────────────
-       The plot log is READ here (shared_palms.js, the same reader the PALMS
-       board uses) and never written: changing a stage stays on the PALMS
-       board, which "Update stage" opens. PLOGS is null when the log could not
-       be read, and the page is then exactly the cycle map it was. */
-    let PLOGS = null;
-    let MAP_MODE = 'cycle';
-    const PRANK = st => (st === 'overdue' ? 0 : st === 'ontrack' ? 1 : 2);
-    const P_NONE = '#94a3b8', P_LATE = '#b91c1c';
-    function palmsUnits(plot) {
-        if (!PLOGS) return [];
-        const want = lpPlotKey(plot);
-        return Object.keys(PLOGS).filter(k => lpPlotKey(MJMPalms.plotOf(k)) === want).sort(lpNatural);
-    }
-    // A split plot is as healthy as its worst area, the board's own rule.
-    function palmsLine(plot) {
-        let best = null;
-        palmsUnits(plot).forEach(k => {
-            const ln = MJMPalms.plotLine(PLOGS, k);
-            if (!ln) return;
-            if (!best || PRANK(ln.state) < PRANK(best.state)
-                || (PRANK(ln.state) === PRANK(best.state) && (ln.left == null ? 1e9 : ln.left) < (best.left == null ? 1e9 : best.left))) best = ln;
-        });
-        return best;
-    }
-    function stageColour(actN) { const a = MJMPalms.actByN(actN); return (a && a.color) || P_NONE; }
-    function rgba(hex, a) {
-        const h = String(hex || '').replace('#', '');
-        const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-        const n = parseInt(f, 16);
-        return isNaN(n) || f.length !== 6 ? `rgba(148,163,184,${a})` : `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-    }
-    const leftTxt = ln => (ln.left < 0 ? (-ln.left) + 'd over' : ln.left + 'd left');
-    // Every stage spell this plot has had, each filed under the cycle it began in:
-    // the first cycle not yet finished by that day, else the newest one.
-    function palmsSpells(plot) {
-        const out = [];
-        palmsUnits(plot).forEach(k => MJMPalms.mergeSpells(PLOGS[k]).forEach(e => {
-            const a = MJMPalms.actByN(e.actN);
-            out.push({ unit: k, split: String(k).indexOf('#') !== -1, actN: e.actN, name: a ? a.name : 'Stage ' + e.actN, start: e.start, end: e.end, by: e.by });
-        }));
-        return out.sort((a, b) => String(a.start).localeCompare(String(b.start)));
-    }
-    function spellsOfCycle(spells, cycles, c) {
-        return spells.filter(e => {
-            const home = cycles.find(x => x.end && String(e.start) <= String(x.end)) || cycles[cycles.length - 1];
-            return home === c;
-        });
-    }
-    function spellChip(e) {
-        const d = lpDays(e.start, e.end);
-        return `<span class="lp-stg-c${e.end ? '' : ' run'}"><i style="background:${stageColour(e.actN)}"></i>`
-             + `${e.split ? MJMPalms.keyLabel(e.unit) + ' · ' : ''}${e.name} <span class="d">${e.start || '–'} → ${e.end || 'now'}${d != null ? ' · ' + d + 'd' : ''}</span></span>`;
-    }
-    function stageStrip(spells) {
-        return `<div class="lp-stg"><span class="lp-stg-k">PALMS</span>`
-             + (spells.length ? spells.map(spellChip).join('') : '<span class="lp-stg-none">No stage recorded in this cycle.</span>') + '</div>';
-    }
-    function renderLegend() {
-        const el = document.getElementById('lp-legend');
-        document.querySelectorAll('#lp-mode button').forEach(b => {
-            b.classList.toggle('on', b.dataset.mode === MAP_MODE);
-            if (b.dataset.mode === 'palms') b.classList.toggle('hidden', !PLOGS);
-        });
-        if (MAP_MODE === 'palms') {
-            const groups = [];
-            (MJMPalms.ACTIVITIES || []).forEach(a => {
-                const c = String(a.color || P_NONE).toLowerCase();
-                let g = groups.find(x => x.c === c);
-                if (!g) { g = { c, names: [] }; groups.push(g); }
-                g.names.push(a.name);
-            });
-            el.innerHTML = groups.map(g => `<span><i style="background:${g.c}"></i>${g.names.join(' · ')}</span>`).join('')
-                + `<span><i style="background:#fff;border:2px solid ${P_LATE}"></i>Overdue</span>`;
-        } else {
-            el.innerHTML = '<span><i style="background:#f59e0b"></i>In the field</span><span><i style="background:#3b82f6"></i>Being culled</span>'
-                + '<span><i style="background:#22c55e"></i>3rd culled</span><span><i style="background:#94a3b8"></i>No batch</span>';
-        }
-    }
     function mapPlotIndex() {
         const idx = {};
         MODEL.groups.forEach(g => g.plots.forEach(p => { idx[lpPlotKey(p.plot)] = p; }));
@@ -491,7 +391,6 @@
         box.classList.remove('hidden');
         if (!keys.includes(MAP_NUR)) MAP_NUR = keys.includes(NUR) ? NUR : keys[0];
         renderHeadTabs();
-        renderLegend();
         drawMap();
     }
     /* The tabs top right. Shown on the views that are about one nursery (the
@@ -552,30 +451,19 @@
         Object.values(PLOT_SHAPES).filter(s => s.nur === k).forEach(s => {
             const p = idx[lpPlotKey(s.name)];
             const st = mapStateOf(p);
-            let [fill, stroke] = MAP_FILL[st.key];
-            let sw = '.4';
-            const ln = PLOGS ? palmsLine(s.name) : null;
-            if (MAP_MODE === 'palms') {
-                if (ln && ln.state !== 'none') {
-                    const col = stageColour(ln.actN);
-                    fill = rgba(col, .55); stroke = ln.state === 'overdue' ? P_LATE : col;
-                    if (ln.state === 'overdue') sw = '.9';
-                } else { [fill, stroke] = MAP_FILL.none; }
-            }
+            const [fill, stroke] = MAP_FILL[st.key];
             const ptsStr = s.pts.map(pt => pt.x + ',' + pt.y).join(' ');
             const cx = s.pts.reduce((a, pt) => a + pt.x, 0) / s.pts.length;
             const cy = s.pts.reduce((a, pt) => a + pt.y, 0) / s.pts.length;
             const cc = curCycle(p);
             const tip = cc ? `Cycle ${cc.n} of ${p.cycles.length} · transplanted ${fmtN(cc.tAdj)} · 2nd cull ${fmtN(cc.c2)} · 3rd cull ${fmtN(cc.c3)}` : 'Nothing recorded';
             svg.insertAdjacentHTML('beforeend',
-                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"><title>${s.name}: ${tip}</title></polygon>`);
-            const cycLine = st.key === 'none'
+                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name}: ${tip}</title></polygon>`);
+            const line = st.key === 'none'
                 ? '<div class="lp-line empty">No batch</div>'
                 : `<div class="lp-line" title="${tip}">Cycle ${cc.n} · ${fmtN(cc.tAdj)}</div>`;
-            const stgLine = ln && ln.state !== 'none'
-                ? `<div class="lp-line${ln.state === 'overdue' ? ' late' : ''}">${ln.status} · ${leftTxt(ln)}</div>` : '';
             labels.insertAdjacentHTML('beforeend',
-                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${MAP_MODE === 'palms' ? stgLine + cycLine : cycLine + stgLine}</div>`);
+                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}</div>`);
         });
         svg.addEventListener('click', e => {
             const el = e.target.closest && e.target.closest('.lp-shape');
@@ -639,7 +527,6 @@
         fillPlotSelect('');
         document.getElementById('lp-list').classList.remove('hidden');
         document.getElementById('lp-detail').classList.add('hidden');
-        document.getElementById('lp-now-box').innerHTML = '';
         document.getElementById('lp-title').textContent = 'Life of Plot';
         document.getElementById('lp-sub').textContent = 'Every plot, and what happened to it. Click a plot for its timeline.';
         history.replaceState(null, '', location.pathname);
@@ -669,31 +556,22 @@
     }
 
     function renderList() {
-        let h = '<thead><tr><th class="l">Plot</th><th class="l">Nursery</th>' + (PLOGS ? '<th class="l">PALMS stage</th><th class="l">Due</th><th class="l">Last update</th>' : '') + '<th>Cycles</th><th class="l">Current cycle</th><th>Transplanted (adjusted)</th><th>2nd cull</th><th>3rd cull</th></tr></thead><tbody>';
-        const span = PLOGS ? 10 : 7;
+        let h = '<thead><tr><th class="l">Plot</th><th class="l">Nursery</th><th>Cycles</th><th class="l">Current cycle</th><th>Transplanted (adjusted)</th><th>2nd cull</th><th>3rd cull</th></tr></thead><tbody>';
         MODEL.groups.filter(g => !NUR || g.key === NUR).forEach(g => {
-            h += `<tr class="grp"><td colspan="${span}">${g.label} · ${g.plots.length} plot${g.plots.length === 1 ? '' : 's'}</td></tr>`;
+            h += `<tr class="grp"><td colspan="7">${g.label} · ${g.plots.length} plot${g.plots.length === 1 ? '' : 's'}</td></tr>`;
             g.plots.forEach(p => {
                 const c = curCycle(p);
-                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td><td class="l">${g.label}</td>` + stageCells(p.plot)
+                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td><td class="l">${g.label}</td>`
                    + `<td>${p.cycles.length || '–'}</td><td class="l">${c ? cycleSpan(c) : '–'}</td>`
                    + `<td>${dash(c && c.tAdj)}</td><td class="cull">${dash(c && c.c2)}</td><td class="cull">${dash(c && c.c3)}</td></tr>`;
             });
-            if (!g.plots.length) h += '<tr><td colspan="' + span + '" class="l" style="color:#94a3b8;font-weight:700">No plots.</td></tr>';
+            if (!g.plots.length) h += '<tr><td colspan="7" class="l" style="color:#94a3b8;font-weight:700">No plots.</td></tr>';
         });
         h += '</tbody>';
         document.getElementById('lp-plots').innerHTML = h;
         document.querySelectorAll('#lp-plots tr.plotrow').forEach(tr => tr.addEventListener('click', () => showPlot(tr.dataset.plot)));
     }
 
-    function stageCells(plot) {
-        if (!PLOGS) return '';
-        const ln = palmsLine(plot);
-        if (!ln || ln.state === 'none') return '<td class="l dash">–</td><td class="l dash">–</td><td class="l dash">' + (ln && ln.lastDate ? ln.lastDate : '–') + '</td>';
-        return `<td class="l"><i style="display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;background:${stageColour(ln.actN)}"></i>${ln.status}</td>`
-             + `<td class="l">${ln.due || '–'} <span class="${ln.state === 'overdue' ? 'stage-late' : ''}">· ${leftTxt(ln)}</span></td>`
-             + `<td class="l">${ln.lastDate || '–'}${ln.lastBy ? ' · ' + ln.lastBy : ''}</td>`;
-    }
     function lpDays(a, b) {
         if (!a) return null;
         const t0 = Date.parse(a + 'T00:00:00Z'), t1 = b ? Date.parse(b + 'T00:00:00Z') : Date.now();
@@ -702,13 +580,13 @@
     function cycleSpan(c) {
         return `${c.start || '–'} → ${c.end || 'now'}`;
     }
-    function cycleHtml(c, strip) {
+    function cycleHtml(c) {
         const d = lpDays(c.start, c.end);
         let h = `<div class="panel overflow-x-auto lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
               + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Finished' : 'Current'}</span>`
               + `<span class="lp-cyc-d">${c.start || '–'} → ${c.end || 'now'}${d != null ? ' · ' + d + ' days' : ''}</span>`
-              + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>` + (strip || '');
+              + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
         h += '<table class="lp"><thead><tr><th class="l">Batch</th><th class="l">Transplant date</th><th>Transplant qty</th><th>Calibration</th><th>Adjusted</th>'
            + '<th class="l">2nd cull date</th><th>2nd cull qty</th><th class="l">3rd cull date</th><th>3rd cull qty</th></tr></thead><tbody>';
         c.batches.forEach(b => {
@@ -721,18 +599,6 @@
         return h;
     }
 
-    // Where the plot is NOW on PALMS, above its cycles. Changing it is the PALMS board's job.
-    function nowHtml(p) {
-        if (!PLOGS) return '';
-        const ln = palmsLine(p.plot);
-        const v = (k, val, late) => `<span><span class="lp-now-k">${k}</span> <span class="lp-now-v${late ? ' late' : ''}">${val}</span></span>`;
-        const on = ln && ln.state !== 'none';
-        return `<div class="panel lp-now">`
-            + v('PALMS stage', on ? `<i style="display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;background:${stageColour(ln.actN)}"></i>${ln.status}` : 'No stage running')
-            + (on ? v('Due', `${ln.due} · ${leftTxt(ln)}`, ln.state === 'overdue') : '')
-            + v('Last update', ln && ln.lastDate ? ln.lastDate + (ln.lastBy ? ' · ' + ln.lastBy : '') : '–')
-            + `<button type="button" class="lp-now-go" id="lp-now-go">Update stage in PALMS &#8594;</button></div>`;
-    }
     function showPlot(name) {
         const p = MODEL.groups.flatMap(g => g.plots).find(x => x.plot === name);
         if (!p) return;
@@ -748,14 +614,9 @@
         const nurLabel = NURSERY_LABEL[p.nursery];
         document.getElementById('lp-sub').textContent = nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
         history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
-        const spells = PLOGS ? palmsSpells(p.plot) : [];
-        document.getElementById('lp-now-box').innerHTML = nowHtml(p);
-        const go = document.getElementById('lp-now-go');
-        if (go) go.addEventListener('click', () => { NUR = MAP_NUR = p.nursery; setView('palms-board'); });
         document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
-            ? p.cycles.slice().reverse().map(c => cycleHtml(c, PLOGS ? stageStrip(spellsOfCycle(spells, p.cycles, c)) : '')).join('')
-            : (spells.length ? `<div class="panel lp-cyc">${stageStrip(spells)}</div>` : '')
-              + '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
+            ? p.cycles.slice().reverse().map(cycleHtml).join('')
+            : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
         document.getElementById('lp-note').textContent = 'Dates come from the transplant and cull records: the record\'s own date, else the Date / CullDate written in its remark, else the day it was saved.';
     }
 
@@ -763,14 +624,12 @@
     let VIEW = 'plots';
     let REC_YEAR = '';
     const PALMS_PAGES = {
-        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'Change a plot stage here. Plot Map in the side bar brings you back.' },
+        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'PALMS · every plot and the stage it is on.' },
         'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'Life of Plot · the stages a plot moves through.' },
     };
     function setView(v, quiet) {
         VIEW = v === 'record' ? 'record' : (PALMS_PAGES[v] ? v : 'plots');
-        // The stage editor is reached from the Plot Map, so the Plot Map stays lit while it is open.
-        const lit = VIEW === 'palms-board' ? 'plots' : VIEW;
-        document.querySelectorAll('#lp-side .lp-side-b').forEach(b => b.classList.toggle('on', b.dataset.view === lit));
+        document.querySelectorAll('#lp-side .lp-side-b').forEach(b => b.classList.toggle('on', b.dataset.view === VIEW));
         document.getElementById('lp-record').classList.toggle('hidden', VIEW !== 'record');
         document.getElementById('lp-plots-view').classList.toggle('hidden', VIEW !== 'plots');
         document.getElementById('lp-palms').classList.toggle('hidden', !PALMS_PAGES[VIEW]);
@@ -831,15 +690,6 @@
         document.getElementById('lp-status').classList.remove('hidden');
         document.getElementById('lp-status').textContent = 'Loading…';
         try {
-            const palmsP = (async () => {
-                if (!window.MJMPalms) return null;
-                try {
-                    await MJMPalms.loadStages(_supabase);
-                    const logs = await MJMPalms.loadLogs(_supabase);
-                    await MJMPalms.loadSaves(_supabase);
-                    return logs;
-                } catch (e) { console.warn('[lifeplot] PALMS log not read, the map shows cycles only:', (e && e.message) || e); return null; }
-            })();
             const [plots, rows, nurs] = await Promise.all([
                 lpFetchAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name, map_top').order('plot_name')),
                 lpFetchAll(() => _supabase.from('shared_inventory_logs')
@@ -859,10 +709,6 @@
                 } catch (e) { /* a shape that will not parse is simply not drawn */ }
             });
             MODEL = buildPlotHistory(plots, rows);
-            PLOGS = await palmsP;
-            let saved = '';
-            try { saved = localStorage.getItem('lp_map_mode') || ''; } catch (e) { /* storage blocked */ }
-            MAP_MODE = PLOGS && Object.keys(PLOGS).length && saved !== 'cycle' ? 'palms' : 'cycle';
             // With the map choosing the nursery there is no "All nurseries", so
             // the list opens on the nursery the map opens on.
             if (!NUR) { const k0 = NURSERY_ORDER.find(k => MAPS[k]); if (k0) NUR = k0; }
@@ -883,14 +729,6 @@
     }
 
     document.getElementById('lp-up').addEventListener('click', showList);
-    document.getElementById('lp-mode').addEventListener('click', e => {
-        const b = e.target.closest('button[data-mode]');
-        if (!b || (b.dataset.mode === 'palms' && !PLOGS)) return;
-        MAP_MODE = b.dataset.mode;
-        try { localStorage.setItem('lp_map_mode', MAP_MODE); } catch (err) { /* storage blocked */ }
-        renderLegend();
-        drawMap();
-    });
     document.getElementById('lp-side').addEventListener('click', e => {
         const b = e.target.closest('button[data-view]');
         if (b) setView(b.dataset.view);
