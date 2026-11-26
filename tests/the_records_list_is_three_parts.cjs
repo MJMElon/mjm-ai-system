@@ -330,6 +330,26 @@ async function boot(browser) {
              own: td.firstChild ? String(td.firstChild.textContent || '').trim() : '',
              clipped: el.scrollWidth > el.clientWidth + 1 };
   });
+  /* THE DASH GOES WHERE THE CHIP SPEAKS — *"符号 - 就不用了"*. It means the
+     office keyed no date, which the chip under it already says; over a day
+     it reads as a contradiction. Asked in BOTH directions, because "no dash
+     anywhere" would pass just as green on a page that stopped drawing it at
+     all, and an empty date cell reads as a column that failed to draw. */
+  const dash = await ev(() => {
+    const cellOf = (plot) => {
+      const row = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children[3] && tr.children[3].textContent.trim() === plot
+                   && !tr.classList.contains('rec-row-loose'));
+      return row ? row.children[0].textContent.replace(/\s+/g, ' ').trim() : 'no ' + plot;
+    };
+    /* B2 is waiting and the office keyed nothing; B1 round 2 is keyed
+       nothing and has no chip, which is the control. */
+    return { waiting: cellOf('B2'), plain: cellOf('B1') };
+  });
+  check('a cell with a chip under it carries no dash',
+        /^-/.test((dash || {}).waiting || '') , false);
+  check('…and a cell with no date and no chip still does',
+        (dash || {}).plain, '-');
   check('the row keeps its own day', (both || {}).own, '10 Nov 2026');
   check('…and the claim is the other day, in full',
         /21 Nov 2026/.test((both || {}).claim || ''), true);
