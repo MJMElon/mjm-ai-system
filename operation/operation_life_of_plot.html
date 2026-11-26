@@ -154,7 +154,7 @@
     </div>
 
     <div class="panel p-6 mb-6 space-y-3">
-        <div class="lp-chip-label">Nursery</div>
+        <div class="lp-chip-label" id="lp-nursery-label">Nursery</div>
         <div id="lp-nursery-row" class="lp-chips"></div>
         <div class="lp-chip-label">Plot</div>
         <div id="lp-plot-row" class="lp-chips"></div>
@@ -507,6 +507,12 @@
     const chip = (attr, val, label, on) =>
         `<button type="button" class="lp-chip${on ? ' on' : ''}" data-${attr}="${String(val).replace(/"/g, '&quot;')}">${label}</button>`;
     function fillNurserySelect() {
+        /* The map's own tabs above choose the nursery, so a second row of the
+           same choice is not drawn while the map is on screen. With no map
+           (no nursery photo), this row is the only way to choose and stays. */
+        const byMap = NURSERY_ORDER.some(k => MAPS[k]);
+        document.getElementById('lp-nursery-label').classList.toggle('hidden', byMap);
+        document.getElementById('lp-nursery-row').classList.toggle('hidden', byMap);
         const keys = MODEL.groups.filter(g => g.plots.length).map(g => g.key);
         document.getElementById('lp-nursery-row').innerHTML =
             chip('nur', '', 'All nurseries', !NUR) + keys.map(k => chip('nur', k, NURSERY_LABEL[k], NUR === k)).join('');
@@ -670,6 +676,9 @@
                 } catch (e) { /* a shape that will not parse is simply not drawn */ }
             });
             MODEL = buildPlotHistory(plots, rows);
+            // With the map choosing the nursery there is no "All nurseries", so
+            // the list opens on the nursery the map opens on.
+            if (!NUR) { const k0 = NURSERY_ORDER.find(k => MAPS[k]); if (k0) NUR = k0; }
             document.getElementById('lp-status').classList.add('hidden');
             fillNurserySelect();
             fillPlotSelect('');

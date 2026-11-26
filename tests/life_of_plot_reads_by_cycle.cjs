@@ -39,29 +39,33 @@ const DATA = {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const B = 'http://127.0.0.1:' + server.address().port;
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } });
-  const errs = [];
-  page.on('pageerror', e => errs.push(e.message));
-  // Tailwind is refused here; .hidden is the one class the page shows and hides with.
-  await page.route('**/cdn.tailwindcss.com/**', r => r.fulfill({ contentType: 'text/javascript',
-    body: "document.head.insertAdjacentHTML('beforeend','<style>.hidden{display:none!important}</style>');" }));
-  await page.route('**/@supabase/supabase-js**', r => r.fulfill({ contentType: 'text/javascript', body: 'window.supabase={createClient:()=>window.__stub};' }));
-  await page.route('**/shared/shared_staff_gate.js', r => r.fulfill({ contentType: 'text/javascript', body: '' }));
-  await page.route('**/shared/shared_access.js', r => r.fulfill({ contentType: 'text/javascript',
-    body: `window.MJMAccess={load:async()=>{},user:()=>({email:'t@t'}),canOpenOperationPage:()=>true};` }));
-  await page.addInitScript((data) => {
-    const q = (table) => {
-      let rows = (data[table] || []).slice();
-      const w = {
-        select: () => w, order: () => w,
-        in: (col, vals) => { rows = rows.filter(r => vals.indexOf(r[col]) >= 0); return w; },
-        range: (a, b) => Promise.resolve({ data: rows.slice(a, b + 1), error: null }),
-        then: (okf, no) => Promise.resolve({ data: rows, error: null }).then(okf, no),
+  async function openPage(data, errs) {
+    const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } });
+    page.on('pageerror', e => errs.push(e.message));
+    // Tailwind is refused here; .hidden is the one class the page shows and hides with.
+    await page.route('**/cdn.tailwindcss.com/**', r => r.fulfill({ contentType: 'text/javascript',
+      body: "document.head.insertAdjacentHTML('beforeend','<style>.hidden{display:none!important}</style>');" }));
+    await page.route('**/@supabase/supabase-js**', r => r.fulfill({ contentType: 'text/javascript', body: 'window.supabase={createClient:()=>window.__stub};' }));
+    await page.route('**/shared/shared_staff_gate.js', r => r.fulfill({ contentType: 'text/javascript', body: '' }));
+    await page.route('**/shared/shared_access.js', r => r.fulfill({ contentType: 'text/javascript',
+      body: `window.MJMAccess={load:async()=>{},user:()=>({email:'t@t'}),canOpenOperationPage:()=>true};` }));
+    await page.addInitScript((data) => {
+      const q = (table) => {
+        let rows = (data[table] || []).slice();
+        const w = {
+          select: () => w, order: () => w,
+          in: (col, vals) => { rows = rows.filter(r => vals.indexOf(r[col]) >= 0); return w; },
+          range: (a, b) => Promise.resolve({ data: rows.slice(a, b + 1), error: null }),
+          then: (okf, no) => Promise.resolve({ data: rows, error: null }).then(okf, no),
+        };
+        return w;
       };
-      return w;
-    };
-    window.__stub = { from: q };
-  }, DATA);
+      window.__stub = { from: q };
+    }, data);
+    return page;
+  }
+  const errs = [];
+  const page = await openPage(DATA, errs);
 
   await page.goto(B + '/operation/operation_life_of_plot.html#plot=B11');
   await page.waitForSelector('#lp-timeline-box .lp-cyc', { timeout: 8000 }).catch(() => {});
@@ -144,6 +148,17 @@ const DATA = {
   ok(alone.nav !== 'none' && alone.ribbon !== 'none', 'opened on its own it is exactly as before', alone);
   await p2.close();
   ok(pageErrs === 0, 'no page errors on Life of Plot', errs.slice(0, pageErrs));
+
+  console.log('4. with a nursery map on screen, its tabs choose the nursery and the row below is not drawn');
+  const pm = await openPage(Object.assign({}, DATA, { operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }] }), []);
+  await pm.goto(B + '/operation/operation_life_of_plot.html');
+  await pm.waitForSelector('#lp-map-tabs button', { timeout: 8000 }).catch(() => {});
+  const nr = await pm.evaluate(() => ({ row: getComputedStyle(document.getElementById('lp-nursery-row')).display,
+    label: getComputedStyle(document.getElementById('lp-nursery-label')).display,
+    plots: [...document.querySelectorAll('#lp-plot-row button')].map(b => b.textContent.trim()) }));
+  ok(nr.row === 'none' && nr.label === 'none', 'the Nursery row and its label are hidden', nr);
+  ok(nr.plots.join() === 'All plots,B11,B13', 'the plot row follows the map nursery (BNN), no All nurseries', nr.plots);
+  await pm.close();
 
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
