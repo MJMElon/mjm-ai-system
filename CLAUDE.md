@@ -11707,6 +11707,80 @@ text, carry none of the chip's spans, and come first in the list.
 
 **Nothing to run in the database.**
 
+##### AND THE ORANGE CAME OFF APPROVED, because the fault it warned about went
+
+The office looked for the Approved-tab chip twice and could not find one —
+*"我没看到"* — then ruled on it in one line, *"Approved tab 的橙色 完全不需要
+这个功能"*, and in the next breath said what it had really been for:
+*"只是我看到我即将check的行有没有工人的记录还没进来"*.
+
+**THAT IS A WARNING, AND IT WAS WARNING ABOUT A REAL FAULT ONE LAYER DOWN.**
+`applyFieldRecords` opened with `if (!plots.includes(r.plot) || r.checked)
+return;`, so a record the conductor VERIFIED after the office had Checked
+the row reached nothing at all: no tick, no walk, no link for the Audit
+column, and the group was then counted as unpaired. **That worker's share
+of the plot was simply gone, with the row still looking complete.** The
+orange was the office's one chance to notice before pressing Check.
+
+**SO THE FIX IS THE FAULT AND NOT THE WARNING** — *"如果我check了 还有工人的
+工作没被approved FC approved了 所有资料一模一样 除了地图 和 员工 就给他进来
+就对了"*. A checked row now takes exactly two things, which are the two the
+office named, and the orange on that tab goes because there is nothing left
+to be warned about.
+
+Six things in it, and four are rules this file already has:
+
+- **IT ADDS AND IT NEVER TAKES AWAY.** The old refusal was right about half
+  of itself: a PAGE LOAD must not move the piece-rate split under a row the
+  office agreed, with nobody acting and nothing saying so. That is true of a
+  REMOVAL — a settled row must not lose a worker to a record being deleted,
+  unverified again or paired elsewhere — and `syncTicks` merges into what is
+  there rather than replacing it. An UNCHECKED row still follows its group
+  both ways.
+- **WHAT IT COSTS, and the office had it in front of them: the other workers
+  drop a share.** The plot is divided among the people ticked, so a fourth
+  name takes the other three down. That is the RIGHT figure — it was
+  overstated while he was missing — but it moves a row the office had
+  settled, which is why it is written down here rather than left as a
+  pleasant surprise.
+- **A ROW CORRECTED BY HAND IS LEFT ALONE**, checked or not. `byHand` was
+  already the guard and it is asked before any of this.
+- **THE ROUND ROUTE ONLY, never the chemical fallback.** That one is guarded
+  by `usedKeys` and is first come, so a checked row joining the queue would
+  take a group an unchecked row has been taking since the day it was
+  written. A ROUND key cannot steal from anybody — `idx[key]` is a plain
+  lookup — so adding it to `usedKeys` only stops the group being reported as
+  unpaired, which is now the truth about it.
+- **NO DATE AND NO BATCH.** A checked row has both and the field only ever
+  fills an EMPTY cell, so refusing them changes nothing today. It is written
+  out rather than left to that guard because the office asked for the worker
+  and the map and named nothing else, and the test asserts the branch
+  mentions neither.
+- **NOTHING IS STRIPPED.** No group found is not a reason to take a settled
+  row's links, ticks or track away: those belong to the records it was
+  agreed with.
+
+**WHAT THE REMOVAL COSTS, named rather than buried:** a record still waiting
+on an approved row is now on NO tab of this page. It is in no count either,
+so no number promises a row nobody can find, and it is not lost — it is
+sitting in the Field Conductor's Verify Hub, which is where it is waiting,
+and the moment he presses Verify it lands on the row by itself. That last
+clause is only true because of the change above; before it, removing the
+orange would have been hiding the one visible symptom of work going unpaid.
+
+**THE SENTENCE HAS ONE CASE LEFT** and the office kept it: a PENDING row
+carrying a day of its own — their own N20-R, `10 Nov 2026` with a claim for
+the 21st under it. Two dates one above the other with nothing between them
+is a question whatever else is true.
+
+Section 2 of `tests/checked_locks_the_qty_not_the_crew.cjs` is the rule,
+driving the SHIPPED `syncTicks`, and its fixture **seeds the sheet** because
+a group that grew and a group that shrank answer identically on a row with
+nothing on it — the removal half would be tested nowhere. Section 3 asserts
+the wholesale `|| r.checked) return;` is gone and that the branch replacing
+it reaches the worker and the walk and nothing else. **Nothing to run in the
+database.**
+
 ## Worker Activity downloads ONE job, for the nurseries ticked
 
 The office: *"Work Activity 全部应该要有一个Download button for 不同的工作，如果

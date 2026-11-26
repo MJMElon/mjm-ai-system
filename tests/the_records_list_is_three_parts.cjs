@@ -182,13 +182,11 @@ async function boot(browser) {
         chemical: 'Manual', qty: 120, work_date: '2026-11-14', week_no: 2,
         schedule_month: m, worked_by: 'Hadi', reported_by: 'Hadi',
         verified_at: null, rejected_at: null },
-      /* PAIRS WITH 601, WHICH IS APPROVED — the one place the sentence has
-         to survive the office taking it off Pending. A row the conductor
-         signed off can still carry a second submission waiting on it, and
-         the APPROVED tab says the opposite of waiting, so a bare amber date
-         there is the unlabelled chip all over again. Without this record
-         the fixture has no approved row with a chip and every check about
-         it passes over nothing. */
+      /* PAIRS WITH 601, WHICH IS APPROVED. The office has since taken the
+         orange off that tab altogether, so this record is what makes the
+         ABSENCE worth asserting: without it the fixture has no approved row
+         that could carry a chip, and "no chip on Approved" passes just as
+         green on a page that draws one. */
       { id: 9106, plot_name: 'B1', work_type: 'pd',
         jenis: 'Penyemburan racun kulat dan serangga',
         chemical: 'Antracol 50gm + Bond 15mL', qty: 700,
@@ -481,22 +479,21 @@ async function boot(browser) {
   const r = await rows();
   const plots = (r.filter ? r : []).filter((x) => !x.group && !x.loose).map((x) => x.cells[3]);
   check('only the linked row', plots, ['B1']);
-  /* A CHIP CAN APPEAR HERE, AND IT KEEPS ITS SENTENCE. An approved row can
-     still carry a second submission nobody has looked at (9106 on B1), and
-     this tab says the OPPOSITE of waiting — so the reason the sentence came
-     off Pending (*"因为它已经under pending了"*) is false here, and a bare
-     amber date would be the unlabelled chip all over again. */
+  /* NO CHIP HERE AT ALL — *"Approved tab 的橙色 完全不需要这个功能"*. 9106
+     is a second submission waiting on the approved B1 row, so the fixture
+     has one to draw and this is an ABSENCE rather than a check that passes
+     over nothing. What the orange was for — a warning before pressing Check
+     — went when the fault went: a record verified after the row is checked
+     is let in now, rather than reaching nothing. */
   const appr = await ev(() => {
     const el = document.querySelector('#rec-body .rec-waiting');
-    if (!el) return 'no chip on the approved row';
-    const lab = el.querySelector('.rw-lab');
-    return { lab: lab ? lab.textContent.replace(/\s+/g, ' ').trim() : null,
-             day: el.textContent.replace(/\s+/g, ' ').trim() };
+    if (!el) return null;
+    return el.textContent.replace(/\s+/g, ' ').trim();
   });
-  check('a second submission still shows on an approved row',
-        /05 Nov 2026/.test((appr || {}).day || ''), true);
-  check('…and HERE it keeps the sentence, because the tab says Approved',
-        (appr || {}).lab, 'Waiting for approval');
+  check('no waiting chip is drawn on the Approved tab', appr, null);
+  check('…and not the sentence either, anywhere on it',
+        await ev(() => /Waiting for approval/i.test(
+          (document.getElementById('rec-body') || {}).textContent || '')), false);
   check('and no unscheduled submission either',
         await ev(() => document.querySelectorAll('#rec-body .rec-row-loose').length), 0);
   } catch (e) { fail++; console.log('  FAIL 5. approved -- ' + String(e.message).split('\n')[0]); }

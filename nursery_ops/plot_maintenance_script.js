@@ -7386,15 +7386,32 @@ function applyFieldRecords(nursery, monthLbl) {
   const syncTicks = (rec, group) => {
     const type = _PAYROLL_TYPE_BY_JENIS[rec.jenis];
     if (!type) return;
-    /* A Checked row is settled, and THE FIELD does not reopen it -- which is
-       not the same rule as the screen's, and the two deliberately parted
-       company the day the office asked for the ticks back (see
-       togglePayrollTick). A PERSON may now correct a name on a checked row;
-       a PAGE LOAD may not, because that moves the piece-rate split under a
-       row the office has agreed with nobody acting and nothing saying so.
-       Same shape as "the field fills an empty cell, it never writes over a
-       full one", one row along. */
-    if (_recLocked(rec)) return;
+    /* A CHECKED ROW TAKES A NAME IN AND NEVER LETS ONE GO — *"如果我check了
+       还有工人的工作没被approved FC approved了 所有资料一模一样 除了地图 和
+       员工 就给他进来就对了"*.
+
+       It used to refuse outright, on the reasoning that a PAGE LOAD moving
+       the piece-rate split under a row the office has agreed, with nobody
+       acting and nothing saying so, is the same fault as the field writing
+       over a full cell. THAT IS STILL TRUE OF A REMOVAL, and it is the half
+       that is kept below.
+
+       It was wrong about the ADDITION, and the office found the case: the
+       conductor presses Verify on a second worker's record AFTER the row is
+       checked, and everything on it is the same morning bar the walk and the
+       person. Refused, that worker is credited by NOTHING — his record is
+       verified, it reaches no tick, and his share of the plot is simply
+       gone, with the row still looking complete. Letting him in is what
+       would have happened had the conductor pressed Verify an hour earlier.
+
+       WHAT IT COSTS, and the office has it in front of them: the plot is
+       divided among the people ticked, so a fourth name takes the other
+       three down a share. That is the RIGHT figure — it was overstated while
+       he was missing — but it does move a row the office had settled.
+
+       A row somebody corrected BY HAND is still left alone, checked or not:
+       that is their answer and this is a page load. */
+    const lockedRow = _recLocked(rec);
     const k = payrollKey(nursery, monthLbl, type);
     const store = payrollData[k] || (payrollData[k] = {});
     const cells = store[rec.id] || {};
@@ -7414,6 +7431,22 @@ function applyFieldRecords(nursery, monthLbl) {
       else unmatched.add(n);
     });
 
+    if (lockedRow) {
+      /* ADD ONLY, and that asymmetry is the whole of what is left of the old
+         refusal. A name the group no longer carries STAYS ticked: a settled
+         row must not lose a worker to a record being deleted, unverified
+         again or paired elsewhere — nobody acted, and the office agreed that
+         row with him on it. */
+      const merged = Object.assign({}, cells);
+      let added = 0;
+      Object.keys(next).forEach((col) => {
+        if (!merged[col]) { merged[col] = 'field'; added++; }
+      });
+      if (!added) return;
+      store[rec.id] = merged;
+      touched.add(type);
+      return;
+    }
     // Nothing to say and nothing was said before: leave the row alone.
     if (!Object.keys(next).length && !Object.keys(cells).length) return;
     if (Object.keys(next).length) store[rec.id] = next;
@@ -7439,12 +7472,44 @@ function applyFieldRecords(nursery, monthLbl) {
   });
 
   records.forEach(r => {
-    if (!plots.includes(r.plot) || r.checked) return;
+    if (!plots.includes(r.plot)) return;
     // A month's field records fill that month's rows and no other.
     if (!_recInMonth(r, monthLbl)) return;
     // The slot's week, not the label — see MJMMaintField.srcWeek.
     const week = MJMMaintField.rowWeek(r);
     let key = week ? _fieldKey(r.jenis, r.plot, week) : null;
+
+    /* A CHECKED ROW IS SETTLED, AND EXACTLY TWO THINGS STILL REACH IT: the
+       worker and his walk — *"除了地图 和 员工 就给他进来就对了"*. The
+       office's own sentence and what the addition costs are in syncTicks.
+
+       THREE THINGS DO NOT reach it, and each is a way a settled row would
+       otherwise move under somebody:
+
+         · THE ROUND ROUTE ONLY, never the chemical fallback. That one is
+           guarded by usedKeys and is first come, so a checked row joining
+           the queue would take a group an unchecked row has been taking
+           since the day it was written. A ROUND key cannot steal from
+           anybody — idx[key] is a plain lookup, guarded by nothing — so
+           adding it to usedKeys only stops the group being reported as
+           unpaired, which is now the truth about it.
+         · NO DATE AND NO BATCH. A checked row has both, and the field only
+           ever fills an EMPTY cell, so refusing them changes nothing today.
+           It is written out rather than left to that guard because the
+           office asked for the worker and the map and named nothing else.
+         · NOTHING IS TAKEN AWAY. No group found is not a reason to strip a
+           settled row of its links, its ticks or its track: those belong to
+           the records it was agreed with. */
+    if (r.checked) {
+      const gc = key ? idx[key] : null;
+      if (!gc) return;
+      usedKeys.add(key);
+      r._fieldIds = gc.ids.slice();
+      r._fieldTracks = (gc.tracks || []).slice();
+      syncTicks(r, gc);
+      return;
+    }
+
     let g = key ? idx[key] : null;
     /* The round did not find it. Try the chemical — the office scheduled
        this exact spray on this exact plot, and the only thing the two sides
@@ -9436,36 +9501,43 @@ function _dateCell(r) {
    it whatever is underneath (the office's own N20-R: `10 Nov 2026` with a
    claim for the 21st under it), because those really are two facts and
    dropping either is the one thing this cell must not do. */
-/* AND THE SENTENCE GOES WHERE THE TAB ALREADY SAYS IT — *"waiting for
-   approval 也拿掉 因为它已经under pending了 代表就是waiting了 不用重复"*.
+/* AND THE CHIP IS A PENDING THING ONLY — *"Approved tab 的橙色 完全不需要
+   这个功能"*.
 
-   They are right, and the REASON they gave is the rule rather than the
-   removal: *因为它已经under pending了*. It is true on the Pending tab and
-   false everywhere else, so the sentence is drawn where it is still
-   answering something and nowhere else.
+   It was drawn on both tabs, because a row the conductor signed off CAN
+   still carry a second worker's record waiting on it, and the argument was
+   that the Approved tab says the opposite of waiting so such a row has to
+   say so. The office looked for one, could not find one, and then said what
+   the orange had really been for: *"只是我看到我即将check的行有没有工人的
+   记录还没进来"* — a warning, before pressing Check, that somebody's work
+   was still outstanding on that row.
 
-   TWO PLACES IT IS STILL ANSWERING, and neither is the tab repeating
-   itself:
+   THE WARNING IS GONE BECAUSE THE FAULT IT WARNED ABOUT IS. A record
+   verified after the row was checked used to reach nothing at all; it is
+   let in now, the worker and his walk, which is the change in
+   applyFieldRecords and the office's own ruling on it. There is nothing
+   left to be warned about before pressing Check, so the orange on that tab
+   is a question sitting on the one list that holds answers.
 
-   - **THE APPROVED TAB**, where a row the conductor signed off can still
-     carry a SECOND submission waiting on it. That tab says the opposite of
-     waiting, so a bare amber date there is the unlabelled chip all over
-     again — which is where *"这什么意思"* came from two days ago.
-   - **A ROW CARRYING A DAY OF ITS OWN**, the office's own N20-R: `10 Nov
-     2026` with a claim for the 21st under it. Two dates one above the other
-     with nothing between them is a question whatever tab they are on, and
-     the sentence is the one thing that answers it.
+   WHAT IT COSTS, named rather than buried: a record still waiting on an
+   approved row is now on NO tab of this page. It is not lost and it is in
+   no count here, so no number promises a row nobody can find — it is
+   sitting in the Field Conductor's Verify Hub, which is where it is
+   waiting, and the moment he presses Verify it lands on the row by itself.
 
-   So on Pending, on a row whose own date is a dash, the cell is the day and
-   nothing else — which is every row they were looking at. The hover carries
-   the whole sentence and the worker names either way. */
+   THE SENTENCE HAS ONE CASE LEFT and the office kept it: a PENDING row
+   carrying a day of its own — their own N20-R, `10 Nov 2026` with a claim
+   for the 21st under it. Two dates one above the other with nothing between
+   them is a question, and the sentence is the one thing that answers it. A
+   pending row whose own date is a dash is the day and nothing else, which
+   is every row they were looking at; the hover carries the whole sentence
+   and the worker names either way. */
 function _dateWithChip(r, list) {
-  const cell  = _dateCell(r);
-  const bare  = cell === '-';
-  const label = _recSection !== 'pending' || !bare;
-  const chip  = _waitingChip(list, { label });
-  if (chip && bare) return chip;
-  return cell + chip;
+  const cell = _dateCell(r);
+  if (_recSection !== 'pending') return cell;
+  const bare = cell === '-';
+  const chip = _waitingChip(list, { label: !bare });
+  return (chip && bare) ? chip : cell + chip;
 }
 
 const _mvPlotKey    = PlotMovement.plotKey;
