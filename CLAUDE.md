@@ -9251,6 +9251,16 @@ app obeys it. The keys are spelled in `MATA_MALAM_FUNCTIONS` here and
 keeps the last one it had. Photo off is a check-in with no picture; gps
 off is no road track, the check-in still records where it was made.
 
+**A worker sees only the location the Worker Namelist files them under.**
+`mata_malam_my_locations(w)` (`shared/RUN_ME_mata_malam_own_location.sql`)
+answers the worker `section` when it is a row of `operation_nurseries`
+(letters and digits, so UNN1 is UNN 1), and NULL, meaning every location,
+for Others or no location. `mata_malam_state` hands it to the phone as
+`my_locations`, the app keeps only those locations on the To-Do List,
+History and Report (`isMyLocation`), and `mata_malam_submit` refuses a
+check-in at any other location. A worker filed under UNE, which Mata Malam
+does not patrol, has nothing to do.
+
 `tests/mata_malam_is_set_in_the_office.cjs` drives the card. It needs a
 `leaflet/dist` folder (`LEAFLET_DIST`) for the map half and says so rather
 than passing without it.
