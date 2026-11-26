@@ -12252,7 +12252,8 @@ the `.png` beside each is its still first frame, shown under reduced motion).
 Growing is three cats, one per job (watering, fertiliser, weeding); Empty two
 digging, three on a plot at or above the nursery median size; Collecting in 1
 month one big cat; Collecting the lorry. The labels keep their size at any
-zoom; the key shows the colour, the cat and the stage name and nothing more.
+zoom and carry the PLOT NAME only (*cycle 2 xxx不用 只需要看plot名字*); the cycle
+is on the shape hover; the key shows the colour, the cat and the stage name and nothing more.
 The Plot chip row has no All plots chip (*all plot 不需要存在*), and the cycle
 table is drawn calm (*看了眼睛很痛*): ordinary-case muted headings,
 regular-weight figures, a faint tint per section, a soft stripe, dashes

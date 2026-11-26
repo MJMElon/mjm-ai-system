@@ -77,8 +77,6 @@
         .lp-labels { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
         .lp-label { position:absolute; display:flex; flex-direction:column; align-items:center; text-align:center; transform:translate(-50%,-50%) scale(calc(1 / var(--lp-z, 1))); transform-origin:center center; max-width:140px; }
         .lp-tag { font-size:10px; font-weight:900; background:#fff; padding:2px 7px; border-radius:6px; color:#3d2610; border:1px solid #e8dcc8; text-transform:uppercase; letter-spacing:.04em; box-shadow:0 2px 6px rgba(61,38,16,.15); }
-        .lp-line { font-size:9px; font-weight:800; line-height:1.15; color:#3d2610; background:rgba(255,255,255,.88); padding:1px 5px; border-radius:4px; margin-top:2px; white-space:nowrap; }
-        .lp-line.empty { color:#8a7a68; font-weight:700; background:transparent; }
         .lp-zoom { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; gap:4px; z-index:5; background:#fff; border-radius:10px; padding:4px; border:1px solid #e8dcc8; box-shadow:0 4px 10px rgba(61,38,16,.12); }
         .lp-zbtn { width:28px; height:28px; border:none; background:#fff; color:#5c3d1e; font-weight:900; font-size:14px; border-radius:6px; cursor:pointer; }
         .lp-zbtn:hover { background:#f1ead9; }
@@ -842,11 +840,10 @@
             const tip = cc ? `Cycle ${cc.n} of ${p.cycles.length} · transplanted ${fmtN(cc.tAdj)} · 2nd cull ${fmtN(cc.c2)} · 3rd cull ${fmtN(cc.c3)}` : 'Nothing recorded';
             svg.insertAdjacentHTML('beforeend',
                 `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" data-stage="${st.key}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name} · ${stg.label}${st.palms ? ' (PALMS: ' + st.palms + ')' : ''}${st.months != null ? ' · ' + Math.floor(st.months) + ' months' : ''}: ${tip}</title></polygon>`);
-            const line = !cc || cc.tAdj <= 0
-                ? '<div class="lp-line empty">No batch</div>'
-                : `<div class="lp-line" title="${tip}">Cycle ${cc.n} · ${fmtN(cc.tAdj)}</div>`;
+            // The label is the plot name and nothing else (the office: "cycle 2 xxx不用
+            // 只需要看plot名字"); the cycle is on the hover of the shape.
             labels.insertAdjacentHTML('beforeend',
-                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}</div>`);
+                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div></div>`);
             catsEl.insertAdjacentHTML('beforeend', lpCats(st.key, s.pts, lpArea(s.pts) >= bigArea));
         });
         svg.addEventListener('click', e => {
