@@ -75,12 +75,10 @@ const DATA = {
   console.log('1. a plot opens as its cycles, newest first');
   const cyc = await page.evaluate(() => [...document.querySelectorAll('#lp-timeline-box .lp-cyc')].map(c => ({
     n: c.dataset.cycle, head: c.querySelector('.lp-cyc-h').textContent.replace(/\s+/g, ' ').trim(),
-    secs: [...c.querySelectorAll('.lp-sec .lp-sec-h')].map(x => x.textContent.trim()),
-    batches: [...c.querySelectorAll('.lp-sec[data-sec="transplant"] tbody td.batch')].map(td => td.textContent.trim()),
-    total: [...c.querySelectorAll('.lp-sec[data-sec="cull3"] tfoot td')].map(td => td.textContent.trim()),
-    c2: [...c.querySelectorAll('.lp-sec[data-sec="cull2"] tfoot td')].map(td => td.textContent.trim()),
-    tp: [...c.querySelectorAll('.lp-sec[data-sec="transplant"] tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()).join('|')),
-    tpTot: [...c.querySelectorAll('.lp-sec[data-sec="transplant"] tfoot td')].map(td => td.textContent.trim()),
+    secs: [...c.querySelectorAll('table.lp-x thead tr.grp-h th')].map(x => x.textContent.trim()),
+    batches: [...c.querySelectorAll('table.lp-x tbody td.batch')].map(td => td.textContent.trim()),
+    rows: [...c.querySelectorAll('table.lp-x tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()).join('|')),
+    foot: [...c.querySelectorAll('table.lp-x tfoot td')].map(td => td.textContent.trim()).join('|'),
   })));
   ok(cyc.length === 2, 'B11 shows two cycle cards', cyc.length);
   ok(cyc[0] && cyc[0].n === '2' && /Current/.test(cyc[0].head) && /12,275/.test(cyc[0].head) && /2026-07-22 → now/.test(cyc[0].head),
@@ -88,13 +86,14 @@ const DATA = {
   ok(cyc[0] && cyc[0].batches.join() === '263,265,269,271', '…holding only its own batches', cyc[0] && cyc[0].batches);
   ok(cyc[1] && /Finished/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && /2025-05-22 → 2026-06-12/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
      'cycle 1 under it: 228 + 229, 22 May 2025 to its 3rd cull 12 Jun 2026, 12,121', cyc[1] && cyc[1].head);
-  ok(cyc[0] && cyc[0].secs.join() === 'Transplanting,7th Month (4th month in MN) · 2nd Culling,3rd Culling', 'each cycle is the three parts of the office sheet: Transplanting, 7th Month 2nd Culling, 3rd Culling', cyc[0] && cyc[0].secs);
-  ok(cyc[1] && cyc[1].total.join('|') === 'Total||12,121|3,062|3,062|0|25.26%|25.26%|', 'cycle 1 3rd culling as the office sheet: 12,121, 3,062 pending, drone 3,062, 25.26%', cyc[1] && cyc[1].total);
-  ok(cyc[1] && cyc[1].c2.join('|') === 'Total||11,957|164|12,121||1.35%|', 'cycle 1 2nd culling as the office sheet: alive 11,957, dead 164, 12,121, 1.35%', cyc[1] && cyc[1].c2);
-  ok(cyc[0] && cyc[0].tp[1] === '2026-07-24|265|7,326|7,326|0', 'transplanting: 265 census 7,326 after its -127 calibration, an old card tallying', cyc[0] && cyc[0].tp);
-  ok(cyc[0] && cyc[0].tp[3] === '2026-10-24|271|135|130|-5', 'the 24 Oct card: drone 130 against census 135, variance -5', cyc[0] && cyc[0].tp);
-  ok(cyc[0] && cyc[0].c2.join('|') === 'Total||12,174|101|12,275||0.82%|', 'cycle 2 2nd culling as the office sheet: alive 12,174 (unculled batches all alive), dead 101, 0.82%', cyc[0] && cyc[0].c2);
-  ok(cyc[0] && cyc[0].tpTot.join('|') === 'Total||12,275|12,270|-5', 'transplanting total: census 12,275, drone 12,270', cyc[0] && cyc[0].tpTot);
+  ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,7th Month (4th month in MN) · 2nd Culling,3rd Culling', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
+  ok(cyc[1] && cyc[1].rows[0] === '228|2025-05-22|3,074|12,121|0|2025-09-14|2,979|95|0|3.09%|2026-06-12|178|178|0|5.79%|5.79%',
+     'batch 228 on one line: census 3,074 (the 22 May card drone 12,121 shared with 229), 2nd 95 dead 3.09%, 3rd 178 5.79%', cyc[1] && cyc[1].rows[0]);
+  ok(cyc[1] && cyc[1].rows[1] === '229|2025-05-22|9,047|2025-09-14|8,978|69|0|0.76%|2026-06-12|2,884|2,884|0|31.88%|31.88%', 'batch 229 below it, the drone cell shared', cyc[1] && cyc[1].rows[1]);
+  ok(cyc[1] && cyc[1].foot === 'Total · plot||12,121|12,121|0||11,957|164|0|1.35%||3,062|3,062|0|25.26%|25.26%', 'the cycle 1 total is the office B11 sheet: 11,957 / 164 / 1.35%, 3,062 / 25.26%', cyc[1] && cyc[1].foot);
+  ok(cyc[0] && cyc[0].rows[1] === '265|2026-07-24|7,326|7,326|0|2026-11-12|7,285|41|0|0.56%|–|–|–|0|0.00%|0.00%', 'batch 265: census 7,326 after its -127 calibration', cyc[0] && cyc[0].rows[1]);
+  ok(cyc[0] && /^271\|2026-10-24\|135\|130\|-5\|/.test(cyc[0].rows[3] || ''), 'the 24 Oct card: drone 130 against census 135, variance -5', cyc[0] && cyc[0].rows[3]);
+  ok(cyc[0] && cyc[0].foot.startsWith('Total · plot||12,275|12,270|-5||12,174|101|0|0.82%|'), 'cycle 2 total: census 12,275, drone 12,270, alive 12,174, dead 101, 0.82%', cyc[0] && cyc[0].foot);
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_cycles.png'), fullPage: true });
 
   console.log('2. the side bar opens the transplant record by year');

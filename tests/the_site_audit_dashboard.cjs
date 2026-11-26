@@ -60,7 +60,7 @@ const R = mod.exports;
 if (R.buildRotation) {
   ok(R.saPlotsOf(DB.shared_plots, 'BNN').join() === 'B1,B2', 'BNN plots come off Seedling Stock, and B4-R (a replant plot) is left off', R.saPlotsOf(DB.shared_plots, 'BNN'));
   ok(R.saPlotsOf([], 'UNN2').length === 20, 'a nursery Seedling Stock holds nothing for falls back to its range');
-  const tr = DB.shared_inventory_logs.map(r => ({ plot: r.plot_name, day: R.saDay(r), qty: r.quantity_change }));
+  const tr = R.saTransplants(DB.shared_inventory_logs);
   const sa = []; DB.shared_do_records.forEach(d => { if (d.status === 'Cancelled' || /\[CANCELLED\]/.test(d.remark)) return; for (let i = 1; i <= 5; i++) if (d['qty_' + i]) sa.push({ plot: d['plot_' + i], day: d.delivery_date, qty: d['qty_' + i] }); });
   const rows = R.buildRotation({ plots: ['B1', 'B2'], capacity: { B1: 2352, B2: 3152 }, transplants: tr, sales: sa, year: '2026', todayYM: '2026-10' });
   const b1 = rows[0].months;
@@ -73,6 +73,28 @@ if (R.buildRotation) {
   ok(b1[6].trPlan === 612 && b1[9].trPlan === 1740, 'B1 transplanting plans: July 612, October 1,740 (dated by its remark)', [b1[6].trPlan, b1[9].trPlan]);
   ok(b1[5].tr === 599 && b1[7].tr === 1754, 'B1 transplanted: June 599, August 1,754', [b1[5].tr, b1[7].tr]);
   ok(b1[10].future && !b1[9].future, 'November is in the future, October is not', [b1[9].future, b1[10].future]);
+  // The transplant figures are Life of Plot own record, month by month.
+  const lop = fs.readFileSync(path.join(ROOT, 'operation', 'operation_life_of_plot.html'), 'utf8');
+  const blk = lop.slice(lop.indexOf('// ── BEGIN build'), lop.indexOf('// ── END build'));
+  const L = new Function('NURSERY_LABEL', 'NURSERY_ORDER', blk + '\nreturn { buildPlotHistory, buildTransplantYear };')(
+    { BNN: 'BNN', UNN1: 'UNN 1', UNN2: 'UNN 2', OTHER: 'Other' }, ['BNN', 'UNN1', 'UNN2', 'OTHER']);
+  const LR = [
+    ...DB.shared_inventory_logs.map(r => Object.assign({ batch_name: '250' }, r)),
+    // Tab 3 day: the Date: in the remark wins over transaction_date
+    { id: 90, transaction_type: 'Transplanted', plot_name: 'B2', batch_name: '260', quantity_change: 500, transaction_date: '2026-05-30', created_at: '2026-05-30T00:00:00Z', remark: 'Transplanted from tray [P3] to Main Plot [B2]. Date: 2026-04-28' },
+    { id: 91, transaction_type: 'Stock_Calibration', plot_name: 'B2', batch_name: '260', quantity_change: -20, transaction_date: '2026-07-01', remark: 'Report: Transplanting. Plot: B2. [APPROVED by x]' },
+    { id: 92, transaction_type: 'Stock_Calibration', plot_name: 'B2', batch_name: '260', quantity_change: -99, transaction_date: '2026-07-01', remark: 'Report: Transplanting. Plot: B2. waiting' },
+  ];
+  const pl = [{ plot_name: 'B1', nursery_name: 'BNN' }, { plot_name: 'B2', nursery_name: 'BNN' }];
+  const SAT = R.saTransplants(LR);
+  const same = ['2025', '2026'].every(y => {
+    const lp = L.buildTransplantYear(L.buildPlotHistory(pl, LR), y).groups.find(g => g.key === 'BNN').plots;
+    const sa = R.buildRotation({ plots: ['B1', 'B2'], capacity: {}, transplants: SAT, sales: [], year: y });
+    return lp.every((p, i) => p.months.join() === sa[i].months.map(m => m.tr).join());
+  });
+  ok(same, 'every plot and month of Pusingan Transplant is the Life of Plot transplant record');
+  const b2 = R.buildRotation({ plots: ['B2'], capacity: {}, transplants: SAT, sales: [], year: '2026' })[0].months;
+  ok(b2[3].tr === 480 && b2[4].tr === 0, 'B2: 500 on the Tab 3 day (28 Apr, not 30 May) less the approved -20; the unapproved -99 counts for nothing', [b2[3].tr, b2[4].tr]);
   const H = R.buildHeights(DB.audit_height_records, 'BNN', '2026');
   ok(H.B1 && H.B1['2026-10'] === 0.83, 'B1 October height = its last audit day (20 Oct, 83 cm) = 0.83 m', H.B1);
   ok(H.B2 && H.B2['2026-10'] === 1.6, 'B2 October 1.60 m; a declined reading (no height) is skipped', H.B2);
