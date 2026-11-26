@@ -354,15 +354,21 @@ const DATA = {
     est2: (document.getElementById('ls-est2') || {}).value, soon: (document.getElementById('ls-name-soon') || {}).value,
     col: (document.getElementById('ls-col-soon') || {}).value,
     selects: document.querySelectorAll('#lp-set select').length,
-    save: document.querySelectorAll('[data-ls-save]').length === 3 }));
-  ok(s9.shown && s9.est2 === '5' && s9.soon === 'Ready soon' && s9.col === '#ff0000' && s9.save, 'Settings shows what is saved, with a Save button for an admin', s9);
+    save: document.querySelectorAll('[data-ls-save]').length, edit: document.querySelectorAll('[data-ls-edit]').length, locked: !!(document.getElementById('ls-est2') || {}).disabled }));
+  ok(s9.shown && s9.est2 === '5' && s9.soon === 'Ready soon' && s9.col === '#ff0000' && s9.save === 0 && s9.edit === 3 && s9.locked, 'Settings shows what is saved, LOCKED, with an Edit per section for an admin', s9);
   const sw9 = await p9.evaluate(() => ({ swatch: document.querySelectorAll('#lp-set .lp-set-sw input[type=color]').length, loose: document.querySelectorAll('#lp-set input[type=color]').length }));
   ok(sw9.swatch === 4 && sw9.loose === 4, 'the colour is picked by pressing the swatch on the left; no second box on the right', sw9);
   ok(s9.selects === 0, 'no PALMS stage dropdowns on Settings', s9.selects);
+  await p9.click('[data-ls-edit="cycles"]');
+  await p9.click('[data-ls-edit="plans"]');
+  const ed9 = await p9.evaluate(() => ({ est: document.getElementById('ls-est2').disabled, col: document.getElementById('ls-col-soon').disabled, saves: document.querySelectorAll('[data-ls-save]').length }));
+  ok(!ed9.est && ed9.col && ed9.saves === 2, 'Edit opens that section only; the others stay locked', ed9);
   await p9.fill('#ls-est3', '12');
   await p9.fill('#ls-trm', '7');   // edited and NOT saved: another section
   await p9.click('[data-ls-save="cycles"]');
   await p9.waitForTimeout(300);
+  const after9 = await p9.evaluate(() => ({ est: document.getElementById('ls-est3').disabled, trm: document.getElementById('ls-trm').value, trmOn: !document.getElementById('ls-trm').disabled }));
+  ok(after9.est && after9.trm === '7' && after9.trmOn, 'after Save the section locks again; the other open section keeps what was typed', after9);
   const w9 = await p9.evaluate(() => (window.__writes || []).filter(w => w.table === 'nops_maint_config').map(w => w.row));
   const saved = w9.length ? JSON.parse(w9[w9.length - 1].txt_value) : null;
   ok(w9.length === 1 && w9[0].key === 'life_of_plot_settings' && saved && saved.est3 === 12 && saved.trMonths === 11 && saved.stages.soon.label === 'Ready soon', 'a section Save writes ONE row carrying its own change; another section unsaved edit is not written', saved);
@@ -377,7 +383,7 @@ const DATA = {
   await p9n.addInitScript(() => { window.__notAdmin = true; });
   await p9n.goto(B + '/operation/operation_life_of_plot.html#view=palms-stages');
   await p9n.waitForSelector('#lp-set .lp-set-sec', { timeout: 8000 }).catch(() => {});
-  const n9 = await p9n.evaluate(() => ({ save: !!document.querySelector('[data-ls-save]'), dis: (document.getElementById('ls-est2') || {}).disabled }));
+  const n9 = await p9n.evaluate(() => ({ save: !!document.querySelector('[data-ls-save], [data-ls-edit]'), dis: (document.getElementById('ls-est2') || {}).disabled }));
   ok(!n9.save && n9.dis === true, 'not an Operation admin: Settings is read only', n9);
   await p9n.close();
 

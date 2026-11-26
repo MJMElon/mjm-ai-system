@@ -12380,7 +12380,9 @@ names and colours, Collecting in 1 month from which month, which map stage
 each PALMS stage is filed under, the collection plan (% and months back) and
 the transplanting plan (months back). ONE row of `nops_maint_config`, key
 `life_of_plot_settings`, JSON (`lpApplySet`); absent or unreadable is the
-built-in values. Edit and Save need Operation admin. EACH SECTION HAS ITS OWN Save
+built-in values. Edit and Save need Operation admin. EACH SECTION IS LOCKED until its Edit is
+pressed (*default是lock的 加一个edit 按钮*), then shows Cancel and a small Save, and
+locks again after either. EACH SECTION HAS ITS OWN Save
 (*每个section都要有自己的save*): it writes its own fields and every other field as
 SAVED, so an unsaved edit in another section is neither written nor lost. A
 stage colour is picked by pressing its swatch; no PALMS stage dropdowns (taken
