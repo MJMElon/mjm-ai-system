@@ -4246,17 +4246,14 @@
        MAIN row and a D-TONE row for one batch, and half a plot signed off is
        not a plot to take off the map. */
     function _invmapCull3Done(log) {
+        // ONLY AN EVIDENCED 3RD CULLING (a drone map, `MapQty:`) takes a batch
+        // off a plot -- the Summary Report's own rule. A row keyed with no map
+        // is a row being filled in: N1 / 255 (Culled 0) and N2 / 253 (Culled
+        // 4,952, no map) both read "No batch" over seedlings the report shows
+        // standing. This is now only the FALLBACK, used when the report view
+        // below cannot be read.
         if (!log) return false;
-        const rm = String(log.remark || '');
-        if (/MapQty:\s*\d+/.test(rm)) return true;
-        // A row keyed with no drone map is only finished when nothing is left
-        // standing on it: Remaining Balance less Culled. N1 / 255 read
-        // "Remaining Balance: 5690, Culled: 0" and was taken off the map as
-        // done, which is a row half filled in, not a plot culled.
-        const rem = rm.match(/Remaining Balance:\s*(-?\d+)/);
-        const cul = rm.match(/Culled:\s*(-?\d+)/);
-        if (rem) return (Number(rem[1]) - (cul ? Number(cul[1]) : 0)) <= 0;
-        return Number(log.quantity_change) === 0;
+        return /MapQty:\s*\d+/.test(String(log.remark || ''));
     }
     function _buildInvmapCompleted(rows) {
         const byKey = {};
@@ -4275,7 +4272,7 @@
     async function loadInventoryMap() {
         const tabBar = document.getElementById('invmap-nursery-tabs');
         try {
-            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res, seedsRes] = await Promise.all([
+            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res, seedsRes, balRes] = await Promise.all([
                 _supabase.from('operation_nurseries').select('*').order('name'),
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
@@ -4302,7 +4299,15 @@
                 _supabase.from('shared_inventory_logs')
                     .select('batch_name,breed_name')
                     .eq('transaction_type', 'Seeds_Received')
-                    .then(r => r, e => ({ data: [] }))
+                    .then(r => r, e => ({ data: [] })),
+                // THE SUMMARY REPORT (Main Nursery Movement Report) per plot
+                // and batch. What stands in a plot is ITS answer, so the map
+                // cannot say "No batch" over a plot the report has seedlings
+                // in. Failing here falls back to the ledger rule below.
+                _supabase.from('shared_plot_batch_balance')
+                    .select('plot_name,batch_name,qty')
+                    .limit(5000)
+                    .then(r => r, e => ({ error: e }))
             ]);
             const batchBreedMap = {};
             ((seedsRes && seedsRes.data) || []).forEach(b => {
@@ -4352,21 +4357,51 @@
                drops is a figure somebody chases; the modal says how many
                finished batches are not on the list. */
             const hiddenComplete = {};
+            const report = invmapReportStanding(balRes);
+            const nk = invmapKey;
+            const fullByKey = {}, keyName = {};
             Object.keys(fullByPlotBatch).forEach(key => {
                 const [plot, batch] = key.split('|');
-                if (completed[String(plot).trim().toUpperCase() + '|' + String(batch).trim().toUpperCase()]) {
-                    hiddenComplete[plot] = (hiddenComplete[plot] || 0) + 1;
-                    return;
-                }
+                const k = nk(plot) + '|' + nk(batch);
+                fullByKey[k] = (fullByKey[k] || 0) + fullByPlotBatch[key];
+                if (!keyName[k]) keyName[k] = key;
+            });
+            const pushRow = (plot, batch, key, standing) => {
                 if (!plotBatches[plot]) plotBatches[plot] = [];
                 plotBatches[plot].push({
                     batch,
                     breed: breedByPlotBatch[key] || batchBreedMap[batch] || '—',
                     full: fullByPlotBatch[key] || 0,
                     collected: collectedByPlotBatch[key] || 0,
-                    balance: 0
+                    balance: 0,
+                    standing
                 });
-            });
+            };
+            if (report) {
+                // The report decides WHICH batches stand and how many.
+                Object.entries(report).forEach(([k, r]) => {
+                    if (invmapIsHoldingTray(r.plot)) return;
+                    const key = keyName[k] || (r.plot + '|' + r.batch);
+                    const [plot, batch] = key.split('|');
+                    pushRow(plot, batch, key, r.qty);
+                    const last = plotBatches[plot][plotBatches[plot].length - 1];
+                    if (!last.full) last.full = fullByKey[k] || r.qty;
+                });
+                Object.keys(fullByKey).forEach(k => {
+                    if (report[k]) return;
+                    const plot = keyName[k].split('|')[0];
+                    hiddenComplete[plot] = (hiddenComplete[plot] || 0) + 1;
+                });
+            } else {
+                Object.keys(fullByPlotBatch).forEach(key => {
+                    const [plot, batch] = key.split('|');
+                    if (completed[String(plot).trim().toUpperCase() + '|' + String(batch).trim().toUpperCase()]) {
+                        hiddenComplete[plot] = (hiddenComplete[plot] || 0) + 1;
+                        return;
+                    }
+                    pushRow(plot, batch, key, null);
+                });
+            }
             // Distribute plot-level (no-batch) collected proportionally.
             Object.entries(plotBatches).forEach(([plot, list]) => {
                 const remaining = collectedByPlot[plot] || 0;
@@ -4379,7 +4414,9 @@
                         });
                     }
                 }
-                list.forEach(b => { b.balance = Math.max(0, b.full - b.collected); });
+                // The report's figure where there is one; otherwise what the
+                // ledger rule leaves after the collections.
+                list.forEach(b => { b.balance = b.standing != null ? b.standing : Math.max(0, b.full - b.collected); });
                 list.sort((a, b) => b.balance - a.balance);
             });
             _invmap.plotBatches = plotBatches;
@@ -4650,6 +4687,25 @@
             const nk = String(n).toUpperCase().replace(/[^A-Z0-9]/g, '');
             return String(n).indexOf('-') >= 0 && nk.indexOf(k + 'R') === 0 && /^\d*$/.test(nk.slice(k.length + 1));
         }).sort();
+    }
+    /* Plot / batch key: letters and digits, upper case -- the rule every
+       crossing between two readers uses here. */
+    function invmapKey(v) { return String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+    /* What the Summary Report says stands, per plot and batch, or NULL when
+       the view could not be read (so the caller falls back). Only a figure
+       above nought stands. */
+    function invmapReportStanding(res) {
+        if (!res || res.error || !Array.isArray(res.data) || !res.data.length) return null;
+        const out = {};
+        res.data.forEach(r => {
+            if (!r || !r.plot_name || !r.batch_name) return;
+            const q = Number(r.qty) || 0;
+            if (q <= 0) return;
+            const k = invmapKey(r.plot_name) + '|' + invmapKey(r.batch_name);
+            if (out[k]) out[k].qty += q;
+            else out[k] = { plot: r.plot_name, batch: r.batch_name, qty: q };
+        });
+        return out;
     }
     function invmapIsHoldingTray(plot) {
         const k = String(plot || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
