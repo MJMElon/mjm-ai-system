@@ -87,7 +87,7 @@ const DATA = {
 
   console.log('2. the side bar opens the transplant record by year');
   const side = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-b')].map(b => b.lastChild.textContent.trim()));
-  ok(side.join('|') === 'Plots & cycles|Transplant record by year|PALMS|Settings', 'the side bar: the two Life of Plot views, PALMS, and Settings at the foot', side);
+  ok(side.join('|') === 'Plot Map|Transplant record by year|Settings', 'the side bar: Plot Map (PALMS and cycles together), the year record, Settings at the foot', side);
   await page.click('#lp-side button[data-view="record"]');
   await page.waitForTimeout(200);
   const rec = await page.evaluate(() => {
@@ -116,9 +116,9 @@ const DATA = {
   const back = await page.evaluate(() => !document.getElementById('lp-detail').classList.contains('hidden') && document.querySelectorAll('#lp-timeline-box .lp-cyc').length);
   ok(back === 2, 'a plot in the record opens its cycles', back);
 
-  console.log('3. PALMS opens inside this page, under the same side bar');
+  console.log('3. changing a stage: the plot opens the PALMS board inside this page');
   const pageErrs = errs.length;
-  await page.click('#lp-side button[data-view="palms-board"]');
+  await page.click('#lp-now-go');
   await page.waitForTimeout(300);
   const pb = await page.evaluate(() => ({
     shown: !document.getElementById('lp-palms').classList.contains('hidden'),
@@ -131,14 +131,14 @@ const DATA = {
   ok(heads.join() === 'Life of Plot', 'PALMS has no section of its own: one heading, Life of Plot', heads);
   ok(pb.shown && pb.others, 'the Plot Status Map replaces the plot list and the record', pb);
   ok(pb.src === '../nursery_ops/nursery_ops_palms_board.html?embed=1', 'the frame opens the real PALMS board, embedded', pb.src);
-  ok(pb.on.join() === 'palms-board' && pb.side, 'the side bar stays, with Plot Status Map lit', pb.on);
+  ok(pb.on.join() === 'plots' && pb.side, 'the side bar stays, with Plot Map lit', pb.on);
   ok(pb.hash === '#view=palms-board', 'the address says which, so a reload comes back to it', pb.hash);
   await page.click('#lp-side button[data-view="palms-stages"]');
   const ps = await page.evaluate(() => document.getElementById('lp-palms-frame').getAttribute('src'));
   ok(ps === '../nursery_ops/nursery_ops_palms_stages.html?embed=1', 'PALMS Settings opens the stage list', ps);
   await page.click('#lp-side button[data-view="plots"]');
   const backToPlots = await page.evaluate(() => document.getElementById('lp-palms').classList.contains('hidden') && !document.getElementById('lp-plots-view').classList.contains('hidden'));
-  ok(backToPlots, 'and Plots & cycles comes back');
+  ok(backToPlots, 'and Plot Map comes back');
 
   // The embedded PALMS page drops its own navigation, so there is ONE side bar.
   const p2 = await browser.newPage({ viewport: { width: 1200, height: 900 } });
@@ -167,7 +167,7 @@ const DATA = {
     inMap: [...document.querySelectorAll('#lp-map button[data-map]')].length }));
   const t1 = await tabsOf();
   ok(t1.head.join() === 'BNN*' && t1.inMap === 0, 'the nursery tabs are top right, once, and not on the map panel', t1);
-  await pm.click('#lp-side button[data-view="palms-board"]');
+  await pm.evaluate(() => setView('palms-board'));
   const t2 = await tabsOf();
   ok(t2.head.join() === 'BNN*', 'PALMS keeps the same tabs top right', t2);
   await pm.click('#lp-side button[data-view="record"]');
@@ -176,6 +176,54 @@ const DATA = {
   const navSrc = fs.readFileSync(path.join(ROOT, 'shared', 'shared_palms_nav.js'), 'utf8');
   ok(/EMBED_CSS[\s\S]{0,400}\.pm-tabs\{display:none/.test(navSrc), 'embedded, PALMS does not draw its own nursery tabs');
   await pm.close();
+
+  console.log('5. PALMS and cycles on one map: the stage colours it, and each cycle carries its stages');
+  const SQ = '[{"x":10,"y":10},{"x":40,"y":10},{"x":40,"y":40},{"x":10,"y":40}]';
+  const L = (plot, n, start, end) => ({ client_uid: plot + n + start, plot_name: plot, act_n: n, start_date: start, end_date: end, ideal_days: null, recorded_by: 'Akbar', seq_no: 0 });
+  const PD = Object.assign({}, DATA, {
+    shared_plots: [{ plot_name: 'B11', nursery_name: 'BNN', map_top: SQ }, { plot_name: 'B13', nursery_name: 'BNN', map_top: SQ.replace(/10/g, '50').replace(/40/g, '80') }, { plot_name: 'U17', nursery_name: 'UNN 1' }],
+    operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }],
+    nops_plot_status_stages: [
+      { id: 1, name: 'Saringan Anak Bibit', sort_order: 1, ideal_days: 14, color: '#2563eb' },
+      { id: 2, name: 'Membesar', sort_order: 2, ideal_days: 270, color: '#16a34a' },
+      { id: 3, name: 'Pengambilan', sort_order: 3, ideal_days: 30, color: '#d97706' } ],
+    fcportal_palms_plot_logs: [
+      L('B11', 1, '2025-05-20', '2025-06-03'), L('B11', 2, '2025-06-03', '2026-05-20'), L('B11', 3, '2026-05-20', '2026-06-12'),
+      L('B11', 1, '2026-07-20', '2026-08-03'), L('B11', 2, '2026-08-03', null) ],
+    fcportal_palms_history: [{ unit_key: 'B11', at_date: '2026-11-20', recorded_by: 'Akbar' }],
+  });
+  const pe = [];
+  const pq = await openPage(PD, pe);
+  await pq.goto(B + '/operation/operation_life_of_plot.html');
+  await pq.waitForSelector('#lp-svg polygon', { timeout: 8000 }).catch(() => {});
+  const m = await pq.evaluate(() => ({
+    mode: [...document.querySelectorAll('#lp-mode button.on')].map(b => b.dataset.mode),
+    fill: (document.querySelector('#lp-svg polygon[data-plot="B11"]') || {}).getAttribute && document.querySelector('#lp-svg polygon[data-plot="B11"]').getAttribute('fill'),
+    label: [...document.querySelectorAll('#lp-labels .lp-label')].map(l => l.textContent.replace(/\s+/g, ' ').trim()),
+    legend: document.getElementById('lp-legend').textContent,
+    head: [...document.querySelectorAll('#lp-plots thead th')].map(t => t.textContent.trim()),
+    row: [...(document.querySelector('#lp-plots tr.plotrow[data-plot="B11"]') || { children: [] }).children].map(t => t.textContent.trim()) }));
+  ok(m.mode.join() === 'palms', 'with a plot log, the map opens coloured by PALMS stage', m.mode);
+  ok(m.fill === 'rgba(22,163,74,0.55)', 'B11 is painted Membesar green', m.fill);
+  ok(m.label.some(t => /^B11 ?Membesar · \d+d left ?Cycle 2 · 12,275$/.test(t)), 'B11 label: its stage and days left, then its cycle and capacity', m.label);
+  ok(/Membesar/.test(m.legend) && /Overdue/.test(m.legend), 'the key is the stage colours', m.legend);
+  ok(m.head.includes('PALMS stage') && m.head.includes('Last update'), 'the list carries the PALMS columns', m.head);
+  ok(m.row[2] === 'Membesar' && /2026-11-20 · Akbar/.test(m.row[4]), 'B11 row: Membesar, last updated 20 Nov by Akbar', m.row);
+  await pq.click('#lp-mode button[data-mode="cycle"]');
+  const cf = await pq.evaluate(() => document.querySelector('#lp-svg polygon[data-plot="B11"]').getAttribute('fill'));
+  ok(cf === 'rgba(251,191,36,.40)', 'Cycle status paints it in the field (amber)', cf);
+  await pq.click('#lp-svg polygon[data-plot="B11"]');
+  await pq.waitForSelector('#lp-timeline-box .lp-cyc', { timeout: 4000 }).catch(() => {});
+  const d = await pq.evaluate(() => ({
+    now: (document.querySelector('#lp-now-box .lp-now') || { textContent: '' }).textContent.replace(/\s+/g, ' '),
+    strips: [...document.querySelectorAll('#lp-timeline-box .lp-cyc')].map(c => [...c.querySelectorAll('.lp-stg-c')].map(x => x.textContent.replace(/\s+/g, ' ').trim())) }));
+  ok(/PALMS stage Membesar/.test(d.now) && /Update stage in PALMS/.test(d.now), 'the plot opens on where it is now, with the way to change it', d.now);
+  ok(d.strips[0] && d.strips[0].length === 2 && /^Saringan Anak Bibit 2026-07-20 → 2026-08-03/.test(d.strips[0][0]) && /^Membesar 2026-08-03 → now/.test(d.strips[0][1]),
+     'cycle 2 carries only its own stages, Membesar still running', d.strips[0]);
+  ok(d.strips[1] && d.strips[1].length === 3 && /^Pengambilan 2026-05-20 → 2026-06-12/.test(d.strips[1][2]), 'cycle 1 carries the three stages of the round before', d.strips[1]);
+  ok(pe.length === 0, 'no page errors with PALMS on the map', pe);
+  if (process.env.SHOT) { await pq.screenshot({ path: path.join(process.env.SHOT, 'lop_combined_detail.png'), fullPage: true }); }
+  await pq.close();
 
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

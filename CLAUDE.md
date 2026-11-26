@@ -12208,3 +12208,29 @@ while the PALMS map loads.
 
 The P.A.L.M.S tile on the Nursery Operation dashboard was taken off for the
 same reason: PALMS is reached from Life of Plot now.
+
+**PALMS and the cycles are ONE map now, the Plot Map** (the office: "palms和
+cycle某些地方可以combine", trial: if they do not like it, go back to the two
+separate entries). The side bar is Plot Map, Transplant record by year,
+Settings; the PALMS entry is gone.
+
+- **It READS the plot log and writes nothing.** `shared_palms.js` is loaded
+  and `MJMPalms.loadStages / loadLogs / loadSaves` are asked in parallel with
+  the ledger; a split plot answers with its worst area (`palmsLine`, the
+  board's own rule). A log that cannot be read leaves `PLOGS` null and the
+  page is exactly the cycle map it was.
+- **One map, two colourings** (`#lp-mode`): PALMS stage (the office stage
+  colours, a red outline for overdue) or Cycle status. It opens on PALMS
+  where there is a log; the choice is kept per machine (`lp_map_mode`). Each
+  label carries both: the stage and days left, and the cycle and capacity.
+- **The list** gains PALMS stage, Due and Last update.
+- **A plot opens on where it is now** (`#lp-now-box`), and every cycle card
+  carries the PALMS stages it went through (`spellsOfCycle`): a spell is
+  filed under the first cycle not finished by the day it began, else the
+  newest, so none is dropped.
+- **Changing a stage is still the PALMS board's job**: "Update stage in
+  PALMS" opens the real board in the frame (`setView('palms-board')`), with
+  Plot Map lit. Its rules (closing an older stage, the daily report, two
+  stages at once) are not copied here.
+
+Section 5 of `tests/life_of_plot_reads_by_cycle.cjs`. Nothing to run.
