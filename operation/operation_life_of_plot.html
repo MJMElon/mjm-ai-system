@@ -69,7 +69,8 @@
         .lp-side-b:hover { background:#f1ead9; }
         .lp-side-b.on { background:#4a7a2e; color:#fdfaf4; }
         .lp-side-i { width:18px; text-align:center; opacity:.85; }
-        .lp-side-h2 { margin-top:12px; padding-top:14px; border-top:1px solid #e8dcc8; }
+        .lp-side-foot { margin-top:12px; position:relative; }
+        .lp-side-foot::before { content:''; position:absolute; left:0; right:0; top:-7px; border-top:1px solid #e8dcc8; }
         .lp-palms-box { overflow:hidden; padding:0; }
         #lp-palms-frame { display:block; width:100%; height:calc(100vh - 190px); min-height:620px; border:0; border-radius:2rem; background:#fff; }
         @media (max-width: 900px) {
@@ -113,9 +114,9 @@
         <div class="lp-side-h">Life of Plot</div>
         <button type="button" class="lp-side-b on" data-view="plots"><span class="lp-side-i">&#9638;</span>Plots &amp; cycles</button>
         <button type="button" class="lp-side-b" data-view="record"><span class="lp-side-i">&#9776;</span>Transplant record by year</button>
-        <div class="lp-side-h lp-side-h2">PALMS</div>
-        <button type="button" class="lp-side-b" data-view="palms-board"><span class="lp-side-i">&#9673;</span>Plot Status Map</button>
-        <button type="button" class="lp-side-b" data-view="palms-stages"><span class="lp-side-i">&#9881;</span>PALMS Settings</button>
+        <button type="button" class="lp-side-b" data-view="palms-board"><span class="lp-side-i">&#9673;</span>PALMS</button>
+        <!-- Settings is the whole module's, so it sits apart at the foot. -->
+        <button type="button" class="lp-side-b lp-side-foot" data-view="palms-stages"><span class="lp-side-i">&#9881;</span>Settings</button>
     </aside>
     <main class="lp-main">
 
@@ -593,8 +594,8 @@
     let VIEW = 'plots';
     let REC_YEAR = '';
     const PALMS_PAGES = {
-        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'Plot Status Map', sub: 'PALMS · every plot and the stage it is on.' },
-        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'PALMS Settings',  sub: 'PALMS · the stages a plot moves through.' },
+        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'PALMS · every plot and the stage it is on.' },
+        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'Life of Plot · the stages a plot moves through.' },
     };
     function setView(v, quiet) {
         VIEW = v === 'record' ? 'record' : (PALMS_PAGES[v] ? v : 'plots');
