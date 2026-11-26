@@ -65,8 +65,8 @@ if (R.buildRotation) {
   const rows = R.buildRotation({ plots: ['B1', 'B2'], capacity: { B1: 2352, B2: 3152 }, transplants: tr, sales: sa, year: '2026', todayYM: '2026-10' });
   const b1 = rows[0].months;
   ok(b1[3].col === 87 && b1[3].colPct === 3, 'B1 April: 87 collected, 3% of 2,352 (rounded down)', [b1[3].col, b1[3].colPct]);
-  ok(b1[4].col === 439 && b1[4].colPct === 18, 'B1 May: two DO lines add to 439, 18%', [b1[4].col, b1[4].colPct]);
-  ok(b1[6].col === 1480 && b1[6].colPct === 62, 'B1 July: 1,480 (62%); both cancelled DOs left out', [b1[6].col, b1[6].colPct]);
+  ok(b1[4].col === 439 && b1[4].colPct === 22, 'B1 May: two DO lines add to 439; the % is CUMULATIVE since the plot was last filled (87 + 439 = 526, 22%)', [b1[4].col, b1[4].colPct]);
+  ok(b1[6].col === 1480 && b1[6].colPct === 62, 'B1 July: 1,480 (62%), the run starting again after the June refill; both cancelled DOs left out', [b1[6].col, b1[6].colPct]);
   ok(b1[5].colPlan === 551, 'B1 June collection plan = 90% of September 2025 transplant 612 = 551', b1[5].colPlan);
   ok(b1[8].colPlan === 1566, 'B1 September collection plan = 90% of December 2025 transplant 1,740', b1[8].colPlan);
   ok(b1[0].trPlan === 1734, 'B1 January transplanting plan = the March 2025 transplant, 10 months earlier', b1[0].trPlan);

@@ -12277,6 +12277,12 @@ Work Maintenance capacity read the first time the view opens. The nursery is
 the tabs top right (its own chip row only with no nursery map), with a year
 row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
 
+**The collection % is CUMULATIVE** (the office: "我要cumulative上去的"): what
+has gone out of the plot since it was last filled, over its capacity — the run
+starts after the latest EARLIER month with a transplant, so a refilled plot
+starts again from nought. The cell still shows that month own collection;
+the hover gives both. `saCumulative` / `lpCumulative`, the same rule twice.
+
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
 colour switch, labels carrying both, PALMS columns on the list and a stage
