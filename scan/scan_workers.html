@@ -431,10 +431,9 @@
                    one; there is no reason to want a worker's record to go
                    back to showing initials. -->
             </div>
-            <div id="wf-photo-note"
-                 style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:5px;">
-              Shown on their chip on the board. Shrunk before it is kept.
-            </div>
+            <!-- Says something only when photos are not switched on. -->
+            <div id="wf-photo-note" style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:5px;"></div>
+
           </div>
         </div>
         <input type="file" id="wf-photo-file" accept="image/*" class="hidden"
@@ -467,9 +466,7 @@
       <div class="frow"><label>Worker PIN</label>
         <input type="text" id="wf-pin" autocomplete="off" autocapitalize="characters"
                autocorrect="off" spellcheck="false" placeholder="Letters or numbers, any length">
-        <div style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:4px;">
-          For signing in to the worker portal. Letters, numbers or both, any length — letters are kept as capitals, so AB12 and ab12 are the same PIN. Leave blank if they have not been given one. No two workers share a PIN.
-        </div>
+
       </div>
       <!-- Decides whether this person gets a column on the Work Maintenance
            tick sheets. Guessed from the role until it is set here. -->
@@ -972,7 +969,7 @@ function wfPhotoDraw() {
   $('wf-photo-row').querySelectorAll('.wf-photo-btn').forEach(b => { b.disabled = off; });
   $('wf-photo-note').textContent = off
     ? 'Run shared/RUN_ME_worker_photos.sql to switch photos on.'
-    : 'Shown on their chip on the board. Shrunk before it is kept.';
+    : '';
 }
 
 /* The initials that stand in for a face. Two letters, from the first and
