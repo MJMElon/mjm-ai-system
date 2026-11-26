@@ -108,20 +108,16 @@
         /* Cycles set by hand: the bar over a plot, and the editor. */
         .lp-cyc-bar { display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; }
         .lp-cyc-bar:empty { display:none; }
-        .lp-ce { padding:18px 22px; margin-bottom:16px; }
-        .lp-ce-grid { display:flex; flex-direction:column; gap:12px; }
-        .lp-ce-cyc { border:2px dashed #e8dcc8; border-radius:16px; padding:10px 12px; background:#fffdf8; min-height:58px; }
-        .lp-ce-cyc.over { border-color:#4a7a2e; background:#f3f7ec; }
-        .lp-ce-h { display:flex; align-items:center; gap:10px; font-size:13px; font-weight:900; color:#3d2610; margin-bottom:8px; }
-        .lp-ce-h small { font-size:11px; font-weight:700; color:#8a7a68; }
+        .lp-cyc-bar { align-items:center; }
+        .lp-ce-cyc { outline:2px dashed transparent; outline-offset:-2px; transition:outline-color .12s, background .12s; }
+        .lp-ce-cyc.over { outline-color:#4a7a2e; background:#f3f7ec; }
+        .lp-ce-row { cursor:grab; }
+        .lp-ce-row td.batch::before { content:'⠿'; color:#b9a88e; margin-right:8px; font-weight:400; }
+        .lp-ce-row:hover td { background:#f6efe2 !important; }
+        .lp-ce-row.drag { opacity:.4; }
+        .lp-ce-new { border:2px dashed #d9c8a8; background:#fffdf8; }
+        .lp-ce-drop { padding:22px; text-align:center; font-size:12px; font-weight:800; color:#a8957a; }
         .lp-ce-x { margin-left:auto; border:1px solid #e8dcc8; background:#fff; color:#8a7a68; border-radius:8px; width:26px; height:26px; cursor:pointer; font-weight:900; }
-        .lp-ce-list { display:flex; flex-wrap:wrap; gap:8px; min-height:30px; }
-        .lp-ce-chip { display:flex; gap:8px; align-items:center; padding:6px 10px; border-radius:10px; background:#fff; border:1px solid #e8dcc8; font-size:12px; font-weight:800; color:#3d2610; cursor:grab; user-select:none; }
-        .lp-ce-chip span { font-weight:700; color:#8a7a68; }
-        .lp-ce-chip.drag { opacity:.4; }
-        .lp-ce-add { margin-top:12px; padding:9px; width:100%; border:2px dashed #d9c8a8; border-radius:14px; background:transparent; color:#5c3d1e; font-weight:800; font-size:12px; cursor:pointer; }
-        .lp-ce-add:hover { background:#f1ead9; }
-        .lp-ce-foot { display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:12px; }
         .lp-set-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
         .lp-set-top .lp-set-h { margin-bottom:0; }
         .lp-set-save, .lp-set-edit, .lp-set-cancel { padding:5px 14px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; }
@@ -1072,7 +1068,7 @@
             alive2 += alive;
             const c2 = b.c2Has ? b.c2Qty : 0, c3 = c3On(b) && b.c3Has ? b.c3Qty : 0, m3 = b.c3Map || 0;
             const span = g.batches.length;
-            body += `<tr><td class="l batch">${b.batch}</td>`
+            body += `<tr data-b="${lpBatchKey(b.batch)}"><td class="l batch">${b.batch}</td>`
                 // Transplanting: the day and how many went in (the office: only these two)
                 + `<td class="l s1">${b.tDate || '–'}</td><td>${nf(b.tAdj) || '0'}</td>`
                 // 2nd culling: alive, dead, culling rate. Nothing keyed yet is one blank
@@ -1263,33 +1259,43 @@
         CYC_EDIT = { plot: p.plot, groups: p.cycles.map(c => c.batches.map(b => lpBatchKey(b.batch))) };
         lpDrawCycleEditor(p);
     }
+    /* The editor IS the cycle cards (the office: "我按了edit 我就可以drag整条batch
+       从current cycle去previous cycle"): each batch row is picked up whole and
+       dropped on another card; the cards are worked out again on each drop. */
+    function lpCanonCycles(p) {
+        const full = CYC_EDIT.groups.filter(g => g.length), empty = CYC_EDIT.groups.length - full.length;
+        const cyc = full.length ? lpCycles(p.batches, full) : [];
+        CYC_EDIT.groups = cyc.map(c => c.batches.map(b => lpBatchKey(b.batch))).concat(Array.from({ length: empty }, () => []));
+        return cyc;
+    }
     function lpDrawCycleEditor(p) {
-        const byKey = {};
-        p.batches.forEach(b => { byKey[lpBatchKey(b.batch)] = b; });
-        document.getElementById('lp-cyc-bar').innerHTML = '';
-        const box = document.getElementById('lp-timeline-box');
-        box.innerHTML = `<div class="panel lp-ce"><div class="lp-ce-grid">`
-            + CYC_EDIT.groups.map((g, i) => `<div class="lp-ce-cyc" data-ci="${i}"><div class="lp-ce-h">Cycle ${i + 1}<small>${nf(g.reduce((a, k) => a + ((byKey[k] || {}).tAdj || 0), 0)) || '0'}</small>`
-                + (g.length ? '' : `<button type="button" class="lp-ce-x" data-cx="${i}" title="Remove">×</button>`) + `</div><div class="lp-ce-list">`
-                + g.map(k => { const b = byKey[k]; return b ? `<div class="lp-ce-chip" draggable="true" data-b="${k}">${b.batch}<span>${b.tDate || '–'} · ${nf(b.tAdj) || '0'}</span></div>` : ''; }).join('')
-                + `</div></div>`).join('')
-            + `</div><button type="button" class="lp-ce-add" id="lp-ce-add">+ Add cycle</button>`
-            + `<div class="lp-ce-foot"><span class="lp-set-msg" id="lp-ce-msg"></span>`
+        const cyc = lpCanonCycles(p);
+        document.getElementById('lp-cyc-bar').innerHTML = `<span class="lp-set-msg" id="lp-ce-msg"></span>`
+            + `<button type="button" class="lp-set-cancel" id="lp-ce-add">+ Add cycle</button>`
             + (LP_CYC[lpPlotKey(p.plot)] ? `<button type="button" class="lp-set-cancel" id="lp-ce-auto">Automatic</button>` : '')
-            + `<button type="button" class="lp-set-cancel" id="lp-ce-cancel">Cancel</button><button type="button" class="lp-set-save" id="lp-ce-save">Save</button></div></div>`;
+            + `<button type="button" class="lp-set-cancel" id="lp-ce-cancel">Cancel</button><button type="button" class="lp-set-save" id="lp-ce-save">Save</button>`;
+        const box = document.getElementById('lp-timeline-box');
+        let h = '';
+        for (let i = CYC_EDIT.groups.length - 1; i >= cyc.length; i--)
+            h += `<div class="panel lp-cyc lp-ce-cyc lp-ce-new" data-ci="${i}"><div class="lp-cyc-h"><span class="lp-cyc-n">Cycle ${i + 1}</span>`
+               + `<button type="button" class="lp-ce-x" data-cx="${i}" title="Remove">×</button></div><div class="lp-ce-drop">Drop a batch here</div></div>`;
+        h += cyc.slice().reverse().map(c => cycleHtml(c, p).replace('class="panel lp-cyc"', `class="panel lp-cyc lp-ce-cyc" data-ci="${c.n - 1}"`)).join('');
+        box.innerHTML = h;
         let dragKey = null;
-        box.querySelectorAll('.lp-ce-chip').forEach(ch => {
-            ch.addEventListener('dragstart', e => { dragKey = ch.dataset.b; ch.classList.add('drag'); try { e.dataTransfer.setData('text/plain', dragKey); e.dataTransfer.effectAllowed = 'move'; } catch (x) {} });
-            ch.addEventListener('dragend', () => ch.classList.remove('drag'));
+        box.querySelectorAll('.lp-ce-cyc tbody tr[data-b]').forEach(tr => {
+            tr.draggable = true; tr.classList.add('lp-ce-row');
+            tr.addEventListener('dragstart', e => { dragKey = tr.dataset.b; tr.classList.add('drag'); try { e.dataTransfer.setData('text/plain', dragKey); e.dataTransfer.effectAllowed = 'move'; } catch (x) {} });
+            tr.addEventListener('dragend', () => tr.classList.remove('drag'));
         });
         box.querySelectorAll('.lp-ce-cyc').forEach(cy => {
             cy.addEventListener('dragover', e => { e.preventDefault(); cy.classList.add('over'); });
-            cy.addEventListener('dragleave', () => cy.classList.remove('over'));
+            cy.addEventListener('dragleave', e => { if (!cy.contains(e.relatedTarget)) cy.classList.remove('over'); });
             cy.addEventListener('drop', e => {
                 e.preventDefault(); cy.classList.remove('over');
                 let k = dragKey; try { k = e.dataTransfer.getData('text/plain') || k; } catch (x) {}
                 if (!k) return;
                 const to = +cy.dataset.ci;
+                if (CYC_EDIT.groups[to] && CYC_EDIT.groups[to].includes(k)) return;
                 CYC_EDIT.groups = CYC_EDIT.groups.map(g => g.filter(x => x !== k));
                 CYC_EDIT.groups[to].push(k);
                 lpDrawCycleEditor(p);

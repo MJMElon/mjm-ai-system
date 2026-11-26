@@ -12180,8 +12180,10 @@ as Pending.
 culled, then filled again, and each of those is a CYCLE. Its capacity is what
 was transplanted in that cycle, never the plot's whole history added up.
 **The office can set a plot cycles BY HAND** (*我可以自己加cycle 然后drag来drag去*):
-Edit cycles over the plot (Operation admin) opens an editor, + Add cycle, drag a
-batch between cycles, Save; Automatic hands the plot back to the rule. One row
+Edit cycles over the plot (Operation admin) turns the cycle CARDS themselves into
+the editor (*我按了edit 我就可以drag整条batch 从current cycle去previous cycle*): each
+batch row is picked up whole and dropped on another card, the cards worked out
+again on each drop; + Add cycle adds an empty card to drop on, Save; Automatic hands the plot back to the rule. One row
 of `nops_maint_config`, key `life_of_plot_cycles`, `{plotKey: [[batch, ...]]}`,
 read again before each save so another plot is not overwritten.
 `lpCyclesByHand`: a batch the saved cycles do not name (transplanted since)

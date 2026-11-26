@@ -397,16 +397,17 @@ const DATA = {
   await p10.click('#lp-cyc-edit').catch(() => {});
   await p10.click('#lp-ce-add').catch(() => {});
   const boxes10 = await p10.evaluate(() => document.querySelectorAll('.lp-ce-cyc').length);
-  ok(before10 === 1 && boxes10 === 2, 'Edit cycles opens the editor; + Add cycle adds an empty one', [before10, boxes10]);
+  ok(before10 === 1 && boxes10 === 2, 'Edit cycles turns the cycle cards into drop targets; + Add cycle adds an empty one', [before10, boxes10]);
   await p10.evaluate(() => {
-    const chip = document.querySelector('.lp-ce-chip[data-b="275"]'), to = document.querySelector('.lp-ce-cyc[data-ci="1"]');
+    const chip = document.querySelector('.lp-ce-cyc tr[data-b="275"]'), to = document.querySelector('.lp-ce-cyc[data-ci="1"]');
     const dt = new DataTransfer();
     chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
     to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
     to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
   });
-  const moved10 = await p10.evaluate(() => [...document.querySelectorAll('.lp-ce-cyc')].map(c => [...c.querySelectorAll('.lp-ce-chip')].map(x => x.dataset.b).join()));
-  ok(moved10.join('|') === '240,270|275', 'dragging 275 onto the new cycle moves it there', moved10);
+  if (process.env.SHOT) await p10.screenshot({ path: path.join(process.env.SHOT, 'lop_cycle_edit.png'), fullPage: true });
+  const moved10 = await p10.evaluate(() => [...document.querySelectorAll('.lp-ce-cyc')].sort((a, b) => a.dataset.ci - b.dataset.ci).map(c => [...c.querySelectorAll('tbody tr[data-b]')].map(x => x.dataset.b).join()));
+  ok(moved10.join('|') === '240,270|275', 'dragging the whole 275 row onto the new cycle moves it there', moved10);
   await p10.click('#lp-ce-save');
   await p10.waitForTimeout(400);
   const w10 = await p10.evaluate(() => (window.__writes || []).filter(w => w.table === 'nops_maint_config').map(w => w.row));
