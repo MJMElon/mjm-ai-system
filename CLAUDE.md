@@ -12023,7 +12023,14 @@ as Pending.
 - **Under a sheet it is drawn into `#cj-sections`** after the sheet's own
   render (`renderPayroll` wraps `_renderPayrollBody`); its own entry draws a
   side bar button (`syncCustomSubnav`) and the page is the job.
-- **NOT YET: the payroll claim.** Checked rows are not priced on the Nursery
-  Payroll yet.
+- **The claim pays CHECKED rows** (`customJobLines` in
+  `npayroll_script.js`), priced off the Piece Rate whose Used For is the job.
+  With no rate the job is still listed on its sheet, the money blank and a
+  line saying the price waits under Pending; nothing is paid until it is set.
+  Which sheet follows where it was put: under a Work Maintenance job on Work
+  Maintenance, under Seed Planting or Loading Seedlings on those, everything
+  else (Transplanting, Culling Monitoring, its own entry) on Transplanting.
+  The Monthly Payroll files it in that column. The dashboard trend does not
+  count it yet.
 
 `tests/an_added_job_is_a_section_of_its_own.cjs`.

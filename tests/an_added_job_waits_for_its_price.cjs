@@ -160,6 +160,50 @@ async function boot(browser, db) {
   await none.page.waitForTimeout(300);
   check('a config table that cannot be read draws no Pending block and no error',
     [await none.page.evaluate(() => !!document.getElementById('rate-pending')), none.errs], [false, []]);
+  console.log('— 2. a CHECKED row reaches the claim; with no rate it is listed and not paid');
+  {
+    const MS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const now = new Date(); const M = `${MS[now.getMonth()]} ${now.getFullYear()}`;
+    const SI = { key: 'cj_si1', label: 'Seedlings Incentive', desc: 'Transfer seedling to big polybag',
+      sidebar: false, under: 'transplanting', attach: 'separate', rows: 'tp_nursery', cols: {}, split: 'equal' };
+    const base = (rates) => ({
+      nops_maint_config: [{ key: 'custom_jobs', txt_value: JSON.stringify([SI]) }],
+      mjmnpayroll_workers: [{ id: 1, full_name: 'Andi', section: 'BNN', active: true }, { id: 2, full_name: 'Ayub', section: 'BNN', active: true }],
+      mjmnpayroll_piece_rates: rates,
+      nops_custom_job_rows: [
+        { job_key: 'cj_si1', month: M, nursery: 'BNN', row_key: 'nursery', qty: 2450, workers: { Andi: 1, Ayub: 1 }, checked_at: '2026-11-20T00:00:00Z' },
+        { job_key: 'cj_si1', month: M, nursery: 'UNN1', row_key: 'nursery', qty: 999, workers: { Andi: 1 }, checked_at: null }]
+    });
+    const read = (page) => page.evaluate(() => {
+      try { switchSub('transpl'); } catch (_) {}
+      const c = document.querySelector('#sub-transpl .cj-claim');
+      if (!c) return 'no section';
+      return { head: c.querySelector('.cj-claim-h').textContent.replace(/\s+/g, ' ').trim(),
+               rows: [...c.querySelectorAll('tbody tr')].map(tr => [...tr.children].slice(1).map(td => td.textContent.trim())),
+               norate: !!c.querySelector('.cj-norate'),
+               monthly: monthlyRows('').filter(r => r.transpl).map(r => [r.name, r.transpl]) };
+    });
+    const a = await boot(browser, base([]));
+    await a.page.waitForTimeout(400);
+    const ga = await read(a.page);
+    check('the checked row is on the Transplanting claim, the unchecked one is not', ga.rows,
+      [['Andi', '1,225', '—', '—'], ['Ayub', '1,225', '—', '—']]);
+    check('…headed by the job and its description', ga.head, 'Seedlings Incentive · Transfer seedling to big polybag');
+    check('…and with no piece rate it says so and pays nothing', [ga.norate, ga.monthly], [true, []]);
+    check('no page errors', a.errs, []);
+    await a.page.close();
+
+    const b = await boot(browser, base([{ id: 9, job_desc: 'Seedlings Incentive', unit: 'Seedling', rate: 0.02, category: 'cj_si1', group_code: 'MN', active: true }]));
+    await b.page.waitForTimeout(400);
+    const gb = await read(b.page);
+    check('once the rate is set it prices: 1,225 at RM 0.02 is RM 24.50 each', gb.rows,
+      [['Andi', '1,225', '0.02', '24.50'], ['Ayub', '1,225', '0.02', '24.50']]);
+    check('…the note goes, and the Monthly Payroll carries it in Transplanting', [gb.norate, gb.monthly],
+      [false, [['Andi', 24.5], ['Ayub', 24.5]]]);
+    check('no page errors', b.errs, []);
+    await b.page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
