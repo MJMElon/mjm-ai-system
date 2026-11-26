@@ -12320,6 +12320,12 @@ and the B11 tab), checked figure for figure against B11:
   less pending) and Culling rate (pending over transplanted). The Tab 3 drone
   count and the 2nd culling variance came off. Both cullings keep their Date
   (*2nd cull and 3rd cull都要date*).
+- **The 3rd culling opens only once that batch has started SELLING out of the
+  plot** (the office: *3rd cull开不开取决于开始sale了没有*), off the delivery
+  orders (`c3On` in `cycleHtml`). Tab 6 saves 3rd Culled as 2nd culled + what
+  is left, so a row saved before any sale reads the whole balance (250 on U1:
+  447) or nought (255): not a culling, so it shows the estimate. The plot redraws
+  once the delivery orders are read; unreadable, it shows what was saved.
 - **A culling not keyed yet is ONE blank cell saying when it is due**
   (`lpEst`): the 2nd culling the 4th month after the batch transplant (the
   office: transplanted Nov 2026, Est. Mar 2027), the 3rd the 9th. Where no
