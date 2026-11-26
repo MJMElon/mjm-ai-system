@@ -12280,8 +12280,8 @@ row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
 **The collection % is CUMULATIVE** (the office: "我要cumulative上去的"): what
 has gone out of the plot since it was last filled, over its capacity — the run
 starts after the latest EARLIER month with a transplant, so a refilled plot
-starts again from nought. The cell still shows that month own collection;
-the hover gives both. `saCumulative` / `lpCumulative`, the same rule twice.
+starts again from nought. The FIGURE in the cell is cumulative as well (the
+office: "数字也要cumulative"); the hover still gives the month own collection. `saCumulative` / `lpCumulative`, the same rule twice.
 
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle

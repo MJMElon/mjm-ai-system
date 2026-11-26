@@ -361,7 +361,7 @@
       <div class="card">
         <div class="card-head">
           <div><h2 class="card-title" id="sa-sales-title">Pusingan Jualan</h2>
-            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. % is the cumulative collection since the plot was last filled, against its capacity.</div></div>
+            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
           <div class="sa-legend">
             <span><i style="background:#F5E6C8"></i>Collected &lt;40%</span>
             <span><i style="background:#DDA04B"></i>40–79%</span>
@@ -1388,7 +1388,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         const tipT = `${r.plot} · ${x.ym} · Collected ${nf(x.col)} · cumulative ${nf(x.colCum)}${x.colPct != null ? ' (' + x.colPct + '% of capacity)' : ''} · Plan ${nf(x.colPlan)}`;
         if (x.col > 0) {
           const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
-          hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
+          hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
         } else if (x.colPlan > 0) {
           hs += `<div class="sa-cell pc${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.colPlan)}</div>`;
         } else hs += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
