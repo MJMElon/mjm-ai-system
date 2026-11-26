@@ -12314,9 +12314,6 @@ and the B11 tab), checked figure for figure against B11:
   (`lpEst`): the 2nd culling the 4th month after the batch transplant (the
   office: transplanted Nov 2026, Est. Mar 2027), the 3rd the 9th. Where no
   batch of the cycle has that culling, its total cells are one blank too.
-  It is drawn as the office mock-up: a yellow block, EST. MONTH over the month
-  in full (MARCH 2027, Fredoka), merged down consecutive batches due the same
-  month.
 
 **And it is ONE table read across, not three stacked** (the office: "改成横着
 的吧 … batch就不用写那么多次"): a row per batch, the batch written once, then

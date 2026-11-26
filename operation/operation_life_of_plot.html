@@ -8,7 +8,6 @@
     <meta http-equiv="Expires" content="0"/>
     <title>Life of Plot · MJM Nursery</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../shared/shared_supabase.js"></script>
@@ -153,12 +152,7 @@
         table.lp-x tbody tr:nth-child(even) td { background:rgba(61,38,16,.025); }
         table.lp-x tbody tr:hover td { background:rgba(106,168,60,.08); }
         table.lp-x td { border-bottom:1px solid #f1ead9; }
-        /* A culling not keyed yet: one yellow block saying the month it is due,
-           merged down the rows of the batches due that same month. */
-        table.lp-x td.est { padding:6px; vertical-align:middle; }
-        table.lp-x td.est .est-box { background:#fbe5a1; border-radius:14px; padding:14px 10px; text-align:center; height:100%; display:flex; flex-direction:column; justify-content:center; }
-        table.lp-x td.est .est-k { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#3d2610; font-weight:500; }
-        table.lp-x td.est .est-v { font-family:'Fredoka', system-ui, sans-serif; font-weight:700; font-size:22px; letter-spacing:.06em; text-transform:uppercase; color:#6f6a63; line-height:1.15; margin-top:2px; }
+        table.lp-x td.est { text-align:center; color:#a8957c; font-weight:600; font-style:italic; }
         table.lp-x .mute { color:#c9bba8; font-weight:400; }
         table.lp-x tfoot td { font-weight:800; color:#1a150d; background:#f6f0e4; }
         /* Transplant record: the office sheet, a column per month. */
@@ -927,8 +921,8 @@
     function lpEst(day, add) {
         if (!day) return '';
         const y = +day.slice(0, 4), m = +day.slice(5, 7) - 1 + add;
-        const M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        return M[m % 12] + ' ' + (y + Math.floor(m / 12));
+        const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return 'Est. ' + M[m % 12] + ' ' + (y + Math.floor(m / 12));
     }
     function cycleHtml(c, p) {
         const d = lpDays(c.start, c.end);
@@ -966,26 +960,7 @@
         let alive2 = 0;
         const map3 = bs.reduce((a, b) => a + (b.c3Map || 0), 0);
         let body = '';
-        // The est. blocks: a batch with nothing keyed, merged down the next rows
-        // whose batches are due the same month (rowspan on the first, nothing on the rest).
-        const flat = groups.flatMap(g => g.batches);
-        const estSpans = (has, add) => {
-            const out = flat.map(() => 0);
-            for (let i = 0; i < flat.length; ) {
-                if (has(flat[i])) { i++; continue; }
-                const lab = lpEst(flat[i].tDate, add);
-                let j = i + 1;
-                while (j < flat.length && !has(flat[j]) && lpEst(flat[j].tDate, add) === lab) j++;
-                out[i] = j - i; for (let k = i + 1; k < j; k++) out[k] = -1;
-                i = j;
-            }
-            return out;
-        };
-        const sp2 = estSpans(b => b.c2Has, LP_EST_C2), sp3 = estSpans(b => b.c3Has || b.c3Map != null, LP_EST_C3);
-        const estCell = (n, span, lab) => span < 0 ? '' : `<td class="s1 est" colspan="${n}" rowspan="${span}"><div class="est-box"><div class="est-k">Est. month</div><div class="est-v">${lab}</div></div></td>`;
-        let rowNo = -1;
         groups.forEach(g => g.batches.forEach((b, i) => {
-            rowNo++;
             const alive = b.c2Has ? (b.c2Alive != null ? b.c2Alive : b.tAdj - b.c2Qty) : b.tAdj;
             alive2 += alive;
             const c2 = b.c2Has ? b.c2Qty : 0, c3 = b.c3Has ? b.c3Qty : 0, m3 = b.c3Map || 0;
@@ -998,13 +973,13 @@
                 // transplanted Nov 2026, est. Mar 2027).
                 + (b.c2Has
                     ? `<td class="l s1">${b.c2Date || '–'}</td><td>${nf(alive) || '0'}</td><td class="cull">${nf(b.c2Qty) || '0'}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
-                    : estCell(4, sp2[rowNo], lpEst(b.tDate, LP_EST_C2)))
+                    : `<td class="l s1 est" colspan="4">${lpEst(b.tDate, LP_EST_C2)}</td>`)
                 // 3rd culling: pending culling, drone count, variance, culling rate; nothing
                 // keyed yet is due the 9th month after transplant.
                 + (b.c3Has || b.c3Map != null
                     ? `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
                       + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td>`
-                    : estCell(5, sp3[rowNo], lpEst(b.tDate, LP_EST_C3)))
+                    : `<td class="l s1 est" colspan="5">${lpEst(b.tDate, LP_EST_C3)}</td>`)
                 + `</tr>`;
         }));
         h += `<div class="lp-x-wrap"><table class="lp lp-x">`
