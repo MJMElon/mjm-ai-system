@@ -119,5 +119,18 @@ console.log('4. a plot is read by CYCLE, never mixed (the office B11, from its o
   ok(b.c3Qty === 600 && b.c3Date === null && b.c3Sort === '2026-09-20', 'a 3rd culling with no CullDate shows no date, as Tab 6 does; the cycle still closes on its save day', [b.c3Qty, b.c3Date, b.c3Sort]);
 }
 
+{
+  // B1: 234 3rd culled 1 Jun 2026, 252 went in 14 Jun, 237 3rd culled 2 Aug. The new
+  // cycle starts after the FIRST real culling, not the last.
+  const C3 = (b, day, q) => ({ plot_name: 'B1', transaction_type: '3rd_Culling', transaction_date: null, quantity_change: q, batch_name: b, remark: '3rd Culling. Culled: ' + q + ', DestType: main MapQty: ' + q + ' CullDate:' + day });
+  const mB1 = buildPlotHistory([{ plot_name: 'B1', nursery_name: 'BNN' }], [
+    T('B1', '234', '2025-09-19', 137), T('B1', '237', '2025-09-19', 1182), T('B1', '252', '2026-06-14', 157), T('B1', '268', '2026-08-23', 1365),
+    C3('234', '2026-06-01', 8), C3('237', '2026-08-02', 90),
+  ]);
+  const pB1 = mB1.groups.find(g => g.key === 'BNN').plots[0];
+  ok(pB1.cycles.length === 2 && pB1.cycles[0].batches.map(b => b.batch).join() === '234,237' && pB1.cycles[1].batches.map(b => b.batch).join() === '252,268',
+     'B1: 252 went in after 234 was 3rd culled, so it starts cycle 2, though 237 was culled later', pB1.cycles.map(c => c.batches.map(b => b.batch)));
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

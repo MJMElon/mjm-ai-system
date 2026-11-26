@@ -384,8 +384,16 @@
         const cycles = [];
         let cur = null;
         (batches || []).forEach(b => {
-            const lastC3 = cur ? lpLatest(cur.batches.map(x => x.c3Sort)) : null;
-            if (!cur || (b.tDate && lastC3 && b.tDate > lastC3)) { cur = { batches: [] }; cycles.push(cur); }
+            /* A new cycle starts with a batch transplanted after the plot's 3rd
+               culling BEGAN: the FIRST real culling of the cycle (one carrying a
+               Cull Date or a drone map), not the last. B1: 234 culled 1 Jun 2026,
+               252 went in 14 Jun, while 237 and 241 were culled on 2 Aug; asked of
+               the last culling, 252 to 268 were read as the same cycle. A Tab 6 row
+               saved with neither is not a culling and is not asked; a cycle with
+               only such rows falls back to its latest, as before. */
+            const real = cur ? cur.batches.filter(x => x.c3Sort && (x.c3Date || x.c3Map != null)).map(x => x.c3Sort) : [];
+            const cutC3 = cur ? (real.length ? lpEarliest(real) : lpLatest(cur.batches.map(x => x.c3Sort))) : null;
+            if (!cur || (b.tDate && cutC3 && b.tDate > cutC3)) { cur = { batches: [] }; cycles.push(cur); }
             cur.batches.push(b);
         });
         return cycles.map((c, i) => {

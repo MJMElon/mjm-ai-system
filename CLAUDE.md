@@ -12180,8 +12180,9 @@ as Pending.
 culled, then filled again, and each of those is a CYCLE. Its capacity is what
 was transplanted in that cycle, never the plot's whole history added up.
 `lpCycles` is the rule: batches in transplant-date order, and a batch
-transplanted AFTER the latest 3rd culling of the cycle before it starts a new
-one. A plot opens as one card per cycle, newest first, each card with its own
+transplanted AFTER the FIRST real 3rd culling (a Cull Date or a drone map) of
+the cycle before it starts a new one. It was the LAST culling, and B1 read as
+one cycle: 234 culled 1 Jun 2026, 252 in on 14 Jun, 237 and 241 culled 2 Aug. A plot opens as one card per cycle, newest first, each card with its own
 dates, days and total. The office's Census & Drone Counting sheet lays B11 out
 the same way: 228 + 229 = 12,121, then 263 to 271 = 12,275. The map colours
 and the list read the CURRENT cycle.
