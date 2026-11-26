@@ -191,7 +191,7 @@ const server = http.createServer((req, res) => {
     const b1c = G.cells.slice(0, 12), b1t = G.tcells.slice(0, 12);
     ok(b1c[3].t === '873%' && /c1/.test(b1c[3].cls), 'B1 April collection reads 87 · 3%, the lightest shade', b1c[3]);
     ok(b1c[6].t === '2,00685%' && /c3/.test(b1c[6].cls), 'B1 July: this round so far 2,006 · 85%, the darkest shade', b1c[6]);
-    ok(b1c[8].t === '250Batch 213' && /old/.test(b1c[8].cls), 'B1 September: only the round before sold, so it names the batch (213) and carries no %', b1c[8]);
+    ok(!/250|Batch|Earlier/.test(b1c[8].t) && !/old/.test(b1c[8].cls), 'B1 September sold only the round before: that sale is not drawn, plan and cumulative only', b1c[8]);
     ok(b1c[5].t === 'Plan551' && /pc/.test(b1c[5].cls), 'B1 June: a dashed collection plan of 551', b1c[5]);
     ok(b1t[0].t === 'Plan1,734' && /pt/.test(b1t[0].cls), 'B1 January: a dashed transplanting plan of 1,734', b1t[0]);
     ok(b1t[5].t === '599' && /t1/.test(b1t[5].cls), 'B1 June: transplanted 599, solid green', b1t[5]);

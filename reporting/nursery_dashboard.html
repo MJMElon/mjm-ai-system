@@ -1427,10 +1427,10 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
         if (x.colMine > 0) {
           const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
           hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
-        } else if (x.col > 0) {
-          // Only batches of the round before were sold this month.
-          hs += `<div class="sa-cell old" title="${esc(tipT)}">${nf(x.col)}<small>${esc((x.colOlderB || []).length ? 'Batch ' + x.colOlderB.join(', ') : 'Earlier round')}</small></div>`;
         } else if (x.colPlan > 0) {
+          // A month that sold only batches of the round before is not drawn:
+          // the grid shows the plan and this round, cumulative, and nothing else
+          // (the office: "只需要show plan和cumulative的").
           hs += `<div class="sa-cell pc${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.colPlan)}</div>`;
         } else hs += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;
       });
