@@ -10254,6 +10254,57 @@ of those bars and the other is Work Records, which answered the first run
 with *Monthly Watering Record* on it. `PAYROLL_VIEW_KEYS` is no use to it
 either: a script-scope `const` is not on `window`.
 
+#### AND CULLING MONITORING IS EDITED ON THIS CARD TOO, by dragging people onto it
+
+*"culling monitoring也要在这里改"*, then *"我drag admin and FC过去culling
+monitoring 这里就会出现他们的名字"*. The row no longer only points at the card
+above: it shows the two lists, **ADMIN** (paid on every nursery) and **FIELD
+CONDUCTOR** (paid on their own nursery), and in Edit it takes a drop.
+
+- **A GROUP DROPPED HERE IS ITS PEOPLE, BY NAME** (`jcCullDrop`). The rule
+  pays named people at their own rates, so the group is not stored: who is
+  in it today is added to the draft, exactly as + Add would. An FC group
+  goes on the Field Conductor list for its own nursery; any other group
+  (Admin) on the every-nursery list. A name already on that list is not
+  added twice, asked through the claim own `resolveName` because the rule
+  spells names short.
+- **ONE DRAFT, ONE WRITER.** The row edits `cmDraft`, the same draft the
+  Culling Monitoring card edits, and `jcSave` hands it to `cmSave` FIRST, so
+  a change made here is DATED like one made there (starts this month, a
+  removal is an end date) and a refusal keeps both drafts on screen.
+  `viaJc` on the draft says which card edits it; the card above reads it as
+  its saved self until Save, so there are never two Save buttons over one
+  change.
+- **IT IS GROUP CHIPS, LIKE EVERY ROW ABOVE, AND ONLY WHAT WAS DRAGGED**
+  (*"要跟上面的一样"*, *"不要自带名字"*, *"不要preset"*). It shipped for an hour
+  as name pickers and then as name chips; the office took both off. The row
+  shows the Team Board groups dragged onto it (`OTHERS · Admin`, `UNN 1 ·
+  FC`), stored as ONE `nops_maint_config` row, `cull_monitoring_groups`, and
+  nothing until somebody drags. The NAMES are on the Culling Monitoring card
+  above (*"上面的culling monitoring setting那边才会需要show 名字"*), which shows
+  the draft live as groups are dropped. A cross takes the group off the row
+  and its people off the rule. People already on the rule before anybody
+  dragged stay paid and are on the card above, not chips here.
+- **THE GROUP IS FOLLOWED, BOTH WAYS, AND IT IS DATED** (*"这个东西是live的
+  但是不影响前面的月份"*, *"什么月份改就影响什么月份 但是在那个月份里的所有
+  变动都是live的"*). On each load of the Setting page, `_cullFollowGroups`
+  makes the rule the people standing in the dragged groups: somebody new in
+  a group is ADDED from this month, and somebody no longer in any dragged
+  group of their kind is ENDED at this month (a row that started this month
+  is deleted, it was never in force anywhere). Earlier months are fixed.
+  Asked per KIND: the FC list is followed only once an FC group is dragged,
+  the every-nursery list only once another group is, so a list nobody has
+  dragged for is left as it stands. **What it costs:** a person on the rule
+  whose group is not dragged here comes off from this month; dragging their
+  group back on puts them back for the whole month.
+- **THE CULLING MONITORING CARD EDITS PRICES AND THE TARGET ONLY**
+  (*"为什么可以drop down? 已经跟着底下的逻辑了"*). Its names are shown, never
+  picked: no dropdown, no Add, no Remove, which were a second writer of the
+  list.
+
+Section 7 of `tests/each_job_has_its_own_worker_list.cjs`. Nothing to run in
+the database.
+
 #### AND SEED PLANTING TAKES A DRAG, which is NOT what the other seven do
 
 Told that dragging a group onto Seed Planting would first need PN workers
@@ -11457,6 +11508,238 @@ draws the block: a fixture whose every loose record is on a plot with
 nothing else on it cannot see where the records were put. The check is
 written as **which group the row falls under**, not as a position in the
 list, because what the office asked for is where it is FILED.
+
+#### AND IT IS DRAGGED ONTO THE ROUND IT BELONGS TO
+
+*"在这里我要可以drag 例如我把这个21 Nov 2026 可以drag去他的下一个上面 drag的
+话 代表它就是on schedule 是同一个工"*.
+
+**WHY A RECORD IS LOOSE AT ALL IS ALMOST ALWAYS THE ROUND, and that is the
+whole of the fix.** The pairing keys on (job, plot, ROUND), and the round a
+record carries is `week_no` — which the phone works out from the day the
+work was done. A worker who ticked round 2 and walked the plot on the 21st
+sends week 3, the office scheduled round 2, and the two never meet. The
+work is real, the row is real, and nothing joins them.
+
+**SO THE DRAG WRITES `week_no` AND NOTHING ELSE.** It is the one field that
+says which round; the phone only ever DERIVED it; and this page already
+corrects it on exactly that reasoning — the sent-back edit modal rewrites it
+whenever the office moves a date, because *"a record dated the 3rd of
+September cannot belong to the August sheet"*. What the worker reported —
+the day, the plot, the job, the batches, who did it — is untouched.
+
+**ONE FACT IN ONE PLACE, which is why this is a write and not a mark on the
+office's own row.** The pairing is read by this screen, by
+`applyFieldRecords` (which has its own copy of the loop) and by
+`maintFieldCredits` in the payroll module, all keyed on the week. A pin
+stored beside the schedule would have to be taught to all three — and a rule
+living in one of them is a rule the other two do not obey, which on this one
+is a crew paid for a round nothing credits them with.
+
+Six things in it, and four are rules this file already has:
+
+- **`recPinRefusal` IS THE ONE RULE, ASKED THREE TIMES** — to decide which
+  rows light up, at the drop, and again at the write, because a row drawn
+  before the month moved is still on the screen. It refuses another plot
+  (that is another plot's capacity paid for work nobody did there), another
+  job (*是同一个工*, the office's own words), a CHECKED row (settled, and
+  the claim is paying on it — Uncheck first), a row carrying no round, and
+  **a round another row of that plot and job already shares**: two rows on
+  one round is the ambiguity the pairing refuses to answer, and a drag that
+  wrote it would leave the record looking filed and still loose.
+- **THE GESTURE IS OFFERED ONLY WHERE IT CAN LAND.** A loose row is
+  `draggable` only where `recPinTargets` finds a row, and where it finds
+  none the tag's own hover says so rather than leaving somebody tugging at a
+  row that will never do anything.
+- **THE WAY BACK IS DERIVED, never remembered.** Nothing records which
+  records this page filed, so the × on a waiting chip is offered on a record
+  whose round is not the week its own day falls in — which is every record
+  the drag moved, and no record that matched by itself, since for those the
+  two numbers are the same and the button would change nothing. A phone can
+  legitimately send such a record too, so the confirm names BOTH numbers and
+  lets the office judge rather than claiming to undo something it cannot
+  know it did.
+- **IT IS A GATE AND NOT A PAINT.** `mayMaintAct('approve','view')` decides
+  whether the row may be picked up AND whether the write goes through, and
+  section 7 of the test calls the writer straight out of the console on a
+  page that drew no handle — the only way to tell the two apart.
+- **THE TINT IS IN THE WORK RECORDS BLOCK, not beside the markup rules.**
+  `#recview-list .rec-table tbody td` carries an ID and sets white, so a
+  class rule cannot reach it however many times it is repeated — the first
+  version wrote the loose tint and both drop tints four hundred lines up,
+  where they looked right in the source and did nothing on the screen. That
+  is also why the loose row's own cream had never shown since the Work
+  Records redesign.
+- **Nothing to run in the database.** `week_no` has been a column since
+  `add_maint_field_batch.sql`, and this page already writes it.
+
+`tests/a_record_is_dragged_onto_its_round.cjs` is 30 checks and **15 fail on
+the previous page**. It fires REAL `DragEvent`s at the real rows, because a
+drag simulated by calling the writer proves nothing about the screen, and it
+asks for the **computed background** of both lit rows as well as the class —
+which is what caught the ID-specificity fault, and what a class check passes
+straight over. Two things its fixture had to learn: the three refusals each
+have to sit on the row they are being refused FOR (`recPinRefusal` asks the
+plot first, so a weeding row on another plot is refused for the plot and the
+job test is never reached), and the checked row has to be a round the record
+does NOT fall in, or it pairs with it and is never loose to begin with.
+
+##### AND THE DROP IS A MERGE: take the side that HAS it, ask where they differ
+
+The office, over a drag in progress: *"现在我要drag去下面一个 每一次merge 你
+要看有什么部分不一样 有的就跟着有的 例如下面的没有工人 上的有工人那就跟着上
+的 上的有日期下的没有 就跟有日期的 但是chemical部分会不一样 如果不一样 你要
+让我选哪一个是对的 还是两个都不对 我可以manual改"*.
+
+**THE TWO ROWS BECOME ONE, AND THE ONE THAT STAYS IS THE SCHEDULE ROW.**
+That is the row the office checks, the row the claim pays and the row that
+carries the round; the record becomes its waiting submission, which is what
+writing `week_no` already did. So the drag did not change — what it opens
+did.
+
+**THREE STATES PER FIELD, and the office named all three.** A field only one
+side has, or one both sides agree on, is **STATED and never asked**: a choice
+with one answer is a question nobody has to read, and a dialog of them is a
+dialog people click through. A disagreement is asked, with **neither, key
+it** as a third answer, because *两个都不对* is a real outcome and a pair of
+wrong options is a dialog somebody has to cancel out of.
+
+**TWO FIELDS ARE NOT MERGED, AND THE WORKER IS ONE OF THEM** — which is the
+office's own FIRST example (*下面的没有工人 上的有工人*), so it cannot simply
+be absent: a dialog silent about the field somebody named reads as the dialog
+ignoring them. It has a row of its own, shown and not asked:
+
+| | |
+|---|---|
+| **the CREW** | a tick is MONEY, written when the Field Conductor APPROVES (`syncTicks`). Copying a name here would either credit somebody for work nobody signed off, or — written as a remark — put a sentence on the row that LOOKS like a credit and pays nobody. The row says when it lands instead. |
+| **the QUANTITY** | the office settled this one themselves — *"link的capacity完全不要管手机送进来的，我要link这个summary report"*. The phone sends the balance of the batches ticked as at the day it was SAVED, counting neither culling, which is not the figure the claim is reconciled against. It is not a field of the dialog at all. |
+
+**THE OFFICE'S OWN EXAMPLE PAIR AGREES, and that is the reading they may want
+to correct.** Their screenshot pointed at the chemical as the thing that
+differs: *Antracol 50gm + Bond 15mL* on the record against *Round 3: Antracol
+50gm + Bond 15mL* on the row. Compared on the pairing's own `chemKey`, which
+strips `^Round N:`, those are ONE chemical wearing a round label — so nothing
+is asked, and only a genuinely different chemical raises the question.
+Section 1 of the test asserts it, so a change to that reading fails here.
+
+Five more things, and three are rules this file already has:
+
+- **THE BATCH IS A SET and the DATE is a DAY.** `255, 271` against
+  `271, 255` is one answer, matched through `PlotMovement.batchList` like
+  every other batch comparison here; `21/11/2026` against `2026-11-21` is
+  one day. Compared as strings either would be a question with one answer.
+- **A VALUE THE OFFICE KEYED IS MARKED AS THEIRS** (`_tarikhByHand` /
+  `_batchByHand`), which is exactly what that mark has always meant, so the
+  field sync does not answer a question they have answered. A value taken
+  off the RECORD carries no mark: it is the field's own first answer, and
+  `applyFieldRecords` fills only an empty cell anyway.
+- **THE ROUND LABEL IS PUT BACK ON A CHEMICAL** (`_recKeepRound`). `rowWeek`
+  reads the week off the slot where a row has one and off `Round N:` where
+  it does not, so a bare chemical written over a hand-keyed row would move
+  it to another round with nothing saying so.
+- **THE ROUND GOES TO THE DATABASE FIRST.** A merge that wrote the office
+  row and then failed on the record would leave a row carrying a worker's
+  day with nothing waiting on it.
+- **ASKED AGAIN AT THE APPLY**, both the permission and `recPinRefusal`: the
+  dialog has been on screen, and the row may have been Checked under it.
+- **IT IS STYLED OFF THE PAGE ROOT TOKENS AND NEVER `--wr-*`.** Those are
+  declared on `#tab-record` and the dialog is drawn at body level, so a
+  `var(--wr-muted)` in there resolves to nothing at all — the same shape as
+  the tint fault one section up, one selector along.
+
+`tests/a_merge_takes_the_side_that_has_it.cjs` is 42 checks and **30 fail on
+the previous page**. `recMergeRows` is pure — states in, states out — so
+section 1 drives the real rule rather than reading the dialog back. Two
+things its fixture had to learn, both of which make the whole file pass over
+what it is for: **no row may be the record's own round**, or the record pairs
+and there is no loose row to drag (the first version wrote one as Round 3
+against a week-3 record and every drag check read *no draggable loose row*);
+and **only ONE side may carry the remark**, or the *one side has it* rule —
+the office's own first sentence — is tested nowhere.
+
+**Nothing to run in the database.** The whole of it is on the screen.
+
+##### AND THE DRAG DID NOTHING, because LAST MONTH'S ROWS were deciding
+
+The office pressed OK on the confirm and sent the screen back: *"我按ok了无事
+发生"*. An N2 record dated **21 Nov**, P & D, dropped on **N2 Round 3** — and
+nothing moved.
+
+**BOTH HALVES OF THAT ARE ONE LINE, and the first one is the real fault: the
+record was never off the schedule at all.** 21 Nov is week 3 and the row is
+Round 3, so the two match perfectly — and `_submissionScheduleRow` was
+reading `records.filter(plot match)`, **every month of it**. `fieldKey` is
+(job, plot, ROUND) and carries NO MONTH, and the schedule draws the same
+rounds every month, so one record matched November's round 3, October's and
+September's alike. `ids.length !== 1` is *more than one row matches, refuse
+to answer* — which is right where it is a real ambiguity and catastrophic
+here, because the ambiguity was invented by the reader.
+
+**THEN THE DRAG COULD NOT FIX IT, which is the half the office saw.** The
+write sets `week_no` to the row's own round, the row is Round 3 and the
+record already carried week 3 — so it wrote the value that was there, the
+re-read found the same three rows, and the screen did not move. A gesture
+that writes what is already written and reports nothing is indistinguishable
+from a dead button.
+
+**AND IT RUNS THE OTHER WAY TOO, which is worse and was invisible.** Where
+this month has NO row of that round and another month does, the record was
+placed on the OTHER MONTH'S row — so it carried no chip anywhere (that row is
+never drawn here) and was not loose either. **A record on no screen at all**,
+which is the fault this board exists to stop, arriving through the very
+function written to stop it.
+
+**The pool is the record's own month** (`_recInMonth`, the page's own EXACT
+test). That narrows nothing real: every other reader of `records` — the
+table itself, `payrollRowsFor`, `applyFieldRecords` — is already month-
+scoped, so a row this rejects is a row that is not on screen in that month
+anyway, and pairing a chip to one was pairing it to something nobody can see.
+
+**IT WAS PROVED BEFORE IT WAS FIXED**, by driving the shipped `index` and
+`pair` over one record and the same row repeated per month: *November alone →
+1 row, PLACED; November and October → 2 rows, LOOSE; Nov, Oct and September →
+3 rows, LOOSE.*
+
+Section 8 of `tests/a_record_is_dragged_onto_its_round.cjs` holds it and **all
+3 of its checks fail on the previous code**, the last naming the record that
+had gone quiet. The fixture needed last month's rows in it, which is the
+point: **a fixture of one month cannot see a rule that reads every month**,
+and the twenty-five checks above it passed over this the whole time.
+
+**Nothing to run in the database.**
+
+##### AND THE CHIP WAS A PILL, so the DATE was the part it threw away
+
+Two messages, and the second is what the first was really about. *"直接放日期
+啊 干嘛这样"* over a chip reading **`21 Nov 2...`**, then *"这什么意思"* over
+an N20-R row reading **`10 Nov 2026`** with that same clipped chip under it.
+
+**A PILL IS ITS BORDER, ITS PADDING AND ITS RADIUS — 19px of chrome round an
+eleven-character date, in a column that is 103px whatever is put in it.** So
+`21 Nov 2026` did not fit and `text-overflow:ellipsis` trimmed it, and what
+it trimmed was the one thing the cell was there to say. No chrome now, and
+**`white-space:normal`**: a long one WRAPS, because two short lines say the
+day and an ellipsis does not.
+
+**AND THE CHECK THAT SHOULD HAVE CAUGHT IT PASSED, which is the part worth
+keeping.** *"the chip stays INSIDE its own cell"* was green the whole time —
+**a pill with an ellipsis always fits its cell; it fits by throwing the
+content away.** Its own comment even said *"a chip that fits by having lost
+the information is not a fix"* and then measured only the box. The check is
+`scrollWidth > clientWidth` now, beside asking for the day in full.
+
+**THE SECOND MESSAGE IS WHY THIS IS NOT SIMPLY A BARE AMBER DATE.** A row can
+carry a day of its OWN and a submission claiming another — the office's N20-R
+exactly — and two dates one above the other with nothing between them is a
+question. **One glyph answers it in the width of a space** (`⏳`), and the
+sentence and the name stay in the hover where there is room. The row's own
+date carries no mark, and the test asserts both halves.
+
+The fixture grew B4 for it: **the dash case cannot test this**, because a
+cell with one date in it reads the same whatever the other line is marked
+with. **5 of the section's 14 checks fail on the previous page.**
+
+**Nothing to run in the database.**
 
 ## Worker Activity downloads ONE job, for the nurseries ticked
 

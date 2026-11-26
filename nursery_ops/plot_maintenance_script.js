@@ -9898,9 +9898,24 @@ function renderRecords() {
      deliberately NOT gated the same way: a row the conductor approved off
      one record can still have a second waiting on it, and a chip hidden
      there would be a submission invisible on both tabs.) */
+  /* A LOOSE ROW IS DRAGGED ONTO THE ROUND IT BELONGS TO — the office's own
+     gesture (*"我要可以drag … drag的话 代表它就是on schedule 是同一个工"*).
+     It is made draggable only where there IS somewhere for it to go, so a
+     drag that could never land is one the screen does not offer; where
+     there is nowhere, the tag's own hover says that rather than leaving
+     somebody tugging at a row. `recPinRefusal` is the rule in both
+     directions. */
+  const mayPin = mayMaintAct('approve', 'view');
   const looseRowHtml = (f) => {
     const jenis = _rejJenis(f);
-    return `<tr class="rec-row-loose">
+    const targets = mayPin ? recPinTargets(f) : [];
+    const drag = targets.length
+      ? ` draggable="true" ondragstart="recDragStart(event,${f.id})" ondragend="recDragEnd(event)"`
+      : '';
+    const tagTip = targets.length
+      ? t('rec.looseSub') + ' — drag this row onto the round it belongs to'
+      : t('rec.looseSub');
+    return `<tr class="rec-row-loose${targets.length ? ' rec-row-drag' : ''}"${drag}>
       <td class="rc-date">${esc(_tarikhDisplay(f.work_date))}</td>
       <td class="rc-jenis">${esc(jenisLabel(jenis) || '—')}</td>
       <td class="rc-chem"><span class="pill ${pillCls(jenis)}">${esc(f.chemical || '—')}</span></td>
@@ -9911,7 +9926,7 @@ function renderRecords() {
       <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
       <td class="rc-c" colspan="4">
         <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
-        <span class="rec-loose-tag" title="${esc(t('rec.looseSub'))}">${esc(t('rec.looseTag'))}</span>
+        <span class="rec-loose-tag" title="${esc(tagTip)}">${esc(t('rec.looseTag'))}</span>
       </td>
     </tr>`;
   };
@@ -9960,7 +9975,13 @@ function renderRecords() {
          quantities — gave no clue which rows were agreed and which were still
          moving. The tint is very light on purpose: it marks the row without
          fighting the figures on it. */
-      html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
+      /* EVERY scheduled row is a drop target in the markup; which of them
+         may actually take the record is decided at the drag, by the one
+         rule, and only those light up. Written here rather than filtered
+         here because the answer depends on which record is in the hand. */
+      html += `<tr${r.checked ? ' class="rec-row-checked"' : ''} data-rec-id="${r.id}"`
+        + ` ondragover="recDragOver(event,${r.id})" ondragleave="recDragLeave(event)"`
+        + ` ondrop="recDrop(event,${r.id})">
         <td class="rc-date">${_dateCell(r)}${_waitingChip(waitingOn[r.id])}</td>
         <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
         <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
@@ -10034,12 +10055,48 @@ function _waitingChip(list) {
   if (!Array.isArray(list) || !list.length) return '';
   const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
   const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
-  const short = (day ? _tarikhDisplay(day) : t('rec.waiting'))
+  /* JUST THE DAY, AND NEVER CUT OFF — *"直接放日期啊 干嘛这样"*. It was a
+     pill, and a pill is its border, its padding and its radius: 19px of
+     chrome round an 11-character date in a column that is 103px whatever
+     is put in it, so `21 Nov 2026` came out as `21 Nov 2...` and the one
+     thing the cell was there to say was the part that got trimmed.
+
+     THE HOURGLASS IS WHAT THE PILL WAS FOR, and it is why this is not
+     simply a bare amber date. A row can carry a day of its own AND a
+     submission claiming another — the office met exactly that on N20-R,
+     `10 Nov 2026` with `21 Nov 2…` under it, and asked what it meant. Two
+     dates one above the other with nothing between them is a question;
+     one glyph answers it in the width of a space. The sentence and the
+     name stay in the hover, where there is room for them. */
+  const short = '⏳ ' + (day ? _tarikhDisplay(day) : t('rec.waiting'))
     + (list.length > 1 ? ' +' + (list.length - 1) : '');
   const full = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
     .filter(Boolean).join(' · ');
+  /* THE WAY BACK OFF A ROUND, offered only on a record whose round is not
+     the one its own work day falls in — which is every record the drag put
+     here, and no record that matched by itself, since for those the two
+     numbers are the same and the button would change nothing. A button that
+     does nothing is how a screen teaches people its buttons do nothing.
+
+     It is NOT offered only on what this page filed, because nothing records
+     that: a phone sends the round the worker was ticking, which can
+     legitimately differ from his walking day. So the confirm names BOTH
+     numbers and lets the office judge rather than claiming to undo
+     something it cannot know it did. */
+  const off = list.filter(_recOffItsOwnWeek);
+  const x = (mayMaintAct('approve', 'view') ? off : []).map((f) =>
+    `<button type="button" class="rec-unpin" title="Take this record off this round"`
+    + ` aria-label="Take this record off this round"`
+    + ` onclick="recUnpinRecord(${f.id})">&times;</button>`).join('');
   return ` <span class="rec-waiting" title="${esc(full + ' — ' + t('rec.waitingTip'))}">`
-       + `${esc(short)}</span>`;
+       + `${esc(short)}</span>${x}`;
+}
+
+/* The round on the record is not the week its own work date falls in. */
+function _recOffItsOwnWeek(f) {
+  if (!f || !f.week_no || !f.work_date || typeof MJMMaintField === 'undefined') return false;
+  const own = MJMMaintField.weekOfDate(f.work_date);
+  return !!own && Number(f.week_no) !== Number(own);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -10232,7 +10289,23 @@ function _submissionScheduleRow(f) {
   const month = f.schedule_month || MJMMaintField.isoMonthLabel(f.work_date);
   if (!month) return null;
   const pk   = MJMMaintField.plotKey;
-  const pool = records.filter((r) => pk(r.plot) === pk(f.plot_name));
+  /* THE RECORD'S OWN MONTH, AND THAT IS NOT A TIDY-UP — it is the whole of
+     why a record the office could see was perfectly placeable read as off
+     the schedule, and why dragging it did NOTHING.
+
+     `fieldKey` is (job, plot, ROUND) and carries no month, and the schedule
+     draws the same rounds every month — so N2 P & D Round 3 exists in
+     November, in October and in September alike. Pairing one record
+     against every month's rows therefore found THREE rows, and
+     `ids.length !== 1` is read as *more than one row matches, refuse to
+     answer*, which draws the record as NOT ON SCHEDULE.
+
+     And then the drag could not fix it: the record is week 3, the row it
+     is dropped on is Round 3, so the write set the round it already
+     carried, the re-read found the same three rows, and the office pressed
+     OK over a screen that did not move. */
+  const pool = records.filter((r) => pk(r.plot) === pk(f.plot_name)
+                                  && _recInMonth(r, month));
   if (!pool.length) return null;
   const idx  = MJMMaintField.index([f], month);
   // skipChecked:false on purpose — a CHECKED row is one the office has
@@ -10241,6 +10314,422 @@ function _submissionScheduleRow(f) {
   const ids = Object.keys(pairs);
   if (ids.length !== 1) return null;
   return pool.find((r) => String(r.id) === ids[0]) || null;
+}
+
+/* ── THE OFFICE SAYS WHICH ROUND A RECORD IS FOR ──────────────────────────
+   *"在这里我要可以drag 例如我把这个21 Nov 2026 可以drag去他的下一个上面
+   drag的话 代表它就是on schedule 是同一个工"*.
+
+   A record comes to rest in its plot wearing NOT ON SCHEDULE because the
+   pairing could not place it: the rule keys on (job, plot, ROUND), and the
+   round a record carries is the week its day falls in. A worker who ticked
+   round 2 and walked the plot on the 21st sends week 3, the office
+   scheduled round 2, and the two never meet — the work is real, the row is
+   real, and nothing joins them.
+
+   SO THE DRAG WRITES THE ROUND, AND NOTHING ELSE. `week_no` is the one
+   field that says which round, the phone only ever DERIVED it from the work
+   date, and this page already corrects it on exactly that reasoning — the
+   sent-back edit modal rewrites it whenever the office moves a date,
+   because *"a record dated the 3rd of September cannot belong to the August
+   sheet"*. What the worker actually reported — the day, the plot, the job,
+   the batches, who did it — is untouched.
+
+   ONE FACT IN ONE PLACE, which is why this is a write and not a mark on the
+   office's own row. The pairing is read by this screen, by
+   `applyFieldRecords` (which has its own copy of the loop) and by the
+   salary claim in the other repository, all keyed on the week. A pin stored
+   beside the schedule would have to be taught to all three, and a rule
+   living in one of them is a rule the other two do not obey — which on this
+   one would be a crew paid for a round nothing credits them with.
+
+   IT IS REVERSIBLE BY THE SAME GESTURE. Dragging the row out again puts the
+   week back to the day's own (`weekOfDate`), which is what the phone sends
+   unless the worker ticked one round and walked in another — so the undo is
+   honest about the ordinary case and says so in the confirm.
+
+   REFUSED RATHER THAN GUESSED, and `recPinRefusal` is the one rule: the
+   same plot and the same job (*"是同一个工"*), a row nobody has Checked, a
+   row that carries a round at all, and a round no OTHER row of that plot
+   and job shares — two rows on one round is the ambiguity the pairing
+   already refuses to answer, and a drag that wrote it would leave the
+   record looking filed and still loose. */
+let _recDragId = null;
+
+function _pendingById(id) {
+  return (pendingFieldRecords || []).find((x) => String(x.id) === String(id)) || null;
+}
+
+/* WHY THIS RECORD CANNOT GO ON THIS ROW, in words, or '' if it can.
+   ONE rule, asked three times: to decide which rows light up while the row
+   is being dragged, at the drop, and again at the write — a row drawn
+   before the month moved is still on the screen. */
+function recPinRefusal(f, row) {
+  if (!f || !row) return 'That row could not be read.';
+  const pk = MJMMaintField.plotKey;
+  if (pk(f.plot_name) !== pk(row.plot)) {
+    return `This is ${f.plot_name} work and that row is Plot ${row.plot}.\n\n`
+         + 'A record moved onto another plot is that plot\'s capacity paid for '
+         + 'work nobody did there.';
+  }
+  if (_rejJenis(f) !== row.jenis) {
+    return `This is ${jenisLabel(_rejJenis(f)) || _rejJenis(f)} and that row is `
+         + `${jenisLabel(row.jenis) || row.jenis}.\n\n`
+         + 'Only the same job on the same plot — the office asked for it in '
+         + 'those words.';
+  }
+  if (row.checked) {
+    return 'That row is Checked, so it is settled and the payroll claim is '
+         + 'paying on it.\n\nPress Uncheck on it first if the round really is '
+         + 'this work.';
+  }
+  const w = MJMMaintField.rowWeek(row);
+  if (!w) return 'That row carries no round, so there is nothing to file this under.';
+  const m = getMonth();
+  const clash = (records || []).filter((r) => r.id !== row.id && _recInMonth(r, m)
+    && pk(r.plot) === pk(row.plot) && r.jenis === row.jenis
+    && MJMMaintField.rowWeek(r) === w);
+  if (clash.length) {
+    return `Plot ${row.plot} has more than one ${jenisLabel(row.jenis) || row.jenis} `
+         + `row on round ${w} this month.\n\nThe pairing cannot tell which of them `
+         + 'a record belongs to, so this would leave the record looking filed and '
+         + 'still unmatched.';
+  }
+  return '';
+}
+
+/* The rows this record may be dropped on, right now. */
+function recPinTargets(f) {
+  if (!f || typeof MJMMaintField === 'undefined') return [];
+  const m = getMonth();
+  return (records || []).filter((r) => _recInMonth(r, m) && !recPinRefusal(f, r));
+}
+
+function recDragStart(ev, id) {
+  _recDragId = String(id);
+  const f = _pendingById(id);
+  try { ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', String(id)); } catch (_) {}
+  const ok = new Set(recPinTargets(f).map((r) => String(r.id)));
+  document.querySelectorAll('#rec-body tr[data-rec-id]').forEach((tr) => {
+    if (ok.has(tr.getAttribute('data-rec-id'))) tr.classList.add('rec-drop-ok');
+  });
+}
+
+function recDragEnd() {
+  _recDragId = null;
+  document.querySelectorAll('#rec-body tr.rec-drop-ok, #rec-body tr.rec-drop-over')
+    .forEach((tr) => tr.classList.remove('rec-drop-ok', 'rec-drop-over'));
+}
+
+function recDragOver(ev, rowId) {
+  if (!_recDragId) return;
+  const tr = ev.currentTarget;
+  if (!tr.classList.contains('rec-drop-ok')) return;
+  ev.preventDefault();
+  tr.classList.add('rec-drop-over');
+}
+
+function recDragLeave(ev) { ev.currentTarget.classList.remove('rec-drop-over'); }
+
+async function recDrop(ev, rowId) {
+  ev.preventDefault();
+  const id = _recDragId || (ev.dataTransfer && ev.dataTransfer.getData('text/plain'));
+  recDragEnd();
+  if (!id) return;
+  const f = _pendingById(id);
+  const row = (records || []).find((r) => String(r.id) === String(rowId));
+  await recPinRecord(f, row);
+}
+
+/* THE WRITE. The permission is asked here as well as at the drag, because a
+   row drawn before somebody's access changed is still sitting on the
+   screen. */
+async function recPinRecord(f, row) {
+  if (!f || !row) return;
+  if (!mayMaintAct('approve', 'view')) {
+    alert('You are not allowed to file a submitted record against a round.\n\n'
+        + 'Ask an admin to tick "Approve a submitted work record" on Module Assess Control.');
+    return;
+  }
+  const why = recPinRefusal(f, row);
+  if (why) { alert('That record cannot go on that row.\n\n' + why); return; }
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+  openRecMerge(f, row);
+}
+
+/* ── THE DROP IS A MERGE, AND A DISAGREEMENT IS ASKED ─────────────────────
+   *"每一次merge 你要看有什么部分不一样 有的就跟着有的 例如下面的没有工人
+   上的有工人那就跟着上的 上的有日期下的没有 就跟有日期的 但是chemical部分
+   会不一样 如果不一样 你要让我选哪一个是对的 还是两个都不对 我可以manual
+   改"*.
+
+   THE TWO ROWS BECOME ONE, and the one that stays is the SCHEDULE ROW —
+   that is the row the office checks, the row the claim pays, and the row
+   that carries the round. The record becomes its waiting submission, which
+   is what writing `week_no` does.
+
+   THREE STATES PER FIELD, and the office named all three:
+
+     ONE SIDE HAS IT      the other is empty, so there is nothing to decide
+                          and nothing is asked. *有的就跟着有的.*
+     THEY AGREE           nothing to decide either.
+     THEY DIFFER          the dialog asks, and offers a third answer —
+                          neither, key it — because *两个都不对* is a real
+                          outcome and a dialog with two wrong options is a
+                          dialog somebody has to cancel out of.
+
+   TWO FIELDS ARE DELIBERATELY NOT MERGED, AND THE WORKER IS ONE OF THEM —
+   which the dialog has to SAY, in a row of its own, because the worker is
+   the office's own first example (*下面的没有工人 上的有工人*) and a dialog
+   silent about the field somebody named reads as the dialog ignoring them:
+
+     THE CREW. A tick is MONEY, and it is written when the Field Conductor
+     APPROVES the record (`syncTicks`), not when the office files it
+     against a round. Copying a name here would either credit somebody for
+     work nobody has signed off, or — written as a remark — put a sentence
+     on the row that LOOKS like a credit and pays nobody. So it is shown
+     with the day it lands on the sheet, and it is not asked about.
+
+     THE QUANTITY. The office settled this one themselves — *"link的
+     capacity完全不要管手机送进来的，我要link这个summary report"* — and the
+     reason stands: the phone sends the balance of the batches ticked, as
+     at the day it was SAVED, counting neither culling, which is not the
+     figure the claim is reconciled against. The row keeps the link.
+
+   THE CHEMICAL IS COMPARED ON `chemKey`, which is what the pairing itself
+   uses: the office writes *Round 3: Antracol 50gm + Bond 15mL* and the
+   worker writes *Antracol 50gm + Bond 15mL*, and those are the same
+   chemical under a round label. Asking about that would be a question with
+   one answer, every time. Two genuinely different chemicals is a question,
+   and it is asked.
+
+   AND THE ROUND LABEL SURVIVES THE ANSWER. A row with no `_src` — one
+   somebody keyed by hand — takes its WEEK off the "Round N:" on the front
+   of its chemical (`rowWeek` falls back to `recRound`), so writing a bare
+   chemical over it would silently move the row to another round. The
+   prefix is put back. */
+let _recMerge = null;
+
+const REC_MERGE_FIELDS = [
+  /* ISO, which is what `applyFieldRecords` writes into this cell, so a day
+     taken off the record at the merge is stored exactly as the field sync
+     would have stored it. */
+  { key: 'tarikh', label: 'Date', kind: 'date',
+    rec: (f) => String(f.work_date || '').slice(0, 10),
+    row: (r) => (r.tarikh && r.tarikh !== '-') ? String(r.tarikh) : '',
+    show: (v) => (v ? _tarikhDisplay(v) : ''),
+    /* COMPARED AS DAYS. The office keys 21/11/2026 and the record carries
+       2026-11-21; on a string compare those are a disagreement and the
+       dialog would ask a question with one answer. */
+    agree: (a, b) => {
+      const x = _mvParseDate(a), y = _mvParseDate(b);
+      return (x != null && y != null) ? x === y : a === b;
+    } },
+  { key: 'racun', label: 'Chemical', kind: 'text',
+    rec: (f) => String(f.chemical || '').trim(),
+    row: (r) => String(r.racun || '').trim(),
+    agree: (a, b) => MJMMaintField.chemKey(a) === MJMMaintField.chemKey(b) },
+  { key: 'batch', label: 'Batch', kind: 'text',
+    rec: (f) => String(f.batch_name || '').trim(),
+    row: (r) => String(r.batch || '').trim(),
+    /* The set rule every batch comparison here uses, so "255, 271" and
+       "271,255" are one answer and a stray space asks nothing. */
+    agree: (a, b) => {
+      const bl = (typeof PlotMovement !== 'undefined' && PlotMovement.batchList)
+        ? PlotMovement.batchList : (v) => String(v || '').split(/[^0-9A-Za-z]+/).filter(Boolean);
+      const k = (v) => [...new Set(bl(v))].sort().join('|');
+      return k(a) === k(b);
+    } },
+  { key: 'remark', label: 'Remark', kind: 'text',
+    rec: (f) => String(f.remark || '').trim(),
+    row: (r) => String(r.remark || '').trim() },
+  /* SHOWN AND NEVER MERGED — see the note above. It is last because it is
+     the one row nobody has to do anything about. */
+  { key: 'worker', label: 'Worker', kind: 'locked',
+    rec: (f) => _rejWorkedBy(f),
+    row: () => '',
+    note: 'credited when the Field Conductor approves the record' },
+];
+
+/* WHAT THE MERGE WOULD DO, field by field. Pure, so the test drives the
+   real rule rather than reading the dialog back. */
+function recMergeRows(f, row) {
+  return REC_MERGE_FIELDS.map((d) => {
+    const a = d.rec(f) || '', b = d.row(row) || '';
+    let state;
+    if (d.kind === 'locked') state = a ? 'locked' : 'empty';
+    else if (!a && !b) state = 'empty';
+    else if (!b) state = 'rec';                       // only the record has it
+    else if (!a) state = 'row';                       // only the row has it
+    else if (d.agree ? d.agree(a, b) : a === b) state = 'same';
+    else state = 'differ';
+    return { key: d.key, label: d.label, kind: d.kind, rec: a, row: b, state,
+             note: d.note || '', show: d.show || ((v) => v) };
+  });
+}
+
+function openRecMerge(f, row) {
+  const fields = recMergeRows(f, row);
+  _recMerge = { f, row, fields, pick: {}, typed: {} };
+  fields.forEach((x) => { if (x.state === 'differ') _recMerge.pick[x.key] = 'rec'; });
+  const el = (id) => document.getElementById(id);
+  el('rec-merge-title').textContent = 'Merge into ' + _scheduleRowLabel(row);
+  el('rec-merge-sub').textContent =
+    `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name}`
+    + `${f.work_date ? ' · ' + _tarikhDisplay(f.work_date) : ''}`
+    + `${_rejWorkedBy(f) ? ' · ' + _rejWorkedBy(f) : ''}`;
+  el('rec-merge-list').innerHTML = fields.map(_recMergeFieldHtml).join('');
+  el('rec-merge-modal').classList.add('open');
+}
+function closeRecMerge() {
+  _recMerge = null;
+  document.getElementById('rec-merge-modal').classList.remove('open');
+}
+
+function _recMergeFieldHtml(x) {
+  const v = (s) => esc(x.show(s)) || '<span class="rm-none">empty</span>';
+  if (x.state === 'empty') return '';
+  if (x.state === 'same') {
+    return `<div class="rm-row rm-agree" data-f="${esc(x.key)}">
+      <div class="rm-lab">${esc(x.label)}</div>
+      <div class="rm-val">${v(x.row)}<span class="rm-tag">both agree</span></div></div>`;
+  }
+  if (x.state === 'locked') {
+    return `<div class="rm-row rm-locked" data-f="${esc(x.key)}">
+      <div class="rm-lab">${esc(x.label)}</div>
+      <div class="rm-val">${v(x.rec)}<span class="rm-tag">${esc(x.note)}</span></div></div>`;
+  }
+  if (x.state === 'rec' || x.state === 'row') {
+    const from = x.state === 'rec' ? 'from the record' : 'already on the row';
+    return `<div class="rm-row rm-taken" data-f="${esc(x.key)}">
+      <div class="rm-lab">${esc(x.label)}</div>
+      <div class="rm-val">${v(x.state === 'rec' ? x.rec : x.row)}<span class="rm-tag">${from}</span></div></div>`;
+  }
+  const opt = (which, val, note) =>
+    `<label class="rm-opt"><input type="radio" name="rm-${esc(x.key)}" value="${which}"
+       ${which === 'rec' ? 'checked' : ''} onchange="recMergePick('${esc(x.key)}','${which}')">
+     <span>${v(val)}<span class="rm-tag">${note}</span></span></label>`;
+  return `<div class="rm-row rm-differ" data-f="${esc(x.key)}">
+    <div class="rm-lab">${esc(x.label)}<span class="rm-q">which is right?</span></div>
+    <div class="rm-opts">
+      ${opt('rec', x.rec, 'the record')}
+      ${opt('row', x.row, 'the row')}
+      <label class="rm-opt"><input type="radio" name="rm-${esc(x.key)}" value="own"
+         onchange="recMergePick('${esc(x.key)}','own')">
+        <span>Neither — key it</span></label>
+      <input class="rm-own" id="rm-own-${esc(x.key)}" type="${x.kind === 'date' ? 'date' : 'text'}"
+        placeholder="${esc(x.label)}" disabled oninput="recMergeTyped('${esc(x.key)}',this.value)">
+    </div></div>`;
+}
+
+function recMergePick(key, which) {
+  if (!_recMerge) return;
+  _recMerge.pick[key] = which;
+  const box = document.getElementById('rm-own-' + key);
+  if (box) { box.disabled = which !== 'own'; if (which === 'own') box.focus(); }
+}
+function recMergeTyped(key, v) { if (_recMerge) _recMerge.typed[key] = v; }
+
+/* What each field ends up as, off the picks. A field nobody had to decide
+   answers with whichever side has it — *有的就跟着有的* — and a field the
+   office keyed answers with what they keyed. */
+function recMergeResult() {
+  const m = _recMerge;
+  if (!m) return {};
+  const out = {};
+  m.fields.forEach((x) => {
+    /* A LOCKED FIELD IS WRITTEN BY NOBODY HERE. Left to fall through it
+       would land in the `differ` branch and be written as an ordinary
+       value — the crew as a remark, which is the one shape this must not
+       have. */
+    if (x.state === 'empty' || x.state === 'locked') return;
+    if (x.state === 'rec') out[x.key] = { value: x.rec, byHand: false };
+    else if (x.state === 'row' || x.state === 'same') out[x.key] = { value: x.row, byHand: false };
+    else {
+      const p = m.pick[x.key] || 'rec';
+      if (p === 'own') out[x.key] = { value: String(m.typed[x.key] || '').trim(), byHand: true };
+      else out[x.key] = { value: p === 'rec' ? x.rec : x.row, byHand: false };
+    }
+  });
+  return out;
+}
+
+async function recMergeApply() {
+  const m = _recMerge;
+  if (!m) return;
+  const { f, row } = m;
+  /* ASKED AGAIN, because the dialog has been on screen while somebody may
+     have checked the row or changed what this login may do. */
+  if (!mayMaintAct('approve', 'view')) { closeRecMerge(); return; }
+  const why = recPinRefusal(f, row);
+  if (why) { alert('That record cannot go on that row.\n\n' + why); closeRecMerge(); return; }
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+
+  const res = recMergeResult();
+  const blank = m.fields.filter((x) => x.state === 'differ'
+    && (m.pick[x.key] === 'own') && !String(m.typed[x.key] || '').trim());
+  if (blank.length) { alert('Key a value for: ' + blank.map((x) => x.label).join(', ')); return; }
+
+  /* THE ROUND IS WHAT PAIRS THEM, and it goes to the database first: a
+     merge that wrote the office row and then failed on the record would
+     leave a row carrying a worker's day with nothing waiting on it. */
+  const w = MJMMaintField.rowWeek(row);
+  const { error } = await _supabase.from('nops_maint_field_records')
+    .update({ week_no: w }).eq('id', f.id);
+  if (error) {
+    alert('Could not file it against that round: ' + (error.message || error));
+    return;
+  }
+
+  const live = (records || []).find((r) => String(r.id) === String(row.id)) || row;
+  Object.keys(res).forEach((k) => {
+    let v = res[k].value;
+    if (k === 'racun') v = _recKeepRound(live, v);
+    if (String(live[k] || '') === String(v || '')) return;
+    live[k] = v;
+    /* A VALUE THE OFFICE KEYED IS THEIR ANSWER, and the field sync must not
+       fill it in again later — the mark `_tarikhByHand` / `_batchByHand`
+       has always meant exactly that. A value taken off the record is the
+       field's own first answer and carries no mark. */
+    if (res[k].byHand && k === 'tarikh') { live._tarikhByHand = 1; delete live._fromFieldDate; }
+    if (res[k].byHand && k === 'batch')  { live._batchByHand  = 1; delete live._fromFieldBatch; }
+  });
+  persistRecords();
+  closeRecMerge();
+  await _reloadSubmissions();
+}
+
+/* THE ROUND LABEL IS PUT BACK. `rowWeek` reads the week off the slot where
+   a row has one and off "Round N:" where it does not, so a bare chemical
+   written over a hand-keyed row would move it to another round without a
+   word. */
+function _recKeepRound(row, chem) {
+  const n = MJMMaintField.recRound(row && row.racun);
+  if (!n) return chem;
+  if (MJMMaintField.recRound(chem)) return chem;
+  return `Round ${n}: ${chem}`;
+}
+
+/* OUT AGAIN, by the same gesture it went in with. The week goes back to the
+   day's own, which is what the phone sends unless the worker ticked one
+   round and walked the plot in another — so the confirm says that rather
+   than promising to restore something nothing recorded. */
+async function recUnpinRecord(id) {
+  const f = _pendingById(id);
+  if (!f) return;
+  if (!mayMaintAct('approve', 'view')) return;
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+  const w = MJMMaintField.weekOfDate(f.work_date) || null;
+  if (!confirm(`Take this record off round ${f.week_no}?\n\n`
+             + `Its own work date, ${_tarikhDisplay(f.work_date)}, falls in round ${w}, `
+             + `and that is where it goes back to.\n\n`
+             + 'It will most likely read as not on the schedule again, and can be '
+             + 'dragged onto a round from there.')) return;
+  const { error } = await _supabase.from('nops_maint_field_records')
+    .update({ week_no: w }).eq('id', f.id);
+  if (error) { alert('Could not take it off: ' + (error.message || error)); return; }
+  await _reloadSubmissions();
 }
 
 /* A ROUND THE OFFICE HAS CHECKED ALREADY HAS ITS WORK ON RECORD.
@@ -12488,6 +12977,10 @@ async function loadSettingLists() {
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
   try { jobCrews = window.MJMJobCrew ? MJMJobCrew.readConfig((cfgRes && cfgRes.data) || []) : {}; }
   catch (e) { jobCrews = {}; console.warn('[maint] job worker lists:', e); }
+  {
+    const cg = ((cfgRes && cfgRes.data) || []).find(r => r && r.key === CULL_GROUPS_KEY);
+    cullGroups = cg && cg.txt_value ? String(cg.txt_value).split(',').map(x => x.trim()).filter(Boolean) : [];
+  }
   jobScopes = {};
   ((cfgRes && cfgRes.data) || []).forEach(r => {
     if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
@@ -12808,6 +13301,12 @@ async function jsSave() {
 let jobCrewDraft = null;         // null = not editing; else { 'BNN:pd': [groups] | null }
 let _jcDrag = null;              // the group being dragged
 let _jcSaving = false;
+/* The groups dragged onto Culling Monitoring on this card, and ONLY those --
+   *"不要preset"*. Stored as one nops_maint_config row; the people they stand
+   for live in the dated rule, shown by name on the Culling Monitoring card. */
+let cullGroups = [];
+let cullGroupsDraft = null;
+const CULL_GROUPS_KEY = 'cull_monitoring_groups';
 const JC_SECTION_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'OTHERS'];
 
 function _jcJobs() {
@@ -12844,9 +13343,74 @@ function _jcElsewhere() {
   const own = (window.MJMJobCrew && MJMJobCrew.JOBS) || [];
   return PAYROLL_VIEW_KEYS.filter(j => !own.includes(j));
 }
-const JC_SET_ELSEWHERE = {
-  cull_incentive: 'Named people at their own rates — set in Culling Monitoring above.',
-};
+const JC_SET_ELSEWHERE = {};
+
+/* ── CULLING MONITORING IS EDITED HERE TOO, through the SAME draft ───────
+   The office, over that row: *"culling monitoring也要在这里改"*. A group
+   still cannot go on it -- it pays NAMED people at their own rates, and a
+   group carries no price -- so the row takes no drop. What it takes is the
+   NAMES: the two paid on every nursery and each nursery's own Field
+   Conductor, added, removed and swapped right here.
+
+   ONE RULE, ONE WRITER. The row edits `cmDraft`, the draft the Culling
+   Monitoring card above edits, and Save hands it to `cmSave` -- so a
+   change made here is DATED exactly as one made there: it starts at this
+   month, a removal is an end date, and September goes on paying who
+   September paid. A second writer of that table would be a second answer
+   to who is paid, which is the fault this file has a heading about.
+
+   THE PRICES STAY ABOVE. This card is who does the work; what it pays is
+   the card above, and two boxes for one price is two places to disagree.
+
+   `viaJc` on the draft says which card is editing it, so the card above
+   reads it as its saved self until Save -- never two Save buttons over
+   one change. A draft already open above is left to that card. */
+function _jcCullRowHtml() {
+  /* GROUP CHIPS, EXACTLY THE ROWS ABOVE, and only what was DRAGGED here --
+     *"不要自带名字"*, *"上面的culling monitoring setting那边才会需要show 名字"*,
+     *"不要preset"*. The names are on the Culling Monitoring card above; a
+     drop here adds a group's people to that card's list, and the cross takes
+     them off it again, through the same dated save. */
+  const editing = !!(jobCrewDraft && cmDraft && cmDraft.viaJc && cullGroupsDraft);
+  const list = editing ? cullGroupsDraft : cullGroups;
+  const html = list.map(g => {
+    const x = editing ? `<button type="button" class="jc-x" title="Take this group off" aria-label="Remove ${esc(_jcGroupLabel(g))}"
+         onclick="jcCullRemove('${esc(g)}')">&times;</button>` : '';
+    return `<span class="jb-chip jc-chip" title="${esc(_jcNames(g).join(', ') || 'Nobody in this group today')}">${esc(_jcGroupLabel(g))}${x}</span>`;
+  }).join('');
+  if (html) return html;
+  return editing ? '<span class="jc-drop-here">Drag a group here</span>' : '';
+}
+/* The Team Board group a name on the rule stands in, matched through the
+   claim own resolver (the rule spells names short). Workers last, so an
+   Admin or an FC reads as that rather than as general work. */
+function _cmGroupOfName(name) {
+  const CI = window.MJMCullIncentive;
+  if (!window.MJMJobCrew || !name) return '';
+  const groups = MJMJobCrew.groupsOnRegister(_registerRows, CREW_OPTS)
+    .sort((a, b) => (a.role === 'General Worker') - (b.role === 'General Worker'));
+  const k = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  for (const g of groups) {
+    const names = MJMJobCrew.rowsOf(_registerRows, g.group, CREW_OPTS)
+      .filter(r => r.active !== false).map(r => String(r.full_name).trim());
+    if (names.some(n => k(n) === k(name)
+        || (CI && CI.resolveName && CI.resolveName(name, [n], x => x).row === n))) return g.group;
+  }
+  return '';
+}
+/* The cross takes the group off this row AND its people off the rule
+   (the card above), every person that group stands for. */
+function jcCullRemove(g) {
+  if (!jobCrewDraft || !cmDraft || !cmDraft.viaJc || !cullGroupsDraft) return;
+  cullGroupsDraft = cullGroupsDraft.filter(x => x !== g);
+  for (let i = cmDraft.people.length - 1; i >= 0; i--) {
+    const r = cmDraft.people[i];
+    if (r.active === false || _cmGroupOfName(r.name) !== g) continue;
+    if (r.id == null) cmDraft.people.splice(i, 1);
+    else r.active = false;
+  }
+  _cmRedraw();
+}
 
 /* ── THE DEFAULT IS NOT DRAWN, AND THAT CHANGED WHAT A DROP DOES ─────────
    The card opened with a dashed `BNN · Workers DEFAULT` chip in every cell
@@ -13043,8 +13607,12 @@ function renderJobCrewSetting() {
      be, and takes no drop — a row that merely LOOKS different while still
      taking a group would write a crew nothing reads. */
   const elsewhere = _jcElsewhere().map(j =>
-    `<tr class="jc-elsewhere"><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
-    + `<td>${esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}</td>`
+    `<tr class="jc-elsewhere${j === 'cull_incentive' ? ' jc-cull' : ''}"><th class="jc-job" scope="row">${esc(jobLabel(j))}</th>`
+    + `<td${j !== 'cull_incentive' ? ''
+         : editing && cmDraft && cmDraft.viaJc
+         ? ` class="jc-cell jc-cm-drop" ondragover="jcDragOver(event)" ondragleave="jsDragLeave(event)" ondrop="jcCullDrop(event)"`
+         : ' class="jc-cell"'}>${j === 'cull_incentive' ? _jcCullRowHtml()
+         : esc(JC_SET_ELSEWHERE[j] || 'The crew for this job is set outside this card.')}</td>`
     + `</tr>`).join('');
 
   box.innerHTML = `<div class="jc-pal${editing ? ' jc-pal-live' : ''}">${palette}</div>
@@ -13075,14 +13643,44 @@ function renderJobCrewSetting() {
     corner.innerHTML = editing || !maySetting() ? ''
       : `<button class="btn btn-sm cm-set-open" onclick="jcEdit()">&#9998; Edit</button>`;
   }
+  /* The rule, the register and the stored groups arrive in no fixed order,
+     so the follow is asked again whenever this card draws; it does its work
+     once, when all three are in hand. */
+  _cullFollowGroups();
 }
 
 function jcEdit() {
   if (!maySetting()) return;
   jobCrewDraft = _jcState();
+  cullGroupsDraft = cullGroups.slice();
+  /* Culling Monitoring's names open with the rest, unless the card above
+     is already editing them. Only a keyed rule can be: the built-in list
+     has no rows to date a change against. */
+  _jcOpenCullDraft();
+  renderJobCrewSetting();
+  /* THE RULE MAY NOT HAVE BEEN READ YET. Edit pressed before the read
+     lands found the built-in list and opened nothing, so the row stayed
+     read-only for the whole edit. Ask, and open the names once it answers. */
+  const CI = window.MJMCullIncentive;
+  if (!cmDraft && CI && CI.loadRule && _supabase) {
+    CI.loadRule(_supabase, cmMonth()).then(() => {
+      if (jobCrewDraft && _jcOpenCullDraft()) renderJobCrewSetting();
+    }, () => {});
+  }
+}
+function _jcOpenCullDraft() {
+  const CI = window.MJMCullIncentive;
+  if (cmDraft || !CI || !CI.ruleSource || CI.ruleSource() !== 'office') return false;
+  _cmOpenDraft(true);
+  renderCullMonitoringSetting();
+  return true;
+}
+function jcCancel() {
+  jobCrewDraft = null;
+  cullGroupsDraft = null;
+  if (cmDraft && cmDraft.viaJc) { cmDraft = null; renderCullMonitoringSetting(); }
   renderJobCrewSetting();
 }
-function jcCancel() { jobCrewDraft = null; renderJobCrewSetting(); }
 
 function jcDragStart(ev, g) {
   if (!jobCrewDraft) { ev.preventDefault(); return; }
@@ -13122,6 +13720,110 @@ function jcDrop(ev, job) {
   });
   renderJobCrewSetting();
 }
+/* ── A GROUP DROPPED ON CULLING MONITORING IS ITS PEOPLE, BY NAME ───────
+   *"我drag admin and FC过去culling monitoring 这里就会出现他们的名字"*. The
+   rule pays NAMED people, so a drop does not store the group: it reads who
+   is in it TODAY and adds each name to the draft, exactly as + Add would.
+   An FC group goes on the Field Conductor list for ITS OWN nursery (the
+   section the group says); any other group -- Admin -- goes on the list
+   paid on every nursery. A name already on that list is not added twice,
+   and nothing is written until Save, which is the dated `cmSave`. */
+function jcCullDrop(ev) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('jb-cell-over');
+  const g = _jcDrag;
+  _jcDrag = null;
+  if (!g || !jobCrewDraft || !cmDraft || !cmDraft.viaJc || !cullGroupsDraft) return;
+  const p = MJMJobCrew.splitGroup(g);
+  if (!p) return;
+  if (!cullGroupsDraft.includes(g)) cullGroupsDraft.push(g);
+  _cullAddGroupPeople(g);
+  _cmRedraw();
+}
+/* Put every person standing in group g today onto the draft, once. FC
+   goes on the Field Conductor list for its own nursery; anything else on
+   the every-nursery list. Answers how many it added. */
+function _cullAddGroupPeople(g) {
+  const p = MJMJobCrew.splitGroup(g);
+  if (!p || !cmDraft) return 0;
+  const CI = window.MJMCullIncentive;
+  const kind = p.role === 'Field Conductor' ? 'fc' : 'admin';
+  const nursery = kind === 'fc' ? ((CI.sectionOf && CI.sectionOf(p.section)) || p.section) : '';
+  const k = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  /* Already on that list is asked through the CLAIM own resolver, because
+     the rule spells a name short (Florence) where the register spells it
+     out -- a plain compare would put her on twice. */
+  const on = cmDraft.people
+    .filter(r => r.kind === kind && r.active !== false && (kind !== 'fc' || k(r.nursery) === k(nursery)));
+  const already = (nm) => on.some(r => k(r.name) === k(nm)
+    || (CI.resolveName && CI.resolveName(r.name, [nm], x => x).row === nm));
+  let added = 0;
+  _jcNames(g).forEach(nm => {
+    if (already(nm)) return;
+    on.push({ name: nm });
+    cmDraft.people.push({ id: null, kind, name: nm, workerId: _cmWorkerId(nm), nursery, active: true });
+    added++;
+  });
+  return added;
+}
+
+/* ── THE GROUP IS FOLLOWED, NOT COPIED ONCE ──────────────────────────────
+   The office moved Surnano into Admin on the Team Board and the Culling
+   Monitoring card did not move: a drop copied the group's people onto the
+   rule on the day it was made and never looked again. *"如果worker namelist
+   那边drag了上面的部分也会改"* -- the group dragged here IS the answer, so
+   somebody who joins it later joins the rule too.
+
+   So once the rule, the register and the stored groups are all in hand,
+   anybody now standing in a dragged group who is not on the rule is
+   ADDED, through the same dated cmSave (from this month). It only ever
+   ADDS: taking somebody off moves money, and that stays a press (the
+   cross on the group here, or Remove on the card above). Once per page
+   load, never under an open edit, and only for a login that may edit the
+   setting. */
+let _cullFollowed = false;
+async function _cullFollowGroups() {
+  const CI = window.MJMCullIncentive;
+  if (_cullFollowed || cmDraft || jobCrewDraft || !cullGroups.length) return;
+  if (!CI || !CI.ruleSource || CI.ruleSource() !== 'office' || !maySetting()) return;
+  if (!Array.isArray(_registerRows) || !_registerRows.length || !window.MJMJobCrew) return;
+  _cullFollowed = true;
+  _cmOpenDraft(true);
+  let added = 0;
+  cullGroups.forEach(g => { added += _cullAddGroupPeople(g); });
+  /* AND IT TAKES OFF, which it did not for a day -- *"我把surnano和amri拿掉
+     了 为什么还在"*, *"这个东西是live的 但是不影响前面的月份"*. Somebody no
+     longer standing in any dragged group of their kind leaves the rule, and
+     the save ENDS them at this month, so every month before it goes on
+     paying who it paid. Asked per KIND: the Field Conductor list is only
+     followed once an FC group has been dragged, and the every-nursery list
+     once any other group has, so a list nobody has dragged for is left as
+     it stands rather than emptied. */
+  const k = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const want = { admin: [], fc: [] };
+  const kinds = new Set();
+  cullGroups.forEach(g => {
+    const p = MJMJobCrew.splitGroup(g);
+    if (!p) return;
+    const kind = p.role === 'Field Conductor' ? 'fc' : 'admin';
+    const nursery = kind === 'fc' ? ((CI.sectionOf && CI.sectionOf(p.section)) || p.section) : '';
+    kinds.add(kind);
+    _jcNames(g).forEach(nm => want[kind].push({ name: nm, nursery }));
+  });
+  const stays = (r) => want[r.kind].some(w => (r.kind !== 'fc' || k(w.nursery) === k(r.nursery))
+    && (k(w.name) === k(r.name) || (CI.resolveName && CI.resolveName(r.name, [w.name], x => x).row === w.name)));
+  let removed = 0;
+  for (let i = cmDraft.people.length - 1; i >= 0; i--) {
+    const r = cmDraft.people[i];
+    if (r.active === false || !kinds.has(r.kind) || stays(r)) continue;
+    if (r.id == null) cmDraft.people.splice(i, 1); else r.active = false;
+    removed++;
+  }
+  if (!added && !removed) { cmDraft = null; return; }
+  await cmSave();
+  if (cmDraft && cmDraft.viaJc) { cmDraft = null; _cmRedraw(); }
+}
+
 /* OFF EVERY NURSERY IT IS ON, never only the one the chip was drawn from:
    the row shows one chip per group however many cells hold it, so a × that
    cleared one of them would leave a chip on screen that looks removed and
@@ -13157,6 +13859,10 @@ async function jcSave() {
   _jcSaving = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
+    /* Culling Monitoring FIRST, through its own writer: a refusal there
+       (nobody left on either list, a write the database would not take)
+       keeps both drafts on screen, rather than saving half of one press. */
+    if (cmDraft && cmDraft.viaJc && !(await cmSave())) return;
     const now = new Date().toISOString();
     const next = {};
     const rows = Object.keys(draft).map(cell => {
@@ -13173,6 +13879,10 @@ async function jcSave() {
         updated_at: now,
       };
     });
+    if (cullGroupsDraft) rows.push({ key: CULL_GROUPS_KEY, txt_value: cullGroupsDraft.join(','),
+      note: 'Team Board groups dragged onto Culling Monitoring on Worker List for Each Job. '
+          + 'The people are in the dated Culling Monitoring rule.',
+      updated_by: (typeof userEmail !== 'undefined' && userEmail) || null, updated_at: now });
     const { error } = await _supabase.from('nops_maint_config')
       .upsert(rows, { onConflict: 'key' }).then(r => r, e => ({ error: e }));
     if (error) {
@@ -13184,6 +13894,8 @@ async function jcSave() {
       return;
     }
     jobCrews = next;
+    if (cullGroupsDraft) cullGroups = cullGroupsDraft.slice();
+    cullGroupsDraft = null;
     jobCrewDraft = null;
     renderJobCrewSetting();
   } finally {
@@ -13281,7 +13993,7 @@ function renderCullMonitoringSetting() {
   if (cmDraft || !CI || !CI.loadRule || !_supabase || _cmRuleAsked === M) return;
   _cmRuleAsked = M;
   CI.loadRule(_supabase, M).then(
-    (r) => { if (!cmDraft) renderCullMonitoringSetting();
+    (r) => { if (!cmDraft) { renderCullMonitoringSetting(); renderJobCrewSetting(); _cullFollowGroups(); }
              if (!(r && r.ready)) _cmRuleAsked = ''; },
     (e) => { console.warn('[maint] Culling Monitoring rule not read:', e); _cmRuleAsked = ''; });
 }
@@ -13329,10 +14041,6 @@ function cmRegisterRows() {
   return (Array.isArray(_registerRows) ? _registerRows : [])
     .filter(w => w && w.full_name && w.active !== false);
 }
-function cmRegisterNames() {
-  return [...new Set(cmRegisterRows().map(w => String(w.full_name).trim()))]
-    .sort((a, b) => a.localeCompare(b));
-}
 function _cmWorkerId(name) {
   const ws = cmRegisterRows();
   const CI = window.MJMCullIncentive;
@@ -13358,45 +14066,25 @@ function cmEdit() {
      MOVED, and whether the row it is moving was ever in force in an earlier
      month. A name swapped on a row that started in January is January's
      conductor being replaced, and January has to keep him. */
+  _cmOpenDraft(false);
+  renderCullMonitoringSetting();
+  renderJobCrewSetting();
+}
+/* The draft, opened from either card. `viaJc` says which card edits it. */
+function _cmOpenDraft(viaJc) {
+  const CI = window.MJMCullIncentive;
   const take = (p, kind, nursery) => ({ id: p.id, kind, nursery,
     name: p.name, workerId: p.workerId, from: p.from || '', active: true,
     wasName: p.name, wasNursery: nursery });
-  cmDraft = {
+  cmDraft = { viaJc: !!viaJc,
     rate: { admin: _cmRate('admin'), fc: _cmRate('fc'), target: _cmRate('target') },
     people: (CI.RULE.everyPlot || []).map(p => take(p, 'admin', ''))
       .concat((CI.RULE.ownNursery || []).map(p => take(p, 'fc', p.nursery)))
   };
-  renderCullMonitoringSetting();
 }
-function cmCancel() { cmDraft = null; renderCullMonitoringSetting(); }
+function _cmRedraw() { renderCullMonitoringSetting(); renderJobCrewSetting(); }
+function cmCancel() { cmDraft = null; _cmRedraw(); }
 function cmSetRate(kind, v) { if (cmDraft) cmDraft.rate[kind] = v === '' ? '' : Number(v); }
-function cmSetName(i, v) {
-  if (!cmDraft || !cmDraft.people[i]) return;
-  cmDraft.people[i].name = v;
-  cmDraft.people[i].workerId = _cmWorkerId(v);
-}
-function cmSetNursery(i, v) { if (cmDraft && cmDraft.people[i]) cmDraft.people[i].nursery = v; }
-function cmRemove(i) {
-  if (!cmDraft || !cmDraft.people[i]) return;
-  /* A row that was never saved is dropped; one that WAS is marked, because
-     taking somebody off the rule is a record and not a deletion. */
-  if (cmDraft.people[i].id == null) cmDraft.people.splice(i, 1);
-  else cmDraft.people[i].active = false;
-  renderCullMonitoringSetting();
-}
-function cmAdd(kind) {
-  if (!cmDraft) return;
-  const CI = window.MJMCullIncentive;
-  const names = cmRegisterNames();
-  if (!names.length) {
-    alert('The worker register has not loaded, so there is nobody to choose.\n\n'
-        + 'Reload the page and try again.');
-    return;
-  }
-  cmDraft.people.push({ id: null, kind, name: names[0], workerId: _cmWorkerId(names[0]),
-    nursery: kind === 'fc' ? ((CI.NURSERIES && CI.NURSERIES[0]) || 'BNN') : '', active: true });
-  renderCullMonitoringSetting();
-}
 
 /* THE MONTH AN EDIT STARTS FROM. Settings carries no month picker — it is
    the one panel that is not about a month — so an edit starts from the one
@@ -13413,16 +14101,16 @@ function _cmMonthName(ym) {
 }
 
 async function cmSave() {
-  if (!cmDraft) return;
+  if (!cmDraft) return true;
   const d = cmDraft, M = cmMonth();
   const bad = ['admin', 'fc'].filter(k => !(Number(d.rate[k]) >= 0));
-  if (bad.length) { alert('A price has to be a number, and not less than nought.'); return; }
+  if (bad.length) { alert('A price has to be a number, and not less than nought.'); return false; }
   /* A target of nought or less is every plot off the incentive at once, and
      it is not a number anybody means to key. */
   if (!(Number(d.rate.target) >= 1)) {
     alert('The target has to be at least 1 day.\n\n'
         + 'A target of nought would take every plot off Culling Monitoring.');
-    return;
+    return false;
   }
   /* A rule with nobody on it pays nobody, and it is the one save somebody
      makes by accident -- the last Remove on a block. Said, and refused. */
@@ -13430,7 +14118,7 @@ async function cmSave() {
   if (!liveOf('admin').length && !liveOf('fc').length) {
     alert('Nobody is on either list, so this would pay nobody at all.\n\n'
         + 'Add somebody, or press Cancel.');
-    return;
+    return false;
   }
   const btn = document.getElementById('cm-save');
   const was = btn ? btn.innerHTML : '';
@@ -13501,11 +14189,13 @@ async function cmSave() {
     /* The money is priced off the rule, so every month on screen is now
        showing a figure worked out under the old one. */
     _cullCache = {};
-    renderCullMonitoringSetting();
+    _cmRedraw();
+    return true;
   } catch (e) {
     console.warn('[maint] Culling Monitoring rule not saved:', e);
     alert('The rule was NOT saved.\n\n' + ((e && e.message) || e)
         + '\n\nNothing on screen has been thrown away — press Save again, or Cancel.');
+    return false;
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = was; }
   }
@@ -13517,9 +14207,14 @@ function _cmSettingHtml() {
     return '<div class="set-empty">The Culling Monitoring rule did not load, '
       + 'so this page cannot say what it is set to. Reload the page.</div>';
   }
-  const D = cmDraft;                       // non-null only while editing
+  /* A draft opened from Worker List for Each Job is edited THERE, so this
+     card reads it as its saved self until that Save -- one set of controls
+     for one draft, never two Save buttons for the same change. */
+  const D = cmDraft && !cmDraft.viaJc ? cmDraft : null;   // non-null only while editing here
   const rate = (k) => D ? D.rate[k] : _cmRate(k);
-  const live = (k) => D ? D.people.filter(r => r.kind === k && r.active !== false)
+  /* A draft edited on Worker List shows its NAMES here as they are dragged
+     on -- *"drag了上面的部分也会改"* -- with no controls: those are below. */
+  const live = (k) => cmDraft ? cmDraft.people.filter(r => r.kind === k && r.active !== false)
                         : (k === 'admin' ? CI.RULE.everyPlot : CI.RULE.ownNursery);
 
   /* WHICH RULE IS ON SCREEN, IN ONE LINE. It fails open, so a database that
@@ -13559,39 +14254,24 @@ function _cmSettingHtml() {
      place is money leaving the claim with nothing saying it had gone. A
      name already on the rule that is NOT on the register keeps its place in
      its own list and says so — it is the row somebody has to settle. */
-  const names = cmRegisterNames();
-  const picker = (r, i) => {
-    /* Which register row this name resolves to is the CLAIM's own rule --
-       the names on the rule are short and the register spells them out, so
-       an exact match alone marks five people the claim pays perfectly well
-       as strangers. */
-    const on = CI.resolveName ? (CI.resolveName(r.name, names, x => x).row || '') : '';
-    const opts = names.map(nm =>
-      `<option value="${esc(nm)}"${nm === on ? ' selected' : ''}>${esc(nm)}</option>`).join('');
-    const stray = on ? ''
-      : `<option value="${esc(r.name)}" selected>${esc(r.name)} — not on the register</option>`;
-    return `<select class="cm-pick" onchange="cmSetName(${i}, this.value)">${stray}${opts}</select>`;
-  };
-  const nurseryPick = (r, i) => {
-    const opts = (CI.NURSERIES.length ? CI.NURSERIES : ['BNN', 'UNN1', 'UNN2']).map(n =>
-      `<option value="${esc(n)}"${n === r.nursery ? ' selected' : ''}>${esc(n)}</option>`).join('');
-    return `<select class="cm-pick cm-pick-n" onchange="cmSetNursery(${i}, this.value)">${opts}</select>`;
-  };
-
   const block = (kind, title, perLine) => {
     const rows = live(kind);
     const body = rows.map((r) => {
       const i = D ? D.people.indexOf(r) : -1;
-      const who = D ? picker(r, i) : `<span class="cm-set-k">${esc(r.name)}</span>`;
+      /* NO PICKERS HERE ANY MORE -- *"而且为什么可以drop down? 已经跟着底下的
+         逻辑了"*. Who is paid follows the groups dragged onto Worker List for
+         Each Job, so this card SHOWS the names and edits only the prices and
+         the target. A dropdown here was a second way to change the list, and
+         two writers of one answer is the fault this file keeps finding. */
+      const who = `<span class="cm-set-k">${esc(r.name)}</span>`;
       const where = kind === 'fc'
-        ? (D ? nurseryPick(r, i) : `<span class="cm-set-w">${esc(r.nursery)} only</span>`)
+        ? `<span class="cm-set-w">${esc(r.nursery)} only</span>`
         : `<span class="cm-set-w">Every nursery</span>`;
-      const cut = D ? `<button class="cm-x" title="Take off the rule"
-                        onclick="cmRemove(${i})">&times;</button>` : '<span></span>';
+      const cut = '<span></span>';
       return `<div class="cm-pay-row">${who}${where}${cut}</div>`;
     }).join('') || `<div class="cm-pay-row cm-pay-none"><span>Nobody is on this list, so it
         pays nobody.</span><span></span><span></span></div>`;
-    const add = D ? `<button type="button" class="row-add" onclick="cmAdd('${kind}')">+ Add</button>` : '';
+    const add = D ? `<div class="cm-pay-row cm-pay-note"><span>Who is paid is set on Worker List for Each Job below.</span></div>` : '';
     return `
       <div class="cm-pay">
         <div class="cm-pay-top"><span class="cm-pay-t">${esc(title)}</span>

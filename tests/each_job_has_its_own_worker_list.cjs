@@ -53,6 +53,17 @@ async function boot(browser, db, where) {
           window.__DB[table] = tbl().filter(r => !match(r));
           return { data: [], error: null };
         }
+        /* An update and an insert LAND, or a Save that saves nothing reads
+           exactly like one that worked. */
+        if (st.op === 'update') {
+          tbl().filter(match).forEach(r => Object.assign(r, st.patch));
+          return { data: [], error: null };
+        }
+        if (st.op === 'insert') {
+          const t = tbl();
+          st.rows.forEach(r => t.push(Object.assign({ id: 900 + t.length }, r)));
+          return { data: st.rows, error: null };
+        }
         const o = tbl().filter(match);
         return st.single ? { data: o[0] || null, error: null } : { data: o, error: null };
       };
@@ -63,6 +74,9 @@ async function boot(browser, db, where) {
         if (p === 'maybeSingle' || p === 'single') return () => { st.single = true; return Promise.resolve(run()); };
         if (p === 'range') return () => Promise.resolve(run());
         if (p === 'delete') return () => { st.op = 'delete'; return q; };
+        if (p === 'update') return (patch) => { st.op = 'update'; st.patch = patch; return q; };
+        if (p === 'insert') return (rows) => { st.op = 'insert';
+          st.rows = Array.isArray(rows) ? rows : [rows]; return q; };
         /* The write LANDS, keyed on what onConflict names, so a read-back
            sees what the screen sent. A stub that recorded an upsert and
            kept nothing would pass a Save that saves nothing. */
@@ -407,8 +421,8 @@ const cellChips = (page, cell) => ev(page, (cell) => {
       ['Culling Monitoring']);
     check('a row set elsewhere is ONE cell, like every other row',
       (rows || []).filter(r => r.elsewhere).map(r => r.cells), [1]);
-    check('Culling Monitoring points at its own card',
-      (rows || []).some(r => r.elsewhere && /Culling Monitoring above/.test(r.says)), true);
+    check('Culling Monitoring presets nothing: empty until a group is dragged on',
+      (rows || []).filter(r => r.elsewhere).map(r => r.says.trim()), ['']);
 
     /* THE DROP IS THE THING THAT MUST NOT WORK. A row that merely LOOKS
        different while still taking a group would write a crew nothing
@@ -524,6 +538,160 @@ const cellChips = (page, cell) => ev(page, (cell) => {
     check('who then leaves the dropdown, being on the list already',
       /Yuyak/.test(JSON.stringify(await picker())), false);
     if (process.env.SHOT) { await page.screenshot({ path: process.env.SHOT + '/sp_picker.png' }); }
+    check('no page error', errs, []);
+    await page.close();
+  }
+
+  /* ── 7. CULLING MONITORING IS EDITED HERE TOO ─────────────────────────
+     "culling monitoring也要在这里改", then "我drag admin and FC过去culling
+     monitoring 这里就会出现他们的名字". A group dropped on that row is its
+     PEOPLE, by name: an FC group goes on the Field Conductor list for its
+     own nursery, an Admin group on the list paid on every nursery. Saved
+     through the card above's own dated writer, so the new rows start at
+     this month. */
+  console.log('— 7. Culling Monitoring: drag Admin and FC, the names appear and are saved dated');
+  {
+    const d = new Date();
+    const M = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const reg = REGISTER.concat([
+      { id: 6, full_name: 'Rousell Wayne', section: 'UNE', role: 'Admin', active: true },
+      { id: 7, full_name: 'Florence',      section: 'OTHERS', role: 'Admin', active: true },
+      { id: 8, full_name: 'Akbar',         section: 'UNN 1', role: 'Field Conductor', active: true },
+    ]);
+    const db = { mjmnpayroll_workers: reg, nops_maint_config: [],
+      nops_cull_monitoring_rate: [{ id: 1, kind: 'admin', from_month: '2026-01', rm: 20 },
+                                  { id: 2, kind: 'fc', from_month: '2026-01', rm: 50 }],
+      nops_cull_monitoring_people: [
+        { id: 11, kind: 'admin', nursery: '', worker_id: 6, worker_name: 'Rousell Wayne', from_month: '2026-01', until_month: null },
+        { id: 12, kind: 'fc', nursery: 'BNN', worker_id: 3, worker_name: 'Lalu Aenal', from_month: '2026-01', until_month: null }] };
+    const { page, errs } = await boot(browser, db, 'setting');
+    await page.waitForFunction(() => window.MJMCullIncentive && MJMCullIncentive.ruleSource() === 'office',
+      { timeout: 8000 }).catch(() => {});
+    /* EDIT PRESSED BEFORE THE RULE IS READ still opens the names once it
+       lands: the office pressed Edit and the row stayed read-only. */
+    await ev(page, () => { MJMCullIncentive.loadRule = ((f) => (s, m) =>
+      new Promise(r => setTimeout(r, 400)).then(() => f(s, m)))(MJMCullIncentive.loadRule); });
+    await ev(page, () => { cmDraft = null; jobCrewDraft = null; jcEdit(); });
+    await page.waitForTimeout(900);
+    check('Edit before the rule is read still opens the names', await ev(page, () =>
+      [!!cmDraft && cmDraft.viaJc, !!document.querySelector('#jc-set-body tr.jc-cull td.jc-cm-drop')]), [true, true]);
+    await ev(page, () => jcCancel());
+    const row = () => ev(page, () => { const tr = document.querySelector('#jc-set-body tr.jc-cull');
+      return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : 'no row'; });
+    check('nothing is preset: nobody has dragged a group here yet ("不要preset")', await row(), 'Culling Monitoring');
+    check('the names are on the Culling Monitoring card above', await ev(page, () =>
+      /Rousell Wayne/.test(document.getElementById('cm-set-body').textContent)), true);
+    await ev(page, () => jcEdit());
+    check('Edit opens the names here, not on the card above',
+      await ev(page, () => [!!cmDraft && cmDraft.viaJc,
+        !!document.querySelector('#jc-set-body tr.jc-cull td.jc-cm-drop'),
+        !!document.getElementById('cm-save')]), [true, true, false]);
+    check('the row is chips like the rows above, no pickers and no buttons', await ev(page, () =>
+      [document.querySelectorAll('#jc-set-body tr.jc-cull select').length,
+       document.querySelectorAll('#jc-set-body tr.jc-cull button.row-add').length]), [0, 0]);
+    const dropCull = (label) => ev(page, (label) => {
+      const chip = [...document.querySelectorAll('#jc-set-body .jc-pal .jc-chip')]
+        .find(c => c.textContent.trim() === label);
+      const td = document.querySelector('#jc-set-body tr.jc-cull td');
+      if (!chip) return 'no palette chip ' + label;
+      const dt = new DataTransfer();
+      const fire = (type, el) => el.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
+      fire('dragstart', chip); fire('dragover', td); fire('drop', td); fire('dragend', chip);
+      return 'dropped';
+    }, label);
+    check('drag OTHERS · Admin', await dropCull('OTHERS · Admin'), 'dropped');
+    check('drag UNN 1 · FC', await dropCull('UNN 1 · FC'), 'dropped');
+    check('drag OTHERS · Admin again adds nobody twice', await dropCull('OTHERS · Admin'), 'dropped');
+    const live = () => ev(page, () => cmDraft.people.filter(r => r.active !== false)
+      .map(r => r.kind + ':' + (r.nursery || '') + ':' + r.name).sort());
+    check('Admin goes on every nursery, FC on its own nursery, nobody twice', await live(),
+      ['admin::Florence', 'admin::Rousell Wayne', 'fc:BNN:Lalu Aenal', 'fc:UNN1:Akbar']);
+    check('…and the row shows the groups DRAGGED, never a name ("不要自带名字")', await ev(page, () =>
+      [...document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip')].map(c => c.childNodes[0].textContent.trim()).sort()),
+      ['OTHERS · Admin', 'UNN 1 · FC']);
+    check('the card above shows the new names as they are dragged ("上面的部分也会改")', await ev(page, () =>
+      ['Florence', 'Akbar'].map(n => document.getElementById('cm-set-body').textContent.includes(n))), [true, true]);
+    await ev(page, () => jcSave());
+    await page.waitForTimeout(500);
+    check('saved through the dated writer: the two new rows start this month', await ev(page, (M) =>
+      window.__DB.nops_cull_monitoring_people.filter(r => r.from_month === M)
+        .map(r => r.kind + ':' + r.nursery + ':' + r.worker_name).sort(), M),
+      ['admin::Florence', 'fc:UNN1:Akbar']);
+    /* LIVE, and the month it changes in is the month it moves -- *"什么月份
+       改就影响什么月份 但是在那个月份里的所有变动都是live的"*. Rousell (UNE ·
+       Admin) and Lalu (BNN · FC) stand in no group dragged here, so they come
+       off from THIS month; their rows are ENDED, never deleted, and every
+       earlier month still pays them. */
+    check('people in no dragged group are ended at this month, never deleted',
+      await ev(page, () => window.__DB.nops_cull_monitoring_people.filter(r => r.id < 100)
+        .map(r => r.until_month)), [M, M]);
+    check('the groups are stored, so the row reads them after a reload', await ev(page, () =>
+      (window.__DB.nops_maint_config.find(r => r.key === 'cull_monitoring_groups') || {}).txt_value),
+      'OTHERS|Admin,UNN1|Field Conductor');
+    check('edit is closed and the row reads the new list', await ev(page, () =>
+      [cmDraft, !!jobCrewDraft, /UNN 1 · FC/.test(document.querySelector('#jc-set-body tr.jc-cull').textContent)]),
+      [null, false, true]);
+    if (process.env.SHOT) { await ev(page, () => jcEdit()); await ev(page, () => document.querySelector('#jc-set-body tr.jc-cull').scrollIntoView()); await page.screenshot({ path: process.env.SHOT + '/jc_cull.png' }); }
+    check('no page error', errs, []);
+    await page.close();
+  }
+
+  /* ── 8. THE GROUP IS FOLLOWED ─────────────────────────────────────────
+     "我刚刚try 把surnano drag去admin ... 为什么这里不跟着变动". Somebody
+     moved into a group already dragged onto Culling Monitoring joins the
+     rule on the next load, dated this month, through the same save. */
+  console.log('— 8. somebody moved into a dragged group joins the rule');
+  {
+    const d = new Date();
+    const M = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const reg = REGISTER.concat([
+      { id: 7, full_name: 'Florence', section: 'OTHERS', role: 'Admin', active: true },
+      { id: 9, full_name: 'Surnano',  section: 'OTHERS', role: 'Admin', active: true },
+    ]);
+    const db = { mjmnpayroll_workers: reg,
+      nops_maint_config: [{ key: 'cull_monitoring_groups', txt_value: 'OTHERS|Admin' }],
+      nops_cull_monitoring_rate: [{ id: 1, kind: 'admin', from_month: '2026-01', rm: 20 }],
+      nops_cull_monitoring_people: [
+        { id: 21, kind: 'admin', nursery: '', worker_id: 7, worker_name: 'Florence', from_month: '2026-01', until_month: null }] };
+    const { page, errs } = await boot(browser, db, 'setting');
+    await page.waitForTimeout(1500);
+    check('Surnano is on the rule from this month, nobody added twice', await ev(page, (M) =>
+      window.__DB.nops_cull_monitoring_people.filter(r => !r.until_month)
+        .map(r => r.worker_name + ':' + r.from_month).sort(), M),
+      ['Florence:2026-01', 'Surnano:' + M]);
+    check('…and the card above names him', await ev(page, () =>
+      /Surnano/.test(document.getElementById('cm-set-body').textContent)), true);
+    check('…and the row still shows the group, not a name', await ev(page, () =>
+      [...document.querySelectorAll('#jc-set-body tr.jc-cull .jc-chip')].map(c => c.textContent.trim())), ['OTHERS · Admin']);
+    check('no page error', errs, []);
+    await page.close();
+  }
+
+  /* ── 9. AND TAKES OFF: live, earlier months untouched ──────────────── */
+  console.log('— 9. somebody taken out of a dragged group leaves the rule from this month');
+  {
+    const d = new Date();
+    const M = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const reg = REGISTER.concat([
+      { id: 7, full_name: 'Florence', section: 'OTHERS', role: 'Admin', active: true },
+      { id: 9, full_name: 'Sunarno',  section: 'OTHERS', role: 'General Worker', active: true },
+    ]);
+    const db = { mjmnpayroll_workers: reg,
+      nops_maint_config: [{ key: 'cull_monitoring_groups', txt_value: 'OTHERS|Admin' }],
+      nops_cull_monitoring_rate: [{ id: 1, kind: 'admin', from_month: '2026-01', rm: 20 }],
+      nops_cull_monitoring_people: [
+        { id: 21, kind: 'admin', nursery: '', worker_id: 7, worker_name: 'Florence', from_month: '2026-01', until_month: null },
+        { id: 22, kind: 'admin', nursery: '', worker_id: 9, worker_name: 'Sunarno',  from_month: '2026-01', until_month: null },
+        { id: 23, kind: 'fc', nursery: 'BNN', worker_id: 3, worker_name: 'Lalu Aenal', from_month: '2026-01', until_month: null }] };
+    const { page, errs } = await boot(browser, db, 'setting');
+    await page.waitForTimeout(1500);
+    check('Sunarno is ENDED at this month, not deleted, so earlier months keep him', await ev(page, () =>
+      window.__DB.nops_cull_monitoring_people.map(r => r.worker_name + ':' + (r.until_month || '-')).sort()),
+      ['Florence:-', 'Lalu Aenal:-', 'Sunarno:' + M]);
+    check('…the FC list, which no FC group was dragged for, is left alone', await ev(page, () =>
+      /Lalu Aenal/.test(document.getElementById('cm-set-body').textContent)), true);
+    check('…and the card no longer names Sunarno', await ev(page, () =>
+      /Sunarno/.test(document.getElementById('cm-set-body').textContent)), false);
     check('no page error', errs, []);
     await page.close();
   }
