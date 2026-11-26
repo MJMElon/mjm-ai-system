@@ -141,7 +141,7 @@ async function open(browser, port, opts) {
     window.alert = (m) => { window.__ALERTS.push(String(m)); };
     window.prompt = () => { throw new Error('nothing here may raise a prompt'); };
   }, { manage: o.manage !== false, cols: o.cols || BASE_COLS.concat(REJ_COLS), workers: o.workers || WORKERS });
-  await page.goto('http://localhost:' + port + '/scan/scan_workers.html', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:' + port + '/scan/scan_workers.html#chart', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#worker-board .bd', { timeout: 8000 });
   return page;
 }
@@ -220,41 +220,11 @@ const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x)
     is(await inRow(page, 'FC'), ['Conductor One', 'ROUSELL WAYNE'],
       'the office staff still stand in their own row, in the Others column');
 
-    console.log('\n-- 4. every row but Other can be added to --');
-    /* Adding from Other would have to invent a role, so that one row takes
-       drops and does not offer to add -- which is exactly why Driver and
-       Gardener needed rows rather than a wider Other.
-
-       THE BOARD IS A RECORD UNTIL EDIT IS PRESSED, so Add is on no row at
-       all until it is -- see the_board_is_read_only_until_edit.cjs. Asked
-       in BOTH states here, because "no Add anywhere" and "no Add on Other"
-       are the same answer read off one row, and a check that only ever saw
-       the locked board would pass with the Add button deleted outright. */
-    const addRows = () => page.evaluate(() => {
-      const out = {};
-      document.querySelectorAll('#worker-board tbody tr').forEach((tr) => {
-        const n = tr.querySelector('.bd-role-name');
-        if (n) out[n.textContent.trim()] = tr.querySelectorAll('.wchip-add').length > 0;
-      });
-      return out;
-    });
-    const locked = await addRows();
-    is(Object.values(locked).filter(Boolean).length, 0,
-      'with the board locked, no row offers Add at all');
-
-    await page.evaluate(() => boardEdit());
-    const addable = await page.evaluate(() => {
-      const out = {};
-      document.querySelectorAll('#worker-board tbody tr').forEach((tr) => {
-        const n = tr.querySelector('.bd-role-name');
-        if (n) out[n.textContent.trim()] = tr.querySelectorAll('.wchip-add').length > 0;
-      });
-      return out;
-    });
-    is(addable['Driver'], true, 'a driver can be added straight to the board');
-    is(addable['Gardener'], true, 'and a gardener');
-    is(addable['Admin'], true, 'and an admin');
-    is(addable['Other'], false, 'Other still offers no Add, because it would have to invent a role');
+    console.log('\n-- 4. the chart offers Add on no row --');
+    /* The chart only shows; a worker of any role is added on the Worker
+       Namelist, through the form, whose role list is section 5. */
+    is(await page.$$eval('#worker-board .wchip-add', (e) => e.length), 0,
+      'no row of the chart offers Add -- that is the namelist');
 
     console.log('\n-- 5. the form offers the same list --');
     const roles = await page.evaluate(() => {

@@ -223,6 +223,60 @@
   #worker-modal input:disabled,
   #worker-modal textarea:disabled { background: #f6f7fb; color: var(--text-muted);
                                     cursor: not-allowed; }
+  /* ── The Worker Namelist ── */
+  .wl-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .wl-title { font-size:20px; font-weight:800; color:#0f172a; }
+  .wl-go { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:10px;
+    background:#7c3aed; color:#fff; font-size:13px; font-weight:800; text-decoration:none; }
+  .wl-go:hover { background:#6d28d9; }
+  .wl-stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .wl-stat { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:10px 16px; min-width:120px; }
+  .wl-stat b { display:block; font-size:22px; font-weight:800; color:#0f172a; }
+  .wl-stat span { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.08em; }
+  .wl-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .wl-bar input, .wl-bar select { height:38px; border:1px solid #cbd5e1; border-radius:10px; padding:0 12px;
+    font-size:13px; background:#fff; }
+  .wl-bar input { flex:1; min-width:200px; }
+  .wl-acts { display:flex; gap:8px; margin-left:auto; }
+  .wl-bar .cf-wrap { width:190px !important; flex:0 0 190px; }
+  @media (max-width:640px) { .wl-bar .cf-wrap { width:100% !important; flex:1 1 100%; } }
+  .wl-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:auto; }
+  .wl-table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .wl-table th { text-align:left; font-size:11px; font-weight:800; color:#64748b; text-transform:uppercase;
+    letter-spacing:.06em; padding:10px 14px; border-bottom:1px solid #e2e8f0; background:#f8fafc; white-space:nowrap; }
+  .wl-table td { padding:9px 14px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+  .wl-table tr:last-child td { border-bottom:0; }
+  .wl-table th.c, .wl-table td.c { text-align:center; width:56px; color:#94a3b8; }
+  .wl-table th.r, .wl-table td.r { text-align:right; width:60px; white-space:nowrap; }
+  .wl-name { display:flex; align-items:center; gap:9px; font-weight:700; color:#0f172a; text-transform:uppercase; }
+  .wl-loc small { display:block; font-size:11px; color:#94a3b8; }
+  .wl-st { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:800; }
+  .wl-st.on  { background:#dcfce7; color:#166534; }
+  .wl-st.off { background:#f1f5f9; color:#64748b; }
+  .wl-st.new { background:#fef3c7; color:#92400e; }
+  .wl-empty { padding:28px; text-align:center; color:#94a3b8; font-size:13px; }
+  tr.is-off td { color:#94a3b8; }
+  tr.is-off .wl-name { color:#64748b; }
+  .wl-ic { width:32px; height:32px; border-radius:8px; border:1px solid #e2e8f0; background:#fff; color:#475569;
+    display:inline-flex; align-items:center; justify-content:center; cursor:pointer; margin-left:4px; }
+  .wl-ic:hover { border-color:#7c3aed; color:#7c3aed; }
+  .wl-ic.x:hover { border-color:#b91c1c; color:#b91c1c; background:#fef2f2; }
+  .wl-pend { background:#fffbeb; border:1px solid #fde68a; border-radius:14px; padding:12px 14px; margin-bottom:14px; }
+  .wl-pend-head { font-size:12px; font-weight:800; color:#92400e; text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+  .wl-pend-head span { font-weight:600; text-transform:none; letter-spacing:0; color:#a16207; margin-left:6px; }
+  .wl-pend-row { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px dashed #fde68a; }
+  .wl-pend-head + .wl-pend-row { border-top:0; }
+  .wl-pend-row .wl-name { flex:1; }
+  .wl-pend-row small { color:#a16207; font-size:11.5px; }
+  .rf-list { display:flex; flex-direction:column; gap:6px; }
+  .rf-item { display:flex; align-items:center; justify-content:space-between; padding:7px 10px;
+    border:1px solid #e2e8f0; border-radius:9px; font-size:13px; font-weight:700; }
+  .rf-item small { color:#94a3b8; font-weight:600; }
+  .rf-x { border:0; background:none; color:#b91c1c; cursor:pointer; font-size:13px; }
+  .rf-none { font-size:12px; color:#94a3b8; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  .wl-name .wface { width:28px; height:28px; flex:0 0 28px; font-size:10px; }
+  @media (max-width:640px) { .wl-acts { margin-left:0; width:100%; } .wl-acts .btn { flex:1; } }
 </style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
@@ -235,18 +289,8 @@
 <div id="loading" class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
 
 <div id="main" class="wrap hidden">
-  <a class="page-back icon-only" href="scan_admin.html" data-icon-back title="Back to Nursery 555 Team" aria-label="Back to Nursery 555 Team"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
+  <a class="page-back icon-only" id="page-back" href="scan_admin.html" data-icon-back title="Back to Nursery 555 Team" aria-label="Back to Nursery 555 Team"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
 
-<section id="tab-workers" class="panel">
-    <div class="bar">
-      <div>
-        <div class="bar-title">Worker System</div>
-      </div>
-      <div class="bar-actions">
-        <label class="chk"><input type="checkbox" id="w-show-inactive" onchange="renderWorkers()"> Show inactive</label>
-        <input type="text" id="w-search" class="sel" placeholder="Search name or role…" oninput="renderWorkers()">
-      </div>
-    </div>
       <div id="worker-setup" class="warn hidden">
       <b>⚠️ The general-worker switch is not switched on yet.</b>
       Run <code>shared/fix_npayroll_maint_general.sql</code> in the Supabase SQL Editor, then reload.
@@ -273,30 +317,82 @@
       Run <code>shared/RUN_ME_worker_photos.sql</code> in the Supabase SQL Editor, then reload.
       Until then the Photo box on a worker's record is read-only and the board shows initials.
     </div>
-    <!-- The board is the register now. It was one of two views; the list
-         said the same thing in a longer way, and a screen that shows the
-         same facts twice is a screen where the two can disagree. -->
+
+<!-- THE WORKER NAMELIST: every worker on the payroll register, where they
+     work and whether they are active -- and the ONE place a worker is added,
+     edited, moved or turned down, and a role added. The Worker System chart
+     below it only shows. -->
+<section id="tab-list" class="panel">
+  <div class="wl-head">
+    <div class="wl-title">Worker Namelist</div>
+    <a class="wl-go" id="wl-go" href="#chart">Worker System
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></a>
+  </div>
+  <div class="wl-stats">
+    <div class="wl-stat"><b id="wl-n-all">0</b><span>All workers</span></div>
+    <div class="wl-stat"><b id="wl-n-on">0</b><span>Active</span></div>
+    <div class="wl-stat"><b id="wl-n-off">0</b><span>Inactive</span></div>
+  </div>
+  <div id="wl-pending"></div>
+  <div class="wl-bar">
+    <input id="wl-q" type="search" placeholder="Search name or role…" oninput="renderList()">
+    <select id="wl-loc" onchange="renderList()"><option value="">All locations</option></select>
+    <select id="wl-st" onchange="renderList()">
+      <option value="">All status</option>
+      <option value="on">Active</option>
+      <option value="off">Inactive</option>
+    </select>
+    <span class="wl-acts" id="wl-acts">
+      <button class="btn" id="wl-roles" onclick="openManageRoles()">Manage Roles</button>
+      <button class="btn btn-primary" id="wl-add" onclick="openWorker(null)">+ Add Worker</button>
+    </span>
+  </div>
+  <div class="wl-card">
+    <table class="wl-table">
+      <thead><tr><th class="c">No.</th><th>Name</th><th>Role</th><th>Location</th><th>Status</th><th class="r" id="wl-edit-h"></th></tr></thead>
+      <tbody id="wl-body"></tbody>
+    </table>
+  </div>
+  <p class="foot-note" id="wl-note"></p>
+</section>
+
+<section id="tab-workers" class="panel hidden">
+    <div class="bar">
+      <div>
+        <div class="bar-title">Worker System</div>
+      </div>
+      <div class="bar-actions">
+        <label class="chk"><input type="checkbox" id="w-show-inactive" onchange="renderWorkers()"> Show inactive</label>
+        <input type="text" id="w-search" class="sel" placeholder="Search name or role…" oninput="renderWorkers()">
+      </div>
+    </div>
     <div id="worker-board"></div>
   </section>
 </div>
 
-<!-- A role the office adds by hand. Its own act with its own Save, like
-     adding a worker: not part of the board's draft. -->
+<!-- Manage Roles: the roles the office added by hand. Its own window with
+     its own Save; Cancel throws away whatever was added or removed in it. -->
 <div class="modal-bg" id="role-modal">
-  <div class="modal" style="max-width:380px">
-    <div class="modal-top"><div class="modal-title">Add Role</div>
+  <div class="modal" style="max-width:400px">
+    <div class="modal-top"><div class="modal-title">Manage Roles</div>
       <button class="modal-x" onclick="closeModal('role-modal')">&times;</button></div>
     <div class="modal-body">
-      <div class="frow"><label>Role name</label>
-        <input id="rf-name" maxlength="40" placeholder="e.g. Security"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();saveCustomRole();}"></div>
-      <div id="rf-why" style="font-size:11.5px;color:var(--text-faint);margin-top:6px;">
-        A new row on the board, and a role you can pick on a worker's record.</div>
+      <div id="rf-list" class="rf-list"></div>
+      <div class="frow" style="margin-top:12px"><label>Add a role</label>
+        <div style="display:flex;gap:8px">
+          <input id="rf-name" maxlength="40" placeholder="e.g. Security" style="flex:1"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addRoleDraft();}">
+          <button class="btn" type="button" onclick="addRoleDraft()">+ Add</button>
+        </div></div>
+      <div id="rf-why" style="font-size:11.5px;margin-top:6px;"></div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-top:6px;">
+        A role is a row on the Worker System chart and a choice on a worker's record.
+        Nothing is saved until you press Save.</div>
     </div>
     <div class="modal-foot">
       <span style="flex:1"></span>
       <button class="btn" onclick="closeModal('role-modal')">Cancel</button>
-      <button class="btn btn-primary" id="rf-save" onclick="saveCustomRole()">Add Role</button>
+      <button class="btn btn-primary" id="rf-save" onclick="saveRoles()">Save</button>
     </div>
   </div>
 </div>
@@ -311,7 +407,7 @@
         <span id="wf-section-hint"></span>
         <button type="button" class="fhint-btn hidden" id="wf-move-btn" onclick="showWorkerSectionSelect()">Move…</button>
       </div>
-      <div class="frow hidden" id="wf-section-row"><label>Move to section</label>
+      <div class="frow hidden" id="wf-section-row"><label>Location (section)</label>
         <select id="wf-section" onchange="onWorkerSectionChange()"></select></div>
       <!-- A photo of the worker. Not an attachment on their record — it IS
            how they are recognised on the board, which is why it sits at the
@@ -396,7 +492,7 @@
            somebody needs is the sentence that tells them where the lever
            is. -->
       <span class="wf-ro-note hidden" id="wf-ro-note">
-        Read-only — press <b>&#9998; Edit</b> above the board to change this record.</span>
+        Read-only here — change this worker on the <b>Worker Namelist</b>.</span>
       <span style="flex:1"></span>
       <button class="btn" id="wf-close" onclick="closeModal('worker-modal')">Cancel</button>
       <button class="btn btn-primary" id="wf-save" onclick="saveWorker()">Save Worker</button>
@@ -688,7 +784,7 @@ function closeModal(id) { $(id).classList.remove('open'); }
    there as well — this page cannot reach that file. */
 function fillSectionSelect(el, includeAll, selected) {
   if (!el) return;
-  el.innerHTML = (includeAll ? '<option value="">All sections</option>' : '')
+  el.innerHTML = (includeAll ? '<option value="">All sections</option>' : '<option value="">— Not allocated yet —</option>')
     + SECTIONS.map(s => `<option value="${s.code}">${esc(s.name)}</option>`).join('');
   if (selected != null) el.value = selected;
 }
@@ -898,13 +994,8 @@ function faceHtml(w) {
 
 /* ════════════ WORKER SYSTEM ════════════ */
 
-/* The board is the only view. It used to be one of two, with a
-   section-by-section list beside it, but the list said the same thing at
-   greater length — and a screen showing the same facts twice is a screen
-   where the two can come to disagree.
-
-   The Show inactive tick and the search box belong to the register rather
-   than to a view, so the board reads them from here. */
+/* The chart's own Show inactive tick and search box. The namelist has its
+   own filters, because it is read for different questions. */
 
 function workerShown(w) {
   const showInactive = $('w-show-inactive').checked;
@@ -913,7 +1004,7 @@ function workerShown(w) {
          (!q || `${w.full_name || ''} ${w.role || ''}`.toLowerCase().includes(q));
 }
 
-function renderWorkers() { renderWorkerBoard(); }
+function renderWorkers() { renderList(); renderWorkerBoard(); }
 
 /* What a name on the board says when you rest on it. The two dates are here
    rather than on the chip itself because the chip is a name and a face — a
@@ -1016,7 +1107,8 @@ const BOARD_OTHER = '(other)';
    holds it, because a row going while somebody sits in it would drop them
    into Other. The eight built in cannot be removed. */
 const BUILTIN_ROLE_COUNT = ROLES.length;
-let customRoles = [];
+let customRoles = [];   // the added roles, as saved
+let savedRoles  = [];   // what nops_maint_config holds
 const isCustomRole = r => customRoles.some(x => x.toLowerCase() === String(r).trim().toLowerCase());
 
 function applyCustomRoles(list) {
@@ -1036,62 +1128,89 @@ async function loadCustomRoles() {
   try {
     const { data, error } = await _supabase.from('nops_maint_config')
       .select('txt_value').eq('key', 'worker_roles').maybeSingle();
-    if (error || !data) { applyCustomRoles([]); return; }
+    if (error || !data) { savedRoles = []; applyCustomRoles([]); return; }
     const list = JSON.parse(data.txt_value || '[]');
     applyCustomRoles(Array.isArray(list) ? list : []);
-  } catch (e) { applyCustomRoles([]); }
+    savedRoles = customRoles.slice();
+  } catch (e) { savedRoles = []; applyCustomRoles([]); }
 }
 
 async function writeCustomRoles(list) {
   const { error } = await _supabase.from('nops_maint_config').upsert({
     key: 'worker_roles', txt_value: JSON.stringify(list),
-    note: 'Roles added by hand on the Worker System board',
+    note: 'Roles added by hand on the Worker Namelist',
     updated_by: userEmail || null, updated_at: new Date().toISOString()
   }, { onConflict: 'key' });
   return error;
 }
 
-function openAddRole() {
-  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
+/* MANAGE ROLES IS A WINDOW WITH ITS OWN SAVE. Adding and removing in it
+   changes only `roleDraft`; Save writes the list and Cancel throws the
+   draft away, so a role added and then cancelled was never stored -- the
+   fault the office found when this lived on the board. */
+let roleDraft = null;
+
+function openManageRoles() {
+  if (!editHere()) { alert('Roles are managed on the Worker Namelist.'); return; }
+  roleDraft = customRoles.slice();
   $('rf-name').value = '';
-  $('rf-why').textContent = 'A new row on the board, and a role you can pick on a worker\'s record.';
-  $('rf-why').style.color = '';
+  roleSay('');
+  drawRoleDraft();
   openModal('role-modal');
   setTimeout(() => $('rf-name').focus(), 30);
 }
 
-async function saveCustomRole() {
-  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
-  if (!mayDo('workers', 'manage',
-      'You do not have permission to change the board. Ask an admin to grant it in Module Assess Control.')) return;
-  const name = $('rf-name').value.trim().replace(/\s+/g, ' ');
-  const say = (t) => { $('rf-why').textContent = t; $('rf-why').style.color = '#b91c1c'; };
-  if (!name) { say('Type the role name.'); return; }
-  if (/['"<>\\]/.test(name)) { say('Letters, numbers and spaces only.'); return; }
-  if (/^others?$/i.test(name)) { say('"Other" is kept for roles nobody recognises. Pick another name.'); return; }
-  if (isKnownRole(name)) { say(`"${name}" is already a row on the board.`); return; }
-  $('rf-save').disabled = true;
-  await loadCustomRoles();                       // somebody else may have added one meanwhile
-  const err = await writeCustomRoles(customRoles.concat([name]));
-  $('rf-save').disabled = false;
-  if (err) { say('Could not save: ' + err.message); return; }
-  await loadCustomRoles();
-  closeModal('role-modal');
-  renderWorkers();
+function roleSay(t) { $('rf-why').textContent = t; $('rf-why').style.color = t ? '#b91c1c' : ''; }
+
+const roleHeld = name => workers.filter(w => String(w.role || '').trim().toLowerCase() === name.toLowerCase());
+
+function drawRoleDraft() {
+  const n = roleDraft.length;
+  $('rf-list').innerHTML = n ? roleDraft.map(r => {
+    const held = roleHeld(r).length;
+    return `<div class="rf-item"><span>${esc(r)}</span>${held
+      ? `<small>${held} worker${held === 1 ? '' : 's'}</small>`
+      : `<button class="rf-x" onclick="dropRoleDraft('${esc(r)}')" title="Remove this role">&#10005;</button>`}</div>`;
+  }).join('') : '<div class="rf-none">No role added yet. The eight built-in roles are always there.</div>';
 }
 
-async function removeCustomRole(name) {
-  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
+function addRoleDraft() {
+  const name = $('rf-name').value.trim().replace(/\s+/g, ' ');
+  if (!name) { roleSay('Type the role name.'); return; }
+  if (/['"<>\\]/.test(name)) { roleSay('Letters, numbers and spaces only.'); return; }
+  if (/^others?$/i.test(name)) { roleSay('"Other" is kept for roles nobody recognises. Pick another name.'); return; }
+  const builtin = ROLES.slice(0, BUILTIN_ROLE_COUNT).some(x => x.toLowerCase() === name.toLowerCase());
+  if (builtin || roleDraft.some(x => x.toLowerCase() === name.toLowerCase())) { roleSay(`"${name}" is already a role.`); return; }
+  roleDraft.push(name);
+  $('rf-name').value = '';
+  roleSay('');
+  drawRoleDraft();
+  $('rf-name').focus();
+}
+
+/* A role can go only while nobody, active or not, holds it: a row going
+   while somebody sits in it would drop them into Other. */
+function dropRoleDraft(name) {
+  if (roleHeld(name).length) { roleSay(`Somebody still holds "${name}". Change their role first.`); return; }
+  roleDraft = roleDraft.filter(r => r.toLowerCase() !== name.toLowerCase());
+  drawRoleDraft();
+}
+
+async function saveRoles() {
+  if (!editHere()) { alert('Roles are managed on the Worker Namelist.'); return; }
   if (!mayDo('workers', 'manage',
-      'You do not have permission to change the board. Ask an admin to grant it in Module Assess Control.')) return;
-  const held = workers.filter(w => boardRoleOf(boardPos(w)) === name);
-  if (held.length) { alert(`${held.length} worker(s) still hold "${name}" (Show inactive counts too). Move them to another row first.`); return; }
-  if (!confirm(`Remove the role "${name}" from the board?`)) return;
-  await loadCustomRoles();
-  const err = await writeCustomRoles(customRoles.filter(r => r.toLowerCase() !== name.toLowerCase()));
-  if (err) { alert('Could not save: ' + err.message); return; }
-  await loadCustomRoles();
-  renderWorkers();
+      'You do not have permission to change the roles. Ask an admin to grant it in Module Assess Control.')) return;
+  if ($('rf-name').value.trim()) { addRoleDraft(); if ($('rf-name').value.trim()) return; }
+  $('rf-save').disabled = true;
+  try {
+    const error = await writeCustomRoles(roleDraft);
+    if (error) { roleSay('Could not save the roles: ' + (error.message || error)); return; }
+    applyCustomRoles(roleDraft);
+    savedRoles = customRoles.slice();
+    roleDraft = null;
+    closeModal('role-modal');
+    renderWorkers();
+  } finally { $('rf-save').disabled = false; }
 }
 
 function boardRoleOf(w) {
@@ -1100,59 +1219,118 @@ function boardRoleOf(w) {
   return hit ? hit.key : BOARD_OTHER;
 }
 
-/* ── THE BOARD IS A RECORD UNTIL SOMEBODY PRESSES EDIT ───────────────────
-   The office asked for it in one line: *"help to add save button and edit
-   button. Editable only when user click edit button."*
+/* ── THE BOARD IS AN ORGANISATION CHART, AND ONLY THAT ──────────────────
+   The office: change things on the Worker Namelist, and let the Worker
+   System only SHOW who is in which place and which job, like an
+   organisation chart. So nothing on the board writes: no Edit, no drag, no
+   Add, no cross. A name still opens its record, read-only. Adding,
+   moving, editing and rejecting a worker, and adding or removing a role,
+   are all on the namelist, each with its own Save. */
+const boardPos = w => ({ section: w.section || '', role: w.role || null });
 
-   THEY ARE RIGHT, AND WHAT THEY WERE LOOKING AT IS WHY. Every drag on this
-   board wrote to the register the moment the name landed — one UPDATE, no
-   confirm, nothing on screen saying it had happened. A drag is the easiest
-   gesture on a trackpad to make by accident, and moving a name moves which
-   nursery pays them and which tick sheets they appear on. A board that
-   writes on contact cannot tell a decision from a sleeve.
+/* Which view is open: the namelist (#list, the default) or the board
+   (#chart). One page, so there is one worker form and one set of rules. */
+let VIEW = 'list';
+const editHere = () => VIEW === 'list' && may('workers', 'manage');
 
-   SO THERE ARE TWO STATES AND THE DIFFERENCE IS VISIBLE. In VIEW nothing on
-   the board moves: no chip is draggable, no cell offers Add, no signup
-   offers the ✕, and a record opens read-only. In EDIT the board is exactly
-   what it always was, the strip is tinted, and the moves are a DRAFT.
+/* #chart opens the board, anything else the namelist. The back icon follows
+   the view: out to the 555 Team page from the namelist, back to the namelist
+   from the chart. */
+function showView() {
+  VIEW = location.hash === '#chart' ? 'chart' : 'list';
+  $('tab-list').classList.toggle('hidden', VIEW !== 'list');
+  $('tab-workers').classList.toggle('hidden', VIEW !== 'chart');
+  const back = $('page-back');
+  const label = VIEW === 'chart' ? 'Back to Worker Namelist' : 'Back to Nursery 555 Team';
+  back.setAttribute('href', VIEW === 'chart' ? '#list' : 'scan_admin.html');
+  back.title = label; back.setAttribute('aria-label', label);
+  document.title = (VIEW === 'chart' ? 'Worker System' : 'Worker Namelist') + ' — 555 FC Portal';
+  closeModal('role-modal'); closeModal('worker-modal');
+  renderWorkers();
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', showView);
 
-   A DRAFT, NEVER A WRITE PER DRAG — the same shape as Where Each Job Is
-   Done, and for its reasons: a move stored before Save cannot be cancelled,
-   and a round trip per chip somebody tried is a board that fights back.
-   `boardDraft` is null in view and holds only the workers who MOVED in
-   edit, so Save knows exactly what it is being asked to write and Cancel
-   has something real to throw away.
+/* A worker is ACTIVE unless the register says otherwise: a rejected signup
+   is inactive too, which the chart treats it as. */
+const isActiveW = w => w.active !== false && !w.rejected_at;
+const sectionOf = w => String(w.section || '').trim().toUpperCase();
 
-   WHAT THE DRAFT DOES NOT HOLD is a whole record: adding a worker, editing
-   one, and rejecting a signup are their own acts with their own Save and
-   their own confirm, and queueing a photo upload and a PIN behind this
-   button would be a second, thinner save. They are simply not OFFERED
-   outside edit mode — which is the half the office asked for. A record
-   saved from the form takes that worker OUT of the draft (see saveWorker),
-   because the form is the more specific statement about that person. */
-let boardDraft = null;           // null = view; {id: {section, role}} = editing
-let _bdSaving  = false;
+/* The location is the place the section is in (Pre Nursery, Main Nursery,
+   Estate, Others), off the shared list the chart and the Location card read,
+   with the section code under it. */
+function locationOfW(code) {
+  if (!code) return { name: 'Not allocated', code: '' };
+  const loc = LOC.locationOf ? LOC.locationOf(code) : null;
+  return { name: loc ? loc.name : code, code: loc ? code : '' };
+}
 
-const boardEditing = () => !!boardDraft;
-const boardMoves   = () => Object.keys(boardDraft || {}).length;
+function fillListLocations() {
+  const sel = $('wl-loc'), keep = sel.value;
+  const names = [...new Set(workers.map(w => locationOfW(sectionOf(w)).name))];
+  const order = ['Pre Nursery', 'Main Nursery', 'Estate', 'Others', 'Not allocated'];
+  names.sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  sel.innerHTML = '<option value="">All locations</option>' +
+    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if (names.includes(keep)) sel.value = keep;
+  if (sel._cfRefresh) sel._cfRefresh();
+}
 
-/* Where a name is drawn: the draft if it has been moved, the register
-   otherwise. `boardRoleOf` reads `.role` only, so a draft entry answers it
-   exactly as a worker row does. */
-function boardPos(w) {
-  const d = boardDraft && boardDraft[w.id];
-  return d || { section: w.section || '', role: w.role || null };
+const PENCIL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const CROSS  = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const editBtn = (w) => `<button class="wl-ic" onclick="openWorker(${w.id})" title="Edit ${esc(w.full_name)}" aria-label="Edit ${esc(w.full_name)}">${PENCIL}<span class="sr-only">Edit</span></button>`;
+
+function renderList() {
+  if (!$('wl-body')) return;
+  const can = may('workers', 'manage');
+  $('wl-acts').classList.toggle('hidden', !can);
+  fillListLocations();
+  const q = ($('wl-q').value || '').trim().toLowerCase();
+  const locF = $('wl-loc').value, stF = $('wl-st').value;
+  $('wl-n-all').textContent = workers.length;
+  $('wl-n-on').textContent  = workers.filter(isActiveW).length;
+  $('wl-n-off').textContent = workers.filter(w => !isActiveW(w)).length;
+
+  /* WAITING TO BE ALLOCATED: active signups filed under no section. They
+     are the namelist's to-do, so they sit above it: Edit gives them a
+     location and a role, the cross turns the registration down. */
+  const pending = workers.filter(w => isActiveW(w) && !sectionOf(w));
+  $('wl-pending').innerHTML = pending.length ? `
+    <div class="wl-pend">
+      <div class="wl-pend-head">Waiting to be allocated · ${pending.length}<span>Signed up, but not filed under a location yet${can ? ' — Edit to give them a location, ✕ to reject the registration' : ''}.</span></div>
+      ${pending.map(w => `<div class="wl-pend-row" data-id="${w.id}">
+          <span class="wl-name">${faceHtml(w)}<span>${esc(w.full_name)}</span></span>
+          <small>${esc(w.role || 'No role yet')}${w.registered_on ? ' · ' + esc(fmtDay(w.registered_on)) : ''}</small>
+          ${can ? editBtn(w) + `<button class="wl-ic x" onclick="rejectWorker(${w.id})" title="Reject ${esc(w.full_name)}'s registration" aria-label="Reject ${esc(w.full_name)}'s registration">${CROSS}<span class="sr-only">Reject</span></button>` : ''}
+        </div>`).join('')}
+    </div>` : '';
+
+  const list = workers.slice().sort((a, b) =>
+    (isActiveW(b) - isActiveW(a)) || String(a.full_name || '').localeCompare(String(b.full_name || '')));
+  const rows = list.filter(w => {
+    const on = isActiveW(w);
+    if (stF === 'on' && !on) return false;
+    if (stF === 'off' && on) return false;
+    if (locF && locationOfW(sectionOf(w)).name !== locF) return false;
+    return !q || `${w.full_name || ''} ${w.role || ''}`.toLowerCase().includes(q);
+  });
+  $('wl-body').innerHTML = rows.length ? rows.map((w, i) => {
+    const on = isActiveW(w), loc = locationOfW(sectionOf(w));
+    const st = !on ? (isRejected(w) ? 'Rejected' : 'Inactive') : 'Active';
+    return `<tr class="${on ? '' : 'is-off'}" data-id="${w.id}">
+      <td class="c">${i + 1}</td>
+      <td><span class="wl-name">${faceHtml(w)}<span>${esc(w.full_name)}</span></span></td>
+      <td>${esc(w.role || '—')}</td>
+      <td class="wl-loc">${esc(loc.name)}${loc.code ? `<small>${esc(loc.code)}</small>` : ''}</td>
+      <td><span class="wl-st ${on ? 'on' : 'off'}">${st}</span></td>
+      <td class="r">${can ? editBtn(w) : ''}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" class="wl-empty">${workers.length ? 'No worker matches.' : 'No worker on the register yet.'}</td></tr>`;
+  $('wl-note').textContent = can ? (lastUpdatedLine() + '') : 'You can look, but adding or changing a worker needs the Worker System add & edit permission.';
 }
 
 function renderWorkerBoard() {
   const box     = $('worker-board');
-  /* TWO DIFFERENT QUESTIONS, and folding them together is how a gate
-     becomes a paint. `canEdit` is whether this person may EVER write to the
-     register — the permission, unchanged. `editing` is whether the board is
-     unlocked right now. No Edit button is drawn without the first; nothing
-     on the board moves without the second. */
-  const canEdit = may('workers', 'manage');
-  const editing = boardEditing();
   const shown   = workers.filter(workerShown);
   /* INACTIVE IS NOT ON THE BOARD, ticked or not. The office: an inactive
      worker sitting in a column, among the people who work there, is in the
@@ -1195,8 +1373,7 @@ function renderWorkerBoard() {
   const head =
     `<tr class="bd-divs"><th class="bd-corner"></th>` +
     cols.map(d => `<th colspan="${d.sections.length}"><span class="bd-div">${esc(d.name)}</span></th>`).join('') +
-    `</tr><tr class="bd-secs"><th class="bd-corner">${editing && canEdit
-        ? '<button class="bd-role-add" onclick="openAddRole()" title="Add a new role row">+ Add role</button>' : ''}</th>` +
+    `</tr><tr class="bd-secs"><th class="bd-corner"></th>` +
     flat.map(c => `<th><span class="bd-sec">${esc(c)}</span></th>`).join('') +
     `</tr>`;
 
@@ -1205,25 +1382,13 @@ function renderWorkerBoard() {
     const cells = flat.map(c => {
       const chips = at(c, r.key).map(w => `
         <span class="wchip ${w.active === false ? 'wchip-off' : ''}"
-              ${editing ? 'draggable="true"' : ''}
-              ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
               onclick="openWorker(${w.id})"
               title="${esc(workerTitle(w))}"
               >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>`).join('');
-      // Adding from the Other row would have to invent a role for them, so
-      // that one row takes drops but does not offer to add.
-      const add = (editing && r.key !== BOARD_OTHER)
-        ? `<button class="wchip-add" onclick="openWorker(null, '${esc(c)}', '${esc(r.key)}')">+ Add person</button>`
-        : '';
-      return `<td class="bd-cell" ondragover="boardDragOver(event)" ondragleave="boardDragLeave(event)"
-                  ondrop="boardDrop(event, '${esc(c)}', '${esc(r.key)}')">
-                <div class="bd-cell-in">${chips}${add}</div></td>`;
+      return `<td class="bd-cell">
+                <div class="bd-cell-in">${chips}</div></td>`;
     }).join('');
-    /* Only an added role, only in Edit, only while nobody at all holds it. */
-    const held = r.custom && workers.some(w => boardRoleOf(boardPos(w)) === r.key);
-    const rx = (r.custom && editing && canEdit && !held)
-      ? `<button class="bd-role-x" onclick="removeCustomRole('${esc(r.key)}')" title="Remove this role">&#10005;</button>` : '';
-    return `<tr><th class="bd-role"><span class="bd-role-name">${esc(r.label)}</span>${rx}
+    return `<tr><th class="bd-role"><span class="bd-role-name">${esc(r.label)}</span>
                   <span class="bd-role-count">${total}</span></th>${cells}</tr>`;
   }).join('');
 
@@ -1250,17 +1415,12 @@ function renderWorkerBoard() {
   const rejected  = offList.filter(w =>  isRejected(w));
   const leftList  = offList.filter(w => !isRejected(w));
 
-  const pendChip = (w, offer) => `
+  const pendChip = (w) => `
         <span class="pend-item">
           <span class="wchip ${w.active === false ? 'wchip-off' : ''}"
-                ${editing ? 'draggable="true"' : ''}
-                ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
                 onclick="openWorker(${w.id})"
                 title="${esc(workerTitle(w))}"
-                >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>${offer
-          ? `<button class="pend-x" onclick="rejectWorker(${w.id})"
-                     title="Reject ${esc(w.full_name)}'s registration">&#10005;</button>`
-          : ''}</span>`;
+                >${faceHtml(w)}<span>${esc(w.full_name)}</span></span></span>`;
 
   /* Where an inactive worker was filed, so a list of names off the board
      still says which nursery and which job each one had. */
@@ -1286,7 +1446,7 @@ function renderWorkerBoard() {
       <div class="pend-head">
         <span class="off-title">Inactive</span>
         <span class="off-count">${offList.length}</span>
-        <span class="pend-why">Not on the board. Open a name and set them Active to put them back.</span>
+        <span class="pend-why">Not on the chart. Set them Active on the Worker Namelist to put them back.</span>
       </div>
       ${offGroup('off-grp', 'Left / inactive', leftList)}
       ${offGroup('pend-rej', 'Registration rejected', rejected)}
@@ -1297,54 +1457,20 @@ function renderWorkerBoard() {
       ${pending.length ? `<div class="pend-head">
         <span class="pend-title">Waiting to be allocated</span>
         <span class="pend-count">${pending.length}</span>
-        <span class="pend-why">Signed up, but not filed under a nursery yet${
-          editing ? ' — drag a name into a column below, or ✕ to reject the registration'
-          : canEdit ? ' — press Edit above to file one' : ''}.</span>
+        <span class="pend-why">Signed up, but not filed under a nursery yet — allocate them on the Worker Namelist.</span>
       </div>
-      <div class="pend-list">${pending.map(w => pendChip(w, editing)).join('')}</div>` : ''}
+      <div class="pend-list">${pending.map(w => pendChip(w)).join('')}</div>` : ''}
     </div>` : '';
 
   const hiddenNote = (workers.some(w => w.active === false) && !$('w-show-inactive').checked)
     ? ' Inactive workers are hidden - tick Show inactive to see them.' : '';
 
-  /* The instructions that used to sit under the board are gone — the two
-     things they explained (drag to move, click to open) are what anybody
-     tries first, and a paragraph read once on the first visit is furniture
-     on every visit after it.
-
-     What is NOT obvious still gets said: that this person may not move
-     anybody, and that somebody on the register is being hidden from them.
-     Neither can be worked out by looking. */
-  const note = (canEdit ? '' : 'You can look, but moving a worker needs the Workers permission.')
-             + hiddenNote;
-
-  /* ── The strip ──────────────────────────────────────────────────────────
-     EDIT IS DRAWN ONLY FOR SOMEBODY WHO MAY WRITE. A button that refuses
-     the press is worse than no button, because it looks like a door.
-
-     Save is offered with nothing moved, DISABLED and saying so, rather
-     than hidden: a button that appears halfway through is a button nobody
-     knows is coming, and the count beside it is where somebody reads how
-     many moves are being held. Cancel is how you leave with none. */
-  const n = boardMoves();
-  const btns = !canEdit ? ''
-    : editing
-      ? `<button class="btn" onclick="boardCancel()">Cancel</button>
-         <button class="btn btn-primary" id="bd-save" onclick="boardSave()" ${n ? '' : 'disabled'}>
-           Save${n ? `<span class="bd-bar-n">${n}</span>` : ''}</button>`
-      : `<button class="btn btn-sm" onclick="boardEdit()">&#9998; Edit</button>`;
-
-  const when = editing
-    ? `<span class="bd-bar-live">Editing</span> &middot; ` + (n
-        ? `${n} ${n === 1 ? 'name has' : 'names have'} been moved and
-           <b>nothing is saved yet</b> — press Save, or Cancel to put them back.`
-        : `drag a name to move it. Nothing is written until you press Save.`)
-    : esc(lastUpdatedLine());
-
+  /* NOTHING ON THE CHART WRITES, so the strip carries no button: it says
+     when the register was last touched and where it is changed. */
+  const note = hiddenNote;
   box.innerHTML =
-    `<div class="bd-bar ${editing ? 'is-edit' : ''}">
-       <div class="bd-bar-when">${when}</div>
-       <div class="bd-bar-btns">${btns}</div>
+    `<div class="bd-bar">
+       <div class="bd-bar-when">${esc(lastUpdatedLine())} To add or change a worker, use the Worker Namelist.</div>
      </div>
      ${pendingHtml}
      <div class="card bd-wrap"><table class="bd"><thead>${head}</thead><tbody>${body}</tbody></table></div>
@@ -1389,180 +1515,6 @@ function whoName(v) {
     ? (MJMPeople.name(v) || v) : v;
 }
 
-/* ── Edit, Cancel, Save ──────────────────────────────────────────────────
-   The permission is asked at EVERY one of these, not only when the button
-   was drawn: a strip rendered before somebody's access changed is still
-   sitting on the screen, and `boardSave` is reachable from a console
-   whatever the stylesheet is doing. */
-function boardEdit() {
-  if (!mayDo('workers', 'manage',
-      'You do not have permission to move a worker. Ask an admin to grant it in Module Assess Control.')) return;
-  if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
-  boardDraft = {};
-  renderWorkers();
-}
-
-/* Cancel THROWS MOVES AWAY, so it says so first. With nothing moved it is
-   simply the way out of edit mode and asks nothing — a confirm over an
-   empty draft is a box people learn to dismiss. */
-function boardCancel() {
-  const n = boardMoves();
-  if (n && !confirm(`Put ${n} ${n === 1 ? 'name' : 'names'} back where ${n === 1 ? 'it was' : 'they were'}?\n\n`
-      + 'Nothing has been saved, so the board goes back to the register as it stands.')) return;
-  boardDraft = null;
-  renderWorkers();
-}
-
-/* ONE WRITE PER WORKER, SENT TOGETHER. They are independent rows carrying
-   different values, so there is no single statement that does it — and an
-   upsert would have to carry every NOT NULL column of a row this form has
-   not got. A `for` loop with an await in it is one round trip per name on
-   a nursery line; `Promise.all` is one wave.
-
-   THE COUNT IS WHAT CAME BACK. A worker whose write was refused STAYS in
-   the draft with their name on screen, so Save can be pressed again — the
-   opposite of reporting success over a board that only agrees with itself.
-   A draft entry whose worker has since left the register is dropped rather
-   than written into nothing. */
-async function boardSave() {
-  if (!boardDraft || _bdSaving) return;
-  if (!mayDo('workers', 'manage',
-      'You do not have permission to move a worker. Ask an admin to grant it in Module Assess Control.')) return;
-  const ids = Object.keys(boardDraft);
-  if (!ids.length) return;
-
-  const btn = $('bd-save');
-  _bdSaving = true;
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  try {
-    const now = new Date().toISOString();
-    const jobs = ids.map(k => {
-      const id = Number(k);
-      const w  = workers.find(x => x.id === id);
-      const p  = boardDraft[k];
-      if (!w) return { id, gone: true };
-      return _supabase.from('mjmnpayroll_workers')
-        .update({ section: p.section, role: p.role,
-                  // Kept in step so anything still reading the original
-                  // columns agrees with the board, as saveWorker does.
-                  nursery: p.section, job_title: p.role,
-                  updated_at: now, updated_by: userEmail || null })
-        .eq('id', id)
-        .then(r => ({ id, error: r.error, name: w.full_name }),
-              e => ({ id, error: e, name: w.full_name }));
-    });
-    const out  = await Promise.all(jobs);
-    const bad  = out.filter(r => r && r.error);
-
-    /* Everything that WENT comes off the draft; everything refused stays on
-       it, so Save can be pressed again with those names still in their new
-       boxes. A clean save leaves edit mode — the board locks itself behind
-       the person who finished with it. */
-    if (bad.length) {
-      const kept = {};
-      bad.forEach(r => { kept[r.id] = boardDraft[r.id]; });
-      boardDraft = kept;
-    } else {
-      boardDraft = null;
-    }
-
-    /* Rebuilt from the DATABASE and not from the screen, the rule the
-       reject cross already follows: a board agreeing with itself and not
-       with the table is worse than one that takes a second. */
-    await loadWorkers();
-    resolveMaintWorkers();          // a role or a section changes the tick sheets
-
-    if (bad.length) {
-      renderWorkers();
-      alert('Saved ' + (out.length - bad.length) + ' of ' + out.length + '.\n\n'
-        + 'These were not moved and are still on the board waiting:\n'
-        + bad.map(r => '• ' + r.name + ' — ' + (r.error.message || r.error)).join('\n'));
-    }
-  } finally {
-    /* Always redrawn, so a throw anywhere above cannot leave Saving… on a
-       dead button with no way back but a reload. */
-    _bdSaving = false;
-    renderWorkers();
-  }
-}
-
-/* A RELOAD OR A TYPED ADDRESS NEVER REACHES THIS PAGE'S OWN DIALOG, so the
-   browser's is asked for instead. Only ever raised over moves that really
-   are unsaved. */
-window.addEventListener('beforeunload', (e) => {
-  if (!boardMoves()) return;
-  e.preventDefault();
-  e.returnValue = '';
-});
-
-/* -- Moving a name ------------------------------------------------------
-   The board writes the same two columns the Edit Worker form writes, and
-   keeps the original nursery/job_title pair in step exactly as saveWorker
-   does, so nothing still reading the old names disagrees with the board.
-
-   THE MOVE IS A DRAFT and the database is not told until Save. It is still
-   drawn the instant the name lands: a chip that hangs in its old box reads
-   as a drag that did not take, and it is the second attempt that causes the
-   trouble.
-   ---------------------------------------------------------------------- */
-let _dragId = null;
-
-function boardDragStart(ev, id) {
-  /* THE EDIT GATE AND THE PERMISSION ARE BOTH ASKED. `draggable` is only
-     written onto a chip while editing, and an attribute is a paint: a chip
-     can be made draggable from a console, and the drop would then write. */
-  if (!boardEditing() || !may('workers', 'manage')) { ev.preventDefault(); return; }
-  _dragId = id;
-  ev.dataTransfer.effectAllowed = 'move';
-  // Firefox will not start a drag at all unless something is carried.
-  try { ev.dataTransfer.setData('text/plain', String(id)); } catch (_) {}
-  ev.currentTarget.classList.add('wchip-drag');
-}
-
-function boardDragEnd(ev) {
-  ev.currentTarget.classList.remove('wchip-drag');
-  _dragId = null;
-  document.querySelectorAll('.bd-cell-over').forEach(el => el.classList.remove('bd-cell-over'));
-}
-
-function boardDragOver(ev) {
-  if (_dragId == null) return;              // something dragged in from outside
-  ev.preventDefault();
-  ev.dataTransfer.dropEffect = 'move';
-  ev.currentTarget.classList.add('bd-cell-over');
-}
-
-function boardDragLeave(ev) { ev.currentTarget.classList.remove('bd-cell-over'); }
-
-function boardDrop(ev, section, roleKey) {
-  ev.preventDefault();
-  ev.currentTarget.classList.remove('bd-cell-over');
-  const id = _dragId;
-  _dragId = null;
-  if (id == null) return;
-  if (!boardEditing()) return;            // a drop that arrived with the board locked
-  const w = workers.find(x => x.id === id);
-  if (!w) return;
-  if (!mayDo('workers', 'manage',
-      'You do not have permission to move a worker. Ask an admin to grant it in Module Assess Control.')) return;
-
-  // Other is not a role anybody holds. Dropped there, a worker changes
-  // section and keeps whatever role they arrived with.
-  const now  = boardPos(w);
-  const role = (roleKey === BOARD_OTHER) ? (now.role || null) : roleKey;
-  if ((now.section || '') === section && (now.role || '') === (role || '')) return;   // nothing moved
-
-  /* DRAGGED BACK TO WHERE THEY STARTED IS NOT A MOVE. Without this the
-     draft would carry a worker whose two columns are what the register
-     already holds, Save would write a row that changes nothing, and the
-     count beside the button would be asking the office to save work they
-     had just undone. */
-  if ((w.section || '') === section && (w.role || '') === (role || '')) delete boardDraft[id];
-  else boardDraft[id] = { section, role };
-
-  renderWorkers();
-}
-
 /* ── Turning a signup down ───────────────────────────────────────────────
    Somebody signed themselves up and the office does not want them. Until
    now the only thing that could be done about it was to leave them in the
@@ -1591,10 +1543,9 @@ function boardDrop(ev, section, roleKey) {
 async function rejectWorker(id) {
   const w = workers.find(x => x.id === id);
   if (!w) return;
-  /* The cross is only DRAWN while the board is unlocked, and a drawn
-     control is a paint — this is the gate. Rejecting a signup is a write to
-     the register like any other, so it answers to the same button. */
-  if (!boardEditing()) { alert('Press Edit above the board first.'); return; }
+  /* The cross is only DRAWN on the namelist, and a drawn control is a
+     paint -- this is the gate. */
+  if (!editHere()) { alert('Registrations are handled on the Worker Namelist.'); return; }
   if (!mayDo('workers', 'manage',
       'You do not have permission to reject a registration. Ask an admin to grant it in Module Assess Control.')) return;
 
@@ -1603,9 +1554,8 @@ async function rejectWorker(id) {
     + 'not record that this was a rejection — they will simply come off the board. '
     + 'Run shared/RUN_ME_worker_rejected.sql to switch it on.';
   if (!confirm('Reject ' + w.full_name + '\u2019s registration?\n\n'
-      + 'They come off the board and stay on the register as a rejected signup. '
-      + 'Nothing is deleted — tick Show inactive to find them again, and setting '
-      + 'them Active on their own record undoes it.' + untagged)) return;
+      + 'They stay on the register as a rejected signup, marked Inactive. '
+      + 'Nothing is deleted, and setting them Active on their own record undoes it.' + untagged)) return;
 
   const row = { active: false, updated_at: new Date().toISOString(), updated_by: userEmail || null };
   // Writing a column the table does not have fails the whole save.
@@ -1613,11 +1563,6 @@ async function rejectWorker(id) {
 
   const { error } = await _supabase.from('mjmnpayroll_workers').update(row).eq('id', id);
   if (error) { alert('Could not reject ' + w.full_name + '.\n\n' + (error.message || error)); return; }
-
-  /* A rejection is the later and more specific statement about this person,
-     so any move still waiting in the draft for them is dropped rather than
-     written over the top of it by the next Save. */
-  if (boardDraft) delete boardDraft[id];
 
   await loadWorkers();
   resolveMaintWorkers();          // an inactive worker is off the tick sheets
@@ -1706,7 +1651,7 @@ async function savePin(id, el) {
 
 function fillSectionSelect(el, includeAll, selected) {
   if (!el) return;
-  el.innerHTML = (includeAll ? '<option value="">All sections</option>' : '') +
+  el.innerHTML = (includeAll ? '<option value="">All sections</option>' : '<option value="">— Not allocated yet —</option>') +
     SECTIONS.map(s => `<option value="${s.code}">${esc(s.name)}</option>`).join('');
   if (selected != null) el.value = selected;
 }
@@ -1742,9 +1687,10 @@ function openWorker(id, section, role) {
   if (!mayDo('workers', 'manage',
       'You do not have permission to add or edit workers. Ask an admin to grant it in Module Assess Control.')) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
-  /* Add is only offered while editing, so a press with no id and the board
-     locked is a console call or a stale button. Nothing to show. */
-  _wfReadOnly = !boardEditing();
+  /* EDITABLE ON THE NAMELIST, READ-ONLY ON THE CHART. Add is only offered
+     on the namelist, so a press with no id on the chart is a console call
+     or a stale button. Nothing to show. */
+  _wfReadOnly = !editHere();
   if (_wfReadOnly && !id) return;
   /* EVERY BOX IS ENABLED FIRST, and then the things that know better
      disable their own. Without this a form opened once with the board
@@ -1757,9 +1703,13 @@ function openWorker(id, section, role) {
     .forEach(el => { el.disabled = false; });
   const w = id ? workers.find(x => x.id === id) : null;
   editWorkerId = w ? w.id : null;
-  fillSectionSelect($('wf-section'), false, w?.section || section || SECTIONS[0].code);
-  $('wf-section-row').classList.add('hidden');
-  $('wf-move-btn').classList.toggle('hidden', !w);   // only an existing worker moves
+  /* THE LOCATION IS A BOX ON THE FORM now, because the namelist is where
+     somebody is filed and moved. "Not allocated yet" is a real answer -- a
+     signup the office has not placed -- so editing one never files them
+     under the first nursery in the list by accident. */
+  fillSectionSelect($('wf-section'), false, w ? (w.section || '') : (section || ''));
+  $('wf-section-row').classList.toggle('hidden', _wfReadOnly);
+  $('wf-move-btn').classList.add('hidden');
   onWorkerSectionChange();               // titles the modal with that section
   $('wf-name').value   = w?.full_name || '';
   fillRoleSelect(w?.role || w?.job_title || role || '');
@@ -1857,7 +1807,7 @@ function onWorkerRoleChange() {
    and again in the body, so it is read either way. */
 function onWorkerSectionChange() {
   const code  = $('wf-section').value;
-  const label = SECTION_NAME[code] || code;
+  const label = code ? (SECTION_NAME[code] || code) : 'Not allocated yet';
   /* A form headed Edit with no Save on it is a contradiction somebody has
      to work out. With the board locked this is a record being looked at,
      and the heading says that much. */
@@ -1879,7 +1829,7 @@ async function saveWorker() {
   /* The gate, not the paint. Save Worker is hidden on a read-only form and
      every box on it is disabled, and neither of those stops this function
      being called. */
-  if (_wfReadOnly) { alert('Press Edit above the board first.'); return; }
+  if (_wfReadOnly || !editHere()) { alert('Workers are changed on the Worker Namelist.'); return; }
   if (!mayDo('workers', 'manage',
       'You do not have permission to add or edit workers. Ask an admin to grant it in Module Assess Control.')) return;
   const name = $('wf-name').value.trim();
@@ -1937,7 +1887,6 @@ async function saveWorker() {
        draft for them is therefore stale — left there, the next Save would
        put the row the board was holding back over the top of what was
        keyed here. */
-    if (boardDraft && editWorkerId) delete boardDraft[editWorkerId];
     closeModal('worker-modal');
     await loadWorkers();
     resolveMaintWorkers();          // the maintenance sheets read this register
@@ -1981,7 +1930,7 @@ async function saveWorker() {
     await loadCustomRoles();
     await loadWorkers();
     addOrphanSections();
-    renderWorkers();
+    showView();
 
     $('loading').classList.add('hidden');
     $('main').classList.remove('hidden');
