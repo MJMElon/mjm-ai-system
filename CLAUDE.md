@@ -12003,8 +12003,9 @@ database.
 Work Maintenance -> Settings -> Where Each Job Is Done -> Edit -> **+ Add job**.
 The office: *"全部东西要在pop out里面决定"*. The window asks the name, a
 description, where it is done (Pre / Main / Both), the side bar (its own entry,
-or under an existing job: TOGETHER in that table is shown and disabled, coming
-soon; SEPARATE is a section under that sheet), where the rows come from
+or under an existing job, which is always a SEPARATE section under that
+sheet; a "together in the same table" option was shown as coming soon and the
+office took it off, and the chip carries no "under ..." wording either), where the rows come from
 (Transplanting one row per nursery with every plot added up, Transplanting one
 row per plot, or rows added by hand), which columns it shows (date, plot,
 batch, remark; quantity always) and how a row is shared (equally among those

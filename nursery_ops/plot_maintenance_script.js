@@ -13344,7 +13344,8 @@ function _jsRowHtml(scope, scopes, editing) {
   const chips = jobs.length
     ? jobs.map(k => {
         const cj = customJob(k, list);
-        const sub = cj && !cj.sidebar && cj.under ? `<span class="jb-under">under ${esc(jobLabel(cj.under))}</span>` : '';
+        /* No "under …" on the chip: the office took it off (under transplanting字眼不需要). */
+        const sub = '';
         const x = cj && editing ? `<button type="button" class="jb-x" data-cj-remove="${esc(k)}" title="Remove this job"
             onclick="jsRemoveJob('${esc(k)}')">×</button>` : '';
         return `<span class="jb-chip${cj ? ' jb-chip-cj' : ''}"${editing ? ' draggable="true"' : ''}
@@ -13409,11 +13410,7 @@ function jsOpenAddJob() {
       <div class="jb-f"><span>Side bar</span>
         ${radio('jb-sb', 'own', 'Its own entry', true)}
         ${radio('jb-sb', 'under', 'Under an existing job', false)}
-        <select id="jb-under" disabled>${opts}</select>
-        <div class="jb-sub" id="jb-attach">
-          ${radio('jb-att', 'together', 'Together in the same table <em>(coming soon)</em>', false, ' disabled')}
-          ${radio('jb-att', 'separate', 'A separate section under it', true)}
-        </div></div>
+        <select id="jb-under" disabled>${opts}</select></div>
       <div class="jb-f"><span>Rows &amp; quantity from</span>
         ${radio('jb-rows', 'tp_nursery', 'Transplanting — one row per nursery (all plots added up)', true)}
         ${radio('jb-rows', 'tp_plot', 'Transplanting — one row per plot', false)}
@@ -13435,13 +13432,14 @@ function jsOpenAddJob() {
   const n = document.getElementById('jb-name');
   if (n) n.focus();
 }
-/* What one answer makes of the others: the attach choice belongs to "under",
-   and a nursery row has no date, plot or batch to show. */
+/* What one answer makes of the others: the job list belongs to "under"
+   (always a separate section under that sheet; "together in the same table"
+   was offered as coming soon and the office took it off), and a nursery row
+   has no date, plot or batch to show. */
 function jsAddJobSide() {
   const pick = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value;
   const under = pick('jb-sb') === 'under';
   const u = document.getElementById('jb-under'); if (u) u.disabled = !under;
-  const at = document.getElementById('jb-attach'); if (at) at.classList.toggle('jb-off', !under);
   const rows = pick('jb-rows');
   ['date', 'plot', 'batch'].forEach(k => {
     const c = document.getElementById('jb-col-' + k);

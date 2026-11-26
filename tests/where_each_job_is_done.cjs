@@ -489,12 +489,12 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
       document.querySelector('input[name="jb-rows"][value="manual"]').checked = true;
       jsAddJob();
     });
-    check('the job lands on the row picked, saying which job it sits under',
+    check('the job lands on the row picked, with no under-wording on the chip',
       await ev(page, () => {
         const c = [...document.querySelectorAll('#js-set-body .jb-chip-cj')];
         return c.map(x => [x.closest('.jb-row').querySelector('.jb-lab b').textContent,
                            x.firstChild.textContent.trim(), (x.querySelector('.jb-under') || {}).textContent]);
-      }), [['Both', 'Racun Rumput', 'under Weeding']]);
+      }), [['Both', 'Racun Rumput', undefined]]);
     check('nothing written before Save',
       await page.evaluate(() => (window.__WRITES || []).length), 0);
     await ev(page, () => jsSave());
