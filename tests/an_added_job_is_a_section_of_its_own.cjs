@@ -151,13 +151,13 @@ async function open(browser, db) {
   {
     const { page, errs } = await boot(browser, {}, 'setting');
     await ev(page, () => { jsEdit(); jsOpenAddJob(); });
-    check('it asks name, description, where, side bar, attach, rows, columns and the split',
+    check('it asks name, description, where, side bar, rows, columns and the split',
       await ev(page, () => ['jb-name', 'jb-desc', 'jb-scope', 'jb-under', 'jb-col-date', 'jb-col-plot', 'jb-col-batch', 'jb-col-remark']
         .map(id => !!document.getElementById(id)).concat(['jb-sb', 'jb-att', 'jb-rows', 'jb-split']
         .map(n => document.querySelectorAll(`input[name="${n}"]`).length))),
-      [true, true, true, true, true, true, true, true, 2, 2, 3, 2]);
-    check('together in the same table is shown and cannot be picked yet',
-      await ev(page, () => document.querySelector('input[name="jb-att"][value="together"]').disabled), true);
+      [true, true, true, true, true, true, true, true, 2, 0, 3, 2]);
+    check('no "together in the same table" option (拿掉)',
+      await ev(page, () => /together in the same table|coming soon/i.test(document.getElementById('jb-dlg').textContent)), false);
     check('one row per nursery takes the date, plot and batch columns away',
       await ev(page, () => ['date', 'plot', 'batch'].map(k => document.getElementById('jb-col-' + k).disabled)), [true, true, true]);
     await ev(page, () => {
