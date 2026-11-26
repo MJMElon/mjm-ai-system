@@ -1013,8 +1013,9 @@ const JOB_SCOPE_PREFIX = 'job_scope:';
    "这边要可以add job", then what a job carries when it is added: its
    name, where it is done (Pre / Main / Both), whether it has a side bar
    entry of its own or sits under an existing job's sheet the way Mengisi
-   Tanah ke Hyplug sits under Seed Planting, its price and unit, and where
-   its quantity comes from. And "添加后这里同步增加": the job is a row on
+   Tanah ke Hyplug sits under Seed Planting, and where its quantity comes
+   from. Its PRICE is set on Nursery Payroll → Settings → Piece Rate, which
+   lists the job as Pending until it has one. And "添加后这里同步增加": the job is a row on
    Worker List for Each Job as soon as it is saved.
 
    ONE nops_maint_config row, `custom_jobs`, a JSON list. The key is made
@@ -1022,7 +1023,7 @@ const JOB_SCOPE_PREFIX = 'job_scope:';
    its scope and its crew rows. Nothing to run in the database. */
 const CUSTOM_JOBS_KEY = 'custom_jobs';
 const CJ_QTY_FROM = { plot: 'Plot seedlings', batch: 'Batch planted qty', keyed: 'Keyed by workers' };
-let customJobs = [];          // [{ key, label, sidebar, under, rate, unit, qtyFrom }]
+let customJobs = [];          // [{ key, label, sidebar, under, qtyFrom }]
 let jobCustomDraft = null;    // the list while Where Each Job Is Done is being edited
 function _cjParse(v) {
   try {
@@ -13355,8 +13356,6 @@ function jsOpenAddJob() {
         <label class="jb-r"><input type="radio" name="jb-sb" value="own" checked onchange="jsAddJobSide()"> Its own entry</label>
         <label class="jb-r"><input type="radio" name="jb-sb" value="under" onchange="jsAddJobSide()"> Under an existing job</label>
         <select id="jb-under" disabled>${opts}</select></div>
-      <div class="jb-f jb-f2"><label><span>Price (RM) · optional</span><input type="number" id="jb-rate" min="0" step="0.0001" inputmode="decimal"></label>
-        <label><span>Unit · optional</span><input type="text" id="jb-unit" maxlength="20" placeholder="e.g. Seedling"></label></div>
       <label class="jb-f"><span>Quantity from</span><select id="jb-qty">
         ${Object.keys(CJ_QTY_FROM).map(k => `<option value="${k}">${esc(CJ_QTY_FROM[k])}</option>`).join('')}</select></label>
       <div class="jb-dlg-err" id="jb-err"></div>
@@ -13385,16 +13384,14 @@ function jsAddJob() {
   if (!label) return say('Key the job name.');
   if (allJobKeys(jobCustomDraft).some(k => kk(jobLabel(k)) === kk(label))) return say(`${label} is already a job.`);
   const side = (document.querySelector('input[name="jb-sb"]:checked') || {}).value || 'own';
-  /* 价钱不需要订先: the price and unit may be left empty and set later. */
-  const rate = v('jb-rate').trim();
-  if (rate !== '' && !(Number(rate) >= 0)) return say('The price has to be a number.');
-  const unit = v('jb-unit').trim();
+  /* THE PRICE IS SET ON THE PAYROLL, not here: "价钱在这里订". Nursery
+     Payroll → Settings → Piece Rate lists this job as Pending until it has
+     one. */
   const scope = JOB_SCOPE_ROWS.includes(v('jb-scope')) ? v('jb-scope') : 'main';
   const job = {
     key: 'cj_' + Date.now().toString(36),
     label, sidebar: side !== 'under',
     under: side === 'under' && PAYROLL_VIEW_KEYS.includes(v('jb-under')) ? v('jb-under') : null,
-    rate: rate === '' ? null : Number(rate), unit: unit || null,
     qtyFrom: CJ_QTY_FROM[v('jb-qty')] ? v('jb-qty') : 'keyed',
   };
   jobCustomDraft.push(job);
@@ -13470,7 +13467,7 @@ async function jsSave() {
       })).concat((cjDraft.length || customJobs.length) ? [{
         key: CUSTOM_JOBS_KEY,
         txt_value: JSON.stringify(cjDraft),
-        note: 'Jobs the office added on Where Each Job Is Done: name, side bar or under which job, price, unit, quantity source.',
+        note: 'Jobs the office added on Where Each Job Is Done: name, side bar or under which job, quantity source. Priced on Nursery Payroll, Piece Rate.',
         updated_by: by,
         updated_at: now,
       }] : []), { onConflict: 'key' }).then(r => r, e => ({ error: e }));

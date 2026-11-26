@@ -1058,6 +1058,79 @@ const RATE_GROUP_NAME = Object.fromEntries(RATE_GROUPS.map(g => [g.code, g.name]
 /* False until the group_code column exists — see loadRates. */
 let _rateGroupCol = true;
 
+/* JOBS ADDED ON WORK MAINTENANCE WAIT HERE FOR A PRICE. The office adds a
+   job on Work Maintenance → Settings → Where Each Job Is Done, and says
+   "价钱在这里订 … 这边要detect到 然后add job那边要有一个pending". So the
+   jobs are read from the same nops_maint_config row that card writes
+   (`custom_jobs`), and one with no rate filed under its key is listed as
+   PENDING above the groups, with Set price opening the ordinary Add Job
+   form already filled in. The rate is an ordinary row of this table whose
+   Used For IS the job key, so nothing new is stored and nothing to run. */
+let maintCustomJobs = [];     // [{ key, label, sidebar, under, qtyFrom, scope }]
+async function loadMaintCustomJobs() {
+  maintCustomJobs = [];
+  const { data, error } = await _supabase.from('nops_maint_config').select('key, txt_value')
+    .then(r => r, e => ({ error: e }));
+  if (error || !data) return;
+  const cj = data.find(r => r && r.key === 'custom_jobs');
+  let list = [];
+  try { list = JSON.parse(String((cj && cj.txt_value) || '[]')); } catch (_) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  const scope = {};
+  data.forEach(r => { const k = String((r && r.key) || ''); if (k.indexOf('job_scope:') === 0) scope[k.slice(10)] = String(r.txt_value || ''); });
+  maintCustomJobs = list.filter(j => j && /^cj_[a-z0-9]+$/.test(String(j.key || '')) && String(j.label || '').trim())
+    .map(j => Object.assign({}, j, { scope: scope[j.key] || 'main' }));
+  /* Used For names the job, and the form offers it. */
+  maintCustomJobs.forEach(j => { CAT_LABEL[j.key] = j.label; });
+  const sel = $('rf-cat');
+  if (sel) {
+    [...sel.querySelectorAll('option[data-cj]')].forEach(o => o.remove());
+    maintCustomJobs.forEach(j => {
+      const o = document.createElement('option');
+      o.value = j.key; o.textContent = j.label; o.dataset.cj = '1';
+      sel.appendChild(o);
+    });
+  }
+}
+function pendingMaintJobs() {
+  return maintCustomJobs.filter(j => !rates.some(r => r.category === j.key));
+}
+/* The Work Maintenance sheet a job sits under, in that page's own words. */
+const MAINT_SHEET_LABEL = { pd: 'P & D — Spraying', manuring: 'Manuring', weeding: 'Weeding',
+  interrow: 'Interrow Spray', loading_seedlings: 'Loading Seedlings', transplanting: 'Transplanting',
+  cull_incentive: 'Culling Monitoring', seed_planting: 'Seed Planting & Hyplug' };
+function _pendingHtml() {
+  const list = pendingMaintJobs();
+  if (!list.length) return '';
+  const where = { pre: 'Pre Nursery', main: 'Main Nursery', both: 'Pre & Main Nursery' };
+  const can = may('rates', 'manage');
+  return `<div class="wsec wsec-pending" id="rate-pending">
+      <div class="wsec-head">
+        <span class="wsec-name">Pending — no price yet</span>
+        <span class="wsec-count">${list.length} job${list.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="wsec-body"><div class="tbl-wrap"><table>
+        <thead><tr><th style="width:44px;">No.</th><th class="l">Job</th><th style="width:220px;">Where</th>
+          <th style="width:200px;">Side bar</th><th style="width:150px;"></th></tr></thead>
+        <tbody>${list.map((j, i) => `<tr data-pending="${esc(j.key)}">
+          <td style="color:var(--text-faint);">${i + 1}</td>
+          <td class="l" style="font-weight:700;color:var(--text-head);">${esc(j.label)}</td>
+          <td>${esc(where[j.scope] || where.main)}</td>
+          <td>${j.sidebar === false && j.under ? 'Under ' + esc(MAINT_SHEET_LABEL[j.under] || j.under) : 'Its own entry'}</td>
+          <td class="r">${can ? `<button class="btn btn-sm btn-primary" onclick="openRateForJob('${esc(j.key)}')">Set price</button>` : ''}</td>
+        </tr>`).join('')}</tbody></table></div></div>
+    </div>`;
+}
+function openRateForJob(key) {
+  const j = maintCustomJobs.find(x => x.key === key);
+  if (!j) return;
+  openRate(null, j.scope === 'pre' ? 'PN' : 'MN');
+  if (!$('rate-modal').classList.contains('open')) return;
+  $('rf-job').value = j.label;
+  $('rf-cat').value = j.key;
+  $('rf-rate').focus();
+}
+
 function renderRates() {
   const codes = RATE_GROUPS.map(g => g.code);
   const ungrouped = rates.filter(r => !codes.includes(r.group_code));
@@ -1066,7 +1139,7 @@ function renderRates() {
   const blocks = RATE_GROUPS.concat(
     ungrouped.length ? [{ code:'', name:'Not grouped yet' }] : []);
 
-  $('rate-groups').innerHTML = blocks.map(g => {
+  $('rate-groups').innerHTML = _pendingHtml() + blocks.map(g => {
     const list = g.code ? rates.filter(r => r.group_code === g.code) : ungrouped;
     const rows = list.length ? list.map((r, i) => `
       <tr>
@@ -6869,6 +6942,7 @@ async function loadRates() {
     .select('*').order('sort_order').order('job_desc');
   if (error) { flagSetup(error.message); return; }
   rates = data || [];
+  await loadMaintCustomJobs();
 
   /* MN / PN / Machinery live in group_code, added after the module shipped.
      Ask the database rather than guessing: on an empty table there is no row

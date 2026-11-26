@@ -473,9 +473,9 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
       await ev(page, () => !!document.getElementById('js-add-job')), false);
     await ev(page, () => jsEdit());
     await ev(page, () => jsOpenAddJob());
-    check('Add job opens a dialog asking name, where, side bar, price, unit and quantity source',
-      await ev(page, () => ['jb-name', 'jb-scope', 'jb-under', 'jb-rate', 'jb-unit', 'jb-qty']
-        .map(id => !!document.getElementById(id))), [true, true, true, true, true, true]);
+    check('Add job opens a dialog asking name, where, side bar and quantity source, and NO price (价钱在这里订 is the payroll)',
+      await ev(page, () => ['jb-name', 'jb-scope', 'jb-under', 'jb-qty', 'jb-rate', 'jb-unit']
+        .map(id => !!document.getElementById(id))), [true, true, true, true, false, false]);
     await ev(page, () => jsAddJob());
     check('an empty name is refused in the dialog, nothing added',
       await ev(page, () => [document.getElementById('jb-err').textContent, jobCustomDraft.length]),
@@ -486,8 +486,6 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
       document.querySelector('input[name="jb-sb"][value="under"]').checked = true;
       jsAddJobSide();
       document.getElementById('jb-under').value = 'weeding';
-      document.getElementById('jb-rate').value = '0.02';
-      document.getElementById('jb-unit').value = 'Seedling';
       document.getElementById('jb-qty').value = 'plot';
       jsAddJob();
     });
@@ -511,7 +509,7 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
     });
     check('Save writes the job and its scope', saved,
       { n: 1, job: { key: true, label: 'Racun Rumput', sidebar: false, under: 'weeding',
-                     rate: 0.02, unit: 'Seedling', qtyFrom: 'plot' }, scope: 'both' });
+                     qtyFrom: 'plot' }, scope: 'both' });
     check('the Worker List card gains its row at once',
       await ev(page, () => [...document.querySelectorAll('#jc-set-body th.jc-job')]
         .map(th => th.textContent.trim()).includes('Racun Rumput')), true);
@@ -535,9 +533,9 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
     await again.page.waitForTimeout(400);
     await ev(again.page, () => jsEdit());
     await ev(again.page, () => { jsOpenAddJob(); document.getElementById('jb-name').value = 'Siram Air'; jsAddJob(); });
-    check('no price yet is allowed (价钱不需要订先)',
-      await ev(again.page, () => { const j = jobCustomDraft.find(x => x.label === 'Siram Air'); return j ? [j.rate, j.unit] : 'not added'; }),
-      [null, null]);
+    check('a job is added with no price at all (it is set on the payroll)',
+      await ev(again.page, () => { const j = jobCustomDraft.find(x => x.label === 'Siram Air'); return j ? ['rate' in j, 'unit' in j] : 'not added'; }),
+      [false, false]);
     await ev(again.page, () => jsCancel());
     check('removing it and saving writes an empty list, and its Worker List row goes',
       await ev(again.page, () => {
