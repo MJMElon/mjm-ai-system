@@ -182,6 +182,19 @@ async function boot(browser) {
         chemical: 'Manual', qty: 120, work_date: '2026-11-14', week_no: 2,
         schedule_month: m, worked_by: 'Hadi', reported_by: 'Hadi',
         verified_at: null, rejected_at: null },
+      /* PAIRS WITH 601, WHICH IS APPROVED — the one place the sentence has
+         to survive the office taking it off Pending. A row the conductor
+         signed off can still carry a second submission waiting on it, and
+         the APPROVED tab says the opposite of waiting, so a bare amber date
+         there is the unlabelled chip all over again. Without this record
+         the fixture has no approved row with a chip and every check about
+         it passes over nothing. */
+      { id: 9106, plot_name: 'B1', work_type: 'pd',
+        jenis: 'Penyemburan racun kulat dan serangga',
+        chemical: 'Antracol 50gm + Bond 15mL', qty: 700,
+        work_date: '2026-11-05', week_no: 1,
+        schedule_month: m, worked_by: 'Jaya', reported_by: 'Jaya',
+        verified_at: null, rejected_at: null },
       /* Pairs with 604 (B4 weeding round 3), so it lands as a chip on a
          row that already shows a date of its own. */
       { id: 9104, plot_name: 'B4', work_type: 'weeding', jenis: 'Merumput',
@@ -293,12 +306,14 @@ async function boot(browser) {
      because a width in the stylesheet proves nothing about the font that
      renders it. */
   const lines = await ev(() => {
-    /* A SCHEDULED row's chip. The loose rows write the sentence as plain
-       text in a colspan cell and carry none of these spans, and they come
-       first in the list — a bare querySelector reads one of those and
-       answers null about every part of the chip. */
+    /* B2's chip: the day and the count, which is what has to stay on one
+       line each. It is found by its PLOT and never by "the first chip with
+       a label", because on Pending the chip with a label is B4's — the one
+       row that has a date of its own — and that one carries no count, so
+       the count check would silently read a row it is not about. */
     const row = [...document.querySelectorAll('#rec-body tr')]
-      .find((tr) => tr.querySelector('.rec-waiting .rw-lab'));
+      .find((tr) => tr.children[3] && tr.children[3].textContent.trim() === 'B2'
+                 && tr.querySelector('.rec-waiting'));
     const el = row && row.querySelector('.rec-waiting');
     if (!el) return 'no chip';
     const one = (s) => {
@@ -307,13 +322,18 @@ async function boot(browser) {
       return Math.round(n.getBoundingClientRect().height
                         / parseFloat(getComputedStyle(n).lineHeight));
     };
+    const lab = el.querySelector('.rw-lab');
     return { day: one('.rw-day'), n: one('.rw-n'),
-             lab: el.querySelector('.rw-lab').textContent.replace(/\s+/g, ' ').trim() };
+             lab: lab ? lab.textContent.replace(/\s+/g, ' ').trim() : null };
   });
   check('the day is on ONE line', (lines || {}).day, 1);
   check('…and so is the count', (lines || {}).n, 1);
-  check('the sentence is the sentence, not an abbreviation of it',
-        (lines || {}).lab, 'Waiting for approval');
+  /* AND THE SENTENCE IS NOT REPEATED ON THE TAB THAT SAYS IT — *"waiting
+     for approval 也拿掉 因为它已经under pending了"*. B2 is a Pending row
+     whose own date is a dash, so the chip is the day and the count and
+     nothing else. The two rows below are where it survives. */
+  check('on Pending, a chip with no other date says only the day',
+        (lines || {}).lab, null);
   /* THE OFFICE'S OWN N20-R: a row with a day of its own and a claim under
      it. *"这什么意思"* — two dates one above the other with nothing
      between them is a question, so the claim wears a mark the row's own
@@ -357,9 +377,12 @@ async function boot(browser) {
   /* IT SAYS IT IN WORDS, and a glyph is what it had to replace. The chip
      carried `⏳ 25 Nov 2026 +1` and the office asked *"我不知道这是什么意
      思"* — a hourglass means nothing to somebody who has not been told,
-     and `+1` means nothing to anybody. So the sentence is IN the cell on
-     every chip, and the row's own date still carries none of it: that is
-     what tells the two dates apart on a row that has both. */
+     and `+1` means nothing to anybody.
+
+     THIS IS THE ROW THE SENTENCE SURVIVES ON, even on Pending where the
+     office took it off everywhere else: two dates one above the other with
+     nothing between them is a question whatever tab they are on, and the
+     sentence is the one thing that answers it. */
   check('…and SAYS it is waiting, in words',
         /waiting for approval/i.test((both || {}).claim || ''), true);
   check('no glyph is left standing in for the sentence',
@@ -458,8 +481,22 @@ async function boot(browser) {
   const r = await rows();
   const plots = (r.filter ? r : []).filter((x) => !x.group && !x.loose).map((x) => x.cells[3]);
   check('only the linked row', plots, ['B1']);
-  check('no waiting chip can appear here',
-        await ev(() => document.querySelectorAll('#rec-body .rec-waiting').length), 0);
+  /* A CHIP CAN APPEAR HERE, AND IT KEEPS ITS SENTENCE. An approved row can
+     still carry a second submission nobody has looked at (9106 on B1), and
+     this tab says the OPPOSITE of waiting — so the reason the sentence came
+     off Pending (*"因为它已经under pending了"*) is false here, and a bare
+     amber date would be the unlabelled chip all over again. */
+  const appr = await ev(() => {
+    const el = document.querySelector('#rec-body .rec-waiting');
+    if (!el) return 'no chip on the approved row';
+    const lab = el.querySelector('.rw-lab');
+    return { lab: lab ? lab.textContent.replace(/\s+/g, ' ').trim() : null,
+             day: el.textContent.replace(/\s+/g, ' ').trim() };
+  });
+  check('a second submission still shows on an approved row',
+        /05 Nov 2026/.test((appr || {}).day || ''), true);
+  check('…and HERE it keeps the sentence, because the tab says Approved',
+        (appr || {}).lab, 'Waiting for approval');
   check('and no unscheduled submission either',
         await ev(() => document.querySelectorAll('#rec-body .rec-row-loose').length), 0);
   } catch (e) { fail++; console.log('  FAIL 5. approved -- ' + String(e.message).split('\n')[0]); }

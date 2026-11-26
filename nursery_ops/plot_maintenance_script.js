@@ -9431,10 +9431,35 @@ function _dateCell(r) {
    it whatever is underneath (the office's own N20-R: `10 Nov 2026` with a
    claim for the 21st under it), because those really are two facts and
    dropping either is the one thing this cell must not do. */
+/* AND THE SENTENCE GOES WHERE THE TAB ALREADY SAYS IT — *"waiting for
+   approval 也拿掉 因为它已经under pending了 代表就是waiting了 不用重复"*.
+
+   They are right, and the REASON they gave is the rule rather than the
+   removal: *因为它已经under pending了*. It is true on the Pending tab and
+   false everywhere else, so the sentence is drawn where it is still
+   answering something and nowhere else.
+
+   TWO PLACES IT IS STILL ANSWERING, and neither is the tab repeating
+   itself:
+
+   - **THE APPROVED TAB**, where a row the conductor signed off can still
+     carry a SECOND submission waiting on it. That tab says the opposite of
+     waiting, so a bare amber date there is the unlabelled chip all over
+     again — which is where *"这什么意思"* came from two days ago.
+   - **A ROW CARRYING A DAY OF ITS OWN**, the office's own N20-R: `10 Nov
+     2026` with a claim for the 21st under it. Two dates one above the other
+     with nothing between them is a question whatever tab they are on, and
+     the sentence is the one thing that answers it.
+
+   So on Pending, on a row whose own date is a dash, the cell is the day and
+   nothing else — which is every row they were looking at. The hover carries
+   the whole sentence and the worker names either way. */
 function _dateWithChip(r, list) {
-  const chip = _waitingChip(list);
-  const cell = _dateCell(r);
-  if (chip && cell === '-') return chip;
+  const cell  = _dateCell(r);
+  const bare  = cell === '-';
+  const label = _recSection !== 'pending' || !bare;
+  const chip  = _waitingChip(list, { label });
+  if (chip && bare) return chip;
   return cell + chip;
 }
 
@@ -10019,6 +10044,18 @@ function renderRecords() {
      there is nowhere, the tag's own hover says that rather than leaving
      somebody tugging at a row. `recPinRefusal` is the rule in both
      directions. */
+  /* AND THE SENTENCE IS GONE FROM THE LOOSE ROW TOO, which is the same rule
+     the chip follows one column along: a loose row is drawn on the PENDING
+     tab and nowhere else (see `drawLoose`), so the tab already says it is
+     waiting. What the tab does NOT say is that the schedule has no round
+     for this work, so the slate tag stays, and its hover carries the whole
+     of it.
+
+     THE NOTE IS HERE AND NOT IN THE MARKUP, because the markup below is a
+     template literal and one backtick inside a comment there ENDS it — the
+     page then dies with `Unexpected identifier` and nothing on screen says
+     why. This file already has a heading about that, and it happened again
+     writing this very note. */
   const mayPin = mayMaintAct('approve', 'view');
   const looseRowHtml = (f) => {
     const jenis = _rejJenis(f);
@@ -10039,7 +10076,6 @@ function renderRecords() {
       <td class="rc-track">—</td>
       <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
       <td class="rc-c" colspan="4">
-        <span class="rec-waiting" title="${esc(t('rec.waitingTip'))}">${esc(t('rec.waiting'))}</span>
         <span class="rec-loose-tag" title="${esc(tagTip)}">${esc(t('rec.looseTag'))}</span>
       </td>
     </tr>`;
@@ -10165,10 +10201,16 @@ function _recTabCounts(filtered, loose) {
    — so this cell is otherwise a dash, and the one thing it can usefully
    say is that a worker claims the 12th. Several waiting records read as
    the earliest and a +n, and every name is in the tooltip. */
-function _waitingChip(list) {
+function _waitingChip(list, opts) {
   if (!Array.isArray(list) || !list.length) return '';
   const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
   const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
+  /* `label` defaults ON, because a caller that has not thought about it is
+     better served by the sentence than by a bare amber date. `_dateWithChip`
+     is the one place that decides to leave it off, and says why — and a
+     record carrying NO work day overrules it, because the day is the whole
+     of what is left and a chip with nothing in it is no chip at all. */
+  const withLabel = !opts || opts.label !== false || !day;
   /* IT SAYS IT IN WORDS, and the hourglass that was here is the reason it
      has to. It was a pill reading `21 Nov 2...`, which trimmed away the one
      thing the cell was there to say; the pill came off and a `⏳` went in
@@ -10216,7 +10258,11 @@ function _waitingChip(list) {
      sentence wrapping over two reads perfectly well, where a date broken
      across two does not. */
   return ` <span class="rec-waiting" title="${esc(full + ' — ' + t('rec.waitingTip'))}">`
-       + `<span class="rw-lab">${esc(t('rec.waiting'))}</span>`
+       + (withLabel ? `<span class="rw-lab">${esc(t('rec.waiting'))}</span>` : '')
+       /* WITH NO LABEL THE DAY IS THE WHOLE CHIP, so it must still say it
+          is a claim and not the row's own date. The amber is what says so,
+          and on a row with a date of its own the label is drawn — which is
+          exactly the case the colour alone could not carry. */
        + (day ? `<span class="rw-day">${esc(_tarikhDisplay(day))}</span>` : '')
        + (list.length > 1
            ? `<span class="rw-n">${esc(t('rec.waitingN', { n: list.length }))}</span>` : '')
