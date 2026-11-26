@@ -233,11 +233,11 @@ const DATA = {
     stage: Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])),
     key: [...document.querySelectorAll('.lp-key .lp-key-r b')].map(b => b.textContent.trim()),
     beside: (() => { const v = document.getElementById('lp-viewport').getBoundingClientRect(), k = document.querySelector('.lp-key').getBoundingClientRect(); return k.left >= v.right - 1; })() }));
-  ok(st6.key.join() === 'Empty,Growing,To be collected in a month,Collecting', 'the key names the four stages', st6.key);
+  ok(st6.key.join() === 'Empty,Growing,Collecting in 1 month,Collecting', 'the key names the four stages', st6.key);
   ok(st6.beside, 'the key stands beside the map', st6.beside);
   ok(await pm6.evaluate(() => !document.querySelector('.lp-key .lp-key-r span')), 'the key carries no explanation lines under the names', '');
   ok(st6.stage.B13 === 'empty' && st6.stage.B11 === 'growing' && st6.stage.B12 === 'soon' && st6.stage.B14 === 'selling',
-     'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing collected: To be collected in a month · B14 on a DO: Collecting', st6);
+     'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing collected: Collecting in 1 month · B14 on a DO: Collecting', st6);
   const sc = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats .lp-cat')].map(c => c.dataset.scene));
   const cnt = k => sc.filter(x => x === k).length;
   ok(cnt('growing') >= 2 && cnt('empty') >= 2 && cnt('soon') === 1 && cnt('selling') === 1, 'cats on the map for every stage: several working or digging, one sitting, one lorry', sc);

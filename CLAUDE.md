@@ -12224,7 +12224,7 @@ the map (`LP_STAGES`, `mapStateOf`): Empty (no current cycle, or it is 3rd
 culled), Growing (under `LP_SOON_MONTHS`, 6, since the cycle first
 transplant), Ready soon (6 months or more, nothing of this cycle sold yet) and
 Selling (a batch of this cycle on a delivery order since it began, or its 3rd
-culling begun). The last two are called To be collected in a month and Collecting
+culling begun). The last two are called Collecting in 1 month and Collecting
 on screen. Each plot carries the office OWN MJM CATS, moving
 (`operation/lifeplot/cat_*.png`, cut out of the sheet they handed over).
 **The cats are part of the MAP, never of the label** (`lpCats` into
@@ -12233,7 +12233,7 @@ shape (`lpCatSpots`, inside the polygon, the label spot left clear), so they
 shrink when the map is zoomed out and are big enough to see what they are
 doing when it is zoomed in (the office: *缩小的时候猫猫也要跟着缩小 放大才看到他们
 在干嘛*). Growing is up to five cats, watering, fertiliser and weeding in
-turn; Empty up to five digging; To be collected in a month one big sitting cat;
+turn; Empty up to five digging; Collecting in 1 month one big sitting cat;
 Collecting the lorry driving across. The labels keep their size at any zoom;
 the key shows the colour, the cat and the stage name and nothing more (the office took the explanation lines off). Plain CSS animation, still under
 `prefers-reduced-motion`. The delivery orders are read once
