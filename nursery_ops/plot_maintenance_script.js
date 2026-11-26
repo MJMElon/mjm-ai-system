@@ -3558,7 +3558,7 @@ function renderSeedPlantingPayroll() {
        boxes whose save the database will refuse. Seed Planting is
        unaffected -- those rows save as they always have. */
     const noJob = !!(st && !st.noTable && st.noJob);
-    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol') : t('pay.spHint');
+    hint.textContent = noTable ? t('pay.spNoTable') : noJob ? t('pay.spNoJobCol') : '';
     hint.classList.toggle('pay-hint-warn', noTable || noJob);
   }
   if (_spLoading[m] || !st) {
@@ -3723,7 +3723,7 @@ function _spDrawNames(m, st) {
       onclick="removeSeedPlantingWorker(${i})" aria-label="${esc(t('pay.spRemove'))} ${esc(w)}">×</button></span>`).join('');
   box.innerHTML = `<div class="sp-names">
     <span class="sp-names-lbl">${esc(t('pay.spWorkers', { m }))}</span>
-    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoNames'))}</span>`}
+    ${chips}
     <span class="sp-names-add">
       ${_spWorkerSelect(st)}
       <input type="text" id="sp-new-name-other" maxlength="60" placeholder="${esc(t('pay.spNamePh'))}" style="display:none;"
@@ -3736,17 +3736,12 @@ function _spDrawNames(m, st) {
 function _spBatchBar(m, st) {
   if (st.noMoveTable) return `<div class="sp-names sp-names-warn">${esc(t('pay.spNoMoveTable'))}</div>`;
   const ins = Object.keys(st.moved).filter(b => st.moved[b] === m).sort();
-  const outs = Object.keys(st.moved).filter(b => st.moved[b] !== m && st.home[b] && _spMonthOfDate(st.home[b]) === m).sort();
   const chips = ins.map(b =>
     `<span class="sp-chip">${esc(b)}<span class="sp-chip-sub">${esc(t('pay.spPlantedOn', { d: _spDay(st.home[b] || '') }))}</span><button type="button" class="sp-chip-x" title="${esc(t('pay.spRemove'))}"
       onclick="removeSeedPlantingBatch('${esc(b).replace(/'/g, "\\'")}')" aria-label="${esc(t('pay.spRemove'))} ${esc(b)}">×</button></span>`).join('');
-  const out = outs.length
-    ? `<span class="sp-names-none">${esc(t('pay.spMovedOut', { list: outs.map(b => b + ' → ' + st.moved[b]).join(', ') }))}</span>`
-    : '';
   return `<div class="sp-names">
     <span class="sp-names-lbl">${esc(t('pay.spBatches'))}</span>
-    ${chips || `<span class="sp-names-none">${esc(t('pay.spNoBatches'))}</span>`}
-    ${out}
+    ${chips}
     <span class="sp-names-add">
       ${_spBatchSelect(m, st)}
       <button type="button" id="sp-batch-confirm" class="btn btn-sm btn-primary" onclick="addSeedPlantingBatch()" style="display:none;">${esc(t('pay.spConfirm'))}</button>
@@ -5534,8 +5529,7 @@ const I18N = {
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
     'pay.batch':'Batch', 'pay.spPlantedDate':'Planted date', 'pay.qtyPlanted':'Qty planted', 'pay.spKeyed':'Keyed by workers',
     'pay.spShort':'short by {n}', 'pay.spOver':'over by {n}',
-    'pay.spNone':'No seed planting in the Pre Nursery for {m}. Rows come from the batch report\u2019s Seed Planting, by its date.',
-    'pay.spHint':'Each row is a batch planted this month, with its total planted quantity from the batch report\u2019s Seed Planting. Pick the month\u2019s workers above, then key how many each one planted. Check a batch to send it to the Pre Nursery payroll, where it is priced. The sheet carries BOTH Pre Nursery jobs, one under the other: sowing the seed on top, and filling the hyplug trays with soil below it, each with its own figures and its own Check.',
+    'pay.spNone':'No seed planting in {m}.',
     'pay.spNoTable':'Seed Planting cannot save yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase. The rows below are read from the batch report as normal.',
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug cannot save yet: run shared/RUN_ME_hyplug_soil.sql in Supabase. The rows below are read from the batch report as normal, and Seed Planting is unaffected.',
     'pay.qtyHoles':'Qty to fill',
@@ -5543,7 +5537,7 @@ const I18N = {
     'pay.spOffRemove':'Remove for this month', 'pay.spOffTip':'This job was not done this month: take its section off. Add it back any time.',
     'pay.spOffAdd':'+ Add back', 'pay.spOffNote':'not done in {m}',
     'pay.spOffHasFigures':'{j} still has figures keyed this month. Clear them first, then remove the section.',
-    'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
+    'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet.',
     'pay.spNamePh':'Worker name', 'pay.spConfirm':'Confirm', 'pay.spRemove':'Remove',
     'pay.spPickWorker':'Pick a worker…', 'pay.spPickGroup':'Pick a position…', 'pay.spTickSome':'Tick at least one name, then press Confirm.', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
     'pay.spPickBatch':'Pick a batch…', 'pay.spNoLateBatch':'No batch from the last two months',
@@ -5553,9 +5547,8 @@ const I18N = {
     'pay.spLocked':'Batch {b} is Checked, so it is on the payroll as it stands. Uncheck it first to change a figure.', 'pay.spDup':'{w} is already on this month\u2019s list.',
     'pay.spInUse':'{w} has figures on {n} row(s). Clear those figures first, then remove the name.',
     'pay.spRemoveQ':'Remove {w} from the {m} list?',
-    'pay.spBatches':'Batches added by hand:', 'pay.spNoBatches':'None. A batch planted too late for its own month can be added here.',
+    'pay.spBatches':'Batches added by hand:',
     'pay.spBatchPh':'Batch no.', 'pay.spPlantedOn':'planted {d}',
-    'pay.spMovedOut':'Moved out of this month: {list}',
     'pay.spNoSuchBatch':'Batch {b} has no Seed Planting on any batch report.',
     'pay.spBatchHere':'Batch {b} is already on the {m} sheet.',
     'pay.spMoveQ':'Move batch {b} from {from} to {m}?\n\nIt leaves the {from} sheet and is counted here instead. Figures already keyed go with it.',
@@ -5755,8 +5748,7 @@ const I18N = {
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
     'pay.batch':'Batch', 'pay.spPlantedDate':'Tarikh tanam', 'pay.qtyPlanted':'Kuantiti ditanam', 'pay.spKeyed':'Diisi pekerja',
     'pay.spShort':'kurang {n}', 'pay.spOver':'lebih {n}',
-    'pay.spNone':'Tiada penanaman benih di Pre Nursery untuk {m}. Baris diambil dari Seed Planting dalam laporan batch, mengikut tarikhnya.',
-    'pay.spHint':'Setiap baris ialah batch yang ditanam bulan ini, dengan jumlah ditanam dari Seed Planting laporan batch. Pilih pekerja bulan ini di atas, kemudian isi berapa yang ditanam setiap seorang. Semak satu batch untuk menghantarnya ke gaji Pre Nursery, di mana ia diberi harga. Helaian ini membawa KEDUA-DUA kerja Pre Nursery, satu di bawah satu lagi: menanam benih di atas, mengisi tanah ke hyplug di bawahnya, masing-masing dengan angka dan Check sendiri.',
+    'pay.spNone':'Tiada penanaman benih pada {m}.',
     'pay.spNoTable':'Seed Planting belum boleh disimpan: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa.',
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug belum boleh disimpan: jalankan shared/RUN_ME_hyplug_soil.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa, dan Penanaman Benih tidak terjejas.',
     'pay.qtyHoles':'Kuantiti diisi',
@@ -5764,7 +5756,7 @@ const I18N = {
     'pay.spOffRemove':'Buang untuk bulan ini', 'pay.spOffTip':'Kerja ini tidak dibuat bulan ini: buang bahagiannya. Boleh tambah semula bila-bila masa.',
     'pay.spOffAdd':'+ Tambah semula', 'pay.spOffNote':'tidak dibuat pada {m}',
     'pay.spOffHasFigures':'{j} masih ada angka bulan ini. Kosongkan dahulu, kemudian buang bahagian ini.',
-    'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
+    'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini.',
     'pay.spNamePh':'Nama pekerja', 'pay.spConfirm':'Sahkan', 'pay.spRemove':'Buang',
     'pay.spPickWorker':'Pilih pekerja…', 'pay.spPickGroup':'Pilih jawatan…', 'pay.spTickSome':'Tanda sekurang-kurangnya satu nama, kemudian tekan Sahkan.', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
     'pay.spPickBatch':'Pilih batch…', 'pay.spNoLateBatch':'Tiada batch dari dua bulan lepas',
@@ -5774,9 +5766,8 @@ const I18N = {
     'pay.spLocked':'Batch {b} sudah disemak, jadi ia dalam gaji seperti sekarang. Nyahsemak dahulu untuk menukar angka.', 'pay.spDup':'{w} sudah ada dalam senarai bulan ini.',
     'pay.spInUse':'{w} ada angka pada {n} baris. Kosongkan angka itu dahulu, kemudian buang nama.',
     'pay.spRemoveQ':'Buang {w} daripada senarai {m}?',
-    'pay.spBatches':'Batch ditambah sendiri:', 'pay.spNoBatches':'Tiada. Batch yang ditanam terlalu lewat untuk bulannya boleh ditambah di sini.',
+    'pay.spBatches':'Batch ditambah sendiri:',
     'pay.spBatchPh':'No. batch', 'pay.spPlantedOn':'ditanam {d}',
-    'pay.spMovedOut':'Dipindah keluar bulan ini: {list}',
     'pay.spNoSuchBatch':'Batch {b} tiada Seed Planting dalam mana-mana laporan batch.',
     'pay.spBatchHere':'Batch {b} sudah ada dalam {m}.',
     'pay.spMoveQ':'Pindah batch {b} dari {from} ke {m}?\n\nIa keluar dari {from} dan dikira di sini. Angka yang sudah diisi ikut sekali.',
