@@ -12209,6 +12209,31 @@ while the PALMS map loads.
 The P.A.L.M.S tile on the Nursery Operation dashboard was taken off for the
 same reason: PALMS is reached from Life of Plot now.
 
+**The figures are the BATCH REPORT own readings** (the office: "life of plot
+里面的资料请去batch report拿 transplant 2nd cull 3rd cull 日期 quantity"), and
+each cycle card is three parts the way the batch report has them —
+Transplanting, 2nd Culling, 3rd Culling, each with its dates, quantities and %.
+
+- **Transplant date** is Tab 3 own (`lpTransplantDay`): the `Date:` in the
+  remark, else `transaction_date`, else the save day. It was
+  `transaction_date` first, which disagreed wherever the two differ.
+- **A culling is ONE saved figure per plot and destination, the NEWEST**
+  (`lpCullFigure`), the way Tabs 5 and 6 load it; destinations add up. It
+  was a SUM of every row, so a plot saved twice read double. Rows with no
+  `DestType` (older saves) are taken one per transplant row, oldest first,
+  as the tabs hand them out.
+- **Cull date is the `CullDate:` in the remark.** Tab 5 falls back to the
+  save day; Tab 6 shows none, so neither does this page — `c3Sort` (last
+  CullSessions day, else the save day) only splits the cycles.
+- **2nd culled %** is over the transplant after approved calibration (Tab 5),
+  **3rd culled %** over the transplant (Tab 6); totals are weighted.
+- **What it does NOT copy**: Tab 6 shows 3rd Culled LIVE (2nd culled +
+  what is left after sales, transfers and adjustments). This page shows the
+  figure that was SAVED, which is that same sum on the day of the save, so the
+  two part only where a sale or transfer was keyed after the culling was saved.
+
+Section 6 of `tests/life_of_plot_builds_the_sheet.cjs`. Nothing to run.
+
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
 colour switch, labels carrying both, PALMS columns on the list and a stage

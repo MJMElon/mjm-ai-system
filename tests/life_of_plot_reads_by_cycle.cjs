@@ -73,8 +73,10 @@ const DATA = {
   console.log('1. a plot opens as its cycles, newest first');
   const cyc = await page.evaluate(() => [...document.querySelectorAll('#lp-timeline-box .lp-cyc')].map(c => ({
     n: c.dataset.cycle, head: c.querySelector('.lp-cyc-h').textContent.replace(/\s+/g, ' ').trim(),
-    batches: [...c.querySelectorAll('tbody td.batch')].map(td => td.textContent.trim()),
-    total: [...c.querySelectorAll('tfoot td')].map(td => td.textContent.trim()),
+    secs: [...c.querySelectorAll('.lp-sec .lp-sec-h')].map(x => x.textContent.trim()),
+    batches: [...c.querySelectorAll('.lp-sec[data-sec="transplant"] tbody td.batch')].map(td => td.textContent.trim()),
+    total: [...c.querySelectorAll('.lp-sec[data-sec="cull3"] tfoot td')].map(td => td.textContent.trim()),
+    c2: [...c.querySelectorAll('.lp-sec[data-sec="cull2"] tfoot td')].map(td => td.textContent.trim()),
   })));
   ok(cyc.length === 2, 'B11 shows two cycle cards', cyc.length);
   ok(cyc[0] && cyc[0].n === '2' && /Current/.test(cyc[0].head) && /12,275/.test(cyc[0].head) && /2026-07-22 → now/.test(cyc[0].head),
@@ -82,7 +84,9 @@ const DATA = {
   ok(cyc[0] && cyc[0].batches.join() === '263,265,269,271', '…holding only its own batches', cyc[0] && cyc[0].batches);
   ok(cyc[1] && /Finished/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && /2025-05-22 → 2026-06-12/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
      'cycle 1 under it: 228 + 229, 22 May 2025 to its 3rd cull 12 Jun 2026, 12,121', cyc[1] && cyc[1].head);
-  ok(cyc[1] && cyc[1].total[0] === 'Cycle 1 total' && cyc[1].total.includes('3,062'), 'each cycle has its own total row (cycle 1 3rd cull 3,062)', cyc[1] && cyc[1].total);
+  ok(cyc[0] && cyc[0].secs.join() === 'Transplanting,2nd Culling,3rd Culling', 'each cycle is three parts, as the batch report: Transplanting, 2nd Culling, 3rd Culling', cyc[0] && cyc[0].secs);
+  ok(cyc[1] && cyc[1].total.join('|') === 'Total||3,062|25.26%', 'cycle 1 3rd culling total 3,062, 25.26% of the 12,121 transplanted', cyc[1] && cyc[1].total);
+  ok(cyc[1] && cyc[1].c2.join('|') === 'Total||164|1.35%', 'cycle 1 2nd culling total 164, 1.35%', cyc[1] && cyc[1].c2);
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_cycles.png'), fullPage: true });
 
   console.log('2. the side bar opens the transplant record by year');

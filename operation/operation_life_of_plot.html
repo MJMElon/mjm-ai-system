@@ -89,6 +89,9 @@
         .lp-cyc-d { font-size:12px; font-weight:700; color:#5c3d1e; }
         .lp-cyc-cap { margin-left:auto; font-size:12px; font-weight:700; color:#8a7a68; }
         .lp-cyc-cap b { font-size:16px; color:#3d2610; font-weight:900; }
+        .lp-sec { border-top:1px solid #e8dcc8; }
+        .lp-sec-h { font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#4a7a2e; padding:12px 18px 2px; }
+        .lp-sec[data-sec="cull2"] .lp-sec-h, .lp-sec[data-sec="cull3"] .lp-sec-h { color:#a83020; }
         /* Transplant record: the office sheet, a column per month. */
         table.lp tr.grp td { text-align:left; }
         table.lp-rec th, table.lp-rec td { padding:9px 10px; }
@@ -194,14 +197,55 @@
     function lpPlotKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(^|[A-Z])0+(\d)/g, '$1$2'); }
     function lpIsReplant(s) { return /-R/i.test(String(s || '')); }
     function lpNatural(a, b) { return String(a).localeCompare(String(b), 'en', { numeric: true }); }
-    // A row's day: its own transaction_date, else the Date: written in its remark, else the day it was saved.
-    function lpDayOf(r, key) {
-        const td = String(r.transaction_date || '').slice(0, 10);
-        if (td) return td;
-        const rem = String(r.remark || '');
-        const m = rem.match(new RegExp(key + ':\\s*(\\d{4}-\\d{2}-\\d{2})'));
+    /* THE BATCH REPORT OWN READINGS, so this page and the batch report say the
+       same day and the same figure (the office: "life of plot 里面的资料请去
+       batch report拿").
+       Transplant day: Tab 3, the Date: in the remark, else transaction_date,
+       else the day it was saved. */
+    function lpTransplantDay(r) {
+        const m = String(r.remark || '').match(/Date:\s*(\d{4}-\d{2}-\d{2})/);
         if (m) return m[1];
-        return String(r.created_at || '').slice(0, 10) || null;
+        const td = String(r.transaction_date || '').slice(0, 10);
+        return td || String(r.created_at || '').slice(0, 10) || null;
+    }
+    /* A culling: Tabs 5 and 6 keep ONE saved figure per plot and destination
+       (DestType in the remark), the NEWEST; a row with no DestType is an older
+       save and counts only where no keyed one exists. Their figures are added
+       across destinations, as Tab 5 merges MAIN and D-TONE of one plot.
+       Day: the CullDate in the remark. Tab 5 falls back to the day it was
+       saved; Tab 6 shows no date, so `day` is null there and `sortDay` (the
+       last session, else the save day) is used only to split the cycles. */
+    function lpCullFigure(rows, saveDayFallback, nTransplants) {
+        const sorted = (rows || []).slice().sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+        const keyed = {}, legacy = [];
+        sorted.forEach(r => {
+            const rem = String(r.remark || '');
+            const dm = rem.match(/DestType:\s*(main|premium|doubletone)/);
+            if (dm) keyed[dm[1]] = r; else legacy.push(r);
+        });
+        let use = Object.keys(keyed).map(k => keyed[k]);
+        // Older saves: one per transplant row, oldest first, the way Tabs 5 and 6 hand them out.
+        if (!use.length && legacy.length) use = legacy.slice(0, Math.max(1, nTransplants || 0));
+        if (!use.length) return { qty: 0, day: null, sortDay: null, rows: 0 };
+        const dayOf = r => {
+            const rem = String(r.remark || '');
+            const m = rem.match(/CullDate:\s*(\d{4}-\d{2}-\d{2})/);
+            if (m) return m[1];
+            return saveDayFallback ? (String(r.created_at || '').slice(0, 10) || null) : null;
+        };
+        const sessDay = r => {
+            const m = String(r.remark || '').match(/CullSessions:(\S+)/);
+            if (!m) return null;
+            return lpLatest(m[1].split(';').map(x => (x.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1]));
+        };
+        const main = keyed.main || use[0];
+        const day = dayOf(main) || lpEarliest(use.map(dayOf));
+        return {
+            qty: use.reduce((a, r) => a + Math.abs(Number(r.quantity_change) || 0), 0),
+            day,
+            sortDay: day || lpLatest(use.map(sessDay)) || lpLatest(use.map(r => String(r.created_at || '').slice(0, 10))),
+            rows: use.length,
+        };
     }
     function lpEarliest(days) { return days.filter(Boolean).sort()[0] || null; }
     function lpLatest(days) { return days.filter(Boolean).sort().slice(-1)[0] || null; }
@@ -220,17 +264,17 @@
         const cycles = [];
         let cur = null;
         (batches || []).forEach(b => {
-            const lastC3 = cur ? lpLatest(cur.batches.map(x => x.c3Date)) : null;
+            const lastC3 = cur ? lpLatest(cur.batches.map(x => x.c3Sort)) : null;
             if (!cur || (b.tDate && lastC3 && b.tDate > lastC3)) { cur = { batches: [] }; cycles.push(cur); }
             cur.batches.push(b);
         });
         return cycles.map((c, i) => {
             const bs = c.batches;
-            const done = bs.some(b => b.c3Date) && (i < cycles.length - 1 || bs.every(b => b.c3Date || !b.tAdj));
+            const done = bs.some(b => b.c3Sort) && (i < cycles.length - 1 || bs.every(b => b.c3Sort || !b.tAdj));
             return {
                 n: i + 1, batches: bs, current: i === cycles.length - 1,
                 start: lpEarliest(bs.map(b => b.tDate)),
-                end: done ? lpLatest(bs.map(b => b.c3Date)) : null,
+                end: done ? lpLatest(bs.map(b => b.c3Sort)) : null,
                 tQty: bs.reduce((a, b) => a + b.tQty, 0),
                 adj: bs.reduce((a, b) => a + b.adj, 0),
                 tAdj: bs.reduce((a, b) => a + b.tAdj, 0),
@@ -308,23 +352,22 @@
                 const batches = [...p.batches.values()].map(b => {
                     const tQty = sum(b.tRows, r => r.quantity_change);
                     const adj = sum(b.adjRows, r => r.quantity_change);
-                    const tDate = lpEarliest(b.tRows.map(r => lpDayOf(r, 'Date')));
+                    const tDate = lpEarliest(b.tRows.map(lpTransplantDay));
                     // Each transplant row lands in the month it was done; an approved
                     // calibration corrects the transplant, so it lands with it.
                     const tByMonth = {};
                     b.tRows.forEach(r => {
-                        const ym = String(lpDayOf(r, 'Date') || '').slice(0, 7);
+                        const ym = String(lpTransplantDay(r) || '').slice(0, 7);
                         if (ym) tByMonth[ym] = (tByMonth[ym] || 0) + (Number(r.quantity_change) || 0);
                     });
                     if (adj && tDate) tByMonth[tDate.slice(0, 7)] = (tByMonth[tDate.slice(0, 7)] || 0) + adj;
+                    const c2 = lpCullFigure(b.c2Rows, true, b.tRows.length), c3 = lpCullFigure(b.c3Rows, false, b.tRows.length);
                     return {
                         batch: b.batch,
                         tDate, tByMonth,
                         tQty, adj, tAdj: tQty + adj,
-                        c2Date: lpEarliest(b.c2Rows.map(r => lpDayOf(r, 'CullDate'))),
-                        c2Qty: sum(b.c2Rows, r => r.quantity_change),
-                        c3Date: lpEarliest(b.c3Rows.map(r => lpDayOf(r, 'CullDate'))),
-                        c3Qty: sum(b.c3Rows, r => r.quantity_change),
+                        c2Date: c2.day, c2Qty: c2.qty, c2Has: c2.rows > 0,
+                        c3Date: c3.day, c3Sort: c3.sortDay, c3Qty: c3.qty, c3Has: c3.rows > 0,
                     };
                 }).sort((x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch));
                 return {
@@ -580,23 +623,36 @@
     function cycleSpan(c) {
         return `${c.start || '–'} → ${c.end || 'now'}`;
     }
+    const lpPct = (n, d) => (d > 0 && n ? (n / d * 100).toFixed(2) + '%' : '–');
+    /* One card per cycle, in three parts the way the batch report has them:
+       Transplanting, 2nd Culling, 3rd Culling, each with its own dates,
+       quantities and rate. The rates are the batch report own: 2nd culled
+       over the transplant less approved adjustments (Tab 5), 3rd culled over
+       the transplant (Tab 6). */
     function cycleHtml(c) {
         const d = lpDays(c.start, c.end);
+        const bs = c.batches;
         let h = `<div class="panel overflow-x-auto lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
               + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Finished' : 'Current'}</span>`
               + `<span class="lp-cyc-d">${c.start || '–'} → ${c.end || 'now'}${d != null ? ' · ' + d + ' days' : ''}</span>`
               + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
-        h += '<table class="lp"><thead><tr><th class="l">Batch</th><th class="l">Transplant date</th><th>Transplant qty</th><th>Calibration</th><th>Adjusted</th>'
-           + '<th class="l">2nd cull date</th><th>2nd cull qty</th><th class="l">3rd cull date</th><th>3rd cull qty</th></tr></thead><tbody>';
-        c.batches.forEach(b => {
-            h += `<tr><td class="l batch">${b.batch}</td><td class="l">${b.tDate || '–'}</td><td>${dash(b.tQty)}</td>`
-               + `<td class="${b.adj ? 'adj' : 'dash'}">${b.adj ? (b.adj > 0 ? '+' : '') + nf(b.adj) : '–'}</td><td>${dash(b.tAdj)}</td>`
-               + `<td class="l">${b.c2Date || '–'}</td><td class="cull">${dash(b.c2Qty)}</td><td class="l">${b.c3Date || '–'}</td><td class="cull">${dash(b.c3Qty)}</td></tr>`;
-        });
-        h += `</tbody><tfoot><tr class="tot"><td class="l">Cycle ${c.n} total</td><td></td><td>${dash(c.tQty)}</td>`
-           + `<td>${c.adj ? (c.adj > 0 ? '+' : '') + nf(c.adj) : '–'}</td><td>${dash(c.tAdj)}</td><td></td><td>${dash(c.c2)}</td><td></td><td>${dash(c.c3)}</td></tr></tfoot></table></div>`;
-        return h;
+        const sec = (key, title, head, rows, foot) =>
+            `<div class="lp-sec" data-sec="${key}"><div class="lp-sec-h">${title}</div><table class="lp"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody><tfoot><tr class="tot">${foot}</tr></tfoot></table></div>`;
+        h += sec('transplant', 'Transplanting',
+            '<th class="l">Batch</th><th class="l">Transplant date</th><th>Transplant qty</th><th>Calibration</th><th>Adjusted</th>',
+            bs.map(b => `<tr><td class="l batch">${b.batch}</td><td class="l">${b.tDate || '–'}</td><td>${dash(b.tQty)}</td>`
+                + `<td class="${b.adj ? 'adj' : 'dash'}">${b.adj ? (b.adj > 0 ? '+' : '') + nf(b.adj) : '–'}</td><td>${dash(b.tAdj)}</td></tr>`).join(''),
+            `<td class="l">Total</td><td></td><td>${dash(c.tQty)}</td><td>${c.adj ? (c.adj > 0 ? '+' : '') + nf(c.adj) : '–'}</td><td>${dash(c.tAdj)}</td>`);
+        h += sec('cull2', '2nd Culling',
+            '<th class="l">Batch</th><th class="l">2nd cull date</th><th>2nd culled qty</th><th>2nd culled %</th>',
+            bs.map(b => `<tr><td class="l batch">${b.batch}</td><td class="l">${b.c2Date || '–'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td><td class="cull">${b.c2Has ? lpPct(b.c2Qty, b.tAdj) : '–'}</td></tr>`).join(''),
+            `<td class="l">Total</td><td></td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`);
+        h += sec('cull3', '3rd Culling',
+            '<th class="l">Batch</th><th class="l">3rd cull date</th><th>3rd culled qty</th><th>3rd culled %</th>',
+            bs.map(b => `<tr><td class="l batch">${b.batch}</td><td class="l">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td class="cull">${b.c3Has ? lpPct(b.c3Qty, b.tQty) : '–'}</td></tr>`).join(''),
+            `<td class="l">Total</td><td></td><td>${dash(c.c3)}</td><td>${lpPct(c.c3, c.tQty)}</td>`);
+        return h + '</div>';
     }
 
     function showPlot(name) {
@@ -617,7 +673,7 @@
         document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
             ? p.cycles.slice().reverse().map(cycleHtml).join('')
             : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
-        document.getElementById('lp-note').textContent = 'Dates come from the transplant and cull records: the record\'s own date, else the Date / CullDate written in its remark, else the day it was saved.';
+        document.getElementById('lp-note').textContent = 'Read the way the batch report reads them: the transplant date off Tab 3, the 2nd and 3rd culling off Tabs 5 and 6 (the newest save of each plot, dated by its Cull Date). 2nd culled % is over the transplant after approved calibration, 3rd culled % over the transplant.';
     }
 
     // ── Side bar: Plots & cycles, or the Transplant record by year ──

@@ -102,5 +102,22 @@ console.log('4. a plot is read by CYCLE, never mixed (the office B11, from its o
   ok(lpYears && lpYears(m2).join() === '2025,2026', 'the years offered are the years with a transplant', lpYears && lpYears(m2));
 }
 
+{
+  console.log('6. the figures are the batch report own readings');
+  const R = (type, qty, remark, created) => ({ plot_name: 'N7', transaction_type: type, transaction_date: type === 'Transplanted' ? '2026-03-30' : null, quantity_change: qty, batch_name: '250', remark, created_at: created });
+  const m6 = buildPlotHistory([{ plot_name: 'N7', nursery_name: 'UNN 2' }], [
+    R('Transplanted', 3000, 'Transplanted from tray [P2] to Main Plot [N7]. Date: 2026-03-14', '2026-03-30T00:00:00Z'),
+    // saved twice: the batch report keeps the newest per destination, never the sum
+    R('2nd_Culling', 40, '2nd Culling. Dead: 40. CullDate: 2026-06-01 DestType: main', '2026-06-02T00:00:00Z'),
+    R('2nd_Culling', 45, '2nd Culling. Dead: 45. CullDate: 2026-06-03 DestType: main', '2026-06-05T00:00:00Z'),
+    // a 3rd culling with no CullDate keyed: the batch report shows no date
+    R('3rd_Culling', 600, '3rd Culling. Transplanted: 3000, Culled: 600, DestType: main MapQty: 2400', '2026-09-20T00:00:00Z'),
+  ]);
+  const b = m6.groups.find(g => g.key === 'UNN2').plots[0].batches[0];
+  ok(b.tDate === '2026-03-14', 'the transplant day is Tab 3 own: the Date: in the remark before transaction_date', b.tDate);
+  ok(b.c2Qty === 45 && b.c2Date === '2026-06-03', 'a 2nd culling saved twice is the newest save (45 on 3 Jun), never 85', [b.c2Qty, b.c2Date]);
+  ok(b.c3Qty === 600 && b.c3Date === null && b.c3Sort === '2026-09-20', 'a 3rd culling with no CullDate shows no date, as Tab 6 does; the cycle still closes on its save day', [b.c3Qty, b.c3Date, b.c3Sort]);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
