@@ -45,7 +45,7 @@
         .lp-tab { padding:8px 16px; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.08em; border-radius:12px; color:#8a7a68; background:#fdfaf4; border:1.5px solid transparent; cursor:pointer; }
         .lp-tab:hover { color:#3d2610; }
         .lp-head-tabs { min-width:90px; justify-content:flex-end; }
-        .lp-head-tabs:empty { visibility:hidden; background:none; border:0; }
+        .lp-head-tabs:empty { display:none; }
         .lp-tab.on { background:#4a7a2e; color:#fdfaf4; border-color:#3f6a26; }
         .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
         .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
@@ -130,16 +130,17 @@
 <div class="bg-pattern"></div>
 
 <div class="max-w-[1400px] mx-auto py-4">
-    <div class="panel p-6 mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <a id="lp-back" href="operation_dashboard.html" class="lp-back">&#8592; Back</a>
-        <div class="text-center">
-            <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
-            <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
-        </div>
-        <!-- ONE nursery choice for the whole page, top right: the plot map and
-             PALMS both follow it, so neither draws tabs of its own. -->
-        <div id="lp-head-nur" class="lp-tabs lp-head-tabs"></div>
+    <!-- Back sits ABOVE the heading, the heading panel carries the title and
+         nothing else, and the nursery choice is BELOW it (the office: "back
+         在上面一点 BNN UNN1 UNN2在下面 中间只会有标题"). -->
+    <div class="mb-3"><a id="lp-back" href="operation_dashboard.html" class="lp-back inline-block">&#8592; Back</a></div>
+    <div class="panel p-6 mb-3 text-center">
+        <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
+        <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
     </div>
+    <!-- ONE nursery choice for the whole page: the plot map and PALMS both
+         follow it, so neither draws tabs of its own. -->
+    <div class="flex justify-end mb-6"><div id="lp-head-nur" class="lp-tabs lp-head-tabs"></div></div>
 
     <div class="lp-shell">
     <aside class="lp-side panel" id="lp-side">
@@ -836,9 +837,11 @@
         fillPlotSelect(p.plot);
         document.getElementById('lp-list').classList.add('hidden');
         document.getElementById('lp-detail').classList.remove('hidden');
-        document.getElementById('lp-title').textContent = 'Life of Plot · ' + p.plot;
+        // The heading is ALWAYS Life of Plot (the office: "标题永远都是life of plot");
+        // which plot or view is open is the line under it.
+        document.getElementById('lp-title').textContent = 'Life of Plot';
         const nurLabel = NURSERY_LABEL[p.nursery];
-        document.getElementById('lp-sub').textContent = nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
+        document.getElementById('lp-sub').textContent = p.plot + ' · ' + nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
         history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
         document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
             ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
@@ -850,8 +853,8 @@
     let VIEW = 'plots';
     let REC_YEAR = '';
     const PALMS_PAGES = {
-        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'PALMS · every plot and the stage it is on.' },
-        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'Life of Plot · the stages a plot moves through.' },
+        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'every plot and the stage it is on.' },
+        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'the stages a plot moves through.' },
     };
     function setView(v, quiet) {
         VIEW = (v === 'record' || v === 'rotation') ? v : (PALMS_PAGES[v] ? v : 'plots');
@@ -865,18 +868,18 @@
             const pg = PALMS_PAGES[VIEW];
             const fr = document.getElementById('lp-palms-frame');
             if (fr.getAttribute('src') !== pg.href) fr.setAttribute('src', pg.href);
-            document.getElementById('lp-title').textContent = pg.title;
-            document.getElementById('lp-sub').textContent = pg.sub;
+            document.getElementById('lp-title').textContent = 'Life of Plot';
+            document.getElementById('lp-sub').textContent = pg.title + ' · ' + pg.sub;
             if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
             syncPalmsNursery();
         } else if (VIEW === 'rotation') {
-            document.getElementById('lp-title').textContent = 'Pusingan Jualan & Transplant';
-            document.getElementById('lp-sub').textContent = 'Collection and transplanting by plot and month, against plan.';
+            document.getElementById('lp-title').textContent = 'Life of Plot';
+            document.getElementById('lp-sub').textContent = 'Pusingan Jualan & Transplant · collection and transplanting by plot and month, against plan.';
             if (!quiet) history.replaceState(null, '', '#view=rotation');
             renderRotation();
         } else if (VIEW === 'record') {
-            document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
-            document.getElementById('lp-sub').textContent = 'Every main plot, transplanted by month.';
+            document.getElementById('lp-title').textContent = 'Life of Plot';
+            document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
             if (!quiet) history.replaceState(null, '', '#view=record&year=' + REC_YEAR);
             renderRecord();
         } else if (!quiet) {
@@ -960,7 +963,8 @@
         [nowY, String(+nowY + 1)].forEach(y => { if (!years.includes(y)) years.push(y); });
         years.sort();
         if (!REC_YEAR || !years.includes(REC_YEAR)) REC_YEAR = years.includes(nowY) ? nowY : years[years.length - 1];
-        document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
+        document.getElementById('lp-title').textContent = 'Life of Plot';
+        document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
         document.getElementById('lp-year-row').innerHTML = years.slice().reverse().map(y => chip('year', y, y, y === REC_YEAR)).join('');
         const R = buildTransplantYear(MODEL, REC_YEAR);
         const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

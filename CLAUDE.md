@@ -12209,6 +12209,18 @@ while the PALMS map loads.
 The P.A.L.M.S tile on the Nursery Operation dashboard was taken off for the
 same reason: PALMS is reached from Life of Plot now.
 
+**The heading is ALWAYS Life of Plot**, whichever view or plot is open; that
+goes on the line under it. Back sits ABOVE the heading panel, the panel holds
+the title and nothing else, and the nursery tabs sit BELOW it, right-aligned.
+**Life of Plot must not change the batch report** (the office, firmly): a
+Plot Cycle box on Tab 3 was built and taken back out unshipped.
+
+**Pusingan Jualan over 100 percent**: the cumulative run starts after the
+latest earlier transplant month, so a plot holding two rounds at once (old
+batches still being sold while new ones go in) adds both against one
+capacity. `shared/CHECK_why_collection_goes_over_100.sql` lists every plot and
+month over 100, with the window, what was filled, and the batches sold.
+
 **The figures are the BATCH REPORT own readings** (the office: "life of plot
 里面的资料请去batch report拿 transplant 2nd cull 3rd cull 日期 quantity"), and
 each cycle card is three parts the way the batch report has them —

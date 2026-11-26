@@ -202,9 +202,9 @@ const DATA = {
   const rot = await pr.evaluate(() => {
     const row = (id, plot) => { const g = [...document.getElementById(id).children]; const i = g.findIndex(x => x.classList.contains('lp-rot-plot') && x.querySelector('b').textContent === plot); return i < 0 ? null : g.slice(i + 1, i + 13).map(c => c.textContent.trim()); };
     return { shown: !document.getElementById('lp-rot').classList.contains('hidden'), on: [...document.querySelectorAll('#lp-side .lp-side-b.on')].map(b => b.dataset.view),
-      tr: row('lp-rot-tr', 'B11'), sales: row('lp-rot-sales', 'B11'), title: document.getElementById('lp-title').textContent };
+      tr: row('lp-rot-tr', 'B11'), sales: row('lp-rot-sales', 'B11'), title: document.getElementById('lp-title').textContent, sub: document.getElementById('lp-sub').textContent };
   });
-  ok(rot.shown && rot.on.join() === 'rotation' && rot.title === 'Pusingan Jualan & Transplant', 'the side bar opens Pusingan Jualan & Transplant', rot);
+  ok(rot.shown && rot.on.join() === 'rotation' && rot.title === 'Life of Plot' && /^Pusingan Jualan & Transplant/.test(rot.sub), 'the side bar opens Pusingan Jualan & Transplant; the heading stays Life of Plot', rot);
   ok(rot.tr && rot.tr[6] === '8,972' && rot.tr[8] === '3,168' && rot.tr[9] === '135', 'Pusingan Transplant B11 2026: Jul 8,972, Sep 3,168, Oct 135 — the transplant record', rot.tr);
   ok(rot.tr && rot.tr[2] === 'Plan12,121', 'Pusingan Transplant March plan: what went in 10 months earlier (May 2025, 12,121)', rot.tr && rot.tr[2]);
   ok(rot.sales && rot.sales[4] === '1,80015%', 'May reads CUMULATIVE: 1,200 + 600 = 1,800 collected, 15% of 12,000', rot.sales && rot.sales[4]);
