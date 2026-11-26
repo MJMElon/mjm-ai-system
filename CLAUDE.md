@@ -11997,3 +11997,33 @@ and Pending Verification are new rows (`nelos`, `verify`); absent is ticked,
 so nothing moved until somebody unticks one. The keys are `DOCK_ACTION_KEY`
 in Barcode_Counter `src/lib/portalSettings.js` too. Nothing to run in the
 database.
+
+## A job the office adds is decided in the Add job window, and it is a section of its own
+
+Work Maintenance -> Settings -> Where Each Job Is Done -> Edit -> **+ Add job**.
+The office: *"全部东西要在pop out里面决定"*. The window asks the name, a
+description, where it is done (Pre / Main / Both), the side bar (its own entry,
+or under an existing job: TOGETHER in that table is shown and disabled, coming
+soon; SEPARATE is a section under that sheet), where the rows come from
+(Transplanting one row per nursery with every plot added up, Transplanting one
+row per plot, or rows added by hand), which columns it shows (date, plot,
+batch, remark; quantity always) and how a row is shared (equally among those
+ticked, or each worker keys their own). The job is one entry in
+`nops_maint_config.custom_jobs`; its price is set on Piece Rate, where it waits
+as Pending.
+
+- **Its work is `nops_custom_job_rows`** (`shared/RUN_ME_custom_jobs.sql`),
+  keyed (job_key, month, nursery, row_key). Until that is run the section
+  draws, names the file, and shuts every box.
+- **A Transplanting row is read off the office Transplanting sheet**
+  (`transplantingRows`), each plot once at its own figure; nothing reaches the
+  FC Portal or a worker phone.
+- **Checked writes the figure read into `qty`**, so a linked row stops being a
+  formula once agreed; Uncheck lets it go.
+- **Under a sheet it is drawn into `#cj-sections`** after the sheet's own
+  render (`renderPayroll` wraps `_renderPayrollBody`); its own entry draws a
+  side bar button (`syncCustomSubnav`) and the page is the job.
+- **NOT YET: the payroll claim.** Checked rows are not priced on the Nursery
+  Payroll yet.
+
+`tests/an_added_job_is_a_section_of_its_own.cjs`.

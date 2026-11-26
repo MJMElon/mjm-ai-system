@@ -474,7 +474,7 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
     await ev(page, () => jsEdit());
     await ev(page, () => jsOpenAddJob());
     check('Add job opens a dialog asking name, where, side bar and quantity source, and NO price (价钱在这里订 is the payroll)',
-      await ev(page, () => ['jb-name', 'jb-scope', 'jb-under', 'jb-qty', 'jb-rate', 'jb-unit']
+      await ev(page, () => ['jb-name', 'jb-scope', 'jb-under', 'jb-desc', 'jb-rate', 'jb-unit']
         .map(id => !!document.getElementById(id))), [true, true, true, true, false, false]);
     await ev(page, () => jsAddJob());
     check('an empty name is refused in the dialog, nothing added',
@@ -486,7 +486,7 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
       document.querySelector('input[name="jb-sb"][value="under"]').checked = true;
       jsAddJobSide();
       document.getElementById('jb-under').value = 'weeding';
-      document.getElementById('jb-qty').value = 'plot';
+      document.querySelector('input[name="jb-rows"][value="manual"]').checked = true;
       jsAddJob();
     });
     check('the job lands on the row picked, saying which job it sits under',
@@ -508,8 +508,8 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
                scope: (w[2].find(r => r.key === 'job_scope:' + k) || {}).txt_value };
     });
     check('Save writes the job and its scope', saved,
-      { n: 1, job: { key: true, label: 'Racun Rumput', sidebar: false, under: 'weeding',
-                     qtyFrom: 'plot' }, scope: 'both' });
+      { n: 1, job: { key: true, label: 'Racun Rumput', desc: '', sidebar: false, under: 'weeding',
+                     attach: 'separate', rows: 'manual', cols: {}, split: 'equal' }, scope: 'both' });
     check('the Worker List card gains its row at once',
       await ev(page, () => [...document.querySelectorAll('#jc-set-body th.jc-job')]
         .map(th => th.textContent.trim()).includes('Racun Rumput')), true);
