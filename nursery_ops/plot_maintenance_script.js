@@ -966,8 +966,8 @@ function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
 const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting', 'cull_incentive', 'seed_planting'];
 function switchPayrollView(type) {
   _payrollView = type;
-  _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
-  _syncSubNav('pn-subtab-', PAYROLL_VIEW_KEYS, type);
+  _syncSubNav('subtab-', payrollViewKeys(), type);
+  _syncSubNav('pn-subtab-', payrollViewKeys(), type);
   /* The circles follow the side tab — 上面nursery的圈圈就会跟着side tab
      show. Before the render, or the sheet draws against a nursery that is
      about to be taken off the row above it. */
@@ -1022,8 +1022,7 @@ const JOB_SCOPE_PREFIX = 'job_scope:';
    once (`cj_` + a time stamp) and never changes, so a renamed job keeps
    its scope and its crew rows. Nothing to run in the database. */
 const CUSTOM_JOBS_KEY = 'custom_jobs';
-const CJ_QTY_FROM = { plot: 'Plot seedlings', batch: 'Batch planted qty', keyed: 'Keyed by workers' };
-let customJobs = [];          // [{ key, label, sidebar, under, qtyFrom }]
+let customJobs = [];          // [{ key, label, desc, sidebar, under, attach, rows, cols, split }]
 let jobCustomDraft = null;    // the list while Where Each Job Is Done is being edited
 function _cjParse(v) {
   try {
@@ -1087,7 +1086,7 @@ function orderJobSubnav() {
   const first = document.getElementById('pn-subtab-' + PAYROLL_VIEW_KEYS[0]);
   const box = first && first.parentNode;
   if (!box) return;
-  const btns = PAYROLL_VIEW_KEYS
+  const btns = payrollViewKeys()
     .map(k => document.getElementById('pn-subtab-' + k))
     .filter(el => el && el.parentNode === box);
   if (btns.length < 2) return;
@@ -1233,7 +1232,12 @@ function payrollTotalsFor(type) {
   return { perWorker, capTotal };
 }
 
+/* The sheet, then the sections of the jobs the office added under it. */
 function renderPayroll() {
+  _renderPayrollBody();
+  try { renderCustomSections(); } catch (e) { console.warn('[maint] added-job sections:', e); }
+}
+function _renderPayrollBody() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
   /* Culling Monitoring's own buttons below the table; every other view
@@ -1261,6 +1265,7 @@ function renderPayroll() {
   if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   if (_payrollView === 'cull_incentive')    { renderCullIncentivePayroll(); return; }
   if (SP_VIEWS[_payrollView])               { renderSeedPlantingPayroll(); return; }
+  { const cj = customJob(_payrollView); if (cj) { renderCustomJobPage(cj); return; } }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -7381,15 +7386,32 @@ function applyFieldRecords(nursery, monthLbl) {
   const syncTicks = (rec, group) => {
     const type = _PAYROLL_TYPE_BY_JENIS[rec.jenis];
     if (!type) return;
-    /* A Checked row is settled, and THE FIELD does not reopen it -- which is
-       not the same rule as the screen's, and the two deliberately parted
-       company the day the office asked for the ticks back (see
-       togglePayrollTick). A PERSON may now correct a name on a checked row;
-       a PAGE LOAD may not, because that moves the piece-rate split under a
-       row the office has agreed with nobody acting and nothing saying so.
-       Same shape as "the field fills an empty cell, it never writes over a
-       full one", one row along. */
-    if (_recLocked(rec)) return;
+    /* A CHECKED ROW TAKES A NAME IN AND NEVER LETS ONE GO — *"如果我check了
+       还有工人的工作没被approved FC approved了 所有资料一模一样 除了地图 和
+       员工 就给他进来就对了"*.
+
+       It used to refuse outright, on the reasoning that a PAGE LOAD moving
+       the piece-rate split under a row the office has agreed, with nobody
+       acting and nothing saying so, is the same fault as the field writing
+       over a full cell. THAT IS STILL TRUE OF A REMOVAL, and it is the half
+       that is kept below.
+
+       It was wrong about the ADDITION, and the office found the case: the
+       conductor presses Verify on a second worker's record AFTER the row is
+       checked, and everything on it is the same morning bar the walk and the
+       person. Refused, that worker is credited by NOTHING — his record is
+       verified, it reaches no tick, and his share of the plot is simply
+       gone, with the row still looking complete. Letting him in is what
+       would have happened had the conductor pressed Verify an hour earlier.
+
+       WHAT IT COSTS, and the office has it in front of them: the plot is
+       divided among the people ticked, so a fourth name takes the other
+       three down a share. That is the RIGHT figure — it was overstated while
+       he was missing — but it does move a row the office had settled.
+
+       A row somebody corrected BY HAND is still left alone, checked or not:
+       that is their answer and this is a page load. */
+    const lockedRow = _recLocked(rec);
     const k = payrollKey(nursery, monthLbl, type);
     const store = payrollData[k] || (payrollData[k] = {});
     const cells = store[rec.id] || {};
@@ -7409,6 +7431,22 @@ function applyFieldRecords(nursery, monthLbl) {
       else unmatched.add(n);
     });
 
+    if (lockedRow) {
+      /* ADD ONLY, and that asymmetry is the whole of what is left of the old
+         refusal. A name the group no longer carries STAYS ticked: a settled
+         row must not lose a worker to a record being deleted, unverified
+         again or paired elsewhere — nobody acted, and the office agreed that
+         row with him on it. */
+      const merged = Object.assign({}, cells);
+      let added = 0;
+      Object.keys(next).forEach((col) => {
+        if (!merged[col]) { merged[col] = 'field'; added++; }
+      });
+      if (!added) return;
+      store[rec.id] = merged;
+      touched.add(type);
+      return;
+    }
     // Nothing to say and nothing was said before: leave the row alone.
     if (!Object.keys(next).length && !Object.keys(cells).length) return;
     if (Object.keys(next).length) store[rec.id] = next;
@@ -7434,12 +7472,44 @@ function applyFieldRecords(nursery, monthLbl) {
   });
 
   records.forEach(r => {
-    if (!plots.includes(r.plot) || r.checked) return;
+    if (!plots.includes(r.plot)) return;
     // A month's field records fill that month's rows and no other.
     if (!_recInMonth(r, monthLbl)) return;
     // The slot's week, not the label — see MJMMaintField.srcWeek.
     const week = MJMMaintField.rowWeek(r);
     let key = week ? _fieldKey(r.jenis, r.plot, week) : null;
+
+    /* A CHECKED ROW IS SETTLED, AND EXACTLY TWO THINGS STILL REACH IT: the
+       worker and his walk — *"除了地图 和 员工 就给他进来就对了"*. The
+       office's own sentence and what the addition costs are in syncTicks.
+
+       THREE THINGS DO NOT reach it, and each is a way a settled row would
+       otherwise move under somebody:
+
+         · THE ROUND ROUTE ONLY, never the chemical fallback. That one is
+           guarded by usedKeys and is first come, so a checked row joining
+           the queue would take a group an unchecked row has been taking
+           since the day it was written. A ROUND key cannot steal from
+           anybody — idx[key] is a plain lookup, guarded by nothing — so
+           adding it to usedKeys only stops the group being reported as
+           unpaired, which is now the truth about it.
+         · NO DATE AND NO BATCH. A checked row has both, and the field only
+           ever fills an EMPTY cell, so refusing them changes nothing today.
+           It is written out rather than left to that guard because the
+           office asked for the worker and the map and named nothing else.
+         · NOTHING IS TAKEN AWAY. No group found is not a reason to strip a
+           settled row of its links, its ticks or its track: those belong to
+           the records it was agreed with. */
+    if (r.checked) {
+      const gc = key ? idx[key] : null;
+      if (!gc) return;
+      usedKeys.add(key);
+      r._fieldIds = gc.ids.slice();
+      r._fieldTracks = (gc.tracks || []).slice();
+      syncTicks(r, gc);
+      return;
+    }
+
     let g = key ? idx[key] : null;
     /* The round did not find it. Try the chemical — the office scheduled
        this exact spray on this exact plot, and the only thing the two sides
@@ -9431,36 +9501,43 @@ function _dateCell(r) {
    it whatever is underneath (the office's own N20-R: `10 Nov 2026` with a
    claim for the 21st under it), because those really are two facts and
    dropping either is the one thing this cell must not do. */
-/* AND THE SENTENCE GOES WHERE THE TAB ALREADY SAYS IT — *"waiting for
-   approval 也拿掉 因为它已经under pending了 代表就是waiting了 不用重复"*.
+/* AND THE CHIP IS A PENDING THING ONLY — *"Approved tab 的橙色 完全不需要
+   这个功能"*.
 
-   They are right, and the REASON they gave is the rule rather than the
-   removal: *因为它已经under pending了*. It is true on the Pending tab and
-   false everywhere else, so the sentence is drawn where it is still
-   answering something and nowhere else.
+   It was drawn on both tabs, because a row the conductor signed off CAN
+   still carry a second worker's record waiting on it, and the argument was
+   that the Approved tab says the opposite of waiting so such a row has to
+   say so. The office looked for one, could not find one, and then said what
+   the orange had really been for: *"只是我看到我即将check的行有没有工人的
+   记录还没进来"* — a warning, before pressing Check, that somebody's work
+   was still outstanding on that row.
 
-   TWO PLACES IT IS STILL ANSWERING, and neither is the tab repeating
-   itself:
+   THE WARNING IS GONE BECAUSE THE FAULT IT WARNED ABOUT IS. A record
+   verified after the row was checked used to reach nothing at all; it is
+   let in now, the worker and his walk, which is the change in
+   applyFieldRecords and the office's own ruling on it. There is nothing
+   left to be warned about before pressing Check, so the orange on that tab
+   is a question sitting on the one list that holds answers.
 
-   - **THE APPROVED TAB**, where a row the conductor signed off can still
-     carry a SECOND submission waiting on it. That tab says the opposite of
-     waiting, so a bare amber date there is the unlabelled chip all over
-     again — which is where *"这什么意思"* came from two days ago.
-   - **A ROW CARRYING A DAY OF ITS OWN**, the office's own N20-R: `10 Nov
-     2026` with a claim for the 21st under it. Two dates one above the other
-     with nothing between them is a question whatever tab they are on, and
-     the sentence is the one thing that answers it.
+   WHAT IT COSTS, named rather than buried: a record still waiting on an
+   approved row is now on NO tab of this page. It is not lost and it is in
+   no count here, so no number promises a row nobody can find — it is
+   sitting in the Field Conductor's Verify Hub, which is where it is
+   waiting, and the moment he presses Verify it lands on the row by itself.
 
-   So on Pending, on a row whose own date is a dash, the cell is the day and
-   nothing else — which is every row they were looking at. The hover carries
-   the whole sentence and the worker names either way. */
+   THE SENTENCE HAS ONE CASE LEFT and the office kept it: a PENDING row
+   carrying a day of its own — their own N20-R, `10 Nov 2026` with a claim
+   for the 21st under it. Two dates one above the other with nothing between
+   them is a question, and the sentence is the one thing that answers it. A
+   pending row whose own date is a dash is the day and nothing else, which
+   is every row they were looking at; the hover carries the whole sentence
+   and the worker names either way. */
 function _dateWithChip(r, list) {
-  const cell  = _dateCell(r);
-  const bare  = cell === '-';
-  const label = _recSection !== 'pending' || !bare;
-  const chip  = _waitingChip(list, { label });
-  if (chip && bare) return chip;
-  return cell + chip;
+  const cell = _dateCell(r);
+  if (_recSection !== 'pending') return cell;
+  const bare = cell === '-';
+  const chip = _waitingChip(list, { label: !bare });
+  return (chip && bare) ? chip : cell + chip;
 }
 
 const _mvPlotKey    = PlotMovement.plotKey;
@@ -13156,6 +13233,7 @@ async function loadSettingLists() {
     const cr = ((cfgRes && cfgRes.data) || []).find(r => r && r.key === CUSTOM_JOBS_KEY);
     customJobs = cr ? _cjParse(cr.txt_value) : [];
     _cjFeedCrew();
+    setTimeout(() => { try { syncCustomSubnav(); } catch (e) { console.warn('[maint] added-job side bar:', e); } }, 0);
   }
   try { jobCrews = window.MJMJobCrew ? MJMJobCrew.readConfig((cfgRes && cfgRes.data) || []) : {}; }
   catch (e) { jobCrews = {}; console.warn('[maint] job worker lists:', e); }
@@ -13338,7 +13416,8 @@ function _jsRowHtml(scope, scopes, editing) {
   const chips = jobs.length
     ? jobs.map(k => {
         const cj = customJob(k, list);
-        const sub = cj && !cj.sidebar && cj.under ? `<span class="jb-under">under ${esc(jobLabel(cj.under))}</span>` : '';
+        /* No "under …" on the chip: the office took it off (under transplanting字眼不需要). */
+        const sub = '';
         const x = cj && editing ? `<button type="button" class="jb-x" data-cj-remove="${esc(k)}" title="Remove this job"
             onclick="jsRemoveJob('${esc(k)}')">×</button>` : '';
         return `<span class="jb-chip${cj ? ' jb-chip-cj' : ''}"${editing ? ' draggable="true"' : ''}
@@ -13388,22 +13467,32 @@ function jsOpenAddJob() {
   if (!jobScopeDraft || !maySetting()) return;
   jsCloseAddJob();
   const opts = PAYROLL_VIEW_KEYS.map(k => `<option value="${esc(k)}">${esc(jobLabel(k))}</option>`).join('');
+  const radio = (name, v, label, on, extra) => `<label class="jb-r"><input type="radio" name="${name}" value="${v}"${on ? ' checked' : ''}${extra || ''} onchange="jsAddJobSide()"> ${label}</label>`;
   const d = document.createElement('div');
   d.id = 'jb-dlg';
   d.className = 'jb-dlg-back';
   d.innerHTML = `<div class="jb-dlg" role="dialog" aria-modal="true" aria-labelledby="jb-dlg-h">
       <div class="jb-dlg-h" id="jb-dlg-h">Add job</div>
-      <label class="jb-f"><span>Job name</span><input type="text" id="jb-name" maxlength="60" placeholder="e.g. Racun Rumput"></label>
+      <label class="jb-f"><span>Job name</span><input type="text" id="jb-name" maxlength="60" placeholder="e.g. Seedlings Incentive"></label>
+      <label class="jb-f"><span>Description</span><input type="text" id="jb-desc" maxlength="120" placeholder="e.g. Transfer seedling to big polybag"></label>
       <label class="jb-f"><span>Where it is done</span><select id="jb-scope">
         <option value="main">Main Nursery (BNN · UNN 1 · UNN 2)</option>
         <option value="pre">Pre Nursery (PN)</option>
         <option value="both">Both</option></select></label>
       <div class="jb-f"><span>Side bar</span>
-        <label class="jb-r"><input type="radio" name="jb-sb" value="own" checked onchange="jsAddJobSide()"> Its own entry</label>
-        <label class="jb-r"><input type="radio" name="jb-sb" value="under" onchange="jsAddJobSide()"> Under an existing job</label>
+        ${radio('jb-sb', 'own', 'Its own entry', true)}
+        ${radio('jb-sb', 'under', 'Under an existing job', false)}
         <select id="jb-under" disabled>${opts}</select></div>
-      <label class="jb-f"><span>Quantity from</span><select id="jb-qty">
-        ${Object.keys(CJ_QTY_FROM).map(k => `<option value="${k}">${esc(CJ_QTY_FROM[k])}</option>`).join('')}</select></label>
+      <div class="jb-f"><span>Rows &amp; quantity from</span>
+        ${radio('jb-rows', 'tp_nursery', 'Transplanting — one row per nursery (all plots added up)', true)}
+        ${radio('jb-rows', 'tp_plot', 'Transplanting — one row per plot', false)}
+        ${radio('jb-rows', 'manual', 'Rows added and keyed by hand', false)}</div>
+      <div class="jb-f"><span>Columns</span>
+        <div class="jb-ticks">${Object.keys(CJ_COLS).map(k => `<label class="jb-r"><input type="checkbox" id="jb-col-${k}"> ${CJ_COLS[k]}</label>`).join('')}
+          <label class="jb-r"><input type="checkbox" checked disabled> Quantity</label></div></div>
+      <div class="jb-f"><span>Quantity to the workers</span>
+        ${radio('jb-split', 'equal', 'Shared equally among the workers ticked', true)}
+        ${radio('jb-split', 'each', 'Each worker keys their own figure', false)}</div>
       <div class="jb-dlg-err" id="jb-err"></div>
       <div class="lst-foot">
         <button class="btn" onclick="jsCloseAddJob()">Cancel</button>
@@ -13411,35 +13500,58 @@ function jsOpenAddJob() {
       </div></div>`;
   d.addEventListener('mousedown', e => { if (e.target === d) jsCloseAddJob(); });
   document.body.appendChild(d);
+  jsAddJobSide();
   const n = document.getElementById('jb-name');
   if (n) n.focus();
 }
+/* What one answer makes of the others: the job list belongs to "under"
+   (always a separate section under that sheet; "together in the same table"
+   was offered as coming soon and the office took it off), and a nursery row
+   has no date, plot or batch to show. */
 function jsAddJobSide() {
-  const u = document.getElementById('jb-under');
-  const r = document.querySelector('input[name="jb-sb"]:checked');
-  if (u) u.disabled = !(r && r.value === 'under');
+  const pick = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value;
+  const under = pick('jb-sb') === 'under';
+  const u = document.getElementById('jb-under'); if (u) u.disabled = !under;
+  const rows = pick('jb-rows');
+  ['date', 'plot', 'batch'].forEach(k => {
+    const c = document.getElementById('jb-col-' + k);
+    if (!c) return;
+    const off = rows === 'tp_nursery' || (k === 'plot' && rows === 'tp_plot');
+    if (k === 'plot' && rows === 'tp_plot') c.checked = true;
+    if (rows === 'tp_nursery') c.checked = false;
+    c.disabled = off;
+  });
 }
 function jsCloseAddJob() { const d = document.getElementById('jb-dlg'); if (d) d.remove(); }
 function jsAddJob() {
   if (!jobScopeDraft || !jobCustomDraft || !maySetting()) return;
   const v = id => (document.getElementById(id) || {}).value || '';
+  const pick = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value;
   const err = document.getElementById('jb-err');
   const say = m => { if (err) err.textContent = m; };
   const label = v('jb-name').trim().replace(/\s+/g, ' ');
   const kk = x => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!label) return say('Key the job name.');
   if (allJobKeys(jobCustomDraft).some(k => kk(jobLabel(k)) === kk(label))) return say(`${label} is already a job.`);
-  const side = (document.querySelector('input[name="jb-sb"]:checked') || {}).value || 'own';
+  const side = pick('jb-sb') || 'own';
   /* THE PRICE IS SET ON THE PAYROLL, not here: "价钱在这里订". Nursery
      Payroll → Settings → Piece Rate lists this job as Pending until it has
      one. */
   const scope = JOB_SCOPE_ROWS.includes(v('jb-scope')) ? v('jb-scope') : 'main';
+  const rows = CJ_ROWS[pick('jb-rows')] ? pick('jb-rows') : 'manual';
+  const cols = {};
+  Object.keys(CJ_COLS).forEach(k => { const c = document.getElementById('jb-col-' + k); if (c && c.checked && !c.disabled) cols[k] = true; });
+  if (rows === 'tp_plot') cols.plot = true;
   const job = {
     key: 'cj_' + Date.now().toString(36),
-    label, sidebar: side !== 'under',
+    label, desc: v('jb-desc').trim().replace(/\s+/g, ' '),
+    sidebar: side !== 'under',
     under: side === 'under' && PAYROLL_VIEW_KEYS.includes(v('jb-under')) ? v('jb-under') : null,
-    qtyFrom: CJ_QTY_FROM[v('jb-qty')] ? v('jb-qty') : 'keyed',
+    attach: 'separate',
+    rows, cols,
+    split: pick('jb-split') === 'each' ? 'each' : 'equal',
   };
+  if (side === 'under' && !job.under) return say('Pick the job it goes under.');
   jobCustomDraft.push(job);
   jobScopeDraft[job.key] = scope;
   jsCloseAddJob();
@@ -13531,6 +13643,7 @@ async function jsSave() {
     jobScopes = Object.assign({}, draft);
     customJobs = cjDraft.map(j => Object.assign({}, j));
     _cjFeedCrew();
+    try { syncCustomSubnav(); } catch (e) { console.warn('[maint] added-job side bar:', e); }
     jobScopeDraft = null;
     jobCustomDraft = null;
     renderJobScopeSetting();
@@ -16707,4 +16820,327 @@ function renderWorkEditor() {
     ft[r].querySelectorAll('td').forEach(td => { td.style.bottom = off + 'px'; });
     off += h;
   }
+}
+
+/* ══ A JOB THE OFFICE ADDED, ON WORKER ACTIVITY ═══════════════════════════
+   Everything about it is decided in the Add job window on Where Each Job Is
+   Done ("全部东西要在pop out里面决定"): its name and description, where it is
+   done, whether it is a side bar entry of its own or a SECTION of its own
+   under an existing job's sheet ("我不要和transplanting贴在一起 要另外一个
+   section but also under transplanting的side bar"), where its rows come
+   from, which columns it shows and how a row's quantity is shared.
+
+   ROWS:
+     tp_plot     one row per plot on that month's Transplanting sheet, the
+                 quantity being the plot's own Transplanting figure;
+     tp_nursery  one row for the nursery, the quantity being every plot's
+                 Transplanting figure added up ("全部transplanting号码加起来");
+     manual      rows the office adds and keys.
+   Transplanting rows are READ from the office's own Transplanting sheet --
+   nothing goes to the FC Portal or a worker's phone, which see nothing of
+   this ("新加的只有我们看得到").
+
+   SPLIT: 'equal' divides a row among the workers ticked; 'each' takes the
+   figure keyed under each name.
+
+   ONE TABLE, nops_custom_job_rows, keyed (job_key, month, nursery, row_key):
+   the ticks, the figures, Checked, and for a manual row its keyed cells. A
+   linked quantity is written into `qty` only when the row is CHECKED, which
+   is the rule Checked has everywhere on this page: it stops a figure being a
+   formula. Until the SQL is run the section is drawn and every box is shut,
+   with the file to run named. */
+const CJ_TABLE = 'nops_custom_job_rows';
+const CJ_ROWS = { tp_plot: 'Transplanting — one row per plot', tp_nursery: 'Transplanting — one row per nursery (all plots added up)', manual: 'Rows added and keyed by hand' };
+const CJ_COLS = { date: 'Date', plot: 'Plot', batch: 'Batch', remark: 'Remark' };
+const _cjCache = {};     // `${n}|${m}` -> { rows: {job: {rowKey: row}}, noTable, err }
+const _cjLoading = {};
+
+function cjOwnKeys() { return customJobs.filter(j => j.sidebar !== false).map(j => j.key); }
+function payrollViewKeys() { return PAYROLL_VIEW_KEYS.concat(cjOwnKeys()); }
+function cjUnder(host) { return customJobs.filter(j => j.sidebar === false && j.under === host); }
+
+/* The side bar carries an entry for every job that asked for its own. */
+function syncCustomSubnav() {
+  const first = document.getElementById('pn-subtab-' + PAYROLL_VIEW_KEYS[0]);
+  const box = first && first.parentNode;
+  if (!box) return;
+  const want = new Set(cjOwnKeys());
+  box.querySelectorAll('.cj-subtab').forEach(b => { if (!want.has(b.dataset.cj)) b.remove(); });
+  customJobs.filter(j => want.has(j.key)).forEach(j => {
+    let b = document.getElementById('pn-subtab-' + j.key);
+    if (!b) {
+      b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pn-subtab cj-subtab';
+      b.id = 'pn-subtab-' + j.key;
+      b.dataset.cj = j.key;
+      b.addEventListener('click', () => switchPayrollView(j.key));
+      box.appendChild(b);
+    }
+    b.textContent = j.label;
+  });
+  if (typeof orderJobSubnav === 'function') orderJobSubnav();
+  _syncSubNav('pn-subtab-', payrollViewKeys(), _payrollView);
+}
+
+async function loadCustomJobRows(n, m) {
+  const ck = n + '|' + m;
+  if (!_supabase || _cjLoading[ck]) return;
+  _cjLoading[ck] = true;
+  try {
+    const { data, error } = await _supabase.from(CJ_TABLE).select('*')
+      .eq('month', m).eq('nursery', n).then(r => r, e => ({ error: e }));
+    const out = { rows: {}, noTable: false, err: '' };
+    if (error) {
+      if (/does not exist|schema cache|relation/i.test(error.message || '')) out.noTable = true;
+      else out.err = error.message || 'could not be read';
+    } else {
+      (data || []).forEach(r => { ((out.rows[r.job_key] ||= {}))[r.row_key] = r; });
+    }
+    _cjCache[ck] = out;
+  } finally {
+    _cjLoading[ck] = false;
+    renderPayroll();
+  }
+}
+
+/* The rows a job shows, before anything saved is laid over them. */
+function cjBaseRows(job, n, m) {
+  const st = _cjCache[n + '|' + m] || { rows: {} };
+  const saved = st.rows[job.key] || {};
+  if (job.rows === 'manual') {
+    return Object.values(saved).sort((a, b) => String(a.created_at || a.row_key).localeCompare(String(b.created_at || b.row_key)))
+      .map(s => ({ key: s.row_key, qty: Number(s.qty) || 0, date: s.date || '', plot: s.plot || '', batch: s.batch || '', manual: true }));
+  }
+  const tkey = _tpPayrollKey(n, m);
+  if (_tpRecordsCache[tkey] === undefined) { if (!_tpRecordsLoading[tkey]) loadTransplantRecordsForPayroll(n, m); return null; }
+  const byPlot = {};
+  transplantingRows(n, m).forEach(r => {
+    const p = r.plot_name; if (!p) return;
+    const b = (byPlot[p] ||= { key: p, plot: p, qty: 0, date: '', batches: new Set() });
+    b.qty = Math.max(b.qty, Number(r.source_qty) || 0);
+    const d = String(tpShownDate(r) || '').slice(0, 10);
+    if (d && (!b.date || d < b.date)) b.date = d;
+    String(r.batch_name || '').split(/[,/]/).map(x => x.trim()).filter(Boolean).forEach(x => b.batches.add(x));
+  });
+  const plots = Object.values(byPlot).map(b => ({ key: b.key, plot: b.plot, qty: b.qty, date: b.date, batch: [...b.batches].join(', ') }));
+  if (job.rows === 'tp_nursery') {
+    return plots.length ? [{ key: 'nursery', nurseryRow: true, qty: plots.reduce((a, b) => a + b.qty, 0), plots: plots.length }] : [];
+  }
+  return plots;
+}
+
+function cjShare(job, row, s, w, crew) {
+  const cells = (s && s.workers) || {};
+  if (job.split === 'each') return Number(cells[w]) || 0;
+  return cells[w] && crew ? row.qty / crew : 0;
+}
+
+/* One section: the table rows of a job, for the screen. */
+/* The same heading cell the Transplanting sheet draws (payTh), so a custom
+   section reads at the same size as the table above it. */
+const cjTh = (txt, w) => `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+
+function cjSectionHtml(job, n, m) {
+  const st = _cjCache[n + '|' + m];
+  if (!st && !_cjLoading[n + '|' + m]) loadCustomJobRows(n, m);
+  const base = st ? cjBaseRows(job, n, m) : null;
+  const cols = job.cols || {};
+  const showDate = !!cols.date && job.rows !== 'tp_nursery';
+  const showPlot = job.rows === 'tp_plot' || (job.rows === 'manual' && !!cols.plot);
+  const showBatch = !!cols.batch && job.rows !== 'tp_nursery';
+  const showRemark = !!cols.remark;
+  const wk = jobWorkers(n, job.key);
+  const lead = (job.rows === 'tp_nursery' ? 1 : 0) + (showDate ? 1 : 0) + (showPlot ? 1 : 0) + (showBatch ? 1 : 0);
+  const span = lead + 1 + wk.length + (showRemark ? 1 : 0) + 1;
+  const head = `<tr><th class="wk-th cj-th" colspan="${span}">${esc(job.label)}${job.desc ? `<div class="cj-desc">${esc(job.desc)}</div>` : ''}</th></tr>
+    <tr>${job.rows === 'tp_nursery' ? cjTh('Nursery', 190) : ''}${showDate ? cjTh(t('pay.date'), 92) : ''}${showPlot ? cjTh(t('pay.plot'), 84) : ''}${showBatch ? cjTh('Batch', 104) : ''}
+      ${cjTh(t('pay.qtyTransplant'), 104)}${wk.map(w => cjTh(esc(w), 108)).join('')}${showRemark ? cjTh('Remark', 160) : ''}${cjTh(t('pay.checked'), 132)}</tr>`;
+  if (!st || base === null) {
+    return { head, body: `<tr><td colspan="${span}" class="cj-empty">${t('pay.loading')}</td></tr>`, foot: '', job, span };
+  }
+  const shut = !!st.noTable || workRecLocked(job.key);
+  const saved = st.rows[job.key] || {};
+  const totals = {}; wk.forEach(w => { totals[w] = 0; });
+  let qtyTotal = 0;
+  let body = '';
+  if (!base.length) {
+    body = `<tr><td colspan="${span}" class="cj-empty">${job.rows === 'manual' ? 'No row yet.' : `Nothing on the Transplanting sheet for ${esc(m)}.`}</td></tr>`;
+  }
+  base.forEach(r => {
+    const s = saved[r.key];
+    const checked = !!(s && s.checked_at);
+    const qty = checked && s.qty != null ? Number(s.qty) : r.qty;
+    const row = Object.assign({}, r, { qty });
+    const crew = Object.keys((s && s.workers) || {}).filter(w => (s.workers[w])).length;
+    const lock = shut || checked;
+    const rk = esc(r.key).replace(/'/g, "\\'");
+    const jk = esc(job.key);
+    qtyTotal += qty;
+    const inp = (field, val, type) => job.rows === 'manual'
+      ? `<input class="cj-in" type="${type || 'text'}" value="${esc(val == null ? '' : String(val))}"${lock ? ' disabled' : ''}
+           onchange="setCustomJobField('${jk}','${rk}','${field}',this.value)">`
+      : esc(val || '—');
+    body += `<tr data-cj-row="${esc(r.key)}"${checked ? ' class="cj-checked"' : ''}>
+      ${job.rows === 'tp_nursery' ? `<td>${esc(NURSERY_NAMES[n] || n)}<div class="cj-sub">${r.plots} plot${r.plots === 1 ? '' : 's'}</div></td>` : ''}
+      ${showDate ? `<td>${job.rows === 'manual' ? inp('date', s && s.date, 'date') : esc(r.date ? _spDay(r.date) : '—')}</td>` : ''}
+      ${showPlot ? `<td class="plot-td">${job.rows === 'manual' ? inp('plot', s && s.plot) : esc(r.plot)}</td>` : ''}
+      ${showBatch ? `<td>${job.rows === 'manual' ? inp('batch', s && s.batch) : esc(r.batch || '—')}</td>` : ''}
+      <td>${job.rows === 'manual' ? inp('qty', s && s.qty, 'number') : (qty ? qty.toLocaleString(USAGE_LOCALE) : '—')}</td>
+      ${wk.map(w => {
+        const share = cjShare(job, row, s, w, crew);
+        totals[w] += share;
+        if (job.split === 'each') {
+          const v = s && s.workers && s.workers[w];
+          return `<td class="cj-cell"><input class="cj-in cj-num" type="number" min="0" step="1" value="${v ? esc(String(v)) : ''}"${lock ? ' disabled' : ''}
+            onchange="setCustomJobWorker('${jk}','${rk}','${esc(w).replace(/'/g, "\\'")}',this.value)" aria-label="${esc(w)}"></td>`;
+        }
+        const on = !!(s && s.workers && s.workers[w]);
+        return `<td class="cj-cell"><input type="checkbox"${on ? ' checked' : ''}${lock ? ' disabled' : ''}
+            onchange="setCustomJobWorker('${jk}','${rk}','${esc(w).replace(/'/g, "\\'")}',this.checked?1:0)" aria-label="${esc(w)}">
+            <div class="cj-sub">${on && share ? capFmt(share) : ''}</div></td>`;
+      }).join('')}
+      ${showRemark ? `<td><input class="cj-in" type="text" value="${esc((s && s.remark) || '')}"${lock ? ' disabled' : ''}
+            onchange="setCustomJobField('${jk}','${rk}','remark',this.value)"></td>` : ''}
+      <td style="white-space:nowrap;">${st.noTable ? '—' : checked
+        ? `<span class="rec-checked-badge" title="Checked on ${esc(_maintWhen(s.checked_at))}">✓ ${esc(_maintWho(s.checked_by) || 'Checked')}</span>
+           <button class="btn btn-sm" onclick="toggleCustomJobCheck('${jk}','${rk}')">Uncheck</button>`
+        : `<button class="btn btn-sm btn-check" onclick="toggleCustomJobCheck('${jk}','${rk}')"${shut ? ' disabled' : ''}>✓ Check</button>
+           ${job.rows === 'manual' ? `<button class="btn btn-sm" title="Remove this row" onclick="removeCustomJobRow('${jk}','${rk}')"${shut ? ' disabled' : ''}>✕</button>` : ''}`}</td>
+    </tr>`;
+  });
+  const foot = `<tr class="jumlah-tr"><td class="th-left" colspan="${lead || 1}">${esc(job.label)} — ${t('pay.totalCap')}</td>
+      ${lead ? `<td>${qtyTotal ? qtyTotal.toLocaleString(USAGE_LOCALE) : '—'}</td>` : ''}
+      ${wk.map(w => `<td>${capFmt(totals[w])}</td>`).join('')}${showRemark ? '<td></td>' : ''}<td></td></tr>`;
+  return { head, body, foot, job, span, noTable: st.noTable, err: st.err };
+}
+
+function cjBlockHtml(job, n, m) {
+  const s = cjSectionHtml(job, n, m);
+  const add = job.rows === 'manual' && !s.noTable
+    ? `<button class="btn btn-sm cj-add" onclick="addCustomJobRow('${esc(job.key)}')">+ Add row</button>` : '';
+  const warn = s.noTable ? `<div class="pay-hint pay-hint-warn cj-warn">${esc(job.label)} cannot save yet: run shared/RUN_ME_custom_jobs.sql in Supabase.</div>`
+    : s.err ? `<div class="pay-hint pay-hint-warn cj-warn">${esc(s.err)}</div>` : '';
+  return `<div class="cj-block" data-cj="${esc(job.key)}">${warn}
+    <div class="card"><div class="tbl-wrap"><table class="sched-table cj-tbl">
+      <thead>${s.head}</thead><tbody>${s.body}</tbody>${s.foot ? `<tfoot>${s.foot}</tfoot>` : ''}
+    </table></div></div>${add}</div>`;
+}
+
+/* The sections under the sheet on screen, one per job added under it. */
+function renderCustomSections() {
+  const box = document.getElementById('cj-sections');
+  if (!box) return;
+  const jobs = cjUnder(_payrollView);
+  box.innerHTML = jobs.length ? jobs.map(j => cjBlockHtml(j, getNursery(), getMonth())).join('') : '';
+}
+/* A job with its own side bar entry is the whole page. */
+function renderCustomJobPage(job) {
+  const tbl = document.getElementById('payroll-table');
+  if (!tbl) return;
+  const n = getNursery(), m = getMonth();
+  const line = document.getElementById('payroll-form-line');
+  if (line) line.textContent = `${t('pay.form')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
+  const hint = document.getElementById('payroll-hint');
+  if (hint) { hint.textContent = ''; hint.classList.remove('pay-hint-warn'); }
+  const off = document.getElementById('payroll-offreg');
+  if (off) off.style.display = 'none';
+  const s = cjSectionHtml(job, n, m);
+  tbl.innerHTML = `<thead>${s.head}</thead><tbody>${s.body}</tbody>${s.foot ? `<tfoot>${s.foot}</tfoot>` : ''}`;
+  const extra = document.getElementById('payroll-extra');
+  if (extra) {
+    extra.innerHTML = (s.noTable ? `<div class="pay-hint pay-hint-warn cj-warn">${esc(job.label)} cannot save yet: run shared/RUN_ME_custom_jobs.sql in Supabase.</div>` : '')
+      + (job.rows === 'manual' && !s.noTable ? `<button class="btn btn-sm cj-add" onclick="addCustomJobRow('${esc(job.key)}')">+ Add row</button>` : '');
+  }
+}
+
+function _cjState(jobKey) {
+  const job = customJob(jobKey);
+  const n = getNursery(), m = getMonth();
+  const st = _cjCache[n + '|' + m];
+  return { job, n, m, st };
+}
+function _cjRowOf(st, jobKey, rowKey, n, m) {
+  const rows = (st.rows[jobKey] ||= {});
+  return rows[rowKey] || (rows[rowKey] = { job_key: jobKey, month: m, nursery: n, row_key: rowKey, workers: {} });
+}
+async function _cjPersist(row) {
+  const payload = {
+    job_key: row.job_key, month: row.month, nursery: row.nursery, row_key: row.row_key,
+    qty: row.qty == null || row.qty === '' ? null : Number(row.qty),
+    date: row.date || null, plot: row.plot || null, batch: row.batch || null, remark: row.remark || null,
+    workers: row.workers || {}, checked_at: row.checked_at || null, checked_by: row.checked_by || null,
+    updated_by: window.currentUserEmail || _signingAs() || null, updated_at: new Date().toISOString(),
+  };
+  const { error } = await _supabase.from(CJ_TABLE).upsert(payload, { onConflict: 'job_key,month,nursery,row_key' })
+    .then(r => r, e => ({ error: e }));
+  if (error) alert('That did not save, so nothing has changed:\n\n' + (error.message || error));
+  return !error;
+}
+function _cjAllowed(job, st, row) {
+  if (!job || !st || st.noTable) return false;
+  if (!wrAllows(job.key)) return false;
+  if (row && row.checked_at) { alert(`${job.label}: this row is Checked. Uncheck it first to change it.`); renderPayroll(); return false; }
+  return true;
+}
+async function setCustomJobWorker(jobKey, rowKey, name, val) {
+  const { job, n, m, st } = _cjState(jobKey);
+  const row = st && _cjRowOf(st, jobKey, rowKey, n, m);
+  if (!_cjAllowed(job, st, row)) return;
+  row.workers = Object.assign({}, row.workers || {});
+  const v = job.split === 'each' ? Math.max(0, Math.round(Number(val) || 0)) : (Number(val) ? 1 : 0);
+  if (v) row.workers[name] = v; else delete row.workers[name];
+  renderPayroll();
+  await _cjPersist(row);
+}
+async function setCustomJobField(jobKey, rowKey, field, val) {
+  const { job, n, m, st } = _cjState(jobKey);
+  const row = st && _cjRowOf(st, jobKey, rowKey, n, m);
+  if (!_cjAllowed(job, st, row)) return;
+  if (!['date', 'plot', 'batch', 'remark', 'qty'].includes(field)) return;
+  if (field === 'qty') {
+    if (job.rows !== 'manual') return;
+    row.qty = String(val).trim() === '' ? null : Math.max(0, Number(val) || 0);
+  } else row[field] = String(val || '').trim();
+  renderPayroll();
+  await _cjPersist(row);
+}
+async function addCustomJobRow(jobKey) {
+  const { job, n, m, st } = _cjState(jobKey);
+  if (!job || job.rows !== 'manual' || !_cjAllowed(job, st)) return;
+  const row = _cjRowOf(st, jobKey, 'm' + Date.now().toString(36), n, m);
+  row.created_at = new Date().toISOString();
+  renderPayroll();
+  await _cjPersist(row);
+}
+async function removeCustomJobRow(jobKey, rowKey) {
+  const { job, st } = _cjState(jobKey);
+  const row = st && (st.rows[jobKey] || {})[rowKey];
+  if (!row || !_cjAllowed(job, st, row)) return;
+  if (!confirm('Remove this row?')) return;
+  const { error } = await _supabase.from(CJ_TABLE).delete().eq('job_key', jobKey).eq('month', row.month)
+    .eq('nursery', row.nursery).eq('row_key', rowKey).then(r => r, e => ({ error: e }));
+  if (error) { alert('That did not save, so nothing has changed:\n\n' + (error.message || error)); return; }
+  delete st.rows[jobKey][rowKey];
+  renderPayroll();
+}
+/* CHECKED WRITES DOWN WHAT THE ROW READ, so a linked quantity stops being a
+   formula once somebody has agreed it; Uncheck lets it go again. */
+async function toggleCustomJobCheck(jobKey, rowKey) {
+  const { job, n, m, st } = _cjState(jobKey);
+  if (!job || !st || st.noTable || !wrAllows(job.key)) return;
+  const row = _cjRowOf(st, jobKey, rowKey, n, m);
+  const base = (cjBaseRows(job, n, m) || []).find(r => r.key === rowKey);
+  const was = { at: row.checked_at, by: row.checked_by, qty: row.qty };
+  if (row.checked_at) {
+    if (!confirm('Uncheck this row?')) return;
+    row.checked_at = null; row.checked_by = null;
+    if (job.rows !== 'manual') row.qty = null;
+  } else {
+    row.checked_at = new Date().toISOString();
+    row.checked_by = window.currentUserEmail || _signingAs() || null;
+    if (job.rows !== 'manual' && base) row.qty = base.qty;
+  }
+  renderPayroll();
+  if (!(await _cjPersist(row))) { row.checked_at = was.at; row.checked_by = was.by; row.qty = was.qty; renderPayroll(); }
 }

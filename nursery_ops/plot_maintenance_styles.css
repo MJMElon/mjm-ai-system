@@ -2212,7 +2212,6 @@ tr.sp-job-off .sp-off-note{font-weight:500;font-size:11px;margin-left:8px;color:
 
 /* Where Each Job Is Done: jobs the office adds, and the Add job dialog. */
 .jb-chip-cj{display:inline-flex;align-items:center;gap:6px;}
-.jb-under{font-size:11px;font-weight:600;color:var(--text-faint);}
 .jb-x{border:0;background:none;color:var(--text-faint);font-size:14px;line-height:1;padding:0 0 0 2px;cursor:pointer;}
 .jb-x:hover{color:#b91c1c;}
 #js-set-body .lst-foot .jb-add{margin-right:auto;}
@@ -2226,3 +2225,19 @@ tr.sp-job-off .sp-off-note{font-weight:500;font-size:11px;margin-left:8px;color:
 .jb-f2 label{flex:1;display:flex;flex-direction:column;gap:5px;}
 .jb-r{display:flex;align-items:center;gap:6px;font-weight:600;}
 .jb-dlg-err{color:#b91c1c;font-size:12px;font-weight:700;min-height:16px;margin-bottom:4px;}
+
+/* Add job window: the attach choice and the column ticks. */
+.jb-ticks{display:flex;flex-wrap:wrap;gap:6px 16px;}
+/* A job the office added, as a section of its own under a sheet. */
+#cj-sections .cj-block{margin-top:22px;}
+.cj-tbl th.cj-th{text-align:center;}
+.cj-tbl .cj-desc{display:inline;font-size:11px;font-weight:600;opacity:.85;text-transform:none;letter-spacing:0;margin:0 0 0 8px;}
+.cj-tbl .cj-desc::before{content:'· ';}
+.cj-tbl td,.cj-tbl th{text-align:center;vertical-align:middle;}
+.cj-tbl .cj-sub{font-size:11px;color:var(--text-faint);margin-top:2px;}
+.cj-tbl .cj-empty{padding:1.4rem;color:var(--text-faint);font-size:13px;}
+.cj-tbl input.cj-in{width:100%;min-width:72px;box-sizing:border-box;padding:4px 6px;border:1px solid var(--border,#dce3e8);border-radius:6px;font-size:13px;text-align:center;}
+.cj-tbl input.cj-in:disabled{background:#f3f4f6;color:#6b7280;}
+.cj-tbl tr.cj-checked td{background:#f6fbf7;}
+.cj-add{margin-top:8px;}
+.cj-warn{margin-bottom:8px;}
