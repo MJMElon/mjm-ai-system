@@ -159,6 +159,14 @@ async function boot(browser) {
         chemical: 'Manual', qty: 900, work_date: '2026-11-12', week_no: 2,
         schedule_month: m, worked_by: 'Siti', reported_by: 'Siti',
         verified_at: null, rejected_at: null },
+      /* A SECOND WORKER ON THE SAME ROUND, and it is the office's own U12:
+         two people recorded that morning, so the chip stood for both and
+         said so as `+1`, which they read and asked what it meant. One
+         waiting record per row cannot test a count at all. */
+      { id: 9105, plot_name: 'B2', work_type: 'weeding', jenis: 'Merumput',
+        chemical: 'Manual', qty: 400, work_date: '2026-11-13', week_no: 2,
+        schedule_month: m, worked_by: 'Lina', reported_by: 'Lina',
+        verified_at: null, rejected_at: null },
       { id: 9102, plot_name: 'B5', work_type: 'weeding', jenis: 'Merumput',
         chemical: 'Manual', qty: 300, work_date: '2026-11-15', week_no: 3,
         schedule_month: m, worked_by: 'Rahim', reported_by: 'Rahim',
@@ -272,6 +280,40 @@ async function boot(browser) {
   });
   check('nothing of it is clipped', (whole || {}).clipped, false);
   check('…so the whole day is readable', /12 Nov 2026/.test((whole || {}).text || ''), true);
+  /* AND THE COUNT IS IN WORDS. It read `+1`, which is the office's own
+     U12 screenshot and the half of *"我不知道这是什么意思"* that no
+     tooltip was ever going to answer, there being no tooltip on a phone. */
+  check('…and the second worker is counted in words',
+        /2 records/i.test((whole || {}).text || ''), true);
+  check('no bare +n is left', /\+\s*\d/.test((whole || {}).text || ''), false);
+  /* THE DAY IS NEVER BROKEN IN HALF, which is the whole reason the date
+     column was given a width of its own. The SENTENCE may wrap and reads
+     fine over two lines; `21 Nov` over `2026` does not, and a date in
+     two pieces is most of the way back to `21 Nov 2...`. Measured,
+     because a width in the stylesheet proves nothing about the font that
+     renders it. */
+  const lines = await ev(() => {
+    /* A SCHEDULED row's chip. The loose rows write the sentence as plain
+       text in a colspan cell and carry none of these spans, and they come
+       first in the list — a bare querySelector reads one of those and
+       answers null about every part of the chip. */
+    const row = [...document.querySelectorAll('#rec-body tr')]
+      .find((tr) => tr.querySelector('.rec-waiting .rw-lab'));
+    const el = row && row.querySelector('.rec-waiting');
+    if (!el) return 'no chip';
+    const one = (s) => {
+      const n = el.querySelector(s);
+      if (!n) return 0;
+      return Math.round(n.getBoundingClientRect().height
+                        / parseFloat(getComputedStyle(n).lineHeight));
+    };
+    return { day: one('.rw-day'), n: one('.rw-n'),
+             lab: el.querySelector('.rw-lab').textContent.replace(/\s+/g, ' ').trim() };
+  });
+  check('the day is on ONE line', (lines || {}).day, 1);
+  check('…and so is the count', (lines || {}).n, 1);
+  check('the sentence is the sentence, not an abbreviation of it',
+        (lines || {}).lab, 'Waiting for approval');
   /* THE OFFICE'S OWN N20-R: a row with a day of its own and a claim under
      it. *"这什么意思"* — two dates one above the other with nothing
      between them is a question, so the claim wears a mark the row's own
@@ -292,12 +334,18 @@ async function boot(browser) {
   check('…and the claim is the other day, in full',
         /21 Nov 2026/.test((both || {}).claim || ''), true);
   check('…not cut off either', (both || {}).clipped, false);
-  /* ONE GLYPH IS WHAT ANSWERS "这什么意思" at a glance: without it the cell
-     is two bare dates and the hover is the only thing that says which is
-     which. */
-  check('…and is marked as a claim rather than a second date',
-        /⏳/.test((both || {}).claim || ''), true);
-  check('the row own date carries no such mark', /⏳/.test((both || {}).own || ''), false);
+  /* IT SAYS IT IN WORDS, and a glyph is what it had to replace. The chip
+     carried `⏳ 25 Nov 2026 +1` and the office asked *"我不知道这是什么意
+     思"* — a hourglass means nothing to somebody who has not been told,
+     and `+1` means nothing to anybody. So the sentence is IN the cell on
+     every chip, and the row's own date still carries none of it: that is
+     what tells the two dates apart on a row that has both. */
+  check('…and SAYS it is waiting, in words',
+        /waiting for approval/i.test((both || {}).claim || ''), true);
+  check('no glyph is left standing in for the sentence',
+        /⏳/.test((both || {}).cell || ''), false);
+  check('the row own date carries no such words',
+        /waiting/i.test((both || {}).own || ''), false);
   /* AMBER, NEVER GREEN. Green here is the Checked badge two cells along,
      which means the opposite — settled. */
   const amber = await ev(() => {

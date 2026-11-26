@@ -714,22 +714,46 @@ tr.sp-sub-row td.th-left{text-align:left;text-transform:uppercase;}
    they did it. Smaller than the Checked badge, deliberately — it is a
    state the row is passing through, not a signature. */
 /* UNDER the date and never beside it. `.rec-table` is table-layout:fixed,
-   so the date column is 103px whatever is put in it and an inline chip
+   so the date column is fixed whatever is put in it and an inline chip
    runs straight over the Work Type column of the row beneath — which
-   makes two rows unreadable instead of one. Block, and only as wide as
-   its own text, so it sits on a line of its own inside the cell. In the
-   loose rows it is inline in a colspan cell with room to spare, which is
-   why that one keeps the whole sentence. */
-/* THE DAY SOMEBODY CLAIMS, AND IT IS NEVER CUT OFF.
-   It was a pill — border, padding, radius — which is 19px of chrome round
-   an 11-character date in a 103px fixed column, so `21 Nov 2026` printed
-   as `21 Nov 2...` and the date was the part that went. No chrome, and
-   `white-space:normal` so a long one WRAPS rather than truncating: two
-   short lines say the day, an ellipsis does not. The hourglass is what
-   tells it from the row's own date on a row that has both. */
-.rec-waiting{display:block;font-size:11px;font-weight:900;letter-spacing:.2px;
-  white-space:normal;color:#92400e;margin:2px 0 0;}
-.rec-row-loose .rec-waiting{display:inline-block;margin:0;}
+   makes two rows unreadable instead of one. Block, so it sits on lines of
+   its own inside the cell. In the loose rows it is inline in a colspan
+   cell with room to spare, which is why that one is one line. */
+/* IT SAYS IT IN WORDS, AND NOTHING IS EVER CUT OFF.
+   Two things went wrong here in turn and the second is the one that
+   matters. It was a pill — border, padding, radius — which is 19px of
+   chrome round an 11-character date in a fixed column, so `21 Nov 2026`
+   printed as `21 Nov 2...` and the date was the part that went. The pill
+   came off and a `⏳` took its place; the office read `⏳ 25 Nov 2026 +1`
+   and asked what it meant. A glyph is an abstraction, and so is `+1`.
+
+   ONE FACT TO A LINE. The column is the narrowest on the row and the
+   sentence is the longest thing on the page, so the two cannot share a
+   line at any width this table can afford. The sentence may WRAP over
+   two and reads perfectly well; a DATE broken over two does not, so the
+   day has a line to itself with `nowrap` on it and the column is given
+   the width to hold it. Nothing is ever trimmed: there is no ellipsis
+   anywhere in here, which is what let the date go the first time. */
+.rec-waiting{display:block;color:#92400e;margin:3px 0 0;}
+.rec-waiting .rw-lab{display:block;font-size:10px;font-weight:800;
+  letter-spacing:.3px;text-transform:uppercase;line-height:1.25;
+  white-space:normal;opacity:.85;}
+.rec-waiting .rw-day{display:block;font-size:11.5px;font-weight:900;
+  letter-spacing:.2px;line-height:1.35;white-space:nowrap;}
+.rec-waiting .rw-n{display:block;font-size:10px;font-weight:800;
+  letter-spacing:.2px;line-height:1.25;white-space:nowrap;opacity:.85;}
+/* The loose rows put the sentence in a colspan cell with room to spare,
+   as plain text and not through the chip, so it stays on one line there. */
+.rec-row-loose .rec-waiting{display:inline-block;margin:0;font-size:11px;
+  font-weight:900;letter-spacing:.2px;}
+/* THE DATE COLUMN IS GIVEN ITS OWN WIDTH, which is what keeps the DAY on
+   one line. `.rec-table` is table-layout:fixed with no widths, so the
+   twelve columns share the minimum equally — about 94px each, and the
+   cell's own padding leaves under 75px of that, which breaks `21 Nov
+   2026` in half. The other eleven give up about 3px apiece for it, and
+   all eleven are short or already wrap. */
+#recview-list .rec-table th:first-child,
+#recview-list .rec-table td.rc-date{width:130px;}
 /* A row for work that matched no scheduled round, sitting IN its own plot's
    group — the office asked for it down there (*"放下去楼下"*). So the tint
    is what tells it from the planned rows around it rather than the heading

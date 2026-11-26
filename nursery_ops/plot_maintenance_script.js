@@ -5653,6 +5653,7 @@ const I18N = {
     'rec.partPending':'Pending',
     'rec.partPendingSub':'Every ticked schedule row that nobody has approved yet, and the work a worker recorded that is still waiting for a Field Conductor',
     'rec.waiting':'Waiting for approval',
+    'rec.waitingN':'{n} records',
     'rec.waitingTip':'A worker recorded this job and no Field Conductor has approved it yet, so nothing of it has reached the row — no date, no batch, no quantity. Approve it in the Verify Hub and it moves to Approved.',
     /* `looseHead` is GONE with the block it was a heading for. The sentence
        is said on the row itself now — `looseTag` in the cell, `looseSub` on
@@ -5862,6 +5863,7 @@ const I18N = {
     'rec.partPending':'Belum Lulus',
     'rec.partPendingSub':'Semua baris jadual yang ditanda dan belum diluluskan, serta kerja yang direkod pekerja yang masih menunggu Field Conductor',
     'rec.waiting':'Menunggu kelulusan',
+    'rec.waitingN':'{n} rekod',
     'rec.waitingTip':'Seorang pekerja merekod kerja ini dan belum ada Field Conductor meluluskannya, jadi tiada apa-apa sampai ke baris ini — tiada tarikh, batch atau kuantiti. Luluskan di Verify Hub dan ia berpindah ke Diluluskan.',
     'rec.looseTag':'Tiada dalam jadual',
     'rec.looseOnly':'Tiada dalam jadual bulan ini',
@@ -10122,21 +10124,28 @@ function _waitingChip(list) {
   if (!Array.isArray(list) || !list.length) return '';
   const who = [...new Set(list.map(_rejWorkedBy).filter(Boolean))];
   const day = list.map((f) => f.work_date).filter(Boolean).sort()[0];
-  /* JUST THE DAY, AND NEVER CUT OFF — *"直接放日期啊 干嘛这样"*. It was a
-     pill, and a pill is its border, its padding and its radius: 19px of
-     chrome round an 11-character date in a column that is 103px whatever
-     is put in it, so `21 Nov 2026` came out as `21 Nov 2...` and the one
-     thing the cell was there to say was the part that got trimmed.
+  /* IT SAYS IT IN WORDS, and the hourglass that was here is the reason it
+     has to. It was a pill reading `21 Nov 2...`, which trimmed away the one
+     thing the cell was there to say; the pill came off and a `⏳` went in
+     its place, on the argument that a row can carry a day of its own AND a
+     submission claiming another, and that one glyph tells them apart in the
+     width of a space. The office read `⏳ 25 Nov 2026 +1` on U12 and asked
+     *"我不知道这是什么意思"*.
 
-     THE HOURGLASS IS WHAT THE PILL WAS FOR, and it is why this is not
-     simply a bare amber date. A row can carry a day of its own AND a
-     submission claiming another — the office met exactly that on N20-R,
-     `10 Nov 2026` with `21 Nov 2…` under it, and asked what it meant. Two
-     dates one above the other with nothing between them is a question;
-     one glyph answers it in the width of a space. The sentence and the
-     name stay in the hover, where there is room for them. */
-  const short = '⏳ ' + (day ? _tarikhDisplay(day) : t('rec.waiting'))
-    + (list.length > 1 ? ' +' + (list.length - 1) : '');
+     THEY HAD BEEN TOLD, IN CHAT, AND THAT IS THE PART TO LEARN FROM: a
+     glyph means nothing to somebody who has not been told, and a sentence
+     said in a message is said once to one person on one day. This file
+     already has the rule, two screens along — *a screen that can answer a
+     question and instead prints an abstraction is the screen that made
+     somebody ask it*. There were THREE abstractions in that cell: the
+     hourglass, the `+1`, and a bare date standing under a dash with
+     nothing saying whose day it was.
+
+     So the sentence is IN the cell, on every chip, and the count is in
+     words. It is the same sentence on twenty rows and that is the point —
+     this is the Pending tab, where every chip means the same thing, and
+     the office has now asked what it means twice. The hover keeps the
+     worker names, which are the one thing there is no room for. */
   const full = [t('rec.waiting'), day ? _tarikhDisplay(day) : '', who.join(', ')]
     .filter(Boolean).join(' · ');
   /* THE WAY BACK OFF A ROUND, offered only on a record whose round is not
@@ -10155,8 +10164,18 @@ function _waitingChip(list) {
     `<button type="button" class="rec-unpin" title="Take this record off this round"`
     + ` aria-label="Take this record off this round"`
     + ` onclick="recUnpinRecord(${f.id})">&times;</button>`).join('');
+  /* ONE FACT TO A LINE, and the day is the one that must never break.
+     The column is the narrowest on the row and the sentence is the
+     longest thing on the page, so the two cannot share a line at any
+     width this table can afford; stacked, each line is whole and the
+     sentence wrapping over two reads perfectly well, where a date broken
+     across two does not. */
   return ` <span class="rec-waiting" title="${esc(full + ' — ' + t('rec.waitingTip'))}">`
-       + `${esc(short)}</span>${x}`;
+       + `<span class="rw-lab">${esc(t('rec.waiting'))}</span>`
+       + (day ? `<span class="rw-day">${esc(_tarikhDisplay(day))}</span>` : '')
+       + (list.length > 1
+           ? `<span class="rw-n">${esc(t('rec.waitingN', { n: list.length }))}</span>` : '')
+       + `</span>${x}`;
 }
 
 /* The round on the record is not the week its own work date falls in. */
