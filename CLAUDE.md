@@ -12369,6 +12369,18 @@ cell for cell. The check that found it: before this, every plot over 100
 percent carried the August CAL-BNN / CAL-UNN delivery orders of batches
 224 to 233, the round before (`shared/CHECK_why_collection_goes_over_100.sql`).
 
+**Settings (the side bar foot) is where the office changes these rules
+themselves** (*下次我需要改东西我不要叫你了 我在setting里面改*), above the
+PALMS stage list: the 2nd and 3rd culling estimate months, the four map stage
+names and colours, Collecting in 1 month from which month, which map stage
+each PALMS stage is filed under, the collection plan (% and months back) and
+the transplanting plan (months back). ONE row of `nops_maint_config`, key
+`life_of_plot_settings`, JSON (`lpApplySet`); absent or unreadable is the
+built-in values. Edit and Save need Operation admin. The Nursery Dashboard
+Site Audit is the PRINTED COPY of the Pusingan grids and reads the same row
+(`SA.plan`), so the two plans cannot differ. Every month is recomputed with
+the setting as it stands; nothing is dated. Nothing to run in the database.
+
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
 colour switch, labels carrying both, PALMS columns on the list and a stage

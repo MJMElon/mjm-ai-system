@@ -52,13 +52,16 @@ const DATA = {
     await page.route('**/@supabase/supabase-js**', r => r.fulfill({ contentType: 'text/javascript', body: 'window.supabase={createClient:()=>window.__stub};' }));
     await page.route('**/shared/shared_staff_gate.js', r => r.fulfill({ contentType: 'text/javascript', body: '' }));
     await page.route('**/shared/shared_access.js', r => r.fulfill({ contentType: 'text/javascript',
-      body: `window.MJMAccess={load:async()=>{},user:()=>({email:'t@t'}),canOpenOperationPage:()=>true};` }));
+      body: `window.MJMAccess={load:async()=>{},user:()=>({email:'t@t'}),canOpenOperationPage:()=>true,isAdminOf:()=>!window.__notAdmin};` }));
     await page.addInitScript((data) => {
       const q = (table) => {
         let rows = (data[table] || []).slice();
         const w = {
           select: () => w, order: () => w,
           in: (col, vals) => { rows = rows.filter(r => vals.indexOf(r[col]) >= 0); return w; },
+          eq: (col, v) => { rows = rows.filter(r => r[col] === v); return w; },
+          maybeSingle: () => Promise.resolve({ data: rows[0] || null, error: null }),
+          upsert: (row) => { (window.__writes = window.__writes || []).push({ table, row }); return Promise.resolve({ error: null }); },
           range: (a, b) => Promise.resolve({ data: rows.slice(a, b + 1), error: null }),
           then: (okf, no) => Promise.resolve({ data: rows, error: null }).then(okf, no),
         };
@@ -320,6 +323,59 @@ const DATA = {
   ok(r8['275'] && !/Est\./.test((r8['275'] || []).slice(4).join('|')) && r8['275'][5] === '0', '275 has started selling, so its 3rd culling shows', r8['275']);
   ok(e8.length === 0, 'no page errors', e8);
   await p8.close();
+
+  console.log('9. Settings: the estimates, the map stages and the plans are the office own');
+  const e9 = [];
+  const SETV = { est2: 5, est3: 10, soonMonth: 8, colMonths: 8, colPct: 80, trMonths: 11, stageMap: { 'membesar': 'growing', 'pengambilan': 'selling' }, stages: { soon: { label: 'Ready soon', color: '#ff0000' } } };
+  const d9 = Object.assign({}, DATA, {
+    nops_maint_config: [{ key: 'life_of_plot_settings', txt_value: JSON.stringify(SETV) }],
+    shared_do_records: [{ id: 1, delivery_date: '2026-04-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 1200, batch_1: '229' }],
+    nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B11', qty: 12000 }],
+    nops_plot_status_stages: [{ name: 'Membersih', sort_order: 1 }, { name: 'Membesar', sort_order: 2 }, { name: 'Pengambilan', sort_order: 3 }] });
+  const p9 = await openPage(d9, e9);
+  await p9.goto(B + '/operation/operation_life_of_plot.html#plot=U17');
+  await p9.waitForSelector('.lp-cyc tbody tr', { timeout: 8000 }).catch(() => {});
+  await p9.waitForTimeout(500);
+  const est9 = await p9.evaluate(() => { const tr = [...document.querySelectorAll('.lp-cyc tbody tr')].find(r => r.children[0].textContent.trim() === '275'); return tr ? [...tr.children].map(c => c.textContent.trim()) : null; });
+  ok(est9 && est9[3] === 'Est. Mar 2027' && est9[4] === 'Est. Aug 2027', '275 (Oct 2026): 2nd culling +5 months = Mar 2027, 3rd +10 = Aug 2027', est9);
+  await p9.goto(B + '/operation/operation_life_of_plot.html#view=rotation');
+  await p9.reload();
+  await p9.waitForSelector('#lp-rot-tr .lp-rot-plot', { timeout: 8000 }).catch(() => {});
+  await p9.click('#lp-rot-year button[data-ryear="2026"]').catch(() => {});
+  const rot9 = await p9.evaluate(() => { const g = [...document.getElementById('lp-rot-tr').children]; const i = g.findIndex(x => x.classList.contains('lp-rot-plot') && x.querySelector('b').textContent === 'B11'); return i < 0 ? null : g.slice(i + 1, i + 13).map(c => c.textContent.trim()); });
+  ok(rot9 && rot9[3] === 'Plan12,121', 'Transplanting plan 11 months earlier: April 2026 plans the May 2025 12,121', rot9 && rot9[3]);
+  await p9.goto(B + '/operation/operation_life_of_plot.html#view=palms-stages');
+  await p9.reload();
+  await p9.waitForSelector('#lp-set .lp-set-sec', { timeout: 8000 }).catch(() => {});
+  const s9 = await p9.evaluate(() => ({
+    shown: !document.getElementById('lp-set').classList.contains('hidden'),
+    est2: (document.getElementById('ls-est2') || {}).value, soon: (document.getElementById('ls-name-soon') || {}).value,
+    col: (document.getElementById('ls-col-soon') || {}).value,
+    map: [...document.querySelectorAll('#lp-set select[data-ls-stage]')].map(e => e.dataset.lsStage + '=' + e.value).join(','),
+    save: !!document.getElementById('lp-set-save') }));
+  ok(s9.shown && s9.est2 === '5' && s9.soon === 'Ready soon' && s9.col === '#ff0000' && s9.save, 'Settings shows what is saved, with a Save button for an admin', s9);
+  ok(s9.map === 'membersih=empty,membesar=growing,pengambilan=selling', 'every PALMS stage is filed under a map stage', s9.map);
+  await p9.fill('#ls-est3', '12');
+  await p9.selectOption('select[data-ls-stage="membersih"]', 'growing');
+  await p9.click('#lp-set-save');
+  await p9.waitForTimeout(300);
+  const w9 = await p9.evaluate(() => (window.__writes || []).filter(w => w.table === 'nops_maint_config').map(w => w.row));
+  const saved = w9.length ? JSON.parse(w9[w9.length - 1].txt_value) : null;
+  ok(w9.length === 1 && w9[0].key === 'life_of_plot_settings' && saved && saved.est3 === 12 && saved.stageMap.membersih === 'growing' && saved.stages.soon.label === 'Ready soon', 'Save writes ONE row, life_of_plot_settings, carrying the change', saved);
+  await p9.fill('#ls-colpct', '150');
+  await p9.click('#lp-set-save');
+  await p9.waitForTimeout(200);
+  const w9b = await p9.evaluate(() => (window.__writes || []).length);
+  ok(w9b === 1, 'a figure out of range is refused, nothing written', w9b);
+  ok(e9.length === 0, 'no page errors', e9);
+  await p9.close();
+  const p9n = await openPage(d9, []);
+  await p9n.addInitScript(() => { window.__notAdmin = true; });
+  await p9n.goto(B + '/operation/operation_life_of_plot.html#view=palms-stages');
+  await p9n.waitForSelector('#lp-set .lp-set-sec', { timeout: 8000 }).catch(() => {});
+  const n9 = await p9n.evaluate(() => ({ save: !!document.getElementById('lp-set-save'), dis: (document.getElementById('ls-est2') || {}).disabled }));
+  ok(!n9.save && n9.dis === true, 'not an Operation admin: Settings is read only', n9);
+  await p9n.close();
 
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
