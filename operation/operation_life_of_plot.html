@@ -104,8 +104,14 @@
         .lp-set-sw input[type=color] { position:absolute; inset:0; width:100%; height:100%; opacity:0; border:0; padding:0; cursor:inherit; }
         .lp-set-row select { padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
         .lp-set-row i { display:inline-block; width:22px; height:22px; border-radius:6px; border:2px solid; }
-        .lp-set-foot { display:flex; align-items:center; gap:12px; justify-content:flex-end; margin-top:8px; }
-        .lp-set-save { padding:9px 20px; border:0; border-radius:10px; background:#4a7a2e; color:#fdfaf4; font-weight:800; cursor:pointer; }
+        .lp-set-foot { display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:6px; min-height:4px; }
+        .lp-set-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
+        .lp-set-top .lp-set-h { margin-bottom:0; }
+        .lp-set-save, .lp-set-edit, .lp-set-cancel { padding:5px 14px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; }
+        .lp-set-save { border:0; background:#4a7a2e; color:#fdfaf4; }
+        .lp-set-edit, .lp-set-cancel { border:1px solid #e8dcc8; background:#fff; color:#5c3d1e; }
+        .lp-set-edit:hover, .lp-set-cancel:hover { background:#f1ead9; }
+        .lp-set-row input:disabled { background:#fbf7ef; color:#5c3d1e; }
         .lp-set-save:disabled { opacity:.5; cursor:default; }
         .lp-set-msg { font-size:12px; font-weight:700; color:#8a7a68; }
         #lp-palms-frame { display:block; width:100%; height:calc(100vh - 190px); min-height:620px; border:0; border-radius:2rem; background:#fff; }
@@ -1090,35 +1096,51 @@
         } catch (e) { console.warn('[lifeplot] settings not read, the built-in values stand:', (e && e.message) || e); }
     }
     const lpMayEditSettings = () => { try { return !!(window.MJMAccess && MJMAccess.isAdminOf && MJMAccess.isAdminOf('operation')); } catch (e) { return false; } };
-    async function renderSettings() {
-        const box = document.getElementById('lp-set');
-        const ed = lpMayEditSettings(), dis = ed ? '' : ' disabled';
+    /* Each section is LOCKED until its Edit is pressed (the office: "default是lock的
+       加一个edit 按钮 才可以edit"); Save or Cancel locks it again. A section is
+       drawn on its own, so opening or closing one never touches another. */
+    const LP_SET_EDITING = new Set();
+    function lpSetSectionHtml(sec) {
+        const can = lpMayEditSettings(), on = can && LP_SET_EDITING.has(sec), dis = on ? '' : ' disabled';
         const S = LP_SET, esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const num = (id, v, lo, hi) => `<input type="number" id="${id}" min="${lo}" max="${hi}" step="1" value="${v}"${dis}>`;
         const toHex = x => { const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(x || ''); return /^#[0-9a-f]{6}$/i.test(x || '') ? x : m ? '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('') : '#94a3b8'; };
-        // Each section carries its own Save (the office: "每个section都要有自己的save").
-        const foot = sec => ed ? `<div class="lp-set-foot"><span class="lp-set-msg" data-ls-msg="${sec}"></span><button type="button" class="lp-set-save" data-ls-save="${sec}">Save</button></div>` : '';
-        box.innerHTML = `
-          <div class="panel lp-set-sec" data-ls-sec="cycles"><div class="lp-set-h">Plots &amp; cycles</div>
-            <div class="lp-set-row"><label for="ls-est2">2nd culling estimate</label>${num('ls-est2', S.est2, 1, 24)}<span>months after transplant</span></div>
-            <div class="lp-set-row"><label for="ls-est3">3rd culling estimate</label>${num('ls-est3', S.est3, 1, 36)}<span>months after transplant</span></div>
-            ${foot('cycles')}
-          </div>
-          <div class="panel lp-set-sec" data-ls-sec="map"><div class="lp-set-h">Map stages</div>
-            ${LP_STAGES.map(x => `<div class="lp-set-row"><label class="lp-set-sw${ed ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}></div>`).join('')}
-            <div class="lp-set-row"><label for="ls-soon">${esc(LP_STAGES[2].label)} from</label><span>month</span>${num('ls-soon', S.soonMonth, 1, 36)}<span>after transplant</span></div>
-            ${foot('map')}
-          </div>
-          <div class="panel lp-set-sec" data-ls-sec="plans"><div class="lp-set-h">Pusingan Jualan &amp; Transplant</div>
-            <div class="lp-set-row"><label>Collection plan</label>${num('ls-colpct', S.colPct, 1, 100)}<span>% of the transplant</span>${num('ls-colm', S.colMonths, 1, 36)}<span>months earlier</span></div>
-            <div class="lp-set-row"><label>Transplanting plan</label><span>the transplant</span>${num('ls-trm', S.trMonths, 1, 36)}<span>months earlier</span></div>
-            ${foot('plans')}
-          </div>`;
+        const head = title => `<div class="lp-set-top"><div class="lp-set-h">${title}</div>${can && !on ? `<button type="button" class="lp-set-edit" data-ls-edit="${sec}">Edit</button>` : ''}</div>`;
+        const foot = on ? `<div class="lp-set-foot"><span class="lp-set-msg" data-ls-msg="${sec}"></span><button type="button" class="lp-set-cancel" data-ls-cancel="${sec}">Cancel</button><button type="button" class="lp-set-save" data-ls-save="${sec}">Save</button></div>` : `<div class="lp-set-foot"><span class="lp-set-msg" data-ls-msg="${sec}"></span></div>`;
+        let body = '';
+        if (sec === 'cycles') body = head('Plots &amp; cycles')
+            + `<div class="lp-set-row"><label for="ls-est2">2nd culling estimate</label>${num('ls-est2', S.est2, 1, 24)}<span>months after transplant</span></div>`
+            + `<div class="lp-set-row"><label for="ls-est3">3rd culling estimate</label>${num('ls-est3', S.est3, 1, 36)}<span>months after transplant</span></div>`;
+        if (sec === 'map') body = head('Map stages')
+            + LP_STAGES.map(x => `<div class="lp-set-row"><label class="lp-set-sw${on ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}></div>`).join('')
+            + `<div class="lp-set-row"><label for="ls-soon">${esc(LP_STAGES[2].label)} from</label><span>month</span>${num('ls-soon', S.soonMonth, 1, 36)}<span>after transplant</span></div>`;
+        if (sec === 'plans') body = head('Pusingan Jualan &amp; Transplant')
+            + `<div class="lp-set-row"><label>Collection plan</label>${num('ls-colpct', S.colPct, 1, 100)}<span>% of the transplant</span>${num('ls-colm', S.colMonths, 1, 36)}<span>months earlier</span></div>`
+            + `<div class="lp-set-row"><label>Transplanting plan</label><span>the transplant</span>${num('ls-trm', S.trMonths, 1, 36)}<span>months earlier</span></div>`;
+        return `<div class="panel lp-set-sec" data-ls-sec="${sec}">${body}${foot}</div>`;
+    }
+    function lpSetDrawSection(sec, note) {
+        const old = document.querySelector(`#lp-set [data-ls-sec="${sec}"]`);
+        if (!old) return;
+        old.outerHTML = lpSetSectionHtml(sec);
+        const el = document.querySelector(`#lp-set [data-ls-sec="${sec}"]`);
+        lpSetBind(el);
+        if (note) { const m = el.querySelector('[data-ls-msg]'); if (m) m.textContent = note; }
+    }
+    function lpSetBind(root) {
         // The swatch IS the picker: pressing it opens the colour, and it repaints as one is chosen.
-        box.querySelectorAll('.lp-set-sw input[type=color]').forEach(inp => inp.addEventListener('input', () => {
+        root.querySelectorAll('.lp-set-sw input[type=color]').forEach(inp => inp.addEventListener('input', () => {
             const sw = inp.parentElement; sw.style.borderColor = inp.value; sw.style.background = lpHexA(inp.value, .45) || inp.value;
         }));
-        box.querySelectorAll('[data-ls-save]').forEach(btn => btn.addEventListener('click', () => saveSettings(btn.dataset.lsSave)));
+        root.querySelectorAll('[data-ls-edit]').forEach(b => b.addEventListener('click', () => { if (!lpMayEditSettings()) return; LP_SET_EDITING.add(b.dataset.lsEdit); lpSetDrawSection(b.dataset.lsEdit); }));
+        root.querySelectorAll('[data-ls-cancel]').forEach(b => b.addEventListener('click', () => { LP_SET_EDITING.delete(b.dataset.lsCancel); lpSetDrawSection(b.dataset.lsCancel); }));
+        root.querySelectorAll('[data-ls-save]').forEach(b => b.addEventListener('click', () => saveSettings(b.dataset.lsSave)));
+    }
+    async function renderSettings() {
+        const box = document.getElementById('lp-set');
+        LP_SET_EDITING.clear();
+        box.innerHTML = ['cycles', 'map', 'plans'].map(lpSetSectionHtml).join('');
+        lpSetBind(box);
     }
     /* Save ONE section: its own fields off the screen, every other field as it
        is SAVED, so an unsaved edit in another section is neither written nor
@@ -1154,7 +1176,9 @@
             if (error) throw error;
             lpApplySet(v);
             if (MODEL) renderHeadTabs();
-            say('Saved.');
+            LP_SET_EDITING.delete(sec);
+            lpSetDrawSection(sec, 'Saved.');
+            return;
         } catch (e) {
             say('Not saved: ' + ((e && e.message) || e));
         }
