@@ -232,6 +232,37 @@ const ok = (cond, what) => {
      A date or a batch written here would move a settled row. */
   ok(!/tarikh|\.batch/.test(branch),
      'and nothing else -- no date and no batch reach a settled row');
+  ok(/_chemMatched/.test(branch),
+     '...and the chemical is asked, because one round can be two rows');
+}
+
+/* ── 3b. one round can be TWO rows, so the chemical is asked as well ──── */
+{
+  /* The office own U1: "Round 1: Antracol 50gm + Bond 15mL" and "Round 1:
+     Cyper 60mL + Bond 15mL" are two P & D rows of the same plot in the same
+     week, so ONE field group answers for both. On a checked row that would
+     let a worker walk in off the other round and move a settled split. The
+     REAL chemKey is used rather than a restatement of it. */
+  require(path.join(__dirname, '..', 'shared', 'shared_maint_field.js'));
+  const body = slice('function _chemMatched(row, list) {', '\n}', '_chemMatched');
+  const fn = new Function('_chemKey', `${body}\nreturn _chemMatched;`)(
+    globalThis.MJMMaintField.chemKey);
+
+  const anta = { id: 1, chemical: 'Round 1: Antracol 50gm + Bond 15mL' };
+  const cyp  = { id: 2, chemical: 'Cyper 60mL + Bond 15mL' };
+  const bare = { id: 3, chemical: '' };
+  const ids  = (xs) => xs.map((x) => x.id).join();
+
+  ok(ids(fn({ racun: 'Round 1: Antracol 50gm + Bond 15mL' }, [anta, cyp])) === '1',
+     'a checked row takes its own chemical and leaves the other round alone');
+  ok(ids(fn({ racun: 'Antracol 50gm + Bond 15mL' }, [anta])) === '1',
+     '...and the Round label off the front is not a difference');
+  ok(ids(fn({ racun: 'Round 1: Antracol 50gm + Bond 15mL' }, [bare])) === '3',
+     'a record with NO chemical has nothing to match on and keeps the round');
+  ok(ids(fn({ racun: '' }, [anta, cyp])) === '1,2',
+     'and a row with no chemical asks nothing -- it is a narrowing, never a widening');
+  ok(fn({ racun: 'Round 1: Antracol 50gm + Bond 15mL' }, [cyp]).length === 0,
+     'nothing left means nothing reaches the row at all');
 }
 
 /* ── 4. the markup, because a refusal left in it is a cell that lies ──── */

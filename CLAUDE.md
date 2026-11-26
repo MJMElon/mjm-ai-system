@@ -11788,7 +11788,22 @@ Six things in it, and four are rules this file already has:
   fills an EMPTY cell, so refusing them changes nothing today. It is written
   out rather than left to that guard because the office asked for the worker
   and the map and named nothing else, and the test asserts the branch
-  mentions neither.
+  mentions neither. **It is unconditional, which is worth knowing because
+  the office assumed otherwise** — *"本来就是同一个日期 所以才不动"*. True of
+  their case and not the reason: the branch never writes the date, so a
+  record claiming another day could not move it either.
+- **AND THE CHEMICAL IS ASKED, which the round key does not do.** The office
+  found it in a question — *"同一个工种 同一种药水 对吗"* — and the answer was
+  no: the key is (job, plot, ROUND), and **their own U1 carries `Round 1:
+  Antracol 50gm + Bond 15mL` AND `Round 1: Cyper 60mL + Bond 15mL`**, two P &
+  D rows of one plot in one week, so one field group answers for both. On an
+  UNCHECKED row that is what it has always done and is left alone — both
+  rows are open and a tick on the wrong one is the office's to move. On a
+  CHECKED row nobody is looking, so `_chemMatched` narrows the group to the
+  records whose chemical agrees. **Strictly a narrowing:** a record with no
+  chemical has nothing to be matched on and keeps the round as its only
+  route, a row with no chemical asks nothing, and the comparison is
+  `chemKey`, so the `Round N:` label off the front is not a difference.
 - **NOTHING IS STRIPPED.** No group found is not a reason to take a settled
   row's links, ticks or track away: those belong to the records it was
   agreed with.
