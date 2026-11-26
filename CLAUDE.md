@@ -6016,6 +6016,19 @@ Two things fall out:
 `tests/every_role_has_its_own_row.cjs` drives the real board; 12 of its 17
 checks fail on the previous page.
 
+### The Worker Namelist comes BEFORE the board
+
+The Worker Namelist tile on `scan_admin.html` opens
+`scan/scan_worker_list.html` first: every worker on the payroll register,
+their role, their LOCATION (Pre Nursery, Main Nursery, Estate, Others, off
+`MJMWorkerLocations.locationOf`, with the section code under it; no section
+reads Not allocated) and Active or Inactive (a rejected signup is inactive).
+Active first, then by name; search, a location and a status filter, and the
+three counts. It is READ-ONLY, and its **Worker System** button opens the
+board, whose back icon now returns to the namelist. Same door as the board
+(`canScanArea('workers')`). Nothing to run in the database.
+`tests/the_worker_namelist_comes_first.cjs`.
+
 ### Inactive workers are in one card UNDER the board, never in a column
 
 The office: two inactive UNN 1 workers appeared in the Workers column the

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- Every line of this page's code is inline, so the PAGE is the deploy.
+     These three are the only lever on GitHub Pages. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worker Namelist — 555 FC Portal</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_staff_gate.js"></script>
+<script src="../shared/shared_access.js"></script>
+<script src="../shared/shared_worker_locations.js?v=2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../npayroll/npayroll_styles.css">
+<style>
+  /* THE WORKER NAMELIST: every name on the payroll register, where they work
+     and whether they are active. A LIST, read-only: adding, moving and
+     editing a worker is the Worker System board, which this page opens. */
+  .wrap { max-width:1200px; margin:0 auto; padding:20px 26px 48px; }
+  @media (max-width:640px) { .wrap { padding:16px 14px 36px; } }
+  .page-back.icon-only { display:inline-flex; align-items:center; justify-content:center;
+    width:40px; height:40px; border-radius:999px; background:white; border:1.5px solid #ede9fe;
+    color:#7c3aed; margin-bottom:14px; }
+  .page-back.icon-only:hover { background:#f5f3ff; border-color:#ddd6fe; }
+  .wl-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .wl-title { font-size:20px; font-weight:800; color:#0f172a; }
+  .wl-go { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:10px;
+    background:#7c3aed; color:#fff; font-size:13px; font-weight:800; text-decoration:none; }
+  .wl-go:hover { background:#6d28d9; }
+  .wl-stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .wl-stat { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:10px 16px; min-width:120px; }
+  .wl-stat b { display:block; font-size:22px; font-weight:800; color:#0f172a; }
+  .wl-stat span { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.08em; }
+  .wl-bar { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .wl-bar input, .wl-bar select { height:38px; border:1px solid #cbd5e1; border-radius:10px; padding:0 12px;
+    font-size:13px; background:#fff; }
+  .wl-bar input { flex:1; min-width:200px; }
+  .wl-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:auto; }
+  .wl-table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .wl-table th { text-align:left; font-size:11px; font-weight:800; color:#64748b; text-transform:uppercase;
+    letter-spacing:.06em; padding:10px 14px; border-bottom:1px solid #e2e8f0; background:#f8fafc; white-space:nowrap; }
+  .wl-table td { padding:10px 14px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+  .wl-table tr:last-child td { border-bottom:0; }
+  .wl-table th.c, .wl-table td.c { text-align:center; width:56px; color:#94a3b8; }
+  .wl-name { font-weight:700; color:#0f172a; text-transform:uppercase; }
+  .wl-loc small { display:block; font-size:11px; color:#94a3b8; }
+  .wl-st { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:800; }
+  .wl-st.on  { background:#dcfce7; color:#166534; }
+  .wl-st.off { background:#f1f5f9; color:#64748b; }
+  .wl-empty { padding:28px; text-align:center; color:#94a3b8; font-size:13px; }
+  tr.is-off td { color:#94a3b8; }
+  tr.is-off .wl-name { color:#64748b; }
+</style>
+</head>
+<body>
+
+<div id="mjm-ribbon" data-logo="off" data-brand="" data-center=" "></div>
+<script src="../shared/shared_ribbon.js"></script>
+<script src="../shared/shared_fc_brand.js" data-portal="Worker Portal" data-sub="Manage"></script>
+
+<div id="loading" class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
+
+<div id="main" class="wrap hidden">
+  <a class="page-back icon-only" href="scan_admin.html" data-icon-back title="Back to Nursery 555 Team" aria-label="Back to Nursery 555 Team"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
+
+  <div class="wl-head">
+    <div class="wl-title">Worker Namelist</div>
+    <a class="wl-go" id="wl-go" href="scan_workers.html">Worker System
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></a>
+  </div>
+
+  <div class="wl-stats">
+    <div class="wl-stat"><b id="wl-n-all">0</b><span>All workers</span></div>
+    <div class="wl-stat"><b id="wl-n-on">0</b><span>Active</span></div>
+    <div class="wl-stat"><b id="wl-n-off">0</b><span>Inactive</span></div>
+  </div>
+
+  <div class="wl-bar">
+    <input id="wl-q" type="search" placeholder="Search name or role…" oninput="renderList()">
+    <select id="wl-loc" onchange="renderList()"><option value="">All locations</option></select>
+    <select id="wl-st" onchange="renderList()">
+      <option value="">All status</option>
+      <option value="on">Active</option>
+      <option value="off">Inactive</option>
+    </select>
+  </div>
+
+  <div class="wl-card">
+    <table class="wl-table">
+      <thead><tr><th class="c">No.</th><th>Name</th><th>Role</th><th>Location</th><th>Status</th></tr></thead>
+      <tbody id="wl-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let workers = [];
+
+/* A worker is ACTIVE unless the register says otherwise: a rejected signup
+   is inactive too, which the board already treats it as. */
+const isActive = w => w.active !== false && !w.rejected_at;
+const sectionOf = w => String(w.section || '').trim().toUpperCase();
+
+/* The location is the place the section is in (Pre Nursery, Main Nursery,
+   Estate, Others), off the one shared list the board and the Location card
+   read, with the section code under it. A worker filed under no section has
+   not been allocated yet, which is what the board's yellow queue says. */
+function locationOf(code) {
+  if (!code) return { name: 'Not allocated', code: '' };
+  const L = window.MJMWorkerLocations;
+  const loc = L && typeof L.locationOf === 'function' ? L.locationOf(code) : null;
+  return { name: loc ? loc.name : code, code: loc ? code : '' };
+}
+
+function fillLocations() {
+  const codes = [...new Set(workers.map(sectionOf))];
+  const names = [...new Set(codes.map(c => locationOf(c).name))];
+  const order = ['Pre Nursery', 'Main Nursery', 'Estate', 'Others'];
+  names.sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  $('wl-loc').innerHTML = '<option value="">All locations</option>' +
+    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+
+function renderList() {
+  const q = ($('wl-q').value || '').trim().toLowerCase();
+  const locF = $('wl-loc').value, stF = $('wl-st').value;
+  $('wl-n-all').textContent = workers.length;
+  $('wl-n-on').textContent = workers.filter(isActive).length;
+  $('wl-n-off').textContent = workers.filter(w => !isActive(w)).length;
+  const rows = workers.filter(w => {
+    const on = isActive(w);
+    if (stF === 'on' && !on) return false;
+    if (stF === 'off' && on) return false;
+    if (locF && locationOf(sectionOf(w)).name !== locF) return false;
+    return !q || `${w.full_name || ''} ${w.role || ''}`.toLowerCase().includes(q);
+  });
+  $('wl-body').innerHTML = rows.length ? rows.map((w, i) => {
+    const on = isActive(w), loc = locationOf(sectionOf(w));
+    return `<tr class="${on ? '' : 'is-off'}">
+      <td class="c">${i + 1}</td>
+      <td class="wl-name">${esc(w.full_name)}</td>
+      <td>${esc(w.role || '—')}</td>
+      <td class="wl-loc">${esc(loc.name)}${loc.code ? `<small>${esc(loc.code)}</small>` : ''}</td>
+      <td><span class="wl-st ${on ? 'on' : 'off'}">${on ? 'Active' : 'Inactive'}</span></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="5" class="wl-empty">${workers.length ? 'No worker matches.' : 'No worker on the register yet.'}</td></tr>`;
+}
+
+/* Active first, then by name: the people working today are what this list
+   is read for, and the ones who left are still here, under them. */
+function sortWorkers(list) {
+  return list.slice().sort((a, b) =>
+    (isActive(b) - isActive(a)) || String(a.full_name || '').localeCompare(String(b.full_name || '')));
+}
+
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    const u = MJMAccess.user();
+    if (!u) { window.location.href = '../index.html'; return; }
+    /* The same door as the Worker System board: this list is its front
+       page, so whoever may open the board may open the list. */
+    if (typeof MJMAccess.canScanArea === 'function' && !MJMAccess.canScanArea('workers')) {
+      alert('You do not have access to the Worker System.');
+      window.location.href = 'scan_admin.html';
+      return;
+    }
+    const { data, error } = await _supabase.from('mjmnpayroll_workers').select('*').order('full_name');
+    if (error) { alert('Could not read the worker register: ' + error.message); }
+    workers = sortWorkers(data || []);
+    fillLocations();
+    renderList();
+    $('loading').classList.add('hidden');
+    $('main').classList.remove('hidden');
+  } catch (e) {
+    if (e && e.message === 'NO_OPS_ACCESS') return;
+    console.warn(e);
+    window.location.href = '../index.html';
+  }
+})();
+</script>
+</body>
+</html>
