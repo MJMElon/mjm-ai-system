@@ -98,7 +98,9 @@ const DATA = {
      'batch 228 on one line: date and 3,074 transplanted; 2nd alive 2,979, dead 95, 3.09%; 3rd pending 178, drone 178, variance 0, 5.79%', cyc[1] && cyc[1].rows[0]);
   ok(cyc[1] && cyc[1].rows[1] === '229|2025-05-22|9,047|2025-09-14|8,978|69|0.76%|2026-06-12|2,884|2,884|0|31.88%', 'batch 229 below it', cyc[1] && cyc[1].rows[1]);
   ok(cyc[1] && cyc[1].foot === 'Total · plot||12,121||11,957|164|1.35%||3,062|3,062|0|25.26%', 'the cycle 1 total is the office B11 sheet: 11,957 / 164 / 1.35%, 3,062 / 25.26%', cyc[1] && cyc[1].foot);
-  ok(cyc[0] && cyc[0].rows[1] === '265|2026-07-24|7,326|2026-11-12|7,285|41|0.56%|Est. Apr 2027', 'batch 265: census 7,326 after its -127 calibration', cyc[0] && cyc[0].rows[1]);
+  ok(cyc[0] && cyc[0].rows[1] === '265|2026-07-24|7,326|2026-11-12|7,285|41|0.56%', 'batch 265: census 7,326 after its -127 calibration; its Est. Apr 2027 is the cell above, shared', cyc[0] && cyc[0].rows[1]);
+  const est1 = await page.evaluate(() => { const c = [...document.querySelectorAll('#lp-timeline-box .lp-cyc')][0].querySelector('td.est[rowspan]'); return c ? c.textContent + '|' + c.rowSpan : null; });
+  ok(est1 === 'Est. Apr 2027|2', 'rows due in the same month share one estimate cell (263 and 265: Est. Apr 2027 over two rows)', est1);
   ok(cyc[0] && cyc[0].rows[3] === '271|2026-10-24|135|Est. Feb 2027|Est. Jul 2027', 'a culling not keyed yet is one blank cell with when it is due: 2nd the 4th month, 3rd the 9th month after transplant', cyc[0] && cyc[0].rows[3]);
   ok(cyc[0] && cyc[0].foot.startsWith('Total · plot||12,275||12,174|101|0.82%|') && cyc[0].foot.endsWith('0.82%|'), 'cycle 2 total: transplanted 12,275, alive 12,174, dead 101, 0.82%', cyc[0] && cyc[0].foot);
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_cycles.png'), fullPage: true });
