@@ -274,6 +274,8 @@
   .rf-item small { color:#94a3b8; font-weight:600; }
   .rf-x { border:0; background:none; color:#b91c1c; cursor:pointer; font-size:13px; }
   .rf-none { font-size:12px; color:#94a3b8; }
+  .wf-jobs { display:flex; flex-wrap:wrap; gap:6px 18px; }
+  .wf-job { font-size:12.5px !important; font-weight:600 !important; color:var(--text-head) !important; text-transform:none !important; letter-spacing:0 !important; }
   .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   .wl-name .wface { width:28px; height:28px; flex:0 0 28px; font-size:10px; }
   @media (max-width:640px) { .wl-acts { margin-left:0; width:100%; } .wl-acts .btn { flex:1; } }
@@ -403,7 +405,7 @@
     <div class="modal-body">
       <!-- No section to fill in: it comes from the section the Add Worker
            button was pressed in. Shown here only so it is never a surprise. -->
-      <div class="fhint">
+      <div class="fhint" id="wf-hint-row">
         <span id="wf-section-hint"></span>
         <button type="button" class="fhint-btn hidden" id="wf-move-btn" onclick="showWorkerSectionSelect()">Move…</button>
       </div>
@@ -431,10 +433,9 @@
                    one; there is no reason to want a worker's record to go
                    back to showing initials. -->
             </div>
-            <div id="wf-photo-note"
-                 style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:5px;">
-              Shown on their chip on the board. Shrunk before it is kept.
-            </div>
+            <!-- Says something only when photos are not switched on. -->
+            <div id="wf-photo-note" style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:5px;"></div>
+
           </div>
         </div>
         <input type="file" id="wf-photo-file" accept="image/*" class="hidden"
@@ -467,17 +468,21 @@
       <div class="frow"><label>Worker PIN</label>
         <input type="text" id="wf-pin" autocomplete="off" autocapitalize="characters"
                autocorrect="off" spellcheck="false" placeholder="Letters or numbers, any length">
-        <div style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:4px;">
-          For signing in to the worker portal. Letters, numbers or both, any length — letters are kept as capitals, so AB12 and ab12 are the same PIN. Leave blank if they have not been given one. No two workers share a PIN.
-        </div>
+
       </div>
       <!-- Decides whether this person gets a column on the Work Maintenance
            tick sheets. Guessed from the role until it is set here. -->
+      <!-- JOBS: what this person does. Work Maintenance is the maint_general
+           column (a column on the tick sheets). Siram Go and Mata Malam are
+           portal.modules on the same row, read by the Worker Portal coin and
+           by the Mata Malam app (shared/RUN_ME_worker_jobs.sql). -->
       <div class="frow" id="wf-maint-row">
-        <label>Work Maintenance</label>
-        <label class="chk" style="font-size:12.5px;font-weight:600;color:var(--text-head);text-transform:none;letter-spacing:0;">
-          <input type="checkbox" id="wf-maint" onchange="_maintExplicit=true;onWorkerRoleChange();"> General worker — give them a column on the tick sheets
-        </label>
+        <label>Jobs</label>
+        <div class="wf-jobs">
+          <label class="chk wf-job"><input type="checkbox" id="wf-maint" onchange="_maintExplicit=true;onWorkerRoleChange();"> Work Maintenance</label>
+          <label class="chk wf-job" id="wf-job-siram-row"><input type="checkbox" id="wf-job-siram" onchange="_jobsExplicit=true;"> Siram Go</label>
+          <label class="chk wf-job" id="wf-job-mata-row"><input type="checkbox" id="wf-job-mata" onchange="_jobsExplicit=true;"> Mata Malam</label>
+        </div>
         <div id="wf-maint-why" style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:4px;"></div>
       </div>
       <div class="frow"><label>Remark</label><textarea id="wf-remark" rows="2"></textarea></div>
@@ -724,6 +729,7 @@ let _tablesOk = true;
 let _maintGeneralCol = true;
 let _pinCol = true;
 let _photoCol = true;
+let _portalCol = true;
 let _dateCols = true;   // registered_on / last_day
 let _rejectCols = true; // rejected_at / rejected_by
 
@@ -820,6 +826,9 @@ async function loadWorkers() {
   // save, so the form has to know before it offers the box.
   const photoProbe = await _supabase.from('mjmnpayroll_workers').select('photo_url').limit(1);
   _photoCol = !photoProbe.error;
+  // And the portal column, where Siram Go and Mata Malam are ticked.
+  const portalProbe = await _supabase.from('mjmnpayroll_workers').select('portal').limit(1);
+  _portalCol = !portalProbe.error;
   const ph = $('photo-setup');
   if (ph) ph.classList.toggle('hidden', _photoCol);
   // And the two dates — when they joined, and the last day of anybody who
@@ -972,7 +981,7 @@ function wfPhotoDraw() {
   $('wf-photo-row').querySelectorAll('.wf-photo-btn').forEach(b => { b.disabled = off; });
   $('wf-photo-note').textContent = off
     ? 'Run shared/RUN_ME_worker_photos.sql to switch photos on.'
-    : 'Shown on their chip on the board. Shrunk before it is kept.';
+    : '';
 }
 
 /* The initials that stand in for a face. Two letters, from the first and
@@ -1731,6 +1740,14 @@ function openWorker(id, section, role) {
   $('wf-remark').value = w?.remark || '';
   _maintExplicit = w ? (w.maint_general === true || w.maint_general === false) : false;
   $('wf-maint').checked = w ? onMaintSheet(w) : true;
+  /* An existing worker shows what the record answers, absent being ON
+     (what every worker had before these ticks). A new one is ticked from
+     the role until somebody touches the boxes. */
+  const jm = (w && w.portal && w.portal.modules) || {};
+  _jobsExplicit = !!w;
+  $('wf-job-siram').checked = w ? jm.siram_go !== false : false;
+  $('wf-job-mata').checked  = w ? jm.mata_malam !== false : false;
+  ['wf-job-siram-row', 'wf-job-mata-row'].forEach(id => $(id).classList.toggle('hidden', !_portalCol));
   onWorkerRoleChange();
   wfApplyReadOnly();
   $('worker-modal').classList.add('open');
@@ -1783,24 +1800,35 @@ function onWorkerStatusChange() {
    re-guesses it — until somebody sets the box themselves, after which their
    answer stands and the role stops moving it. */
 let _maintExplicit = false;
+/* THE WORK MAINTENANCE BOX IS ON EVERY FORM, Add and Edit alike. It only
+   means something for a worker filed under a nursery, so anywhere else it
+   is shown switched off with the sentence saying why, rather than missing
+   from one version of the form and present on the other. */
+/* The jobs a role does by default, for a new worker only. */
+const roleKey = r => String(r || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const roleDoesSiram = r => roleKey(r) === 'WATERPUMPOPERATOR';
+const roleDoesMata  = r => ['MATAMALAM', 'NIGHTWATCHMAN', 'PENJAGAMALAM', 'GUARD', 'SECURITY'].includes(roleKey(r));
+let _jobsExplicit = false;
+
 function onWorkerRoleChange() {
-  const row = $('wf-maint-row');
+  const r = $('wf-role').value.trim();
+  if (!_jobsExplicit) {
+    $('wf-job-siram').checked = roleDoesSiram(r);
+    $('wf-job-mata').checked  = roleDoesMata(r);
+  }
   const sec = $('wf-section').value;
   const nursery = MAINT_NURSERIES.includes(sec);
-  row.classList.toggle('hidden', !nursery);        // UNE has no sheet
-  if (!nursery) return;
-  if (!_maintExplicit) {
-    const named = nurseryNamesRole(sec);
-    $('wf-maint').checked = isGeneralWorker({ role: $('wf-role').value, active: true }, named);
+  $('wf-maint').disabled = !nursery || _wfReadOnly;
+  if (!nursery) {
+    $('wf-maint').checked = false;
+    $('wf-maint-why').textContent = 'Work Maintenance needs a nursery location (' + MAINT_NURSERIES.join(', ') + ').';
+    return;
   }
-  const r = $('wf-role').value.trim();
-  const why = _maintExplicit ? 'Set on this worker.'
-    : MAINT_ROLE.test(r) ? 'From the role: a General Worker is on the sheets.'
-    : isKnownRole(r)     ? `From the role: a ${r} is not general nursery work. Tick the box to put them on the sheets anyway.`
-    : r                  ? `"${r}" is not on the role list. Pick a role, or set this box yourself.`
-    :                      'Pick a role, or set this box yourself.';
-  $('wf-maint-why').textContent = _maintGeneralCol ? why
-    : 'Guessed from the role. Run shared/fix_npayroll_maint_general.sql to set it per worker.';
+  if (!_maintExplicit) {
+    $('wf-maint').checked = isGeneralWorker({ role: r, active: true }, nurseryNamesRole(sec));
+  }
+  $('wf-maint-why').textContent = _maintGeneralCol ? ''
+    : 'Run shared/fix_npayroll_maint_general.sql to set Work Maintenance per worker.';
 }
 
 /* Keep the modal saying, in words, where this worker is filed — in the title
@@ -1814,6 +1842,8 @@ function onWorkerSectionChange() {
   $('worker-modal-title').textContent =
     `${_wfReadOnly ? 'Worker' : (editWorkerId ? 'Edit Worker' : 'Add Worker')} — ${label}`;
   $('wf-section-hint').textContent = `Filed under ${label}.`;
+  /* The location box says it while the form is editable. */
+  $('wf-hint-row').classList.toggle('hidden', !_wfReadOnly);
   if ($('wf-maint-row')) onWorkerRoleChange();
 }
 
@@ -1848,6 +1878,15 @@ async function saveWorker() {
   };
   // Writing a column the table does not have fails the whole save.
   if (_maintGeneralCol && MAINT_NURSERIES.includes(row.section)) row.maint_general = $('wf-maint').checked;
+  /* Siram Go and Mata Malam go into portal.modules, keeping everything
+     else the Worker Portal Settings screen keeps there. */
+  if (_portalCol) {
+    const was = editWorkerId ? (workers.find(x => x.id === editWorkerId) || {}).portal : null;
+    const portal = (was && typeof was === 'object') ? JSON.parse(JSON.stringify(was)) : {};
+    portal.modules = Object.assign({}, portal.modules || {},
+      { siram_go: $('wf-job-siram').checked, mata_malam: $('wf-job-mata').checked });
+    row.portal = portal;
+  }
   if (_dateCols) {
     row.registered_on = $('wf-registered').value || null;
     // Only somebody who has left has a last day, and Active clears it —

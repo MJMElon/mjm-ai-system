@@ -6048,6 +6048,13 @@ so there is ONE worker form and one set of rules:
   writes for every nursery worker (the phone's copy of `ROLES` and
   `shared_job_crew.js` do not know an added role). A role somebody holds,
   active or not, cannot be removed; the eight built in cannot be.
+- **The Work Maintenance box is on Add and Edit alike.** It used to hide
+  for a worker filed under no nursery, so Add Worker (which opens on Not
+  allocated yet) had no box and Edit did. It is always shown, switched off
+  with a sentence saying why until a nursery is picked. The "Filed under"
+  line shows only on a read-only record; on an editable form the location
+  box says it. (A "+ New role" in the Role box was tried and taken back:
+  roles stay on Manage Roles.)
 - **The setup warnings sit above both views**, so the namelist says which
   SQL file is missing too.
 - `scan/scan_worker_list.html` only forwards to `scan_workers.html`, for
@@ -6056,6 +6063,32 @@ so there is ONE worker form and one set of rules:
 Nothing to run in the database.
 `tests/the_namelist_edits_and_the_chart_shows.cjs` holds it.
 
+
+### JOBS on the worker form decide who opens Siram Go and Mata Malam
+
+The Work Maintenance box became **Jobs**, three ticks: Work Maintenance
+(the `maint_general` column, as before, needs a nursery location), **Siram
+Go** and **Mata Malam**, stored in the worker row `portal.modules.siram_go`
+/ `.mata_malam`, beside the Maintenance and Settings switches the Worker
+Portal Settings screen keeps there (the save MERGES into `portal`, never
+replaces it).
+
+- **Absent is ON**, which is what every worker had before the ticks, so
+  nothing moved until somebody unticks a person. An existing record opens
+  showing that. A NEW worker is ticked from the role until somebody touches
+  the boxes: Water Pump Operator does Siram Go, a Mata Malam / Night
+  Watchman / Penjaga Malam role does Mata Malam.
+- **`shared/RUN_ME_worker_jobs.sql` is the gate**: `worker_portal` hands the
+  two keys to the phone, `mata_malam_access` answers OFF for an untick (the
+  app then says it is not open for the account), and `mata_malam_submit`
+  refuses that worker a check-in. The Worker Portal M coin
+  (`FloatingDock pinWorker.modules`, FC-Portal) hides an untick.
+- **A staff login is not a register row**, so the app-wide coin on a phone
+  with a staff account still follows the portal column alone. Siram Go is
+  an outside page with no login, so the coin is the only lever there.
+
+`tests/the_namelist_edits_and_the_chart_shows.cjs` section 5c, and section 7
+of `FC-Portal/tests/the_dock_obeys_its_portal_column.cjs`.
 
 ### Inactive workers are in one card UNDER the board, never in a column
 

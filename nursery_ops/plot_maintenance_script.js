@@ -16973,6 +16973,10 @@ function cjShare(job, row, s, w, crew) {
 }
 
 /* One section: the table rows of a job, for the screen. */
+/* The same heading cell the Transplanting sheet draws (payTh), so a custom
+   section reads at the same size as the table above it. */
+const cjTh = (txt, w) => `<th style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+
 function cjSectionHtml(job, n, m) {
   const st = _cjCache[n + '|' + m];
   if (!st && !_cjLoading[n + '|' + m]) loadCustomJobRows(n, m);
@@ -16986,8 +16990,8 @@ function cjSectionHtml(job, n, m) {
   const lead = (job.rows === 'tp_nursery' ? 1 : 0) + (showDate ? 1 : 0) + (showPlot ? 1 : 0) + (showBatch ? 1 : 0);
   const span = lead + 1 + wk.length + (showRemark ? 1 : 0) + 1;
   const head = `<tr><th class="wk-th cj-th" colspan="${span}">${esc(job.label)}${job.desc ? `<div class="cj-desc">${esc(job.desc)}</div>` : ''}</th></tr>
-    <tr>${job.rows === 'tp_nursery' ? '<th>Nursery</th>' : ''}${showDate ? '<th>Date</th>' : ''}${showPlot ? '<th>Plot</th>' : ''}${showBatch ? '<th>Batch</th>' : ''}
-      <th>Qty</th>${wk.map(w => `<th>${esc(w)}</th>`).join('')}${showRemark ? '<th>Remark</th>' : ''}<th>Checked</th></tr>`;
+    <tr>${job.rows === 'tp_nursery' ? cjTh('Nursery', 190) : ''}${showDate ? cjTh(t('pay.date'), 92) : ''}${showPlot ? cjTh(t('pay.plot'), 84) : ''}${showBatch ? cjTh('Batch', 104) : ''}
+      ${cjTh(t('pay.qtyTransplant'), 104)}${wk.map(w => cjTh(esc(w), 108)).join('')}${showRemark ? cjTh('Remark', 160) : ''}${cjTh(t('pay.checked'), 132)}</tr>`;
   if (!st || base === null) {
     return { head, body: `<tr><td colspan="${span}" class="cj-empty">${t('pay.loading')}</td></tr>`, foot: '', job, span };
   }
