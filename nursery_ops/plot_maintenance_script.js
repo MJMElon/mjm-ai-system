@@ -13335,8 +13335,8 @@ function jsOpenAddJob() {
         <label class="jb-r"><input type="radio" name="jb-sb" value="own" checked onchange="jsAddJobSide()"> Its own entry</label>
         <label class="jb-r"><input type="radio" name="jb-sb" value="under" onchange="jsAddJobSide()"> Under an existing job</label>
         <select id="jb-under" disabled>${opts}</select></div>
-      <div class="jb-f jb-f2"><label><span>Price (RM)</span><input type="number" id="jb-rate" min="0" step="0.0001" inputmode="decimal"></label>
-        <label><span>Unit</span><input type="text" id="jb-unit" maxlength="20" placeholder="e.g. Seedling"></label></div>
+      <div class="jb-f jb-f2"><label><span>Price (RM) · optional</span><input type="number" id="jb-rate" min="0" step="0.0001" inputmode="decimal"></label>
+        <label><span>Unit · optional</span><input type="text" id="jb-unit" maxlength="20" placeholder="e.g. Seedling"></label></div>
       <label class="jb-f"><span>Quantity from</span><select id="jb-qty">
         ${Object.keys(CJ_QTY_FROM).map(k => `<option value="${k}">${esc(CJ_QTY_FROM[k])}</option>`).join('')}</select></label>
       <div class="jb-dlg-err" id="jb-err"></div>
@@ -13365,16 +13365,16 @@ function jsAddJob() {
   if (!label) return say('Key the job name.');
   if (allJobKeys(jobCustomDraft).some(k => kk(jobLabel(k)) === kk(label))) return say(`${label} is already a job.`);
   const side = (document.querySelector('input[name="jb-sb"]:checked') || {}).value || 'own';
+  /* 价钱不需要订先: the price and unit may be left empty and set later. */
   const rate = v('jb-rate').trim();
-  if (rate === '' || !(Number(rate) >= 0)) return say('Key the price.');
+  if (rate !== '' && !(Number(rate) >= 0)) return say('The price has to be a number.');
   const unit = v('jb-unit').trim();
-  if (!unit) return say('Key the unit.');
   const scope = JOB_SCOPE_ROWS.includes(v('jb-scope')) ? v('jb-scope') : 'main';
   const job = {
     key: 'cj_' + Date.now().toString(36),
     label, sidebar: side !== 'under',
     under: side === 'under' && PAYROLL_VIEW_KEYS.includes(v('jb-under')) ? v('jb-under') : null,
-    rate: Number(rate), unit,
+    rate: rate === '' ? null : Number(rate), unit: unit || null,
     qtyFrom: CJ_QTY_FROM[v('jb-qty')] ? v('jb-qty') : 'keyed',
   };
   jobCustomDraft.push(job);

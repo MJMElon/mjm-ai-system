@@ -533,6 +533,12 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
     await ev(again.page, () => jsRemoveJob('cj_abc'));
     await ev(again.page, () => jsSave());
     await again.page.waitForTimeout(400);
+    await ev(again.page, () => jsEdit());
+    await ev(again.page, () => { jsOpenAddJob(); document.getElementById('jb-name').value = 'Siram Air'; jsAddJob(); });
+    check('no price yet is allowed (价钱不需要订先)',
+      await ev(again.page, () => { const j = jobCustomDraft.find(x => x.label === 'Siram Air'); return j ? [j.rate, j.unit] : 'not added'; }),
+      [null, null]);
+    await ev(again.page, () => jsCancel());
     check('removing it and saving writes an empty list, and its Worker List row goes',
       await ev(again.page, () => {
         const w = (window.__WRITES || []).filter(x => x[0] === 'nops_maint_config').pop();
