@@ -2203,7 +2203,7 @@ function renderTransplantingPayroll() {
        asked to stop -- and the Check buttons below would refuse one by one
        with nothing saying why. */
     const noGate = !!_tpNoGate[key];
-    hint.textContent = noGate ? t('pay.tpNoGate') : t('pay.transplantHint');
+    hint.textContent = noGate ? t('pay.tpNoGate') : '';
     hint.classList.toggle('pay-hint-warn', noGate);
   }
   const off = document.getElementById('payroll-offreg');
@@ -5594,7 +5594,6 @@ const I18N = {
     'pay.spUnmoveQ':'Take batch {b} off {m}?\n\nIt goes back to {back}, the month it was planted in. Figures already keyed go with it.',
     'pay.spNoMoveTable':'Batches cannot be added by hand yet: run shared/RUN_ME_seed_planting_workers.sql in Supabase.',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
-    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. A wrong name or a wrong figure: press Edit on an unchecked row, correct the ticks and the figures under them, and Save.',
     'pay.checked':'Checked',
     'pay.tpHeldLabel':'Held back',
     'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
@@ -5813,7 +5812,6 @@ const I18N = {
     'pay.spUnmoveQ':'Keluarkan batch {b} dari {m}?\n\nIa kembali ke {back}, bulan ia ditanam. Angka yang sudah diisi ikut sekali.',
     'pay.spNoMoveTable':'Batch belum boleh ditambah sendiri: jalankan shared/RUN_ME_seed_planting_workers.sql di Supabase.',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
-    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Nama atau angka salah: tekan Edit pada baris yang belum disemak, betulkan tanda dan angka di bawahnya, dan Simpan.',
     'pay.checked':'Disemak',
     'pay.tpHeldLabel':'Ditahan',
     'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
@@ -8246,6 +8244,13 @@ function fitTableToWrap(wrap) {
   // offsetParent is null on a hidden tab (display:none up the tree) — nothing
   // to measure, and nothing left scaled from the last time it was open.
   if (wrap.offsetParent === null) return;
+  /* Worker Activity is NOT scaled: the office asked for the type at its own
+     size and a sideways scroll instead (transplanting字体放大 可以scroll去旁边).
+     Shrunk, a sheet of twelve workers read at two thirds size, and the
+     height set below left the wrapper's padding short, so a vertical
+     scrollbar stood beside a table that needed none. Its own
+     overflow-x:auto scrolls only when the table is wider than the room. */
+  if (wrap.closest('#tab-payroll')) return;
   const availW = wrap.clientWidth;
   const naturalW = table.scrollWidth;
   if (!availW || !naturalW) return;
