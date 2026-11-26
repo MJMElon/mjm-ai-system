@@ -233,14 +233,16 @@ const DATA = {
     stage: Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])),
     key: [...document.querySelectorAll('.lp-key .lp-key-r b')].map(b => b.textContent.trim()),
     beside: (() => { const v = document.getElementById('lp-viewport').getBoundingClientRect(), k = document.querySelector('.lp-key').getBoundingClientRect(); return k.left >= v.right - 1; })() }));
-  ok(st6.key.join() === 'Empty,Growing,Ready soon,Selling', 'the key names the four stages', st6.key);
+  ok(st6.key.join() === 'Empty,Growing,Ready for collection,Collecting', 'the key names the four stages', st6.key);
   ok(st6.beside, 'the key stands beside the map', st6.beside);
   ok(st6.stage.B13 === 'empty' && st6.stage.B11 === 'growing' && st6.stage.B12 === 'soon' && st6.stage.B14 === 'selling',
-     'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing sold: Ready soon · B14 sold on a DO: Selling', st6);
+     'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing collected: Ready for collection · B14 on a DO: Collecting', st6);
   const sc = await pm6.evaluate(() => Object.fromEntries([...document.querySelectorAll('#lp-labels .lp-label')].map(l => [l.querySelector('.lp-tag').textContent, (l.querySelector('.lp-scene') || {}).dataset ? l.querySelector('.lp-scene').dataset.scene : null])));
   ok(sc.B13 === 'empty' && sc.B11 === 'growing' && sc.B12 === 'soon' && sc.B14 === 'selling', 'each plot carries the moving scene of its stage', sc);
   const moving = await pm6.evaluate(() => getComputedStyle(document.querySelector('.lp-scene[data-scene="selling"] .drive')).animationName);
   ok(moving === 'lp-drive', 'the lorry drives', moving);
+  const cats = await pm6.evaluate(() => Promise.all([...document.querySelectorAll('.lp-scene img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false))));
+  ok(cats.length === 6 && cats.every(Boolean), 'the six cats load: three take turns on Growing, one each on the other three', cats);
   ok(me.length === 0, 'no page errors on the map', me);
   if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages.png'), fullPage: true });
   await pm6.close();
