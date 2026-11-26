@@ -237,14 +237,22 @@ const DATA = {
   ok(st6.beside, 'the key stands beside the map', st6.beside);
   ok(st6.stage.B13 === 'empty' && st6.stage.B11 === 'growing' && st6.stage.B12 === 'soon' && st6.stage.B14 === 'selling',
      'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing collected: Ready for collection · B14 on a DO: Collecting', st6);
-  const sc = await pm6.evaluate(() => Object.fromEntries([...document.querySelectorAll('#lp-labels .lp-label')].map(l => [l.querySelector('.lp-tag').textContent, (l.querySelector('.lp-scene') || {}).dataset ? l.querySelector('.lp-scene').dataset.scene : null])));
-  ok(sc.B13 === 'empty' && sc.B11 === 'growing' && sc.B12 === 'soon' && sc.B14 === 'selling', 'each plot carries the moving scene of its stage', sc);
-  const moving = await pm6.evaluate(() => getComputedStyle(document.querySelector('.lp-scene[data-scene="selling"] .drive')).animationName);
+  const sc = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats .lp-cat')].map(c => c.dataset.scene));
+  const cnt = k => sc.filter(x => x === k).length;
+  ok(cnt('growing') >= 2 && cnt('empty') >= 2 && cnt('soon') === 1 && cnt('selling') === 1, 'cats on the map for every stage: several working or digging, one sitting, one lorry', sc);
+  ok(await pm6.evaluate(() => !document.querySelector('#lp-labels .lp-cat, #lp-labels img')), 'the cats are on the map, not inside the labels', '');
+  const moving = await pm6.evaluate(() => getComputedStyle(document.querySelector('.lp-cat[data-scene="selling"] .drive')).animationName);
   ok(moving === 'lp-drive', 'the lorry drives', moving);
-  const cats = await pm6.evaluate(() => Promise.all([...document.querySelectorAll('.lp-scene img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false))));
-  ok(cats.length === 6 && cats.every(Boolean), 'the six cats load: three take turns on Growing, one each on the other three', cats);
-  ok(me.length === 0, 'no page errors on the map', me);
+  const cats = await pm6.evaluate(() => Promise.all([...document.querySelectorAll('#lp-cats img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false))));
+  ok(cats.length >= 6 && cats.every(Boolean), 'every cat picture loads', cats);
+  // They zoom WITH the map: a cat is a bigger thing on screen at 300% than at 100%.
   if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages.png'), fullPage: true });
+  const h1 = await pm6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height);
+  await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]');
+  const h2 = await pm6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height);
+  ok(h2 > h1 * 1.8, 'the cats grow when the map is zoomed in and shrink back out', { h1, h2 });
+  ok(me.length === 0, 'no page errors on the map', me);
+  if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages_zoomed.png'), fullPage: true });
   await pm6.close();
 
   await browser.close(); server.close();

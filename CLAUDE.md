@@ -12221,12 +12221,18 @@ culled), Growing (under `LP_SOON_MONTHS`, 6, since the cycle first
 transplant), Ready soon (6 months or more, nothing of this cycle sold yet) and
 Selling (a batch of this cycle on a delivery order since it began, or its 3rd
 culling begun). The last two are called Ready for collection and Collecting
-on screen. Each plot carries the office OWN MJM CATS, moving (`LP_SCENES`,
-`operation/lifeplot/cat_*.png`, cut out of the sheet they handed over): the
-watering, fertiliser and weeding cats take turns on Growing, the digging cat
-is Empty, the sitting cat is Ready for collection and the cat in the lorry
-drives on Collecting; the key shows them too. Plain CSS animation, still
-under `prefers-reduced-motion`. The delivery orders are read once
+on screen. Each plot carries the office OWN MJM CATS, moving
+(`operation/lifeplot/cat_*.png`, cut out of the sheet they handed over).
+**The cats are part of the MAP, never of the label** (`lpCats` into
+`#lp-cats`, under the labels): sized off the plot and scattered over its
+shape (`lpCatSpots`, inside the polygon, the label spot left clear), so they
+shrink when the map is zoomed out and are big enough to see what they are
+doing when it is zoomed in (the office: *缩小的时候猫猫也要跟着缩小 放大才看到他们
+在干嘛*). Growing is up to five cats, watering, fertiliser and weeding in
+turn; Empty up to five digging; Ready for collection one big sitting cat;
+Collecting the lorry driving across. The labels keep their size at any zoom;
+the key shows the cats too. Plain CSS animation, still under
+`prefers-reduced-motion`. The delivery orders are read once
 (`ensureRot`) and the map is coloured again when they land.
 
 **Pusingan Jualan over 100 percent**: the cumulative run starts after the
