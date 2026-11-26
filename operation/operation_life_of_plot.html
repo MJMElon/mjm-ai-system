@@ -55,18 +55,9 @@
         .lp-cats { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; }
         .lp-cat { position:absolute; transform:translate(-50%,-100%); filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
         .lp-cat img { display:block; height:100%; width:auto; transform-origin:50% 100%; }
+        .lp-cat picture { display:block; height:100%; }
+        .lp-cat.wide picture { height:auto; width:100%; }
         .lp-cat.wide img { width:100%; height:auto; }
-        .lp-cat .water { animation:lp-tilt 2.2s ease-in-out infinite; }
-        .lp-cat .feed  { animation:lp-bob 1.4s ease-in-out infinite; }
-        .lp-cat .weed, .lp-cat .dig { animation:lp-dig 1.1s ease-in-out infinite; }
-        .lp-cat .hop   { animation:lp-hop 1.6s ease-in-out infinite; }
-        .lp-cat .drive { animation:lp-drive 6s ease-in-out infinite; }
-        @keyframes lp-tilt  { 0%,100% { transform:rotate(-3deg); } 50% { transform:rotate(5deg); } }
-        @keyframes lp-bob   { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6%); } }
-        @keyframes lp-dig   { 0%,100% { transform:rotate(-4deg); } 50% { transform:rotate(6deg) translateY(3%); } }
-        @keyframes lp-hop   { 0%,100% { transform:translateY(0); } 40% { transform:translateY(-8%); } 60% { transform:translateY(0) scale(1.03,.97); } }
-        @keyframes lp-drive { 0%,100% { transform:translateX(-18%); } 50% { transform:translateX(18%); } }
-        @media (prefers-reduced-motion: reduce) { .lp-cat img { animation:none !important; } }
         .lp-map-row { display:flex; gap:16px; align-items:stretch; }
         .lp-map-row .lp-viewport { flex:1 1 auto; min-width:0; }
         .lp-key { flex:0 0 200px; display:flex; flex-direction:column; gap:10px; padding:14px; border:1px solid #e8dcc8; border-radius:16px; background:#fffdf8; }
@@ -140,13 +131,29 @@
         .lp-rot-c.pc { border:2px dashed #B8732A; color:#8a7a68; font-weight:600; }
         .lp-rot-c.pt { border:2px dashed #2E7D4F; color:#8a7a68; font-weight:600; }
         /* One cycle, one table read across: a rule before each part, its heading coloured. */
-        table.lp-x th, table.lp-x td { padding:9px 10px; white-space:nowrap; }
-        table.lp-x .s1 { border-left:2px solid #e8dcc8; }
-        table.lp-x thead tr:not(.grp-h) th { white-space:normal; line-height:1.25; vertical-align:bottom; }
+        /* The cycle table is read for a long time, so it is calm: headings in
+           ordinary case and muted, figures in a regular weight, the three
+           sections each on a faint tint of their own, a soft stripe to keep
+           the eye on the row, and a dash greyed out so empty reads as empty. */
+        table.lp-x th, table.lp-x td { padding:10px 12px; white-space:nowrap; }
+        table.lp-x td { font-weight:500; color:#3a3328; font-size:13px; }
+        table.lp-x td.batch { font-weight:800; color:#1a150d; }
+        table.lp-x td.cull { color:#3a3328; }
+        table.lp-x .s1 { border-left:1px solid #e3d7c3; }
+        table.lp-x thead th { text-transform:none; letter-spacing:0; font-size:11.5px; font-weight:600; color:#8a7a68; border-bottom:1px solid #e8dcc8; }
+        table.lp-x thead tr:not(.grp-h) th { white-space:normal; line-height:1.3; vertical-align:bottom; }
         .lp-x-wrap { overflow-x:auto; }
-        table.lp-x tr.grp-h th { text-align:center; font-size:11px; font-weight:900; letter-spacing:.1em; border-bottom:1px solid #e8dcc8; }
-        table.lp-x th.g-t { color:#4a7a2e; }
-        table.lp-x th.g-c { color:#a83020; }
+        table.lp-x tr.grp-h th { text-align:center; font-size:12px; font-weight:800; letter-spacing:.02em; border-bottom:1px solid #e8dcc8; }
+        table.lp-x th.g-t { color:#3f6a26; }
+        table.lp-x th.g-c { color:#8a4a2a; }
+        table.lp-x col.c-t { background:rgba(106,168,60,.05); }
+        table.lp-x col.c-2 { background:rgba(217,119,6,.045); }
+        table.lp-x col.c-3 { background:rgba(168,48,32,.04); }
+        table.lp-x tbody tr:nth-child(even) td { background:rgba(61,38,16,.025); }
+        table.lp-x tbody tr:hover td { background:rgba(106,168,60,.08); }
+        table.lp-x td { border-bottom:1px solid #f1ead9; }
+        table.lp-x .mute { color:#c9bba8; font-weight:400; }
+        table.lp-x tfoot td { font-weight:800; color:#1a150d; background:#f6f0e4; }
         /* Transplant record: the office sheet, a column per month. */
         table.lp tr.grp td { text-align:left; }
         table.lp-rec th, table.lp-rec td { padding:9px 10px; }
@@ -685,7 +692,12 @@
        cat sitting happy; Collecting is the cat driving the lorry of seedlings.
        The pictures are lifeplot/cat_*.png, cut out of the sheet the office
        handed over. */
+    /* The office own animation (their Canva video, cut cat by cat): each cat is an
+       animated picture that moves by itself. Under reduced motion the still first
+       frame is shown instead. */
     const LP_CAT = n => `lifeplot/cat_${n}.png`;
+    const LP_CAT_ANIM = n => `lifeplot/cat_${n}.webp`;
+    const lpCatImg = (n, cls) => `<picture><source media="(prefers-reduced-motion: reduce)" srcset="${LP_CAT(n)}"><img class="${cls || ''}" src="${LP_CAT_ANIM(n)}" alt=""></picture>`;
     // Where the cats stand in one plot: spread over the shape, the label
     // spot left clear. Points are in the map's own percent units.
     function lpCatSpots(pts, n) {
@@ -711,14 +723,15 @@
     // (watering, fertiliser, weeding) spread over the plot, empty is cats
     // digging, ready for collection is one big cat sitting happy in the
     // middle, collecting is the lorry driving across it.
-    function lpCats(key, pts) {
-        const g = lpCatSpots(pts, key === 'growing' || key === 'empty' ? 5 : 0);
-        const cat = (x, y, hgt, img, cls, delay) => `<div class="lp-cat" data-scene="${key}" style="left:${x}%;top:${y}%;height:${hgt}%"><img class="${cls}" style="animation-delay:-${delay}s" src="${LP_CAT(img)}" alt=""></div>`;
-        const small = Math.min(g.h * 0.24, g.w * 0.5);
-        if (key === 'growing') return g.spots.map((p, i) => { const t = [['grow_water', 'water'], ['grow_feed', 'feed'], ['grow_weed', 'weed']][i % 3]; return cat(p.x, p.y, small, t[0], t[1], i * 0.37); }).join('');
-        if (key === 'empty') return g.spots.map((p, i) => cat(p.x, p.y, small, 'empty_dig', 'dig', i * 0.29)).join('');
-        if (key === 'soon') return cat(g.cx, Math.min(g.y1 - g.h * 0.1, g.cy + g.h * 0.4), Math.min(g.h * 0.45, g.w * 0.8), 'ready', 'hop', 0);
-        if (key === 'selling') return `<div class="lp-cat wide" data-scene="selling" style="left:${g.cx}%;top:${Math.min(g.y1 - g.h * 0.1, g.cy + g.h * 0.38)}%;width:${g.w * 0.6}%"><img class="drive" src="${LP_CAT('collecting')}" alt=""></div>`;
+    function lpCats(key, pts, big) {
+        // Membesar: three cats, one per job. Empty: two, three on a big plot.
+        const g = lpCatSpots(pts, key === 'growing' ? 3 : key === 'empty' ? (big ? 3 : 2) : 0);
+        const cat = (x, y, hgt, img) => `<div class="lp-cat" data-scene="${key}" style="left:${x}%;top:${y}%;height:${hgt}%">${lpCatImg(img)}</div>`;
+        const small = Math.min(g.h * 0.28, g.w * 0.55);
+        if (key === 'growing') return g.spots.map((p, i) => cat(p.x, p.y, small, ['grow_water', 'grow_feed', 'grow_weed'][i % 3])).join('');
+        if (key === 'empty') return g.spots.map(p => cat(p.x, p.y, small, 'empty_dig')).join('');
+        if (key === 'soon') return cat(g.cx, Math.min(g.y1 - g.h * 0.1, g.cy + g.h * 0.4), Math.min(g.h * 0.45, g.w * 0.8), 'ready');
+        if (key === 'selling') return `<div class="lp-cat wide" data-scene="selling" style="left:${g.cx}%;top:${Math.min(g.y1 - g.h * 0.1, g.cy + g.h * 0.38)}%;width:${g.w * 0.6}%">${lpCatImg('collecting')}</div>`;
         return '';
     }
     function drawMap() {
@@ -727,7 +740,7 @@
         const idx = mapPlotIndex();
         const z = MAP_ZOOM[k] || (MAP_ZOOM[k] = { z: 1, x: 0, y: 0 });
         const key = '<div class="lp-key"><div class="lp-key-h">Stage</div>' + LP_STAGES.map(x =>
-            `<div class="lp-key-r" data-stage="${x.key}"><i style="background:${x.fill};border-color:${x.stroke}"></i><img class="lp-key-cat" src="${LP_CAT({ empty: 'empty_dig', growing: 'grow_water', soon: 'ready', selling: 'collecting' }[x.key])}" alt=""><div><b>${x.label}</b></div></div>`).join('') + '</div>';
+            `<div class="lp-key-r" data-stage="${x.key}"><i style="background:${x.fill};border-color:${x.stroke}"></i>${lpCatImg({ empty: 'empty_dig', growing: 'grow_water', soon: 'ready', selling: 'collecting' }[x.key], 'lp-key-cat')}<div><b>${x.label}</b></div></div>`).join('') + '</div>';
         body.innerHTML = `<div class="lp-map-row">
             <div class="lp-viewport" id="lp-viewport">
                 <div class="lp-stage" id="lp-stage">
@@ -751,6 +764,10 @@
         const vp = document.getElementById('lp-viewport');
         const stage = document.getElementById('lp-stage');
 
+        // a plot at or above the median size of this nursery is a big one
+        const lpArea = pts => { let a = 0; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j].x + pts[i].x) * (pts[j].y - pts[i].y); return Math.abs(a / 2); };
+        const areas = Object.values(PLOT_SHAPES).filter(s => s.nur === k).map(s => lpArea(s.pts)).sort((a, b) => a - b);
+        const bigArea = areas.length ? areas[Math.floor(areas.length / 2)] : 0;
         Object.values(PLOT_SHAPES).filter(s => s.nur === k).forEach(s => {
             const p = idx[lpPlotKey(s.name)];
             const st = mapStateOf(p, s.name);
@@ -768,7 +785,7 @@
                 : `<div class="lp-line" title="${tip}">Cycle ${cc.n} · ${fmtN(cc.tAdj)}</div>`;
             labels.insertAdjacentHTML('beforeend',
                 `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}</div>`);
-            catsEl.insertAdjacentHTML('beforeend', lpCats(st.key, s.pts));
+            catsEl.insertAdjacentHTML('beforeend', lpCats(st.key, s.pts, lpArea(s.pts) >= bigArea));
         });
         svg.addEventListener('click', e => {
             const el = e.target.closest && e.target.closest('.lp-shape');
@@ -857,7 +874,7 @@
         const names = MODEL.groups.filter(g => !NUR || g.key === NUR).flatMap(g => g.plots.map(p => p.plot));
         const cur = keep && names.includes(keep) ? keep : '';
         document.getElementById('lp-plot-row').innerHTML =
-            chip('plot', '', 'All plots', !cur) + names.map(n => chip('plot', n, n, cur === n)).join('');
+            names.map(n => chip('plot', n, n, cur === n)).join('');
     }
 
     function renderList() {
@@ -953,6 +970,7 @@
                 + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td><td class="cull">${lpPct(m3, b.tAdj)}</td></tr>`;
         }));
         h += `<div class="lp-x-wrap"><table class="lp lp-x">`
+           + `<colgroup><col><col span="4" class="c-t"><col span="5" class="c-2"><col span="6" class="c-3"></colgroup>`
            + `<thead><tr class="grp-h"><th class="l" rowspan="2">Batch</th>`
            + `<th class="s1 g-t" colspan="4">Transplanting</th><th class="s1 g-c" colspan="5">2nd Culling</th><th class="s1 g-c" colspan="6">3rd Culling</th></tr>`
            + `<tr><th class="l s1">Map Date</th><th>Census</th><th>Total Drone Count</th><th>Variance</th>`
@@ -964,6 +982,7 @@
            + `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpVar(alive2 + c.c2 - c.tAdj)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
            + `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td><td>${lpPct(map3, c.tAdj)}</td></tr></tfoot>`
            + `</table></div>`;
+        h = h.replace(/>–</g, '><span class="mute">–</span><');
         return h + '</div>';
     }
 

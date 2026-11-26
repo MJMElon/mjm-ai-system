@@ -172,7 +172,7 @@ const DATA = {
     plotRow: getComputedStyle(document.getElementById('lp-plot-row')).display,
     list: [...document.querySelectorAll('#lp-plots tr.plotrow')].map(r => r.dataset.plot) }));
   ok(nr.row === 'none' && nr.label === 'none', 'the Nursery row below is not drawn; the tabs top right choose it', nr);
-  ok(nr.plotRow !== 'none' && nr.plots.join() === 'All plots,B11,B13', 'the Plot row stays, following the nursery', nr.plots);
+  ok(nr.plotRow !== 'none' && nr.plots.join() === 'B11,B13', 'the Plot row stays, following the nursery, with no All plots chip', nr.plots);
   ok(nr.list.join() === 'B11,B13', 'the list follows the map nursery (BNN)', nr.list);
   const tabsOf = () => pm.evaluate(() => ({ head: [...document.querySelectorAll('#lp-head-nur button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')),
     inMap: [...document.querySelectorAll('#lp-map button[data-map]')].length }));
@@ -240,10 +240,10 @@ const DATA = {
      'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing collected: Collecting in 1 month · B14 on a DO: Collecting', st6);
   const sc = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats .lp-cat')].map(c => c.dataset.scene));
   const cnt = k => sc.filter(x => x === k).length;
-  ok(cnt('growing') >= 2 && cnt('empty') >= 2 && cnt('soon') === 1 && cnt('selling') === 1, 'cats on the map for every stage: several working or digging, one sitting, one lorry', sc);
+  ok(cnt('growing') === 3 && cnt('empty') >= 2 && cnt('empty') <= 3 && cnt('soon') === 1 && cnt('selling') === 1, 'Membesar three cats (one per job), Empty two or three, one sitting, one lorry', sc);
   ok(await pm6.evaluate(() => !document.querySelector('#lp-labels .lp-cat, #lp-labels img')), 'the cats are on the map, not inside the labels', '');
-  const moving = await pm6.evaluate(() => getComputedStyle(document.querySelector('.lp-cat[data-scene="selling"] .drive')).animationName);
-  ok(moving === 'lp-drive', 'the lorry drives', moving);
+  const anim = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats img')].every(i => /\.webp$/.test(i.getAttribute('src'))));
+  ok(anim, 'every cat on the map is the office animation (an animated picture)', anim);
   const cats = await pm6.evaluate(() => Promise.all([...document.querySelectorAll('#lp-cats img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false))));
   ok(cats.length >= 6 && cats.every(Boolean), 'every cat picture loads', cats);
   // They zoom WITH the map: a cat is a bigger thing on screen at 300% than at 100%.
