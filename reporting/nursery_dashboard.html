@@ -361,7 +361,7 @@
       <div class="card">
         <div class="card-head">
           <div><h2 class="card-title" id="sa-sales-title">Pusingan Jualan</h2>
-            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. % is the collection against the plot capacity.</div></div>
+            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. % is the cumulative collection since the plot was last filled, against its capacity.</div></div>
           <div class="sa-legend">
             <span><i style="background:#F5E6C8"></i>Collected &lt;40%</span>
             <span><i style="background:#DDA04B"></i>40–79%</span>
@@ -638,6 +638,15 @@ function saPlotsOf(sharedPlots, nursery) {
   const num = s => { const m = String(s).match(/\d+/); return m ? +m[0] : 0; };
   return out.sort((a, b) => num(a) - num(b) || a.localeCompare(b));
 }
+/* THE COLLECTION % IS CUMULATIVE (the office: "我要cumulative上去的"): what
+   has gone out of the plot since it was last filled, over its capacity. The
+   run starts after the latest month before this one that had a transplant,
+   so a refilled plot starts again from nought. SHARED RULE: lpCumulative in
+   operation/operation_life_of_plot.html. */
+function saCumulative(tByYm, sByYm, ym) {
+  const lastT = Object.keys(tByYm || {}).filter(m => m < ym && tByYm[m] > 0).sort().pop() || '';
+  return Object.keys(sByYm || {}).filter(m => m > lastT && m <= ym).reduce((a, m) => a + (sByYm[m] || 0), 0);
+}
 /* plots: names; capacity: {key: qty}; transplants / sales: [{plot, day, qty}]. */
 function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
   const sum = rows => { const o = {}; (rows || []).forEach(r => {
@@ -653,9 +662,10 @@ function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
     for (let m = 1; m <= 12; m++) {
       const ym = year + '-' + String(m).padStart(2, '0');
       const col = c(ym), tr = t(ym);
+      const cum = col > 0 ? saCumulative(T[k], S[k], ym) : 0;
       months.push({
         ym, future: !!todayYM && ym > todayYM,
-        col, colPct: cap > 0 && col > 0 ? Math.floor(col / cap * 100) : null,
+        col, colCum: cum, colPct: cap > 0 && col > 0 ? Math.floor(cum / cap * 100) : null,
         colPlan: Math.round(t(saShift(ym, -9)) * 0.9),
         tr, trPlan: t(saShift(ym, -10)),
       });
@@ -1375,7 +1385,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       if (ri) { hs += '<div class="sa-gap"></div>'; ht += '<div class="sa-gap"></div>'; }
       hs += plotCell(r);
       r.months.forEach(x => {
-        const tipT = `${r.plot} · ${x.ym} · Collected ${nf(x.col)}${x.colPct != null ? ' (' + x.colPct + '%)' : ''} · Plan ${nf(x.colPlan)}`;
+        const tipT = `${r.plot} · ${x.ym} · Collected ${nf(x.col)} · cumulative ${nf(x.colCum)}${x.colPct != null ? ' (' + x.colPct + '% of capacity)' : ''} · Plan ${nf(x.colPlan)}`;
         if (x.col > 0) {
           const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
           hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
