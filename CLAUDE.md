@@ -12213,7 +12213,7 @@ run in the database.
 **PALMS opens inside Life of Plot.** Its side bar carries **PALMS** (the Plot
 Status Map) as an ordinary entry under Life of Plot, and **Settings** (the
 stage list, for the whole of Life of Plot) at the foot; each opens the REAL
-PALMS page in a frame under the same side bar (`PALMS_PAGES`, `#view=palms-board`). The PALMS
+PALMS page in a frame under the same side bar (`PALMS_PAGES`, `#view=palms-board`), ONE FRAME EACH and kept, the board loaded in the background once the page is up, so opening PALMS never loads it again (*为什么每次开palms都要load*: they shared one frame and Settings replaced the board). The PALMS
 pages stay their own: they check their own access and write their own
 records. With `?embed=1`, `shared_palms_nav.js` hides their ribbon, their
 own side bar and the NELOS dock, so only one side bar is on screen; opened

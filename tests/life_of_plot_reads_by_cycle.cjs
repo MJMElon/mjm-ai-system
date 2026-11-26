@@ -159,6 +159,10 @@ const DATA = {
 
   console.log('3. PALMS opens inside this page, under the same side bar');
   const pageErrs = errs.length;
+  await page.waitForTimeout(1500);
+  const pre = await page.evaluate(() => document.getElementById('lp-palms-frame').getAttribute('src'));
+  ok(pre === '../nursery_ops/nursery_ops_palms_board.html?embed=1', 'PALMS is loaded in the background before anybody presses it', pre);
+  await page.evaluate(() => { window.__boardLoads = 0; document.getElementById('lp-palms-frame').addEventListener('load', () => window.__boardLoads++); });
   await page.click('#lp-side button[data-view="palms-board"]');
   await page.waitForTimeout(300);
   const pb = await page.evaluate(() => ({
@@ -175,8 +179,15 @@ const DATA = {
   ok(pb.on.join() === 'palms-board' && pb.side, 'the side bar stays, with Plot Status Map lit', pb.on);
   ok(pb.hash === '#view=palms-board', 'the address says which, so a reload comes back to it', pb.hash);
   await page.click('#lp-side button[data-view="palms-stages"]');
-  const ps = await page.evaluate(() => document.getElementById('lp-palms-frame').getAttribute('src'));
-  ok(ps === '../nursery_ops/nursery_ops_palms_stages.html?embed=1', 'PALMS Settings opens the stage list', ps);
+  const ps = await page.evaluate(() => ({ st: document.getElementById('lp-palms-frame-st').getAttribute('src'), board: document.getElementById('lp-palms-frame').getAttribute('src'),
+    stShown: getComputedStyle(document.getElementById('lp-palms-frame-st')).display !== 'none', boardShown: getComputedStyle(document.getElementById('lp-palms-frame')).display !== 'none' }));
+  ok(ps.st === '../nursery_ops/nursery_ops_palms_stages.html?embed=1' && ps.stShown && !ps.boardShown, 'PALMS Settings opens the stage list in a frame of its own', ps);
+  ok(ps.board === '../nursery_ops/nursery_ops_palms_board.html?embed=1', 'the board frame is left as it was', ps.board);
+  await page.click('#lp-side button[data-view="plots"]');
+  await page.click('#lp-side button[data-view="palms-board"]');
+  await page.waitForTimeout(400);
+  const reload = await page.evaluate(() => window.__boardLoads);
+  ok(reload === 0, 'opening PALMS again after Settings and Plots does not load it again', reload);
   await page.click('#lp-side button[data-view="plots"]');
   const backToPlots = await page.evaluate(() => document.getElementById('lp-palms').classList.contains('hidden') && !document.getElementById('lp-plots-view').classList.contains('hidden'));
   ok(backToPlots, 'and Plots & cycles comes back');
