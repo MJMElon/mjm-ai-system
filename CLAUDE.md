@@ -6090,16 +6090,15 @@ replaces it).
 `tests/the_namelist_edits_and_the_chart_shows.cjs` section 5c, and section 7
 of `FC-Portal/tests/the_dock_obeys_its_portal_column.cjs`.
 
-### Inactive workers are in one card UNDER the board, never in a column
+### The chart shows ACTIVE workers only, and has no Show inactive
 
-The office: two inactive UNN 1 workers appeared in the Workers column the
-moment Show inactive was ticked, among the people who work there. So the
-columns and the Waiting to be allocated queue are the ACTIVE register only
-(`onBoard`), and Show inactive draws everybody who is not, left or a
-rejected signup, in one grey **Inactive** card under the board, in two groups
-(Left / inactive, Registration rejected), each name saying where it was
-filed. Setting them Active on the namelist is how they come back. An orphan column therefore never returns for an inactive
-person. `tests/inactive_workers_sit_under_the_board.cjs`.
+Inactive workers (left, or a rejected signup) were drawn in a grey card
+under the board when Show inactive was ticked. The office took it off:
+*"不需要show inactive的人， 因为在第一页就已经有inactive的人record了"*. So
+the chart (`workerShown`) is the active register only, with no tick and no
+card, and the Worker Namelist is where an inactive person is found and set
+Active again. The Worker System button is teal. 
+`tests/inactive_workers_sit_under_the_board.cjs`.
 
 
 ## The Worker Record reads the conductor's transplanting, and writes ONE column

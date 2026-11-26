@@ -1,5 +1,5 @@
-/* INACTIVE WORKERS ARE IN ONE CARD UNDER THE BOARD, NEVER IN A COLUMN.
- * Rejected signups and people who left, together, only with Show inactive.
+/* THE CHART SHOWS ONLY ACTIVE WORKERS. Rejected signups and people who left
+ * are on the Worker Namelist; the chart has no Show inactive.
  * (Harness from the role-row test.)
  *
  * '+ Add role' sits in the corner over the role names, in Edit only, and
@@ -219,18 +219,12 @@ const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x)
   ];
   try {
     const page = await open(browser, port, { workers: W });
-    yes(!(await page.$('.off-wrap')), 'nothing inactive on screen before Show inactive');
-    await page.click('#w-show-inactive'); await page.waitForTimeout(150);
+    /* The chart shows the ACTIVE register only, with no Show inactive at all:
+       inactive and rejected people are on the Worker Namelist. */
+    is(await page.$$eval('#w-show-inactive, .off-wrap', (e) => e.length), 0, 'no Show inactive and no Inactive card');
     is(await inRow(page, 'Workers'), ['Ahmad Bin Ali'], 'the UNN1 Workers column keeps only the active worker');
-    const off = await page.$$eval('.off-wrap .wchip > span:nth-child(2)', (e) => e.map((x) => x.textContent.trim()));
-    is(off.sort(), ['Left Worker A', 'Left Worker B', 'Turned Down'], 'every inactive person is in the Inactive card');
-    is(await page.$$eval('.off-wrap .off-grp .wchip', (e) => e.length), 2, 'two under Left / inactive');
-    is(await page.$$eval('.off-wrap .pend-rej .wchip', (e) => e.length), 1, 'one under Registration rejected');
-    yes(/UNN1/.test(await page.$eval('.off-wrap .off-grp .off-where', (e) => e.textContent)), 'and each says where it was filed');
-    yes(await page.evaluate(() => {
-      const t = document.querySelector('.bd-wrap'), o = document.querySelector('.off-wrap');
-      return !!(t.compareDocumentPosition(o) & Node.DOCUMENT_POSITION_FOLLOWING);
-    }), 'the card is UNDER the board');
+    is(await page.$$eval('#worker-board .wchip > span:last-child', (e) => e.map((x) => x.textContent.trim()).filter((n) => /Left|Turned/.test(n))), [],
+      'nobody inactive or rejected anywhere on the chart');
     const pend = await page.$$eval('.pend-wrap .wchip > span:last-child', (e) => e.map((x) => x.textContent.trim()));
     is(pend, ['New Signup'], 'the queue on top holds only the active signup');
     if (process.env.SHOT) { await page.setViewportSize({ width: 1300, height: 1100 }); await page.screenshot({ path: process.env.SHOT, fullPage: true }); }
