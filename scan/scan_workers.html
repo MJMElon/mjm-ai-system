@@ -159,30 +159,6 @@
             font-size: 13px; font-weight: 900; line-height: 1; }
   .pend-x:hover { background: #fecaca; }
 
-  /* A signup already turned down. It is on the register and it is not in
-     the queue, so it sits under the queue rather than in it -- muted,
-     because the only reason to look is to find somebody rejected by
-     mistake. Only ever on screen with Show inactive ticked. */
-  .pend-rej { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fcd34d; }
-  .pend-rej-title { font-size: 11px; font-weight: 900; letter-spacing: .08em;
-                    text-transform: uppercase; color: #a16207; margin-bottom: 7px; }
-  .pend-rej .wchip { opacity: .72; }
-
-  /* Everybody inactive, in one card UNDER the board: grey, because they are
-     not part of the working picture, and only there with Show inactive. */
-  .off-wrap { padding: 14px 16px; margin-top: 14px; border-left: 4px solid #94a3b8; background: #f8fafc; }
-  .off-title { font-size: 12px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #475569; }
-  .off-count { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11px;
-               font-weight: 800; color: #475569; background: #e2e8f0; }
-  .off-wrap .pend-why { color: #64748b; }
-  .off-wrap .pend-rej, .off-wrap .off-grp { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
-  .off-wrap .pend-rej-title { color: #64748b; }
-  /* Grey says inactive here; the strike-through the board uses for one is
-     not needed in a card that is all inactive, and it makes names hard to read. */
-  .off-wrap .wchip { text-decoration: none; color: #64748b; }
-  .off-wrap .wchip span, .off-wrap .off-where { text-decoration: none; }
-  .off-wrap .wchip > span:nth-child(2) { text-transform: uppercase; }
-  .off-where { margin-left: 6px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: none; }
 
   /* ── The strip: Edit / Cancel / Save, and when this was last touched ───
      ABOVE the board and not under it. The last-updated line has been on
@@ -227,8 +203,8 @@
   .wl-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
   .wl-title { font-size:20px; font-weight:800; color:#0f172a; }
   .wl-go { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:10px;
-    background:#7c3aed; color:#fff; font-size:13px; font-weight:800; text-decoration:none; }
-  .wl-go:hover { background:#6d28d9; }
+    background:#0d9488; color:#fff; font-size:13px; font-weight:800; text-decoration:none; }
+  .wl-go:hover { background:#0f766e; }
   .wl-stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
   .wl-stat { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:10px 16px; min-width:120px; }
   .wl-stat b { display:block; font-size:22px; font-weight:800; color:#0f172a; }
@@ -364,7 +340,6 @@
         <div class="bar-title">Worker System</div>
       </div>
       <div class="bar-actions">
-        <label class="chk"><input type="checkbox" id="w-show-inactive" onchange="renderWorkers()"> Show inactive</label>
         <input type="text" id="w-search" class="sel" placeholder="Search name or role…" oninput="renderWorkers()">
       </div>
     </div>
@@ -1003,13 +978,12 @@ function faceHtml(w) {
 
 /* ════════════ WORKER SYSTEM ════════════ */
 
-/* The chart's own Show inactive tick and search box. The namelist has its
-   own filters, because it is read for different questions. */
-
+/* The chart shows the ACTIVE register only. Inactive and rejected people
+   are on the Worker Namelist, which is their record, so the chart has no
+   Show inactive (the office: the first page already has them). */
 function workerShown(w) {
-  const showInactive = $('w-show-inactive').checked;
   const q = ($('w-search').value || '').trim().toLowerCase();
-  return (showInactive || w.active !== false) &&
+  return w.active !== false && !isRejected(w) &&
          (!q || `${w.full_name || ''} ${w.role || ''}`.toLowerCase().includes(q));
 }
 
@@ -1349,7 +1323,6 @@ function renderWorkerBoard() {
      they are out of the way and still one click from their record. */
   const isOff   = w => w.active === false || isRejected(w);
   const onBoard = shown.filter(w => !isOff(w));
-  const offList = shown.filter(isOff);
   const at = (sec, role) => onBoard.filter(w => {
     const p = boardPos(w);
     return (p.section || '') === sec && boardRoleOf(p) === role;
@@ -1421,8 +1394,6 @@ function renderWorkerBoard() {
      still carried somebody already filed would be counting it twice. */
   const noSection = onBoard.filter(w => !String(boardPos(w).section || '').trim());
   const pending   = noSection;
-  const rejected  = offList.filter(w =>  isRejected(w));
-  const leftList  = offList.filter(w => !isRejected(w));
 
   const pendChip = (w) => `
         <span class="pend-item">
@@ -1430,36 +1401,6 @@ function renderWorkerBoard() {
                 onclick="openWorker(${w.id})"
                 title="${esc(workerTitle(w))}"
                 >${faceHtml(w)}<span>${esc(w.full_name)}</span></span></span>`;
-
-  /* Where an inactive worker was filed, so a list of names off the board
-     still says which nursery and which job each one had. */
-  const offChip = (w) => {
-    const where = [w.section, boardRoleOf(w) === BOARD_OTHER ? (w.role || '') :
-      (BOARD_ROLES.find(b => b.key === boardRoleOf(w)) || {}).label].filter(Boolean).join(' · ');
-    return `
-        <span class="pend-item">
-          <span class="wchip wchip-off" onclick="openWorker(${w.id})"
-                title="${esc(workerTitle(w))}"
-                >${faceHtml(w)}<span>${esc(w.full_name)}</span>${where
-                  ? `<small class="off-where">${esc(where)}</small>` : ''}</span></span>`;
-  };
-
-  const offGroup = (cls, title, list) => list.length ? `
-      <div class="${cls}">
-        <div class="pend-rej-title">${title} · ${list.length}</div>
-        <div class="pend-list">${list.map(offChip).join('')}</div>
-      </div>` : '';
-
-  const inactiveHtml = offList.length ? `
-    <div class="card off-wrap">
-      <div class="pend-head">
-        <span class="off-title">Inactive</span>
-        <span class="off-count">${offList.length}</span>
-        <span class="pend-why">Not on the chart. Set them Active on the Worker Namelist to put them back.</span>
-      </div>
-      ${offGroup('off-grp', 'Left / inactive', leftList)}
-      ${offGroup('pend-rej', 'Registration rejected', rejected)}
-    </div>` : '';
 
   const pendingHtml = pending.length ? `
     <div class="card pend-wrap">
@@ -1471,20 +1412,15 @@ function renderWorkerBoard() {
       <div class="pend-list">${pending.map(w => pendChip(w)).join('')}</div>` : ''}
     </div>` : '';
 
-  const hiddenNote = (workers.some(w => w.active === false) && !$('w-show-inactive').checked)
-    ? ' Inactive workers are hidden - tick Show inactive to see them.' : '';
-
   /* NOTHING ON THE CHART WRITES, so the strip carries no button: it says
      when the register was last touched and where it is changed. */
-  const note = hiddenNote;
   box.innerHTML =
     `<div class="bd-bar">
        <div class="bd-bar-when">${esc(lastUpdatedLine())} To add or change a worker, use the Worker Namelist.</div>
      </div>
      ${pendingHtml}
      <div class="card bd-wrap"><table class="bd"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-     ${note.trim() ? `<p class="foot-note">${note.trim()}</p>` : ''}
-     ${inactiveHtml}`;
+`;
 }
 
 /* WHEN THE REGISTER WAS LAST TOUCHED, AND BY WHOM — on the strip above the
