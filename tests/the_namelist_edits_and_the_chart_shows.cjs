@@ -209,7 +209,7 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     is(await page.$eval('#wl-n-off', (e) => e.textContent), '1', 'one inactive');
     is(await page.$$eval('#wl-body .wl-ic', (e) => e.length), WORKERS.length, 'every row carries an Edit');
     yes(await page.isVisible('#wl-add'), 'there is an Add Worker');
-    is(await page.$$eval('#wl-roles, #role-modal', (e) => e.length), 0, 'and no Manage Roles: a role is added on the form');
+    yes(await page.isVisible('#wl-roles'), 'and a Manage Roles');
 
     console.log('\n-- 2. Waiting to be allocated is the to-do, at the top --');
     is(await page.$$eval('#wl-pending .wl-pend-row .wl-name > span:last-child', (e) => e.map((x) => x.textContent)),
@@ -244,36 +244,36 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     const ins = await page.evaluate(() => window.__WRITES.find((w) => w.verb === 'insert'));
     is([ins.row.full_name, ins.row.section, ins.row.role], ['Brand New', 'BNN', 'Driver'], 'one INSERT, with the location and role picked');
 
-    console.log('\n-- 5. a new role is added on the form, and only when that worker is saved --');
+    console.log('\n-- 5. Manage Roles waits for Save, and Cancel throws it away --');
     await page.evaluate(() => { window.__WRITES.length = 0; });
-    await page.click('#wl-add');
-    yes(await page.isVisible('#wf-maint-row'), 'Add Worker carries the Work Maintenance box, as Edit does');
-    yes(await page.$eval('#wf-maint', (e) => e.disabled), 'switched off while the worker is filed under no nursery');
-    await setSel(page, 'wf-section', 'UNN1');
-    yes(!(await page.$eval('#wf-maint', (e) => e.disabled)), 'and live once a nursery is picked');
-    yes(await page.$eval('#wf-role', (s) => [...s.options].some((o) => /New role/.test(o.textContent))), 'the Role box offers + New role');
-    await setSel(page, 'wf-role', '__new_role__');
-    yes(await page.isVisible('#wf-role-new'), 'which opens a box to type it');
-    await page.fill('#wf-role-new', 'Mata Malam');
-    await page.fill('#wf-name', 'Guard One');
-    if (process.env.SHOT) { await page.setViewportSize({ width: 1280, height: 1100 }); await page.screenshot({ path: process.env.SHOT + '/add_form.png' }); }
-    await page.evaluate(() => closeModal('worker-modal'));
-    is(await page.evaluate(() => window.__WRITES.length), 0, 'a form closed without Save writes nothing');
+    await page.click('#wl-roles');
+    await page.fill('#rf-name', 'Mata Malam');
+    await page.click('#role-modal .frow .btn');
+    is(await page.$$eval('#rf-list .rf-item > span', (e) => e.map((x) => x.textContent)), ['Mata Malam'], 'the role is in the window');
+    is(await page.evaluate(() => window.__WRITES.length), 0, 'and nothing is written yet');
+    await page.click('#role-modal .modal-foot .btn:not(.btn-primary)');
+    is(await page.evaluate(() => window.__WRITES.length), 0, 'Cancel writes nothing');
     is(await page.evaluate(() => ROLES.includes('Mata Malam')), false, 'and the role is not on the list');
-    await page.click('#wl-add');
-    is(await page.$eval('#wf-role-new', (e) => e.classList.contains('hidden')), true, 'reopened, the new-role box is shut');
-    await page.fill('#wf-name', 'Guard One');
-    await setSel(page, 'wf-role', '__new_role__');
-    await page.fill('#wf-role-new', 'Mata Malam');
-    await page.evaluate(() => saveWorker());
-    await page.waitForFunction(() => window.__WRITES.some((w) => w.verb === 'insert'), null, { timeout: 4000 });
+    await page.click('#wl-roles');
+    is(await page.$$eval('#rf-list .rf-item', (e) => e.length), 0, 'reopened, the cancelled role is gone');
+    await page.fill('#rf-name', 'Mata Malam');
+    await page.click('#rf-save');
+    await page.waitForFunction(() => window.__WRITES.some((w) => w.verb === 'upsert'), null, { timeout: 4000 });
     const ro = await page.evaluate(() => window.__WRITES.find((w) => w.verb === 'upsert'));
-    is(ro && [ro.table, ro.row.key, JSON.parse(ro.row.txt_value)], ['nops_maint_config', 'worker_roles', ['Mata Malam']],
+    is([ro.table, ro.row.key, JSON.parse(ro.row.txt_value)], ['nops_maint_config', 'worker_roles', ['Mata Malam']],
       'Save writes the role list, the typed name included');
-    is(await page.evaluate(() => window.__WRITES.find((w) => w.verb === 'insert').row.role), 'Mata Malam', 'and the worker holds it');
-    is(await page.evaluate(() => window.__WRITES.findIndex((w) => w.verb === 'upsert') < window.__WRITES.findIndex((w) => w.verb === 'insert')), true,
-      'the role is written before the worker');
     is(await page.evaluate(() => ROLES.includes('Mata Malam')), true, 'and the form now offers it');
+    await page.close();
+
+    console.log('\n-- 5b. the Work Maintenance box is on Add as on Edit --');
+    page = await open(browser, port);
+    await page.click('#wl-add');
+    yes(await page.isVisible('#wf-maint-row'), 'Add Worker carries the Work Maintenance box');
+    yes(await page.$eval('#wf-maint', (e) => e.disabled), 'switched off while the worker is filed under no nursery');
+    yes(!(await page.isVisible('#wf-hint-row')), 'and no Filed under line over an editable location box');
+    await setSel(page, 'wf-section', 'UNN1');
+    yes(!(await page.$eval('#wf-maint', (e) => e.disabled)), 'live once a nursery is picked');
+    is(await page.$eval('#wf-role', (s) => [...s.options].some((o) => /New role/.test(o.textContent))), false, 'the Role box offers no New role');
     await page.close();
 
     console.log('\n-- 6. the chart only shows --');
@@ -288,9 +288,9 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     yes(!(await page.isVisible('#wf-save')), 'a name opens read-only');
     yes(!(await page.isVisible('#wf-section-row')), 'with no location box');
     yes(await page.$eval('#wf-name', (e) => e.disabled), 'and every box disabled');
-    await page.evaluate(() => { window.__WRITES.length = 0; window.__ALERTS.length = 0; saveWorker(); rejectWorker(11); });
+    await page.evaluate(() => { window.__WRITES.length = 0; window.__ALERTS.length = 0; saveWorker(); rejectWorker(11); openManageRoles(); });
     await page.waitForTimeout(200);
-    is(await page.evaluate(() => window.__WRITES.length), 0, 'a save or a rejection called from the console on the chart writes nothing');
+    is(await page.evaluate(() => window.__WRITES.length), 0, 'a save, a rejection or a role called from the console on the chart writes nothing');
     await page.evaluate(() => closeModal('worker-modal'));
     await page.click('#page-back');
     await page.waitForTimeout(200);
@@ -301,6 +301,7 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     page = await open(browser, port, { manage: false });
     is(await page.$$eval('#wl-body .wl-ic', (e) => e.length), 0, 'no Edit on any row');
     yes(!(await page.isVisible('#wl-add')), 'no Add Worker');
+    yes(!(await page.isVisible('#wl-roles')), 'no Manage Roles');
     await page.close();
 
     if (process.env.SHOT) {

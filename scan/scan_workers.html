@@ -268,6 +268,12 @@
   .wl-pend-head + .wl-pend-row { border-top:0; }
   .wl-pend-row .wl-name { flex:1; }
   .wl-pend-row small { color:#a16207; font-size:11.5px; }
+  .rf-list { display:flex; flex-direction:column; gap:6px; }
+  .rf-item { display:flex; align-items:center; justify-content:space-between; padding:7px 10px;
+    border:1px solid #e2e8f0; border-radius:9px; font-size:13px; font-weight:700; }
+  .rf-item small { color:#94a3b8; font-weight:600; }
+  .rf-x { border:0; background:none; color:#b91c1c; cursor:pointer; font-size:13px; }
+  .rf-none { font-size:12px; color:#94a3b8; }
   .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   .wl-name .wface { width:28px; height:28px; flex:0 0 28px; font-size:10px; }
   @media (max-width:640px) { .wl-acts { margin-left:0; width:100%; } .wl-acts .btn { flex:1; } }
@@ -337,6 +343,7 @@
       <option value="off">Inactive</option>
     </select>
     <span class="wl-acts" id="wl-acts">
+      <button class="btn" id="wl-roles" onclick="openManageRoles()">Manage Roles</button>
       <button class="btn btn-primary" id="wl-add" onclick="openWorker(null)">+ Add Worker</button>
     </span>
   </div>
@@ -363,6 +370,32 @@
   </section>
 </div>
 
+<!-- Manage Roles: the roles the office added by hand. Its own window with
+     its own Save; Cancel throws away whatever was added or removed in it. -->
+<div class="modal-bg" id="role-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-top"><div class="modal-title">Manage Roles</div>
+      <button class="modal-x" onclick="closeModal('role-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div id="rf-list" class="rf-list"></div>
+      <div class="frow" style="margin-top:12px"><label>Add a role</label>
+        <div style="display:flex;gap:8px">
+          <input id="rf-name" maxlength="40" placeholder="e.g. Security" style="flex:1"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addRoleDraft();}">
+          <button class="btn" type="button" onclick="addRoleDraft()">+ Add</button>
+        </div></div>
+      <div id="rf-why" style="font-size:11.5px;margin-top:6px;"></div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-top:6px;">
+        A role is a row on the Worker System chart and a choice on a worker's record.
+        Nothing is saved until you press Save.</div>
+    </div>
+    <div class="modal-foot">
+      <span style="flex:1"></span>
+      <button class="btn" onclick="closeModal('role-modal')">Cancel</button>
+      <button class="btn btn-primary" id="rf-save" onclick="saveRoles()">Save</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="worker-modal">
   <div class="modal">
     <div class="modal-top"><div class="modal-title" id="worker-modal-title">Add Worker</div>
@@ -411,9 +444,7 @@
       <div class="grid2">
         <!-- Filled from ROLES; the same list in every section. -->
         <div class="frow"><label>Role</label>
-          <select id="wf-role" onchange="onWorkerRoleChange()"></select>
-          <input type="text" id="wf-role-new" class="hidden" maxlength="40" placeholder="Type the new role, e.g. Security"
-                 style="margin-top:6px" oninput="onWorkerRoleChange()"></div>
+          <select id="wf-role" onchange="onWorkerRoleChange()"></select></div>
         <!-- When they joined. Kept as a date of its own rather than read off
              created_at: a worker is keyed in days or weeks after they start,
              and sometimes years after, when an old register is typed up. -->
@@ -1061,8 +1092,7 @@ const BOARD_OTHER = '(other)';
 
 /* ── ROLES THE OFFICE ADDS BY HAND ─────────────────────────────────────
    The office: a new kind of job turns up and the rows down the side were
-   fixed. "+ New role…" in the Role box of the worker form adds one, when
-   that worker is saved. It is
+   fixed. "+ Add role" in the corner over them (Edit only) adds one. It is
    stored as a JSON list in nops_maint_config, key worker_roles, and is
    appended to ROLES and BOARD_ROLES IN PLACE, so every reader of those two
    (the board, the role picker, isKnownRole) takes it without knowing.
@@ -1073,8 +1103,9 @@ const BOARD_OTHER = '(other)';
    an added role, which is why the record's own switch is what decides there;
    saveWorker writes it for every nursery worker.
 
-   There is no screen that takes an added role off again: the office asked
-   for the Manage Roles window to go. */
+   An added role can be taken off again only while nobody, active or not,
+   holds it, because a row going while somebody sits in it would drop them
+   into Other. The eight built in cannot be removed. */
 const BUILTIN_ROLE_COUNT = ROLES.length;
 let customRoles = [];   // the added roles, as saved
 let savedRoles  = [];   // what nops_maint_config holds
@@ -1113,12 +1144,74 @@ async function writeCustomRoles(list) {
   return error;
 }
 
-/* A NEW ROLE IS ADDED FROM THE WORKER FORM, by picking "+ New role…" in
-   the Role box and typing it. The office: Add Worker already asks for the
-   role, so a separate Manage Roles window was a second door to one list.
-   It is written to the list only when that worker is saved, so a form
-   cancelled leaves no role behind. */
-const NEW_ROLE = '__new_role__';
+/* MANAGE ROLES IS A WINDOW WITH ITS OWN SAVE. Adding and removing in it
+   changes only `roleDraft`; Save writes the list and Cancel throws the
+   draft away, so a role added and then cancelled was never stored -- the
+   fault the office found when this lived on the board. */
+let roleDraft = null;
+
+function openManageRoles() {
+  if (!editHere()) { alert('Roles are managed on the Worker Namelist.'); return; }
+  roleDraft = customRoles.slice();
+  $('rf-name').value = '';
+  roleSay('');
+  drawRoleDraft();
+  openModal('role-modal');
+  setTimeout(() => $('rf-name').focus(), 30);
+}
+
+function roleSay(t) { $('rf-why').textContent = t; $('rf-why').style.color = t ? '#b91c1c' : ''; }
+
+const roleHeld = name => workers.filter(w => String(w.role || '').trim().toLowerCase() === name.toLowerCase());
+
+function drawRoleDraft() {
+  const n = roleDraft.length;
+  $('rf-list').innerHTML = n ? roleDraft.map(r => {
+    const held = roleHeld(r).length;
+    return `<div class="rf-item"><span>${esc(r)}</span>${held
+      ? `<small>${held} worker${held === 1 ? '' : 's'}</small>`
+      : `<button class="rf-x" onclick="dropRoleDraft('${esc(r)}')" title="Remove this role">&#10005;</button>`}</div>`;
+  }).join('') : '<div class="rf-none">No role added yet. The eight built-in roles are always there.</div>';
+}
+
+function addRoleDraft() {
+  const name = $('rf-name').value.trim().replace(/\s+/g, ' ');
+  if (!name) { roleSay('Type the role name.'); return; }
+  if (/['"<>\\]/.test(name)) { roleSay('Letters, numbers and spaces only.'); return; }
+  if (/^others?$/i.test(name)) { roleSay('"Other" is kept for roles nobody recognises. Pick another name.'); return; }
+  const builtin = ROLES.slice(0, BUILTIN_ROLE_COUNT).some(x => x.toLowerCase() === name.toLowerCase());
+  if (builtin || roleDraft.some(x => x.toLowerCase() === name.toLowerCase())) { roleSay(`"${name}" is already a role.`); return; }
+  roleDraft.push(name);
+  $('rf-name').value = '';
+  roleSay('');
+  drawRoleDraft();
+  $('rf-name').focus();
+}
+
+/* A role can go only while nobody, active or not, holds it: a row going
+   while somebody sits in it would drop them into Other. */
+function dropRoleDraft(name) {
+  if (roleHeld(name).length) { roleSay(`Somebody still holds "${name}". Change their role first.`); return; }
+  roleDraft = roleDraft.filter(r => r.toLowerCase() !== name.toLowerCase());
+  drawRoleDraft();
+}
+
+async function saveRoles() {
+  if (!editHere()) { alert('Roles are managed on the Worker Namelist.'); return; }
+  if (!mayDo('workers', 'manage',
+      'You do not have permission to change the roles. Ask an admin to grant it in Module Assess Control.')) return;
+  if ($('rf-name').value.trim()) { addRoleDraft(); if ($('rf-name').value.trim()) return; }
+  $('rf-save').disabled = true;
+  try {
+    const error = await writeCustomRoles(roleDraft);
+    if (error) { roleSay('Could not save the roles: ' + (error.message || error)); return; }
+    applyCustomRoles(roleDraft);
+    savedRoles = customRoles.slice();
+    roleDraft = null;
+    closeModal('role-modal');
+    renderWorkers();
+  } finally { $('rf-save').disabled = false; }
+}
 
 function boardRoleOf(w) {
   const r = String(w.role || '').trim().toLowerCase();
@@ -1152,7 +1245,7 @@ function showView() {
   back.setAttribute('href', VIEW === 'chart' ? '#list' : 'scan_admin.html');
   back.title = label; back.setAttribute('aria-label', label);
   document.title = (VIEW === 'chart' ? 'Worker System' : 'Worker Namelist') + ' — 555 FC Portal';
-  closeModal('worker-modal');
+  closeModal('role-modal'); closeModal('worker-modal');
   renderWorkers();
   window.scrollTo(0, 0);
 }
@@ -1571,11 +1664,8 @@ function fillRoleSelect(current) {
   const extra = (cur && !isKnownRole(cur)) ? [cur] : [];
   $('wf-role').innerHTML = '<option value="">— Choose role —</option>' +
     ROLES.concat(extra).map(r =>
-      `<option value="${esc(r)}">${esc(r)}${extra.includes(r) ? ' (old)' : ''}</option>`).join('') +
-    `<option value="${NEW_ROLE}">+ New role…</option>`;
+      `<option value="${esc(r)}">${esc(r)}${extra.includes(r) ? ' (old)' : ''}</option>`).join('');
   $('wf-role').value = cur;
-  $('wf-role-new').value = '';
-  $('wf-role-new').classList.add('hidden');
 }
 
 let editWorkerId = null;
@@ -1693,21 +1783,11 @@ function onWorkerStatusChange() {
    re-guesses it — until somebody sets the box themselves, after which their
    answer stands and the role stops moving it. */
 let _maintExplicit = false;
-/* The role the form will save: the box, or what was typed under
-   "+ New role…". */
-function wfRoleValue() {
-  if ($('wf-role').value !== NEW_ROLE) return $('wf-role').value.trim();
-  return $('wf-role-new').value.trim().replace(/\s+/g, ' ');
-}
-
 /* THE WORK MAINTENANCE BOX IS ON EVERY FORM, Add and Edit alike. It only
    means something for a worker filed under a nursery, so anywhere else it
    is shown switched off with the sentence saying why, rather than missing
    from one version of the form and present on the other. */
 function onWorkerRoleChange() {
-  const isNew = $('wf-role').value === NEW_ROLE;
-  $('wf-role-new').classList.toggle('hidden', !isNew);
-  if (isNew && document.activeElement === $('wf-role')) setTimeout(() => $('wf-role-new').focus(), 0);
   const sec = $('wf-section').value;
   const nursery = MAINT_NURSERIES.includes(sec);
   $('wf-maint').disabled = !nursery || _wfReadOnly;
@@ -1717,7 +1797,7 @@ function onWorkerRoleChange() {
       + ') can be on the tick sheets. Pick a nursery as the location above.';
     return;
   }
-  const r = wfRoleValue();
+  const r = $('wf-role').value.trim();
   if (!_maintExplicit) {
     const named = nurseryNamesRole(sec);
     $('wf-maint').checked = isGeneralWorker({ role: r, active: true }, named);
@@ -1725,7 +1805,7 @@ function onWorkerRoleChange() {
   const why = _maintExplicit ? 'Set on this worker.'
     : MAINT_ROLE.test(r) ? 'From the role: a General Worker is on the sheets.'
     : isKnownRole(r)     ? `From the role: a ${r} is not general nursery work. Tick the box to put them on the sheets anyway.`
-    : r                  ? `"${r}" is a new role, not general nursery work. Tick the box to put them on the sheets anyway.`
+    : r                  ? `"${r}" is not on the role list. Pick a role, or set this box yourself.`
     :                      'Pick a role, or set this box yourself.';
   $('wf-maint-why').textContent = _maintGeneralCol ? why
     : 'Guessed from the role. Run shared/fix_npayroll_maint_general.sql to set it per worker.';
@@ -1764,27 +1844,15 @@ async function saveWorker() {
       'You do not have permission to add or edit workers. Ask an admin to grant it in Module Assess Control.')) return;
   const name = $('wf-name').value.trim();
   if (!name) { alert('Enter the worker\'s name.'); return; }
-  /* A role typed under "+ New role…". One the list already has, in any
-     case, is that role; a genuinely new one joins the list when this
-     worker is saved, and not before. */
-  let role = wfRoleValue();
-  let addRole = null;
-  if ($('wf-role').value === NEW_ROLE) {
-    if (!role) { alert('Type the new role, or pick one from the list.'); $('wf-role-new').focus(); return; }
-    if (/['"<>\\]/.test(role)) { alert('A role is letters, numbers and spaces only.'); return; }
-    if (/^others?$/i.test(role)) { alert('"Other" is kept for roles nobody recognises. Pick another name.'); return; }
-    const known = ROLES.find(x => x.toLowerCase() === role.toLowerCase());
-    if (known) role = known; else addRole = role;
-  }
   const row = {
     full_name: name,
     section:   $('wf-section').value,
-    role:      role || null,
+    role:      $('wf-role').value.trim() || null,
     active:    $('wf-active').value === '1',
     remark:    $('wf-remark').value.trim() || null,
     // Kept in step so anything still reading the original columns agrees.
     nursery:   $('wf-section').value,
-    job_title: role || null,
+    job_title: $('wf-role').value.trim() || null,
     updated_at: new Date().toISOString(),
     updated_by: userEmail || null
   };
@@ -1809,15 +1877,6 @@ async function saveWorker() {
   }
   $('wf-save').disabled = true;
   try {
-    /* A new role is written to the list BEFORE the worker, so a worker is
-       never saved holding a role the board has no row for. */
-    if (addRole) {
-      const list = customRoles.concat([addRole]);
-      const rErr = await writeCustomRoles(list);
-      if (rErr) throw new Error('Could not add the role "' + addRole + '": ' + (rErr.message || rErr));
-      applyCustomRoles(list);
-      savedRoles = customRoles.slice();
-    }
     /* The picture goes up FIRST, and a failure here stops the save. That is
        deliberate and it is the opposite of how the phone treats a photo of
        the work: there, a picture that will not upload is dropped rather than
