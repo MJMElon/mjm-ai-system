@@ -466,6 +466,83 @@ const drag = (page, label, row) => ev(page, ({ label, row }) => {
     await page.close();
   }
 
+  console.log('— 7. the office adds a job (这边要可以add job / 添加后这里同步增加)');
+  {
+    const { page, errs } = await boot(browser, {}, 'setting');
+    check('no Add job button until Edit',
+      await ev(page, () => !!document.getElementById('js-add-job')), false);
+    await ev(page, () => jsEdit());
+    await ev(page, () => jsOpenAddJob());
+    check('Add job opens a dialog asking name, where, side bar, price, unit and quantity source',
+      await ev(page, () => ['jb-name', 'jb-scope', 'jb-under', 'jb-rate', 'jb-unit', 'jb-qty']
+        .map(id => !!document.getElementById(id))), [true, true, true, true, true, true]);
+    await ev(page, () => jsAddJob());
+    check('an empty name is refused in the dialog, nothing added',
+      await ev(page, () => [document.getElementById('jb-err').textContent, jobCustomDraft.length]),
+      ['Key the job name.', 0]);
+    await ev(page, () => {
+      document.getElementById('jb-name').value = 'Racun Rumput';
+      document.getElementById('jb-scope').value = 'both';
+      document.querySelector('input[name="jb-sb"][value="under"]').checked = true;
+      jsAddJobSide();
+      document.getElementById('jb-under').value = 'weeding';
+      document.getElementById('jb-rate').value = '0.02';
+      document.getElementById('jb-unit').value = 'Seedling';
+      document.getElementById('jb-qty').value = 'plot';
+      jsAddJob();
+    });
+    check('the job lands on the row picked, saying which job it sits under',
+      await ev(page, () => {
+        const c = [...document.querySelectorAll('#js-set-body .jb-chip-cj')];
+        return c.map(x => [x.closest('.jb-row').querySelector('.jb-lab b').textContent,
+                           x.firstChild.textContent.trim(), (x.querySelector('.jb-under') || {}).textContent]);
+      }), [['Both', 'Racun Rumput', 'under Weeding']]);
+    check('nothing written before Save',
+      await page.evaluate(() => (window.__WRITES || []).length), 0);
+    await ev(page, () => jsSave());
+    await page.waitForFunction(() => !!(window.__WRITES || []).length, { timeout: 8000 }).catch(() => {});
+    const saved = await ev(page, () => {
+      const w = (window.__WRITES || []).filter(x => x[0] === 'nops_maint_config').pop();
+      const cj = w[2].find(r => r.key === 'custom_jobs');
+      const list = JSON.parse(cj.txt_value);
+      const k = list[0].key;
+      return { n: list.length, job: Object.assign({}, list[0], { key: /^cj_/.test(k) }),
+               scope: (w[2].find(r => r.key === 'job_scope:' + k) || {}).txt_value };
+    });
+    check('Save writes the job and its scope', saved,
+      { n: 1, job: { key: true, label: 'Racun Rumput', sidebar: false, under: 'weeding',
+                     rate: 0.02, unit: 'Seedling', qtyFrom: 'plot' }, scope: 'both' });
+    check('the Worker List card gains its row at once',
+      await ev(page, () => [...document.querySelectorAll('#jc-set-body th.jc-job')]
+        .map(th => th.textContent.trim()).includes('Racun Rumput')), true);
+    await page.close();
+
+    /* A reload reads it back: on the card, in its row, and on Worker List. */
+    const again = await boot(browser, {
+      nops_maint_config: [
+        { key: 'custom_jobs', txt_value: JSON.stringify([{ key: 'cj_abc', label: 'Racun Rumput', sidebar: true,
+          under: null, rate: 0.02, unit: 'Seedling', qtyFrom: 'keyed' }]) },
+        { key: 'job_scope:cj_abc', txt_value: 'pre' }] }, 'setting');
+    check('a saved job is read back into its row and onto Worker List',
+      await ev(again.page, () => [
+        [...document.querySelectorAll('#js-set-body .jb-row')].find(r => /Racun Rumput/.test(r.textContent))
+          ?.querySelector('.jb-lab b').textContent,
+        [...document.querySelectorAll('#jc-set-body th.jc-job')].map(th => th.textContent.trim()).includes('Racun Rumput')]),
+      ['Pre Nursery', true]);
+    await ev(again.page, () => jsEdit());
+    await ev(again.page, () => jsRemoveJob('cj_abc'));
+    await ev(again.page, () => jsSave());
+    await again.page.waitForTimeout(400);
+    check('removing it and saving writes an empty list, and its Worker List row goes',
+      await ev(again.page, () => {
+        const w = (window.__WRITES || []).filter(x => x[0] === 'nops_maint_config').pop();
+        return [(w[2].find(r => r.key === 'custom_jobs') || {}).txt_value,
+                [...document.querySelectorAll('#jc-set-body th.jc-job')].map(th => th.textContent.trim()).includes('Racun Rumput')];
+      }), ['[]', false]);
+    check('no page errors, no prompt()', errs.concat(again.errs), []);
+    await again.page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -1009,6 +1009,37 @@ const JOB_SCOPE_WAS = { seed_planting: 'pre' };
 let jobScopes = {};          // job key → 'pre' | 'main' | 'both', only what is KEYED
 const JOB_SCOPE_PREFIX = 'job_scope:';
 
+/* ── JOBS THE OFFICE ADDS ──────────────────────────────────────────────
+   "这边要可以add job", then what a job carries when it is added: its
+   name, where it is done (Pre / Main / Both), whether it has a side bar
+   entry of its own or sits under an existing job's sheet the way Mengisi
+   Tanah ke Hyplug sits under Seed Planting, its price and unit, and where
+   its quantity comes from. And "添加后这里同步增加": the job is a row on
+   Worker List for Each Job as soon as it is saved.
+
+   ONE nops_maint_config row, `custom_jobs`, a JSON list. The key is made
+   once (`cj_` + a time stamp) and never changes, so a renamed job keeps
+   its scope and its crew rows. Nothing to run in the database. */
+const CUSTOM_JOBS_KEY = 'custom_jobs';
+const CJ_QTY_FROM = { plot: 'Plot seedlings', batch: 'Batch planted qty', keyed: 'Keyed by workers' };
+let customJobs = [];          // [{ key, label, sidebar, under, rate, unit, qtyFrom }]
+let jobCustomDraft = null;    // the list while Where Each Job Is Done is being edited
+function _cjParse(v) {
+  try {
+    const a = JSON.parse(String(v || '[]'));
+    return Array.isArray(a) ? a.filter(j => j && /^cj_[a-z0-9]+$/.test(String(j.key || '')) && String(j.label || '').trim()) : [];
+  } catch (_) { return []; }
+}
+function customJob(key, list) { return (list || customJobs).find(j => j.key === key) || null; }
+function allJobKeys(list) { return PAYROLL_VIEW_KEYS.concat((list || customJobs).map(j => j.key)); }
+/* MJMJobCrew.JOBS is read by every reader of the crew rows, so an added
+   job is put into it IN PLACE, the way applyCustomRoles feeds ROLES. */
+function _cjFeedCrew(list) {
+  const J = window.MJMJobCrew && MJMJobCrew.JOBS;
+  if (!J) return;
+  (list || customJobs).forEach(j => { if (!J.includes(j.key)) J.push(j.key); });
+}
+
 function jobScopeOf(key) {
   const keyed = jobScopes[key];
   return JOB_SCOPE_ROWS.includes(keyed) ? keyed : (JOB_SCOPE_WAS[key] || 'main');
@@ -1027,6 +1058,8 @@ function jobNurseries(key) { return scopeNurseries(jobScopeOf(key)); }
    here — the same rule the section head follows, so one wording and one
    language toggle. */
 function jobLabel(key) {
+  const cj = customJob(key, jobCustomDraft || customJobs) || customJob(key);
+  if (cj) return cj.label;
   const btn = document.getElementById('pn-subtab-' + key);
   const span = btn && btn.querySelector('[data-i18n]');
   if (span) return t(span.getAttribute('data-i18n'));
@@ -13052,6 +13085,11 @@ async function loadSettingLists() {
   ((tsRes && tsRes.data) || []).forEach(r => { traySize[r.nursery] = +r.per_tray || 0; });
   const cfg = ((cfgRes && cfgRes.data) || []).find(r => r.key === 'pump_coverage');
   if (cfg && +cfg.num_value > 0) pumpCoverage = +cfg.num_value;
+  {
+    const cr = ((cfgRes && cfgRes.data) || []).find(r => r && r.key === CUSTOM_JOBS_KEY);
+    customJobs = cr ? _cjParse(cr.txt_value) : [];
+    _cjFeedCrew();
+  }
   try { jobCrews = window.MJMJobCrew ? MJMJobCrew.readConfig((cfgRes && cfgRes.data) || []) : {}; }
   catch (e) { jobCrews = {}; console.warn('[maint] job worker lists:', e); }
   {
@@ -13063,7 +13101,7 @@ async function loadSettingLists() {
     if (!r || String(r.key || '').indexOf(JOB_SCOPE_PREFIX) !== 0) return;
     const key = String(r.key).slice(JOB_SCOPE_PREFIX.length);
     const v = String(r.txt_value || '').trim().toLowerCase();
-    if (PAYROLL_VIEW_KEYS.includes(key) && JOB_SCOPE_ROWS.includes(v)) jobScopes[key] = v;
+    if (allJobKeys().includes(key) && JOB_SCOPE_ROWS.includes(v)) jobScopes[key] = v;
   });
   chemicals   = (chRes && chRes.data) || [];
   fertilisers = (feRes && feRes.data) || [];
@@ -13222,17 +13260,24 @@ const JOB_ROW_NAME = { pre: 'Pre Nursery', main: 'Main Nursery', both: 'Both' };
 
 function _jsScopes() {
   const out = {};
-  PAYROLL_VIEW_KEYS.forEach(k => { out[k] = jobScopeOf(k); });
+  allJobKeys().forEach(k => { out[k] = jobScopeOf(k); });
   return out;
 }
 
 function _jsRowHtml(scope, scopes, editing) {
-  const jobs = PAYROLL_VIEW_KEYS.filter(k => scopes[k] === scope);
+  const list = editing ? jobCustomDraft : customJobs;
+  const jobs = allJobKeys(list).filter(k => scopes[k] === scope);
   const circles = scopeNurseries(scope).map(nurseryShort).join(' · ');
   const chips = jobs.length
-    ? jobs.map(k => `<span class="jb-chip"${editing ? ' draggable="true"' : ''}
+    ? jobs.map(k => {
+        const cj = customJob(k, list);
+        const sub = cj && !cj.sidebar && cj.under ? `<span class="jb-under">under ${esc(jobLabel(cj.under))}</span>` : '';
+        const x = cj && editing ? `<button type="button" class="jb-x" data-cj-remove="${esc(k)}" title="Remove this job"
+            onclick="jsRemoveJob('${esc(k)}')">×</button>` : '';
+        return `<span class="jb-chip${cj ? ' jb-chip-cj' : ''}"${editing ? ' draggable="true"' : ''}
           ondragstart="jsDragStart(event,'${esc(k)}')" ondragend="jsDragEnd(event)"
-        >${esc(jobLabel(k))}</span>`).join('')
+        >${esc(jobLabel(k))}${sub}${x}</span>`;
+      }).join('')
     /* An empty row STANDS, because it is where a job is dragged. The Team
        Board keeps a company section's column up for the same reason. */
     : `<span class="jb-none">${editing ? 'Drag a job here' : 'No job'}</span>`;
@@ -13251,10 +13296,8 @@ function renderJobScopeSetting() {
   const scopes = editing ? jobScopeDraft : _jsScopes();
   box.innerHTML = JOB_SCOPE_ROWS.map(s => _jsRowHtml(s, scopes, editing)).join('')
     + (editing
-      ? `<div class="jb-note">The side bar lists every job whatever row it is
-           in; it is the nursery circles above a sheet that follow this. Saving
-           writes all three rows.</div>
-         <div class="lst-foot">
+      ? `<div class="lst-foot">
+           <button class="btn jb-add" id="js-add-job" onclick="jsOpenAddJob()">+ Add job</button>
            <button class="btn" onclick="jsCancel()">Cancel</button>
            <button class="btn btn-primary" id="js-save-btn" onclick="jsSave()">Save</button>
          </div>`
@@ -13268,9 +13311,83 @@ function renderJobScopeSetting() {
 function jsEdit() {
   if (!maySetting()) return;
   jobScopeDraft = _jsScopes();
+  jobCustomDraft = customJobs.map(j => Object.assign({}, j));
   renderJobScopeSetting();
 }
-function jsCancel() { jobScopeDraft = null; renderJobScopeSetting(); }
+function jsCancel() { jobScopeDraft = null; jobCustomDraft = null; jsCloseAddJob(); renderJobScopeSetting(); }
+
+/* The Add job dialog. Never prompt(): a job carries six answers. */
+function jsOpenAddJob() {
+  if (!jobScopeDraft || !maySetting()) return;
+  jsCloseAddJob();
+  const opts = PAYROLL_VIEW_KEYS.map(k => `<option value="${esc(k)}">${esc(jobLabel(k))}</option>`).join('');
+  const d = document.createElement('div');
+  d.id = 'jb-dlg';
+  d.className = 'jb-dlg-back';
+  d.innerHTML = `<div class="jb-dlg" role="dialog" aria-modal="true" aria-labelledby="jb-dlg-h">
+      <div class="jb-dlg-h" id="jb-dlg-h">Add job</div>
+      <label class="jb-f"><span>Job name</span><input type="text" id="jb-name" maxlength="60" placeholder="e.g. Racun Rumput"></label>
+      <label class="jb-f"><span>Where it is done</span><select id="jb-scope">
+        <option value="main">Main Nursery (BNN · UNN 1 · UNN 2)</option>
+        <option value="pre">Pre Nursery (PN)</option>
+        <option value="both">Both</option></select></label>
+      <div class="jb-f"><span>Side bar</span>
+        <label class="jb-r"><input type="radio" name="jb-sb" value="own" checked onchange="jsAddJobSide()"> Its own entry</label>
+        <label class="jb-r"><input type="radio" name="jb-sb" value="under" onchange="jsAddJobSide()"> Under an existing job</label>
+        <select id="jb-under" disabled>${opts}</select></div>
+      <div class="jb-f jb-f2"><label><span>Price (RM)</span><input type="number" id="jb-rate" min="0" step="0.0001" inputmode="decimal"></label>
+        <label><span>Unit</span><input type="text" id="jb-unit" maxlength="20" placeholder="e.g. Seedling"></label></div>
+      <label class="jb-f"><span>Quantity from</span><select id="jb-qty">
+        ${Object.keys(CJ_QTY_FROM).map(k => `<option value="${k}">${esc(CJ_QTY_FROM[k])}</option>`).join('')}</select></label>
+      <div class="jb-dlg-err" id="jb-err"></div>
+      <div class="lst-foot">
+        <button class="btn" onclick="jsCloseAddJob()">Cancel</button>
+        <button class="btn btn-primary" id="jb-add-go" onclick="jsAddJob()">Add</button>
+      </div></div>`;
+  d.addEventListener('mousedown', e => { if (e.target === d) jsCloseAddJob(); });
+  document.body.appendChild(d);
+  const n = document.getElementById('jb-name');
+  if (n) n.focus();
+}
+function jsAddJobSide() {
+  const u = document.getElementById('jb-under');
+  const r = document.querySelector('input[name="jb-sb"]:checked');
+  if (u) u.disabled = !(r && r.value === 'under');
+}
+function jsCloseAddJob() { const d = document.getElementById('jb-dlg'); if (d) d.remove(); }
+function jsAddJob() {
+  if (!jobScopeDraft || !jobCustomDraft || !maySetting()) return;
+  const v = id => (document.getElementById(id) || {}).value || '';
+  const err = document.getElementById('jb-err');
+  const say = m => { if (err) err.textContent = m; };
+  const label = v('jb-name').trim().replace(/\s+/g, ' ');
+  const kk = x => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!label) return say('Key the job name.');
+  if (allJobKeys(jobCustomDraft).some(k => kk(jobLabel(k)) === kk(label))) return say(`${label} is already a job.`);
+  const side = (document.querySelector('input[name="jb-sb"]:checked') || {}).value || 'own';
+  const rate = v('jb-rate').trim();
+  if (rate === '' || !(Number(rate) >= 0)) return say('Key the price.');
+  const unit = v('jb-unit').trim();
+  if (!unit) return say('Key the unit.');
+  const scope = JOB_SCOPE_ROWS.includes(v('jb-scope')) ? v('jb-scope') : 'main';
+  const job = {
+    key: 'cj_' + Date.now().toString(36),
+    label, sidebar: side !== 'under',
+    under: side === 'under' && PAYROLL_VIEW_KEYS.includes(v('jb-under')) ? v('jb-under') : null,
+    rate: Number(rate), unit,
+    qtyFrom: CJ_QTY_FROM[v('jb-qty')] ? v('jb-qty') : 'keyed',
+  };
+  jobCustomDraft.push(job);
+  jobScopeDraft[job.key] = scope;
+  jsCloseAddJob();
+  renderJobScopeSetting();
+}
+function jsRemoveJob(key) {
+  if (!jobCustomDraft) return;
+  jobCustomDraft = jobCustomDraft.filter(j => j.key !== key);
+  delete jobScopeDraft[key];
+  renderJobScopeSetting();
+}
 
 function jsDragStart(ev, key) {
   if (!jobScopeDraft) { ev.preventDefault(); return; }
@@ -13315,20 +13432,28 @@ async function jsSave() {
   if (!maySetting()) { alert('Setting is not open to you.'); return; }
   if (!_supabase) { alert('Not signed in — nothing was saved.'); return; }
   const draft = jobScopeDraft;
+  const cjDraft = jobCustomDraft || customJobs;
   const btn = document.getElementById('js-save-btn');
   _jsSaving = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     const now = new Date().toISOString();
+    const by = (typeof userEmail !== 'undefined' && userEmail) || window.currentUserEmail || null;
     const { error } = await _supabase.from('nops_maint_config').upsert(
-      PAYROLL_VIEW_KEYS.map(k => ({
+      allJobKeys(cjDraft).map(k => ({
         key: JOB_SCOPE_PREFIX + k,
         txt_value: draft[k],
         note: 'Which nurseries this job is done in: pre, main or both. Keyed on '
             + 'Work Maintenance, Settings, Where Each Job Is Done.',
-        updated_by: (typeof userEmail !== 'undefined' && userEmail) || null,
+        updated_by: by,
         updated_at: now,
-      })), { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+      })).concat((cjDraft.length || customJobs.length) ? [{
+        key: CUSTOM_JOBS_KEY,
+        txt_value: JSON.stringify(cjDraft),
+        note: 'Jobs the office added on Where Each Job Is Done: name, side bar or under which job, price, unit, quantity source.',
+        updated_by: by,
+        updated_at: now,
+      }] : []), { onConflict: 'key' }).then(r => r, e => ({ error: e }));
     if (error) {
       /* A database old enough to have no txt_value refuses the whole write.
          Dropping the column and writing anyway would store eight rows
@@ -13341,8 +13466,13 @@ async function jsSave() {
       return;
     }
     jobScopes = Object.assign({}, draft);
+    customJobs = cjDraft.map(j => Object.assign({}, j));
+    _cjFeedCrew();
     jobScopeDraft = null;
+    jobCustomDraft = null;
     renderJobScopeSetting();
+    /* 添加后这里同步增加: the Worker List card gains or loses the row now. */
+    try { if (typeof renderJobCrewSetting === 'function') renderJobCrewSetting(); } catch (e) { console.warn('[maint] job crew redraw:', e); }
     /* The side bar does not re-order — every job is in it whatever row it
        is in — but the circles over Worker Activity do move, so a sheet
        left open behind this card is put right before anybody goes back. */
@@ -13387,7 +13517,8 @@ const CULL_GROUPS_KEY = 'cull_monitoring_groups';
 const JC_SECTION_ORDER = ['PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'OTHERS'];
 
 function _jcJobs() {
-  return ((window.MJMJobCrew && MJMJobCrew.JOBS) || []).filter(j => PAYROLL_VIEW_KEYS.includes(j));
+  const own = ((window.MJMJobCrew && MJMJobCrew.JOBS) || []).filter(j => PAYROLL_VIEW_KEYS.includes(j));
+  return own.concat(customJobs.map(j => j.key));
 }
 
 /* ── THE TWO JOBS WHOSE CREW IS NOT A TEAM BOARD GROUP ───────────────────
