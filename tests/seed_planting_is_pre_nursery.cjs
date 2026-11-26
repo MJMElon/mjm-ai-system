@@ -48,8 +48,8 @@ async function boot(browser, opts) {
     if (d.type() === 'confirm') d.accept().catch(() => {}); else d.dismiss().catch(() => {});
   });
   await page.addInitScript((o) => {
-    window.__PDFS = []; window.__WRITES = []; window.__NAMES = []; window.__MOVES = [];
-    const db = { saved: o.saved.slice(), names: o.names.slice(), moves: (o.moves || []).slice() };
+    window.__PDFS = []; window.__WRITES = []; window.__NAMES = []; window.__MOVES = []; window.__CONFIG = [];
+    const db = { config: (o.config || []).slice(), saved: o.saved.slice(), names: o.names.slice(), moves: (o.moves || []).slice() };
     window.__DB = db;
     const fin = (v) => typeof v === 'number' && isFinite(v);
     const guard = (m, a) => a.forEach((v, i) => {
@@ -74,6 +74,14 @@ async function boot(browser, opts) {
         return { data: o.logs.slice(a, b + 1), error: null };
       }
       if (o.noTable && table.indexOf('nops_seed_planting') === 0) return missing(table);
+      if (table === 'nops_maint_config') {
+        if (st.op === 'upsert') {
+          window.__CONFIG.push({ row: st.row, opt: st.opt });
+          db.config = db.config.filter(r => r.key !== st.row.key).concat([st.row]);
+          return { data: null, error: null };
+        }
+        return { data: db.config.filter(r => !st.eq.key || r.key === st.eq.key), error: null };
+      }
       if (table === 'nops_seed_planting_batch_workers') {
         if (st.op === 'upsert') { window.__WRITES.push({ row: st.row, opt: st.opt }); return { data: null, error: null }; }
         const want = st.in.batch_name || [];
@@ -168,7 +176,8 @@ const sheetOf = (page) => page.evaluate(() => {
   let cur = null;
   [...tbl.querySelectorAll('tbody tr')].forEach(tr => {
     if (tr.classList.contains('sp-job-row')) {
-      cur = { band: tr.textContent.trim(), head: [], body: [], foot: [] }; sections.push(cur); return;
+      const nm = tr.querySelector('.sp-job-name');
+      cur = { band: (nm || tr).textContent.trim(), off: tr.classList.contains('sp-job-off'), head: [], body: [], foot: [] }; sections.push(cur); return;
     }
     if (!cur) { cur = { band: '', head: [], body: [], foot: [] }; sections.push(cur); }
     if (tr.classList.contains('sp-head')) { cur.head = [...tr.children].map(th => th.textContent.trim()); return; }
@@ -475,6 +484,56 @@ const sheetOf = (page) => page.evaluate(() => {
   check('last month is a group, picked and ticked in one Add', await c.page.evaluate(() => window.__NAMES.map(x => [x.row.month, x.row.names])),
     [['Oct 2026', ['Ana', 'Budi']]]);
   check('no page errors there', c.errs, []);
+
+  // ── 9. A month with no soil filling takes that band off ──
+  /* *"这个mengisi tanah某些月份是没有的 所以要有一个按钮是可以删掉这部分的"*.
+     A mark on the month, never a deletion; refused while figures are keyed
+     against that job; and the band comes back with one press. */
+  {
+    const d = await boot(browser, { logs: LOGS, saved: [], names, noTable: false });
+    let s9 = await sheetOf(d.page);
+    check('the soil filling band carries a Remove button; Seed Planting does not',
+      await d.page.evaluate(() => [...document.querySelectorAll('[data-sp-remove]')].map(b => b.dataset.spRemove)), ['hyplug']);
+    try { await d.page.click('[data-sp-remove="hyplug"]', { timeout: 3000 }); } catch (_) {}
+    await d.page.waitForTimeout(400);
+    s9 = await sheetOf(d.page);
+    check('Remove marks the month in nops_maint_config, and writes nothing else',
+      [await d.page.evaluate(() => window.__CONFIG.map(x => [x.row.key, x.row.txt_value, x.opt && x.opt.onConflict])),
+       await d.page.evaluate(() => window.__WRITES.length)],
+      [[['sp_job_off:Oct 2026', 'hyplug', 'key']], 0]);
+    check('…the band is down to one line saying so, with no rows and no boxes under it',
+      [s9.sections.length, s9.sections[1] && s9.sections[1].off, s9.sections[1] && s9.sections[1].body.length,
+       await d.page.evaluate(() => document.querySelectorAll('[id^="sp-hyplug-"]').length)],
+      [2, true, 0, 0]);
+    check('…Seed Planting is untouched', s9.sections[0] && s9.sections[0].body.length, 2);
+    try { await d.page.click('[data-sp-add="hyplug"]', { timeout: 3000 }); } catch (_) {}
+    await d.page.waitForTimeout(400);
+    s9 = await sheetOf(d.page);
+    check('Add back brings the band back, rows and all',
+      [s9.sections[1] && s9.sections[1].off, s9.sections[1] && s9.sections[1].body.length,
+       await d.page.evaluate(() => window.__CONFIG.slice(-1)[0].row.txt_value)], [false, 2, '']);
+    check('no page errors there', d.errs, []);
+    await d.page.close();
+
+    /* Already marked: the sheet opens with the band off, and the PDF leaves it out. */
+    const e = await boot(browser, { logs: LOGS, saved: [], names, noTable: false,
+      config: [{ key: 'sp_job_off:Oct 2026', txt_value: 'hyplug' }] });
+    const s10 = await sheetOf(e.page);
+    check('a month already marked opens with the band off', s10.sections[1] && s10.sections[1].off, true);
+    check('another month is not touched by it', await e.page.evaluate(() => (_spCache['Nov 2026'] || {}).off || null), null);
+    await e.page.close();
+
+    /* Figures keyed: refused, naming the job, and nothing written. */
+    const f = await boot(browser, { logs: LOGS, names, noTable: false,
+      saved: [{ batch_name: '278', job: 'hyplug', month: 'Oct 2026', qty_planted: 3000, workers: { Siti: 50 } }] });
+    try { await f.page.click('[data-sp-remove="hyplug"]', { timeout: 3000 }); } catch (_) {}
+    await f.page.waitForTimeout(400);
+    check('refused while figures are keyed against it, and nothing is written',
+      [f.dialogs.some(x => /still has figures/.test(x)), await f.page.evaluate(() => window.__CONFIG.length),
+       ((await sheetOf(f.page)).sections[1] || {}).off],
+      [true, 0, false]);
+    await f.page.close();
+  }
 
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
