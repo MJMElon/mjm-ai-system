@@ -897,6 +897,7 @@ function renderPreNurseryGlance(c) {
 }
 
 function renderSeedPlanting(fromLoad) {
+  try { renderCustomJobClaims('seedplant'); } catch (e) { console.warn('[payroll] added jobs:', e); }
   const tbl = $('seedplant-table'), note = $('seedplant-note'), sub = $('seedplant-sub');
   if (!tbl) return;
   const month = maintMonthLabel(monthValue());
@@ -1768,6 +1769,7 @@ async function loadTransplantField() {
   transplantGateOff = got.gateOff;
   transplantRowsAll = got.rows;
   splitTransplantField();
+  try { await loadCustomJobRowsForPayroll(); } catch (e) { console.warn('[payroll] added jobs:', e); }
 }
 /* The read, for any month, touching no global — loadTransplantField is the
    open month's, monthTotals() the dashboard trend's. */
@@ -2993,6 +2995,8 @@ function renderTransplantClaim() {
   catch (e) { console.warn('[payroll] the by-plot table could not be drawn:', e); }
   try { renderCullIncentive(secFilter); }
   catch (e) { console.warn('[payroll] the culling incentive could not be drawn:', e); }
+  try { renderCustomJobClaims('transpl', l => !secFilter || inSection(secFilter, l.section)); }
+  catch (e) { console.warn('[payroll] added jobs could not be drawn:', e); }
 
   const lines = transplantFieldLines()
     .filter(l => !secFilter || inSection(secFilter, l.section));
@@ -4253,6 +4257,7 @@ function renderMaint() {
   const frozen = maintSnapshotFor(n, ym);
   const view = frozen ? maintViewFromSnapshot(frozen) : maintLiveView(n, ym, monthTxt);
   renderMaintGlance(view);
+  try { renderCustomJobClaims('maint', l => !n || l.row.nursery === n); } catch (e) { console.warn('[payroll] added jobs:', e); }
   const { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll } = view;
 
   // The two things a claim form has to say about itself, and no preamble.
@@ -4491,6 +4496,7 @@ function renderLoading() {
      see its money again just because it reached a different tab. */
   if (!may('maint')) { if (primary) primary.classList.add('hidden'); return; }
   if (primary) primary.classList.remove('hidden');
+  try { renderCustomJobClaims('seedling', l => !$('maint-nursery').value || l.row.nursery === $('maint-nursery').value); } catch (e) { console.warn('[payroll] added jobs:', e); }
 
   const sel = $('maint-nursery');
   if (!sel) return;
@@ -5014,6 +5020,20 @@ function monthlyRows(sec) {
       touch(p.known.full_name, p.section || '').transpl += p.amount;
     });
   } catch (e) { console.warn('[payroll] culling incentive left off the monthly payroll:', e); }
+
+  /* Jobs the office added, CHECKED rows only, priced where a rate exists,
+     into the column of the sheet they are listed on. */
+  try {
+    customJobLines().forEach(l => {
+      if (!l.known || !l.amount) return;
+      if (secFilter && (l.section || '') !== secFilter) return;
+      const row = touch(l.known.full_name, l.known.section || '');
+      const sh = customJobSheet(l.job);
+      if (sh === 'maint') row.maint += l.amount;
+      else if (sh === 'seedling') row.seedling += l.amount;
+      else row.transpl += l.amount;
+    });
+  } catch (e) { console.warn('[payroll] added jobs left off the monthly payroll:', e); }
 
   // Keyed sheets.
   entries.filter(e => e.month === month).forEach(e => {
@@ -7203,3 +7223,94 @@ document.addEventListener('keydown', (e) => {
     window.location.href = '../index.html';
   }
 })();
+
+/* ════════════ JOBS THE OFFICE ADDED, ON THE CLAIM ════════════
+   A job added on Work Maintenance → Settings → Where Each Job Is Done is
+   recorded on Worker Activity (nops_custom_job_rows) and reaches the claim
+   once a row is CHECKED there — "就等于我check了进payroll". It is priced off
+   the Piece Rate row whose Used For is the job; with none yet it is still
+   listed, its money left blank and the line saying the price is waiting on
+   Settings → Piece Rate, where the job sits under Pending
+   ("payroll没有他的piece rate 后面setting detect到").
+
+   Which sheet it lands on follows where it was put: under a Work
+   Maintenance job → Work Maintenance; under Seed Planting → Seed Planting;
+   under Loading Seedlings → Loading Seedlings; under Transplanting, under
+   Culling Monitoring, or a side bar entry of its own → Transplanting. The
+   Monthly Payroll files its money in that sheet's column. */
+let customJobRows = [];
+let customJobRowsErr = '';
+const CJ_MAINT_HOSTS = ['pd', 'manuring', 'weeding', 'interrow'];
+function customJobSheet(job) {
+  const h = job && job.sidebar === false ? job.under : null;
+  if (CJ_MAINT_HOSTS.includes(h)) return 'maint';
+  if (h === 'seed_planting') return 'seedplant';
+  if (h === 'loading_seedlings') return 'seedling';
+  return 'transpl';
+}
+async function loadCustomJobRowsForPayroll() {
+  customJobRows = []; customJobRowsErr = '';
+  if (!_supabase) return;
+  const { data, error } = await _supabase.from('nops_custom_job_rows').select('*')
+    .eq('month', maintMonthLabel(monthValue())).then(r => r, e => ({ error: e }));
+  if (error) {
+    customJobRowsErr = /does not exist|schema cache|relation/i.test(error.message || '') ? '' : (error.message || '');
+    return;
+  }
+  customJobRows = data || [];
+}
+function customJobRate(job) {
+  const r = rates.find(x => x.category === job.key && x.active !== false);
+  return r ? { rate: Number(r.rate) || 0, unit: r.unit || '' } : null;
+}
+/* Every worker line of every CHECKED row, priced where a rate exists. */
+function customJobLines(sheet) {
+  const out = [];
+  (maintCustomJobs || []).forEach(job => {
+    if (sheet && customJobSheet(job) !== sheet) return;
+    const rate = customJobRate(job);
+    customJobRows.filter(r => r.job_key === job.key && r.checked_at).forEach(r => {
+      const cells = r.workers || {};
+      const names = Object.keys(cells).filter(w => cells[w]);
+      const qty = Number(r.qty) || 0;
+      names.forEach(w => {
+        const share = job.split === 'each' ? Number(cells[w]) || 0 : (names.length ? qty / names.length : 0);
+        const known = workers.find(x => (x.full_name || '').trim().toLowerCase() === String(w).trim().toLowerCase());
+        const amount = rate ? Math.round(cap2(share) * Math.round(rate.rate * 100000) / 1000) / 100 : null;
+        out.push({ job, row: r, worker: w, known, share, amount, rate,
+                   section: (known && known.section) || r.nursery || '' });
+      });
+    });
+  });
+  return out;
+}
+/* The section under a sheet: one table per job with a checked row. */
+function renderCustomJobClaims(sheet, keep) {
+  const pane = document.getElementById('sub-' + sheet);
+  if (!pane) return;
+  let box = pane.querySelector(':scope > .cj-claims');
+  if (!box) { box = document.createElement('div'); box.className = 'cj-claims'; pane.appendChild(box); }
+  const lines = customJobLines(sheet).filter(l => !keep || keep(l));
+  const jobs = (maintCustomJobs || []).filter(j => customJobSheet(j) === sheet && lines.some(l => l.job.key === j.key));
+  box.innerHTML = (customJobRowsErr ? `<p class="foot-note">Jobs added on Work Maintenance could not be read: ${esc(customJobRowsErr)}</p>` : '')
+    + jobs.map(job => {
+      const ls = lines.filter(l => l.job.key === job.key);
+      const rate = customJobRate(job);
+      const per = new Map();
+      ls.forEach(l => {
+        const k = l.known ? l.known.full_name : l.worker;
+        const e = per.get(k) || { name: k, known: !!l.known, section: l.section, qty: 0, amount: 0 };
+        e.qty += l.share; e.amount += l.amount || 0;
+        per.set(k, e);
+      });
+      const rows = [...per.values()].sort((a, b) => a.name.localeCompare(b.name));
+      const totQ = rows.reduce((a, r) => a + r.qty, 0), totA = rows.reduce((a, r) => a + r.amount, 0);
+      return `<div class="card cj-claim" data-cj="${esc(job.key)}" style="margin-top:16px;"><div class="tbl-wrap"><table>
+        <thead><tr><th colspan="5" class="cj-claim-h">${esc(job.label)}${job.desc ? ` <span class="cj-claim-desc">· ${esc(job.desc)}</span>` : ''}</th></tr>
+          <tr><th>No.</th><th>Worker</th><th>Qty</th><th>Rate (RM)</th><th>Amount (RM)</th></tr></thead>
+        <tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}${r.known ? '' : ' <span class="cj-unknown">(not on register)</span>'}</td>
+          <td>${capFmt(r.qty)}</td><td>${rate ? esc(String(rate.rate)) : '—'}</td><td>${rate ? moneyFig(r.amount) : '—'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="2">TOTAL</td><td>${capFmt(totQ)}</td><td></td><td>${rate ? moneyFig(totA) : '—'}</td></tr></tfoot>
+      </table></div>${rate ? '' : `<p class="foot-note cj-norate">No piece rate yet for ${esc(job.label)} — set it on Settings → Piece Rate, where it is waiting under Pending. Until then this work is listed and not paid.</p>`}</div>`;
+    }).join('');
+}
