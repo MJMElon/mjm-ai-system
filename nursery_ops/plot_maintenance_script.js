@@ -3256,8 +3256,52 @@ const SP_VIEWS = { seed_planting: 'seed' };
    one job it heads. */
 const SP_JOBS = [
   { job: 'seed',   label: 'pay.jobSeed' },
-  { job: 'hyplug', label: 'pay.jobHyplug' },
+  { job: 'hyplug', label: 'pay.jobHyplug', removable: true },
 ];
+
+/* A MONTH WITH NO SOIL FILLING TAKES THE BAND OFF. The office:
+   *"这个mengisi tanah某些月份是没有的 所以要有一个按钮是可以删掉这部分的"*.
+   It is a MARK on the month and never a deletion -- one nops_maint_config
+   row, `sp_job_off:<month>`, naming the jobs taken off -- so the band comes
+   back with one press of Add back, and no figure is touched. It is refused
+   while any figure is keyed against that job this month: a band taken off
+   over figures would hide work the claim still pays. An unreadable mark
+   reads as nothing taken off, so the band shows -- the fail-open every
+   other gate here follows. */
+const SP_OFF_PREFIX = 'sp_job_off:';
+function _spJobOff(st, job) { return !!(st && st.off && st.off.includes(job)); }
+function _spJobHasFigures(st, job) {
+  return !!st && st.rows.some(r => _spKeyed(st.saved[_spKey(r.key, job)]) > 0);
+}
+async function setSeedPlantingJobOff(job, on) {
+  if (!wrAllows('seed_planting')) return;
+  const m = getMonth();
+  const st = _spCache[m];
+  const j = SP_JOBS.find(x => x.job === job);
+  if (!st || !j || !j.removable) return;
+  if (on && _spJobHasFigures(st, job)) {
+    alert(t('pay.spOffHasFigures', { j: t(j.label) }));
+    return;
+  }
+  const next = (st.off || []).filter(x => x !== job);
+  if (on) next.push(job);
+  const { error } = await _supabase.from('nops_maint_config').upsert({
+    key: SP_OFF_PREFIX + m,
+    txt_value: next.join(','),
+    note: 'Pre Nursery jobs not done this month (their band is taken off the '
+        + 'Seed Planting & Hyplug sheet). Work Maintenance, Worker Activity.',
+    updated_by: (typeof userEmail !== 'undefined' && userEmail) || window.currentUserEmail || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'key' }).then(r => r, e => ({ error: e }));
+  if (error) {
+    alert('Could not save — ' + (error.message || 'try again')
+      + (/txt_value/i.test(error.message || '')
+        ? '\n\nRun shared/RUN_ME_nops_maint_config.sql in the Supabase SQL Editor once, then try again.' : ''));
+    return;
+  }
+  st.off = next;
+  renderPayroll();
+}
 function _spKey(batch, job) { return String(batch) + '|' + (job || 'seed'); }
 
 /* THE JOB IS SENT ONLY BY A DATABASE THAT HAS THE COLUMN. Naming a column a
@@ -3365,6 +3409,13 @@ async function loadSeedPlantingForPayroll(m) {
     if (me) { noMoveTable = true; console.warn('[maint] seed planting batches read:', me.message); }
     else (mv || []).forEach(r => { if (r.batch_name && r.month) moved[String(r.batch_name).trim()] = r.month; });
     const rows = seedPlantingRows(logs, m, moved);
+    /* The jobs taken off this month. Unreadable reads as none. */
+    let off = [];
+    const { data: oc, error: oe } = await _supabase.from('nops_maint_config')
+      .select('key, txt_value').eq('key', SP_OFF_PREFIX + m)
+      .then(r => r, e => ({ error: e }));
+    if (oe) console.warn('[maint] seed planting jobs off read:', oe.message);
+    else (oc || []).forEach(r => { off = String(r.txt_value || '').split(',').map(x => x.trim()).filter(Boolean); });
 
     /* Asked by the BATCHES on this sheet, not by the month written on the
        record: a batch keyed under September and then moved into October
@@ -3433,7 +3484,7 @@ async function loadSeedPlantingForPayroll(m) {
       if (b && d && (!home[b] || d < home[b])) home[b] = d;
       if (b && d) homeQty[b] = (homeQty[b] || 0) + (Number(l.quantity_change) || 0);
     });
-    _spCache[m] = { rows, saved, names, prevNames, noTable, noJob, moved, noMoveTable, home, homeQty };
+    _spCache[m] = { rows, saved, names, prevNames, noTable, noJob, moved, noMoveTable, home, homeQty, off };
   } catch (e) {
     _spErr[m] = 'Could not read the Seed Planting records: ' + (e && e.message || e);
   } finally {
@@ -3530,6 +3581,12 @@ function renderSeedPlantingPayroll() {
      下两部分就好"* -- which is also how the claim they flow into is laid
      out, so the screen and the paper read the same way round. */
   const section = (j) => {
+    if (_spJobOff(st, j.job)) {
+      return `<tr class="sp-job-row sp-job-off"><td class="sp-job" colspan="${span}"><span class="sp-job-name">${esc(t(j.label))}</span>
+        <span class="sp-off-note">${esc(t('pay.spOffNote', { m }))}</span>
+        <button type="button" class="btn btn-sm sp-job-btn" data-sp-add="${j.job}"
+          onclick="setSeedPlantingJobOff('${j.job}', false)">${esc(t('pay.spOffAdd'))}</button></td></tr>`;
+    }
     /* The soil filling half cannot be stored without the column; the seed
        half always can, because that is the row the table has always had. */
     const shut = st.noTable || (st.noJob && j.job !== 'seed');
@@ -3573,7 +3630,11 @@ function renderSeedPlantingPayroll() {
     /* The band names the job and nothing else. Its own total sits under its
        own rows: one figure under both would be two jobs added together, and
        they are not the same thing even where the unit is. */
-    return `<tr class="sp-job-row"><td class="sp-job" colspan="${span}">${esc(t(j.label))}</td></tr>
+    const rm = j.removable && !st.noTable
+      ? `<button type="button" class="btn btn-sm sp-job-btn" data-sp-remove="${j.job}"
+          title="${esc(t('pay.spOffTip'))}" onclick="setSeedPlantingJobOff('${j.job}', true)">✕ ${esc(t('pay.spOffRemove'))}</button>`
+      : '';
+    return `<tr class="sp-job-row"><td class="sp-job" colspan="${span}"><span class="sp-job-name">${esc(t(j.label))}</span>${rm}</td></tr>
       <tr class="sp-head">
         ${payTh(t('pay.spPlantedDate'), 100)}
         ${payTh(t('pay.batch'), 96)}
@@ -4387,7 +4448,7 @@ function downloadPayrollPDF(opts) {
     for (let i = 0; i < cols.length; i += per) chunks.push(cols.slice(i, i + per));
 
     let started = false;
-    SP_JOBS.forEach((j) => {
+    SP_JOBS.filter(j => !_spJobOff(st, j.job)).forEach((j) => {
       const job = j.job, label = t(j.label);
       chunks.forEach((chunk, ci) => {
         if (started) newPage();
@@ -5479,6 +5540,9 @@ const I18N = {
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug cannot save yet: run shared/RUN_ME_hyplug_soil.sql in Supabase. The rows below are read from the batch report as normal, and Seed Planting is unaffected.',
     'pay.qtyHoles':'Qty to fill',
     'pay.jobSeed':'Seed Planting', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
+    'pay.spOffRemove':'Remove for this month', 'pay.spOffTip':'This job was not done this month: take its section off. Add it back any time.',
+    'pay.spOffAdd':'+ Add back', 'pay.spOffNote':'not done in {m}',
+    'pay.spOffHasFigures':'{j} still has figures keyed this month. Clear them first, then remove the section.',
     'pay.spWorkers':'Workers for {m}:', 'pay.spNoNames':'No names keyed for this month yet. Add the workers who planted.',
     'pay.spNamePh':'Worker name', 'pay.spConfirm':'Confirm', 'pay.spRemove':'Remove',
     'pay.spPickWorker':'Pick a worker…', 'pay.spPickGroup':'Pick a position…', 'pay.spTickSome':'Tick at least one name, then press Confirm.', 'pay.spLastMonth':'Last month', 'pay.spOtherName':'Other — type a name…',
@@ -5697,6 +5761,9 @@ const I18N = {
     'pay.spNoJobCol':'Mengisi Tanah ke Hyplug belum boleh disimpan: jalankan shared/RUN_ME_hyplug_soil.sql di Supabase. Baris di bawah dibaca dari laporan batch seperti biasa, dan Penanaman Benih tidak terjejas.',
     'pay.qtyHoles':'Kuantiti diisi',
     'pay.jobSeed':'Penanaman Benih', 'pay.jobHyplug':'Mengisi Tanah ke Hyplug',
+    'pay.spOffRemove':'Buang untuk bulan ini', 'pay.spOffTip':'Kerja ini tidak dibuat bulan ini: buang bahagiannya. Boleh tambah semula bila-bila masa.',
+    'pay.spOffAdd':'+ Tambah semula', 'pay.spOffNote':'tidak dibuat pada {m}',
+    'pay.spOffHasFigures':'{j} masih ada angka bulan ini. Kosongkan dahulu, kemudian buang bahagian ini.',
     'pay.spWorkers':'Pekerja untuk {m}:', 'pay.spNoNames':'Belum ada nama untuk bulan ini. Tambah pekerja yang menanam.',
     'pay.spNamePh':'Nama pekerja', 'pay.spConfirm':'Sahkan', 'pay.spRemove':'Buang',
     'pay.spPickWorker':'Pilih pekerja…', 'pay.spPickGroup':'Pilih jawatan…', 'pay.spTickSome':'Tanda sekurang-kurangnya satu nama, kemudian tekan Sahkan.', 'pay.spLastMonth':'Bulan lepas', 'pay.spOtherName':'Lain — taip nama…',
