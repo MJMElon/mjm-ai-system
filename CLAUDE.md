@@ -12239,11 +12239,17 @@ carries no explanation lines. Each plot carries the office OWN MJM CATS, moving
 shape (`lpCatSpots`, inside the polygon, the label spot left clear), so they
 shrink when the map is zoomed out and are big enough to see what they are
 doing when it is zoomed in (the office: *缩小的时候猫猫也要跟着缩小 放大才看到他们
-在干嘛*). Growing is up to five cats, watering, fertiliser and weeding in
-turn; Empty up to five digging; Collecting in 1 month one big sitting cat;
-Collecting the lorry driving across. The labels keep their size at any zoom;
-the key shows the colour, the cat and the stage name and nothing more (the office took the explanation lines off). Plain CSS animation, still under
-`prefers-reduced-motion`. The delivery orders are read once
+在干嘛*). **The movement is the office own Canva animation** (their Oil Palm
+Seedling video, cut cat by cat into `lifeplot/cat_*.webp`, 6 frames a second;
+the `.png` beside each is its still first frame, shown under reduced motion).
+Growing is three cats, one per job (watering, fertiliser, weeding); Empty two
+digging, three on a plot at or above the nursery median size; Collecting in 1
+month one big cat; Collecting the lorry. The labels keep their size at any
+zoom; the key shows the colour, the cat and the stage name and nothing more.
+The Plot chip row has no All plots chip (*all plot 不需要存在*), and the cycle
+table is drawn calm (*看了眼睛很痛*): ordinary-case muted headings,
+regular-weight figures, a faint tint per section, a soft stripe, dashes
+greyed. The delivery orders are read once
 (`ensureRot`) and the map is coloured again when they land.
 
 **Pusingan Jualan over 100 percent**: the cumulative run starts after the
