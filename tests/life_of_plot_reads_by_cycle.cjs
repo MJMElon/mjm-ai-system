@@ -396,6 +396,12 @@ const DATA = {
   await p10.waitForSelector('.lp-cyc', { timeout: 8000 }).catch(() => {});
   await p10.waitForTimeout(500);
   const before10 = await p10.evaluate(() => document.querySelectorAll('#lp-timeline-box .lp-cyc').length);
+  const bgOf = () => p10.evaluate(() => { const td = document.querySelector('table.lp-x tbody tr td.batch'); return td ? getComputedStyle(td).backgroundColor : 'no row'; });
+  const bg0 = await bgOf();
+  await p10.hover('table.lp-x tbody tr td.batch').catch(() => {});
+  const bg1 = await bgOf();
+  ok(bg0 !== 'no row' && bg0 === bg1, 'outside Edit cycles a row does not change colour under the pointer', [bg0, bg1]);
+  await p10.mouse.move(0, 0);
   await p10.click('#lp-cyc-edit').catch(() => {});
   await p10.click('#lp-ce-add').catch(() => {});
   const boxes10 = await p10.evaluate(() => document.querySelectorAll('.lp-ce-cyc').length);
