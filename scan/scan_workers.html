@@ -1745,9 +1745,14 @@ const roleKey = r => String(r || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const roleDoesSiram = r => roleKey(r) === 'WATERPUMPOPERATOR';
 const roleDoesMata  = r => ['MATAMALAM', 'NIGHTWATCHMAN', 'PENJAGAMALAM', 'GUARD', 'SECURITY'].includes(roleKey(r));
 let _jobsExplicit = false;
+/* THE JOBS ROW IS ONLY FOR TWO ROLES. The office: only a General Worker and
+   a Water Pump Operator need it, so for every other role (and before a role
+   is chosen) it is hidden, and Save leaves those jobs as they are. */
+const roleHasJobs = r => ['GENERALWORKER', 'WATERPUMPOPERATOR'].includes(roleKey(r));
 
 function onWorkerRoleChange() {
   const r = $('wf-role').value.trim();
+  $('wf-maint-row').classList.toggle('hidden', !roleHasJobs(r));
   if (!_jobsExplicit) {
     $('wf-job-siram').checked = roleDoesSiram(r);
     $('wf-job-mata').checked  = roleDoesMata(r);
@@ -1813,10 +1818,14 @@ async function saveWorker() {
     updated_by: userEmail || null
   };
   // Writing a column the table does not have fails the whole save.
-  if (_maintGeneralCol && MAINT_NURSERIES.includes(row.section)) row.maint_general = $('wf-maint').checked;
+  /* With the Jobs row hidden, the sheets follow the role again (null), and
+     Siram Go and Mata Malam are left exactly as they are. */
+  const jobsShown = roleHasJobs(row.role);
+  if (_maintGeneralCol && !jobsShown) row.maint_general = null;
+  else if (_maintGeneralCol && MAINT_NURSERIES.includes(row.section)) row.maint_general = $('wf-maint').checked;
   /* Siram Go and Mata Malam go into portal.modules, keeping everything
      else the Worker Portal Settings screen keeps there. */
-  if (_portalCol) {
+  if (_portalCol && jobsShown) {
     const was = editWorkerId ? (workers.find(x => x.id === editWorkerId) || {}).portal : null;
     const portal = (was && typeof was === 'object') ? JSON.parse(JSON.stringify(was)) : {};
     portal.modules = Object.assign({}, portal.modules || {},
