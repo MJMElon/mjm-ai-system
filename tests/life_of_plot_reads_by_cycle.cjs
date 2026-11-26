@@ -23,6 +23,8 @@ const C = (type, plot, b, date, qty) => ({ plot_name: plot, transaction_type: ty
 const DATA = {
   shared_plots: [{ plot_name: 'B11', nursery_name: 'BNN' }, { plot_name: 'B13', nursery_name: 'BNN' }, { plot_name: 'U17', nursery_name: 'UNN 1' }],
   operation_nurseries: [],
+  // 228 and 229 sold out of B11, so their 3rd culling is open; nothing else has sold.
+  shared_do_records: [{ id: 91, delivery_date: '2026-02-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 2000, batch_1: '229', plot_2: 'B11', qty_2: 900, batch_2: '228' }],
   shared_inventory_logs: [
     T('B11', '228', '2025-05-22', 3074), T('B11', '229', '2025-05-22', 9047),
     C('2nd_Culling', 'B11', '228', '2025-09-14', 95), C('2nd_Culling', 'B11', '229', '2025-09-14', 69),
@@ -71,6 +73,7 @@ const DATA = {
 
   await page.goto(B + '/operation/operation_life_of_plot.html#plot=B11');
   await page.waitForSelector('#lp-timeline-box .lp-cyc', { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(600);
 
   console.log('1. a plot opens as its cycles, newest first');
   const cyc = await page.evaluate(() => [...document.querySelectorAll('#lp-timeline-box .lp-cyc')].map(c => ({
@@ -298,6 +301,25 @@ const DATA = {
   ok(st7.B17 === 'soon', 'a plot PALMS has nothing open for reads the ledger: 8th month, Collecting in 1 month', st7);
   ok(me7.length === 0, 'no page errors with PALMS on the map', me7);
   await pm7.close();
+
+  console.log('8. the 3rd culling opens once the batch has started selling, and only then');
+  const e8 = [];
+  const nomap = (plot, b, at, qty) => ({ plot_name: plot, transaction_type: '3rd_Culling', transaction_date: null, quantity_change: qty, batch_name: b, remark: 'Culled. 2ndCulled: 0, Sales: 0', created_at: at + 'T00:00:00Z' });
+  const p8 = await openPage(Object.assign({}, DATA, {
+    shared_inventory_logs: DATA.shared_inventory_logs.concat([nomap('U17', '270', '2026-11-05', 4877), nomap('U17', '275', '2026-11-05', 0)]),
+    shared_do_records: [{ id: 1, delivery_date: '2026-11-01', status: 'Completed', remark: '', plot_1: 'U17', qty_1: 100, batch_1: '275' }] }), e8);
+  await p8.goto(B + '/operation/operation_life_of_plot.html#plot=U17');
+  await p8.waitForSelector('.lp-cyc tbody tr', { timeout: 8000 }).catch(() => {});
+  await p8.waitForTimeout(600);
+  const r8 = await p8.evaluate(() => {
+    const o = {};
+    document.querySelectorAll('.lp-cyc tbody tr').forEach(tr => { const c = [...tr.children].map(x => x.textContent.trim()); o[c[0]] = c; });
+    return o;
+  });
+  ok(r8['270'] && /^Est\. /.test(r8['270'][r8['270'].length - 1] || '') && !r8['270'].includes('4,877', 3), '270 saved a 3rd culling of 4,877 and nothing is sold: the cell is the estimate, not 4,877', r8['270']);
+  ok(r8['275'] && !/Est\./.test((r8['275'] || []).slice(4).join('|')) && r8['275'][5] === '0', '275 has started selling, so its 3rd culling shows', r8['275']);
+  ok(e8.length === 0, 'no page errors', e8);
+  await p8.close();
 
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

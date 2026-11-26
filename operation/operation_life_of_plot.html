@@ -649,7 +649,7 @@
         if (!liveC) return { key: 'empty', months: null };
         const months = since(liveC.start) || 0;
         const mine = new Set(liveC.batches.map(b => lpBatchKey(b.batch)));
-        const sold = liveC.c3 > 0 || (ROT && ROT.sales.some(r => lpPlotKey(r.plot) === k && mine.has(lpBatchKey(r.batch)) && String(r.day) >= String(liveC.start)));
+        const sold = (ROT && ROT.sales.some(r => lpPlotKey(r.plot) === k && mine.has(lpBatchKey(r.batch)) && String(r.day) >= String(liveC.start)));
         if (sold) return { key: 'selling', months };
         return { key: months >= LP_SOON_MONTHS ? 'soon' : 'growing', months };
     }
@@ -956,13 +956,23 @@
             if (g.drone == null) droneKnown = false; else droneAll += g.drone;
         });
 
+        /* A 3rd culling is shown once the batch has started selling out of this
+           plot, and only then (the office: "3rd cull开不开取决于开始sale了没有").
+           Tab 6 saves its 3rd Culled as 2nd culled + what is left, so a row saved
+           before any sale reads the whole balance, or nought, and is not a
+           culling. Sales not read yet: shown, and drawn again once they are. */
+        const pk = lpPlotKey((p && p.plot) || '');
+        const salesKnown = !!(ROT && ROT.done && !ROT.missing.some(m => m.indexOf('delivery orders') === 0));
+        const c3On = b => (b.c3Has || b.c3Map != null) && (!salesKnown
+            || ROT.sales.some(r => lpPlotKey(r.plot) === pk && lpBatchKey(r.batch) === lpBatchKey(b.batch)));
         let alive2 = 0;
-        const map3 = bs.reduce((a, b) => a + (b.c3Map || 0), 0);
+        const map3 = bs.reduce((a, b) => a + (c3On(b) ? (b.c3Map || 0) : 0), 0);
+        const c3Tot = bs.reduce((a, b) => a + (c3On(b) && b.c3Has ? b.c3Qty : 0), 0);
         let body = '';
         groups.forEach(g => g.batches.forEach((b, i) => {
             const alive = b.c2Has ? (b.c2Alive != null ? b.c2Alive : b.tAdj - b.c2Qty) : b.tAdj;
             alive2 += alive;
-            const c2 = b.c2Has ? b.c2Qty : 0, c3 = b.c3Has ? b.c3Qty : 0, m3 = b.c3Map || 0;
+            const c2 = b.c2Has ? b.c2Qty : 0, c3 = c3On(b) && b.c3Has ? b.c3Qty : 0, m3 = b.c3Map || 0;
             const span = g.batches.length;
             body += `<tr><td class="l batch">${b.batch}</td>`
                 // Transplanting: the day and how many went in (the office: only these two)
@@ -975,7 +985,7 @@
                     : `<td class="l s1 est" colspan="4">${lpEst(b.tDate, LP_EST_C2)}</td>`)
                 // 3rd culling: pending culling, drone count, variance, culling rate; nothing
                 // keyed yet is due the 9th month after transplant.
-                + (b.c3Has || b.c3Map != null
+                + (c3On(b)
                     ? `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
                       + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td>`
                     : `<td class="l s1 est" colspan="5">${lpEst(b.tDate, LP_EST_C3)}</td>`)
@@ -992,7 +1002,7 @@
            + `<tfoot><tr class="tot"><td class="l">Total · plot</td>`
            + `<td class="s1"></td><td>${dash(c.tAdj)}</td>`
            + (bs.some(b => b.c2Has) ? `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>` : `<td class="s1" colspan="4"></td>`)
-           + (bs.some(b => b.c3Has || b.c3Map != null) ? `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td>` : `<td class="s1" colspan="5"></td>`)
+           + (bs.some(c3On) ? `<td class="s1"></td><td>${dash(c3Tot)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c3Tot)}</td><td>${lpPct(c3Tot, c.tAdj)}</td>` : `<td class="s1" colspan="5"></td>`)
            + `</tr></tfoot>`
            + `</table></div>`;
         h = h.replace(/>–</g, '><span class="mute">–</span><');
@@ -1019,6 +1029,10 @@
             ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
         document.getElementById('lp-note').textContent = '';
+        // The 3rd culling waits on the sales; draw again once they are read.
+        if (!(ROT && ROT.done)) ensureRot().then(() => {
+            if (VIEW === 'plots' && location.hash === '#plot=' + encodeURIComponent(p.plot)) showPlot(p.plot);
+        }).catch(() => {});
     }
 
     // ── Side bar: Plots & cycles, or the Transplant record by year ──
