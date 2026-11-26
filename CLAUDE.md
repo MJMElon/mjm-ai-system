@@ -12215,6 +12215,17 @@ the title and nothing else, and the nursery tabs sit BELOW it, right-aligned.
 **Life of Plot must not change the batch report** (the office, firmly): a
 Plot Cycle box on Tab 3 was built and taken back out unshipped.
 
+**The Plots & cycles map paints FOUR STAGES**, with the key standing beside
+the map (`LP_STAGES`, `mapStateOf`): Empty (no current cycle, or it is 3rd
+culled), Growing (under `LP_SOON_MONTHS`, 6, since the cycle first
+transplant), Ready soon (6 months or more, nothing of this cycle sold yet) and
+Selling (a batch of this cycle on a delivery order since it began, or its 3rd
+culling begun). Each plot carries a small MOVING scene of its stage
+(`LP_SCENES`): people watering, feeding and weeding; a person wheeling soil;
+big seedlings swaying; a lorry driving. Plain SVG moved by the stylesheet,
+still under `prefers-reduced-motion`. The delivery orders are read once
+(`ensureRot`) and the map is coloured again when they land.
+
 **Pusingan Jualan over 100 percent**: the cumulative run starts after the
 latest earlier transplant month, so a plot holding two rounds at once (old
 batches still being sold while new ones go in) adds both against one
