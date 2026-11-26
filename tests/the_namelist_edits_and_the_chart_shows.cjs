@@ -354,6 +354,21 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     yes(!(await page.isVisible('#wl-roles')), 'no Manage Roles');
     await page.close();
 
+    console.log('\n-- 10. the location filter is the section --');
+    page = await open(browser, port);
+    const locOpts = await page.$$eval('#wl-loc option', (o) => o.map((x) => x.value));
+    yes(['PN', 'BNN', 'UNN1', 'UNN2', 'UNE', 'OTHERS'].every((c) => locOpts.includes(c)), 'the filter offers each section, as the form does -> ' + JSON.stringify(locOpts));
+    yes(!locOpts.includes('Main Nursery'), 'and not Main Nursery as one choice');
+    yes(locOpts.includes('__none'), 'Not allocated is still a choice');
+    await page.evaluate(() => { const s = document.getElementById('wl-loc'); s.value = 'UNN1'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+    await page.waitForTimeout(150);
+    const ids = await page.$$eval('#wl-body tr[data-id]', (t) => t.map((x) => +x.dataset.id).sort((a, b) => a - b));
+    is(ids, [5, 6, 7, 8], 'UNN1 shows the UNN1 workers and nobody from BNN or UNN2');
+    await page.evaluate(() => { const s = document.getElementById('wl-loc'); s.value = '__none'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+    await page.waitForTimeout(150);
+    is(await page.$$eval('#wl-body tr[data-id]', (t) => t.map((x) => +x.dataset.id)), [11], 'Not allocated shows the signup filed nowhere');
+    await page.close();
+
     console.log('\n-- 9. the page sits in the middle --');
     page = await open(browser, port);
     await page.setViewportSize({ width: 1900, height: 900 });

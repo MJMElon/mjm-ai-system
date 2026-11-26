@@ -1252,14 +1252,19 @@ function locationOfW(code) {
   return { name: loc ? loc.name : code, code: loc ? code : '' };
 }
 
+/* THE FILTER IS THE SECTION, the same list the form's Location box offers
+   (PN, BNN, UNN1, UNN2, UNE, Others), because Main Nursery is three places
+   and the office filters by one of them. A section somebody is filed under
+   that the list does not hold is offered too, and Not allocated last. */
 function fillListLocations() {
   const sel = $('wl-loc'), keep = sel.value;
-  const names = [...new Set(workers.map(w => locationOfW(sectionOf(w)).name))];
-  const order = ['Pre Nursery', 'Main Nursery', 'Estate', 'Others', 'Not allocated'];
-  names.sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const opts = SECTIONS.map(s => ({ v: s.code, t: s.name }));
+  workers.forEach(w => { const c = sectionOf(w);
+    if (c && !opts.some(o => o.v === c)) opts.push({ v: c, t: c }); });
+  if (workers.some(w => !sectionOf(w))) opts.push({ v: '__none', t: 'Not allocated' });
   sel.innerHTML = '<option value="">All locations</option>' +
-    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  if (names.includes(keep)) sel.value = keep;
+    opts.map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join('');
+  if (opts.some(o => o.v === keep)) sel.value = keep;
   if (sel._cfRefresh) sel._cfRefresh();
 }
 
@@ -1298,7 +1303,7 @@ function renderList() {
     const on = isActiveW(w);
     if (stF === 'on' && !on) return false;
     if (stF === 'off' && on) return false;
-    if (locF && locationOfW(sectionOf(w)).name !== locF) return false;
+    if (locF && (locF === '__none' ? sectionOf(w) !== '' : sectionOf(w) !== locF)) return false;
     return !q || `${w.full_name || ''} ${w.role || ''}`.toLowerCase().includes(q);
   });
   $('wl-body').innerHTML = rows.length ? rows.map((w, i) => {

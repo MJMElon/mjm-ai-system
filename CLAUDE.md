@@ -6078,6 +6078,10 @@ replaces it).
   showing that. A NEW worker is ticked from the role until somebody touches
   the boxes: Water Pump Operator does Siram Go, a Mata Malam / Night
   Watchman / Penjaga Malam role does Mata Malam.
+- **The namelist's location filter is the SECTION** (PN, BNN, UNN1, UNN2,
+  UNE, Others, then Not allocated), the same list the form's Location box
+  offers, because Main Nursery is three places. The table's Location column
+  still shows the place with the section under it. Section 10 of the test.
 - **The page borrows `npayroll/npayroll_styles.css`**, which pads BODY for
   the payroll side bar whenever `#main` is shown. This page has no side bar,
   so its own style sets that padding back to 0, or the whole page sits right
