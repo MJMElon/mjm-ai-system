@@ -12212,3 +12212,122 @@ while the PALMS map loads.
 
 The P.A.L.M.S tile on the Nursery Operation dashboard was taken off for the
 same reason: PALMS is reached from Life of Plot now.
+
+**The heading is ALWAYS Life of Plot**, whichever view or plot is open; that
+goes on the line under it. Back sits ABOVE the heading panel, the panel holds
+the title and nothing else, and the nursery tabs sit BELOW it, right-aligned.
+**Life of Plot must not change the batch report** (the office, firmly): a
+Plot Cycle box on Tab 3 was built and taken back out unshipped.
+
+**The Plots & cycles map paints FOUR STAGES**, with the key standing beside
+the map (`LP_STAGES`, `mapStateOf`): Empty (no current cycle, or it is 3rd
+culled), Growing (under `LP_SOON_MONTHS`, 6, since the cycle first
+transplant), Ready soon (6 months or more, nothing of this cycle sold yet) and
+Selling (a batch of this cycle on a delivery order since it began, or its 3rd
+culling begun). The last two are called Ready for collection and Collecting
+on screen. Each plot carries the office OWN MJM CATS, moving
+(`operation/lifeplot/cat_*.png`, cut out of the sheet they handed over).
+**The cats are part of the MAP, never of the label** (`lpCats` into
+`#lp-cats`, under the labels): sized off the plot and scattered over its
+shape (`lpCatSpots`, inside the polygon, the label spot left clear), so they
+shrink when the map is zoomed out and are big enough to see what they are
+doing when it is zoomed in (the office: *缩小的时候猫猫也要跟着缩小 放大才看到他们
+在干嘛*). Growing is up to five cats, watering, fertiliser and weeding in
+turn; Empty up to five digging; Ready for collection one big sitting cat;
+Collecting the lorry driving across. The labels keep their size at any zoom;
+the key shows the cats too. Plain CSS animation, still under
+`prefers-reduced-motion`. The delivery orders are read once
+(`ensureRot`) and the map is coloured again when they land.
+
+**Pusingan Jualan over 100 percent**: the cumulative run starts after the
+latest earlier transplant month, so a plot holding two rounds at once (old
+batches still being sold while new ones go in) adds both against one
+capacity. `shared/CHECK_why_collection_goes_over_100.sql` lists every plot and
+month over 100, with the window, what was filled, and the batches sold.
+
+**The figures are the BATCH REPORT own readings** (the office: "life of plot
+里面的资料请去batch report拿 transplant 2nd cull 3rd cull 日期 quantity"), and
+each cycle card is three parts the way the batch report has them —
+Transplanting, 2nd Culling, 3rd Culling, each with its dates, quantities and %.
+
+- **Transplant date** is Tab 3 own (`lpTransplantDay`): the `Date:` in the
+  remark, else `transaction_date`, else the save day. It was
+  `transaction_date` first, which disagreed wherever the two differ.
+- **A culling is ONE saved figure per plot and destination, the NEWEST**
+  (`lpCullFigure`), the way Tabs 5 and 6 load it; destinations add up. It
+  was a SUM of every row, so a plot saved twice read double. Rows with no
+  `DestType` (older saves) are taken one per transplant row, oldest first,
+  as the tabs hand them out.
+- **Cull date is the `CullDate:` in the remark.** Tab 5 falls back to the
+  save day; Tab 6 shows none, so neither does this page — `c3Sort` (last
+  CullSessions day, else the save day) only splits the cycles.
+- **2nd culled %** is over the transplant after approved calibration (Tab 5),
+  **3rd culled %** over the transplant (Tab 6); totals are weighted.
+- **What it does NOT copy**: Tab 6 shows 3rd Culled LIVE (2nd culled +
+  what is left after sales, transfers and adjustments). This page shows the
+  figure that was SAVED, which is that same sum on the day of the save, so the
+  two part only where a sale or transfer was keyed after the culling was saved.
+
+Section 6 of `tests/life_of_plot_builds_the_sheet.cjs`. Nothing to run.
+
+**And each cycle is laid out as the office PLOT SHEET** (their workbook, Sheet13
+and the B11 tab), checked figure for figure against B11:
+
+- **Transplanting**: Map Date, Batch, Census, Total Drone Count, Variance. One
+  group per DAY, because a drone count belongs to the Tab 3 card (one plot on
+  one day, `DroneQty:` on the `Transplant_Card` row, newest save wins). A card
+  saved before `LP_DRONE_FROM` (2026-10-23, the batch report T3_DRONE_FROM)
+  with no count reads as tallying, shown and never stored. A newer one with
+  no count shows a dash. Census is the transplant after approved calibration,
+  the calibration sitting on the first day of its batch.
+- **2nd Culling (the office sheet: 7th Month, 4th month in MN)**: Date, Batch, Alive (`Alive:`
+  in the Tab 5 remark), Dead, Total, Variance, Culling rate, Plot culling rate.
+  A batch not yet culled reads all alive and 0.00%, as the sheet does.
+- **3rd Culling**: Map Date, Batch, Total, Pending culling (the culled figure),
+  Drone Count (`MapQty:`), Variance drone with pending, both rates, Plot
+  culling rate.
+- **Left off, having no data in the system**: the sheet Nurseries, Plot, Drone
+  Area (Ha) and SIN columns.
+
+**And it is ONE table read across, not three stacked** (the office: "改成横着
+的吧 … batch就不用写那么多次"): a row per batch, the batch written once, then
+the Transplanting, 2nd Culling and 3rd Culling column groups side by side, and
+a `Total · plot` row carrying the plot culling rates. Batches sharing a first
+transplant day share one drone-count cell (`rowspan`). The second header row
+wraps so the table fits the card.
+
+**The Transplant record by year and the Site Audit Pusingan Jualan / Pusingan
+Transplant read the SAME record** (the office: "pusingan jualan and transplant
+将会从这个record去pull"). Per plot per month it is the census of the cycle
+cards: the Transplanted rows on the Tab 3 day, plus an approved Transplanting
+calibration on the first day of its batch. `saTransplants` / `saDay` in
+`reporting/nursery_dashboard.html` are the copy (another page, no shared file
+yet); `the_site_audit_dashboard.cjs` lifts Life of Plot builder and compares
+the two plot by plot and month by month. Before, the Site Audit dated a
+transplant by `transaction_date` first and left the calibration out.
+
+**Life of Plot carries the two grids too**, as a side bar entry, Pusingan
+Jualan & Transplant (`#view=rotation`): `lpRotation` in the builder block is
+the Site Audit `buildRotation` over this page own record, delivery orders and
+Work Maintenance capacity read the first time the view opens. The nursery is
+the tabs top right (its own chip row only with no nursery map), with a year
+row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
+
+**The collection is CUMULATIVE over the CURRENT ROUND only** (the office:
+"我要cumulative上去的", "数字也要cumulative", then "cumulative的部分也要考虑cycle
+例如225 和 242 247 是两个cycle" and "不要真的全部cumulative"). The round at a
+month is the batches transplanted into the plot from the same month a year
+before up to it; the cell shows what those batches have sold so far
+and that over the capacity. A month whose sales are only of an older batch
+reads `Earlier round` with no %. Batches match on the batch number
+(`saBatchKey` / `lpBatchKey`, the batch report own key: `232 (B13)` is 232).
+`saRound` / `lpRound`, the same rule twice; the site audit test asserts them
+cell for cell. The check that found it: before this, every plot over 100
+percent carried the August CAL-BNN / CAL-UNN delivery orders of batches
+224 to 233, the round before (`shared/CHECK_why_collection_goes_over_100.sql`).
+
+**PALMS and the cycles were merged into one Plot Map for a day and taken back
+out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
+colour switch, labels carrying both, PALMS columns on the list and a stage
+strip on every cycle card was too much on one screen. Plots & cycles and
+PALMS stay two entries; do not merge them again without being asked.

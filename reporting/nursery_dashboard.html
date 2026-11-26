@@ -166,6 +166,7 @@
   .sa-cell.c2 { background:#DDA04B; border-color:#DDA04B; color:#3F2A08; }
   .sa-cell.c3 { background:#B8730E; border-color:#B8730E; color:#fff; }
   .sa-cell.t1 { background:#2E7D4F; border-color:#2E7D4F; color:#fff; }
+  .sa-cell.old { background:#fff; border:1px solid #DDA04B; color:var(--ink-2); font-weight:600; }
   .sa-cell.pc { border:2px dashed #B8732A; color:var(--ink-2); font-weight:500; }
   .sa-cell.pt { border:2px dashed #2E7D4F; color:var(--ink-2); font-weight:500; }
   .sa-gap { grid-column:1 / -1; height:6px; }
@@ -361,7 +362,7 @@
       <div class="card">
         <div class="card-head">
           <div><h2 class="card-title" id="sa-sales-title">Pusingan Jualan</h2>
-            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. % is the collection against the plot capacity.</div></div>
+            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
           <div class="sa-legend">
             <span><i style="background:#F5E6C8"></i>Collected &lt;40%</span>
             <span><i style="background:#DDA04B"></i>40–79%</span>
@@ -562,8 +563,9 @@ function labelOf(key, by) {
      Collection %   = Collection / plot capacity, rounded DOWN to a whole %
      Collection plan = 90% of what was transplanted into the plot 9 months
                       earlier (the sheet's  Sasaran = transplant x 0.9)
-     Transplanting  = the batch report's Transplanted rows into the plot
-                      (shared_inventory_logs), by the day keyed on Tab 3
+     Transplanting  = Life of Plot transplant record: the Transplanted rows
+                      by the day keyed on Tab 3, plus approved Transplanting
+                      calibration on the first day of its batch
      Transplanting plan = what was transplanted 10 months earlier
      Capacity       = the plot capacity keyed on Work Maintenance > Setting
                       (nops_maint_plot_qty), the sheet's  Kapasiti
@@ -576,10 +578,46 @@ const SA_RANGES = { BNN: ['B', 14], UNN1: ['U', 18], UNN2: ['N', 20] };
 const saNurKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const saKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(^|[A-Z])0+(\d)/g, '$1$2');
 const saIsReplant = s => /-R\d*$/i.test(String(s || '').trim());
+/* THE TRANSPLANT FIGURES ARE LIFE OF PLOT OWN TRANSPLANT RECORD (the
+   office: "pusingan jualan and transplant 将会从这个record去pull"), which is
+   the batch report reading: the day is Tab 3 own (the Date: in the remark,
+   else transaction_date, else the day it was saved), and an APPROVED
+   Transplanting calibration corrects its batch on that plot, landing on the
+   first day that batch went in. SHARED RULE: lpTransplantDay,
+   lpIsApprovedTransplantCal and buildPlotHistory in
+   operation/operation_life_of_plot.html. Change one, change the other;
+   the_site_audit_dashboard.cjs compares the two month by month. */
 function saDay(r) {
-  if (r.transaction_date) return String(r.transaction_date).slice(0, 10);
   const m = String(r.remark || '').match(/Date:\s*(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : String(r.created_at || '').slice(0, 10);
+  if (m) return m[1];
+  const td = String(r.transaction_date || '').slice(0, 10);
+  return td || String(r.created_at || '').slice(0, 10);
+}
+function saIsApprovedTransplantCal(r) {
+  const rem = String(r.remark || '');
+  return r.transaction_type === 'Stock_Calibration' && /^Report:\s*Transplanting/i.test(rem) && /APPROVED/i.test(rem);
+}
+/* Ledger rows (Transplanted and Stock_Calibration) to [{plot, day, qty}]. */
+function saTransplants(rows) {
+  const by = new Map();
+  (rows || []).forEach(r => {
+    if (saIsReplant(r.plot_name)) return;
+    const t = r.transaction_type || 'Transplanted';
+    const cal = saIsApprovedTransplantCal(r);
+    if (t !== 'Transplanted' && !cal) return;
+    const id = saKey(r.plot_name) + '|' + String(r.batch_name || '—');
+    const g = by.get(id) || { plot: r.plot_name, tr: [], adj: 0 };
+    if (cal) g.adj += Number(r.quantity_change) || 0;
+    else { g.tr.push({ plot: r.plot_name, batch: r.batch_name, day: saDay(r), qty: Number(r.quantity_change) || 0 }); if (!by.has(id)) g.plot = r.plot_name; }
+    by.set(id, g);
+  });
+  const out = [];
+  by.forEach(g => {
+    g.tr.forEach(x => out.push(x));
+    const first = g.tr.map(x => x.day).filter(Boolean).sort()[0];
+    if (g.adj && first) out.push({ plot: g.tr[0].plot, batch: g.tr[0].batch, day: first, qty: g.adj });
+  });
+  return out;
 }
 function saShift(ym, by) {
   const y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + by;
@@ -601,6 +639,28 @@ function saPlotsOf(sharedPlots, nursery) {
   const num = s => { const m = String(s).match(/\d+/); return m ? +m[0] : 0; };
   return out.sort((a, b) => num(a) - num(b) || a.localeCompare(b));
 }
+/* THE COLLECTION % IS CUMULATIVE (the office: "我要cumulative上去的"), and
+   it is the CURRENT ROUND only (the office: "cumulative的部分也要考虑cycle,
+   例如225 和 242 247 是两个cycle"). The round at a month is the batches
+   transplanted into the plot in the 12 months to it, the same window the
+   plans count; the figure is everything those batches have sold so far. A
+   sale of an older batch is the round before and is counted apart (`older`),
+   never in the % against this round. Batches are matched on the batch
+   number (`saBatchKey`, the batch report own key). SHARED RULE: lpRound in
+   operation/operation_life_of_plot.html. */
+const saBatchKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/^BATCH\s*:?\s*/, '').split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
+function saRound(fills, sales, ym) {
+  const from = saShift(ym, -13);   // the same month last year counts
+  let cum = 0, older = 0, mine = 0;
+  Object.keys(sales || {}).forEach(b => {
+    const inRound = Object.keys((fills || {})[b] || {}).some(m => m > from && m <= ym);
+    Object.keys(sales[b]).forEach(m => {
+      if (m > ym) return;
+      if (inRound) { cum += sales[b][m]; if (m === ym) mine += sales[b][m]; } else if (m === ym) older += sales[b][m];
+    });
+  });
+  return { cum, older, mine };
+}
 /* plots: names; capacity: {key: qty}; transplants / sales: [{plot, day, qty}]. */
 function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
   const sum = rows => { const o = {}; (rows || []).forEach(r => {
@@ -609,6 +669,14 @@ function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
     (o[k] || (o[k] = {}))[ym] = ((o[k] || {})[ym] || 0) + (Number(r.qty) || 0);
   }); return o; };
   const T = sum(transplants), S = sum(sales);
+  // Per plot, per batch, per month: what went in and what went out.
+  const byB = rows => { const o = {}; (rows || []).forEach(r => {
+    const k = saKey(r.plot), ym = String(r.day || '').slice(0, 7), b = saBatchKey(r.batch);
+    if (!k || ym.length !== 7) return;
+    const pb = ((o[k] = o[k] || {})[b] = (o[k] || {})[b] || {});
+    pb[ym] = (pb[ym] || 0) + (Number(r.qty) || 0);
+  }); return o; };
+  const TB = byB(transplants), SB = byB(sales);
   return (plots || []).map(name => {
     const k = saKey(name), cap = Number((capacity || {})[k]) || 0;
     const t = ym => (T[k] && T[k][ym]) || 0, c = ym => (S[k] && S[k][ym]) || 0;
@@ -616,9 +684,11 @@ function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
     for (let m = 1; m <= 12; m++) {
       const ym = year + '-' + String(m).padStart(2, '0');
       const col = c(ym), tr = t(ym);
+      const rd = col > 0 ? saRound(TB[k], SB[k], ym) : { cum: 0, older: 0, mine: 0 };
+      const cum = rd.cum;
       months.push({
         ym, future: !!todayYM && ym > todayYM,
-        col, colPct: cap > 0 && col > 0 ? Math.floor(col / cap * 100) : null,
+        col, colCum: cum, colOlder: rd.older, colMine: rd.mine, colPct: cap > 0 && cum > 0 ? Math.floor(cum / cap * 100) : null,
         colPlan: Math.round(t(saShift(ym, -9)) * 0.9),
         tr, trPlan: t(saShift(ym, -10)),
       });
@@ -648,7 +718,7 @@ function buildHeights(records, nursery, year) {
 }
 
 if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, reportBlocks, labelOf, MAX_DAMAGE_PCT,
-  saKey, saNurKey, saDay, saShift, saPlotsOf, buildRotation, buildHeights, SA_SUITABLE_M };
+  saKey, saNurKey, saDay, saTransplants, saShift, saBatchKey, saRound, saPlotsOf, buildRotation, buildHeights, SA_SUITABLE_M };
 </script>
 <script>
 (function () {
@@ -1280,26 +1350,26 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     SA.missing = [];
     const [plots, logs, dos, caps, heights] = await Promise.all([
       soft(saAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name').order('plot_name')), 'plot list'),
-      saAll(() => _supabase.from('shared_inventory_logs').select('id, plot_name, quantity_change, transaction_date, created_at, remark')
-        .eq('transaction_type', 'Transplanted').order('id', { ascending: true })),
-      soft(saAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5')
+      saAll(() => _supabase.from('shared_inventory_logs').select('id, plot_name, batch_name, transaction_type, quantity_change, transaction_date, created_at, remark')
+        .in('transaction_type', ['Transplanted', 'Stock_Calibration']).order('id', { ascending: true })),
+      soft(saAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5, batch_1, batch_2, batch_3, batch_4, batch_5')
         .order('id', { ascending: true })), 'delivery orders'),
       soft(saAll(() => _supabase.from('nops_maint_plot_qty').select('nursery, plot, qty').order('plot')), 'plot capacity'),
       soft(saAll(() => _supabase.from('audit_height_records').select('nursery, plot, avg_height, date').order('date')), 'height audits'),
     ]);
     SA.plots = plots;
-    SA.transplants = logs.map(r => ({ plot: r.plot_name, day: saDay(r), qty: Number(r.quantity_change) || 0 }));
+    SA.transplants = saTransplants(logs);
     SA.sales = [];
     dos.forEach(d => {
       if (d.status === 'Cancelled' || String(d.remark || '').includes('[CANCELLED]')) return;
       const day = String(d.delivery_date || '').slice(0, 10);
-      for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) SA.sales.push({ plot: d['plot_' + i], day, qty: q }); }
+      for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) SA.sales.push({ plot: d['plot_' + i], batch: d['batch_' + i], day, qty: q }); }
     });
     SA.caps = caps; SA.heights = heights;
     const years = new Set();
     SA.transplants.concat(SA.sales).forEach(r => { const y = String(r.day || '').slice(0, 4); if (/^\d{4}$/.test(y)) years.add(y); });
     const now = new Date(); const ty = String(now.getFullYear());
-    years.add(ty);
+    years.add(ty); years.add(String(+ty + 1));   // next year: its plans are already known
     const ys = [...years].sort().reverse();
     $('sa-year').innerHTML = ys.map(y => `<option value="${y}">${y}</option>`).join('');
     $('sa-year').value = ty;
@@ -1338,10 +1408,13 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       if (ri) { hs += '<div class="sa-gap"></div>'; ht += '<div class="sa-gap"></div>'; }
       hs += plotCell(r);
       r.months.forEach(x => {
-        const tipT = `${r.plot} · ${x.ym} · Collected ${nf(x.col)}${x.colPct != null ? ' (' + x.colPct + '%)' : ''} · Plan ${nf(x.colPlan)}`;
-        if (x.col > 0) {
+        const tipT = `${r.plot} · ${x.ym} · Collected ${nf(x.col)} · this round so far ${nf(x.colCum)}${x.colPct != null ? ' (' + x.colPct + '% of capacity)' : ''}${x.colOlder ? ' · ' + nf(x.colOlder) + ' of an earlier round, not counted' : ''} · Plan ${nf(x.colPlan)}`;
+        if (x.colMine > 0) {
           const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
-          hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
+          hs += `<div class="sa-cell ${cls}" title="${esc(tipT)}">${nf(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
+        } else if (x.col > 0) {
+          // Only batches of the round before were sold this month.
+          hs += `<div class="sa-cell old" title="${esc(tipT)}">${nf(x.col)}<small>Earlier round</small></div>`;
         } else if (x.colPlan > 0) {
           hs += `<div class="sa-cell pc${x.future ? ' fut' : ''}" title="${esc(tipT)}"><small>Plan</small>${nf(x.colPlan)}</div>`;
         } else hs += `<div class="sa-cell${x.future ? ' fut' : ''}"></div>`;

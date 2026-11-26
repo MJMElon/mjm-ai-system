@@ -31,6 +31,8 @@ const DATA = {
     { plot_name: 'B11', transaction_type: 'Stock_Calibration', transaction_date: '2026-08-26', quantity_change: -127, batch_name: '265', remark: 'Report: Transplanting. Plot: B11. [APPROVED by x]' },
     C('2nd_Culling', 'B11', '263', '2026-11-12', 60), C('2nd_Culling', 'B11', '265', '2026-11-12', 41),
     T('B11', '269', '2026-09-10', 3168), T('B11', '271', '2026-10-24', 135),
+    // the checker drone count on the 24 Oct card (keyed after the drone count existed)
+    { plot_name: 'B11', transaction_type: 'Transplant_Card', transaction_date: '2026-10-24', quantity_change: 0, batch_name: '271', remark: 'Transplant card. Date: 2026-10-24 DroneQty:130 DroneBy:x', created_at: '2026-10-26T00:00:00Z' },
     T('U17', '240', '2026-01-09', 6872), T('U17', '270', '2026-09-20', 4877), T('U17', '275', '2026-10-31', 2002),
   ],
 };
@@ -73,8 +75,10 @@ const DATA = {
   console.log('1. a plot opens as its cycles, newest first');
   const cyc = await page.evaluate(() => [...document.querySelectorAll('#lp-timeline-box .lp-cyc')].map(c => ({
     n: c.dataset.cycle, head: c.querySelector('.lp-cyc-h').textContent.replace(/\s+/g, ' ').trim(),
-    batches: [...c.querySelectorAll('tbody td.batch')].map(td => td.textContent.trim()),
-    total: [...c.querySelectorAll('tfoot td')].map(td => td.textContent.trim()),
+    secs: [...c.querySelectorAll('table.lp-x thead tr.grp-h th')].map(x => x.textContent.trim()),
+    batches: [...c.querySelectorAll('table.lp-x tbody td.batch')].map(td => td.textContent.trim()),
+    rows: [...c.querySelectorAll('table.lp-x tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()).join('|')),
+    foot: [...c.querySelectorAll('table.lp-x tfoot td')].map(td => td.textContent.trim()).join('|'),
   })));
   ok(cyc.length === 2, 'B11 shows two cycle cards', cyc.length);
   ok(cyc[0] && cyc[0].n === '2' && /Current/.test(cyc[0].head) && /12,275/.test(cyc[0].head) && /2026-07-22 → now/.test(cyc[0].head),
@@ -82,12 +86,19 @@ const DATA = {
   ok(cyc[0] && cyc[0].batches.join() === '263,265,269,271', '…holding only its own batches', cyc[0] && cyc[0].batches);
   ok(cyc[1] && /Finished/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && /2025-05-22 → 2026-06-12/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
      'cycle 1 under it: 228 + 229, 22 May 2025 to its 3rd cull 12 Jun 2026, 12,121', cyc[1] && cyc[1].head);
-  ok(cyc[1] && cyc[1].total[0] === 'Cycle 1 total' && cyc[1].total.includes('3,062'), 'each cycle has its own total row (cycle 1 3rd cull 3,062)', cyc[1] && cyc[1].total);
+  ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,2nd Culling,3rd Culling', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
+  ok(cyc[1] && cyc[1].rows[0] === '228|2025-05-22|3,074|12,121|0|2025-09-14|2,979|95|0|3.09%|2026-06-12|178|178|0|5.79%|5.79%',
+     'batch 228 on one line: census 3,074 (the 22 May card drone 12,121 shared with 229), 2nd 95 dead 3.09%, 3rd 178 5.79%', cyc[1] && cyc[1].rows[0]);
+  ok(cyc[1] && cyc[1].rows[1] === '229|2025-05-22|9,047|2025-09-14|8,978|69|0|0.76%|2026-06-12|2,884|2,884|0|31.88%|31.88%', 'batch 229 below it, the drone cell shared', cyc[1] && cyc[1].rows[1]);
+  ok(cyc[1] && cyc[1].foot === 'Total · plot||12,121|12,121|0||11,957|164|0|1.35%||3,062|3,062|0|25.26%|25.26%', 'the cycle 1 total is the office B11 sheet: 11,957 / 164 / 1.35%, 3,062 / 25.26%', cyc[1] && cyc[1].foot);
+  ok(cyc[0] && cyc[0].rows[1] === '265|2026-07-24|7,326|7,326|0|2026-11-12|7,285|41|0|0.56%|–|–|–|0|0.00%|0.00%', 'batch 265: census 7,326 after its -127 calibration', cyc[0] && cyc[0].rows[1]);
+  ok(cyc[0] && /^271\|2026-10-24\|135\|130\|-5\|/.test(cyc[0].rows[3] || ''), 'the 24 Oct card: drone 130 against census 135, variance -5', cyc[0] && cyc[0].rows[3]);
+  ok(cyc[0] && cyc[0].foot.startsWith('Total · plot||12,275|12,270|-5||12,174|101|0|0.82%|'), 'cycle 2 total: census 12,275, drone 12,270, alive 12,174, dead 101, 0.82%', cyc[0] && cyc[0].foot);
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_cycles.png'), fullPage: true });
 
   console.log('2. the side bar opens the transplant record by year');
   const side = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-b')].map(b => b.lastChild.textContent.trim()));
-  ok(side.join('|') === 'Plots & cycles|Transplant record by year|PALMS|Settings', 'the side bar: the two Life of Plot views, PALMS, and Settings at the foot', side);
+  ok(side.join('|') === 'Plots & cycles|Transplant record by year|Pusingan Jualan & Transplant|PALMS|Settings', 'the side bar: the two Life of Plot views, PALMS, and Settings at the foot', side);
   await page.click('#lp-side button[data-view="record"]');
   await page.waitForTimeout(200);
   const rec = await page.evaluate(() => {
@@ -104,7 +115,7 @@ const DATA = {
   ok(rec.b13 && rec.b13.every(v => v === ''), 'B13, never transplanted, keeps its empty row', rec.b13);
   ok(rec.totBNN && rec.totBNN[6] === '8,972' && rec.totBNN[12] === '12,275', 'BNN has a total row', rec.totBNN);
   ok(rec.sum26 && rec.sum26[0] === '6,872' && rec.sum25 && rec.sum25[4] === '12,121', 'summary on top: 2026 by month, and 2025 beside it', [rec.sum26, rec.sum25]);
-  ok(rec.years[0] === '2026*' && rec.years.includes('2025'), 'the year chips, this year picked', rec.years);
+  { const ny = new Date().getFullYear(); ok(rec.years[0] === String(ny + 1) && rec.years[1] === ny + '*' && rec.years.includes('2025'), 'the year chips: next year too, this year picked', rec.years); }
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_record.png'), fullPage: true });
 
   await page.click('#lp-year-row button[data-year="2025"]');
@@ -176,6 +187,73 @@ const DATA = {
   const navSrc = fs.readFileSync(path.join(ROOT, 'shared', 'shared_palms_nav.js'), 'utf8');
   ok(/EMBED_CSS[\s\S]{0,400}\.pm-tabs\{display:none/.test(navSrc), 'embedded, PALMS does not draw its own nursery tabs');
   await pm.close();
+
+  console.log('5. Pusingan Jualan & Transplant, off this page transplant record');
+  const re = [];
+  const pr = await openPage(Object.assign({}, DATA, {
+    shared_do_records: [
+      { id: 1, delivery_date: '2026-04-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 1200, batch_1: '229' },
+      { id: 3, delivery_date: '2026-05-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 600, batch_1: '228 (B11)' },
+      { id: 2, delivery_date: '2026-04-12', status: 'Cancelled', remark: '', plot_1: 'B11', qty_1: 9999 } ],
+    nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B11', qty: 12000 }] }), re);
+  await pr.goto(B + '/operation/operation_life_of_plot.html#view=rotation');
+  await pr.waitForSelector('#lp-rot-tr .lp-rot-plot', { timeout: 8000 }).catch(() => {});
+  await pr.click('#lp-rot-year button[data-ryear="2026"]').catch(() => {});
+  const rot = await pr.evaluate(() => {
+    const row = (id, plot) => { const g = [...document.getElementById(id).children]; const i = g.findIndex(x => x.classList.contains('lp-rot-plot') && x.querySelector('b').textContent === plot); return i < 0 ? null : g.slice(i + 1, i + 13).map(c => c.textContent.trim()); };
+    return { shown: !document.getElementById('lp-rot').classList.contains('hidden'), on: [...document.querySelectorAll('#lp-side .lp-side-b.on')].map(b => b.dataset.view),
+      tr: row('lp-rot-tr', 'B11'), sales: row('lp-rot-sales', 'B11'), title: document.getElementById('lp-title').textContent, sub: document.getElementById('lp-sub').textContent };
+  });
+  ok(rot.shown && rot.on.join() === 'rotation' && rot.title === 'Life of Plot' && /^Pusingan Jualan & Transplant/.test(rot.sub), 'the side bar opens Pusingan Jualan & Transplant; the heading stays Life of Plot', rot);
+  ok(rot.tr && rot.tr[6] === '8,972' && rot.tr[8] === '3,168' && rot.tr[9] === '135', 'Pusingan Transplant B11 2026: Jul 8,972, Sep 3,168, Oct 135 — the transplant record', rot.tr);
+  ok(rot.tr && rot.tr[2] === 'Plan12,121', 'Pusingan Transplant March plan: what went in 10 months earlier (May 2025, 12,121)', rot.tr && rot.tr[2]);
+  ok(rot.sales && rot.sales[4] === '1,80015%', 'May reads CUMULATIVE: 1,200 + 600 = 1,800 collected, 15% of 12,000', rot.sales && rot.sales[4]);
+  ok(rot.sales && rot.sales[3] === '1,20010%' && rot.sales[1] === 'Plan10,909', 'Pusingan Jualan B11: April 1,200 collected (10% of 12,000; the cancelled DO left out), February plan 90% of 12,121', rot.sales);
+  ok(re.length === 0, 'no page errors', re);
+  if (process.env.SHOT) await pr.screenshot({ path: path.join(process.env.SHOT, 'lop_rotation.png'), fullPage: true });
+  await pr.close();
+
+  console.log('6. the map shows four stages, with the key beside it');
+  const SQ = (x, y) => JSON.stringify([{ x, y }, { x: x + 20, y }, { x: x + 20, y: y + 20 }, { x, y: y + 20 }]);
+  const ago = m => { const d = new Date(); d.setDate(d.getDate() - Math.round(m * 30.44)); return d.toISOString().slice(0, 10); };
+  const me = [];
+  const pm6 = await openPage(Object.assign({}, DATA, {
+    shared_plots: [{ plot_name: 'B11', nursery_name: 'BNN', map_top: SQ(5, 5) }, { plot_name: 'B13', nursery_name: 'BNN', map_top: SQ(30, 5) },
+                   { plot_name: 'B12', nursery_name: 'BNN', map_top: SQ(55, 5) }, { plot_name: 'B14', nursery_name: 'BNN', map_top: SQ(5, 40) }],
+    operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }],
+    shared_inventory_logs: DATA.shared_inventory_logs.concat([
+      { plot_name: 'B12', transaction_type: 'Transplanted', transaction_date: ago(8), quantity_change: 2000, batch_name: '250', remark: '', created_at: ago(8) + 'T00:00:00Z' },
+      { plot_name: 'B14', transaction_type: 'Transplanted', transaction_date: ago(10), quantity_change: 3000, batch_name: '248', remark: '', created_at: ago(10) + 'T00:00:00Z' } ]),
+    shared_do_records: [{ id: 1, delivery_date: ago(1), status: 'Completed', remark: '', plot_1: 'B14', qty_1: 500, batch_1: '248' }] }), me);
+  await pm6.goto(B + '/operation/operation_life_of_plot.html');
+  await pm6.waitForSelector('#lp-svg polygon', { timeout: 8000 }).catch(() => {});
+  await pm6.waitForTimeout(400);
+  const st6 = await pm6.evaluate(() => ({
+    n: document.querySelectorAll('#lp-svg polygon').length, html: document.getElementById('lp-status').textContent,
+    stage: Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])),
+    key: [...document.querySelectorAll('.lp-key .lp-key-r b')].map(b => b.textContent.trim()),
+    beside: (() => { const v = document.getElementById('lp-viewport').getBoundingClientRect(), k = document.querySelector('.lp-key').getBoundingClientRect(); return k.left >= v.right - 1; })() }));
+  ok(st6.key.join() === 'Empty,Growing,Ready for collection,Collecting', 'the key names the four stages', st6.key);
+  ok(st6.beside, 'the key stands beside the map', st6.beside);
+  ok(st6.stage.B13 === 'empty' && st6.stage.B11 === 'growing' && st6.stage.B12 === 'soon' && st6.stage.B14 === 'selling',
+     'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing collected: Ready for collection · B14 on a DO: Collecting', st6);
+  const sc = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats .lp-cat')].map(c => c.dataset.scene));
+  const cnt = k => sc.filter(x => x === k).length;
+  ok(cnt('growing') >= 2 && cnt('empty') >= 2 && cnt('soon') === 1 && cnt('selling') === 1, 'cats on the map for every stage: several working or digging, one sitting, one lorry', sc);
+  ok(await pm6.evaluate(() => !document.querySelector('#lp-labels .lp-cat, #lp-labels img')), 'the cats are on the map, not inside the labels', '');
+  const moving = await pm6.evaluate(() => getComputedStyle(document.querySelector('.lp-cat[data-scene="selling"] .drive')).animationName);
+  ok(moving === 'lp-drive', 'the lorry drives', moving);
+  const cats = await pm6.evaluate(() => Promise.all([...document.querySelectorAll('#lp-cats img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false))));
+  ok(cats.length >= 6 && cats.every(Boolean), 'every cat picture loads', cats);
+  // They zoom WITH the map: a cat is a bigger thing on screen at 300% than at 100%.
+  if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages.png'), fullPage: true });
+  const h1 = await pm6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height);
+  await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]');
+  const h2 = await pm6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height);
+  ok(h2 > h1 * 1.8, 'the cats grow when the map is zoomed in and shrink back out', { h1, h2 });
+  ok(me.length === 0, 'no page errors on the map', me);
+  if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages_zoomed.png'), fullPage: true });
+  await pm6.close();
 
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

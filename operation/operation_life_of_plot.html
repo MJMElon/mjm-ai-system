@@ -45,8 +45,37 @@
         .lp-tab { padding:8px 16px; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.08em; border-radius:12px; color:#8a7a68; background:#fdfaf4; border:1.5px solid transparent; cursor:pointer; }
         .lp-tab:hover { color:#3d2610; }
         .lp-head-tabs { min-width:90px; justify-content:flex-end; }
-        .lp-head-tabs:empty { visibility:hidden; background:none; border:0; }
+        .lp-head-tabs:empty { display:none; }
         .lp-tab.on { background:#4a7a2e; color:#fdfaf4; border-color:#3f6a26; }
+        /* The cats on the map, one stage each. They are part of the MAP, not
+           of the label: sized off the plot and scattered over it, so they
+           shrink when the map is zoomed out and are big enough to see what
+           they are doing when it is zoomed in (the office asked for both). */
+        .lp-cats { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; }
+        .lp-cat { position:absolute; transform:translate(-50%,-100%); filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+        .lp-cat img { display:block; height:100%; width:auto; transform-origin:50% 100%; }
+        .lp-cat.wide img { width:100%; height:auto; }
+        .lp-cat .water { animation:lp-tilt 2.2s ease-in-out infinite; }
+        .lp-cat .feed  { animation:lp-bob 1.4s ease-in-out infinite; }
+        .lp-cat .weed, .lp-cat .dig { animation:lp-dig 1.1s ease-in-out infinite; }
+        .lp-cat .hop   { animation:lp-hop 1.6s ease-in-out infinite; }
+        .lp-cat .drive { animation:lp-drive 6s ease-in-out infinite; }
+        @keyframes lp-tilt  { 0%,100% { transform:rotate(-3deg); } 50% { transform:rotate(5deg); } }
+        @keyframes lp-bob   { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6%); } }
+        @keyframes lp-dig   { 0%,100% { transform:rotate(-4deg); } 50% { transform:rotate(6deg) translateY(3%); } }
+        @keyframes lp-hop   { 0%,100% { transform:translateY(0); } 40% { transform:translateY(-8%); } 60% { transform:translateY(0) scale(1.03,.97); } }
+        @keyframes lp-drive { 0%,100% { transform:translateX(-18%); } 50% { transform:translateX(18%); } }
+        @media (prefers-reduced-motion: reduce) { .lp-cat img { animation:none !important; } }
+        .lp-map-row { display:flex; gap:16px; align-items:stretch; }
+        .lp-map-row .lp-viewport { flex:1 1 auto; min-width:0; }
+        .lp-key { flex:0 0 230px; display:flex; flex-direction:column; gap:10px; padding:14px; border:1px solid #e8dcc8; border-radius:16px; background:#fffdf8; }
+        .lp-key-h { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#8a7a68; }
+        .lp-key-r { display:flex; gap:10px; align-items:flex-start; }
+        .lp-key-r i { flex:0 0 26px; height:26px; border-radius:7px; border:2px solid; }
+        .lp-key-cat { flex:0 0 48px; width:48px; height:34px; object-fit:contain; }
+        .lp-key-r b { display:block; font-size:13px; font-weight:900; color:#3d2610; }
+        .lp-key-r span { display:block; font-size:10px; font-weight:700; color:#8a7a68; line-height:1.3; }
+        @media (max-width: 900px) { .lp-map-row { flex-direction:column; } .lp-key { flex-basis:auto; flex-direction:row; flex-wrap:wrap; } }
         .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
         .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
         .lp-stage.drag { cursor:grabbing; }
@@ -89,6 +118,35 @@
         .lp-cyc-d { font-size:12px; font-weight:700; color:#5c3d1e; }
         .lp-cyc-cap { margin-left:auto; font-size:12px; font-weight:700; color:#8a7a68; }
         .lp-cyc-cap b { font-size:16px; color:#3d2610; font-weight:900; }
+        /* Pusingan Jualan / Transplant: a plot per row, a month per column. */
+        .lp-rot-head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px 20px; margin-bottom:14px; }
+        .lp-rot-t { font-size:15px; font-weight:900; color:#3d2610; }
+        .lp-rot-s { font-size:11px; font-weight:700; color:#8a7a68; margin-top:2px; }
+        .lp-rot-wrap { overflow-x:auto; }
+        .lp-rot-grid { display:grid; grid-template-columns:110px repeat(12, minmax(62px,1fr)); gap:6px; min-width:960px; font-variant-numeric:tabular-nums; }
+        .lp-rot-mh { text-align:center; font-size:11px; font-weight:800; color:#8a7a68; text-transform:uppercase; letter-spacing:.06em; padding:4px 0; }
+        .lp-rot-mh.now { color:#a83020; }
+        .lp-rot-plot { align-self:center; }
+        .lp-rot-plot b { display:block; font-size:14px; font-weight:900; color:#3d2610; }
+        .lp-rot-plot span { font-size:10px; font-weight:700; color:#8a7a68; }
+        .lp-rot-c { height:46px; border:1px solid #e8dcc8; border-radius:8px; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#3d2610; }
+        .lp-rot-c small { font-size:10px; font-weight:600; }
+        .lp-rot-c.fut { background:#f1ede2; border-color:#f1ede2; }
+        .lp-rot-c.c1 { background:#F5E6C8; border-color:#F5E6C8; color:#5B3F12; }
+        .lp-rot-c.c2 { background:#DDA04B; border-color:#DDA04B; color:#3F2A08; }
+        .lp-rot-c.c3 { background:#B8730E; border-color:#B8730E; color:#fff; }
+        .lp-rot-c.t1 { background:#2E7D4F; border-color:#2E7D4F; color:#fff; }
+        .lp-rot-c.old { background:#fff; border:1px solid #DDA04B; color:#8a7a68; font-weight:600; }
+        .lp-rot-c.pc { border:2px dashed #B8732A; color:#8a7a68; font-weight:600; }
+        .lp-rot-c.pt { border:2px dashed #2E7D4F; color:#8a7a68; font-weight:600; }
+        /* One cycle, one table read across: a rule before each part, its heading coloured. */
+        table.lp-x th, table.lp-x td { padding:9px 10px; white-space:nowrap; }
+        table.lp-x .s1 { border-left:2px solid #e8dcc8; }
+        table.lp-x thead tr:not(.grp-h) th { white-space:normal; line-height:1.25; vertical-align:bottom; }
+        .lp-x-wrap { overflow-x:auto; }
+        table.lp-x tr.grp-h th { text-align:center; font-size:11px; font-weight:900; letter-spacing:.1em; border-bottom:1px solid #e8dcc8; }
+        table.lp-x th.g-t { color:#4a7a2e; }
+        table.lp-x th.g-c { color:#a83020; }
         /* Transplant record: the office sheet, a column per month. */
         table.lp tr.grp td { text-align:left; }
         table.lp-rec th, table.lp-rec td { padding:9px 10px; }
@@ -102,22 +160,24 @@
 <div class="bg-pattern"></div>
 
 <div class="max-w-[1400px] mx-auto py-4">
-    <div class="panel p-6 mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <a id="lp-back" href="operation_dashboard.html" class="lp-back">&#8592; Back</a>
-        <div class="text-center">
-            <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
-            <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
-        </div>
-        <!-- ONE nursery choice for the whole page, top right: the plot map and
-             PALMS both follow it, so neither draws tabs of its own. -->
-        <div id="lp-head-nur" class="lp-tabs lp-head-tabs"></div>
+    <!-- Back sits ABOVE the heading, the heading panel carries the title and
+         nothing else, and the nursery choice is BELOW it (the office: "back
+         在上面一点 BNN UNN1 UNN2在下面 中间只会有标题"). -->
+    <div class="mb-3"><a id="lp-back" href="operation_dashboard.html" class="lp-back inline-block">&#8592; Back</a></div>
+    <div class="panel p-6 mb-3 text-center">
+        <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
+        <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
     </div>
+    <!-- ONE nursery choice for the whole page: the plot map and PALMS both
+         follow it, so neither draws tabs of its own. -->
+    <div class="flex justify-end mb-6"><div id="lp-head-nur" class="lp-tabs lp-head-tabs"></div></div>
 
     <div class="lp-shell">
     <aside class="lp-side panel" id="lp-side">
         <div class="lp-side-h">Life of Plot</div>
         <button type="button" class="lp-side-b on" data-view="plots"><span class="lp-side-i">&#9638;</span>Plots &amp; cycles</button>
         <button type="button" class="lp-side-b" data-view="record"><span class="lp-side-i">&#9776;</span>Transplant record by year</button>
+        <button type="button" class="lp-side-b" data-view="rotation"><span class="lp-side-i">&#8635;</span>Pusingan Jualan &amp; Transplant</button>
         <button type="button" class="lp-side-b" data-view="palms-board"><span class="lp-side-i">&#9673;</span>PALMS</button>
         <!-- Settings is the whole module's, so it sits apart at the foot. -->
         <button type="button" class="lp-side-b lp-side-foot" data-view="palms-stages"><span class="lp-side-i">&#9881;</span>Settings</button>
@@ -130,6 +190,29 @@
          only navigation on screen. -->
     <div id="lp-palms" class="hidden">
         <div class="panel lp-palms-box"><iframe id="lp-palms-frame" title="PALMS" src="about:blank"></iframe></div>
+    </div>
+
+    <!-- Pusingan Jualan and Pusingan Transplant, off THIS page transplant
+         record (the Nursery Dashboard Site Audit reads the same figures). -->
+    <div id="lp-rot" class="hidden">
+        <div class="panel p-6 mb-6 space-y-3">
+            <div id="lp-rot-nur-wrap"><div class="lp-chip-label">Nursery</div><div id="lp-rot-nur" class="lp-chips"></div></div>
+            <div class="lp-chip-label">Year</div>
+            <div id="lp-rot-year" class="lp-chips"></div>
+        </div>
+        <div class="panel p-6 mb-6">
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-sales-t">Pusingan Jualan</div>
+                <div class="lp-rot-s">Collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
+                <div class="lp-legend"><span><i style="background:#F5E6C8"></i>Collected &lt;40%</span><span><i style="background:#DDA04B"></i>40–79%</span><span><i style="background:#B8730E"></i>&ge;80%</span><span><i style="border:2px dashed #B8732A;background:#fff"></i>Collection plan</span></div></div>
+            <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-sales"></div></div>
+        </div>
+        <div class="panel p-6 mb-6">
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-tr-t">Pusingan Transplant</div>
+                <div class="lp-rot-s">Transplanting plan = what was transplanted 10 months earlier.</div></div>
+                <div class="lp-legend"><span><i style="background:#2E7D4F"></i>Transplanted</span><span><i style="border:2px dashed #2E7D4F;background:#fff"></i>Transplanting plan</span></div></div>
+            <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-tr"></div></div>
+            <p class="text-[11px] font-bold text-[#8a7a68] mt-3" id="lp-rot-note"></p>
+        </div>
     </div>
 
     <div id="lp-record" class="hidden">
@@ -147,12 +230,6 @@
     <div id="lp-map" class="panel p-6 mb-6 hidden">
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div class="lp-chip-label">Map · click a plot for its cycles</div>
-            <div class="lp-legend">
-                <span><i style="background:#f59e0b"></i>In the field</span>
-                <span><i style="background:#3b82f6"></i>Being culled</span>
-                <span><i style="background:#22c55e"></i>3rd culled</span>
-                <span><i style="background:#94a3b8"></i>No batch</span>
-            </div>
         </div>
         <div id="lp-map-tabs" class="hidden"></div>
         <div id="lp-map-body"></div>
@@ -194,14 +271,60 @@
     function lpPlotKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(^|[A-Z])0+(\d)/g, '$1$2'); }
     function lpIsReplant(s) { return /-R/i.test(String(s || '')); }
     function lpNatural(a, b) { return String(a).localeCompare(String(b), 'en', { numeric: true }); }
-    // A row's day: its own transaction_date, else the Date: written in its remark, else the day it was saved.
-    function lpDayOf(r, key) {
-        const td = String(r.transaction_date || '').slice(0, 10);
-        if (td) return td;
-        const rem = String(r.remark || '');
-        const m = rem.match(new RegExp(key + ':\\s*(\\d{4}-\\d{2}-\\d{2})'));
+    /* THE BATCH REPORT OWN READINGS, so this page and the batch report say the
+       same day and the same figure (the office: "life of plot 里面的资料请去
+       batch report拿").
+       Transplant day: Tab 3, the Date: in the remark, else transaction_date,
+       else the day it was saved. */
+    function lpTransplantDay(r) {
+        const m = String(r.remark || '').match(/Date:\s*(\d{4}-\d{2}-\d{2})/);
         if (m) return m[1];
-        return String(r.created_at || '').slice(0, 10) || null;
+        const td = String(r.transaction_date || '').slice(0, 10);
+        return td || String(r.created_at || '').slice(0, 10) || null;
+    }
+    /* A culling: Tabs 5 and 6 keep ONE saved figure per plot and destination
+       (DestType in the remark), the NEWEST; a row with no DestType is an older
+       save and counts only where no keyed one exists. Their figures are added
+       across destinations, as Tab 5 merges MAIN and D-TONE of one plot.
+       Day: the CullDate in the remark. Tab 5 falls back to the day it was
+       saved; Tab 6 shows no date, so `day` is null there and `sortDay` (the
+       last session, else the save day) is used only to split the cycles. */
+    function lpCullFigure(rows, saveDayFallback, nTransplants) {
+        const sorted = (rows || []).slice().sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+        const keyed = {}, legacy = [];
+        sorted.forEach(r => {
+            const rem = String(r.remark || '');
+            const dm = rem.match(/DestType:\s*(main|premium|doubletone)/);
+            if (dm) keyed[dm[1]] = r; else legacy.push(r);
+        });
+        let use = Object.keys(keyed).map(k => keyed[k]);
+        // Older saves: one per transplant row, oldest first, the way Tabs 5 and 6 hand them out.
+        if (!use.length && legacy.length) use = legacy.slice(0, Math.max(1, nTransplants || 0));
+        if (!use.length) return { qty: 0, day: null, sortDay: null, rows: 0 };
+        const dayOf = r => {
+            const rem = String(r.remark || '');
+            const m = rem.match(/CullDate:\s*(\d{4}-\d{2}-\d{2})/);
+            if (m) return m[1];
+            return saveDayFallback ? (String(r.created_at || '').slice(0, 10) || null) : null;
+        };
+        const sessDay = r => {
+            const m = String(r.remark || '').match(/CullSessions:(\S+)/);
+            if (!m) return null;
+            return lpLatest(m[1].split(';').map(x => (x.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1]));
+        };
+        const main = keyed.main || use[0];
+        const day = dayOf(main) || lpEarliest(use.map(dayOf));
+        const num = (re) => use.reduce((a, r) => { const m = String(r.remark || '').match(re); return m ? a + Number(m[1]) : a; }, 0);
+        const has = (re) => use.some(r => re.test(String(r.remark || '')));
+        return {
+            qty: use.reduce((a, r) => a + Math.abs(Number(r.quantity_change) || 0), 0),
+            // Tab 5 writes Alive:, Tab 6 writes MapQty: (the drone count of what was culled).
+            alive: has(/Alive:\s*\d/) ? num(/Alive:\s*(\d+)/) : null,
+            map: has(/MapQty:\s*\d/) ? num(/MapQty:\s*(\d+)/) : null,
+            day,
+            sortDay: day || lpLatest(use.map(sessDay)) || lpLatest(use.map(r => String(r.created_at || '').slice(0, 10))),
+            rows: use.length,
+        };
     }
     function lpEarliest(days) { return days.filter(Boolean).sort()[0] || null; }
     function lpLatest(days) { return days.filter(Boolean).sort().slice(-1)[0] || null; }
@@ -220,17 +343,17 @@
         const cycles = [];
         let cur = null;
         (batches || []).forEach(b => {
-            const lastC3 = cur ? lpLatest(cur.batches.map(x => x.c3Date)) : null;
+            const lastC3 = cur ? lpLatest(cur.batches.map(x => x.c3Sort)) : null;
             if (!cur || (b.tDate && lastC3 && b.tDate > lastC3)) { cur = { batches: [] }; cycles.push(cur); }
             cur.batches.push(b);
         });
         return cycles.map((c, i) => {
             const bs = c.batches;
-            const done = bs.some(b => b.c3Date) && (i < cycles.length - 1 || bs.every(b => b.c3Date || !b.tAdj));
+            const done = bs.some(b => b.c3Sort) && (i < cycles.length - 1 || bs.every(b => b.c3Sort || !b.tAdj));
             return {
                 n: i + 1, batches: bs, current: i === cycles.length - 1,
                 start: lpEarliest(bs.map(b => b.tDate)),
-                end: done ? lpLatest(bs.map(b => b.c3Date)) : null,
+                end: done ? lpLatest(bs.map(b => b.c3Sort)) : null,
                 tQty: bs.reduce((a, b) => a + b.tQty, 0),
                 adj: bs.reduce((a, b) => a + b.adj, 0),
                 tAdj: bs.reduce((a, b) => a + b.tAdj, 0),
@@ -264,6 +387,66 @@
         return { year: Y, prev: P, groups, thisY, thisCum: cum(thisY), prevY, prevCum: cum(prevY),
                  total: thisY.reduce((a, x) => a + x, 0), prevTotal: prevY.reduce((a, x) => a + x, 0) };
     }
+    /* Pusingan Jualan and Pusingan Transplant, per plot and month of `year`.
+       Transplanted is THIS record (tByMonth: the Tab 3 day plus approved
+       calibration); collected is the delivery-order lines of that plot by the
+       delivery date; capacity is Work Maintenance > Setting. The rule is the
+       Nursery Dashboard Site Audit own (buildRotation): collection plan = 90%
+       of the transplant 9 months earlier, transplanting plan = the transplant
+       10 months earlier, % = collected over capacity, rounded down.
+       the_site_audit_dashboard.cjs compares the two. */
+    function lpShiftYM(ym, by) {
+        const y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + by;
+        return (y + Math.floor(m / 12)) + '-' + String(((m % 12) + 12) % 12 + 1).padStart(2, '0');
+    }
+    /* The collection % is CUMULATIVE over the CURRENT ROUND only: the batches
+       transplanted into the plot from the same month a year before (the
+       plans count). A sale of an older batch is the round before, counted apart
+       (`older`). SHARED RULE: saRound on the Nursery Dashboard. */
+    const lpBatchKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/^BATCH\s*:?\s*/, '').split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
+    function lpRound(fills, sales, ym) {
+        const from = lpShiftYM(ym, -13);   // the same month last year counts
+        let cum = 0, older = 0, mine = 0;
+        Object.keys(sales || {}).forEach(b => {
+            const inRound = Object.keys((fills || {})[b] || {}).some(m => m > from && m <= ym);
+            Object.keys(sales[b]).forEach(m => {
+                if (m > ym) return;
+                if (inRound) { cum += sales[b][m]; if (m === ym) mine += sales[b][m]; } else if (m === ym) older += sales[b][m];
+            });
+        });
+        return { cum, older, mine };
+    }
+    function lpRotation(model, nursery, year, sales, caps, todayYM) {
+        const g = model.groups.find(x => x.key === nursery);
+        const S = {}, SB = {};
+        (sales || []).forEach(r => {
+            const k = lpPlotKey(r.plot), ym = String(r.day || '').slice(0, 7);
+            if (!k || ym.length !== 7) return;
+            (S[k] = S[k] || {})[ym] = (S[k][ym] || 0) + (Number(r.qty) || 0);
+            const pb = ((SB[k] = SB[k] || {})[lpBatchKey(r.batch)] = (SB[k] || {})[lpBatchKey(r.batch)] || {});
+            pb[ym] = (pb[ym] || 0) + (Number(r.qty) || 0);
+        });
+        return (g ? g.plots : []).map(p => {
+            const k = lpPlotKey(p.plot), cap = Number((caps || {})[k]) || 0;
+            const tm = {};
+            const fills = {};
+            p.batches.forEach(b => Object.keys(b.tByMonth).forEach(ym => {
+                tm[ym] = (tm[ym] || 0) + b.tByMonth[ym];
+                const f = (fills[lpBatchKey(b.batch)] = fills[lpBatchKey(b.batch)] || {});
+                f[ym] = (f[ym] || 0) + b.tByMonth[ym];
+            }));
+            const t = ym => tm[ym] || 0, c = ym => (S[k] && S[k][ym]) || 0;
+            const months = [];
+            for (let m = 1; m <= 12; m++) {
+                const ym = year + '-' + String(m).padStart(2, '0');
+                const col = c(ym), rd = col > 0 ? lpRound(fills, SB[k], ym) : { cum: 0, older: 0, mine: 0 }, cum = rd.cum;
+                months.push({ ym, future: !!todayYM && ym > todayYM, col, colCum: cum, colOlder: rd.older, colMine: rd.mine,
+                    colPct: cap > 0 && cum > 0 ? Math.floor(cum / cap * 100) : null,
+                    colPlan: Math.round(t(lpShiftYM(ym, -9)) * 0.9), tr: t(ym), trPlan: t(lpShiftYM(ym, -10)) });
+            }
+            return { plot: p.plot, key: k, cap, months };
+        });
+    }
     function lpYears(model) {
         const ys = new Set();
         model.groups.forEach(g => g.plots.forEach(p => p.batches.forEach(b => Object.keys(b.tByMonth).forEach(k => ys.add(k.slice(0, 4))))));
@@ -281,7 +464,7 @@
             const k = lpPlotKey(r.plot_name);
             if (!byPlot.has(k)) {
                 const known = nurOfPlot.get(k);
-                byPlot.set(k, { name: known ? known.name : r.plot_name, nursery: known ? known.nursery : 'OTHER', batches: new Map() });
+                byPlot.set(k, { name: known ? known.name : r.plot_name, nursery: known ? known.nursery : 'OTHER', batches: new Map(), cards: {} });
             }
             return byPlot.get(k);
         };
@@ -297,9 +480,22 @@
             else if (lpIsApprovedTransplantCal(r)) batchOf(plotOf(r), r).adjRows.push(r);
             else if (t === '2nd_Culling') batchOf(plotOf(r), r).c2Rows.push(r);
             else if (t === '3rd_Culling') batchOf(plotOf(r), r).c3Rows.push(r);
+            else if (t === 'Transplant_Card') {
+                /* The Tab 3 card: one plot on one day, its drone count in the
+                   remark (DroneQty:), newest save wins, as Tab 3 reads it. */
+                const rem = String(r.remark || '');
+                const dm = rem.match(/Date:\s*(\d{4}-\d{2}-\d{2})/);
+                const day = dm ? dm[1] : String(r.transaction_date || '').slice(0, 10);
+                if (!day) return;
+                const pl = plotOf(r), cur = pl.cards[day];
+                const at = String(r.created_at || '');
+                if (cur && cur.at > at) return;
+                const q = rem.match(/DroneQty:(\d+)/);
+                pl.cards[day] = { at, drone: q ? Number(q[1]) : null };
+            }
         });
         // A plot in Seedling Stock with nothing recorded still gets a row, so an empty plot shows as empty.
-        nurOfPlot.forEach((v, k) => { if (!byPlot.has(k) && v.nursery !== 'OTHER') byPlot.set(k, { name: v.name, nursery: v.nursery, batches: new Map() }); });
+        nurOfPlot.forEach((v, k) => { if (!byPlot.has(k) && v.nursery !== 'OTHER') byPlot.set(k, { name: v.name, nursery: v.nursery, batches: new Map(), cards: {} }); });
 
         const sum = (xs, f) => xs.reduce((a, r) => a + (Number(f(r)) || 0), 0);
         const out = NURSERY_ORDER.map(key => {
@@ -308,27 +504,36 @@
                 const batches = [...p.batches.values()].map(b => {
                     const tQty = sum(b.tRows, r => r.quantity_change);
                     const adj = sum(b.adjRows, r => r.quantity_change);
-                    const tDate = lpEarliest(b.tRows.map(r => lpDayOf(r, 'Date')));
+                    const tDate = lpEarliest(b.tRows.map(lpTransplantDay));
                     // Each transplant row lands in the month it was done; an approved
                     // calibration corrects the transplant, so it lands with it.
                     const tByMonth = {};
                     b.tRows.forEach(r => {
-                        const ym = String(lpDayOf(r, 'Date') || '').slice(0, 7);
+                        const ym = String(lpTransplantDay(r) || '').slice(0, 7);
                         if (ym) tByMonth[ym] = (tByMonth[ym] || 0) + (Number(r.quantity_change) || 0);
                     });
                     if (adj && tDate) tByMonth[tDate.slice(0, 7)] = (tByMonth[tDate.slice(0, 7)] || 0) + adj;
+                    // Each day this batch went into the plot, the census of that day; an
+                    // approved calibration sits on the first day, as the office sheet has it.
+                    const tDays = {};
+                    b.tRows.forEach(r => {
+                        const d = lpTransplantDay(r) || '';
+                        const e = tDays[d] || (tDays[d] = { day: d, qty: 0, at: '' });
+                        e.qty += Number(r.quantity_change) || 0;
+                        if (String(r.created_at || '') > e.at) e.at = String(r.created_at || '');
+                    });
+                    if (adj && tDays[tDate || '']) tDays[tDate || ''].qty += adj;
+                    const c2 = lpCullFigure(b.c2Rows, true, b.tRows.length), c3 = lpCullFigure(b.c3Rows, false, b.tRows.length);
                     return {
                         batch: b.batch,
-                        tDate, tByMonth,
+                        tDate, tByMonth, tDays: Object.values(tDays).sort((x, y) => x.day.localeCompare(y.day)),
                         tQty, adj, tAdj: tQty + adj,
-                        c2Date: lpEarliest(b.c2Rows.map(r => lpDayOf(r, 'CullDate'))),
-                        c2Qty: sum(b.c2Rows, r => r.quantity_change),
-                        c3Date: lpEarliest(b.c3Rows.map(r => lpDayOf(r, 'CullDate'))),
-                        c3Qty: sum(b.c3Rows, r => r.quantity_change),
+                        c2Date: c2.day, c2Qty: c2.qty, c2Alive: c2.alive, c2Has: c2.rows > 0,
+                        c3Date: c3.day, c3Sort: c3.sortDay, c3Qty: c3.qty, c3Map: c3.map, c3Has: c3.rows > 0,
                     };
                 }).sort((x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch));
                 return {
-                    plot: p.name, nursery: p.nursery, batches, cycles: lpCycles(batches),
+                    plot: p.name, nursery: p.nursery, batches, cycles: lpCycles(batches), cards: p.cards || {},
                     tAdj: batches.reduce((a, b) => a + b.tAdj, 0),
                     c2: batches.reduce((a, b) => a + b.c2Qty, 0),
                     c3: batches.reduce((a, b) => a + b.c3Qty, 0),
@@ -357,12 +562,18 @@
     let PLOT_SHAPES = {}; // plot key -> { name, nur, pts } from shared_plots.map_top
     let MAP_NUR = '';
     const MAP_ZOOM = {};
-    const MAP_FILL = {
-        none:     ['rgba(148,163,184,.22)', '#94a3b8'],
-        field:    ['rgba(251,191,36,.40)',  '#f59e0b'],
-        culling:  ['rgba(96,165,250,.40)',  '#3b82f6'],
-        finished: ['rgba(74,222,128,.40)',  '#22c55e'],
-    };
+    /* THE MAP SAYS WHERE THE PLOT IS IN ITS ROUND, four stages (the office:
+       "empty, growing, 即将可以售卖, 售卖中"), each its own colour, with the key
+       standing beside the map. `stage` is the key, `fill` / `stroke` the paint. */
+    const LP_STAGES = [
+        { key: 'empty',   label: 'Empty',         note: 'nothing standing: never filled, or 3rd culled',       fill: 'rgba(148,163,184,.30)', stroke: '#94a3b8' },
+        { key: 'growing', label: 'Growing',       note: `under ${6} months since transplant`,                 fill: 'rgba(74,222,128,.45)',  stroke: '#16a34a' },
+        { key: 'soon',    label: 'Ready for collection', note: '6 months or more, nothing collected yet',      fill: 'rgba(251,191,36,.50)',  stroke: '#d97706' },
+        { key: 'selling', label: 'Collecting',    note: 'this round is going out on delivery orders',         fill: 'rgba(96,165,250,.50)',  stroke: '#2563eb' },
+    ];
+    const LP_SOON_MONTHS = 6;
+    const MAP_FILL = {};
+    LP_STAGES.forEach(x => { MAP_FILL[x.key] = [x.fill, x.stroke]; });
 
     // ── Map view ──────────────────────────────────────────────
     // Colour is how far the plot has got through its 3rd cull, read off the
@@ -370,13 +581,20 @@
     // transplant, so it is the same answer the table gives.
     // Asked of the CURRENT cycle: a plot culled last year and filled again is in the field.
     function curCycle(p) { return p && p.cycles && p.cycles.length ? p.cycles[p.cycles.length - 1] : null; }
+    /* Empty: no current cycle, or it is finished (3rd culled). Selling: a
+       batch of the current cycle has been sold on a delivery order since the
+       cycle began (or its 3rd culling has begun). Ready soon: 6 months or more
+       since the cycle first transplant and nothing sold yet. Growing: younger.
+       Before the delivery orders are read, age alone decides. */
     function mapStateOf(p) {
         const c = curCycle(p);
-        if (!c || c.tAdj <= 0) return { key: 'none', pct: 0 };
-        const pct = Math.round(Math.min(100, (c.c3 / c.tAdj) * 100));
-        if (c.c3 <= 0) return { key: 'field', pct };
-        if (c.end || c.c3 >= c.tAdj) return { key: 'finished', pct: Math.max(pct, c.end ? 100 : pct) };
-        return { key: 'culling', pct };
+        if (!c || c.tAdj <= 0 || c.end) return { key: 'empty', months: null };
+        const months = c.start ? (Date.now() - Date.parse(c.start + 'T00:00:00Z')) / 86400000 / 30.44 : 0;
+        const k = lpPlotKey(p.plot);
+        const mine = new Set(c.batches.map(b => lpBatchKey(b.batch)));
+        const sold = c.c3 > 0 || (ROT && ROT.sales.some(r => lpPlotKey(r.plot) === k && mine.has(lpBatchKey(r.batch)) && String(r.day) >= String(c.start)));
+        if (sold) return { key: 'selling', months };
+        return { key: months >= LP_SOON_MONTHS ? 'soon' : 'growing', months };
     }
     const fmtN = n => Number(n || 0).toLocaleString('en-MY');
     function mapPlotIndex() {
@@ -398,7 +616,7 @@
     function renderHeadTabs() {
         const el = document.getElementById('lp-head-nur');
         const keys = NURSERY_ORDER.filter(k => MAPS[k] && k !== 'OTHER');
-        const show = keys.length && (VIEW === 'plots' || VIEW === 'palms-board');
+        const show = keys.length && (VIEW === 'plots' || VIEW === 'palms-board' || VIEW === 'rotation');
         el.innerHTML = show ? keys.map(k =>
             `<button type="button" class="lp-tab${k === MAP_NUR ? ' on' : ''}" data-map="${k}">${NURSERY_LABEL[k]}</button>`).join('') : '';
     }
@@ -422,17 +640,62 @@
         showPlot(name);
         document.getElementById('lp-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    /* ── The scenes: the office own MJM cats, moved by the stylesheet. ──
+       Growing is the three working cats taking turns (watering, fertiliser,
+       weeding); Empty is the cat digging soil; Ready for collection is the
+       cat sitting happy; Collecting is the cat driving the lorry of seedlings.
+       The pictures are lifeplot/cat_*.png, cut out of the sheet the office
+       handed over. */
+    const LP_CAT = n => `lifeplot/cat_${n}.png`;
+    // Where the cats stand in one plot: spread over the shape, the label
+    // spot left clear. Points are in the map's own percent units.
+    function lpCatSpots(pts, n) {
+        const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+        const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+        const inside = (x, y) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const a = pts[i], b = pts[j]; if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) c = !c; } return c; };
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = x1 - x0, h = y1 - y0;
+        const cand = [];
+        for (let i = 1; i < 8; i++) for (let j = 1; j < 8; j++) {
+            const x = x0 + w * i / 8, y = y0 + h * j / 8;
+            // the base AND the top of the cat inside the plot, and off the label
+            if (inside(x, y) && inside(x, y - h * 0.18) && !(Math.abs(x - cx) < w * 0.2 && Math.abs(y - cy) < h * 0.22)) cand.push({ x, y });
+        }
+        const out = [];
+        while (out.length < n && cand.length) {
+            let best = 0, bd = -1;
+            cand.forEach((c, i) => { const d = out.length ? Math.min(...out.map(o => (o.x - c.x) ** 2 + (o.y - c.y) ** 2)) : -((c.x - x0) ** 2 + (c.y - y0) ** 2); if (d > bd) { bd = d; best = i; } });
+            out.push(cand.splice(best, 1)[0]);
+        }
+        return { spots: out, x0, x1, y0, y1, w, h, cx, cy };
+    }
+    // One stage's cats for one plot: growing is the three working cats
+    // (watering, fertiliser, weeding) spread over the plot, empty is cats
+    // digging, ready for collection is one big cat sitting happy in the
+    // middle, collecting is the lorry driving across it.
+    function lpCats(key, pts) {
+        const g = lpCatSpots(pts, key === 'growing' || key === 'empty' ? 5 : 0);
+        const cat = (x, y, hgt, img, cls, delay) => `<div class="lp-cat" data-scene="${key}" style="left:${x}%;top:${y}%;height:${hgt}%"><img class="${cls}" style="animation-delay:-${delay}s" src="${LP_CAT(img)}" alt=""></div>`;
+        const small = Math.min(g.h * 0.24, g.w * 0.5);
+        if (key === 'growing') return g.spots.map((p, i) => { const t = [['grow_water', 'water'], ['grow_feed', 'feed'], ['grow_weed', 'weed']][i % 3]; return cat(p.x, p.y, small, t[0], t[1], i * 0.37); }).join('');
+        if (key === 'empty') return g.spots.map((p, i) => cat(p.x, p.y, small, 'empty_dig', 'dig', i * 0.29)).join('');
+        if (key === 'soon') return cat(g.cx, Math.min(g.y1 - g.h * 0.1, g.cy + g.h * 0.4), Math.min(g.h * 0.45, g.w * 0.8), 'ready', 'hop', 0);
+        if (key === 'selling') return `<div class="lp-cat wide" data-scene="selling" style="left:${g.cx}%;top:${Math.min(g.y1 - g.h * 0.1, g.cy + g.h * 0.38)}%;width:${g.w * 0.6}%"><img class="drive" src="${LP_CAT('collecting')}" alt=""></div>`;
+        return '';
+    }
     function drawMap() {
         const k = MAP_NUR;
         const body = document.getElementById('lp-map-body');
         const idx = mapPlotIndex();
         const z = MAP_ZOOM[k] || (MAP_ZOOM[k] = { z: 1, x: 0, y: 0 });
-        body.innerHTML = `
+        const key = '<div class="lp-key"><div class="lp-key-h">Stage</div>' + LP_STAGES.map(x =>
+            `<div class="lp-key-r" data-stage="${x.key}"><i style="background:${x.fill};border-color:${x.stroke}"></i><img class="lp-key-cat" src="${LP_CAT({ empty: 'empty_dig', growing: 'grow_water', soon: 'ready', selling: 'collecting' }[x.key])}" alt=""><div><b>${x.label}</b><span>${x.note}</span></div></div>`).join('') + '</div>';
+        body.innerHTML = `<div class="lp-map-row">
             <div class="lp-viewport" id="lp-viewport">
                 <div class="lp-stage" id="lp-stage">
                     <div class="relative inline-block">
                         <img class="lp-map-img" src="${MAPS[k]}" alt="Map ${NURSERY_LABEL[k]}" draggable="false">
                         <svg class="lp-svg" id="lp-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                        <div class="lp-cats" id="lp-cats"></div>
                         <div class="lp-labels" id="lp-labels"></div>
                     </div>
                 </div>
@@ -442,15 +705,17 @@
                     <button type="button" class="lp-zbtn" data-z="-0.25" title="Zoom out">−</button>
                     <button type="button" class="lp-zbtn" data-z="reset" title="Reset zoom">↺</button>
                 </div>
-            </div>`;
+            </div>${key}</div>`;
         const svg = document.getElementById('lp-svg');
         const labels = document.getElementById('lp-labels');
+        const catsEl = document.getElementById('lp-cats');
         const vp = document.getElementById('lp-viewport');
         const stage = document.getElementById('lp-stage');
 
         Object.values(PLOT_SHAPES).filter(s => s.nur === k).forEach(s => {
             const p = idx[lpPlotKey(s.name)];
             const st = mapStateOf(p);
+            const stg = LP_STAGES.find(x => x.key === st.key);
             const [fill, stroke] = MAP_FILL[st.key];
             const ptsStr = s.pts.map(pt => pt.x + ',' + pt.y).join(' ');
             const cx = s.pts.reduce((a, pt) => a + pt.x, 0) / s.pts.length;
@@ -458,12 +723,13 @@
             const cc = curCycle(p);
             const tip = cc ? `Cycle ${cc.n} of ${p.cycles.length} · transplanted ${fmtN(cc.tAdj)} · 2nd cull ${fmtN(cc.c2)} · 3rd cull ${fmtN(cc.c3)}` : 'Nothing recorded';
             svg.insertAdjacentHTML('beforeend',
-                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name}: ${tip}</title></polygon>`);
-            const line = st.key === 'none'
+                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" data-stage="${st.key}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name} · ${stg.label}${st.months != null ? ' · ' + Math.floor(st.months) + ' months' : ''}: ${tip}</title></polygon>`);
+            const line = !cc || cc.tAdj <= 0
                 ? '<div class="lp-line empty">No batch</div>'
                 : `<div class="lp-line" title="${tip}">Cycle ${cc.n} · ${fmtN(cc.tAdj)}</div>`;
             labels.insertAdjacentHTML('beforeend',
                 `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}</div>`);
+            catsEl.insertAdjacentHTML('beforeend', lpCats(st.key, s.pts));
         });
         svg.addEventListener('click', e => {
             const el = e.target.closest && e.target.closest('.lp-shape');
@@ -580,23 +846,86 @@
     function cycleSpan(c) {
         return `${c.start || '–'} → ${c.end || 'now'}`;
     }
-    function cycleHtml(c) {
+    const lpPct = (n, d) => (d > 0 ? ((n || 0) / d * 100).toFixed(2) + '%' : '–');
+    const lpVar = v => (v == null ? '–' : (v > 0 ? '+' : '') + nf(v) || '0');
+    // A card saved before the drone count existed has the picture and no number,
+    // and reads as tallying — shown, never stored (the batch report T3_DRONE_FROM rule).
+    const LP_DRONE_FROM = '2026-10-23T00:00:00Z';
+    /* One card per cycle, ONE table read across (the office: "改成横着的吧 …
+       batch就不用写那么多次"): a row per batch, the batch written once, then
+       the three parts of the office plot sheet side by side — Transplanting
+       (Map Date, Census, Total Drone Count, Variance), the 7th month 2nd
+       culling (Date, Alive, Dead, Variance, Culling rate) and the 3rd culling
+       (Map Date, Pending culling, Drone Count, Variance, both rates). Census
+       is the transplant after approved calibration and every rate is over it;
+       the Total row carries the plot culling rates. A drone count belongs to
+       a Tab 3 card (one plot, one day), so batches that went in on the same
+       first day share one drone cell. */
+    function cycleHtml(c, p) {
         const d = lpDays(c.start, c.end);
-        let h = `<div class="panel overflow-x-auto lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
+        const bs = c.batches;
+        const cards = (p && p.cards) || {};
+        let h = `<div class="panel lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
               + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Finished' : 'Current'}</span>`
               + `<span class="lp-cyc-d">${c.start || '–'} → ${c.end || 'now'}${d != null ? ' · ' + d + ' days' : ''}</span>`
               + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
-        h += '<table class="lp"><thead><tr><th class="l">Batch</th><th class="l">Transplant date</th><th>Transplant qty</th><th>Calibration</th><th>Adjusted</th>'
-           + '<th class="l">2nd cull date</th><th>2nd cull qty</th><th class="l">3rd cull date</th><th>3rd cull qty</th></tr></thead><tbody>';
-        c.batches.forEach(b => {
-            h += `<tr><td class="l batch">${b.batch}</td><td class="l">${b.tDate || '–'}</td><td>${dash(b.tQty)}</td>`
-               + `<td class="${b.adj ? 'adj' : 'dash'}">${b.adj ? (b.adj > 0 ? '+' : '') + nf(b.adj) : '–'}</td><td>${dash(b.tAdj)}</td>`
-               + `<td class="l">${b.c2Date || '–'}</td><td class="cull">${dash(b.c2Qty)}</td><td class="l">${b.c3Date || '–'}</td><td class="cull">${dash(b.c3Qty)}</td></tr>`;
+
+        // Drone groups: batches sharing their first transplant day.
+        const groups = [];
+        bs.forEach(b => {
+            const key = b.tDate || '';
+            let g = groups.find(x => x.key === key);
+            if (!g) { g = { key, batches: [], days: new Set(), census: 0, at: '' }; groups.push(g); }
+            g.batches.push(b); g.census += b.tAdj;
+            (b.tDays || []).forEach(t => { g.days.add(t.day); if (t.at > g.at) g.at = t.at; });
         });
-        h += `</tbody><tfoot><tr class="tot"><td class="l">Cycle ${c.n} total</td><td></td><td>${dash(c.tQty)}</td>`
-           + `<td>${c.adj ? (c.adj > 0 ? '+' : '') + nf(c.adj) : '–'}</td><td>${dash(c.tAdj)}</td><td></td><td>${dash(c.c2)}</td><td></td><td>${dash(c.c3)}</td></tr></tfoot></table></div>`;
-        return h;
+        let droneAll = 0, droneKnown = true;
+        groups.forEach(g => {
+            let drone = 0, known = true;
+            g.days.forEach(day => {
+                const card = cards[day];
+                const census = g.batches.reduce((a, b) => a + ((b.tDays || []).filter(t => t.day === day).reduce((x, t) => x + t.qty, 0)), 0);
+                let v = card && card.drone != null ? card.drone : null;
+                if (v == null && ((card ? card.at : g.at) || '9') < LP_DRONE_FROM) v = census;
+                if (v == null) known = false; else drone += v;
+            });
+            g.drone = known && g.days.size ? drone : null;
+            if (g.drone == null) droneKnown = false; else droneAll += g.drone;
+        });
+
+        let alive2 = 0;
+        const map3 = bs.reduce((a, b) => a + (b.c3Map || 0), 0);
+        let body = '';
+        groups.forEach(g => g.batches.forEach((b, i) => {
+            const alive = b.c2Has ? (b.c2Alive != null ? b.c2Alive : b.tAdj - b.c2Qty) : b.tAdj;
+            alive2 += alive;
+            const c2 = b.c2Has ? b.c2Qty : 0, c3 = b.c3Has ? b.c3Qty : 0, m3 = b.c3Map || 0;
+            const span = g.batches.length;
+            body += `<tr><td class="l batch">${b.batch}</td>`
+                // Transplanting
+                + `<td class="l s1">${b.tDate || '–'}</td><td>${nf(b.tAdj) || '0'}</td>`
+                + (i ? '' : `<td rowspan="${span}">${g.drone == null ? '–' : nf(g.drone) || '0'}</td><td rowspan="${span}" class="${g.drone != null && g.drone !== g.census ? 'adj' : ''}">${g.drone == null ? '–' : lpVar(g.drone - g.census)}</td>`)
+                // 2nd culling (the 7th month)
+                + `<td class="l s1">${b.c2Date || '–'}</td><td>${nf(alive) || '0'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td>`
+                + `<td>${lpVar(alive + c2 - b.tAdj)}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
+                // 3rd culling
+                + `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
+                + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td><td class="cull">${lpPct(m3, b.tAdj)}</td></tr>`;
+        }));
+        h += `<div class="lp-x-wrap"><table class="lp lp-x">`
+           + `<thead><tr class="grp-h"><th class="l" rowspan="2">Batch</th>`
+           + `<th class="s1 g-t" colspan="4">Transplanting</th><th class="s1 g-c" colspan="5">2nd Culling</th><th class="s1 g-c" colspan="6">3rd Culling</th></tr>`
+           + `<tr><th class="l s1">Map Date</th><th>Census</th><th>Total Drone Count</th><th>Variance</th>`
+           + `<th class="l s1">Date</th><th>Alive</th><th>Dead</th><th>Variance</th><th>Culling rate (%)</th>`
+           + `<th class="l s1">Map Date</th><th>Pending culling</th><th>Drone Count</th><th>Variance drone vs pending</th><th>Pending culling rate (%)</th><th>Drone culling rate (%)</th></tr></thead>`
+           + `<tbody>${body}</tbody>`
+           + `<tfoot><tr class="tot"><td class="l">Total · plot</td>`
+           + `<td class="s1"></td><td>${dash(c.tAdj)}</td><td>${droneKnown ? dash(droneAll) : '–'}</td><td>${droneKnown ? lpVar(droneAll - c.tAdj) : '–'}</td>`
+           + `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpVar(alive2 + c.c2 - c.tAdj)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
+           + `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td><td>${lpPct(map3, c.tAdj)}</td></tr></tfoot>`
+           + `</table></div>`;
+        return h + '</div>';
     }
 
     function showPlot(name) {
@@ -610,27 +939,30 @@
         fillPlotSelect(p.plot);
         document.getElementById('lp-list').classList.add('hidden');
         document.getElementById('lp-detail').classList.remove('hidden');
-        document.getElementById('lp-title').textContent = 'Life of Plot · ' + p.plot;
+        // The heading is ALWAYS Life of Plot (the office: "标题永远都是life of plot");
+        // which plot or view is open is the line under it.
+        document.getElementById('lp-title').textContent = 'Life of Plot';
         const nurLabel = NURSERY_LABEL[p.nursery];
-        document.getElementById('lp-sub').textContent = nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
+        document.getElementById('lp-sub').textContent = p.plot + ' · ' + nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
         history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
         document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
-            ? p.cycles.slice().reverse().map(cycleHtml).join('')
+            ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
-        document.getElementById('lp-note').textContent = 'Dates come from the transplant and cull records: the record\'s own date, else the Date / CullDate written in its remark, else the day it was saved.';
+        document.getElementById('lp-note').textContent = 'Laid out as the office plot sheet, read the way the batch report reads them: the transplant date and drone count off Tab 3, the 2nd and 3rd culling off Tabs 5 and 6 (the newest save of each plot, dated by its Cull Date). Census and Total are the transplant after approved calibration; every rate is over it.';
     }
 
     // ── Side bar: Plots & cycles, or the Transplant record by year ──
     let VIEW = 'plots';
     let REC_YEAR = '';
     const PALMS_PAGES = {
-        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'PALMS · every plot and the stage it is on.' },
-        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'Life of Plot · the stages a plot moves through.' },
+        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'every plot and the stage it is on.' },
+        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'the stages a plot moves through.' },
     };
     function setView(v, quiet) {
-        VIEW = v === 'record' ? 'record' : (PALMS_PAGES[v] ? v : 'plots');
+        VIEW = (v === 'record' || v === 'rotation') ? v : (PALMS_PAGES[v] ? v : 'plots');
         document.querySelectorAll('#lp-side .lp-side-b').forEach(b => b.classList.toggle('on', b.dataset.view === VIEW));
         document.getElementById('lp-record').classList.toggle('hidden', VIEW !== 'record');
+        document.getElementById('lp-rot').classList.toggle('hidden', VIEW !== 'rotation');
         document.getElementById('lp-plots-view').classList.toggle('hidden', VIEW !== 'plots');
         document.getElementById('lp-palms').classList.toggle('hidden', !PALMS_PAGES[VIEW]);
         if (MODEL) renderHeadTabs();
@@ -638,27 +970,107 @@
             const pg = PALMS_PAGES[VIEW];
             const fr = document.getElementById('lp-palms-frame');
             if (fr.getAttribute('src') !== pg.href) fr.setAttribute('src', pg.href);
-            document.getElementById('lp-title').textContent = pg.title;
-            document.getElementById('lp-sub').textContent = pg.sub;
+            document.getElementById('lp-title').textContent = 'Life of Plot';
+            document.getElementById('lp-sub').textContent = pg.title + ' · ' + pg.sub;
             if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
             syncPalmsNursery();
+        } else if (VIEW === 'rotation') {
+            document.getElementById('lp-title').textContent = 'Life of Plot';
+            document.getElementById('lp-sub').textContent = 'Pusingan Jualan & Transplant · collection and transplanting by plot and month, against plan.';
+            if (!quiet) history.replaceState(null, '', '#view=rotation');
+            renderRotation();
         } else if (VIEW === 'record') {
-            document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
-            document.getElementById('lp-sub').textContent = 'Every main plot, transplanted by month.';
+            document.getElementById('lp-title').textContent = 'Life of Plot';
+            document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
             if (!quiet) history.replaceState(null, '', '#view=record&year=' + REC_YEAR);
             renderRecord();
         } else if (!quiet) {
             showList();
         }
     }
+    // Delivery orders and plot capacity are read the first time this view opens.
+    let ROT = null, ROT_YEAR = '', ROT_P = null;
+    // ONE read of the delivery orders, shared by the map and the rotation view.
+    const ensureRot = () => ROT_P || (ROT_P = loadRotation());
+    async function loadRotation() {
+        const soft = (pr, what) => pr.catch(e => { ROT.missing.push(what + ': ' + (e && e.message ? e.message : e)); return []; });
+        ROT = { missing: [], sales: [], caps: {} };
+        const [dos, caps] = await Promise.all([
+            soft(lpFetchAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5, batch_1, batch_2, batch_3, batch_4, batch_5').order('id', { ascending: true })), 'delivery orders'),
+            soft(lpFetchAll(() => _supabase.from('nops_maint_plot_qty').select('nursery, plot, qty').order('plot')), 'plot capacity'),
+        ]);
+        (dos || []).forEach(d => {
+            if (d.status === 'Cancelled' || String(d.remark || '').includes('[CANCELLED]')) return;
+            const day = String(d.delivery_date || '').slice(0, 10);
+            for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) ROT.sales.push({ plot: d['plot_' + i], batch: d['batch_' + i], day, qty: q }); }
+        });
+        (caps || []).forEach(r => { if (Number(r.qty) > 0) (ROT.caps[lpNurKey(r.nursery)] = ROT.caps[lpNurKey(r.nursery)] || {})[lpPlotKey(r.plot)] = Number(r.qty); });
+        ROT.done = true;
+    }
+    async function renderRotation() {
+        if (!MODEL) return;
+        if (!ROT_P || !ROT || !ROT.done) {
+            document.getElementById('lp-rot-sales').innerHTML = '<div class="lp-rot-mh" style="grid-column:1/-1">Loading…</div>';
+            await ensureRot();
+            if (VIEW !== 'rotation') return;
+        }
+        const keys = NURSERY_ORDER.filter(k => k !== 'OTHER' && MODEL.groups.some(g => g.key === k && g.plots.length));
+        if (!keys.includes(NUR)) NUR = keys[0] || '';
+        const byMap = NURSERY_ORDER.some(k => MAPS[k]);
+        document.getElementById('lp-rot-nur-wrap').classList.toggle('hidden', byMap);
+        document.getElementById('lp-rot-nur').innerHTML = keys.map(k => chip('rnur', k, NURSERY_LABEL[k], k === NUR)).join('');
+        const now = new Date(), nowY = String(now.getFullYear()), todayYM = nowY + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        const years = lpYears(MODEL);
+        ROT.sales.forEach(r => { const y = String(r.day).slice(0, 4); if (/^\d{4}$/.test(y) && !years.includes(y)) years.push(y); });
+        // Next year too: its plans are already known from this year transplants.
+        [nowY, String(+nowY + 1)].forEach(y => { if (!years.includes(y)) years.push(y); });
+        years.sort();
+        if (!ROT_YEAR || !years.includes(ROT_YEAR)) ROT_YEAR = nowY;
+        document.getElementById('lp-rot-year').innerHTML = years.slice().reverse().map(y => chip('ryear', y, y, y === ROT_YEAR)).join('');
+        const rows = lpRotation(MODEL, NUR, ROT_YEAR, ROT.sales, ROT.caps[NUR] || {}, todayYM);
+        const lab = NURSERY_LABEL[NUR] || NUR;
+        document.getElementById('lp-rot-sales-t').textContent = `Pusingan Jualan — ${lab}, ${ROT_YEAR}`;
+        document.getElementById('lp-rot-tr-t').textContent = `Pusingan Transplant — ${lab}, ${ROT_YEAR}`;
+        const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const head = '<div></div>' + MON.map((m, i) => `<div class="lp-rot-mh${ROT_YEAR + '-' + String(i + 1).padStart(2, '0') === todayYM ? ' now' : ''}">${m}</div>`).join('');
+        const plotCell = r => `<div class="lp-rot-plot"><b>${r.plot}</b><span>${r.cap ? nf(r.cap) + ' capacity' : 'No capacity keyed'}</span></div>`;
+        let hs = head, ht = head;
+        rows.forEach(r => {
+            hs += plotCell(r); ht += plotCell(r);
+            r.months.forEach(x => {
+                const tip = `${r.plot} · ${x.ym} · Collected ${fmtN(x.col)} · this round so far ${fmtN(x.colCum)}${x.colPct != null ? ' (' + x.colPct + '% of capacity)' : ''}${x.colOlder ? ' · ' + fmtN(x.colOlder) + ' of an earlier round, not counted' : ''} · Plan ${fmtN(x.colPlan)}`;
+                if (x.colMine > 0) {
+                    const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
+                    hs += `<div class="lp-rot-c ${cls}" title="${tip}">${fmtN(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
+                } else if (x.col > 0) hs += `<div class="lp-rot-c old" title="${tip}">${fmtN(x.col)}<small>Earlier round</small></div>`;
+                else if (x.colPlan > 0) hs += `<div class="lp-rot-c pc${x.future ? ' fut' : ''}" title="${tip}"><small>Plan</small>${fmtN(x.colPlan)}</div>`;
+                else hs += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
+                const tipT = `${r.plot} · ${x.ym} · Transplanted ${fmtN(x.tr)} · Plan ${fmtN(x.trPlan)}`;
+                if (x.tr > 0) ht += `<div class="lp-rot-c t1" title="${tipT}">${fmtN(x.tr)}</div>`;
+                else if (x.trPlan > 0) ht += `<div class="lp-rot-c pt${x.future ? ' fut' : ''}" title="${tipT}"><small>Plan</small>${fmtN(x.trPlan)}</div>`;
+                else ht += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
+            });
+        });
+        const empty = '<div class="lp-rot-mh" style="grid-column:1/-1">No plots for this nursery.</div>';
+        document.getElementById('lp-rot-sales').innerHTML = rows.length ? hs : empty;
+        document.getElementById('lp-rot-tr').innerHTML = rows.length ? ht : empty;
+        document.getElementById('lp-rot-note').textContent = ROT.missing.length ? 'Could not read: ' + ROT.missing.join('; ') + '. Those figures show as empty.' : '';
+    }
+    document.getElementById('lp-rot').addEventListener('click', e => {
+        const n = e.target.closest('button[data-rnur]'), y = e.target.closest('button[data-ryear]');
+        if (n) { NUR = MAP_NUR = n.dataset.rnur; renderRotation(); }
+        if (y) { ROT_YEAR = y.dataset.ryear; renderRotation(); }
+    });
     function renderRecord() {
         if (!MODEL) return;
         const years = lpYears(MODEL);
         const nowY = String(new Date().getFullYear());
-        if (!years.includes(nowY)) years.push(nowY);
+        // Next year too: its plans are already known from this year transplants.
+        [nowY, String(+nowY + 1)].forEach(y => { if (!years.includes(y)) years.push(y); });
         years.sort();
         if (!REC_YEAR || !years.includes(REC_YEAR)) REC_YEAR = years.includes(nowY) ? nowY : years[years.length - 1];
-        document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
+        document.getElementById('lp-title').textContent = 'Life of Plot';
+        document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
         document.getElementById('lp-year-row').innerHTML = years.slice().reverse().map(y => chip('year', y, y, y === REC_YEAR)).join('');
         const R = buildTransplantYear(MODEL, REC_YEAR);
         const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -694,7 +1106,7 @@
                 lpFetchAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name, map_top').order('plot_name')),
                 lpFetchAll(() => _supabase.from('shared_inventory_logs')
                     .select('id, plot_name, transaction_type, transaction_date, quantity_change, batch_name, remark, created_at')
-                    .in('transaction_type', ['Transplanted', 'Stock_Calibration', '2nd_Culling', '3rd_Culling'])
+                    .in('transaction_type', ['Transplanted', 'Stock_Calibration', '2nd_Culling', '3rd_Culling', 'Transplant_Card'])
                     .order('id', { ascending: true })),
                 _supabase.from('operation_nurseries').select('name, map_image_url').then(r => (r.data || []), () => []),
             ]);
@@ -717,11 +1129,13 @@
             fillPlotSelect('');
             renderList();
             renderMap();
+            // The delivery orders decide Selling; read them now and colour the map again.
+            ensureRot().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); }).catch(() => {});
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
             REC_YEAR = (location.hash.match(/year=(\d{4})/) || [])[1] || '';
             const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
             if (deep) showPlot(deep);
-            else if (viewIn === 'record' || PALMS_PAGES[viewIn]) setView(viewIn);
+            else if (viewIn === 'record' || viewIn === 'rotation' || PALMS_PAGES[viewIn]) setView(viewIn);
             else showList();
         } catch (e) {
             document.getElementById('lp-status').textContent = 'Could not read the plot records: ' + (e && e.message ? e.message : e);
@@ -748,7 +1162,10 @@
     document.getElementById('lp-head-nur').addEventListener('click', e => {
         const b = e.target.closest('button[data-map]');
         if (!b) return;
-        if (VIEW === 'palms-board') {
+        if (VIEW === 'rotation') {
+            NUR = MAP_NUR = b.dataset.map;
+            renderHeadTabs(); renderRotation();
+        } else if (VIEW === 'palms-board') {
             NUR = MAP_NUR = b.dataset.map;
             fillNurserySelect(); fillPlotSelect(''); renderList(); renderMap();
             syncPalmsNursery();
@@ -764,7 +1181,7 @@
         const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
         const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
         if (MODEL && deep) showPlot(deep);
-        else if (MODEL && (viewIn === 'record' || PALMS_PAGES[viewIn])) setView(viewIn);
+        else if (MODEL && (viewIn === 'record' || viewIn === 'rotation' || PALMS_PAGES[viewIn])) setView(viewIn);
         else if (MODEL) showList();
     });
 
