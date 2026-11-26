@@ -6064,6 +6064,32 @@ Nothing to run in the database.
 `tests/the_namelist_edits_and_the_chart_shows.cjs` holds it.
 
 
+### JOBS on the worker form decide who opens Siram Go and Mata Malam
+
+The Work Maintenance box became **Jobs**, three ticks: Work Maintenance
+(the `maint_general` column, as before, needs a nursery location), **Siram
+Go** and **Mata Malam**, stored in the worker row `portal.modules.siram_go`
+/ `.mata_malam`, beside the Maintenance and Settings switches the Worker
+Portal Settings screen keeps there (the save MERGES into `portal`, never
+replaces it).
+
+- **Absent is ON**, which is what every worker had before the ticks, so
+  nothing moved until somebody unticks a person. An existing record opens
+  showing that. A NEW worker is ticked from the role until somebody touches
+  the boxes: Water Pump Operator does Siram Go, a Mata Malam / Night
+  Watchman / Penjaga Malam role does Mata Malam.
+- **`shared/RUN_ME_worker_jobs.sql` is the gate**: `worker_portal` hands the
+  two keys to the phone, `mata_malam_access` answers OFF for an untick (the
+  app then says it is not open for the account), and `mata_malam_submit`
+  refuses that worker a check-in. The Worker Portal M coin
+  (`FloatingDock pinWorker.modules`, FC-Portal) hides an untick.
+- **A staff login is not a register row**, so the app-wide coin on a phone
+  with a staff account still follows the portal column alone. Siram Go is
+  an outside page with no login, so the coin is the only lever there.
+
+`tests/the_namelist_edits_and_the_chart_shows.cjs` section 5c, and section 7
+of `FC-Portal/tests/the_dock_obeys_its_portal_column.cjs`.
+
 ### Inactive workers are in one card UNDER the board, never in a column
 
 The office: two inactive UNN 1 workers appeared in the Workers column the

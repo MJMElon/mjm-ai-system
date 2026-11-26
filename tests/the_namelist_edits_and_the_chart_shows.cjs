@@ -162,7 +162,7 @@ const WORKERS = [
   { id: 9, full_name: 'Arif',           section: 'UNE',    role: 'Driver',                    active: true },
   { id: 10, full_name: 'Kerani Lama',   section: 'UNN2',   role: 'Kerani',                    active: true },
 ];
-const BASE_COLS = ['id','full_name','section','role','nursery','job_title','active','remark',
+const BASE_COLS = ['id','full_name','section','role','nursery','job_title','active','remark','portal',
                    'pin','photo_url','maint_general','registered_on','last_day',
                    'created_at','created_by','updated_at','updated_by',
                    'rejected_at','rejected_by'];
@@ -274,6 +274,34 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     await setSel(page, 'wf-section', 'UNN1');
     yes(!(await page.$eval('#wf-maint', (e) => e.disabled)), 'live once a nursery is picked');
     is(await page.$eval('#wf-role', (s) => [...s.options].some((o) => /New role/.test(o.textContent))), false, 'the Role box offers no New role');
+    await page.close();
+
+    console.log('\n-- 5c. Jobs: Work Maintenance, Siram Go and Mata Malam --');
+    page = await open(browser, port, { workers: WORKERS.map((x) => x.id === 6
+      ? { ...x, portal: { modules: { maintenance: true, settings: true, mata_malam: false } } } : x) });
+    await page.evaluate(() => openWorker(7));
+    is(await page.$$eval('#wf-maint-row .wf-job', (e) => e.map((x) => x.textContent.trim())),
+      ['Work Maintenance', 'Siram Go', 'Mata Malam'], 'the Jobs box names the three jobs');
+    is(await page.$eval('#wf-job-siram', (e) => e.checked) && await page.$eval('#wf-job-mata', (e) => e.checked), true,
+      'a worker whose record says nothing keeps both (absent is on)');
+    await page.evaluate(() => closeModal('worker-modal'));
+    await page.evaluate(() => openWorker(6));
+    is([await page.$eval('#wf-job-siram', (e) => e.checked), await page.$eval('#wf-job-mata', (e) => e.checked)], [true, false],
+      'a record with Mata Malam unticked opens unticked');
+    await page.evaluate(() => { window.__WRITES.length = 0; document.getElementById('wf-job-siram').click(); });
+    await page.evaluate(() => saveWorker());
+    await page.waitForFunction(() => window.__WRITES.some((w) => w.verb === 'update'), null, { timeout: 4000 });
+    const jw = await page.evaluate(() => window.__WRITES.find((w) => w.verb === 'update').row.portal);
+    is(jw && jw.modules, { maintenance: true, settings: true, mata_malam: false, siram_go: false },
+      'Save writes the two ticks into portal.modules and keeps what else is there');
+    await page.close();
+    page = await open(browser, port);
+    await page.click('#wl-add');
+    is([await page.$eval('#wf-job-siram', (e) => e.checked), await page.$eval('#wf-job-mata', (e) => e.checked)], [false, false],
+      'a new worker with no role does neither');
+    await setSel(page, 'wf-role', 'Water Pump Operator');
+    is(await page.$eval('#wf-job-siram', (e) => e.checked), true, 'a new Water Pump Operator is ticked for Siram Go');
+    if (process.env.SHOT) { await setSel(page, 'wf-section', 'UNN1'); await page.setViewportSize({ width: 1280, height: 1000 }); await page.screenshot({ path: process.env.SHOT + '/jobs_form.png' }); }
     await page.close();
 
     console.log('\n-- 6. the chart only shows --');
