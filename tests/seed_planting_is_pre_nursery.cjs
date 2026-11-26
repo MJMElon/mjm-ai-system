@@ -496,7 +496,17 @@ const sheetOf = (page) => page.evaluate(() => {
     let s9 = await sheetOf(d.page);
     check('the standing explanation over the sheet is gone (删掉)',
     await d.page.evaluate(() => document.getElementById('payroll-hint').textContent.trim()), '');
-  check('the soil filling band carries a Remove button; Seed Planting does not',
+    /* "design很丑 而且planted date batch这些字眼都不在中间". */
+    const look = await d.page.evaluate(() => ({
+      off: [...document.querySelectorAll('tr.sp-head th')].map(th => {
+        const r = th.getBoundingClientRect(), w = (th.firstElementChild || th).getBoundingClientRect();
+        return Math.abs((r.left + r.width / 2) - (w.left + w.width / 2)); }).filter(x => x > 2).length,
+      bands: [...new Set([...document.querySelectorAll('tr.sp-job-row td')].map(td => getComputedStyle(td).backgroundColor))].length,
+      batchTint: [...document.querySelectorAll('#payroll-table td.plot-td')].length
+    }));
+    check('every heading sits in the middle of its column, both job bands are one colour, no plot tint on the batch',
+      [look.off, look.bands, look.batchTint], [0, 1, 0]);
+    check('the soil filling band carries a Remove button; Seed Planting does not',
       await d.page.evaluate(() => [...document.querySelectorAll('[data-sp-remove]')].map(b => b.dataset.spRemove)), ['hyplug']);
     try { await d.page.click('[data-sp-remove="hyplug"]', { timeout: 3000 }); } catch (_) {}
     await d.page.waitForTimeout(400);
