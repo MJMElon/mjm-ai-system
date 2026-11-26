@@ -171,6 +171,9 @@
         table.lp-rec tbody tr.plotrow { cursor:default; }
         table.lp-rec tr.plotrow td.batch { cursor:pointer; color:#2f6b1f; text-decoration:underline; text-decoration-color:rgba(47,107,31,.35); text-underline-offset:3px; }
         table.lp-rec tr.plotrow td.batch:hover { text-decoration-color:#2f6b1f; }
+        table.lp-rec td.has-tip { cursor:help; }
+        table.lp-rec td.has-tip:hover { background:#e4efd6 !important; }
+        #lp-tip { position:fixed; z-index:50; pointer-events:none; background:#2b2116; color:#fdfaf4; font-size:12px; font-weight:600; line-height:1.5; padding:8px 11px; border-radius:10px; white-space:pre; box-shadow:0 8px 20px rgba(0,0,0,.25); display:none; }
         table.lp-rec td.sum { color:#5c3d1e; }
         table.lp-rec tr.sumrow td { background:#fbf6ec; }
         table.lp-rec tr.tot td { font-weight:900; color:#3d2610; border-top:2px solid #d9cbb2; background:#f4ecdc; }
@@ -392,7 +395,9 @@
         const groups = model.groups.map(g => {
             const plots = g.plots.map(p => {
                 const m = months.map(mm => p.batches.reduce((a, b) => a + (b.tByMonth[Y + '-' + mm] || 0), 0));
-                return { plot: p.plot, months: m, total: m.reduce((a, x) => a + x, 0) };
+                // which batches make each month's figure (the hover on the cell)
+                const who = months.map(mm => p.batches.filter(b => b.tByMonth[Y + '-' + mm]).map(b => ({ batch: b.batch, qty: b.tByMonth[Y + '-' + mm] })));
+                return { plot: p.plot, months: m, who, total: m.reduce((a, x) => a + x, 0) };
             });
             const tot = months.map((_, i) => plots.reduce((a, p) => a + p.months[i], 0));
             return { key: g.key, label: g.label, plots, months: tot, total: tot.reduce((a, x) => a + x, 0) };
@@ -1151,14 +1156,25 @@
         R.groups.forEach(g => {
             h += `<tr class="grp"><td colspan="14">${g.label}</td></tr>`;
             g.plots.forEach(p => {
-                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td>${p.months.map(cell).join('')}<td class="yt">${p.total ? nf(p.total) : ''}</td></tr>`;
+                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td>${p.months.map((v, i) => v ? `<td class="has-tip" data-tip="${p.plot} · ${MON[i]} ${R.year}\n${p.who[i].map(w => 'Batch ' + w.batch + ': ' + nf(w.qty)).join('\n')}">${nf(v)}</td>` : '<td class="dash"></td>').join('')}<td class="yt">${p.total ? nf(p.total) : ''}</td></tr>`;
             });
             h += `<tr class="tot"><td class="l">Total ${g.label}</td>${g.months.map(v => `<td>${nf(v) || '0'}</td>`).join('')}<td>${nf(g.total) || '0'}</td></tr>`;
         });
         h += '</tbody>';
         const t = document.getElementById('lp-rec-table');
         t.innerHTML = h;
-        // Only the plot NAME opens the plot (the office: "我按plot名字才带我去plot").
+        // Each figure floats the batches it is made of.
+        let tip = document.getElementById('lp-tip');
+        if (!tip) { tip = document.createElement('div'); tip.id = 'lp-tip'; document.body.appendChild(tip); }
+        t.querySelectorAll('td.has-tip').forEach(td => {
+            td.addEventListener('mouseenter', () => { tip.textContent = td.dataset.tip; tip.style.display = 'block'; });
+            td.addEventListener('mousemove', e => {
+                const w = tip.offsetWidth, x = e.clientX + 14 + w > innerWidth ? e.clientX - w - 14 : e.clientX + 14;
+                tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+            });
+            td.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+        });
+                // Only the plot NAME opens the plot (the office: "我按plot名字才带我去plot").
         t.querySelectorAll('tr.plotrow td.batch').forEach(td => td.addEventListener('click', () => {
             showPlot(td.parentElement.dataset.plot);
             window.scrollTo({ top: 0, behavior: 'smooth' });

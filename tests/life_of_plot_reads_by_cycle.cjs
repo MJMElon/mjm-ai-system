@@ -125,6 +125,9 @@ const DATA = {
 
   const before = await page.evaluate(() => { document.querySelector('#lp-rec-table tr.plotrow[data-plot="B11"] td:nth-child(5)').click(); return location.hash; });
   ok(!/plot=/.test(before), 'clicking a figure in the row does not open the plot', before);
+  await page.hover('#lp-rec-table tr.plotrow[data-plot="B11"] td.has-tip[data-tip^="B11 · May 2025"]');
+  const tip = await page.evaluate(() => { const e = document.getElementById('lp-tip'); return e && getComputedStyle(e).display !== 'none' ? e.textContent : ''; });
+  ok(/^B11 · May 2025\nBatch 228: 3,074\nBatch 229: 9,047$/.test(tip), 'hovering a figure floats the batches it is made of', tip);
   await page.click('#lp-rec-table tr.plotrow[data-plot="B11"] td.batch');
   await page.waitForTimeout(200);
   const back = await page.evaluate(() => !document.getElementById('lp-detail').classList.contains('hidden') && document.querySelectorAll('#lp-timeline-box .lp-cyc').length);
