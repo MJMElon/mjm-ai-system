@@ -89,10 +89,14 @@
         .lp-cyc-d { font-size:12px; font-weight:700; color:#5c3d1e; }
         .lp-cyc-cap { margin-left:auto; font-size:12px; font-weight:700; color:#8a7a68; }
         .lp-cyc-cap b { font-size:16px; color:#3d2610; font-weight:900; }
-        .lp-sec { border-top:1px solid #e8dcc8; }
-        .lp-sec table.lp th, .lp-sec table.lp td { padding:9px 10px; }
-        .lp-sec-h { font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#4a7a2e; padding:12px 18px 2px; }
-        .lp-sec[data-sec="cull2"] .lp-sec-h, .lp-sec[data-sec="cull3"] .lp-sec-h { color:#a83020; }
+        /* One cycle, one table read across: a rule before each part, its heading coloured. */
+        table.lp-x th, table.lp-x td { padding:9px 10px; white-space:nowrap; }
+        table.lp-x .s1 { border-left:2px solid #e8dcc8; }
+        table.lp-x thead tr:not(.grp-h) th { white-space:normal; line-height:1.25; vertical-align:bottom; }
+        .lp-x-wrap { overflow-x:auto; }
+        table.lp-x tr.grp-h th { text-align:center; font-size:11px; font-weight:900; letter-spacing:.1em; border-bottom:1px solid #e8dcc8; }
+        table.lp-x th.g-t { color:#4a7a2e; }
+        table.lp-x th.g-c { color:#a83020; }
         /* Transplant record: the office sheet, a column per month. */
         table.lp tr.grp td { text-align:left; }
         table.lp-rec th, table.lp-rec td { padding:9px 10px; }
@@ -657,74 +661,80 @@
     // A card saved before the drone count existed has the picture and no number,
     // and reads as tallying — shown, never stored (the batch report T3_DRONE_FROM rule).
     const LP_DRONE_FROM = '2026-10-23T00:00:00Z';
-    /* One card per cycle, in the three parts of the office sheet and the batch
-       report: Transplanting (Map Date, Batch, Census, Total Drone Count,
-       Variance), the 7th month 2nd culling (Date, Batch, Alive, Dead, Total,
-       Variance, Culling rate, Plot culling rate) and the 3rd culling (Map Date,
-       Batch, Total, Pending culling, Drone Count, Variance, the two rates, Plot
-       culling rate). Total is the census, the transplant after approved
-       calibration. */
+    /* One card per cycle, ONE table read across (the office: "改成横着的吧 …
+       batch就不用写那么多次"): a row per batch, the batch written once, then
+       the three parts of the office plot sheet side by side — Transplanting
+       (Map Date, Census, Total Drone Count, Variance), the 7th month 2nd
+       culling (Date, Alive, Dead, Variance, Culling rate) and the 3rd culling
+       (Map Date, Pending culling, Drone Count, Variance, both rates). Census
+       is the transplant after approved calibration and every rate is over it;
+       the Total row carries the plot culling rates. A drone count belongs to
+       a Tab 3 card (one plot, one day), so batches that went in on the same
+       first day share one drone cell. */
     function cycleHtml(c, p) {
         const d = lpDays(c.start, c.end);
         const bs = c.batches;
         const cards = (p && p.cards) || {};
-        let h = `<div class="panel overflow-x-auto lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
+        let h = `<div class="panel lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
               + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Finished' : 'Current'}</span>`
               + `<span class="lp-cyc-d">${c.start || '–'} → ${c.end || 'now'}${d != null ? ' · ' + d + ' days' : ''}</span>`
               + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
-        const sec = (key, title, head, rows, foot) =>
-            `<div class="lp-sec" data-sec="${key}"><div class="lp-sec-h">${title}</div><table class="lp"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody><tfoot><tr class="tot">${foot}</tr></tfoot></table></div>`;
 
-        // Transplanting: one group per day (a day is one card, one drone count).
-        const days = {};
-        bs.forEach(b => (b.tDays || []).forEach(t => {
-            const g = days[t.day] || (days[t.day] = { day: t.day, rows: [], census: 0, at: '' });
-            g.rows.push({ batch: b.batch, qty: t.qty }); g.census += t.qty;
-            if (t.at > g.at) g.at = t.at;
-        }));
-        let droneAll = 0, droneKnown = true, tRowsHtml = '';
-        Object.values(days).sort((x, y) => x.day.localeCompare(y.day)).forEach(g => {
-            const card = cards[g.day];
-            let drone = card && card.drone != null ? card.drone : null;
-            if (drone == null && ((card ? card.at : g.at) || '9') < LP_DRONE_FROM) drone = g.census;
-            if (drone == null) droneKnown = false; else droneAll += drone;
-            g.rows.forEach((r, i) => {
-                tRowsHtml += `<tr>${i ? '' : `<td class="l" rowspan="${g.rows.length}">${g.day || '–'}</td>`}<td class="l batch">${r.batch}</td><td>${nf(r.qty) || '0'}</td>`
-                    + (i ? '' : `<td rowspan="${g.rows.length}">${drone == null ? '–' : nf(drone) || '0'}</td><td rowspan="${g.rows.length}" class="${drone != null && drone !== g.census ? 'adj' : ''}">${drone == null ? '–' : lpVar(drone - g.census)}</td>`) + '</tr>';
-            });
+        // Drone groups: batches sharing their first transplant day.
+        const groups = [];
+        bs.forEach(b => {
+            const key = b.tDate || '';
+            let g = groups.find(x => x.key === key);
+            if (!g) { g = { key, batches: [], days: new Set(), census: 0, at: '' }; groups.push(g); }
+            g.batches.push(b); g.census += b.tAdj;
+            (b.tDays || []).forEach(t => { g.days.add(t.day); if (t.at > g.at) g.at = t.at; });
         });
-        h += sec('transplant', 'Transplanting',
-            '<th class="l">Map Date</th><th class="l">Batch</th><th>Census</th><th>Total Drone Count</th><th>Variance</th>',
-            tRowsHtml,
-            `<td class="l">Total</td><td></td><td>${dash(c.tAdj)}</td><td>${droneKnown ? dash(droneAll) : '–'}</td><td>${droneKnown ? lpVar(droneAll - c.tAdj) : '–'}</td>`);
+        let droneAll = 0, droneKnown = true;
+        groups.forEach(g => {
+            let drone = 0, known = true;
+            g.days.forEach(day => {
+                const card = cards[day];
+                const census = g.batches.reduce((a, b) => a + ((b.tDays || []).filter(t => t.day === day).reduce((x, t) => x + t.qty, 0)), 0);
+                let v = card && card.drone != null ? card.drone : null;
+                if (v == null && ((card ? card.at : g.at) || '9') < LP_DRONE_FROM) v = census;
+                if (v == null) known = false; else drone += v;
+            });
+            g.drone = known && g.days.size ? drone : null;
+            if (g.drone == null) droneKnown = false; else droneAll += g.drone;
+        });
 
-        // 2nd culling (the 7th month, 4th in the main nursery).
-        const n = bs.length;
         let alive2 = 0;
-        h += sec('cull2', '7th Month (4th month in MN) · 2nd Culling',
-            '<th class="l">Date</th><th class="l">Batch</th><th>Alive</th><th>Dead</th><th>Total</th><th>Variance</th><th>Culling rate (%)</th><th>Plot culling rate (%)</th>',
-            bs.map((b, i) => {
-                // Not culled yet: every seedling is alive and the rate is nought, as the office sheet reads.
-                const alive = b.c2Has ? (b.c2Alive != null ? b.c2Alive : b.tAdj - b.c2Qty) : b.tAdj;
-                alive2 += alive;
-                return `<tr><td class="l">${b.c2Date || '–'}</td><td class="l batch">${b.batch}</td><td>${alive == null ? '–' : nf(alive) || '0'}</td>`
-                    + `<td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td><td>${dash(b.tAdj)}</td>`
-                    + `<td>${lpVar(alive + (b.c2Has ? b.c2Qty : 0) - b.tAdj)}</td><td class="cull">${lpPct(b.c2Has ? b.c2Qty : 0, b.tAdj)}</td>`
-                    + (i ? '' : `<td rowspan="${n}" class="cull">${lpPct(c.c2, c.tAdj)}</td>`) + '</tr>';
-            }).join(''),
-            `<td class="l">Total</td><td></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${dash(c.tAdj)}</td><td></td><td>${lpPct(c.c2, c.tAdj)}</td><td></td>`);
-
-        // 3rd culling: Pending culling is the culled figure, Drone Count the drone map.
         const map3 = bs.reduce((a, b) => a + (b.c3Map || 0), 0);
-        h += sec('cull3', '3rd Culling',
-            '<th class="l">Map Date</th><th class="l">Batch</th><th>Total</th><th>Pending culling</th><th>Drone Count</th><th>Variance drone with pending</th><th>Pending culling rate (%)</th><th>Drone culling rate (%)</th><th>Plot culling rate (%)</th>',
-            bs.map((b, i) => `<tr><td class="l">${b.c3Date || '–'}</td><td class="l batch">${b.batch}</td><td>${dash(b.tAdj)}</td>`
-                + `<td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
-                + `<td>${lpVar((b.c3Map || 0) - (b.c3Has ? b.c3Qty : 0))}</td>`
-                + `<td class="cull">${lpPct(b.c3Has ? b.c3Qty : 0, b.tAdj)}</td><td class="cull">${lpPct(b.c3Map || 0, b.tAdj)}</td>`
-                + (i ? '' : `<td rowspan="${n}" class="cull">${lpPct(c.c3, c.tAdj)}</td>`) + '</tr>').join(''),
-            `<td class="l">Total</td><td></td><td>${dash(c.tAdj)}</td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td><td>${lpPct(map3, c.tAdj)}</td><td></td>`);
+        let body = '';
+        groups.forEach(g => g.batches.forEach((b, i) => {
+            const alive = b.c2Has ? (b.c2Alive != null ? b.c2Alive : b.tAdj - b.c2Qty) : b.tAdj;
+            alive2 += alive;
+            const c2 = b.c2Has ? b.c2Qty : 0, c3 = b.c3Has ? b.c3Qty : 0, m3 = b.c3Map || 0;
+            const span = g.batches.length;
+            body += `<tr><td class="l batch">${b.batch}</td>`
+                // Transplanting
+                + `<td class="l s1">${b.tDate || '–'}</td><td>${nf(b.tAdj) || '0'}</td>`
+                + (i ? '' : `<td rowspan="${span}">${g.drone == null ? '–' : nf(g.drone) || '0'}</td><td rowspan="${span}" class="${g.drone != null && g.drone !== g.census ? 'adj' : ''}">${g.drone == null ? '–' : lpVar(g.drone - g.census)}</td>`)
+                // 2nd culling (the 7th month)
+                + `<td class="l s1">${b.c2Date || '–'}</td><td>${nf(alive) || '0'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td>`
+                + `<td>${lpVar(alive + c2 - b.tAdj)}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
+                // 3rd culling
+                + `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
+                + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td><td class="cull">${lpPct(m3, b.tAdj)}</td></tr>`;
+        }));
+        h += `<div class="lp-x-wrap"><table class="lp lp-x">`
+           + `<thead><tr class="grp-h"><th class="l" rowspan="2">Batch</th>`
+           + `<th class="s1 g-t" colspan="4">Transplanting</th><th class="s1 g-c" colspan="5">7th Month (4th month in MN) · 2nd Culling</th><th class="s1 g-c" colspan="6">3rd Culling</th></tr>`
+           + `<tr><th class="l s1">Map Date</th><th>Census</th><th>Total Drone Count</th><th>Variance</th>`
+           + `<th class="l s1">Date</th><th>Alive</th><th>Dead</th><th>Variance</th><th>Culling rate (%)</th>`
+           + `<th class="l s1">Map Date</th><th>Pending culling</th><th>Drone Count</th><th>Variance drone vs pending</th><th>Pending culling rate (%)</th><th>Drone culling rate (%)</th></tr></thead>`
+           + `<tbody>${body}</tbody>`
+           + `<tfoot><tr class="tot"><td class="l">Total · plot</td>`
+           + `<td class="s1"></td><td>${dash(c.tAdj)}</td><td>${droneKnown ? dash(droneAll) : '–'}</td><td>${droneKnown ? lpVar(droneAll - c.tAdj) : '–'}</td>`
+           + `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpVar(alive2 + c.c2 - c.tAdj)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
+           + `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td><td>${lpPct(map3, c.tAdj)}</td></tr></tfoot>`
+           + `</table></div>`;
         return h + '</div>';
     }
 
