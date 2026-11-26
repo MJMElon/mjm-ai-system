@@ -12179,3 +12179,12 @@ sheet reads B11 in July 2026: 8,972 = 1,646 + 7,453 - 127.
 `tests/life_of_plot_builds_the_sheet.cjs` (builder) and
 `tests/life_of_plot_reads_by_cycle.cjs` (the real page) hold it. Nothing to
 run in the database.
+
+**PALMS opens inside Life of Plot.** Its side bar carries a PALMS group, Plot
+Status Map and PALMS Settings, and each opens the REAL PALMS page in a frame
+under the same side bar (`PALMS_PAGES`, `#view=palms-board`). The PALMS
+pages stay their own: they check their own access and write their own
+records. With `?embed=1`, `shared_palms_nav.js` hides their ribbon, their
+own side bar and the NELOS dock, so only one side bar is on screen; opened
+on their own they are exactly as before. Section 3 of
+`tests/life_of_plot_reads_by_cycle.cjs`.

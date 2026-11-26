@@ -69,6 +69,9 @@
         .lp-side-b:hover { background:#f1ead9; }
         .lp-side-b.on { background:#4a7a2e; color:#fdfaf4; }
         .lp-side-i { width:18px; text-align:center; opacity:.85; }
+        .lp-side-h2 { margin-top:12px; padding-top:14px; border-top:1px solid #e8dcc8; }
+        .lp-palms-box { overflow:hidden; padding:0; }
+        #lp-palms-frame { display:block; width:100%; height:calc(100vh - 190px); min-height:620px; border:0; border-radius:2rem; background:#fff; }
         @media (max-width: 900px) {
             .lp-shell { grid-template-columns:1fr; }
             .lp-side { position:static; flex-direction:row; flex-wrap:wrap; }
@@ -110,8 +113,19 @@
         <div class="lp-side-h">Life of Plot</div>
         <button type="button" class="lp-side-b on" data-view="plots"><span class="lp-side-i">&#9638;</span>Plots &amp; cycles</button>
         <button type="button" class="lp-side-b" data-view="record"><span class="lp-side-i">&#9776;</span>Transplant record by year</button>
+        <div class="lp-side-h lp-side-h2">PALMS</div>
+        <button type="button" class="lp-side-b" data-view="palms-board"><span class="lp-side-i">&#9673;</span>Plot Status Map</button>
+        <button type="button" class="lp-side-b" data-view="palms-stages"><span class="lp-side-i">&#9881;</span>PALMS Settings</button>
     </aside>
     <main class="lp-main">
+
+    <!-- PALMS, opened inside this page. The PALMS pages are their own (they
+         check their own access and write their own records); ?embed=1 makes
+         them drop their ribbon and their own side bar, so this one is the
+         only navigation on screen. -->
+    <div id="lp-palms" class="hidden">
+        <div class="panel lp-palms-box"><iframe id="lp-palms-frame" title="PALMS" src="about:blank"></iframe></div>
+    </div>
 
     <div id="lp-record" class="hidden">
         <div class="panel p-6 mb-6 space-y-3">
@@ -572,12 +586,24 @@
     // ── Side bar: Plots & cycles, or the Transplant record by year ──
     let VIEW = 'plots';
     let REC_YEAR = '';
+    const PALMS_PAGES = {
+        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'Plot Status Map', sub: 'PALMS · every plot and the stage it is on.' },
+        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'PALMS Settings',  sub: 'PALMS · the stages a plot moves through.' },
+    };
     function setView(v, quiet) {
-        VIEW = v === 'record' ? 'record' : 'plots';
+        VIEW = v === 'record' ? 'record' : (PALMS_PAGES[v] ? v : 'plots');
         document.querySelectorAll('#lp-side .lp-side-b').forEach(b => b.classList.toggle('on', b.dataset.view === VIEW));
         document.getElementById('lp-record').classList.toggle('hidden', VIEW !== 'record');
         document.getElementById('lp-plots-view').classList.toggle('hidden', VIEW !== 'plots');
-        if (VIEW === 'record') {
+        document.getElementById('lp-palms').classList.toggle('hidden', !PALMS_PAGES[VIEW]);
+        if (PALMS_PAGES[VIEW]) {
+            const pg = PALMS_PAGES[VIEW];
+            const fr = document.getElementById('lp-palms-frame');
+            if (fr.getAttribute('src') !== pg.href) fr.setAttribute('src', pg.href);
+            document.getElementById('lp-title').textContent = pg.title;
+            document.getElementById('lp-sub').textContent = pg.sub;
+            if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
+        } else if (VIEW === 'record') {
             document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
             document.getElementById('lp-sub').textContent = 'Every main plot, transplanted by month.';
             if (!quiet) history.replaceState(null, '', '#view=record&year=' + REC_YEAR);
@@ -651,8 +677,9 @@
             renderMap();
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
             REC_YEAR = (location.hash.match(/year=(\d{4})/) || [])[1] || '';
+            const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
             if (deep) showPlot(deep);
-            else if (/view=record/.test(location.hash)) setView('record');
+            else if (viewIn === 'record' || PALMS_PAGES[viewIn]) setView(viewIn);
             else showList();
         } catch (e) {
             document.getElementById('lp-status').textContent = 'Could not read the plot records: ' + (e && e.message ? e.message : e);
@@ -687,8 +714,9 @@
     });
     window.addEventListener('hashchange', () => {
         const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
+        const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
         if (MODEL && deep) showPlot(deep);
-        else if (MODEL && /view=record/.test(location.hash)) setView('record');
+        else if (MODEL && (viewIn === 'record' || PALMS_PAGES[viewIn])) setView(viewIn);
         else if (MODEL) showList();
     });
 

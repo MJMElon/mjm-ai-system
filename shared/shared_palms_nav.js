@@ -132,8 +132,23 @@
       '<style>' + CSS + '</style>';
   }
 
+  /* EMBEDDED (?embed=1): Life of Plot opens a PALMS page inside its own page,
+     with its own side bar. So the PALMS page drops its ribbon, this bar and
+     the NELOS dock, and its content takes the whole width: one side bar on
+     screen, never two. Everything else on the page is exactly as it is. */
+  var EMBED = /[?&]embed=1(&|$)/.test(location.search || '');
+  var EMBED_CSS =
+    '#palms-nav,#mjm-ribbon,#nelos-dock{display:none!important;}' +
+    '.palms-frame{display:block!important;}';
+
   function mount() {
     var host = document.getElementById('palms-nav');
+    if (EMBED && !document.getElementById('palms-embed-css')) {
+      var st = document.createElement('style');
+      st.id = 'palms-embed-css';
+      st.textContent = EMBED_CSS;
+      (document.head || document.documentElement).appendChild(st);
+    }
     if (!host) return;
     host.innerHTML = html((host.dataset && host.dataset.page) || '');
   }
@@ -144,6 +159,6 @@
     mount();
   }
 
-  global.MJMPalmsNav = { mount: mount, pages: PAGES };
+  global.MJMPalmsNav = { mount: mount, pages: PAGES, embed: EMBED };
 
 })(window);
