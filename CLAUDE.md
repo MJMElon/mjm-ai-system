@@ -12270,6 +12270,13 @@ yet); `the_site_audit_dashboard.cjs` lifts Life of Plot builder and compares
 the two plot by plot and month by month. Before, the Site Audit dated a
 transplant by `transaction_date` first and left the calibration out.
 
+**Life of Plot carries the two grids too**, as a side bar entry, Pusingan
+Jualan & Transplant (`#view=rotation`): `lpRotation` in the builder block is
+the Site Audit `buildRotation` over this page own record, delivery orders and
+Work Maintenance capacity read the first time the view opens. The nursery is
+the tabs top right (its own chip row only with no nursery map), with a year
+row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
+
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
 colour switch, labels carrying both, PALMS columns on the list and a stage

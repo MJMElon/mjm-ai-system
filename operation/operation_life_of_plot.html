@@ -89,6 +89,26 @@
         .lp-cyc-d { font-size:12px; font-weight:700; color:#5c3d1e; }
         .lp-cyc-cap { margin-left:auto; font-size:12px; font-weight:700; color:#8a7a68; }
         .lp-cyc-cap b { font-size:16px; color:#3d2610; font-weight:900; }
+        /* Pusingan Jualan / Transplant: a plot per row, a month per column. */
+        .lp-rot-head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px 20px; margin-bottom:14px; }
+        .lp-rot-t { font-size:15px; font-weight:900; color:#3d2610; }
+        .lp-rot-s { font-size:11px; font-weight:700; color:#8a7a68; margin-top:2px; }
+        .lp-rot-wrap { overflow-x:auto; }
+        .lp-rot-grid { display:grid; grid-template-columns:110px repeat(12, minmax(62px,1fr)); gap:6px; min-width:960px; font-variant-numeric:tabular-nums; }
+        .lp-rot-mh { text-align:center; font-size:11px; font-weight:800; color:#8a7a68; text-transform:uppercase; letter-spacing:.06em; padding:4px 0; }
+        .lp-rot-mh.now { color:#a83020; }
+        .lp-rot-plot { align-self:center; }
+        .lp-rot-plot b { display:block; font-size:14px; font-weight:900; color:#3d2610; }
+        .lp-rot-plot span { font-size:10px; font-weight:700; color:#8a7a68; }
+        .lp-rot-c { height:46px; border:1px solid #e8dcc8; border-radius:8px; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#3d2610; }
+        .lp-rot-c small { font-size:10px; font-weight:600; }
+        .lp-rot-c.fut { background:#f1ede2; border-color:#f1ede2; }
+        .lp-rot-c.c1 { background:#F5E6C8; border-color:#F5E6C8; color:#5B3F12; }
+        .lp-rot-c.c2 { background:#DDA04B; border-color:#DDA04B; color:#3F2A08; }
+        .lp-rot-c.c3 { background:#B8730E; border-color:#B8730E; color:#fff; }
+        .lp-rot-c.t1 { background:#2E7D4F; border-color:#2E7D4F; color:#fff; }
+        .lp-rot-c.pc { border:2px dashed #B8732A; color:#8a7a68; font-weight:600; }
+        .lp-rot-c.pt { border:2px dashed #2E7D4F; color:#8a7a68; font-weight:600; }
         /* One cycle, one table read across: a rule before each part, its heading coloured. */
         table.lp-x th, table.lp-x td { padding:9px 10px; white-space:nowrap; }
         table.lp-x .s1 { border-left:2px solid #e8dcc8; }
@@ -126,6 +146,7 @@
         <div class="lp-side-h">Life of Plot</div>
         <button type="button" class="lp-side-b on" data-view="plots"><span class="lp-side-i">&#9638;</span>Plots &amp; cycles</button>
         <button type="button" class="lp-side-b" data-view="record"><span class="lp-side-i">&#9776;</span>Transplant record by year</button>
+        <button type="button" class="lp-side-b" data-view="rotation"><span class="lp-side-i">&#8635;</span>Pusingan Jualan &amp; Transplant</button>
         <button type="button" class="lp-side-b" data-view="palms-board"><span class="lp-side-i">&#9673;</span>PALMS</button>
         <!-- Settings is the whole module's, so it sits apart at the foot. -->
         <button type="button" class="lp-side-b lp-side-foot" data-view="palms-stages"><span class="lp-side-i">&#9881;</span>Settings</button>
@@ -138,6 +159,29 @@
          only navigation on screen. -->
     <div id="lp-palms" class="hidden">
         <div class="panel lp-palms-box"><iframe id="lp-palms-frame" title="PALMS" src="about:blank"></iframe></div>
+    </div>
+
+    <!-- Pusingan Jualan and Pusingan Transplant, off THIS page transplant
+         record (the Nursery Dashboard Site Audit reads the same figures). -->
+    <div id="lp-rot" class="hidden">
+        <div class="panel p-6 mb-6 space-y-3">
+            <div id="lp-rot-nur-wrap"><div class="lp-chip-label">Nursery</div><div id="lp-rot-nur" class="lp-chips"></div></div>
+            <div class="lp-chip-label">Year</div>
+            <div id="lp-rot-year" class="lp-chips"></div>
+        </div>
+        <div class="panel p-6 mb-6">
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-sales-t">Pusingan Jualan</div>
+                <div class="lp-rot-s">Collection plan = 90% of what was transplanted into the plot 9 months earlier. % is the collection against the plot capacity.</div></div>
+                <div class="lp-legend"><span><i style="background:#F5E6C8"></i>Collected &lt;40%</span><span><i style="background:#DDA04B"></i>40–79%</span><span><i style="background:#B8730E"></i>&ge;80%</span><span><i style="border:2px dashed #B8732A;background:#fff"></i>Collection plan</span></div></div>
+            <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-sales"></div></div>
+        </div>
+        <div class="panel p-6 mb-6">
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-tr-t">Pusingan Transplant</div>
+                <div class="lp-rot-s">Transplanting plan = what was transplanted 10 months earlier.</div></div>
+                <div class="lp-legend"><span><i style="background:#2E7D4F"></i>Transplanted</span><span><i style="border:2px dashed #2E7D4F;background:#fff"></i>Transplanting plan</span></div></div>
+            <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-tr"></div></div>
+            <p class="text-[11px] font-bold text-[#8a7a68] mt-3" id="lp-rot-note"></p>
+        </div>
     </div>
 
     <div id="lp-record" class="hidden">
@@ -318,6 +362,42 @@
         return { year: Y, prev: P, groups, thisY, thisCum: cum(thisY), prevY, prevCum: cum(prevY),
                  total: thisY.reduce((a, x) => a + x, 0), prevTotal: prevY.reduce((a, x) => a + x, 0) };
     }
+    /* Pusingan Jualan and Pusingan Transplant, per plot and month of `year`.
+       Transplanted is THIS record (tByMonth: the Tab 3 day plus approved
+       calibration); collected is the delivery-order lines of that plot by the
+       delivery date; capacity is Work Maintenance > Setting. The rule is the
+       Nursery Dashboard Site Audit own (buildRotation): collection plan = 90%
+       of the transplant 9 months earlier, transplanting plan = the transplant
+       10 months earlier, % = collected over capacity, rounded down.
+       the_site_audit_dashboard.cjs compares the two. */
+    function lpShiftYM(ym, by) {
+        const y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + by;
+        return (y + Math.floor(m / 12)) + '-' + String(((m % 12) + 12) % 12 + 1).padStart(2, '0');
+    }
+    function lpRotation(model, nursery, year, sales, caps, todayYM) {
+        const g = model.groups.find(x => x.key === nursery);
+        const S = {};
+        (sales || []).forEach(r => {
+            const k = lpPlotKey(r.plot), ym = String(r.day || '').slice(0, 7);
+            if (!k || ym.length !== 7) return;
+            (S[k] = S[k] || {})[ym] = (S[k][ym] || 0) + (Number(r.qty) || 0);
+        });
+        return (g ? g.plots : []).map(p => {
+            const k = lpPlotKey(p.plot), cap = Number((caps || {})[k]) || 0;
+            const tm = {};
+            p.batches.forEach(b => Object.keys(b.tByMonth).forEach(ym => { tm[ym] = (tm[ym] || 0) + b.tByMonth[ym]; }));
+            const t = ym => tm[ym] || 0, c = ym => (S[k] && S[k][ym]) || 0;
+            const months = [];
+            for (let m = 1; m <= 12; m++) {
+                const ym = year + '-' + String(m).padStart(2, '0');
+                const col = c(ym);
+                months.push({ ym, future: !!todayYM && ym > todayYM, col,
+                    colPct: cap > 0 && col > 0 ? Math.floor(col / cap * 100) : null,
+                    colPlan: Math.round(t(lpShiftYM(ym, -9)) * 0.9), tr: t(ym), trPlan: t(lpShiftYM(ym, -10)) });
+            }
+            return { plot: p.plot, key: k, cap, months };
+        });
+    }
     function lpYears(model) {
         const ys = new Set();
         model.groups.forEach(g => g.plots.forEach(p => p.batches.forEach(b => Object.keys(b.tByMonth).forEach(k => ys.add(k.slice(0, 4))))));
@@ -474,7 +554,7 @@
     function renderHeadTabs() {
         const el = document.getElementById('lp-head-nur');
         const keys = NURSERY_ORDER.filter(k => MAPS[k] && k !== 'OTHER');
-        const show = keys.length && (VIEW === 'plots' || VIEW === 'palms-board');
+        const show = keys.length && (VIEW === 'plots' || VIEW === 'palms-board' || VIEW === 'rotation');
         el.innerHTML = show ? keys.map(k =>
             `<button type="button" class="lp-tab${k === MAP_NUR ? ' on' : ''}" data-map="${k}">${NURSERY_LABEL[k]}</button>`).join('') : '';
     }
@@ -767,9 +847,10 @@
         'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'Life of Plot · the stages a plot moves through.' },
     };
     function setView(v, quiet) {
-        VIEW = v === 'record' ? 'record' : (PALMS_PAGES[v] ? v : 'plots');
+        VIEW = (v === 'record' || v === 'rotation') ? v : (PALMS_PAGES[v] ? v : 'plots');
         document.querySelectorAll('#lp-side .lp-side-b').forEach(b => b.classList.toggle('on', b.dataset.view === VIEW));
         document.getElementById('lp-record').classList.toggle('hidden', VIEW !== 'record');
+        document.getElementById('lp-rot').classList.toggle('hidden', VIEW !== 'rotation');
         document.getElementById('lp-plots-view').classList.toggle('hidden', VIEW !== 'plots');
         document.getElementById('lp-palms').classList.toggle('hidden', !PALMS_PAGES[VIEW]);
         if (MODEL) renderHeadTabs();
@@ -781,6 +862,11 @@
             document.getElementById('lp-sub').textContent = pg.sub;
             if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
             syncPalmsNursery();
+        } else if (VIEW === 'rotation') {
+            document.getElementById('lp-title').textContent = 'Pusingan Jualan & Transplant';
+            document.getElementById('lp-sub').textContent = 'Collection and transplanting by plot and month, against plan.';
+            if (!quiet) history.replaceState(null, '', '#view=rotation');
+            renderRotation();
         } else if (VIEW === 'record') {
             document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
             document.getElementById('lp-sub').textContent = 'Every main plot, transplanted by month.';
@@ -790,6 +876,74 @@
             showList();
         }
     }
+    // Delivery orders and plot capacity are read the first time this view opens.
+    let ROT = null, ROT_YEAR = '';
+    async function loadRotation() {
+        const soft = (pr, what) => pr.catch(e => { ROT.missing.push(what + ': ' + (e && e.message ? e.message : e)); return []; });
+        ROT = { missing: [], sales: [], caps: {} };
+        const [dos, caps] = await Promise.all([
+            soft(lpFetchAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5').order('id', { ascending: true })), 'delivery orders'),
+            soft(lpFetchAll(() => _supabase.from('nops_maint_plot_qty').select('nursery, plot, qty').order('plot')), 'plot capacity'),
+        ]);
+        (dos || []).forEach(d => {
+            if (d.status === 'Cancelled' || String(d.remark || '').includes('[CANCELLED]')) return;
+            const day = String(d.delivery_date || '').slice(0, 10);
+            for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) ROT.sales.push({ plot: d['plot_' + i], day, qty: q }); }
+        });
+        (caps || []).forEach(r => { if (Number(r.qty) > 0) (ROT.caps[lpNurKey(r.nursery)] = ROT.caps[lpNurKey(r.nursery)] || {})[lpPlotKey(r.plot)] = Number(r.qty); });
+    }
+    async function renderRotation() {
+        if (!MODEL) return;
+        if (!ROT) {
+            document.getElementById('lp-rot-sales').innerHTML = '<div class="lp-rot-mh" style="grid-column:1/-1">Loading…</div>';
+            await loadRotation();
+            if (VIEW !== 'rotation') return;
+        }
+        const keys = NURSERY_ORDER.filter(k => k !== 'OTHER' && MODEL.groups.some(g => g.key === k && g.plots.length));
+        if (!keys.includes(NUR)) NUR = keys[0] || '';
+        const byMap = NURSERY_ORDER.some(k => MAPS[k]);
+        document.getElementById('lp-rot-nur-wrap').classList.toggle('hidden', byMap);
+        document.getElementById('lp-rot-nur').innerHTML = keys.map(k => chip('rnur', k, NURSERY_LABEL[k], k === NUR)).join('');
+        const now = new Date(), nowY = String(now.getFullYear()), todayYM = nowY + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        const years = lpYears(MODEL);
+        ROT.sales.forEach(r => { const y = String(r.day).slice(0, 4); if (/^\d{4}$/.test(y) && !years.includes(y)) years.push(y); });
+        if (!years.includes(nowY)) years.push(nowY);
+        years.sort();
+        if (!ROT_YEAR || !years.includes(ROT_YEAR)) ROT_YEAR = nowY;
+        document.getElementById('lp-rot-year').innerHTML = years.slice().reverse().map(y => chip('ryear', y, y, y === ROT_YEAR)).join('');
+        const rows = lpRotation(MODEL, NUR, ROT_YEAR, ROT.sales, ROT.caps[NUR] || {}, todayYM);
+        const lab = NURSERY_LABEL[NUR] || NUR;
+        document.getElementById('lp-rot-sales-t').textContent = `Pusingan Jualan — ${lab}, ${ROT_YEAR}`;
+        document.getElementById('lp-rot-tr-t').textContent = `Pusingan Transplant — ${lab}, ${ROT_YEAR}`;
+        const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const head = '<div></div>' + MON.map((m, i) => `<div class="lp-rot-mh${ROT_YEAR + '-' + String(i + 1).padStart(2, '0') === todayYM ? ' now' : ''}">${m}</div>`).join('');
+        const plotCell = r => `<div class="lp-rot-plot"><b>${r.plot}</b><span>${r.cap ? nf(r.cap) + ' capacity' : 'No capacity keyed'}</span></div>`;
+        let hs = head, ht = head;
+        rows.forEach(r => {
+            hs += plotCell(r); ht += plotCell(r);
+            r.months.forEach(x => {
+                const tip = `${r.plot} · ${x.ym} · Collected ${fmtN(x.col)}${x.colPct != null ? ' (' + x.colPct + '%)' : ''} · Plan ${fmtN(x.colPlan)}`;
+                if (x.col > 0) {
+                    const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
+                    hs += `<div class="lp-rot-c ${cls}" title="${tip}">${fmtN(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
+                } else if (x.colPlan > 0) hs += `<div class="lp-rot-c pc${x.future ? ' fut' : ''}" title="${tip}"><small>Plan</small>${fmtN(x.colPlan)}</div>`;
+                else hs += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
+                const tipT = `${r.plot} · ${x.ym} · Transplanted ${fmtN(x.tr)} · Plan ${fmtN(x.trPlan)}`;
+                if (x.tr > 0) ht += `<div class="lp-rot-c t1" title="${tipT}">${fmtN(x.tr)}</div>`;
+                else if (x.trPlan > 0) ht += `<div class="lp-rot-c pt${x.future ? ' fut' : ''}" title="${tipT}"><small>Plan</small>${fmtN(x.trPlan)}</div>`;
+                else ht += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
+            });
+        });
+        const empty = '<div class="lp-rot-mh" style="grid-column:1/-1">No plots for this nursery.</div>';
+        document.getElementById('lp-rot-sales').innerHTML = rows.length ? hs : empty;
+        document.getElementById('lp-rot-tr').innerHTML = rows.length ? ht : empty;
+        document.getElementById('lp-rot-note').textContent = ROT.missing.length ? 'Could not read: ' + ROT.missing.join('; ') + '. Those figures show as empty.' : '';
+    }
+    document.getElementById('lp-rot').addEventListener('click', e => {
+        const n = e.target.closest('button[data-rnur]'), y = e.target.closest('button[data-ryear]');
+        if (n) { NUR = MAP_NUR = n.dataset.rnur; renderRotation(); }
+        if (y) { ROT_YEAR = y.dataset.ryear; renderRotation(); }
+    });
     function renderRecord() {
         if (!MODEL) return;
         const years = lpYears(MODEL);
@@ -860,7 +1014,7 @@
             REC_YEAR = (location.hash.match(/year=(\d{4})/) || [])[1] || '';
             const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
             if (deep) showPlot(deep);
-            else if (viewIn === 'record' || PALMS_PAGES[viewIn]) setView(viewIn);
+            else if (viewIn === 'record' || viewIn === 'rotation' || PALMS_PAGES[viewIn]) setView(viewIn);
             else showList();
         } catch (e) {
             document.getElementById('lp-status').textContent = 'Could not read the plot records: ' + (e && e.message ? e.message : e);
@@ -887,7 +1041,10 @@
     document.getElementById('lp-head-nur').addEventListener('click', e => {
         const b = e.target.closest('button[data-map]');
         if (!b) return;
-        if (VIEW === 'palms-board') {
+        if (VIEW === 'rotation') {
+            NUR = MAP_NUR = b.dataset.map;
+            renderHeadTabs(); renderRotation();
+        } else if (VIEW === 'palms-board') {
             NUR = MAP_NUR = b.dataset.map;
             fillNurserySelect(); fillPlotSelect(''); renderList(); renderMap();
             syncPalmsNursery();
@@ -903,7 +1060,7 @@
         const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
         const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
         if (MODEL && deep) showPlot(deep);
-        else if (MODEL && (viewIn === 'record' || PALMS_PAGES[viewIn])) setView(viewIn);
+        else if (MODEL && (viewIn === 'record' || viewIn === 'rotation' || PALMS_PAGES[viewIn])) setView(viewIn);
         else if (MODEL) showList();
     });
 
