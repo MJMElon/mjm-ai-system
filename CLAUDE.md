@@ -12234,6 +12234,25 @@ Transplanting, 2nd Culling, 3rd Culling, each with its dates, quantities and %.
 
 Section 6 of `tests/life_of_plot_builds_the_sheet.cjs`. Nothing to run.
 
+**And each cycle is laid out as the office PLOT SHEET** (their workbook, Sheet13
+and the B11 tab), checked figure for figure against B11:
+
+- **Transplanting**: Map Date, Batch, Census, Total Drone Count, Variance. One
+  group per DAY, because a drone count belongs to the Tab 3 card (one plot on
+  one day, `DroneQty:` on the `Transplant_Card` row, newest save wins). A card
+  saved before `LP_DRONE_FROM` (2026-10-23, the batch report T3_DRONE_FROM)
+  with no count reads as tallying, shown and never stored. A newer one with
+  no count shows a dash. Census is the transplant after approved calibration,
+  the calibration sitting on the first day of its batch.
+- **7th Month (4th month in MN) · 2nd Culling**: Date, Batch, Alive (`Alive:`
+  in the Tab 5 remark), Dead, Total, Variance, Culling rate, Plot culling rate.
+  A batch not yet culled reads all alive and 0.00%, as the sheet does.
+- **3rd Culling**: Map Date, Batch, Total, Pending culling (the culled figure),
+  Drone Count (`MapQty:`), Variance drone with pending, both rates, Plot
+  culling rate.
+- **Left off, having no data in the system**: the sheet Nurseries, Plot, Drone
+  Area (Ha) and SIN columns.
+
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
 colour switch, labels carrying both, PALMS columns on the list and a stage
