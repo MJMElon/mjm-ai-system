@@ -171,7 +171,7 @@
         </div>
         <div class="panel p-6 mb-6">
             <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-sales-t">Pusingan Jualan</div>
-                <div class="lp-rot-s">Collection plan = 90% of what was transplanted into the plot 9 months earlier. % is the cumulative collection since the plot was last filled, against its capacity.</div></div>
+                <div class="lp-rot-s">Collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
                 <div class="lp-legend"><span><i style="background:#F5E6C8"></i>Collected &lt;40%</span><span><i style="background:#DDA04B"></i>40–79%</span><span><i style="background:#B8730E"></i>&ge;80%</span><span><i style="border:2px dashed #B8732A;background:#fff"></i>Collection plan</span></div></div>
             <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-sales"></div></div>
         </div>
@@ -932,7 +932,7 @@
                 const tip = `${r.plot} · ${x.ym} · Collected ${fmtN(x.col)} · cumulative ${fmtN(x.colCum)}${x.colPct != null ? ' (' + x.colPct + '% of capacity)' : ''} · Plan ${fmtN(x.colPlan)}`;
                 if (x.col > 0) {
                     const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
-                    hs += `<div class="lp-rot-c ${cls}" title="${tip}">${fmtN(x.col)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
+                    hs += `<div class="lp-rot-c ${cls}" title="${tip}">${fmtN(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
                 } else if (x.colPlan > 0) hs += `<div class="lp-rot-c pc${x.future ? ' fut' : ''}" title="${tip}"><small>Plan</small>${fmtN(x.colPlan)}</div>`;
                 else hs += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
                 const tipT = `${r.plot} · ${x.ym} · Transplanted ${fmtN(x.tr)} · Plan ${fmtN(x.trPlan)}`;
