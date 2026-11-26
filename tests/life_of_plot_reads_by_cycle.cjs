@@ -86,7 +86,7 @@ const DATA = {
   ok(cyc[0] && cyc[0].batches.join() === '263,265,269,271', '…holding only its own batches', cyc[0] && cyc[0].batches);
   ok(cyc[1] && /Finished/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && /2025-05-22 → 2026-06-12/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
      'cycle 1 under it: 228 + 229, 22 May 2025 to its 3rd cull 12 Jun 2026, 12,121', cyc[1] && cyc[1].head);
-  ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,7th Month (4th month in MN) · 2nd Culling,3rd Culling', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
+  ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,2nd Culling,3rd Culling', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
   ok(cyc[1] && cyc[1].rows[0] === '228|2025-05-22|3,074|12,121|0|2025-09-14|2,979|95|0|3.09%|2026-06-12|178|178|0|5.79%|5.79%',
      'batch 228 on one line: census 3,074 (the 22 May card drone 12,121 shared with 229), 2nd 95 dead 3.09%, 3rd 178 5.79%', cyc[1] && cyc[1].rows[0]);
   ok(cyc[1] && cyc[1].rows[1] === '229|2025-05-22|9,047|2025-09-14|8,978|69|0|0.76%|2026-06-12|2,884|2,884|0|31.88%|31.88%', 'batch 229 below it, the drone cell shared', cyc[1] && cyc[1].rows[1]);

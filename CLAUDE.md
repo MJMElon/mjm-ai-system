@@ -12244,7 +12244,7 @@ and the B11 tab), checked figure for figure against B11:
   with no count reads as tallying, shown and never stored. A newer one with
   no count shows a dash. Census is the transplant after approved calibration,
   the calibration sitting on the first day of its batch.
-- **7th Month (4th month in MN) · 2nd Culling**: Date, Batch, Alive (`Alive:`
+- **2nd Culling (the office sheet: 7th Month, 4th month in MN)**: Date, Batch, Alive (`Alive:`
   in the Tab 5 remark), Dead, Total, Variance, Culling rate, Plot culling rate.
   A batch not yet culled reads all alive and 0.00%, as the sheet does.
 - **3rd Culling**: Map Date, Batch, Total, Pending culling (the culled figure),
