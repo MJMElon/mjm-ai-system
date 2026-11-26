@@ -12301,6 +12301,12 @@ and the B11 tab), checked figure for figure against B11:
   culling rate.
 - **Left off, having no data in the system**: the sheet Nurseries, Plot, Drone
   Area (Ha) and SIN columns.
+- **And then cut down to what the office reads** (*transplanting只需要日期和种下去的qty
+  2nd cull只需要活的和死的和culling rate, 3rd只需要pending cull, drone count, variance
+  和 culling rate*): Transplanting is Date and Transplanted; 2nd Culling is Alive,
+  Dead, Culling rate; 3rd Culling is Pending culling, Drone Count, Variance (drone
+  less pending) and Culling rate (pending over transplanted). The Tab 3 drone
+  count and the 2nd culling date and variance came off.
 
 **And it is ONE table read across, not three stacked** (the office: "改成横着
 的吧 … batch就不用写那么多次"): a row per batch, the batch written once, then
