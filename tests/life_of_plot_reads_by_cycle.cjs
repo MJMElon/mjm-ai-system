@@ -326,12 +326,12 @@ const DATA = {
 
   console.log('9. Settings: the estimates, the map stages and the plans are the office own');
   const e9 = [];
-  const SETV = { est2: 5, est3: 10, soonMonth: 8, colMonths: 8, colPct: 80, trMonths: 11, stageMap: { 'membesar': 'growing', 'pengambilan': 'selling' }, stages: { soon: { label: 'Ready soon', color: '#ff0000' } } };
+  const SETV = { est2: 5, est3: 10, soonMonth: 8, colMonths: 8, colPct: 80, trMonths: 11, stages: { soon: { label: 'Ready soon', color: '#ff0000' } } };
   const d9 = Object.assign({}, DATA, {
     nops_maint_config: [{ key: 'life_of_plot_settings', txt_value: JSON.stringify(SETV) }],
     shared_do_records: [{ id: 1, delivery_date: '2026-04-10', status: 'Completed', remark: '', plot_1: 'B11', qty_1: 1200, batch_1: '229' }],
-    nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B11', qty: 12000 }],
-    nops_plot_status_stages: [{ name: 'Membersih', sort_order: 1 }, { name: 'Membesar', sort_order: 2 }, { name: 'Pengambilan', sort_order: 3 }] });
+    nops_maint_plot_qty: [{ nursery: 'BNN', plot: 'B11', qty: 12000 }]
+    });
   const p9 = await openPage(d9, e9);
   await p9.goto(B + '/operation/operation_life_of_plot.html#plot=U17');
   await p9.waitForSelector('.lp-cyc tbody tr', { timeout: 8000 }).catch(() => {});
@@ -351,19 +351,21 @@ const DATA = {
     shown: !document.getElementById('lp-set').classList.contains('hidden'),
     est2: (document.getElementById('ls-est2') || {}).value, soon: (document.getElementById('ls-name-soon') || {}).value,
     col: (document.getElementById('ls-col-soon') || {}).value,
-    map: [...document.querySelectorAll('#lp-set select[data-ls-stage]')].map(e => e.dataset.lsStage + '=' + e.value).join(','),
-    save: !!document.getElementById('lp-set-save') }));
+    selects: document.querySelectorAll('#lp-set select').length,
+    save: document.querySelectorAll('[data-ls-save]').length === 3 }));
   ok(s9.shown && s9.est2 === '5' && s9.soon === 'Ready soon' && s9.col === '#ff0000' && s9.save, 'Settings shows what is saved, with a Save button for an admin', s9);
-  ok(s9.map === 'membersih=empty,membesar=growing,pengambilan=selling', 'every PALMS stage is filed under a map stage', s9.map);
+  const sw9 = await p9.evaluate(() => ({ swatch: document.querySelectorAll('#lp-set .lp-set-sw input[type=color]').length, loose: document.querySelectorAll('#lp-set input[type=color]').length }));
+  ok(sw9.swatch === 4 && sw9.loose === 4, 'the colour is picked by pressing the swatch on the left; no second box on the right', sw9);
+  ok(s9.selects === 0, 'no PALMS stage dropdowns on Settings', s9.selects);
   await p9.fill('#ls-est3', '12');
-  await p9.selectOption('select[data-ls-stage="membersih"]', 'growing');
-  await p9.click('#lp-set-save');
+  await p9.fill('#ls-trm', '7');   // edited and NOT saved: another section
+  await p9.click('[data-ls-save="cycles"]');
   await p9.waitForTimeout(300);
   const w9 = await p9.evaluate(() => (window.__writes || []).filter(w => w.table === 'nops_maint_config').map(w => w.row));
   const saved = w9.length ? JSON.parse(w9[w9.length - 1].txt_value) : null;
-  ok(w9.length === 1 && w9[0].key === 'life_of_plot_settings' && saved && saved.est3 === 12 && saved.stageMap.membersih === 'growing' && saved.stages.soon.label === 'Ready soon', 'Save writes ONE row, life_of_plot_settings, carrying the change', saved);
+  ok(w9.length === 1 && w9[0].key === 'life_of_plot_settings' && saved && saved.est3 === 12 && saved.trMonths === 11 && saved.stages.soon.label === 'Ready soon', 'a section Save writes ONE row carrying its own change; another section unsaved edit is not written', saved);
   await p9.fill('#ls-colpct', '150');
-  await p9.click('#lp-set-save');
+  await p9.click('[data-ls-save="plans"]');
   await p9.waitForTimeout(200);
   const w9b = await p9.evaluate(() => (window.__writes || []).length);
   ok(w9b === 1, 'a figure out of range is refused, nothing written', w9b);
@@ -373,7 +375,7 @@ const DATA = {
   await p9n.addInitScript(() => { window.__notAdmin = true; });
   await p9n.goto(B + '/operation/operation_life_of_plot.html#view=palms-stages');
   await p9n.waitForSelector('#lp-set .lp-set-sec', { timeout: 8000 }).catch(() => {});
-  const n9 = await p9n.evaluate(() => ({ save: !!document.getElementById('lp-set-save'), dis: (document.getElementById('ls-est2') || {}).disabled }));
+  const n9 = await p9n.evaluate(() => ({ save: !!document.querySelector('[data-ls-save]'), dis: (document.getElementById('ls-est2') || {}).disabled }));
   ok(!n9.save && n9.dis === true, 'not an Operation admin: Settings is read only', n9);
   await p9n.close();
 
