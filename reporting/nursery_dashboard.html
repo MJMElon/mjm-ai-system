@@ -362,7 +362,7 @@
       <div class="card">
         <div class="card-head">
           <div><h2 class="card-title" id="sa-sales-title">Pusingan Jualan</h2>
-            <div class="card-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
+            <div class="card-sub" id="sa-col-sub">Sales cycle: collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
           <div class="sa-legend">
             <span><i style="background:#F5E6C8"></i>Collected &lt;40%</span>
             <span><i style="background:#DDA04B"></i>40–79%</span>
@@ -375,7 +375,7 @@
       <div class="card">
         <div class="card-head">
           <div><h2 class="card-title" id="sa-rot-title">Pusingan Transplant</h2>
-            <div class="card-sub">Transplanting cycle: transplanting plan = what was transplanted 10 months earlier.</div></div>
+            <div class="card-sub" id="sa-tr-sub">Transplanting cycle: transplanting plan = what was transplanted 10 months earlier.</div></div>
           <div class="sa-legend">
             <span><i style="background:#2E7D4F"></i>Transplanted</span>
             <span><i style="border:2px dashed #2E7D4F"></i>Transplanting plan</span>
@@ -662,7 +662,9 @@ function saRound(fills, sales, ym) {
   return { cum, older, mine, olderB: olderB.sort((x, y) => (parseInt(x, 10) || 0) - (parseInt(y, 10) || 0) || x.localeCompare(y)) };
 }
 /* plots: names; capacity: {key: qty}; transplants / sales: [{plot, day, qty}]. */
-function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
+function buildRotation({ plots, capacity, transplants, sales, year, todayYM, plan }) {
+  // plan: Life of Plot Settings (collection: months back and %, transplanting: months back).
+  const P = Object.assign({ colMonths: 9, colPct: 90, trMonths: 10 }, plan || {});
   const sum = rows => { const o = {}; (rows || []).forEach(r => {
     const k = saKey(r.plot), ym = String(r.day || '').slice(0, 7);
     if (!k || ym.length !== 7) return;
@@ -689,8 +691,8 @@ function buildRotation({ plots, capacity, transplants, sales, year, todayYM }) {
       months.push({
         ym, future: !!todayYM && ym > todayYM,
         col, colCum: cum, colOlder: rd.older, colOlderB: rd.olderB, colMine: rd.mine, colPct: cap > 0 && cum > 0 ? Math.floor(cum / cap * 100) : null,
-        colPlan: Math.round(t(saShift(ym, -9)) * 0.9),
-        tr, trPlan: t(saShift(ym, -10)),
+        colPlan: Math.round(t(saShift(ym, -P.colMonths)) * P.colPct / 100),
+        tr, trPlan: t(saShift(ym, -P.trMonths)),
       });
     }
     return { plot: name, key: k, cap, months,
@@ -1357,6 +1359,19 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       soft(saAll(() => _supabase.from('nops_maint_plot_qty').select('nursery, plot, qty').order('plot')), 'plot capacity'),
       soft(saAll(() => _supabase.from('audit_height_records').select('nursery, plot, avg_height, date').order('date')), 'height audits'),
     ]);
+    // The plans follow Life of Plot Settings (nops_maint_config, life_of_plot_settings).
+    SA.plan = null;
+    try {
+      const cfg = await _supabase.from('nops_maint_config').select('txt_value').eq('key', 'life_of_plot_settings').maybeSingle();
+      const v = cfg && cfg.data && cfg.data.txt_value ? JSON.parse(cfg.data.txt_value) : null;
+      if (v) SA.plan = { colMonths: v.colMonths, colPct: v.colPct, trMonths: v.trMonths };
+    } catch (e) { /* the built-in plans stand */ }
+    {
+      const P = Object.assign({ colMonths: 9, colPct: 90, trMonths: 10 }, SA.plan || {});
+      const cs = document.getElementById('sa-col-sub'), ts = document.getElementById('sa-tr-sub');
+      if (cs) cs.textContent = 'Sales cycle: collection plan = ' + P.colPct + '% of what was transplanted into the plot ' + P.colMonths + ' months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.';
+      if (ts) ts.textContent = 'Transplanting cycle: transplanting plan = what was transplanted ' + P.trMonths + ' months earlier.';
+    }
     SA.plots = plots;
     SA.transplants = saTransplants(logs);
     SA.sales = [];
@@ -1386,7 +1401,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const nursery = $('sa-nursery').value, year = $('sa-year').value;
     const now = new Date(), todayYM = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
     const plots = saPlotsOf(SA.plots, nursery), caps = saCapsOf(nursery);
-    const rows = buildRotation({ plots, capacity: caps, transplants: SA.transplants, sales: SA.sales, year, todayYM });
+    const rows = buildRotation({ plots, capacity: caps, transplants: SA.transplants, sales: SA.sales, year, todayYM, plan: SA.plan });
     const nurLabel = $('sa-nursery').selectedOptions[0].textContent;
     $('sa-sales-title').textContent = `Pusingan Jualan — ${nurLabel}, ${year}`;
     $('sa-rot-title').textContent = `Pusingan Transplant — ${nurLabel}, ${year}`;
@@ -1469,7 +1484,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const now = new Date(), y = String(now.getFullYear()), todayYM = y + '-' + String(now.getMonth() + 1).padStart(2, '0');
     let n = 0, c = 0, t = 0;
     ['BNN', 'UNN1', 'UNN2'].forEach(nu => {
-      const rows = buildRotation({ plots: saPlotsOf(SA.plots, nu), capacity: saCapsOf(nu), transplants: SA.transplants, sales: SA.sales, year: y, todayYM });
+      const rows = buildRotation({ plots: saPlotsOf(SA.plots, nu), capacity: saCapsOf(nu), transplants: SA.transplants, sales: SA.sales, year: y, todayYM, plan: SA.plan });
       n += rows.length; rows.forEach(r => { c += r.colTotal; t += r.trTotal; });
     });
     $('card-audit-n').textContent = nf(n); $('card-audit-col').textContent = nf(c); $('card-audit-tr').textContent = nf(t);
