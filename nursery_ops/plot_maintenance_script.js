@@ -9417,6 +9417,26 @@ function _dateCell(r) {
        + `${_datesDisplay(ds)}</span>`;
 }
 
+/* THE DASH GOES WHERE THE CHIP SPEAKS — *"符号 - 就不用了"*, over a cell
+   reading `-` above WAITING FOR APPROVAL and a day.
+
+   The dash means the office has keyed no date, and on an ordinary row that
+   is worth saying: an empty cell reads as a column that failed to draw.
+   Under a chip it says nothing the chip does not already say, in a place
+   where it reads as a CONTRADICTION — a dash over a date, with nothing
+   between them to say the two are about different things.
+
+   It is only ever the DASH that goes. A row carrying a day of its own keeps
+   it whatever is underneath (the office's own N20-R: `10 Nov 2026` with a
+   claim for the 21st under it), because those really are two facts and
+   dropping either is the one thing this cell must not do. */
+function _dateWithChip(r, list) {
+  const chip = _waitingChip(list);
+  const cell = _dateCell(r);
+  if (chip && cell === '-') return chip;
+  return cell + chip;
+}
+
 const _mvPlotKey    = PlotMovement.plotKey;
 const _mvBatchKey   = PlotMovement.batchKey;
 const _mvBatchList  = PlotMovement.batchList;
@@ -10075,7 +10095,7 @@ function renderRecords() {
       html += `<tr${r.checked ? ' class="rec-row-checked"' : ''} data-rec-id="${r.id}"`
         + ` ondragover="recDragOver(event,${r.id})" ondragleave="recDragLeave(event)"`
         + ` ondrop="recDrop(event,${r.id})">
-        <td class="rc-date">${_dateCell(r)}${_waitingChip(waitingOn[r.id])}</td>
+        <td class="rc-date">${_dateWithChip(r, waitingOn[r.id])}</td>
         <td class="rc-jenis">${jenisLabel(r.jenis)}</td>
         <td class="rc-chem"><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
         <td class="rc-plot">${r.plot}</td>
