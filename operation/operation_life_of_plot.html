@@ -377,12 +377,12 @@
         return (y + Math.floor(m / 12)) + '-' + String(((m % 12) + 12) % 12 + 1).padStart(2, '0');
     }
     /* The collection % is CUMULATIVE over the CURRENT ROUND only: the batches
-       transplanted into the plot in the 12 months to the month (the window the
+       transplanted into the plot from the same month a year before (the
        plans count). A sale of an older batch is the round before, counted apart
        (`older`). SHARED RULE: saRound on the Nursery Dashboard. */
     const lpBatchKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/^BATCH\s*:?\s*/, '').split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
     function lpRound(fills, sales, ym) {
-        const from = lpShiftYM(ym, -12);
+        const from = lpShiftYM(ym, -13);   // the same month last year counts
         let cum = 0, older = 0, mine = 0;
         Object.keys(sales || {}).forEach(b => {
             const inRound = Object.keys((fills || {})[b] || {}).some(m => m > from && m <= ym);

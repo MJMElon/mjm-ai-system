@@ -650,7 +650,7 @@ function saPlotsOf(sharedPlots, nursery) {
    operation/operation_life_of_plot.html. */
 const saBatchKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/^BATCH\s*:?\s*/, '').split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
 function saRound(fills, sales, ym) {
-  const from = saShift(ym, -12);
+  const from = saShift(ym, -13);   // the same month last year counts
   let cum = 0, older = 0, mine = 0;
   Object.keys(sales || {}).forEach(b => {
     const inRound = Object.keys((fills || {})[b] || {}).some(m => m > from && m <= ym);

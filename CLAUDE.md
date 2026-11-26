@@ -12292,8 +12292,8 @@ row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
 **The collection is CUMULATIVE over the CURRENT ROUND only** (the office:
 "我要cumulative上去的", "数字也要cumulative", then "cumulative的部分也要考虑cycle
 例如225 和 242 247 是两个cycle" and "不要真的全部cumulative"). The round at a
-month is the batches transplanted into the plot in the 12 months to it, the
-window the plans count; the cell shows what those batches have sold so far
+month is the batches transplanted into the plot from the same month a year
+before up to it; the cell shows what those batches have sold so far
 and that over the capacity. A month whose sales are only of an older batch
 reads `Earlier round` with no %. Batches match on the batch number
 (`saBatchKey` / `lpBatchKey`, the batch report own key: `232 (B13)` is 232).
