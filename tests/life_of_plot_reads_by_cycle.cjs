@@ -87,7 +87,7 @@ const DATA = {
 
   console.log('2. the side bar opens the transplant record by year');
   const side = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-b')].map(b => b.lastChild.textContent.trim()));
-  ok(side.join('|') === 'Plots & cycles|Transplant record by year|Plot Status Map|PALMS Settings', 'the side bar has the two entries and the two PALMS pages', side);
+  ok(side.join('|') === 'Plots & cycles|Transplant record by year|PALMS|Settings', 'the side bar: the two Life of Plot views, PALMS, and Settings at the foot', side);
   await page.click('#lp-side button[data-view="record"]');
   await page.waitForTimeout(200);
   const rec = await page.evaluate(() => {
@@ -127,6 +127,8 @@ const DATA = {
     on: [...document.querySelectorAll('#lp-side .lp-side-b.on')].map(b => b.dataset.view),
     side: !!document.getElementById('lp-side').offsetParent,
     hash: location.hash }));
+  const heads = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-h')].map(h => h.textContent.trim()));
+  ok(heads.join() === 'Life of Plot', 'PALMS has no section of its own: one heading, Life of Plot', heads);
   ok(pb.shown && pb.others, 'the Plot Status Map replaces the plot list and the record', pb);
   ok(pb.src === '../nursery_ops/nursery_ops_palms_board.html?embed=1', 'the frame opens the real PALMS board, embedded', pb.src);
   ok(pb.on.join() === 'palms-board' && pb.side, 'the side bar stays, with Plot Status Map lit', pb.on);
