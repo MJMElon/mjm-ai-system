@@ -256,6 +256,40 @@ const DATA = {
   if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages_zoomed.png'), fullPage: true });
   await pm6.close();
 
+  console.log('7. the stage is PALMS: the lining stages Empty, Membesar Growing, the 8th month Collecting in 1 month, Pengambilan Collecting');
+  const L = (plot, n, start, end) => ({ client_uid: plot + n + start, plot_name: plot, act_n: n, start_date: start, end_date: end || null, ideal_days: 1, recorded_by: 'x', seq_no: 0 });
+  const me7 = [];
+  const pm7 = await openPage(Object.assign({}, DATA, {
+    shared_plots: ['B11', 'B12', 'B13', 'B14', 'B15', 'B16', 'B17'].map((p, i) => ({ plot_name: p, nursery_name: 'BNN', map_top: SQ(5 + (i % 4) * 24, 5 + Math.floor(i / 4) * 30) })),
+    operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }],
+    shared_inventory_logs: DATA.shared_inventory_logs.concat([
+      { plot_name: 'B12', transaction_type: 'Transplanted', transaction_date: ago(7.5), quantity_change: 2000, batch_name: '250', remark: '', created_at: ago(7.5) + 'T00:00:00Z' },
+      { plot_name: 'B16', transaction_type: 'Transplanted', transaction_date: ago(6.5), quantity_change: 2000, batch_name: '251', remark: '', created_at: ago(6.5) + 'T00:00:00Z' },
+      { plot_name: 'B14', transaction_type: 'Transplanted', transaction_date: ago(10), quantity_change: 3000, batch_name: '248', remark: '', created_at: ago(10) + 'T00:00:00Z' },
+      { plot_name: 'B17', transaction_type: 'Transplanted', transaction_date: ago(7.5), quantity_change: 3000, batch_name: '252', remark: '', created_at: ago(7.5) + 'T00:00:00Z' } ]),
+    shared_do_records: [{ id: 1, delivery_date: ago(1), status: 'Completed', remark: '', plot_1: 'B14', qty_1: 500, batch_1: '248' }],
+    fcportal_palms_plot_logs: [
+      L('B11', 10, ago(4), ago(1)), L('B11', 11, ago(1)),          // ledger young, PALMS Pengambilan
+      L('B12', 10, ago(7.5)),                                       // Membesar, 8th month
+      L('B13', 10, ago(3)),                                         // Membesar, no ledger
+      L('B14', 11, ago(3), ago(0.5)), L('B14', 4, ago(0.5)),        // sold out, Membersih now
+      L('B15', 8, ago(0.2)),                                        // Lining
+      L('B16', 10, ago(6.5)),                                       // Membesar, 7th month
+    ] }), me7);
+  await pm7.goto(B + '/operation/operation_life_of_plot.html');
+  await pm7.waitForSelector('#lp-svg polygon', { timeout: 8000 }).catch(() => {});
+  await pm7.waitForTimeout(600);
+  const st7 = await pm7.evaluate(() => Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])));
+  ok(st7.B11 === 'selling', 'PALMS on Pengambilan is Collecting, whatever the ledger says', st7);
+  ok(st7.B12 === 'soon', 'Membesar in the 8th month after transplant is Collecting in 1 month', st7);
+  ok(st7.B16 === 'growing', 'Membesar in the 7th month is still Growing', st7);
+  ok(st7.B13 === 'growing', 'Membesar with no ledger cycle is Growing', st7);
+  ok(st7.B14 === 'empty', 'back on Membersih is Empty, though the ledger still has a sale', st7);
+  ok(st7.B15 === 'empty', 'Lining is Empty', st7);
+  ok(st7.B17 === 'soon', 'a plot PALMS has nothing open for reads the ledger: 8th month, Collecting in 1 month', st7);
+  ok(me7.length === 0, 'no page errors with PALMS on the map', me7);
+  await pm7.close();
+
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
