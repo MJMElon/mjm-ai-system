@@ -93,6 +93,12 @@ if (R.buildRotation) {
     return lp.every((p, i) => p.months.join() === sa[i].months.map(m => m.tr).join());
   });
   ok(same, 'every plot and month of Pusingan Transplant is the Life of Plot transplant record');
+  const L2 = new Function('NURSERY_LABEL', 'NURSERY_ORDER', blk + '\nreturn { buildPlotHistory, lpRotation: typeof lpRotation === "function" ? lpRotation : null };')(
+    { BNN: 'BNN', UNN1: 'UNN 1', UNN2: 'UNN 2', OTHER: 'Other' }, ['BNN', 'UNN1', 'UNN2', 'OTHER']);
+  const SALES = [{ plot: 'B1', day: '2026-04-10', qty: 87 }, { plot: 'B1', day: '2026-07-01', qty: 1480 }, { plot: 'B2', day: '2026-05-02', qty: 300 }];
+  const lr = L2.lpRotation ? L2.lpRotation(L2.buildPlotHistory(pl, LR), 'BNN', '2026', SALES, { B1: 2352, B2: 3152 }, '2026-10') : null;
+  const dr = R.buildRotation({ plots: ['B1', 'B2'], capacity: { B1: 2352, B2: 3152 }, transplants: SAT, sales: SALES, year: '2026', todayYM: '2026-10' });
+  ok(lr && JSON.stringify(lr.map(r => r.months)) === JSON.stringify(dr.map(r => r.months)), 'Life of Plot Pusingan Jualan & Transplant answers exactly what the Site Audit does, cell by cell');
   const b2 = R.buildRotation({ plots: ['B2'], capacity: {}, transplants: SAT, sales: [], year: '2026' })[0].months;
   ok(b2[3].tr === 480 && b2[4].tr === 0, 'B2: 500 on the Tab 3 day (28 Apr, not 30 May) less the approved -20; the unapproved -99 counts for nothing', [b2[3].tr, b2[4].tr]);
   const H = R.buildHeights(DB.audit_height_records, 'BNN', '2026');
