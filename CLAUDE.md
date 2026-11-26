@@ -12208,3 +12208,9 @@ while the PALMS map loads.
 
 The P.A.L.M.S tile on the Nursery Operation dashboard was taken off for the
 same reason: PALMS is reached from Life of Plot now.
+
+**PALMS and the cycles were merged into one Plot Map for a day and taken back
+out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
+colour switch, labels carrying both, PALMS columns on the list and a stage
+strip on every cycle card was too much on one screen. Plots & cycles and
+PALMS stay two entries; do not merge them again without being asked.
