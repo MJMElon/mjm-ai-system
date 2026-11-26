@@ -12249,7 +12249,9 @@ zoom; the key shows the colour, the cat and the stage name and nothing more.
 The Plot chip row has no All plots chip (*all plot 不需要存在*), and the cycle
 table is drawn calm (*看了眼睛很痛*): ordinary-case muted headings,
 regular-weight figures, a faint tint per section, a soft stripe, dashes
-greyed. **No explanation lines anywhere on the page** (*我再说一次 我不要看到
+greyed. **There is no list of every plot**: the plots view opens straight on
+the first plot of the nursery chosen (B1 / U1 / N1) and the Plot chips move
+between plots (*不用show这个了 我们都没有all plot了*). **No explanation lines anywhere on the page** (*我再说一次 我不要看到
 废话*): the line under the title is only the plot and its nursery, or the
 view name; no notes under the tables or the grids. The delivery orders are read once
 (`ensureRot`) and the map is coloured again when they land.

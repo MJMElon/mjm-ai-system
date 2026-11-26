@@ -171,10 +171,11 @@ const DATA = {
     label: getComputedStyle(document.getElementById('lp-nursery-label')).display,
     plots: [...document.querySelectorAll('#lp-plot-row button')].map(b => b.textContent.trim()),
     plotRow: getComputedStyle(document.getElementById('lp-plot-row')).display,
-    list: [...document.querySelectorAll('#lp-plots tr.plotrow')].map(r => r.dataset.plot) }));
+    opened: (document.querySelector('#lp-timeline-box .lp-cyc') ? document.getElementById('lp-sub').textContent : ''),
+    list: document.getElementById('lp-plots') ? 'a list' : 'none' }));
   ok(nr.row === 'none' && nr.label === 'none', 'the Nursery row below is not drawn; the tabs top right choose it', nr);
   ok(nr.plotRow !== 'none' && nr.plots.join() === 'B11,B13', 'the Plot row stays, following the nursery, with no All plots chip', nr.plots);
-  ok(nr.list.join() === 'B11,B13', 'the list follows the map nursery (BNN)', nr.list);
+  ok(nr.list === 'none' && /^B11 ·/.test(nr.opened), 'no list of every plot: it opens straight on the first plot of the nursery (B11)', nr);
   const tabsOf = () => pm.evaluate(() => ({ head: [...document.querySelectorAll('#lp-head-nur button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')),
     inMap: [...document.querySelectorAll('#lp-map button[data-map]')].length }));
   const t1 = await tabsOf();

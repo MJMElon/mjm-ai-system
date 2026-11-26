@@ -249,12 +249,8 @@
 
     <div id="lp-status" class="panel p-8 text-center text-sm font-bold text-[#8a7a68]">Loading…</div>
 
-    <div id="lp-list" class="hidden panel overflow-x-auto">
-        <table class="lp" id="lp-plots"></table>
-    </div>
 
     <div id="lp-detail" class="hidden">
-        <button id="lp-up" class="lp-back mb-4">&#8592; All plots</button>
         <div id="lp-timeline-box"></div>
         <p id="lp-note" class="text-[11px] font-bold text-[#8a7a68] mt-3"></p>
     </div>
@@ -837,19 +833,21 @@
         if (MAPS[k]) MAP_NUR = k;
         fillNurserySelect();
         fillPlotSelect('');
-        renderList();
         renderMap();
         showList();
     }
 
+    /* There is no list of every plot any more (the office: "不用show这个了 我们都没有
+       all plot了 直接从B1/U1/N1开始"): the plots view opens on the first plot of
+       the nursery chosen, and the Plot chips move between them. */
     function showList() {
         if (VIEW !== 'plots') setView('plots', true);
+        const first = MODEL && MODEL.groups.filter(g => !NUR || g.key === NUR).flatMap(g => g.plots.map(p => p.plot))[0];
+        if (first) return showPlot(first);
         fillPlotSelect('');
-        document.getElementById('lp-list').classList.remove('hidden');
         document.getElementById('lp-detail').classList.add('hidden');
         document.getElementById('lp-title').textContent = 'Life of Plot';
         document.getElementById('lp-sub').textContent = '';
-        history.replaceState(null, '', location.pathname);
     }
 
     let NUR = '';
@@ -875,22 +873,6 @@
             names.map(n => chip('plot', n, n, cur === n)).join('');
     }
 
-    function renderList() {
-        let h = '<thead><tr><th class="l">Plot</th><th class="l">Nursery</th><th>Cycles</th><th class="l">Current cycle</th><th>Transplanted (adjusted)</th><th>2nd cull</th><th>3rd cull</th></tr></thead><tbody>';
-        MODEL.groups.filter(g => !NUR || g.key === NUR).forEach(g => {
-            h += `<tr class="grp"><td colspan="7">${g.label} · ${g.plots.length} plot${g.plots.length === 1 ? '' : 's'}</td></tr>`;
-            g.plots.forEach(p => {
-                const c = curCycle(p);
-                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td><td class="l">${g.label}</td>`
-                   + `<td>${p.cycles.length || '–'}</td><td class="l">${c ? cycleSpan(c) : '–'}</td>`
-                   + `<td>${dash(c && c.tAdj)}</td><td class="cull">${dash(c && c.c2)}</td><td class="cull">${dash(c && c.c3)}</td></tr>`;
-            });
-            if (!g.plots.length) h += '<tr><td colspan="7" class="l" style="color:#94a3b8;font-weight:700">No plots.</td></tr>';
-        });
-        h += '</tbody>';
-        document.getElementById('lp-plots').innerHTML = h;
-        document.querySelectorAll('#lp-plots tr.plotrow').forEach(tr => tr.addEventListener('click', () => showPlot(tr.dataset.plot)));
-    }
 
     function lpDays(a, b) {
         if (!a) return null;
@@ -1009,7 +991,6 @@
         renderMap();
         fillNurserySelect();
         fillPlotSelect(p.plot);
-        document.getElementById('lp-list').classList.add('hidden');
         document.getElementById('lp-detail').classList.remove('hidden');
         // The heading is ALWAYS Life of Plot (the office: "标题永远都是life of plot");
         // which plot or view is open is the line under it.
@@ -1199,8 +1180,7 @@
             document.getElementById('lp-status').classList.add('hidden');
             fillNurserySelect();
             fillPlotSelect('');
-            renderList();
-            renderMap();
+                renderMap();
             // The delivery orders decide Selling; read them now and colour the map again.
             ensureRot().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); }).catch(() => {});
             ensurePalms().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); });
@@ -1215,7 +1195,6 @@
         }
     }
 
-    document.getElementById('lp-up').addEventListener('click', showList);
     document.getElementById('lp-side').addEventListener('click', e => {
         const b = e.target.closest('button[data-view]');
         if (b) setView(b.dataset.view);
@@ -1240,7 +1219,7 @@
             renderHeadTabs(); renderRotation();
         } else if (VIEW === 'palms-board') {
             NUR = MAP_NUR = b.dataset.map;
-            fillNurserySelect(); fillPlotSelect(''); renderList(); renderMap();
+            fillNurserySelect(); fillPlotSelect(''); renderMap();
             syncPalmsNursery();
         } else setNursery(b.dataset.map);
     });
