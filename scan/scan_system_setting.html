@@ -521,16 +521,19 @@ const MATA_MALAM_FUNCTIONS = [
    minutes. See shared/RUN_ME_worker_photos.sql, which has to have been run
    for this switch to mean anything.
 
-   Scan / Delivery Order / PALMS / Culling: the Worker Portal has no such
-   screen built yet. The switch is here because the decision is yours to record
+   Scan / Delivery Order: the Worker Portal has no such screen built yet.
+   PALMS / Culling / NELOS / Pending Verification reach the Worker Portal only
+   through the floating dock, which is drawn only for a staff sign-in. The switch is here because the decision is yours to record
    — and the day one of them is built it arrives already set the way you set
    it, rather than appearing on every worker's phone unannounced. */
 const CANNOT_YET = {
   worker: {
     scan:    'No Scan Barcode Counter on a worker phone yet — off is obeyed, on waits for one.',
     do:      'No Issue Collection DO screen on a worker phone yet — off is obeyed, on waits for one.',
-    palms:   'No PALMS screen on a worker phone yet — off is obeyed, on waits for one.',
-    culling: 'No Culling Calculator on a worker phone yet — off is obeyed, on waits for one.'
+    palms:   'Only on the dock (the M coin), on a phone also signed in as staff.',
+    culling: 'Only on the dock (the M coin), on a phone also signed in as staff.',
+    nelos:   'Only on the dock (the M coin), on a phone also signed in as staff.',
+    verify:  'Only on the dock (the M coin), on a phone also signed in as staff.'
   }
 };
 
@@ -560,7 +563,13 @@ const PORTAL_MODULES = {
        the other. */
     { key:'siram_go',    name:'Siram Go' },
     { key:'palms',       name:'PALMS' },
-    { key:'culling',     name:'Culling Calculator' }
+    { key:'culling',     name:'Culling Calculator' },
+    /* Two more actions of the floating dock (the M coin). Every action on
+       the dock obeys the column of the portal it is drawn over, ticked to
+       show. The keys are spelled in DOCK_ACTION_KEY in Barcode_Counter
+       src/lib/portalSettings.js too. Change one, change the other. */
+    { key:'nelos',       name:'NELOS' },
+    { key:'verify',      name:'Pending Verification' }
   ],
   /* Every module the company has, not only the two the Worker Portal draws
      today. Whether a worker sees a module is decided here and nowhere else, so
@@ -580,6 +589,8 @@ const PORTAL_MODULES = {
     { key:'siram_go',    name:'Siram Go' },
     { key:'palms',       name:'PALMS' },
     { key:'culling',     name:'Culling Calculator' },
+    { key:'nelos',       name:'NELOS' },
+    { key:'verify',      name:'Pending Verification' },
     /* Not on the office outline, because that outline is the FC PORTAL
        column and this module is the Worker Portal's alone. Absent from one
        column is not the same as gone. */

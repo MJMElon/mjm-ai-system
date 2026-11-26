@@ -12016,3 +12016,14 @@ show 10 months and above seedlings and also 1.5 m or above plot qty"*.
   `tests/the_mcp_reads_the_dashboard.cjs` share a ledger where U7 is
   matured by the old rule and only 9 months old, so it is NOT available.
   **The Edge Function must be redeployed** for the agent to answer by it.
+
+## The M coin follows Portal View & Function, per portal
+
+Every action on the phone dock (PALMS, Culling Calculator, NELOS, Pending
+Verification, Mata Malam, Siram Go) is a row of System Setting → Portal View
+& Function, and the dock reads the column of the portal it is drawn over:
+the Worker Portal column on `/worker`, the FC Portal column elsewhere. NELOS
+and Pending Verification are new rows (`nelos`, `verify`); absent is ticked,
+so nothing moved until somebody unticks one. The keys are `DOCK_ACTION_KEY`
+in Barcode_Counter `src/lib/portalSettings.js` too. Nothing to run in the
+database.
