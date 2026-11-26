@@ -115,7 +115,7 @@ const DATA = {
   ok(rec.b13 && rec.b13.every(v => v === ''), 'B13, never transplanted, keeps its empty row', rec.b13);
   ok(rec.totBNN && rec.totBNN[6] === '8,972' && rec.totBNN[12] === '12,275', 'BNN has a total row', rec.totBNN);
   ok(rec.sum26 && rec.sum26[0] === '6,872' && rec.sum25 && rec.sum25[4] === '12,121', 'summary on top: 2026 by month, and 2025 beside it', [rec.sum26, rec.sum25]);
-  ok(rec.years[0] === '2026*' && rec.years.includes('2025'), 'the year chips, this year picked', rec.years);
+  { const ny = new Date().getFullYear(); ok(rec.years[0] === String(ny + 1) && rec.years[1] === ny + '*' && rec.years.includes('2025'), 'the year chips: next year too, this year picked', rec.years); }
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_record.png'), fullPage: true });
 
   await page.click('#lp-year-row button[data-year="2025"]');
