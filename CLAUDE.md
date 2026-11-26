@@ -12189,3 +12189,10 @@ records. With `?embed=1`, `shared_palms_nav.js` hides their ribbon, their
 own side bar and the NELOS dock, so only one side bar is on screen; opened
 on their own they are exactly as before. Section 3 of
 `tests/life_of_plot_reads_by_cycle.cjs`.
+
+**The nursery is chosen ONCE, top right** (`#lp-head-nur`), on Plots & cycles
+and on PALMS; the year record and Settings show none. The map panel draws no
+tabs and the Nursery chip row is hidden while a map exists; the Plot chip row
+stays (the office asked for it back). Embedded PALMS hides its own `.pm-tabs`,
+and `syncPalmsNursery` presses the matching one inside the frame, retrying
+while the PALMS map loads.

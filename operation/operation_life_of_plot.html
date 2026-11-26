@@ -44,6 +44,8 @@
         .lp-tabs { display:flex; gap:8px; flex-wrap:wrap; background:#f1ead9; border:1px solid #e8dcc8; border-radius:16px; padding:6px; }
         .lp-tab { padding:8px 16px; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.08em; border-radius:12px; color:#8a7a68; background:#fdfaf4; border:1.5px solid transparent; cursor:pointer; }
         .lp-tab:hover { color:#3d2610; }
+        .lp-head-tabs { min-width:90px; justify-content:flex-end; }
+        .lp-head-tabs:empty { visibility:hidden; background:none; border:0; }
         .lp-tab.on { background:#4a7a2e; color:#fdfaf4; border-color:#3f6a26; }
         .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
         .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
@@ -106,7 +108,9 @@
             <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
             <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
         </div>
-        <div class="hidden md:block w-[90px]"></div>
+        <!-- ONE nursery choice for the whole page, top right: the plot map and
+             PALMS both follow it, so neither draws tabs of its own. -->
+        <div id="lp-head-nur" class="lp-tabs lp-head-tabs"></div>
     </div>
 
     <div class="lp-shell">
@@ -150,7 +154,7 @@
                 <span><i style="background:#94a3b8"></i>No batch</span>
             </div>
         </div>
-        <div id="lp-map-tabs" class="lp-tabs mb-4"></div>
+        <div id="lp-map-tabs" class="hidden"></div>
         <div id="lp-map-body"></div>
     </div>
 
@@ -386,9 +390,33 @@
         if (!keys.length) { box.classList.add('hidden'); return; }
         box.classList.remove('hidden');
         if (!keys.includes(MAP_NUR)) MAP_NUR = keys.includes(NUR) ? NUR : keys[0];
-        document.getElementById('lp-map-tabs').innerHTML = keys.map(k =>
-            `<button type="button" class="lp-tab${k === MAP_NUR ? ' on' : ''}" data-map="${k}">${NURSERY_LABEL[k]}</button>`).join('');
+        renderHeadTabs();
         drawMap();
+    }
+    /* The tabs top right. Shown on the views that are about one nursery (the
+       plots and PALMS), not on the year record (every nursery) or Settings. */
+    function renderHeadTabs() {
+        const el = document.getElementById('lp-head-nur');
+        const keys = NURSERY_ORDER.filter(k => MAPS[k] && k !== 'OTHER');
+        const show = keys.length && (VIEW === 'plots' || VIEW === 'palms-board');
+        el.innerHTML = show ? keys.map(k =>
+            `<button type="button" class="lp-tab${k === MAP_NUR ? ' on' : ''}" data-map="${k}">${NURSERY_LABEL[k]}</button>`).join('') : '';
+    }
+    /* PALMS draws its own tabs (hidden when embedded); press the one that
+       matches. The map loads after the page, so keep asking for a while. */
+    let _palmsSyncT = null;
+    function syncPalmsNursery(tries) {
+        clearTimeout(_palmsSyncT);
+        if (VIEW !== 'palms-board' || !MAP_NUR) return;
+        let done = false;
+        try {
+            const doc = document.getElementById('lp-palms-frame').contentDocument;
+            const tabs = doc ? [...doc.querySelectorAll('.pm-tab')] : [];
+            const t = tabs.find(b => lpNurKey(b.dataset.pmTab || b.textContent) === MAP_NUR);
+            if (t) { if (!t.classList.contains('active')) t.click(); done = true; }
+        } catch (e) { /* not loaded yet */ }
+        const n = tries == null ? 60 : tries;
+        if (!done && n > 0) _palmsSyncT = setTimeout(() => syncPalmsNursery(n - 1), 300);
     }
     function openPlotFromMap(name) {
         showPlot(name);
@@ -512,9 +540,10 @@
            same choice is not drawn while the map is on screen. With no map
            (no nursery photo), this row is the only way to choose and stays. */
         const byMap = NURSERY_ORDER.some(k => MAPS[k]);
-        /* The plot is chosen on the map too ("我按地图就好"), so with a map the
-           whole chooser panel goes, nursery and plot alike. */
-        document.getElementById('lp-pick').classList.toggle('hidden', byMap);
+        /* Only the NURSERY row goes: the tabs top right choose it. The Plot
+           row stays (the office asked for it back, "这个保留"). */
+        document.getElementById('lp-nursery-label').classList.toggle('hidden', byMap);
+        document.getElementById('lp-nursery-row').classList.toggle('hidden', byMap);
         const keys = MODEL.groups.filter(g => g.plots.length).map(g => g.key);
         document.getElementById('lp-nursery-row').innerHTML =
             chip('nur', '', 'All nurseries', !NUR) + keys.map(k => chip('nur', k, NURSERY_LABEL[k], NUR === k)).join('');
@@ -604,6 +633,7 @@
         document.getElementById('lp-record').classList.toggle('hidden', VIEW !== 'record');
         document.getElementById('lp-plots-view').classList.toggle('hidden', VIEW !== 'plots');
         document.getElementById('lp-palms').classList.toggle('hidden', !PALMS_PAGES[VIEW]);
+        if (MODEL) renderHeadTabs();
         if (PALMS_PAGES[VIEW]) {
             const pg = PALMS_PAGES[VIEW];
             const fr = document.getElementById('lp-palms-frame');
@@ -611,6 +641,7 @@
             document.getElementById('lp-title').textContent = pg.title;
             document.getElementById('lp-sub').textContent = pg.sub;
             if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
+            syncPalmsNursery();
         } else if (VIEW === 'record') {
             document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
             document.getElementById('lp-sub').textContent = 'Every main plot, transplanted by month.';
@@ -714,10 +745,16 @@
         if (!b) return;
         setNursery(b.dataset.nur);
     });
-    document.getElementById('lp-map-tabs').addEventListener('click', e => {
+    document.getElementById('lp-head-nur').addEventListener('click', e => {
         const b = e.target.closest('button[data-map]');
-        if (b) setNursery(b.dataset.map);
+        if (!b) return;
+        if (VIEW === 'palms-board') {
+            NUR = MAP_NUR = b.dataset.map;
+            fillNurserySelect(); fillPlotSelect(''); renderList(); renderMap();
+            syncPalmsNursery();
+        } else setNursery(b.dataset.map);
     });
+    document.getElementById('lp-palms-frame').addEventListener('load', () => syncPalmsNursery());
     document.getElementById('lp-plot-row').addEventListener('click', e => {
         const b = e.target.closest('button[data-plot]');
         if (!b) return;

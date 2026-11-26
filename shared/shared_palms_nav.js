@@ -139,6 +139,9 @@
   var EMBED = /[?&]embed=1(&|$)/.test(location.search || '');
   var EMBED_CSS =
     '#palms-nav,#mjm-ribbon,#nelos-dock{display:none!important;}' +
+    /* Life of Plot chooses the nursery top right and presses the matching
+       tab, so the map's own tabs are not drawn. */
+    '.pm-tabs{display:none!important;}' +
     '.palms-frame{display:block!important;}';
 
   function mount() {
