@@ -6024,30 +6024,39 @@ So `scan/scan_workers.html` is ONE page with two views, and it is one page
 so there is ONE worker form and one set of rules:
 
 - **The namelist** (the default, any hash but `#chart`) is the only place
-  anything is written: **+ Add Worker**, an Edit on every row, **Waiting to
-  be allocated** at the top (active signups with no section) with Edit and
-  a cross that rejects the registration (`rejectWorker`, still a record,
-  never a deletion), and **Manage Roles**. Every act has its own Save.
+  anything is written: **+ Add Worker**, an Edit on every row, and **Waiting
+  to be allocated** at the top (active signups with no section) with Edit
+  and a cross that rejects the registration (`rejectWorker`, still a record,
+  never a deletion). Every act has its own Save.
 - **The chart** (`#chart`, the Worker System button) only shows: no Edit,
   no drag, no Add, no cross, no role buttons. A name opens its record
   read-only. Its back icon returns to the namelist (`showView`); the
   namelist's goes to the 555 Team page.
 - **`editHere()` is the gate** (`VIEW === 'list'` and the `workers.manage`
   permission), asked by `openWorker`, `saveWorker`, `rejectWorker`,
-  `openManageRoles` and `saveRoles`, because a hidden button is a paint and
-  each of them is reachable from a console.
+  because a hidden button is a paint and each of them is reachable from a
+  console.
 - **The location is a box on the form now**, with **Not allocated yet** as
   a real choice, so editing a pending signup never files them under the
   first nursery by accident.
-- **Manage Roles is a window with its own Save** (`roleDraft`): Cancel
-  throws away what was added or removed in it. An added role is stored in
-  `nops_maint_config`, key `worker_roles`, and appended to `ROLES` /
-  `BOARD_ROLES` in place (`applyCustomRoles`), so it is a row on the chart
-  and a choice on the form. An added role is a KNOWN role, so not general
-  nursery work; the record's own tick decides the sheets, which `saveWorker`
-  writes for every nursery worker (the phone's copy of `ROLES` and
-  `shared_job_crew.js` do not know an added role). A role somebody holds,
-  active or not, cannot be removed; the eight built in cannot be.
+- **A NEW ROLE IS ADDED ON THE WORKER FORM**, not in a window of its own
+  (the office: *"Manage Roles 可以拿掉， 因为Add Worker的时候可以选择什么
+  Role"*). The Role box offers **+ New role…**, which opens a box to type
+  it; the role is written to the list (`nops_maint_config`, key
+  `worker_roles`) only when that worker is SAVED, and BEFORE the worker, so
+  a form closed without Save leaves nothing and no worker holds a role the
+  chart has no row for. A typed name the list already has is that role. It
+  is appended to `ROLES` / `BOARD_ROLES` in place (`applyCustomRoles`). An
+  added role is a KNOWN role, so not general nursery work; the record's own
+  tick decides the sheets (the phone's copy of `ROLES` and
+  `shared_job_crew.js` do not know an added role). **No screen takes an
+  added role off any more.**
+- **The Work Maintenance box is on Add and Edit alike.** It used to hide
+  for a worker filed under no nursery, so Add Worker (which opens on Not
+  allocated yet) had no box and Edit did. It is always shown, switched off
+  with a sentence saying why until a nursery is picked.
+- **The "Filed under" line shows only on a read-only record**; on an
+  editable form the location box says it.
 - **The setup warnings sit above both views**, so the namelist says which
   SQL file is missing too.
 - `scan/scan_worker_list.html` only forwards to `scan_workers.html`, for
