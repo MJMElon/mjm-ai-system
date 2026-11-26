@@ -12250,8 +12250,9 @@ The Plot chip row has no All plots chip (*all plot 不需要存在*), and the cy
 table is drawn calm (*看了眼睛很痛*): ordinary-case muted headings,
 regular-weight figures, a faint tint per section, a soft stripe, dashes
 greyed. The Transplant record by year is drawn as a clear GRID (*格子要分明一点*):
-every cell lined, plot rows striped, the hovered row lit, the plot and Total
-columns set apart. **There is no list of every plot**: the plots view opens straight on
+every cell lined, the month row NOT pinned (it froze while scrolling), plot rows striped, the hovered row lit, the plot and Total
+columns set apart; only the PLOT NAME opens the plot, a figure does nothing
+(*我按plot名字才带我去plot*). **There is no list of every plot**: the plots view opens straight on
 the first plot of the nursery chosen (B1 / U1 / N1) and the Plot chips move
 between plots (*不用show这个了 我们都没有all plot了*). **No explanation lines anywhere on the page** (*我再说一次 我不要看到
 废话*): the line under the title is only the plot and its nursery, or the
