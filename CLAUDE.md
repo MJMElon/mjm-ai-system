@@ -12365,7 +12365,8 @@ row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
 month is the batches transplanted into the plot from the same month a year
 before up to it; the cell shows what those batches have sold so far
 and that over the capacity. A month whose sales are only of an older batch
-names that batch (`Batch 213`, off `colOlderB`) with no % (the office: *直接写批次号*);
+is NOT DRAWN: the grid shows the plan and this round, cumulative, and nothing
+else (the office: *只需要show plan和cumulative的*; it named the batch for a day);
 the plot cell carries the plot name only, no capacity line. Batches match on the batch number
 (`saBatchKey` / `lpBatchKey`, the batch report own key: `232 (B13)` is 232).
 `saRound` / `lpRound`, the same rule twice; the site audit test asserts them

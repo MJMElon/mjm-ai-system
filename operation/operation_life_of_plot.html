@@ -1278,7 +1278,9 @@
                 if (x.colMine > 0) {
                     const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
                     hs += `<div class="lp-rot-c ${cls}" title="${tip}">${fmtN(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
-                } else if (x.col > 0) hs += `<div class="lp-rot-c old" title="${tip}">${fmtN(x.col)}<small>${(x.colOlderB || []).length ? 'Batch ' + x.colOlderB.join(', ') : 'Earlier round'}</small></div>`;
+                }
+                // A month that sold only the round before is not drawn: plan and
+                // cumulative only (the office: "只需要show plan和cumulative的").
                 else if (x.colPlan > 0) hs += `<div class="lp-rot-c pc${x.future ? ' fut' : ''}" title="${tip}"><small>Plan</small>${fmtN(x.colPlan)}</div>`;
                 else hs += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
                 const tipT = `${r.plot} · ${x.ym} · Transplanted ${fmtN(x.tr)} · Plan ${fmtN(x.trPlan)}`;
