@@ -1447,7 +1447,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     $('sa-grid-tr').innerHTML = rows.length ? ht : empty;
     $('sa-rot-note').textContent = SA.missing.length ? 'Could not read: ' + SA.missing.join('; ') + '. Those figures show as empty.' : '';
 
-    // Seedling height: the month picked, one bar per plot, and every month in a table.
+    // Seedling height: the month picked, one bar per plot, and the same month in a table.
     const H = buildHeights(SA.heights, nursery, year), hm = year + '-' + $('sa-hmonth').value;
     const hg = rows.map(r => ({ key: r.plot, v: (H[r.key] || {})[hm] }));
     $('sa-h-title').textContent = `Seedling Height — ${nurLabel}, ${MONTHS[+hm.slice(5) - 1]} ${year}`;
@@ -1471,14 +1471,15 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
       }
     }
     let t = '<thead><tr><th>Month</th>' + rows.map(r => `<th class="num">${esc(r.plot)}</th>`).join('') + '</tr></thead><tbody>';
+    // Only the month picked (the office: the month chosen and no other).
     MONTHS.forEach((m, i) => {
       const ym = year + '-' + String(i + 1).padStart(2, '0');
-      if (!rows.some(r => (H[r.key] || {})[ym] != null)) return;
+      if (ym !== hm || !rows.some(r => (H[r.key] || {})[ym] != null)) return;
       t += `<tr><td class="key">${m}</td>` + rows.map(r => { const v = (H[r.key] || {})[ym];
         return `<td class="num${v != null && v >= SA_SUITABLE_M ? ' h-ok' : ''}">${v == null ? '—' : v.toFixed(2)}</td>`; }).join('') + '</tr>';
     });
     t += '</tbody>';
-    $('sa-htable').innerHTML = t.includes('<td') ? t : '<tbody><tr><td class="empty">No Seedling Height audit this year.</td></tr></tbody>';
+    $('sa-htable').innerHTML = t.includes('<td') ? t : '<tbody><tr><td class="empty">No Seedling Height audit in this month.</td></tr></tbody>';
   }
   function saFillCard() {
     const now = new Date(), y = String(now.getFullYear()), todayYM = y + '-' + String(now.getMonth() + 1).padStart(2, '0');
