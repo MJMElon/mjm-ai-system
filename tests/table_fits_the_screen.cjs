@@ -48,7 +48,7 @@ const fnEnd = src.indexOf('\nfunction fitAllTables', fnStart);
 if (fnEnd === -1) { console.log('FAIL  could not find the end of fitTableToWrap'); process.exit(1); }
 const code = src.slice(start, fnEnd);
 
-function makeWrap({ availW, naturalW, naturalH, hidden }) {
+function makeWrap({ availW, naturalW, naturalH, hidden, inPayroll }) {
   const style = {};
   const table = {
     style,
@@ -61,6 +61,7 @@ function makeWrap({ availW, naturalW, naturalH, hidden }) {
     clientWidth: availW,
     offsetParent: hidden ? null : {},
     querySelector: (sel) => (sel === 'table' ? table : null),
+    closest: (sel) => (sel === '#tab-payroll' && inPayroll ? {} : null),
   };
   return { wrap, table };
 }
@@ -137,6 +138,18 @@ console.log('A previous scale is cleared before a fresh measurement, not stacked
   run(null, wrap);
   is(table.style.transform, '', 'the stale scale is reset once the table fits exactly again');
   is(wrap.style.height, '', 'and so is the forced height');
+}
+
+console.log('');
+console.log('Worker Activity is never scaled: its type stays its own size and the wrapper scrolls sideways');
+{
+  const { wrap, table } = makeWrap({ availW: 800, naturalW: 1600, naturalH: 400, inPayroll: true });
+  table.style.transform = 'scale(0.62)';
+  wrap.style.height = '248px';
+  run(null, wrap);
+  is(table.style.transform, '', 'a wide Worker Activity sheet is not shrunk');
+  is(wrap.style.height, '', 'and no height is forced, so no vertical scrollbar');
+  is(wrap.style.overflowX, '', 'the sideways scroll is left to the CSS (auto)');
 }
 
 console.log('\n' + (failed ? failed + ' FAILED' : 'all green'));
