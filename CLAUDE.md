@@ -12220,10 +12220,13 @@ the map (`LP_STAGES`, `mapStateOf`): Empty (no current cycle, or it is 3rd
 culled), Growing (under `LP_SOON_MONTHS`, 6, since the cycle first
 transplant), Ready soon (6 months or more, nothing of this cycle sold yet) and
 Selling (a batch of this cycle on a delivery order since it began, or its 3rd
-culling begun). Each plot carries a small MOVING scene of its stage
-(`LP_SCENES`): people watering, feeding and weeding; a person wheeling soil;
-big seedlings swaying; a lorry driving. Plain SVG moved by the stylesheet,
-still under `prefers-reduced-motion`. The delivery orders are read once
+culling begun). The last two are called Ready for collection and Collecting
+on screen. Each plot carries the office OWN MJM CATS, moving (`LP_SCENES`,
+`operation/lifeplot/cat_*.png`, cut out of the sheet they handed over): the
+watering, fertiliser and weeding cats take turns on Growing, the digging cat
+is Empty, the sitting cat is Ready for collection and the cat in the lorry
+drives on Collecting; the key shows them too. Plain CSS animation, still
+under `prefers-reduced-motion`. The delivery orders are read once
 (`ensureRot`) and the map is coloured again when they land.
 
 **Pusingan Jualan over 100 percent**: the cumulative run starts after the
