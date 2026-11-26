@@ -101,13 +101,15 @@
         .lp-set-row label { min-width:230px; }
         .lp-set-row input[type=number] { width:76px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:800; text-align:right; background:#fff; }
         .lp-set-row input[type=text] { width:220px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
-        .lp-set-row input[type=color] { width:40px; height:30px; padding:0; border:1px solid #e8dcc8; border-radius:6px; background:#fff; cursor:pointer; }
+        .lp-set-row .lp-set-sw { position:relative; flex:0 0 30px; width:30px; height:30px; min-width:0; border-radius:8px; border:2px solid; cursor:pointer; }
+        .lp-set-row .lp-set-sw.ro { cursor:default; }
+        .lp-set-sw input[type=color] { position:absolute; inset:0; width:100%; height:100%; opacity:0; border:0; padding:0; cursor:inherit; }
         .lp-set-row select { padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
         .lp-set-row i { display:inline-block; width:22px; height:22px; border-radius:6px; border:2px solid; }
-        .lp-set-foot { display:flex; align-items:center; gap:12px; justify-content:flex-end; }
+        .lp-set-foot { display:flex; align-items:center; gap:12px; justify-content:flex-end; margin-top:8px; }
         .lp-set-save { padding:9px 20px; border:0; border-radius:10px; background:#4a7a2e; color:#fdfaf4; font-weight:800; cursor:pointer; }
         .lp-set-save:disabled { opacity:.5; cursor:default; }
-        #lp-set-msg { font-size:12px; font-weight:700; color:#8a7a68; }
+        .lp-set-msg { font-size:12px; font-weight:700; color:#8a7a68; }
         #lp-palms-frame { display:block; width:100%; height:calc(100vh - 190px); min-height:620px; border:0; border-radius:2rem; background:#fff; }
         @media (max-width: 900px) {
             .lp-shell { grid-template-columns:1fr; }
@@ -622,7 +624,7 @@
        or unreadable is the built-in values, which are what the page has
        always done. */
     const LP_SET_KEY = 'life_of_plot_settings';
-    const LP_SET_DEFAULT = { est2: 4, est3: 9, soonMonth: 8, colMonths: 9, colPct: 90, trMonths: 10, stageMap: {}, stages: {} };
+    const LP_SET_DEFAULT = { est2: 4, est3: 9, soonMonth: 8, colMonths: 9, colPct: 90, trMonths: 10, stages: {} };
     let LP_SET = JSON.parse(JSON.stringify(LP_SET_DEFAULT));
     const lpHexA = (hex, a) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return null; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
     function lpApplySet(v) {
@@ -631,7 +633,7 @@
         LP_SET = {
             est2: int(o.est2, D.est2, 1, 24), est3: int(o.est3, D.est3, 1, 36), soonMonth: int(o.soonMonth, D.soonMonth, 1, 36),
             colMonths: int(o.colMonths, D.colMonths, 1, 36), colPct: int(o.colPct, D.colPct, 1, 100), trMonths: int(o.trMonths, D.trMonths, 1, 36),
-            stageMap: Object.assign({}, o.stageMap || {}), stages: Object.assign({}, o.stages || {}),
+            stages: Object.assign({}, o.stages || {}),
         };
         LP_EST_C2 = LP_SET.est2; LP_EST_C3 = LP_SET.est3; LP_SOON_MONTHS = LP_SET.soonMonth - 1;
         LP_STAGES.forEach((x, i) => {
@@ -658,13 +660,6 @@
     function lpPalmsStage(actName, months) {
         const n = lpStageName(actName);
         if (!n) return null;
-        // Settings may file a PALMS stage under Empty, Growing or Collecting.
-        const set = LP_SET.stageMap[n];
-        if (set === 'empty' || set === 'selling') return set;
-        if (set === 'growing') return months != null && months >= LP_SOON_MONTHS ? 'soon' : 'growing';
-        return lpPalmsStageBuiltin(n, months);
-    }
-    function lpPalmsStageBuiltin(n, months) {
         if (n === 'pengambilan' || n.indexOf('collect') >= 0) return 'selling';
         if (n === 'membesar') return months != null && months >= LP_SOON_MONTHS ? 'soon' : 'growing';
         return 'empty';
@@ -1098,74 +1093,75 @@
         } catch (e) { console.warn('[lifeplot] settings not read, the built-in values stand:', (e && e.message) || e); }
     }
     const lpMayEditSettings = () => { try { return !!(window.MJMAccess && MJMAccess.isAdminOf && MJMAccess.isAdminOf('operation')); } catch (e) { return false; } };
-    let LP_SET_STAGES = null;   // the PALMS stage names, in their order
-    async function lpPalmsStageNames() {
-        if (LP_SET_STAGES) return LP_SET_STAGES;
-        try {
-            const r = await _supabase.from('nops_plot_status_stages').select('name, sort_order').order('sort_order');
-            if (r && !r.error && r.data && r.data.length) return (LP_SET_STAGES = r.data.map(x => String(x.name || '').trim()).filter(Boolean));
-        } catch (e) { /* the built-in list below */ }
-        const A = (window.MJMPalms && MJMPalms.ACTIVITIES) || [];
-        return (LP_SET_STAGES = A.map(a => String(a.name || '').trim()).filter(Boolean));
-    }
     async function renderSettings() {
         const box = document.getElementById('lp-set');
-        const names = await lpPalmsStageNames();
         const ed = lpMayEditSettings(), dis = ed ? '' : ' disabled';
         const S = LP_SET, esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const num = (id, v, lo, hi) => `<input type="number" id="${id}" min="${lo}" max="${hi}" step="1" value="${v}"${dis}>`;
         const toHex = x => { const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(x || ''); return /^#[0-9a-f]{6}$/i.test(x || '') ? x : m ? '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('') : '#94a3b8'; };
-        const STG = [['empty', 0], ['growing', 1], ['selling', 3]];
-        const mapOf = n => S.stageMap[n.toLowerCase()] || { selling: 'selling', soon: 'growing', growing: 'growing', empty: 'empty' }[lpPalmsStageBuiltin(n.toLowerCase(), 0)];
+        // Each section carries its own Save (the office: "每个section都要有自己的save").
+        const foot = sec => ed ? `<div class="lp-set-foot"><span class="lp-set-msg" data-ls-msg="${sec}"></span><button type="button" class="lp-set-save" data-ls-save="${sec}">Save</button></div>` : '';
         box.innerHTML = `
-          <div class="panel lp-set-sec"><div class="lp-set-h">Plots &amp; cycles</div>
+          <div class="panel lp-set-sec" data-ls-sec="cycles"><div class="lp-set-h">Plots &amp; cycles</div>
             <div class="lp-set-row"><label for="ls-est2">2nd culling estimate</label>${num('ls-est2', S.est2, 1, 24)}<span>months after transplant</span></div>
             <div class="lp-set-row"><label for="ls-est3">3rd culling estimate</label>${num('ls-est3', S.est3, 1, 36)}<span>months after transplant</span></div>
+            ${foot('cycles')}
           </div>
-          <div class="panel lp-set-sec"><div class="lp-set-h">Map stages</div>
-            ${LP_STAGES.map(x => `<div class="lp-set-row"><i style="background:${x.fill};border-color:${x.stroke}"></i><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></div>`).join('')}
+          <div class="panel lp-set-sec" data-ls-sec="map"><div class="lp-set-h">Map stages</div>
+            ${LP_STAGES.map(x => `<div class="lp-set-row"><label class="lp-set-sw${ed ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}></div>`).join('')}
             <div class="lp-set-row"><label for="ls-soon">${esc(LP_STAGES[2].label)} from</label><span>month</span>${num('ls-soon', S.soonMonth, 1, 36)}<span>after transplant</span></div>
-            ${names.map((n, i) => `<div class="lp-set-row"><label>${esc(n)}</label><select data-ls-stage="${esc(n.toLowerCase())}"${dis}>${STG.map(([k, ix]) => `<option value="${k}"${mapOf(n) === k ? ' selected' : ''}>${esc(LP_STAGES[ix].label)}</option>`).join('')}</select></div>`).join('')}
+            ${foot('map')}
           </div>
-          <div class="panel lp-set-sec"><div class="lp-set-h">Pusingan Jualan &amp; Transplant</div>
+          <div class="panel lp-set-sec" data-ls-sec="plans"><div class="lp-set-h">Pusingan Jualan &amp; Transplant</div>
             <div class="lp-set-row"><label>Collection plan</label>${num('ls-colpct', S.colPct, 1, 100)}<span>% of the transplant</span>${num('ls-colm', S.colMonths, 1, 36)}<span>months earlier</span></div>
             <div class="lp-set-row"><label>Transplanting plan</label><span>the transplant</span>${num('ls-trm', S.trMonths, 1, 36)}<span>months earlier</span></div>
-          </div>
-          ${ed ? '<div class="lp-set-foot mb-6"><span id="lp-set-msg"></span><button type="button" class="lp-set-save" id="lp-set-save">Save</button></div>' : ''}`;
-        const sv = document.getElementById('lp-set-save');
-        if (sv) sv.addEventListener('click', saveSettings);
+            ${foot('plans')}
+          </div>`;
+        // The swatch IS the picker: pressing it opens the colour, and it repaints as one is chosen.
+        box.querySelectorAll('.lp-set-sw input[type=color]').forEach(inp => inp.addEventListener('input', () => {
+            const sw = inp.parentElement; sw.style.borderColor = inp.value; sw.style.background = lpHexA(inp.value, .45) || inp.value;
+        }));
+        box.querySelectorAll('[data-ls-save]').forEach(btn => btn.addEventListener('click', () => saveSettings(btn.dataset.lsSave)));
     }
-    async function saveSettings() {
-        const msg = document.getElementById('lp-set-msg'), btn = document.getElementById('lp-set-save');
-        if (!lpMayEditSettings()) { if (msg) msg.textContent = 'Only an Operation admin can change Settings.'; return; }
+    /* Save ONE section: its own fields off the screen, every other field as it
+       is SAVED, so an unsaved edit in another section is neither written nor
+       thrown away. */
+    async function saveSettings(sec) {
+        const msg = document.querySelector(`[data-ls-msg="${sec}"]`), btn = document.querySelector(`[data-ls-save="${sec}"]`);
+        const say = t => { if (msg) msg.textContent = t; };
+        if (!lpMayEditSettings()) { say('Only an Operation admin can change Settings.'); return; }
         const val = id => { const e = document.getElementById(id); return e ? Number(e.value) : NaN; };
         const ok = (x, lo, hi) => Number.isInteger(x) && x >= lo && x <= hi;
-        const v = { est2: val('ls-est2'), est3: val('ls-est3'), soonMonth: val('ls-soon'), colPct: val('ls-colpct'), colMonths: val('ls-colm'), trMonths: val('ls-trm'), stageMap: {}, stages: {} };
-        const bad = [['est2', 1, 24], ['est3', 1, 36], ['soonMonth', 1, 36], ['colPct', 1, 100], ['colMonths', 1, 36], ['trMonths', 1, 36]].filter(([k, lo, hi]) => !ok(v[k], lo, hi));
-        if (bad.length) { if (msg) msg.textContent = 'Whole numbers only, in range.'; return; }
-        document.querySelectorAll('#lp-set select[data-ls-stage]').forEach(e => { v.stageMap[e.dataset.lsStage] = e.value; });
-        LP_STAGES.forEach((x, i) => {
-            const name = String((document.getElementById('ls-name-' + x.key) || {}).value || '').trim();
-            const col = String((document.getElementById('ls-col-' + x.key) || {}).value || '');
-            const b = LP_STAGES_BUILTIN[i], o = {};
-            if (name && name !== b.label) o.label = name;
-            if (/^#[0-9a-f]{6}$/i.test(col) && col.toLowerCase() !== String(b.stroke).toLowerCase()) o.color = col;
-            if (Object.keys(o).length) v.stages[x.key] = o;
-        });
+        const v = JSON.parse(JSON.stringify(LP_SET));
+        let checks = [];
+        if (sec === 'cycles') { v.est2 = val('ls-est2'); v.est3 = val('ls-est3'); checks = [['est2', 1, 24], ['est3', 1, 36]]; }
+        if (sec === 'plans') { v.colPct = val('ls-colpct'); v.colMonths = val('ls-colm'); v.trMonths = val('ls-trm'); checks = [['colPct', 1, 100], ['colMonths', 1, 36], ['trMonths', 1, 36]]; }
+        if (sec === 'map') {
+            v.soonMonth = val('ls-soon'); checks = [['soonMonth', 1, 36]];
+            v.stages = {};
+            LP_STAGES.forEach((x, i) => {
+                const name = String((document.getElementById('ls-name-' + x.key) || {}).value || '').trim();
+                const col = String((document.getElementById('ls-col-' + x.key) || {}).value || '');
+                const b = LP_STAGES_BUILTIN[i], o = {};
+                if (name && name !== b.label) o.label = name;
+                if (/^#[0-9a-f]{6}$/i.test(col) && col.toLowerCase() !== String(b.stroke).toLowerCase()) o.color = col;
+                if (Object.keys(o).length) v.stages[x.key] = o;
+            });
+        }
+        if (checks.some(([k, lo, hi]) => !ok(v[k], lo, hi))) { say('Whole numbers only, in range.'); return; }
         if (btn) btn.disabled = true;
-        if (msg) msg.textContent = 'Saving…';
+        say('Saving…');
         try {
             const who = (MJMAccess.user && MJMAccess.user() && MJMAccess.user().email) || null;
             const { error } = await _supabase.from('nops_maint_config').upsert({ key: LP_SET_KEY, txt_value: JSON.stringify(v), note: 'Life of Plot Settings', updated_by: who, updated_at: new Date().toISOString() }, { onConflict: 'key' });
             if (error) throw error;
             lpApplySet(v);
             if (MODEL) renderHeadTabs();
-            renderSettings();
-            const m2 = document.getElementById('lp-set-msg'); if (m2) m2.textContent = 'Saved.';
+            say('Saved.');
         } catch (e) {
-            if (msg) msg.textContent = 'Not saved: ' + ((e && e.message) || e);
-            if (btn) btn.disabled = false;
+            say('Not saved: ' + ((e && e.message) || e));
         }
+        if (btn) btn.disabled = false;
     }
 
     // ── Side bar: Plots & cycles, or the Transplant record by year ──
