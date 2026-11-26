@@ -60,12 +60,12 @@
         .lp-cat.wide img { width:100%; height:auto; }
         .lp-map-row { display:flex; gap:16px; align-items:stretch; }
         .lp-map-row .lp-viewport { flex:1 1 auto; min-width:0; }
-        .lp-key { flex:0 0 200px; display:flex; flex-direction:column; gap:10px; padding:14px; border:1px solid #e8dcc8; border-radius:16px; background:#fffdf8; }
+        .lp-key { flex:0 0 auto; min-width:200px; display:flex; flex-direction:column; gap:10px; padding:14px; border:1px solid #e8dcc8; border-radius:16px; background:#fffdf8; }
         .lp-key-h { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#8a7a68; }
         .lp-key-r { display:flex; gap:10px; align-items:center; }
         .lp-key-r i { flex:0 0 26px; height:26px; border-radius:7px; border:2px solid; }
         .lp-key-cat { flex:0 0 48px; width:48px; height:34px; object-fit:contain; }
-        .lp-key-r b { display:block; font-size:13px; font-weight:900; color:#3d2610; }
+        .lp-key-r b { display:block; font-size:13px; font-weight:900; color:#3d2610; white-space:nowrap; }
         @media (max-width: 900px) { .lp-map-row { flex-direction:column; } .lp-key { flex-basis:auto; flex-direction:row; flex-wrap:wrap; } }
         .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
         .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
