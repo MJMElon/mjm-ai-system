@@ -178,7 +178,8 @@ async function boot(browser, db) {
       try { switchSub('transpl'); } catch (_) {}
       const c = document.querySelector('#sub-transpl .cj-claim');
       if (!c) return 'no section';
-      return { head: c.querySelector('.cj-claim-h').textContent.replace(/\s+/g, ' ').trim(),
+      return { head: c.querySelector('.cj-claim-head').textContent.replace(/\s+/g, ' ').trim(),
+               underCull: (() => { const w = document.getElementById('cull-inc-wrap'); return !!w && w.nextElementSibling === c.parentNode; })(),
                rows: [...c.querySelectorAll('tbody tr')].map(tr => [...tr.children].slice(1).map(td => td.textContent.trim())),
                norate: !!c.querySelector('.cj-norate'),
                monthly: monthlyRows('').filter(r => r.transpl).map(r => [r.name, r.transpl]) };
@@ -188,7 +189,8 @@ async function boot(browser, db) {
     const ga = await read(a.page);
     check('the checked row is on the Transplanting claim, the unchecked one is not', ga.rows,
       [['Andi', '1,225', '—', '—'], ['Ayub', '1,225', '—', '—']]);
-    check('…headed by the job and its description', ga.head, 'Seedlings Incentive · Transfer seedling to big polybag');
+    check('…headed like Culling Monitoring', ga.head, 'Seedlings Incentive — Checked — BNN — Batu Niah · November 2026');
+    check('…in a section of its own directly under Culling Monitoring', ga.underCull, true);
     check('…and with no piece rate it says so and pays nothing', [ga.norate, ga.monthly], [true, []]);
     check('no page errors', a.errs, []);
     await a.page.close();
