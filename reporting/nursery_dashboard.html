@@ -1346,7 +1346,7 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     const years = new Set();
     SA.transplants.concat(SA.sales).forEach(r => { const y = String(r.day || '').slice(0, 4); if (/^\d{4}$/.test(y)) years.add(y); });
     const now = new Date(); const ty = String(now.getFullYear());
-    years.add(ty);
+    years.add(ty); years.add(String(+ty + 1));   // next year: its plans are already known
     const ys = [...years].sort().reverse();
     $('sa-year').innerHTML = ys.map(y => `<option value="${y}">${y}</option>`).join('');
     $('sa-year').value = ty;

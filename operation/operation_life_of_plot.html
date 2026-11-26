@@ -914,7 +914,8 @@
         const now = new Date(), nowY = String(now.getFullYear()), todayYM = nowY + '-' + String(now.getMonth() + 1).padStart(2, '0');
         const years = lpYears(MODEL);
         ROT.sales.forEach(r => { const y = String(r.day).slice(0, 4); if (/^\d{4}$/.test(y) && !years.includes(y)) years.push(y); });
-        if (!years.includes(nowY)) years.push(nowY);
+        // Next year too: its plans are already known from this year transplants.
+        [nowY, String(+nowY + 1)].forEach(y => { if (!years.includes(y)) years.push(y); });
         years.sort();
         if (!ROT_YEAR || !years.includes(ROT_YEAR)) ROT_YEAR = nowY;
         document.getElementById('lp-rot-year').innerHTML = years.slice().reverse().map(y => chip('ryear', y, y, y === ROT_YEAR)).join('');
@@ -955,7 +956,8 @@
         if (!MODEL) return;
         const years = lpYears(MODEL);
         const nowY = String(new Date().getFullYear());
-        if (!years.includes(nowY)) years.push(nowY);
+        // Next year too: its plans are already known from this year transplants.
+        [nowY, String(+nowY + 1)].forEach(y => { if (!years.includes(y)) years.push(y); });
         years.sort();
         if (!REC_YEAR || !years.includes(REC_YEAR)) REC_YEAR = years.includes(nowY) ? nowY : years[years.length - 1];
         document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
