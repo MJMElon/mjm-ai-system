@@ -71,8 +71,8 @@ if (R.buildRotation) {
   ok(b1[4].col === 439 && b1[4].colPct === 22, 'B1 May: two DO lines add to 439; the % is CUMULATIVE since the plot was last filled (87 + 439 = 526, 22%)', [b1[4].col, b1[4].colPct]);
   ok(b1[6].col === 1780 && b1[6].colCum === 2006 && b1[6].colPct === 85 && b1[6].colOlder === 300,
      'B1 July: this round (234, 237, 252) has sold 87 + 439 + 1,480 = 2,006 (85%); the 300 of batch 213 is the round before and not counted; both cancelled DOs left out', [b1[6].col, b1[6].colCum, b1[6].colPct, b1[6].colOlder]);
-  ok(b1[8].col === 250 && b1[8].colMine === 0 && b1[8].colOlder === 250,
-     'B1 September: only batch 213 (the round before) sold, so the cell says Earlier round', [b1[8].col, b1[8].colMine, b1[8].colOlder]);
+  ok(b1[8].col === 250 && b1[8].colMine === 0 && b1[8].colOlder === 250 && (b1[8].colOlderB || []).join() === '213',
+     'B1 September: only batch 213 (the round before) sold, so the cell names it', [b1[8].col, b1[8].colMine, b1[8].colOlder, b1[8].colOlderB]);
   ok(b1[5].colPlan === 551, 'B1 June collection plan = 90% of September 2025 transplant 612 = 551', b1[5].colPlan);
   ok(b1[8].colPlan === 1566, 'B1 September collection plan = 90% of December 2025 transplant 1,740', b1[8].colPlan);
   ok(b1[0].trPlan === 1734, 'B1 January transplanting plan = the March 2025 transplant, 10 months earlier', b1[0].trPlan);
@@ -191,7 +191,7 @@ const server = http.createServer((req, res) => {
     const b1c = G.cells.slice(0, 12), b1t = G.tcells.slice(0, 12);
     ok(b1c[3].t === '873%' && /c1/.test(b1c[3].cls), 'B1 April collection reads 87 · 3%, the lightest shade', b1c[3]);
     ok(b1c[6].t === '2,00685%' && /c3/.test(b1c[6].cls), 'B1 July: this round so far 2,006 · 85%, the darkest shade', b1c[6]);
-    ok(b1c[8].t === '250Earlier round' && /old/.test(b1c[8].cls), 'B1 September: only the round before sold, so it says Earlier round and carries no %', b1c[8]);
+    ok(b1c[8].t === '250Batch 213' && /old/.test(b1c[8].cls), 'B1 September: only the round before sold, so it names the batch (213) and carries no %', b1c[8]);
     ok(b1c[5].t === 'Plan551' && /pc/.test(b1c[5].cls), 'B1 June: a dashed collection plan of 551', b1c[5]);
     ok(b1t[0].t === 'Plan1,734' && /pt/.test(b1t[0].cls), 'B1 January: a dashed transplanting plan of 1,734', b1t[0]);
     ok(b1t[5].t === '599' && /t1/.test(b1t[5].cls), 'B1 June: transplanted 599, solid green', b1t[5]);

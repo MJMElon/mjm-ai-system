@@ -119,7 +119,6 @@
         .lp-rot-mh.now { color:#a83020; }
         .lp-rot-plot { align-self:center; }
         .lp-rot-plot b { display:block; font-size:14px; font-weight:900; color:#3d2610; }
-        .lp-rot-plot span { font-size:10px; font-weight:700; color:#8a7a68; }
         .lp-rot-c { height:46px; border:1px solid #e8dcc8; border-radius:8px; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#3d2610; }
         .lp-rot-c small { font-size:10px; font-weight:600; }
         .lp-rot-c.fut { background:#f1ede2; border-color:#f1ede2; }
@@ -425,15 +424,15 @@
     const lpBatchKey = v => String(v == null ? '' : v).trim().toUpperCase().replace(/^BATCH\s*:?\s*/, '').split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
     function lpRound(fills, sales, ym) {
         const from = lpShiftYM(ym, -13);   // the same month last year counts
-        let cum = 0, older = 0, mine = 0;
+        let cum = 0, older = 0, mine = 0; const olderB = [];
         Object.keys(sales || {}).forEach(b => {
             const inRound = Object.keys((fills || {})[b] || {}).some(m => m > from && m <= ym);
             Object.keys(sales[b]).forEach(m => {
                 if (m > ym) return;
-                if (inRound) { cum += sales[b][m]; if (m === ym) mine += sales[b][m]; } else if (m === ym) older += sales[b][m];
+                if (inRound) { cum += sales[b][m]; if (m === ym) mine += sales[b][m]; } else if (m === ym) { older += sales[b][m]; if (sales[b][m] && !olderB.includes(b)) olderB.push(b); }
             });
         });
-        return { cum, older, mine };
+        return { cum, older, mine, olderB: olderB.sort((x, y) => (parseInt(x, 10) || 0) - (parseInt(y, 10) || 0) || x.localeCompare(y)) };
     }
     function lpRotation(model, nursery, year, sales, caps, todayYM) {
         const g = model.groups.find(x => x.key === nursery);
@@ -458,8 +457,8 @@
             const months = [];
             for (let m = 1; m <= 12; m++) {
                 const ym = year + '-' + String(m).padStart(2, '0');
-                const col = c(ym), rd = col > 0 ? lpRound(fills, SB[k], ym) : { cum: 0, older: 0, mine: 0 }, cum = rd.cum;
-                months.push({ ym, future: !!todayYM && ym > todayYM, col, colCum: cum, colOlder: rd.older, colMine: rd.mine,
+                const col = c(ym), rd = col > 0 ? lpRound(fills, SB[k], ym) : { cum: 0, older: 0, mine: 0, olderB: [] }, cum = rd.cum;
+                months.push({ ym, future: !!todayYM && ym > todayYM, col, colCum: cum, colOlder: rd.older, colOlderB: rd.olderB, colMine: rd.mine,
                     colPct: cap > 0 && cum > 0 ? Math.floor(cum / cap * 100) : null,
                     colPlan: Math.round(t(lpShiftYM(ym, -9)) * 0.9), tr: t(ym), trPlan: t(lpShiftYM(ym, -10)) });
             }
@@ -1104,7 +1103,7 @@
         document.getElementById('lp-rot-tr-t').textContent = `Pusingan Transplant — ${lab}, ${ROT_YEAR}`;
         const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const head = '<div></div>' + MON.map((m, i) => `<div class="lp-rot-mh${ROT_YEAR + '-' + String(i + 1).padStart(2, '0') === todayYM ? ' now' : ''}">${m}</div>`).join('');
-        const plotCell = r => `<div class="lp-rot-plot"><b>${r.plot}</b><span>${r.cap ? nf(r.cap) + ' capacity' : 'No capacity keyed'}</span></div>`;
+        const plotCell = r => `<div class="lp-rot-plot"><b>${r.plot}</b></div>`;
         let hs = head, ht = head;
         rows.forEach(r => {
             hs += plotCell(r); ht += plotCell(r);
@@ -1113,7 +1112,7 @@
                 if (x.colMine > 0) {
                     const cls = x.colPct == null ? 'c2' : x.colPct >= 80 ? 'c3' : x.colPct >= 40 ? 'c2' : 'c1';
                     hs += `<div class="lp-rot-c ${cls}" title="${tip}">${fmtN(x.colCum)}${x.colPct != null ? `<small>${x.colPct}%</small>` : ''}</div>`;
-                } else if (x.col > 0) hs += `<div class="lp-rot-c old" title="${tip}">${fmtN(x.col)}<small>Earlier round</small></div>`;
+                } else if (x.col > 0) hs += `<div class="lp-rot-c old" title="${tip}">${fmtN(x.col)}<small>${(x.colOlderB || []).length ? 'Batch ' + x.colOlderB.join(', ') : 'Earlier round'}</small></div>`;
                 else if (x.colPlan > 0) hs += `<div class="lp-rot-c pc${x.future ? ' fut' : ''}" title="${tip}"><small>Plan</small>${fmtN(x.colPlan)}</div>`;
                 else hs += `<div class="lp-rot-c${x.future ? ' fut' : ''}"></div>`;
                 const tipT = `${r.plot} · ${x.ym} · Transplanted ${fmtN(x.tr)} · Plan ${fmtN(x.trPlan)}`;

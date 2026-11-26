@@ -12355,7 +12355,8 @@ row. `the_site_audit_dashboard.cjs` asserts the two answer cell for cell.
 month is the batches transplanted into the plot from the same month a year
 before up to it; the cell shows what those batches have sold so far
 and that over the capacity. A month whose sales are only of an older batch
-reads `Earlier round` with no %. Batches match on the batch number
+names that batch (`Batch 213`, off `colOlderB`) with no % (the office: *直接写批次号*);
+the plot cell carries the plot name only, no capacity line. Batches match on the batch number
 (`saBatchKey` / `lpBatchKey`, the batch report own key: `232 (B13)` is 232).
 `saRound` / `lpRound`, the same rule twice; the site audit test asserts them
 cell for cell. The check that found it: before this, every plot over 100

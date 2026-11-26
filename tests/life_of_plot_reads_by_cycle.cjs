@@ -213,6 +213,8 @@ const DATA = {
   });
   ok(rot.shown && rot.on.join() === 'rotation' && rot.title === 'Life of Plot' && /^Pusingan Jualan & Transplant/.test(rot.sub), 'the side bar opens Pusingan Jualan & Transplant; the heading stays Life of Plot', rot);
   ok(rot.tr && rot.tr[6] === '8,972' && rot.tr[8] === '3,168' && rot.tr[9] === '135', 'Pusingan Transplant B11 2026: Jul 8,972, Sep 3,168, Oct 135 — the transplant record', rot.tr);
+  const capWords = await pr.evaluate(() => [...document.querySelectorAll('.lp-rot-plot')].some(e => /capacity/i.test(e.textContent)));
+  ok(!capWords, 'the plot cell carries no capacity line', capWords);
   ok(rot.tr && rot.tr[2] === 'Plan12,121', 'Pusingan Transplant March plan: what went in 10 months earlier (May 2025, 12,121)', rot.tr && rot.tr[2]);
   ok(rot.sales && rot.sales[4] === '1,80015%', 'May reads CUMULATIVE: 1,200 + 600 = 1,800 collected, 15% of 12,000', rot.sales && rot.sales[4]);
   ok(rot.sales && rot.sales[3] === '1,20010%' && rot.sales[1] === 'Plan10,909', 'Pusingan Jualan B11: April 1,200 collected (10% of 12,000; the cancelled DO left out), February plan 90% of 12,121', rot.sales);
