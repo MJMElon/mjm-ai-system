@@ -95,16 +95,33 @@
         /* Settings: what the office set by hand, keyed here instead. */
         .lp-set-sec { padding:20px 24px; margin-bottom:18px; }
         .lp-set-h { font-size:13px; font-weight:900; color:#3d2610; margin-bottom:12px; }
-        .lp-set-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 0; font-size:13px; font-weight:700; color:#5c3d1e; }
-        .lp-set-row label { min-width:230px; }
+        .lp-set-row { display:grid; grid-template-columns:230px auto 1fr; align-items:center; gap:12px; padding:6px 0; font-size:13px; font-weight:700; color:#5c3d1e; }
+        @media (max-width: 640px) { .lp-set-row { grid-template-columns:1fr auto; } .lp-set-row > span:last-child { grid-column:1 / -1; } }
         .lp-set-row input[type=number] { width:76px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:800; text-align:right; background:#fff; }
         .lp-set-row input[type=text] { width:220px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
-        .lp-set-row .lp-set-sw { position:relative; flex:0 0 30px; width:30px; height:30px; min-width:0; border-radius:8px; border:2px solid; cursor:pointer; }
+        .lp-set-row .lp-set-sw { position:relative; display:block; width:30px; height:30px; min-width:0; border-radius:8px; border:2px solid; cursor:pointer; }
         .lp-set-row .lp-set-sw.ro { cursor:default; }
         .lp-set-sw input[type=color] { position:absolute; inset:0; width:100%; height:100%; opacity:0; border:0; padding:0; cursor:inherit; }
         .lp-set-row select { padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
         .lp-set-row i { display:inline-block; width:22px; height:22px; border-radius:6px; border:2px solid; }
         .lp-set-foot { display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:6px; min-height:4px; }
+        /* Cycles set by hand: the bar over a plot, and the editor. */
+        .lp-cyc-bar { display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; }
+        .lp-cyc-bar:empty { display:none; }
+        .lp-ce { padding:18px 22px; margin-bottom:16px; }
+        .lp-ce-grid { display:flex; flex-direction:column; gap:12px; }
+        .lp-ce-cyc { border:2px dashed #e8dcc8; border-radius:16px; padding:10px 12px; background:#fffdf8; min-height:58px; }
+        .lp-ce-cyc.over { border-color:#4a7a2e; background:#f3f7ec; }
+        .lp-ce-h { display:flex; align-items:center; gap:10px; font-size:13px; font-weight:900; color:#3d2610; margin-bottom:8px; }
+        .lp-ce-h small { font-size:11px; font-weight:700; color:#8a7a68; }
+        .lp-ce-x { margin-left:auto; border:1px solid #e8dcc8; background:#fff; color:#8a7a68; border-radius:8px; width:26px; height:26px; cursor:pointer; font-weight:900; }
+        .lp-ce-list { display:flex; flex-wrap:wrap; gap:8px; min-height:30px; }
+        .lp-ce-chip { display:flex; gap:8px; align-items:center; padding:6px 10px; border-radius:10px; background:#fff; border:1px solid #e8dcc8; font-size:12px; font-weight:800; color:#3d2610; cursor:grab; user-select:none; }
+        .lp-ce-chip span { font-weight:700; color:#8a7a68; }
+        .lp-ce-chip.drag { opacity:.4; }
+        .lp-ce-add { margin-top:12px; padding:9px; width:100%; border:2px dashed #d9c8a8; border-radius:14px; background:transparent; color:#5c3d1e; font-weight:800; font-size:12px; cursor:pointer; }
+        .lp-ce-add:hover { background:#f1ead9; }
+        .lp-ce-foot { display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:12px; }
         .lp-set-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
         .lp-set-top .lp-set-h { margin-bottom:0; }
         .lp-set-save, .lp-set-edit, .lp-set-cancel { padding:5px 14px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; }
@@ -291,6 +308,7 @@
 
 
     <div id="lp-detail" class="hidden">
+        <div id="lp-cyc-bar" class="lp-cyc-bar"></div>
         <div id="lp-timeline-box"></div>
         <p id="lp-note" class="text-[11px] font-bold text-[#8a7a68] mt-3"></p>
     </div>
@@ -380,10 +398,29 @@
        batch transplanted AFTER the latest 3rd culling of the cycle before it
        starts a new cycle. A batch with no transplant date of its own (a cull
        with nothing transplanted here) stays in the cycle it falls in. */
-    function lpCycles(batches) {
+    /* THE OFFICE MAY SET A PLOT'S CYCLES BY HAND (the office: "我可以自己加cycle
+       然后drag来drag去"): `override` is the cycles as lists of batch keys. A batch
+       it does not name (one transplanted since) goes into the latest cycle that
+       had started by its transplant day. Without one, the rule below decides. */
+    function lpCyclesByHand(batches, override) {
+        const groups = override.map(() => []), at = {}, loose = [];
+        override.forEach((list, i) => (list || []).forEach(k => { at[String(k)] = i; }));
+        (batches || []).forEach(b => { const i = at[lpBatchKey(b.batch)]; if (i != null) groups[i].push(b); else loose.push(b); });
+        loose.forEach(b => {
+            let best = -1;
+            groups.forEach((g, i) => { const st = lpEarliest(g.map(x => x.tDate)); if (st && b.tDate && st <= b.tDate) best = i; });
+            if (best < 0) best = groups.findIndex(g => g.length);
+            groups[best < 0 ? 0 : best].push(b);
+        });
+        const byDay = (x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch);
+        return groups.filter(g => g.length).map(g => g.slice().sort(byDay))
+            .sort((x, y) => (lpEarliest(x.map(b => b.tDate)) || '9999').localeCompare(lpEarliest(y.map(b => b.tDate)) || '9999'));
+    }
+    function lpCycles(batches, override) {
         const cycles = [];
         let cur = null;
-        (batches || []).forEach(b => {
+        if (override && override.length) lpCyclesByHand(batches, override).forEach(g => cycles.push({ batches: g }));
+        else (batches || []).forEach(b => {
             /* A new cycle starts with a batch transplanted after the plot's 3rd
                culling BEGAN: the FIRST real culling of the cycle (one carrying a
                Cull Date or a drone map), not the last. B1: 234 culled 1 Jun 2026,
@@ -621,7 +658,7 @@
     const LP_STAGES = [
         { key: 'empty',   label: 'Empty',                 fill: 'rgba(148,163,184,.30)', stroke: '#94a3b8' },
         { key: 'growing', label: 'Growing',               fill: 'rgba(74,222,128,.45)',  stroke: '#16a34a' },
-        { key: 'soon',    label: 'Collecting in 1 month', fill: 'rgba(251,191,36,.50)',  stroke: '#d97706' },
+        { key: 'soon',    label: 'Collect soon',          fill: 'rgba(251,191,36,.50)',  stroke: '#d97706' },
         { key: 'selling', label: 'Collecting',            fill: 'rgba(96,165,250,.50)',  stroke: '#2563eb' },
     ];
     /* The 8th month after transplant is Collecting in 1 month (the office:
@@ -1086,6 +1123,13 @@
         const nurLabel = NURSERY_LABEL[p.nursery];
         document.getElementById('lp-sub').textContent = p.plot + ' · ' + nurLabel;
         history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
+        if (CYC_EDIT && CYC_EDIT.plot === p.plot) { lpDrawCycleEditor(p); return; }
+        CYC_EDIT = null;
+        const can = lpMayEditSettings();
+        document.getElementById('lp-cyc-bar').innerHTML = can && p.batches.length
+            ? `<button type="button" class="lp-set-edit" id="lp-cyc-edit">Edit cycles</button>` : '';
+        const ce = document.getElementById('lp-cyc-edit');
+        if (ce) ce.addEventListener('click', () => lpOpenCycleEditor(p));
         document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
             ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
@@ -1120,11 +1164,12 @@
             + `<div class="lp-set-row"><label for="ls-est2">2nd culling estimate</label>${num('ls-est2', S.est2, 1, 24)}<span>months after transplant</span></div>`
             + `<div class="lp-set-row"><label for="ls-est3">3rd culling estimate</label>${num('ls-est3', S.est3, 1, 36)}<span>months after transplant</span></div>`;
         if (sec === 'map') body = head('Map stages')
-            + LP_STAGES.map(x => `<div class="lp-set-row"><label class="lp-set-sw${on ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}></div>`).join('')
-            + `<div class="lp-set-row"><label for="ls-soon">${esc(LP_STAGES[2].label)} from</label><span>month</span>${num('ls-soon', S.soonMonth, 1, 36)}<span>after transplant</span></div>`;
+            + LP_STAGES.map(x => `<div class="lp-set-row"><div><label class="lp-set-sw${on ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label></div><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}><span></span></div>`).join('')
+            + `<div class="lp-set-row"><label for="ls-soon">${esc(LP_STAGES[2].label)} from month</label>${num('ls-soon', S.soonMonth, 1, 36)}<span>after transplant</span></div>`;
         if (sec === 'plans') body = head('Pusingan Jualan &amp; Transplant')
-            + `<div class="lp-set-row"><label>Collection plan</label>${num('ls-colpct', S.colPct, 1, 100)}<span>% of the transplant</span>${num('ls-colm', S.colMonths, 1, 36)}<span>months earlier</span></div>`
-            + `<div class="lp-set-row"><label>Transplanting plan</label><span>the transplant</span>${num('ls-trm', S.trMonths, 1, 36)}<span>months earlier</span></div>`;
+            + `<div class="lp-set-row"><label for="ls-colpct">Collection plan</label>${num('ls-colpct', S.colPct, 1, 100)}<span>% of the transplant</span></div>`
+            + `<div class="lp-set-row"><label for="ls-colm">Collection plan from</label>${num('ls-colm', S.colMonths, 1, 36)}<span>months earlier</span></div>`
+            + `<div class="lp-set-row"><label for="ls-trm">Transplanting plan from</label>${num('ls-trm', S.trMonths, 1, 36)}<span>months earlier</span></div>`;
         return `<div class="panel lp-set-sec" data-ls-sec="${sec}">${body}${foot}</div>`;
     }
     function lpSetDrawSection(sec, note) {
@@ -1191,6 +1236,92 @@
             say('Not saved: ' + ((e && e.message) || e));
         }
         if (btn) btn.disabled = false;
+    }
+
+    // ── Cycles set by hand ──
+    // One row of nops_maint_config, key life_of_plot_cycles: { plotKey: [[batch, ...], ...] }.
+    const LP_CYC_KEY = 'life_of_plot_cycles';
+    let LP_CYC = {};
+    let CYC_EDIT = null;   // { plot, groups: [[batchKey, ...], ...] } while the editor is open
+    async function lpReadCycles() {
+        const r = await _supabase.from('nops_maint_config').select('txt_value').eq('key', LP_CYC_KEY).maybeSingle();
+        if (r && r.error) throw r.error;
+        return r && r.data && r.data.txt_value ? (JSON.parse(r.data.txt_value) || {}) : {};
+    }
+    async function lpLoadCycles() {
+        try { LP_CYC = await lpReadCycles(); } catch (e) { LP_CYC = {}; console.warn('[lifeplot] cycles set by hand not read, the rule stands:', (e && e.message) || e); }
+    }
+    function lpApplyCycles() {
+        if (!MODEL) return;
+        MODEL.groups.forEach(g => g.plots.forEach(p => {
+            const ov = LP_CYC[lpPlotKey(p.plot)];
+            p.cycles = lpCycles(p.batches, Array.isArray(ov) && ov.length ? ov : null);
+        }));
+    }
+    function lpOpenCycleEditor(p) {
+        if (!lpMayEditSettings()) return;
+        CYC_EDIT = { plot: p.plot, groups: p.cycles.map(c => c.batches.map(b => lpBatchKey(b.batch))) };
+        lpDrawCycleEditor(p);
+    }
+    function lpDrawCycleEditor(p) {
+        const byKey = {};
+        p.batches.forEach(b => { byKey[lpBatchKey(b.batch)] = b; });
+        document.getElementById('lp-cyc-bar').innerHTML = '';
+        const box = document.getElementById('lp-timeline-box');
+        box.innerHTML = `<div class="panel lp-ce"><div class="lp-ce-grid">`
+            + CYC_EDIT.groups.map((g, i) => `<div class="lp-ce-cyc" data-ci="${i}"><div class="lp-ce-h">Cycle ${i + 1}<small>${nf(g.reduce((a, k) => a + ((byKey[k] || {}).tAdj || 0), 0)) || '0'}</small>`
+                + (g.length ? '' : `<button type="button" class="lp-ce-x" data-cx="${i}" title="Remove">×</button>`) + `</div><div class="lp-ce-list">`
+                + g.map(k => { const b = byKey[k]; return b ? `<div class="lp-ce-chip" draggable="true" data-b="${k}">${b.batch}<span>${b.tDate || '–'} · ${nf(b.tAdj) || '0'}</span></div>` : ''; }).join('')
+                + `</div></div>`).join('')
+            + `</div><button type="button" class="lp-ce-add" id="lp-ce-add">+ Add cycle</button>`
+            + `<div class="lp-ce-foot"><span class="lp-set-msg" id="lp-ce-msg"></span>`
+            + (LP_CYC[lpPlotKey(p.plot)] ? `<button type="button" class="lp-set-cancel" id="lp-ce-auto">Automatic</button>` : '')
+            + `<button type="button" class="lp-set-cancel" id="lp-ce-cancel">Cancel</button><button type="button" class="lp-set-save" id="lp-ce-save">Save</button></div></div>`;
+        let dragKey = null;
+        box.querySelectorAll('.lp-ce-chip').forEach(ch => {
+            ch.addEventListener('dragstart', e => { dragKey = ch.dataset.b; ch.classList.add('drag'); try { e.dataTransfer.setData('text/plain', dragKey); e.dataTransfer.effectAllowed = 'move'; } catch (x) {} });
+            ch.addEventListener('dragend', () => ch.classList.remove('drag'));
+        });
+        box.querySelectorAll('.lp-ce-cyc').forEach(cy => {
+            cy.addEventListener('dragover', e => { e.preventDefault(); cy.classList.add('over'); });
+            cy.addEventListener('dragleave', () => cy.classList.remove('over'));
+            cy.addEventListener('drop', e => {
+                e.preventDefault(); cy.classList.remove('over');
+                let k = dragKey; try { k = e.dataTransfer.getData('text/plain') || k; } catch (x) {}
+                if (!k) return;
+                const to = +cy.dataset.ci;
+                CYC_EDIT.groups = CYC_EDIT.groups.map(g => g.filter(x => x !== k));
+                CYC_EDIT.groups[to].push(k);
+                lpDrawCycleEditor(p);
+            });
+        });
+        box.querySelectorAll('[data-cx]').forEach(x => x.addEventListener('click', () => { CYC_EDIT.groups.splice(+x.dataset.cx, 1); lpDrawCycleEditor(p); }));
+        document.getElementById('lp-ce-add').addEventListener('click', () => { CYC_EDIT.groups.push([]); lpDrawCycleEditor(p); });
+        document.getElementById('lp-ce-cancel').addEventListener('click', () => { CYC_EDIT = null; showPlot(p.plot); });
+        const auto = document.getElementById('lp-ce-auto');
+        if (auto) auto.addEventListener('click', () => lpSaveCycles(p, null));
+        document.getElementById('lp-ce-save').addEventListener('click', () => lpSaveCycles(p, CYC_EDIT.groups.filter(g => g.length)));
+    }
+    // groups: the cycles to keep for this plot; null hands the plot back to the rule.
+    async function lpSaveCycles(p, groups) {
+        const msg = document.getElementById('lp-ce-msg');
+        if (!lpMayEditSettings()) { if (msg) msg.textContent = 'Only an Operation admin can change cycles.'; return; }
+        if (msg) msg.textContent = 'Saving…';
+        try {
+            const all = await lpReadCycles();   // read again: another plot may have been saved since
+            const k = lpPlotKey(p.plot);
+            if (groups && groups.length) all[k] = groups; else delete all[k];
+            const who = (MJMAccess.user && MJMAccess.user() && MJMAccess.user().email) || null;
+            const { error } = await _supabase.from('nops_maint_config').upsert({ key: LP_CYC_KEY, txt_value: JSON.stringify(all), note: 'Life of Plot cycles set by hand', updated_by: who, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+            if (error) throw error;
+            LP_CYC = all;
+            lpApplyCycles();
+            CYC_EDIT = null;
+            showPlot(p.plot);
+            if (MAP_NUR) drawMap();
+        } catch (e) {
+            if (msg) msg.textContent = 'Not saved: ' + ((e && e.message) || e);
+        }
     }
 
     // ── Side bar: Plots & cycles, or the Transplant record by year ──
@@ -1380,6 +1511,8 @@
                 } catch (e) { /* a shape that will not parse is simply not drawn */ }
             });
             MODEL = buildPlotHistory(plots, rows);
+            await lpLoadCycles();
+            lpApplyCycles();
             // With the map choosing the nursery there is no "All nurseries", so
             // the list opens on the nursery the map opens on.
             if (!NUR) { const k0 = NURSERY_ORDER.find(k => MAPS[k]); if (k0) NUR = k0; }

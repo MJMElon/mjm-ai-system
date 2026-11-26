@@ -248,7 +248,7 @@ const DATA = {
     stage: Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])),
     key: [...document.querySelectorAll('.lp-key .lp-key-r b')].map(b => b.textContent.trim()),
     beside: (() => { const v = document.getElementById('lp-viewport').getBoundingClientRect(), k = document.querySelector('.lp-key').getBoundingClientRect(); return k.left >= v.right - 1; })() }));
-  ok(st6.key.join() === 'Empty,Growing,Collecting in 1 month,Collecting', 'the key names the four stages', st6.key);
+  ok(st6.key.join() === 'Empty,Growing,Collect soon,Collecting', 'the key names the four stages', st6.key);
   ok(st6.beside, 'the key stands beside the map', st6.beside);
   ok(await pm6.evaluate(() => !document.querySelector('.lp-key .lp-key-r span')), 'the key carries no explanation lines under the names', '');
   ok(st6.stage.B13 === 'empty' && st6.stage.B11 === 'growing' && st6.stage.B12 === 'soon' && st6.stage.B14 === 'selling',
@@ -386,6 +386,35 @@ const DATA = {
   const n9 = await p9n.evaluate(() => ({ save: !!document.querySelector('[data-ls-save], [data-ls-edit]'), dis: (document.getElementById('ls-est2') || {}).disabled }));
   ok(!n9.save && n9.dis === true, 'not an Operation admin: Settings is read only', n9);
   await p9n.close();
+
+  console.log('10. cycles set by hand: add a cycle and drag a batch into it');
+  const e10 = [];
+  const p10 = await openPage(DATA, e10);
+  await p10.goto(B + '/operation/operation_life_of_plot.html#plot=U17');
+  await p10.waitForSelector('.lp-cyc', { timeout: 8000 }).catch(() => {});
+  await p10.waitForTimeout(500);
+  const before10 = await p10.evaluate(() => document.querySelectorAll('#lp-timeline-box .lp-cyc').length);
+  await p10.click('#lp-cyc-edit').catch(() => {});
+  await p10.click('#lp-ce-add').catch(() => {});
+  const boxes10 = await p10.evaluate(() => document.querySelectorAll('.lp-ce-cyc').length);
+  ok(before10 === 1 && boxes10 === 2, 'Edit cycles opens the editor; + Add cycle adds an empty one', [before10, boxes10]);
+  await p10.evaluate(() => {
+    const chip = document.querySelector('.lp-ce-chip[data-b="275"]'), to = document.querySelector('.lp-ce-cyc[data-ci="1"]');
+    const dt = new DataTransfer();
+    chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+    to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  });
+  const moved10 = await p10.evaluate(() => [...document.querySelectorAll('.lp-ce-cyc')].map(c => [...c.querySelectorAll('.lp-ce-chip')].map(x => x.dataset.b).join()));
+  ok(moved10.join('|') === '240,270|275', 'dragging 275 onto the new cycle moves it there', moved10);
+  await p10.click('#lp-ce-save');
+  await p10.waitForTimeout(400);
+  const w10 = await p10.evaluate(() => (window.__writes || []).filter(w => w.table === 'nops_maint_config').map(w => w.row));
+  const after10 = await p10.evaluate(() => [...document.querySelectorAll('#lp-timeline-box .lp-cyc')].map(c => c.querySelector('.lp-cyc-n').textContent));
+  ok(w10.length === 1 && w10[0].key === 'life_of_plot_cycles' && JSON.parse(w10[0].txt_value).U17.join('|') === '240,270|275', 'Save writes the plot cycles, one row', w10.map(r => r.txt_value));
+  ok(after10.length === 2, 'the plot now reads two cycles', after10);
+  ok(e10.length === 0, 'no page errors', e10);
+  await p10.close();
 
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

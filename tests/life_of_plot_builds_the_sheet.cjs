@@ -6,7 +6,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'operation', 'operation_l
 const block = src.slice(src.indexOf('// ── BEGIN build'), src.indexOf('// ── END build'));
 const NURSERY_LABEL = { BNN: 'BNN', UNN1: 'UNN 1', UNN2: 'UNN 2', OTHER: 'Not in Seedling Stock' };
 const NURSERY_ORDER = ['BNN', 'UNN1', 'UNN2', 'OTHER'];
-const { buildPlotHistory, buildTransplantYear, lpYears } = new Function('NURSERY_LABEL', 'NURSERY_ORDER', block + '\nreturn { buildPlotHistory, buildTransplantYear, lpYears: typeof lpYears === "function" ? lpYears : null };')(NURSERY_LABEL, NURSERY_ORDER);
+const { buildPlotHistory, buildTransplantYear, lpYears, lpCycles } = new Function('NURSERY_LABEL', 'NURSERY_ORDER', block + '\nreturn { buildPlotHistory, buildTransplantYear, lpYears: typeof lpYears === "function" ? lpYears : null, lpCycles };')(NURSERY_LABEL, NURSERY_ORDER);
 
 let pass = 0, fail = 0;
 const ok = (c, m, d) => { if (c) { pass++; console.log('  ok   ' + m); } else { fail++; console.log('  FAIL ' + m + (d !== undefined ? ' -> ' + JSON.stringify(d) : '')); } };
@@ -130,6 +130,11 @@ console.log('4. a plot is read by CYCLE, never mixed (the office B11, from its o
   const pB1 = mB1.groups.find(g => g.key === 'BNN').plots[0];
   ok(pB1.cycles.length === 2 && pB1.cycles[0].batches.map(b => b.batch).join() === '234,237' && pB1.cycles[1].batches.map(b => b.batch).join() === '252,268',
      'B1: 252 went in after 234 was 3rd culled, so it starts cycle 2, though 237 was culled later', pB1.cycles.map(c => c.batches.map(b => b.batch)));
+  const hand = lpCycles(pB1.batches, [['234'], ['237', '252']]);
+  ok(hand.length === 2 && hand[0].batches.map(b => b.batch).join() === '234' && hand[1].batches.map(b => b.batch).join() === '237,252,268',
+     'cycles set by hand: 237 moved into cycle 2; 268, not named, joins the latest cycle started by its day', hand.map(c => c.batches.map(b => b.batch)));
+  const hand2 = lpCycles(pB1.batches, [['252', '268'], [], ['234', '237']]);
+  ok(hand2.length === 2 && hand2[0].batches[0].batch === '234' && hand2[0].n === 1, 'an empty cycle is dropped and the cycles are numbered by their start', hand2.map(c => [c.n, c.batches.map(b => b.batch)]));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

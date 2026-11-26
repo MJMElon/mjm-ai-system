@@ -12179,7 +12179,14 @@ as Pending.
 `operation/operation_life_of_plot.html`. A plot is filled, grown and 3rd
 culled, then filled again, and each of those is a CYCLE. Its capacity is what
 was transplanted in that cycle, never the plot's whole history added up.
-`lpCycles` is the rule: batches in transplant-date order, and a batch
+**The office can set a plot cycles BY HAND** (*我可以自己加cycle 然后drag来drag去*):
+Edit cycles over the plot (Operation admin) opens an editor, + Add cycle, drag a
+batch between cycles, Save; Automatic hands the plot back to the rule. One row
+of `nops_maint_config`, key `life_of_plot_cycles`, `{plotKey: [[batch, ...]]}`,
+read again before each save so another plot is not overwritten.
+`lpCyclesByHand`: a batch the saved cycles do not name (transplanted since)
+joins the latest cycle started by its day; an empty cycle is dropped. Without
+one, `lpCycles` is the rule: batches in transplant-date order, and a batch
 transplanted AFTER the FIRST real 3rd culling (a Cull Date or a drone map) of
 the cycle before it starts a new one. It was the LAST culling, and B1 read as
 one cycle: 234 culled 1 Jun 2026, 252 in on 14 Jun, 237 and 241 culled 2 Aug. A plot opens as one card per cycle, newest first, each card with its own
