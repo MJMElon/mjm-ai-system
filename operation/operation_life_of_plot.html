@@ -959,23 +959,23 @@
                 // Transplanting: the day and how many went in (the office: only these two)
                 + `<td class="l s1">${b.tDate || '–'}</td><td>${nf(b.tAdj) || '0'}</td>`
                 // 2nd culling: alive, dead, culling rate
-                + `<td class="s1">${nf(alive) || '0'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
+                + `<td class="l s1">${b.c2Date || '–'}</td><td>${nf(alive) || '0'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
                 // 3rd culling: pending culling, drone count, variance, culling rate
-                + `<td class="cull s1">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
+                + `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
                 + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td></tr>`;
         }));
         h += `<div class="lp-x-wrap"><table class="lp lp-x">`
-           + `<colgroup><col><col span="2" class="c-t"><col span="3" class="c-2"><col span="4" class="c-3"></colgroup>`
+           + `<colgroup><col><col span="2" class="c-t"><col span="4" class="c-2"><col span="5" class="c-3"></colgroup>`
            + `<thead><tr class="grp-h"><th class="l" rowspan="2">Batch</th>`
-           + `<th class="s1 g-t" colspan="2">Transplanting</th><th class="s1 g-c" colspan="3">2nd Culling</th><th class="s1 g-c" colspan="4">3rd Culling</th></tr>`
+           + `<th class="s1 g-t" colspan="2">Transplanting</th><th class="s1 g-c" colspan="4">2nd Culling</th><th class="s1 g-c" colspan="5">3rd Culling</th></tr>`
            + `<tr><th class="l s1">Date</th><th>Transplanted</th>`
-           + `<th class="s1">Alive</th><th>Dead</th><th>Culling rate (%)</th>`
-           + `<th class="s1">Pending culling</th><th>Drone Count</th><th>Variance</th><th>Culling rate (%)</th></tr></thead>`
+           + `<th class="l s1">Date</th><th>Alive</th><th>Dead</th><th>Culling rate (%)</th>`
+           + `<th class="l s1">Date</th><th>Pending culling</th><th>Drone Count</th><th>Variance</th><th>Culling rate (%)</th></tr></thead>`
            + `<tbody>${body}</tbody>`
            + `<tfoot><tr class="tot"><td class="l">Total · plot</td>`
            + `<td class="s1"></td><td>${dash(c.tAdj)}</td>`
-           + `<td class="s1">${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
-           + `<td class="s1">${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td></tr></tfoot>`
+           + `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
+           + `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td></tr></tfoot>`
            + `</table></div>`;
         h = h.replace(/>–</g, '><span class="mute">–</span><');
         return h + '</div>';

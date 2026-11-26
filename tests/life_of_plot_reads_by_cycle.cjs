@@ -87,14 +87,14 @@ const DATA = {
   ok(cyc[0] && cyc[0].batches.join() === '263,265,269,271', '…holding only its own batches', cyc[0] && cyc[0].batches);
   ok(cyc[1] && /Finished/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && /2025-05-22 → 2026-06-12/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
      'cycle 1 under it: 228 + 229, 22 May 2025 to its 3rd cull 12 Jun 2026, 12,121', cyc[1] && cyc[1].head);
-  ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,2nd Culling,3rd Culling' && cyc[0].heads === 'Date,Transplanted,Alive,Dead,Culling rate (%),Pending culling,Drone Count,Variance,Culling rate (%)', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
-  ok(cyc[1] && cyc[1].rows[0] === '228|2025-05-22|3,074|2,979|95|3.09%|178|178|0|5.79%',
+  ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,2nd Culling,3rd Culling' && cyc[0].heads === 'Date,Transplanted,Date,Alive,Dead,Culling rate (%),Date,Pending culling,Drone Count,Variance,Culling rate (%)', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
+  ok(cyc[1] && cyc[1].rows[0] === '228|2025-05-22|3,074|2025-09-14|2,979|95|3.09%|2026-06-12|178|178|0|5.79%',
      'batch 228 on one line: date and 3,074 transplanted; 2nd alive 2,979, dead 95, 3.09%; 3rd pending 178, drone 178, variance 0, 5.79%', cyc[1] && cyc[1].rows[0]);
-  ok(cyc[1] && cyc[1].rows[1] === '229|2025-05-22|9,047|8,978|69|0.76%|2,884|2,884|0|31.88%', 'batch 229 below it', cyc[1] && cyc[1].rows[1]);
-  ok(cyc[1] && cyc[1].foot === 'Total · plot||12,121|11,957|164|1.35%|3,062|3,062|0|25.26%', 'the cycle 1 total is the office B11 sheet: 11,957 / 164 / 1.35%, 3,062 / 25.26%', cyc[1] && cyc[1].foot);
-  ok(cyc[0] && cyc[0].rows[1] === '265|2026-07-24|7,326|7,285|41|0.56%|–|–|0|0.00%', 'batch 265: census 7,326 after its -127 calibration', cyc[0] && cyc[0].rows[1]);
-  ok(cyc[0] && /^271\|2026-10-24\|135\|135\|/.test(cyc[0].rows[3] || ''), 'Transplanting is the date and the quantity only (no drone count there)', cyc[0] && cyc[0].rows[3]);
-  ok(cyc[0] && cyc[0].foot.startsWith('Total · plot||12,275|12,174|101|0.82%|'), 'cycle 2 total: transplanted 12,275, alive 12,174, dead 101, 0.82%', cyc[0] && cyc[0].foot);
+  ok(cyc[1] && cyc[1].rows[1] === '229|2025-05-22|9,047|2025-09-14|8,978|69|0.76%|2026-06-12|2,884|2,884|0|31.88%', 'batch 229 below it', cyc[1] && cyc[1].rows[1]);
+  ok(cyc[1] && cyc[1].foot === 'Total · plot||12,121||11,957|164|1.35%||3,062|3,062|0|25.26%', 'the cycle 1 total is the office B11 sheet: 11,957 / 164 / 1.35%, 3,062 / 25.26%', cyc[1] && cyc[1].foot);
+  ok(cyc[0] && cyc[0].rows[1] === '265|2026-07-24|7,326|2026-11-12|7,285|41|0.56%|–|–|–|0|0.00%', 'batch 265: census 7,326 after its -127 calibration', cyc[0] && cyc[0].rows[1]);
+  ok(cyc[0] && /^271\|2026-10-24\|135\|–\|135\|/.test(cyc[0].rows[3] || ''), 'Transplanting is the date and the quantity only (no drone count there)', cyc[0] && cyc[0].rows[3]);
+  ok(cyc[0] && cyc[0].foot.startsWith('Total · plot||12,275||12,174|101|0.82%|'), 'cycle 2 total: transplanted 12,275, alive 12,174, dead 101, 0.82%', cyc[0] && cyc[0].foot);
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_cycles.png'), fullPage: true });
 
   console.log('2. the side bar opens the transplant record by year');

@@ -12308,7 +12308,8 @@ and the B11 tab), checked figure for figure against B11:
   和 culling rate*): Transplanting is Date and Transplanted; 2nd Culling is Alive,
   Dead, Culling rate; 3rd Culling is Pending culling, Drone Count, Variance (drone
   less pending) and Culling rate (pending over transplanted). The Tab 3 drone
-  count and the 2nd culling date and variance came off.
+  count and the 2nd culling variance came off. Both cullings keep their Date
+  (*2nd cull and 3rd cull都要date*).
 
 **And it is ONE table read across, not three stacked** (the office: "改成横着
 的吧 … batch就不用写那么多次"): a row per batch, the batch written once, then
