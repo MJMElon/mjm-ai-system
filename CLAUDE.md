@@ -12161,3 +12161,46 @@ as Pending.
   count it yet.
 
 `tests/an_added_job_is_a_section_of_its_own.cjs`.
+
+## Life of Plot reads a plot by CYCLE, and carries the Transplant Record by year
+
+`operation/operation_life_of_plot.html`. A plot is filled, grown and 3rd
+culled, then filled again, and each of those is a CYCLE. Its capacity is what
+was transplanted in that cycle, never the plot's whole history added up.
+`lpCycles` is the rule: batches in transplant-date order, and a batch
+transplanted AFTER the latest 3rd culling of the cycle before it starts a new
+one. A plot opens as one card per cycle, newest first, each card with its own
+dates, days and total. The office's Census & Drone Counting sheet lays B11 out
+the same way: 228 + 229 = 12,121, then 263 to 271 = 12,275. The map colours
+and the list read the CURRENT cycle.
+
+The side bar's **Transplant record by year** (`buildTransplantYear`) is the
+office's *Transplant Record 2026* sheet: a row for every plot Seedling Stock
+holds, a column per month, a total per nursery, and the year with the one
+before it on top. The figure is the transplant record PLUS the approved
+calibration, which lands in the batch's transplant month. That is how the
+sheet reads B11 in July 2026: 8,972 = 1,646 + 7,453 - 127.
+
+`tests/life_of_plot_builds_the_sheet.cjs` (builder) and
+`tests/life_of_plot_reads_by_cycle.cjs` (the real page) hold it. Nothing to
+run in the database.
+
+**PALMS opens inside Life of Plot.** Its side bar carries **PALMS** (the Plot
+Status Map) as an ordinary entry under Life of Plot, and **Settings** (the
+stage list, for the whole of Life of Plot) at the foot; each opens the REAL
+PALMS page in a frame under the same side bar (`PALMS_PAGES`, `#view=palms-board`). The PALMS
+pages stay their own: they check their own access and write their own
+records. With `?embed=1`, `shared_palms_nav.js` hides their ribbon, their
+own side bar and the NELOS dock, so only one side bar is on screen; opened
+on their own they are exactly as before. Section 3 of
+`tests/life_of_plot_reads_by_cycle.cjs`.
+
+**The nursery is chosen ONCE, top right** (`#lp-head-nur`), on Plots & cycles
+and on PALMS; the year record and Settings show none. The map panel draws no
+tabs and the Nursery chip row is hidden while a map exists; the Plot chip row
+stays (the office asked for it back). Embedded PALMS hides its own `.pm-tabs`,
+and `syncPalmsNursery` presses the matching one inside the frame, retrying
+while the PALMS map loads.
+
+The P.A.L.M.S tile on the Nursery Operation dashboard was taken off for the
+same reason: PALMS is reached from Life of Plot now.

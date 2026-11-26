@@ -897,7 +897,7 @@ function renderPreNurseryGlance(c) {
 }
 
 function renderSeedPlanting(fromLoad) {
-  try { renderCustomJobClaims('seedplant'); } catch (e) { console.warn('[payroll] added jobs:', e); }
+  try { renderCustomJobClaims('seedplant', null, 'Pre Nursery'); } catch (e) { console.warn('[payroll] added jobs:', e); }
   const tbl = $('seedplant-table'), note = $('seedplant-note'), sub = $('seedplant-sub');
   if (!tbl) return;
   const month = maintMonthLabel(monthValue());
@@ -2995,7 +2995,8 @@ function renderTransplantClaim() {
   catch (e) { console.warn('[payroll] the by-plot table could not be drawn:', e); }
   try { renderCullIncentive(secFilter); }
   catch (e) { console.warn('[payroll] the culling incentive could not be drawn:', e); }
-  try { renderCustomJobClaims('transpl', l => !secFilter || inSection(secFilter, l.section)); }
+  try { renderCustomJobClaims('transpl', l => !secFilter || inSection(secFilter, l.section),
+      secFilter ? (secFilter === NO_SECTION ? 'No section' : (SECTION_NAME[secFilter] || secFilter)) : 'All Sections'); }
   catch (e) { console.warn('[payroll] added jobs could not be drawn:', e); }
 
   const lines = transplantFieldLines()
@@ -4257,7 +4258,7 @@ function renderMaint() {
   const frozen = maintSnapshotFor(n, ym);
   const view = frozen ? maintViewFromSnapshot(frozen) : maintLiveView(n, ym, monthTxt);
   renderMaintGlance(view);
-  try { renderCustomJobClaims('maint', l => !n || l.row.nursery === n); } catch (e) { console.warn('[payroll] added jobs:', e); }
+  try { renderCustomJobClaims('maint', l => !n || l.row.nursery === n, n || 'All Sections'); } catch (e) { console.warn('[payroll] added jobs:', e); }
   const { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll } = view;
 
   // The two things a claim form has to say about itself, and no preamble.
@@ -4496,7 +4497,7 @@ function renderLoading() {
      see its money again just because it reached a different tab. */
   if (!may('maint')) { if (primary) primary.classList.add('hidden'); return; }
   if (primary) primary.classList.remove('hidden');
-  try { renderCustomJobClaims('seedling', l => !$('maint-nursery').value || l.row.nursery === $('maint-nursery').value); } catch (e) { console.warn('[payroll] added jobs:', e); }
+  try { renderCustomJobClaims('seedling', l => !$('maint-nursery').value || l.row.nursery === $('maint-nursery').value, $('maint-nursery').value || 'All Sections'); } catch (e) { console.warn('[payroll] added jobs:', e); }
 
   const sel = $('maint-nursery');
   if (!sel) return;
@@ -7285,13 +7286,24 @@ function customJobLines(sheet) {
   return out;
 }
 /* The section under a sheet: one table per job with a checked row. */
-function renderCustomJobClaims(sheet, keep) {
+function renderCustomJobClaims(sheet, keep, scopeTxt) {
   const pane = document.getElementById('sub-' + sheet);
   if (!pane) return;
-  let box = pane.querySelector(':scope > .cj-claims');
-  if (!box) { box = document.createElement('div'); box.className = 'cj-claims'; pane.appendChild(box); }
+  let box = pane.querySelector('.cj-claims');
+  if (!box) {
+    box = document.createElement('div'); box.className = 'cj-claims';
+    /* On Transplanting it is a section of its own UNDER Culling Monitoring,
+       which is where the office asked for it. Elsewhere it closes the sheet. */
+    const after = sheet === 'transpl' ? document.getElementById('cull-inc-wrap') : null;
+    if (after && after.parentNode) after.parentNode.insertBefore(box, after.nextSibling);
+    else pane.appendChild(box);
+  }
   const lines = customJobLines(sheet).filter(l => !keep || keep(l));
-  const jobs = (maintCustomJobs || []).filter(j => customJobSheet(j) === sheet && lines.some(l => l.job.key === j.key));
+  /* Every job filed under this sheet draws its section, Checked rows or not:
+     a section that only appears once something is paid reads as a job that
+     never reached the payroll. */
+  const jobs = (maintCustomJobs || []).filter(j => customJobSheet(j) === sheet);
+  const monthTxt = monthLabelFull(monthValue());
   box.innerHTML = (customJobRowsErr ? `<p class="foot-note">Jobs added on Work Maintenance could not be read: ${esc(customJobRowsErr)}</p>` : '')
     + jobs.map(job => {
       const ls = lines.filter(l => l.job.key === job.key);
@@ -7305,12 +7317,18 @@ function renderCustomJobClaims(sheet, keep) {
       });
       const rows = [...per.values()].sort((a, b) => a.name.localeCompare(b.name));
       const totQ = rows.reduce((a, r) => a + r.qty, 0), totA = rows.reduce((a, r) => a + r.amount, 0);
-      return `<div class="card cj-claim" data-cj="${esc(job.key)}" style="margin-top:16px;"><div class="tbl-wrap"><table>
-        <thead><tr><th colspan="5" class="cj-claim-h">${esc(job.label)}${job.desc ? ` <span class="cj-claim-desc">· ${esc(job.desc)}</span>` : ''}</th></tr>
-          <tr><th>No.</th><th>Worker</th><th>Qty</th><th>Rate (RM)</th><th>Amount (RM)</th></tr></thead>
+      const view = job.sidebar === false ? job.under : job.key;
+      const head = `<div class="cj-claim-bar">
+          <div class="sec-label cj-claim-head">${esc(job.label)} — Checked — ${esc(scopeTxt || 'All Sections')} · ${esc(monthTxt)}</div>
+          <a class="btn btn-sm" href="../nursery_ops/nursery_ops_maintenance.html?view=${encodeURIComponent(view || '')}">Check on Worker Activity &rarr;</a>
+        </div>`;
+      const table = rows.length ? `<div class="card"><div class="tbl-wrap"><table>
+        <thead><tr><th>No.</th><th>Worker</th><th>Qty</th><th>Rate (RM)</th><th>Amount (RM)</th></tr></thead>
         <tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}${r.known ? '' : ' <span class="cj-unknown">(not on register)</span>'}</td>
           <td>${capFmt(r.qty)}</td><td>${rate ? esc(String(rate.rate)) : '—'}</td><td>${rate ? moneyFig(r.amount) : '—'}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="2">TOTAL</td><td>${capFmt(totQ)}</td><td></td><td>${rate ? moneyFig(totA) : '—'}</td></tr></tfoot>
-      </table></div>${rate ? '' : `<p class="foot-note cj-norate">No piece rate yet for ${esc(job.label)} — set it on Settings → Piece Rate, where it is waiting under Pending. Until then this work is listed and not paid.</p>`}</div>`;
+      </table></div></div>`
+        : `<div class="card cj-claim-empty">Nothing of ${esc(job.label)} has been Checked for ${esc(monthTxt)} yet.</div>`;
+      return `<div class="cj-claim" data-cj="${esc(job.key)}">${head}${table}${rate ? '' : `<p class="foot-note cj-norate">No piece rate yet for ${esc(job.label)} — set it on Settings → Piece Rate, where it is waiting under Pending. Until then this work is listed and not paid.</p>`}</div>`;
     }).join('');
 }

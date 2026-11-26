@@ -44,6 +44,8 @@
         .lp-tabs { display:flex; gap:8px; flex-wrap:wrap; background:#f1ead9; border:1px solid #e8dcc8; border-radius:16px; padding:6px; }
         .lp-tab { padding:8px 16px; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.08em; border-radius:12px; color:#8a7a68; background:#fdfaf4; border:1.5px solid transparent; cursor:pointer; }
         .lp-tab:hover { color:#3d2610; }
+        .lp-head-tabs { min-width:90px; justify-content:flex-end; }
+        .lp-head-tabs:empty { visibility:hidden; background:none; border:0; }
         .lp-tab.on { background:#4a7a2e; color:#fdfaf4; border-color:#3f6a26; }
         .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
         .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
@@ -61,6 +63,39 @@
         .lp-zbtn { width:28px; height:28px; border:none; background:#fff; color:#5c3d1e; font-weight:900; font-size:14px; border-radius:6px; cursor:pointer; }
         .lp-zbtn:hover { background:#f1ead9; }
         .lp-zlvl { font-size:9px; font-weight:800; color:#8a7a68; text-align:center; padding:2px 0; border-top:1px solid #e8dcc8; border-bottom:1px solid #e8dcc8; }
+        /* Side bar: the two ways into the plots. */
+        .lp-shell { display:grid; grid-template-columns:230px minmax(0,1fr); gap:24px; align-items:start; }
+        .lp-side { position:sticky; top:16px; padding:16px 12px; border-radius:1.5rem; display:flex; flex-direction:column; gap:4px; }
+        .lp-side-h { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#8a7a68; padding:4px 10px 10px; }
+        .lp-side-b { display:flex; align-items:center; gap:10px; text-align:left; padding:10px 12px; border-radius:12px; border:none; background:transparent; font-weight:700; font-size:13px; color:#5c3d1e; cursor:pointer; }
+        .lp-side-b:hover { background:#f1ead9; }
+        .lp-side-b.on { background:#4a7a2e; color:#fdfaf4; }
+        .lp-side-i { width:18px; text-align:center; opacity:.85; }
+        .lp-side-foot { margin-top:12px; position:relative; }
+        .lp-side-foot::before { content:''; position:absolute; left:0; right:0; top:-7px; border-top:1px solid #e8dcc8; }
+        .lp-palms-box { overflow:hidden; padding:0; }
+        #lp-palms-frame { display:block; width:100%; height:calc(100vh - 190px); min-height:620px; border:0; border-radius:2rem; background:#fff; }
+        @media (max-width: 900px) {
+            .lp-shell { grid-template-columns:1fr; }
+            .lp-side { position:static; flex-direction:row; flex-wrap:wrap; }
+            .lp-side-h { display:none; }
+        }
+        /* Cycles: one card per cycle, newest first, each with its own total. */
+        .lp-cyc { margin-bottom:20px; }
+        .lp-cyc-h { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 18px; padding:16px 18px 6px; }
+        .lp-cyc-n { font-size:15px; font-weight:900; color:#3d2610; }
+        .lp-cyc-tag { font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:3px 9px; border-radius:999px; background:#f1ead9; color:#8a7a68; }
+        .lp-cyc-tag.cur { background:#e5f0dc; color:#3f6a26; }
+        .lp-cyc-d { font-size:12px; font-weight:700; color:#5c3d1e; }
+        .lp-cyc-cap { margin-left:auto; font-size:12px; font-weight:700; color:#8a7a68; }
+        .lp-cyc-cap b { font-size:16px; color:#3d2610; font-weight:900; }
+        /* Transplant record: the office sheet, a column per month. */
+        table.lp tr.grp td { text-align:left; }
+        table.lp-rec th, table.lp-rec td { padding:9px 10px; }
+        table.lp-rec td.sum { color:#5c3d1e; }
+        table.lp-rec tr.sumrow td { background:#fbf6ec; }
+        table.lp-rec tr.tot td { font-weight:900; color:#3d2610; border-top:2px solid #e8dcc8; background:#f8f2e6; }
+        table.lp-rec td.yt { font-weight:900; background:#f8f2e6; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
@@ -73,9 +108,42 @@
             <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
             <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
         </div>
-        <div class="hidden md:block w-[90px]"></div>
+        <!-- ONE nursery choice for the whole page, top right: the plot map and
+             PALMS both follow it, so neither draws tabs of its own. -->
+        <div id="lp-head-nur" class="lp-tabs lp-head-tabs"></div>
     </div>
 
+    <div class="lp-shell">
+    <aside class="lp-side panel" id="lp-side">
+        <div class="lp-side-h">Life of Plot</div>
+        <button type="button" class="lp-side-b on" data-view="plots"><span class="lp-side-i">&#9638;</span>Plots &amp; cycles</button>
+        <button type="button" class="lp-side-b" data-view="record"><span class="lp-side-i">&#9776;</span>Transplant record by year</button>
+        <button type="button" class="lp-side-b" data-view="palms-board"><span class="lp-side-i">&#9673;</span>PALMS</button>
+        <!-- Settings is the whole module's, so it sits apart at the foot. -->
+        <button type="button" class="lp-side-b lp-side-foot" data-view="palms-stages"><span class="lp-side-i">&#9881;</span>Settings</button>
+    </aside>
+    <main class="lp-main">
+
+    <!-- PALMS, opened inside this page. The PALMS pages are their own (they
+         check their own access and write their own records); ?embed=1 makes
+         them drop their ribbon and their own side bar, so this one is the
+         only navigation on screen. -->
+    <div id="lp-palms" class="hidden">
+        <div class="panel lp-palms-box"><iframe id="lp-palms-frame" title="PALMS" src="about:blank"></iframe></div>
+    </div>
+
+    <div id="lp-record" class="hidden">
+        <div class="panel p-6 mb-6 space-y-3">
+            <div class="lp-chip-label">Year</div>
+            <div id="lp-year-row" class="lp-chips"></div>
+        </div>
+        <div class="panel overflow-x-auto">
+            <table class="lp lp-rec" id="lp-rec-table"></table>
+        </div>
+        <p class="text-[11px] font-bold text-[#8a7a68] mt-3">Transplanted into each main plot by month, approved calibration included, on the transplant record date. Click a plot for its cycles.</p>
+    </div>
+
+    <div id="lp-plots-view">
     <div id="lp-map" class="panel p-6 mb-6 hidden">
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div class="lp-chip-label">Map · click a plot for its cycles</div>
@@ -86,12 +154,12 @@
                 <span><i style="background:#94a3b8"></i>No batch</span>
             </div>
         </div>
-        <div id="lp-map-tabs" class="lp-tabs mb-4"></div>
+        <div id="lp-map-tabs" class="hidden"></div>
         <div id="lp-map-body"></div>
     </div>
 
-    <div class="panel p-6 mb-6 space-y-3">
-        <div class="lp-chip-label">Nursery</div>
+    <div class="panel p-6 mb-6 space-y-3" id="lp-pick">
+        <div class="lp-chip-label" id="lp-nursery-label">Nursery</div>
         <div id="lp-nursery-row" class="lp-chips"></div>
         <div class="lp-chip-label">Plot</div>
         <div id="lp-plot-row" class="lp-chips"></div>
@@ -105,10 +173,11 @@
 
     <div id="lp-detail" class="hidden">
         <button id="lp-up" class="lp-back mb-4">&#8592; All plots</button>
-        <div class="panel overflow-x-auto">
-            <table class="lp" id="lp-timeline"></table>
-        </div>
+        <div id="lp-timeline-box"></div>
         <p id="lp-note" class="text-[11px] font-bold text-[#8a7a68] mt-3"></p>
+    </div>
+    </div>
+    </main>
     </div>
 </div>
 
@@ -140,6 +209,65 @@
     function lpIsApprovedTransplantCal(r) {
         const rem = String(r.remark || '');
         return r.transaction_type === 'Stock_Calibration' && /^Report:\s*Transplanting/i.test(rem) && /APPROVED/i.test(rem);
+    }
+    /* A plot is filled, grown and 3rd culled, then filled again: each of those
+       is a CYCLE, and its capacity is what was transplanted in that cycle, never
+       the plot's whole history added up. Batches run in transplant-date order; a
+       batch transplanted AFTER the latest 3rd culling of the cycle before it
+       starts a new cycle. A batch with no transplant date of its own (a cull
+       with nothing transplanted here) stays in the cycle it falls in. */
+    function lpCycles(batches) {
+        const cycles = [];
+        let cur = null;
+        (batches || []).forEach(b => {
+            const lastC3 = cur ? lpLatest(cur.batches.map(x => x.c3Date)) : null;
+            if (!cur || (b.tDate && lastC3 && b.tDate > lastC3)) { cur = { batches: [] }; cycles.push(cur); }
+            cur.batches.push(b);
+        });
+        return cycles.map((c, i) => {
+            const bs = c.batches;
+            const done = bs.some(b => b.c3Date) && (i < cycles.length - 1 || bs.every(b => b.c3Date || !b.tAdj));
+            return {
+                n: i + 1, batches: bs, current: i === cycles.length - 1,
+                start: lpEarliest(bs.map(b => b.tDate)),
+                end: done ? lpLatest(bs.map(b => b.c3Date)) : null,
+                tQty: bs.reduce((a, b) => a + b.tQty, 0),
+                adj: bs.reduce((a, b) => a + b.adj, 0),
+                tAdj: bs.reduce((a, b) => a + b.tAdj, 0),
+                c2: bs.reduce((a, b) => a + b.c2Qty, 0),
+                c3: bs.reduce((a, b) => a + b.c3Qty, 0),
+            };
+        });
+    }
+    /* The Transplant Record for one year, laid out the way the office sheet is:
+       a row per plot, a column per month, a total per nursery, and the year with
+       the one before it on top. Every plot Seedling Stock holds gets its row,
+       transplanted into or not. */
+    function buildTransplantYear(model, year) {
+        const Y = String(year), P = String(Number(year) - 1);
+        const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+        const yearTotals = (yy) => months.map(mm => {
+            let t = 0;
+            model.groups.forEach(g => g.plots.forEach(p => p.batches.forEach(b => { t += b.tByMonth[yy + '-' + mm] || 0; })));
+            return t;
+        });
+        const cum = (xs) => { let a = 0; return xs.map(x => (a += x)); };
+        const groups = model.groups.map(g => {
+            const plots = g.plots.map(p => {
+                const m = months.map(mm => p.batches.reduce((a, b) => a + (b.tByMonth[Y + '-' + mm] || 0), 0));
+                return { plot: p.plot, months: m, total: m.reduce((a, x) => a + x, 0) };
+            });
+            const tot = months.map((_, i) => plots.reduce((a, p) => a + p.months[i], 0));
+            return { key: g.key, label: g.label, plots, months: tot, total: tot.reduce((a, x) => a + x, 0) };
+        }).filter(gr => gr.key !== 'OTHER' || gr.total);
+        const thisY = yearTotals(Y), prevY = yearTotals(P);
+        return { year: Y, prev: P, groups, thisY, thisCum: cum(thisY), prevY, prevCum: cum(prevY),
+                 total: thisY.reduce((a, x) => a + x, 0), prevTotal: prevY.reduce((a, x) => a + x, 0) };
+    }
+    function lpYears(model) {
+        const ys = new Set();
+        model.groups.forEach(g => g.plots.forEach(p => p.batches.forEach(b => Object.keys(b.tByMonth).forEach(k => ys.add(k.slice(0, 4))))));
+        return [...ys].filter(y => /^\d{4}$/.test(y)).sort();
     }
     function buildPlotHistory(plots, rows) {
         const nurOfPlot = new Map();
@@ -180,9 +308,18 @@
                 const batches = [...p.batches.values()].map(b => {
                     const tQty = sum(b.tRows, r => r.quantity_change);
                     const adj = sum(b.adjRows, r => r.quantity_change);
+                    const tDate = lpEarliest(b.tRows.map(r => lpDayOf(r, 'Date')));
+                    // Each transplant row lands in the month it was done; an approved
+                    // calibration corrects the transplant, so it lands with it.
+                    const tByMonth = {};
+                    b.tRows.forEach(r => {
+                        const ym = String(lpDayOf(r, 'Date') || '').slice(0, 7);
+                        if (ym) tByMonth[ym] = (tByMonth[ym] || 0) + (Number(r.quantity_change) || 0);
+                    });
+                    if (adj && tDate) tByMonth[tDate.slice(0, 7)] = (tByMonth[tDate.slice(0, 7)] || 0) + adj;
                     return {
                         batch: b.batch,
-                        tDate: lpEarliest(b.tRows.map(r => lpDayOf(r, 'Date'))),
+                        tDate, tByMonth,
                         tQty, adj, tAdj: tQty + adj,
                         c2Date: lpEarliest(b.c2Rows.map(r => lpDayOf(r, 'CullDate'))),
                         c2Qty: sum(b.c2Rows, r => r.quantity_change),
@@ -191,7 +328,7 @@
                     };
                 }).sort((x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch));
                 return {
-                    plot: p.name, nursery: p.nursery, batches,
+                    plot: p.name, nursery: p.nursery, batches, cycles: lpCycles(batches),
                     tAdj: batches.reduce((a, b) => a + b.tAdj, 0),
                     c2: batches.reduce((a, b) => a + b.c2Qty, 0),
                     c3: batches.reduce((a, b) => a + b.c3Qty, 0),
@@ -231,11 +368,14 @@
     // Colour is how far the plot has got through its 3rd cull, read off the
     // same figures the list shows. The pct is 3rd culled over the adjusted
     // transplant, so it is the same answer the table gives.
+    // Asked of the CURRENT cycle: a plot culled last year and filled again is in the field.
+    function curCycle(p) { return p && p.cycles && p.cycles.length ? p.cycles[p.cycles.length - 1] : null; }
     function mapStateOf(p) {
-        if (!p || !p.batches.length || p.tAdj <= 0) return { key: 'none', pct: 0 };
-        const pct = Math.round(Math.min(100, (p.c3 / p.tAdj) * 100));
-        if (p.c3 <= 0) return { key: 'field', pct };
-        if (p.c3 >= p.tAdj) return { key: 'finished', pct: 100 };
+        const c = curCycle(p);
+        if (!c || c.tAdj <= 0) return { key: 'none', pct: 0 };
+        const pct = Math.round(Math.min(100, (c.c3 / c.tAdj) * 100));
+        if (c.c3 <= 0) return { key: 'field', pct };
+        if (c.end || c.c3 >= c.tAdj) return { key: 'finished', pct: Math.max(pct, c.end ? 100 : pct) };
         return { key: 'culling', pct };
     }
     const fmtN = n => Number(n || 0).toLocaleString('en-MY');
@@ -250,9 +390,33 @@
         if (!keys.length) { box.classList.add('hidden'); return; }
         box.classList.remove('hidden');
         if (!keys.includes(MAP_NUR)) MAP_NUR = keys.includes(NUR) ? NUR : keys[0];
-        document.getElementById('lp-map-tabs').innerHTML = keys.map(k =>
-            `<button type="button" class="lp-tab${k === MAP_NUR ? ' on' : ''}" data-map="${k}">${NURSERY_LABEL[k]}</button>`).join('');
+        renderHeadTabs();
         drawMap();
+    }
+    /* The tabs top right. Shown on the views that are about one nursery (the
+       plots and PALMS), not on the year record (every nursery) or Settings. */
+    function renderHeadTabs() {
+        const el = document.getElementById('lp-head-nur');
+        const keys = NURSERY_ORDER.filter(k => MAPS[k] && k !== 'OTHER');
+        const show = keys.length && (VIEW === 'plots' || VIEW === 'palms-board');
+        el.innerHTML = show ? keys.map(k =>
+            `<button type="button" class="lp-tab${k === MAP_NUR ? ' on' : ''}" data-map="${k}">${NURSERY_LABEL[k]}</button>`).join('') : '';
+    }
+    /* PALMS draws its own tabs (hidden when embedded); press the one that
+       matches. The map loads after the page, so keep asking for a while. */
+    let _palmsSyncT = null;
+    function syncPalmsNursery(tries) {
+        clearTimeout(_palmsSyncT);
+        if (VIEW !== 'palms-board' || !MAP_NUR) return;
+        let done = false;
+        try {
+            const doc = document.getElementById('lp-palms-frame').contentDocument;
+            const tabs = doc ? [...doc.querySelectorAll('.pm-tab')] : [];
+            const t = tabs.find(b => lpNurKey(b.dataset.pmTab || b.textContent) === MAP_NUR);
+            if (t) { if (!t.classList.contains('active')) t.click(); done = true; }
+        } catch (e) { /* not loaded yet */ }
+        const n = tries == null ? 60 : tries;
+        if (!done && n > 0) _palmsSyncT = setTimeout(() => syncPalmsNursery(n - 1), 300);
     }
     function openPlotFromMap(name) {
         showPlot(name);
@@ -291,12 +455,13 @@
             const ptsStr = s.pts.map(pt => pt.x + ',' + pt.y).join(' ');
             const cx = s.pts.reduce((a, pt) => a + pt.x, 0) / s.pts.length;
             const cy = s.pts.reduce((a, pt) => a + pt.y, 0) / s.pts.length;
-            const tip = p ? `Transplanted ${fmtN(p.tAdj)} · 2nd cull ${fmtN(p.c2)} · 3rd cull ${fmtN(p.c3)}` : 'Nothing recorded';
+            const cc = curCycle(p);
+            const tip = cc ? `Cycle ${cc.n} of ${p.cycles.length} · transplanted ${fmtN(cc.tAdj)} · 2nd cull ${fmtN(cc.c2)} · 3rd cull ${fmtN(cc.c3)}` : 'Nothing recorded';
             svg.insertAdjacentHTML('beforeend',
                 `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name}: ${tip}</title></polygon>`);
             const line = st.key === 'none'
                 ? '<div class="lp-line empty">No batch</div>'
-                : `<div class="lp-line" title="${tip}">${st.pct}% 3rd culled</div>`;
+                : `<div class="lp-line" title="${tip}">Cycle ${cc.n} · ${fmtN(cc.tAdj)}</div>`;
             labels.insertAdjacentHTML('beforeend',
                 `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}</div>`);
         });
@@ -358,6 +523,7 @@
     }
 
     function showList() {
+        if (VIEW !== 'plots') setView('plots', true);
         fillPlotSelect('');
         document.getElementById('lp-list').classList.remove('hidden');
         document.getElementById('lp-detail').classList.add('hidden');
@@ -370,6 +536,14 @@
     const chip = (attr, val, label, on) =>
         `<button type="button" class="lp-chip${on ? ' on' : ''}" data-${attr}="${String(val).replace(/"/g, '&quot;')}">${label}</button>`;
     function fillNurserySelect() {
+        /* The map's own tabs above choose the nursery, so a second row of the
+           same choice is not drawn while the map is on screen. With no map
+           (no nursery photo), this row is the only way to choose and stays. */
+        const byMap = NURSERY_ORDER.some(k => MAPS[k]);
+        /* Only the NURSERY row goes: the tabs top right choose it. The Plot
+           row stays (the office asked for it back, "这个保留"). */
+        document.getElementById('lp-nursery-label').classList.toggle('hidden', byMap);
+        document.getElementById('lp-nursery-row').classList.toggle('hidden', byMap);
         const keys = MODEL.groups.filter(g => g.plots.length).map(g => g.key);
         document.getElementById('lp-nursery-row').innerHTML =
             chip('nur', '', 'All nurseries', !NUR) + keys.map(k => chip('nur', k, NURSERY_LABEL[k], NUR === k)).join('');
@@ -382,22 +556,53 @@
     }
 
     function renderList() {
-        let h = '<thead><tr><th class="l">Plot</th><th class="l">Nursery</th><th>Transplanted (adjusted)</th><th>2nd cull</th><th>3rd cull</th></tr></thead><tbody>';
+        let h = '<thead><tr><th class="l">Plot</th><th class="l">Nursery</th><th>Cycles</th><th class="l">Current cycle</th><th>Transplanted (adjusted)</th><th>2nd cull</th><th>3rd cull</th></tr></thead><tbody>';
         MODEL.groups.filter(g => !NUR || g.key === NUR).forEach(g => {
-            h += `<tr class="grp"><td colspan="5">${g.label} · ${g.plots.length} plot${g.plots.length === 1 ? '' : 's'}</td></tr>`;
+            h += `<tr class="grp"><td colspan="7">${g.label} · ${g.plots.length} plot${g.plots.length === 1 ? '' : 's'}</td></tr>`;
             g.plots.forEach(p => {
-                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td><td class="l">${g.label}</td><td>${dash(p.tAdj)}</td><td class="cull">${dash(p.c2)}</td><td class="cull">${dash(p.c3)}</td></tr>`;
+                const c = curCycle(p);
+                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td><td class="l">${g.label}</td>`
+                   + `<td>${p.cycles.length || '–'}</td><td class="l">${c ? cycleSpan(c) : '–'}</td>`
+                   + `<td>${dash(c && c.tAdj)}</td><td class="cull">${dash(c && c.c2)}</td><td class="cull">${dash(c && c.c3)}</td></tr>`;
             });
-            if (!g.plots.length) h += '<tr><td colspan="5" class="l" style="color:#94a3b8;font-weight:700">No plots.</td></tr>';
+            if (!g.plots.length) h += '<tr><td colspan="7" class="l" style="color:#94a3b8;font-weight:700">No plots.</td></tr>';
         });
         h += '</tbody>';
         document.getElementById('lp-plots').innerHTML = h;
         document.querySelectorAll('#lp-plots tr.plotrow').forEach(tr => tr.addEventListener('click', () => showPlot(tr.dataset.plot)));
     }
 
+    function lpDays(a, b) {
+        if (!a) return null;
+        const t0 = Date.parse(a + 'T00:00:00Z'), t1 = b ? Date.parse(b + 'T00:00:00Z') : Date.now();
+        return Math.max(0, Math.round((t1 - t0) / 86400000));
+    }
+    function cycleSpan(c) {
+        return `${c.start || '–'} → ${c.end || 'now'}`;
+    }
+    function cycleHtml(c) {
+        const d = lpDays(c.start, c.end);
+        let h = `<div class="panel overflow-x-auto lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
+              + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
+              + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Finished' : 'Current'}</span>`
+              + `<span class="lp-cyc-d">${c.start || '–'} → ${c.end || 'now'}${d != null ? ' · ' + d + ' days' : ''}</span>`
+              + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
+        h += '<table class="lp"><thead><tr><th class="l">Batch</th><th class="l">Transplant date</th><th>Transplant qty</th><th>Calibration</th><th>Adjusted</th>'
+           + '<th class="l">2nd cull date</th><th>2nd cull qty</th><th class="l">3rd cull date</th><th>3rd cull qty</th></tr></thead><tbody>';
+        c.batches.forEach(b => {
+            h += `<tr><td class="l batch">${b.batch}</td><td class="l">${b.tDate || '–'}</td><td>${dash(b.tQty)}</td>`
+               + `<td class="${b.adj ? 'adj' : 'dash'}">${b.adj ? (b.adj > 0 ? '+' : '') + nf(b.adj) : '–'}</td><td>${dash(b.tAdj)}</td>`
+               + `<td class="l">${b.c2Date || '–'}</td><td class="cull">${dash(b.c2Qty)}</td><td class="l">${b.c3Date || '–'}</td><td class="cull">${dash(b.c3Qty)}</td></tr>`;
+        });
+        h += `</tbody><tfoot><tr class="tot"><td class="l">Cycle ${c.n} total</td><td></td><td>${dash(c.tQty)}</td>`
+           + `<td>${c.adj ? (c.adj > 0 ? '+' : '') + nf(c.adj) : '–'}</td><td>${dash(c.tAdj)}</td><td></td><td>${dash(c.c2)}</td><td></td><td>${dash(c.c3)}</td></tr></tfoot></table></div>`;
+        return h;
+    }
+
     function showPlot(name) {
         const p = MODEL.groups.flatMap(g => g.plots).find(x => x.plot === name);
         if (!p) return;
+        setView('plots', true);
         NUR = p.nursery;
         if (MAPS[p.nursery]) MAP_NUR = p.nursery;
         renderMap();
@@ -407,20 +612,78 @@
         document.getElementById('lp-detail').classList.remove('hidden');
         document.getElementById('lp-title').textContent = 'Life of Plot · ' + p.plot;
         const nurLabel = NURSERY_LABEL[p.nursery];
-        document.getElementById('lp-sub').textContent = nurLabel + ' · transplant, 2nd cull and 3rd cull by batch, in date order. Transplant includes approved calibration.';
+        document.getElementById('lp-sub').textContent = nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
         history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
-        let h = '<thead><tr><th class="l">Batch</th><th class="l">Transplant date</th><th>Transplant qty</th><th>Calibration</th><th>Adjusted</th>'
-              + '<th class="l">2nd cull date</th><th>2nd cull qty</th><th class="l">3rd cull date</th><th>3rd cull qty</th></tr></thead><tbody>';
-        if (!p.batches.length) h += '<tr><td colspan="9" class="l" style="color:#94a3b8;font-weight:700">Nothing recorded on this plot yet.</td></tr>';
-        p.batches.forEach(b => {
-            h += `<tr><td class="l batch">${b.batch}</td><td class="l">${b.tDate || '–'}</td><td>${dash(b.tQty)}</td>`
-               + `<td class="${b.adj ? 'adj' : 'dash'}">${b.adj ? (b.adj > 0 ? '+' : '') + nf(b.adj) : '–'}</td><td>${dash(b.tAdj)}</td>`
-               + `<td class="l">${b.c2Date || '–'}</td><td class="cull">${dash(b.c2Qty)}</td><td class="l">${b.c3Date || '–'}</td><td class="cull">${dash(b.c3Qty)}</td></tr>`;
-        });
-        h += `</tbody><tfoot><tr class="tot"><td class="l">Total</td><td></td><td>${dash(p.batches.reduce((a, b) => a + b.tQty, 0))}</td>`
-           + `<td>${dash(p.batches.reduce((a, b) => a + b.adj, 0)) || '–'}</td><td>${dash(p.tAdj)}</td><td></td><td>${dash(p.c2)}</td><td></td><td>${dash(p.c3)}</td></tr></tfoot>`;
-        document.getElementById('lp-timeline').innerHTML = h;
+        document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
+            ? p.cycles.slice().reverse().map(cycleHtml).join('')
+            : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
         document.getElementById('lp-note').textContent = 'Dates come from the transplant and cull records: the record\'s own date, else the Date / CullDate written in its remark, else the day it was saved.';
+    }
+
+    // ── Side bar: Plots & cycles, or the Transplant record by year ──
+    let VIEW = 'plots';
+    let REC_YEAR = '';
+    const PALMS_PAGES = {
+        'palms-board':  { href: '../nursery_ops/nursery_ops_palms_board.html?embed=1',  title: 'PALMS', sub: 'PALMS · every plot and the stage it is on.' },
+        'palms-stages': { href: '../nursery_ops/nursery_ops_palms_stages.html?embed=1', title: 'Settings',  sub: 'Life of Plot · the stages a plot moves through.' },
+    };
+    function setView(v, quiet) {
+        VIEW = v === 'record' ? 'record' : (PALMS_PAGES[v] ? v : 'plots');
+        document.querySelectorAll('#lp-side .lp-side-b').forEach(b => b.classList.toggle('on', b.dataset.view === VIEW));
+        document.getElementById('lp-record').classList.toggle('hidden', VIEW !== 'record');
+        document.getElementById('lp-plots-view').classList.toggle('hidden', VIEW !== 'plots');
+        document.getElementById('lp-palms').classList.toggle('hidden', !PALMS_PAGES[VIEW]);
+        if (MODEL) renderHeadTabs();
+        if (PALMS_PAGES[VIEW]) {
+            const pg = PALMS_PAGES[VIEW];
+            const fr = document.getElementById('lp-palms-frame');
+            if (fr.getAttribute('src') !== pg.href) fr.setAttribute('src', pg.href);
+            document.getElementById('lp-title').textContent = pg.title;
+            document.getElementById('lp-sub').textContent = pg.sub;
+            if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
+            syncPalmsNursery();
+        } else if (VIEW === 'record') {
+            document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
+            document.getElementById('lp-sub').textContent = 'Every main plot, transplanted by month.';
+            if (!quiet) history.replaceState(null, '', '#view=record&year=' + REC_YEAR);
+            renderRecord();
+        } else if (!quiet) {
+            showList();
+        }
+    }
+    function renderRecord() {
+        if (!MODEL) return;
+        const years = lpYears(MODEL);
+        const nowY = String(new Date().getFullYear());
+        if (!years.includes(nowY)) years.push(nowY);
+        years.sort();
+        if (!REC_YEAR || !years.includes(REC_YEAR)) REC_YEAR = years.includes(nowY) ? nowY : years[years.length - 1];
+        document.getElementById('lp-title').textContent = 'Transplant Record ' + REC_YEAR;
+        document.getElementById('lp-year-row').innerHTML = years.slice().reverse().map(y => chip('year', y, y, y === REC_YEAR)).join('');
+        const R = buildTransplantYear(MODEL, REC_YEAR);
+        const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const cell = v => (v ? `<td>${nf(v)}</td>` : '<td class="dash"></td>');
+        const sumRow = (label, xs, total) => `<tr class="sumrow"><td class="l batch">${label}</td>${xs.map(v => `<td class="sum">${v ? nf(v) : '–'}</td>`).join('')}<td class="yt">${total == null ? '' : nf(total) || '0'}</td></tr>`;
+        let h = `<thead><tr><th class="l">Month</th>${MON.map(m => `<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>`;
+        h += '<tr class="grp"><td colspan="14">Summary</td></tr>';
+        h += sumRow('Total transplanted ' + R.year, R.thisY, R.total);
+        h += sumRow('Cumulative ' + R.year, R.thisCum, null);
+        h += sumRow('Total transplanted ' + R.prev, R.prevY, R.prevTotal);
+        h += sumRow('Cumulative ' + R.prev, R.prevCum, null);
+        R.groups.forEach(g => {
+            h += `<tr class="grp"><td colspan="14">${g.label}</td></tr>`;
+            g.plots.forEach(p => {
+                h += `<tr class="plotrow" data-plot="${p.plot.replace(/"/g, '&quot;')}"><td class="l batch">${p.plot}</td>${p.months.map(cell).join('')}<td class="yt">${p.total ? nf(p.total) : ''}</td></tr>`;
+            });
+            h += `<tr class="tot"><td class="l">Total ${g.label}</td>${g.months.map(v => `<td>${nf(v) || '0'}</td>`).join('')}<td>${nf(g.total) || '0'}</td></tr>`;
+        });
+        h += '</tbody>';
+        const t = document.getElementById('lp-rec-table');
+        t.innerHTML = h;
+        t.querySelectorAll('tr.plotrow').forEach(tr => tr.addEventListener('click', () => {
+            showPlot(tr.dataset.plot);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }));
     }
 
     async function load() {
@@ -446,28 +709,52 @@
                 } catch (e) { /* a shape that will not parse is simply not drawn */ }
             });
             MODEL = buildPlotHistory(plots, rows);
+            // With the map choosing the nursery there is no "All nurseries", so
+            // the list opens on the nursery the map opens on.
+            if (!NUR) { const k0 = NURSERY_ORDER.find(k => MAPS[k]); if (k0) NUR = k0; }
             document.getElementById('lp-status').classList.add('hidden');
             fillNurserySelect();
             fillPlotSelect('');
             renderList();
             renderMap();
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
-            if (deep) showPlot(deep); else showList();
+            REC_YEAR = (location.hash.match(/year=(\d{4})/) || [])[1] || '';
+            const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
+            if (deep) showPlot(deep);
+            else if (viewIn === 'record' || PALMS_PAGES[viewIn]) setView(viewIn);
+            else showList();
         } catch (e) {
             document.getElementById('lp-status').textContent = 'Could not read the plot records: ' + (e && e.message ? e.message : e);
         }
     }
 
     document.getElementById('lp-up').addEventListener('click', showList);
+    document.getElementById('lp-side').addEventListener('click', e => {
+        const b = e.target.closest('button[data-view]');
+        if (b) setView(b.dataset.view);
+    });
+    document.getElementById('lp-year-row').addEventListener('click', e => {
+        const b = e.target.closest('button[data-year]');
+        if (!b) return;
+        REC_YEAR = b.dataset.year;
+        history.replaceState(null, '', '#view=record&year=' + REC_YEAR);
+        renderRecord();
+    });
     document.getElementById('lp-nursery-row').addEventListener('click', e => {
         const b = e.target.closest('button[data-nur]');
         if (!b) return;
         setNursery(b.dataset.nur);
     });
-    document.getElementById('lp-map-tabs').addEventListener('click', e => {
+    document.getElementById('lp-head-nur').addEventListener('click', e => {
         const b = e.target.closest('button[data-map]');
-        if (b) setNursery(b.dataset.map);
+        if (!b) return;
+        if (VIEW === 'palms-board') {
+            NUR = MAP_NUR = b.dataset.map;
+            fillNurserySelect(); fillPlotSelect(''); renderList(); renderMap();
+            syncPalmsNursery();
+        } else setNursery(b.dataset.map);
     });
+    document.getElementById('lp-palms-frame').addEventListener('load', () => syncPalmsNursery());
     document.getElementById('lp-plot-row').addEventListener('click', e => {
         const b = e.target.closest('button[data-plot]');
         if (!b) return;
@@ -475,7 +762,10 @@
     });
     window.addEventListener('hashchange', () => {
         const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
-        if (MODEL && deep) showPlot(deep); else if (MODEL) showList();
+        const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
+        if (MODEL && deep) showPlot(deep);
+        else if (MODEL && (viewIn === 'record' || PALMS_PAGES[viewIn])) setView(viewIn);
+        else if (MODEL) showList();
     });
 
     (async function boot() {
