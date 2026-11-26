@@ -154,7 +154,7 @@
         <div id="lp-map-body"></div>
     </div>
 
-    <div class="panel p-6 mb-6 space-y-3">
+    <div class="panel p-6 mb-6 space-y-3" id="lp-pick">
         <div class="lp-chip-label" id="lp-nursery-label">Nursery</div>
         <div id="lp-nursery-row" class="lp-chips"></div>
         <div class="lp-chip-label">Plot</div>
@@ -512,8 +512,9 @@
            same choice is not drawn while the map is on screen. With no map
            (no nursery photo), this row is the only way to choose and stays. */
         const byMap = NURSERY_ORDER.some(k => MAPS[k]);
-        document.getElementById('lp-nursery-label').classList.toggle('hidden', byMap);
-        document.getElementById('lp-nursery-row').classList.toggle('hidden', byMap);
+        /* The plot is chosen on the map too ("我按地图就好"), so with a map the
+           whole chooser panel goes, nursery and plot alike. */
+        document.getElementById('lp-pick').classList.toggle('hidden', byMap);
         const keys = MODEL.groups.filter(g => g.plots.length).map(g => g.key);
         document.getElementById('lp-nursery-row').innerHTML =
             chip('nur', '', 'All nurseries', !NUR) + keys.map(k => chip('nur', k, NURSERY_LABEL[k], NUR === k)).join('');
