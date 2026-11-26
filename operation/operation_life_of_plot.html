@@ -173,7 +173,7 @@
     <div class="mb-3"><a id="lp-back" href="operation_dashboard.html" class="lp-back inline-block">&#8592; Back</a></div>
     <div class="panel p-6 mb-3 text-center">
         <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]" id="lp-title" style="word-spacing:.2em">Life of Plot</h1>
-        <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub">Every plot, and what happened to it.</p>
+        <p class="text-[11px] font-bold text-[#8a7a68] mt-1" id="lp-sub"></p>
     </div>
     <!-- ONE nursery choice for the whole page: the plot map and PALMS both
          follow it, so neither draws tabs of its own. -->
@@ -208,14 +208,12 @@
             <div id="lp-rot-year" class="lp-chips"></div>
         </div>
         <div class="panel p-6 mb-6">
-            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-sales-t">Pusingan Jualan</div>
-                <div class="lp-rot-s">Collection plan = 90% of what was transplanted into the plot 9 months earlier. The figure and the % are cumulative since the plot was last filled; the % is against its capacity.</div></div>
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-sales-t">Pusingan Jualan</div></div>
                 <div class="lp-legend"><span><i style="background:#F5E6C8"></i>Collected &lt;40%</span><span><i style="background:#DDA04B"></i>40–79%</span><span><i style="background:#B8730E"></i>&ge;80%</span><span><i style="border:2px dashed #B8732A;background:#fff"></i>Collection plan</span></div></div>
             <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-sales"></div></div>
         </div>
         <div class="panel p-6 mb-6">
-            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-tr-t">Pusingan Transplant</div>
-                <div class="lp-rot-s">Transplanting plan = what was transplanted 10 months earlier.</div></div>
+            <div class="lp-rot-head"><div><div class="lp-rot-t" id="lp-rot-tr-t">Pusingan Transplant</div></div>
                 <div class="lp-legend"><span><i style="background:#2E7D4F"></i>Transplanted</span><span><i style="border:2px dashed #2E7D4F;background:#fff"></i>Transplanting plan</span></div></div>
             <div class="lp-rot-wrap"><div class="lp-rot-grid" id="lp-rot-tr"></div></div>
             <p class="text-[11px] font-bold text-[#8a7a68] mt-3" id="lp-rot-note"></p>
@@ -230,13 +228,12 @@
         <div class="panel overflow-x-auto">
             <table class="lp lp-rec" id="lp-rec-table"></table>
         </div>
-        <p class="text-[11px] font-bold text-[#8a7a68] mt-3">Transplanted into each main plot by month, approved calibration included, on the transplant record date. Click a plot for its cycles.</p>
     </div>
 
     <div id="lp-plots-view">
     <div id="lp-map" class="panel p-6 mb-6 hidden">
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-            <div class="lp-chip-label">Map · click a plot for its cycles</div>
+            <div class="lp-chip-label">Map</div>
         </div>
         <div id="lp-map-tabs" class="hidden"></div>
         <div id="lp-map-body"></div>
@@ -850,7 +847,7 @@
         document.getElementById('lp-list').classList.remove('hidden');
         document.getElementById('lp-detail').classList.add('hidden');
         document.getElementById('lp-title').textContent = 'Life of Plot';
-        document.getElementById('lp-sub').textContent = 'Every plot, and what happened to it. Click a plot for its timeline.';
+        document.getElementById('lp-sub').textContent = '';
         history.replaceState(null, '', location.pathname);
     }
 
@@ -999,12 +996,12 @@
         // which plot or view is open is the line under it.
         document.getElementById('lp-title').textContent = 'Life of Plot';
         const nurLabel = NURSERY_LABEL[p.nursery];
-        document.getElementById('lp-sub').textContent = p.plot + ' · ' + nurLabel + ' · ' + (p.cycles.length ? p.cycles.length + ' cycle' + (p.cycles.length === 1 ? '' : 's') + ', newest first. Transplant includes approved calibration.' : 'nothing recorded yet.');
+        document.getElementById('lp-sub').textContent = p.plot + ' · ' + nurLabel;
         history.replaceState(null, '', '#plot=' + encodeURIComponent(p.plot));
         document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
             ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
-        document.getElementById('lp-note').textContent = 'Laid out as the office plot sheet, read the way the batch report reads them: the transplant off Tab 3, the 2nd and 3rd culling off Tabs 5 and 6 (the newest save of each plot). Transplanted is after approved calibration; every rate is over it.';
+        document.getElementById('lp-note').textContent = '';
     }
 
     // ── Side bar: Plots & cycles, or the Transplant record by year ──
@@ -1027,17 +1024,17 @@
             const fr = document.getElementById('lp-palms-frame');
             if (fr.getAttribute('src') !== pg.href) fr.setAttribute('src', pg.href);
             document.getElementById('lp-title').textContent = 'Life of Plot';
-            document.getElementById('lp-sub').textContent = pg.title + ' · ' + pg.sub;
+            document.getElementById('lp-sub').textContent = pg.title;
             if (!quiet) history.replaceState(null, '', '#view=' + VIEW);
             syncPalmsNursery();
         } else if (VIEW === 'rotation') {
             document.getElementById('lp-title').textContent = 'Life of Plot';
-            document.getElementById('lp-sub').textContent = 'Pusingan Jualan & Transplant · collection and transplanting by plot and month, against plan.';
+            document.getElementById('lp-sub').textContent = 'Pusingan Jualan & Transplant';
             if (!quiet) history.replaceState(null, '', '#view=rotation');
             renderRotation();
         } else if (VIEW === 'record') {
             document.getElementById('lp-title').textContent = 'Life of Plot';
-            document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
+            document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR;
             if (!quiet) history.replaceState(null, '', '#view=record&year=' + REC_YEAR);
             renderRecord();
         } else if (!quiet) {
@@ -1126,7 +1123,7 @@
         years.sort();
         if (!REC_YEAR || !years.includes(REC_YEAR)) REC_YEAR = years.includes(nowY) ? nowY : years[years.length - 1];
         document.getElementById('lp-title').textContent = 'Life of Plot';
-        document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR + ' · every main plot, transplanted by month.';
+        document.getElementById('lp-sub').textContent = 'Transplant Record ' + REC_YEAR;
         document.getElementById('lp-year-row').innerHTML = years.slice().reverse().map(y => chip('year', y, y, y === REC_YEAR)).join('');
         const R = buildTransplantYear(MODEL, REC_YEAR);
         const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
