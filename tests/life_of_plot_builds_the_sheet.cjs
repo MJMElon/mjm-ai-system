@@ -44,7 +44,7 @@ const plotOf = n => m.groups.flatMap(g => g.plots).find(p => p.plot === n);
 const bOf = (n, b) => plotOf(n).batches.find(x => x.batch === b);
 
 console.log('1. the timeline of one plot (B4)');
-ok(plotOf('B4').batches.map(b => b.batch).join() === '238,242,264,233', 'B4 batches run in transplant-date order, undated-by-transplant 233 last', plotOf('B4').batches.map(b => b.batch));
+ok(plotOf('B4').batches.map(b => b.batch).join() === '238,242,233,264', 'B4 batches run in date order; 233, never transplanted onto B4, is placed by its 2nd culling day (14 May), not last', plotOf('B4').batches.map(b => b.batch));
 const b242 = bOf('B4', '242');
 ok(b242.tDate === '2026-01-18' && b242.tQty === 2188 && b242.adj === 0 && b242.tAdj === 2188, 'batch 242: transplanted 18 Jan, 2,188 (1,190 + 998)', b242);
 ok(b242.c2Date === '2026-05-14' && b242.c2Qty === 7, 'batch 242: 2nd cull 14 May, 7 dead', b242);
@@ -135,6 +135,18 @@ console.log('4. a plot is read by CYCLE, never mixed (the office B11, from its o
      'cycles set by hand: 237 moved into cycle 2; 268, not named, joins the latest cycle started by its day', hand.map(c => c.batches.map(b => b.batch)));
   const hand2 = lpCycles(pB1.batches, [['252', '268'], [], ['234', '237']]);
   ok(hand2.length === 2 && hand2[0].batches[0].batch === '234' && hand2[0].n === 1, 'an empty cycle is dropped and the cycles are numbered by their start', hand2.map(c => [c.n, c.batches.map(b => b.batch)]));
+  // The office own shape (N2): 233 never had a transplant row on the plot (0
+  // transplanted), only a 2nd culling in May. Moved to a cycle of its own, that
+  // cycle must take its place by that day, not sort last as the newest.
+  const B = (batch, tDate, extra) => Object.assign({ batch, tDate, tQty: 0, adj: 0, tAdj: 0, c2Qty: 0, c3Qty: 0, c2Date: null, c3Sort: null }, extra || {});
+  const n2 = [B('240', '2026-01-18', { tAdj: 2388, c3Sort: '2026-09-11', c3Date: '2026-09-11' }),
+              B('233', null, { c2Date: '2026-05-14', c3Sort: '2026-09-15' }),
+              B('261', '2026-06-18', { tAdj: 488 }), B('270', '2026-09-23', { tAdj: 2309 })];
+  const hand3 = lpCycles(n2, [['240'], ['261', '270'], ['233']]);
+  ok(hand3.map(c => c.batches.map(b => b.batch).join()).join('|') === '240|233|261,270' && hand3[2].current && !hand3[1].current,
+     'a cycle of a batch with no transplant row is placed by its 2nd culling day, so the newest cycle is still the current one',
+     hand3.map(c => c.batches.map(b => b.batch).join() + (c.current ? '*' : '')));
+  ok(hand3[1].start === '2026-05-14', 'and its start reads that day rather than a dash', hand3[1].start);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

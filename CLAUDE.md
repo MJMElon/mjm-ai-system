@@ -12187,7 +12187,10 @@ again on each drop; + Add cycle adds an empty card to drop on, Save; Automatic h
 of `nops_maint_config`, key `life_of_plot_cycles`, `{plotKey: [[batch, ...]]}`,
 read again before each save so another plot is not overwritten.
 `lpCyclesByHand`: a batch the saved cycles do not name (transplanted since)
-joins the latest cycle started by its day; an empty cycle is dropped. Without
+joins the latest cycle started by its day; an empty cycle is dropped. **A batch the plot never had a
+transplant row for** (233 on B4, only a 2nd culling) is placed by its 2nd
+culling day, then its 3rd (`lpBatchDay`): it sorted LAST before, so a cycle of
+it read as the newest and CURRENT (*你应该auto区分哪一个才是最新的cycle*). Without
 one, `lpCycles` is the rule: batches in transplant-date order, and a batch
 transplanted AFTER the FIRST real 3rd culling (a Cull Date or a drone map) of
 the cycle before it starts a new one. It was the LAST culling, and B1 read as
