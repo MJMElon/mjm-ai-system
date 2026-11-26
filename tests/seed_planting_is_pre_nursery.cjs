@@ -396,9 +396,11 @@ const sheetOf = (page) => page.evaluate(() => {
   await page.evaluate(() => { document.getElementById('global-month').value = '2026-09'; renderPayroll(); });
   await page.waitForTimeout(500);
   sh = await sheetOf(page);
-  check('September no longer counts 277, and says where it went',
-    [sh.body.length, /No seed planting/.test(sh.body[0] && sh.body[0][0] || ''), /Moved out of this month: 277 → Oct 2026/.test(sh.bars)],
-    [1, true, true]);
+  /* It used to add a line saying where 277 went; the office took that and
+     every other standing sentence off the sheet (那种废话全部移除). */
+  check('September no longer counts 277, and adds no sentence about it',
+    [sh.body.length, /No seed planting/.test(sh.body[0] && sh.body[0][0] || ''), /Moved out|planted too late|No names keyed|Rows come from/.test(sh.bars + sh.body.join(' '))],
+    [1, true, false]);
 
   // Taken off again: back to September.
   await page.evaluate(() => { document.getElementById('global-month').value = '2026-10'; renderPayroll(); });
@@ -492,7 +494,9 @@ const sheetOf = (page) => page.evaluate(() => {
   {
     const d = await boot(browser, { logs: LOGS, saved: [], names, noTable: false });
     let s9 = await sheetOf(d.page);
-    check('the soil filling band carries a Remove button; Seed Planting does not',
+    check('the standing explanation over the sheet is gone (删掉)',
+    await d.page.evaluate(() => document.getElementById('payroll-hint').textContent.trim()), '');
+  check('the soil filling band carries a Remove button; Seed Planting does not',
       await d.page.evaluate(() => [...document.querySelectorAll('[data-sp-remove]')].map(b => b.dataset.spRemove)), ['hyplug']);
     try { await d.page.click('[data-sp-remove="hyplug"]', { timeout: 3000 }); } catch (_) {}
     await d.page.waitForTimeout(400);
