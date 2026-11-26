@@ -7367,6 +7367,37 @@ function fieldRecordIndex(monthLbl) {
   return MJMMaintField.index(fieldRecords, monthLbl, _fieldTracks);
 }
 
+/* WHICH OF A ROUND GROUP'S RECORDS REALLY BELONG TO **THIS** ROW.
+
+   The round key is (job, plot, ROUND) and says nothing about the chemical,
+   which is fine while a round is one row — and the office's own U1 is not:
+   `Round 1: Antracol 50gm + Bond 15mL` and `Round 1: Cyper 60mL + Bond 15mL`
+   are TWO P & D rows of the same plot in the same week, so one field group
+   answers for both of them. The office put their finger on it in a question
+   — *"同一个工种 同一种药水 对吗"* — and the answer was no, the chemical was
+   not being asked at all.
+
+   On an UNCHECKED row that is what it has always done and is left alone:
+   both rows are open, the office is still working the month, and a tick on
+   the wrong one of two rows they are looking at is theirs to move. On a
+   CHECKED row it is not — nobody is looking at it, and a worker walking in
+   off the other round's record moves a settled piece-rate split.
+
+   SO THE CHECKED ROW ASKS, AND IT IS STRICTLY A NARROWING: a record with no
+   chemical on it has nothing to be matched on and keeps the round as its
+   only route (the rule `index` already follows), and a row with no chemical
+   asks nothing. Where both carry one they must agree, on `chemKey` — the
+   round label off the front, then letters and digits — so `Round 1: Antracol
+   50gm` and `Antracol 50gm` are one answer. */
+function _chemMatched(row, list) {
+  const want = _chemKey(row && row.racun);
+  if (!want) return (list || []).slice();
+  return (list || []).filter((f) => {
+    const got = _chemKey(f.chemical);
+    return !got || got === want;
+  });
+}
+
 function applyFieldRecords(nursery, monthLbl) {
   const idx = fieldRecordIndex(monthLbl);
   const plots = NURSERY_PLOTS[nursery] || [];
@@ -7503,10 +7534,15 @@ function applyFieldRecords(nursery, monthLbl) {
     if (r.checked) {
       const gc = key ? idx[key] : null;
       if (!gc) return;
+      /* …and the CHEMICAL has to agree as well, which the round key does
+         not ask. See _chemMatched: one round can be two rows. */
+      const mine = _chemMatched(r, gc.list);
+      if (!mine.length) return;
+      const g2 = mine.length === (gc.list || []).length ? gc : _summariseFieldGroup(mine);
       usedKeys.add(key);
-      r._fieldIds = gc.ids.slice();
-      r._fieldTracks = (gc.tracks || []).slice();
-      syncTicks(r, gc);
+      r._fieldIds = g2.ids.slice();
+      r._fieldTracks = (g2.tracks || []).slice();
+      syncTicks(r, g2);
       return;
     }
 
