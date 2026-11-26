@@ -19,15 +19,21 @@
  * TWO WRITERS, AND THEY NO LONGER ANSWER THE SAME WAY. That asymmetry is the
  * point of this file rather than an oversight in it:
  *
- *   togglePayrollTick  somebody pressing the cell          -- ALLOWED now
- *   syncTicks          applyFieldRecords, on every load    -- still REFUSED
+ *   togglePayrollTick  somebody pressing the cell          -- ALLOWED
+ *   syncTicks          applyFieldRecords, on every load    -- ADDS ONLY
  *
- * A person correcting a name is what was asked for. A page load re-writing an
- * agreed row is not a person: it moves the piece-rate split with nobody
- * acting and nothing on screen saying so. Same shape as "the field fills an
- * empty cell, it never writes over a full one", one row along.
+ * syncTicks refused a checked row outright for a month. The office found the
+ * case that was wrong -- "如果我check了 还有工人的工作没被approved FC
+ * approved了 所有资料一模一样 除了地图 和 员工 就给他进来就对了" -- and it is
+ * the ADDITION half: a second worker verified after the row was checked
+ * reached no tick at all, so his share of the plot was simply gone.
  *
- * Both are lifted out of the shipped page rather than described.
+ * WHAT STAYS REFUSED IS THE REMOVAL. A settled row must not lose a worker to
+ * a record being deleted or unverified again: nobody acted, and the office
+ * agreed that row with him on it. Same shape as "the field fills an empty
+ * cell, it never writes over a full one", one row along.
+ *
+ * Both writers are lifted out of the shipped page rather than described.
  */
 const fs = require('fs');
 const path = require('path');
@@ -149,12 +155,18 @@ const ok = (cond, what) => {
      '...and unlocking the sheet gives the press straight back');
 }
 
-/* ── 2. the field, on every page load, is NOT a person ────────────────── */
+/* ── 2. the field on a page load: it ADDS, and it never takes away ───── */
 {
   const body = slice('const syncTicks = (rec, group) => {',
                      '\n  };', 'syncTicks');
-  const make = (checked) => {
+  const K = 'BNN_Sep 2026_manuring';
+  /* `seed` is what the sheet already holds for this row, so the two
+     directions can be told apart: a group that GREW and a group that
+     SHRANK. Asked of a row with nothing on it, both answer the same and
+     the removal half is tested nowhere. */
+  const run = (checked, seed, workers) => {
     const env = { payrollData: {}, unmatched: new Set(), touched: new Set() };
+    if (seed) env.payrollData[K] = { 7: Object.assign({}, seed) };
     const fn = new Function('env', `
       const payrollData = env.payrollData;
       const unmatched = env.unmatched;
@@ -167,24 +179,62 @@ const ok = (cond, what) => {
       ${body}
       return syncTicks;
     `)(env);
-    const rec = { id: 7, checked, jenis: 'Membaja' };
-    fn(rec, { workers: ['Andi Rosmini', 'Yuyak'] });
+    fn({ id: 7, checked, jenis: 'Membaja' }, { workers });
     return env;
   };
+  const who = (env) => Object.keys((env.payrollData[K] || {})[7] || {}).sort();
 
-  const open = make(false);
-  ok(open.payrollData['BNN_Sep 2026_manuring'] &&
-     open.payrollData['BNN_Sep 2026_manuring'][7],
+  ok(who(run(false, null, ['Andi Rosmini', 'Yuyak'])).join() === 'Andi Rosmini,Yuyak',
      'the field still fills an unchecked row');
 
-  const shut = make(true);
-  ok(Object.keys(shut.payrollData).length === 0,
-     'the field does NOT reopen a checked row, even now the screen will');
-  ok(shut.touched.size === 0,
-     'and does not mark the sheet for saving, so nothing is written back');
+  /* THE OFFICE OWN CASE. The conductor pressed Verify after the row was
+     checked; refused, this worker is credited by nothing at all. */
+  ok(who(run(true, { 'Andi Rosmini': 'field' }, ['Andi Rosmini', 'Yuyak']))
+       .join() === 'Andi Rosmini,Yuyak',
+     'a worker verified AFTER the row was checked is let in');
+  ok(run(true, { 'Andi Rosmini': 'field' }, ['Andi Rosmini', 'Yuyak'])
+       .touched.has('manuring'),
+     '...and the sheet is marked, so the tick is actually written back');
+
+  ok(who(run(true, { 'Andi Rosmini': 'field', 'Yuyak': 'field' }, ['Andi Rosmini']))
+       .join() === 'Andi Rosmini,Yuyak',
+     'but NOBODY is taken off a settled row');
+  ok(run(true, { 'Andi Rosmini': 'field', 'Yuyak': 'field' }, ['Andi Rosmini'])
+       .touched.size === 0,
+     '...and with nothing to add it writes nothing at all');
+
+  /* A hand tick is the office own answer and this is a page load. */
+  const hand = run(true, { 'Andi Rosmini': 1 }, ['Andi Rosmini', 'Yuyak']);
+  ok(who(hand).join() === 'Andi Rosmini' && hand.touched.size === 0,
+     'a row somebody corrected BY HAND is left alone, checked or not');
+
+  /* The removal is still right where the office has settled nothing. */
+  ok(who(run(false, { 'Andi Rosmini': 'field', 'Yuyak': 'field' }, ['Andi Rosmini']))
+       .join() === 'Andi Rosmini',
+     'an UNCHECKED row still follows its group both ways');
 }
 
-/* ── 3. the markup, because a refusal left in it is a cell that lies ──── */
+/* ── 3. and the WALK comes with him, which is the other half asked for ── */
+{
+  ok(!SRC.includes('if (!plots.includes(r.plot) || r.checked) return;'),
+     'applyFieldRecords no longer skips a checked row outright');
+
+  let branch = '';
+  try {
+    branch = slice('    if (r.checked) {\n      const gc', '\n    }',
+                   'the checked-row branch of applyFieldRecords');
+  } catch (e) { branch = '[not found: ' + e.message + ']'; }
+
+  ok(/_fieldTracks/.test(branch), 'a checked row is handed the walk');
+  ok(/_fieldIds/.test(branch),    '...and the records behind it, for the Audit column');
+  ok(/syncTicks/.test(branch),    '...and the worker');
+  /* EXACTLY TWO THINGS, which is the office own wording: 除了地图 和 员工.
+     A date or a batch written here would move a settled row. */
+  ok(!/tarikh|\.batch/.test(branch),
+     'and nothing else -- no date and no batch reach a settled row');
+}
+
+/* ── 4. the markup, because a refusal left in it is a cell that lies ──── */
 {
   /* The maintenance tick cell carries NO lock class and NO conditional
      handler: a greyed cell over a gate that allows the press is the worst
