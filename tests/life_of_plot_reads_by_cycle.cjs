@@ -88,11 +88,11 @@ const DATA = {
     foot: [...c.querySelectorAll('table.lp-x tfoot td')].map(td => td.textContent.trim()).join('|'),
   })));
   ok(cyc.length === 2, 'B11 shows two cycle cards', cyc.length);
-  ok(cyc[0] && cyc[0].n === '2' && /Current/.test(cyc[0].head) && /12,275/.test(cyc[0].head) && /2026-07-22 → now/.test(cyc[0].head),
-     'the current cycle is on top: 22 Jul 2026 to now, 12,275 transplanted this cycle', cyc[0] && cyc[0].head);
+  ok(cyc[0] && cyc[0].n === '2' && /Current/.test(cyc[0].head) && /12,275/.test(cyc[0].head) && !/→|days/.test(cyc[0].head),
+     'the current cycle is on top, 12,275 transplanted this cycle, and no date span or day count on its head', cyc[0] && cyc[0].head);
   ok(cyc[0] && cyc[0].batches.join() === '263,265,269,271', '…holding only its own batches', cyc[0] && cyc[0].batches);
-  ok(cyc[1] && /Finished/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && /2025-05-22 → 2026-06-12/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
-     'cycle 1 under it: 228 + 229, 22 May 2025 to its 3rd cull 12 Jun 2026, 12,121', cyc[1] && cyc[1].head);
+  ok(cyc[1] && /Finished/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && !/→|days/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
+     'cycle 1 under it: 228 + 229, 12,121', cyc[1] && cyc[1].head);
   ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,2nd Culling,3rd Culling' && cyc[0].heads === 'Date,Transplanted,Date,Alive,Dead,Culling rate (%),Date,Pending culling,Drone Count,Variance,Culling rate (%)', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
   ok(cyc[1] && cyc[1].rows[0] === '228|2025-05-22|3,074|2025-09-14|2,979|95|3.09%|2026-06-12|178|178|0|5.79%',
      'batch 228 on one line: date and 3,074 transplanted; 2nd alive 2,979, dead 95, 3.09%; 3rd pending 178, drone 178, variance 0, 5.79%', cyc[1] && cyc[1].rows[0]);

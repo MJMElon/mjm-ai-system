@@ -139,7 +139,6 @@
         .lp-cyc-n { font-size:15px; font-weight:900; color:#3d2610; }
         .lp-cyc-tag { font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; padding:3px 9px; border-radius:999px; background:#f1ead9; color:#8a7a68; }
         .lp-cyc-tag.cur { background:#e5f0dc; color:#3f6a26; }
-        .lp-cyc-d { font-size:12px; font-weight:700; color:#5c3d1e; }
         .lp-cyc-cap { margin-left:auto; font-size:12px; font-weight:700; color:#8a7a68; }
         .lp-cyc-cap b { font-size:16px; color:#3d2610; font-weight:900; }
         /* Pusingan Jualan / Transplant: a plot per row, a month per column. */
@@ -1008,14 +1007,6 @@
     }
 
 
-    function lpDays(a, b) {
-        if (!a) return null;
-        const t0 = Date.parse(a + 'T00:00:00Z'), t1 = b ? Date.parse(b + 'T00:00:00Z') : Date.now();
-        return Math.max(0, Math.round((t1 - t0) / 86400000));
-    }
-    function cycleSpan(c) {
-        return `${c.start || '–'} → ${c.end || 'now'}`;
-    }
     const lpPct = (n, d) => (d > 0 ? ((n || 0) / d * 100).toFixed(2) + '%' : '–');
     const lpVar = v => (v == null ? '–' : (v > 0 ? '+' : '') + nf(v) || '0');
     /* A 3rd culling variance carries the batch report own explanation on hover
@@ -1056,13 +1047,11 @@
         return 'Est. ' + M[m % 12] + ' ' + (y + Math.floor(m / 12));
     }
     function cycleHtml(c, p) {
-        const d = lpDays(c.start, c.end);
         const bs = c.batches;
         const cards = (p && p.cards) || {};
         let h = `<div class="panel lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
               + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Finished' : 'Current'}</span>`
-              + `<span class="lp-cyc-d">${c.start || '–'} → ${c.end || 'now'}${d != null ? ' · ' + d + ' days' : ''}</span>`
               + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
 
         // Drone groups: batches sharing their first transplant day.
