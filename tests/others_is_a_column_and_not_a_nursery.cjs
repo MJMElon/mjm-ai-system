@@ -257,7 +257,7 @@ console.log('\n-- 5. The board can still draw it --');
   await page.route('**/fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, body: '' }));
   await page.route('**://*.supabase.co/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
 
-  const res = await page.goto('http://localhost:8779/scan/scan_workers.html', { waitUntil: 'load' })
+  const res = await page.goto('http://localhost:8779/scan/scan_workers.html#chart', { waitUntil: 'load' })
     .catch(() => null);
   if (!res) {
     console.log('  skipped: nothing is serving on 8779 (python3 -m http.server 8779)');

@@ -159,7 +159,7 @@ async function open(browser, port, opts) {
     window.alert = (m) => { window.__ALERTS.push(String(m)); };
     window.prompt = () => { throw new Error('nothing here may raise a prompt'); };
   }, { cfgOn: !!o.cfg, manage: o.manage !== false, cols: o.cols || BASE_COLS.concat(REJ_COLS), workers: o.workers || WORKERS });
-  await page.goto('http://localhost:' + port + '/scan/scan_workers.html', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://localhost:' + port + '/scan/scan_workers.html#chart', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#worker-board .bd', { timeout: 8000 });
   return page;
 }

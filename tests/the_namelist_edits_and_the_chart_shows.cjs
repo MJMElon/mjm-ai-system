@@ -1,31 +1,16 @@
-/* THE WORKER NAMELIST: every worker, where they work, Active or Inactive,
- * and the door into the Worker System board. Harness from the role-row test.
- * SHOT=/path.png draws it.
- */
-/* EVERY ROLE THE REGISTER OFFERS HAS A ROW ON THE BOARD.
+/* THE WORKER NAMELIST EDITS, AND THE WORKER SYSTEM CHART ONLY SHOWS.
  *
- * The Team Board drew four rows -- FC, Assistant FC, Water Pump Operator,
- * Workers -- and swept everybody else into Other. Driver and Gardener were
- * real roles on the register the whole time, so four people sat under a
- * heading that means "a role nobody recognises" over roles the list names.
- * And Other is the one row that cannot be added to, because adding there
- * would have to invent a role: so a Driver could not be added to the board
- * at all, which is the question the office actually asked.
+ * The office: changing things belongs on the namelist, and the Worker
+ * System should only show who is in which place and which job, like an
+ * organisation chart. So scan/scan_workers.html opens on the namelist (Add
+ * Worker, an Edit on every row, Waiting to be allocated with Edit and a
+ * cross, Manage Roles), and #chart is the board with nothing on it that
+ * writes: no Edit, no drag, no Add, no cross. A name there still opens its
+ * record, read-only. A role added in Manage Roles waits for Save, and
+ * Cancel throws it away.
  *
- * Estate Manager and Admin joined the list on the same day, above FC,
- * because the company has both and neither had anywhere to stand.
- *
- * OTHERS IS A COLUMN, not a row, and it is the only column that is not a
- * place. Two office staff were filed under a section called ADMIN, which is
- * in no nursery list, so the board headed their column "ADMIN -- not in the
- * nursery list" -- which reads as a fault rather than as an answer. Admin is
- * a JOB and is a row now; the column is simply for people who work for the
- * company rather than at a nursery.
- * shared/RUN_ME_worker_section_others.sql is what moves them.
- *
- * Drives the real scan/scan_workers.html in a real browser.
- *
- * Run: NODE_PATH=/opt/node22/lib/node_modules node tests/every_role_has_its_own_row.cjs
+ * Run: NODE_PATH=/opt/node22/lib/node_modules node tests/the_namelist_edits_and_the_chart_shows.cjs
+ * SHOT=/dir draws both views.
  */
 const http = require('http');
 const fs = require('fs');
@@ -154,8 +139,8 @@ async function open(browser, port, opts) {
     window.alert = (m) => { window.__ALERTS.push(String(m)); };
     window.prompt = () => { throw new Error('nothing here may raise a prompt'); };
   }, { cfgOn: !!o.cfg, manage: o.manage !== false, cols: o.cols || BASE_COLS.concat(REJ_COLS), workers: o.workers || WORKERS });
-  await page.goto('http://localhost:' + port + '/scan/' + (o.page || 'scan_worker_list.html'), { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector(o.page ? '#worker-board .bd' : '#wl-body tr', { timeout: 8000 });
+  await page.goto('http://localhost:' + port + '/scan/scan_workers.html' + (o.hash || ''), { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector(o.hash === '#chart' ? '#worker-board .bd' : '#wl-body tr', { timeout: 8000 });
   return page;
 }
 
@@ -164,6 +149,8 @@ async function open(browser, port, opts) {
  * Other and nowhere else: a role typed before the list existed, and none at
  * all. The two in OTHERS are the office staff the SQL moves. */
 const WORKERS = [
+  { id: 11, full_name: 'New Signup',    section: '',       role: 'General Worker',            active: true },
+  { id: 12, full_name: 'Gone Worker',   section: 'BNN',    role: 'General Worker',            active: false, last_day: '2026-10-01' },
   { id: 1, full_name: 'Estate Man',     section: 'UNE',    role: 'Estate Manager',            active: true },
   { id: 2, full_name: 'Office Admin',   section: 'OTHERS', role: 'Admin',                     active: true },
   { id: 3, full_name: 'ROUSELL WAYNE',  section: 'OTHERS', role: 'Field Conductor',           active: true },
@@ -198,51 +185,128 @@ const inRow = (page, label) => page.evaluate((l) => {
   if (!th) return null;
   return [...th.closest('tr').querySelectorAll('.wchip > span:last-child')].map((x) => x.textContent.trim());
 }, label);
-/* The column headings, which are the sections. */
-const colNames = (page) => page.$$eval('#worker-board .bd-div', (e) => e.map((x) => x.textContent.trim()));
+
+const names = (page) => page.$$eval('#wl-body tr .wl-name > span:last-child', (e) => e.map((x) => x.textContent));
+const shown = (page, sel) => page.$$eval(sel, (e) => e.filter((x) => x.offsetParent !== null).length);
+const setSel = (page, id, v) => page.evaluate(([i, val]) => {
+  const s = document.getElementById(i); s.value = val; s.dispatchEvent(new Event('change', { bubbles: true }));
+}, [id, v]);
 
 (async () => {
   await new Promise((r) => server.listen(0, r));
   const port = server.address().port;
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-  const W = [
-    { id: 1, full_name: 'Ahmad Bin Ali', section: 'UNN1', role: 'General Worker', active: true },
-    { id: 2, full_name: 'Left Worker',   section: 'UNN1', role: 'General Worker', active: false },
-    { id: 3, full_name: 'Wisnu',         section: 'PN',   role: 'Field Conductor', active: true },
-    { id: 4, full_name: 'Turned Down',   section: '',     role: null, active: false, rejected_at: '2026-11-01', rejected_by: 'x' },
-    { id: 5, full_name: 'Dedi',          section: 'UNE',  role: 'General Worker', active: true },
-    { id: 6, full_name: 'Office Admin',  section: 'OTHERS', role: 'Admin', active: true },
-  ];
-  const rows = (p) => p.$$eval('#wl-body tr', (l) => l.map((r) => [...r.querySelectorAll('td')].map((c) => c.textContent.replace(/\s+/g, ' ').trim())));
   try {
-    const page = await open(browser, port, { workers: W });
-    const all = await rows(page);
-    is(all.length, 6, 'every worker on the register is listed');
-    is(all.map((r) => r[1]), ['Ahmad Bin Ali', 'Dedi', 'Office Admin', 'Wisnu', 'Left Worker', 'Turned Down'], 'active first, then inactive, each by name');
-    is(all[0].slice(2), ['General Worker', 'Main NurseryUNN1', 'Active'], 'a row says the role, the location with its section, and the status');
-    is(all.find((r) => r[1] === 'Wisnu')[3], 'Pre NurseryPN', 'PN is the Pre Nursery');
-    is(all.find((r) => r[1] === 'Dedi')[3], 'EstateUNE', 'UNE is the Estate');
-    is(all.find((r) => r[1] === 'Left Worker')[4], 'Inactive', 'an inactive worker reads Inactive');
-    is(all.find((r) => r[1] === 'Turned Down').slice(3), ['Not allocated', 'Inactive'], 'a rejected signup is inactive and not allocated');
-    is([await page.textContent('#wl-n-all'), await page.textContent('#wl-n-on'), await page.textContent('#wl-n-off')], ['6', '4', '2'], 'the counts');
-    if (process.env.SHOT) { await page.setViewportSize({ width: 1280, height: 800 }); await page.screenshot({ path: process.env.SHOT, fullPage: true }); }
-    await page.selectOption('#wl-st', 'off'); await page.waitForTimeout(100);
-    is((await rows(page)).map((r) => r[1]), ['Left Worker', 'Turned Down'], 'Inactive filter');
-    await page.selectOption('#wl-st', ''); await page.selectOption('#wl-loc', 'Main Nursery'); await page.waitForTimeout(100);
-    is((await rows(page)).map((r) => r[1]), ['Ahmad Bin Ali', 'Left Worker'], 'Location filter');
-    await page.selectOption('#wl-loc', ''); await page.fill('#wl-q', 'conductor'); await page.waitForTimeout(100);
-    is((await rows(page)).map((r) => r[1]), ['Wisnu'], 'search by role');
-    is(await page.getAttribute('#wl-go', 'href'), 'scan_workers.html', 'the button opens the Worker System board');
-    is(await page.getAttribute('a[data-icon-back]', 'href'), 'scan_admin.html', 'the way back is Nursery 555 Team');
-    await page.click('#wl-go');
-    await page.waitForSelector('#worker-board .bd', { timeout: 8000 });
-    yes(/scan_workers\.html/.test(page.url()), 'and pressing it lands on the board');
-    is(await page.getAttribute('a[data-icon-back]', 'href'), 'scan_worker_list.html', 'the board way back is the namelist');
+    console.log('\n-- 1. the page opens on the namelist --');
+    let page = await open(browser, port);
+    yes(await page.isVisible('#tab-list'), 'the namelist is the first thing shown');
+    yes(!(await page.isVisible('#tab-workers')), 'and the chart is not');
+    is(await page.$eval('#page-back', (e) => e.getAttribute('href')), 'scan_admin.html', 'its back icon goes to the 555 Team page');
+    is(await page.$eval('#wl-go', (e) => e.getAttribute('href')), '#chart', 'and Worker System opens the chart');
+    const n = await names(page);
+    is(n.length, WORKERS.length, 'every worker on the register is listed');
+    is(n[n.length - 1], 'Gone Worker', 'active first, the inactive under them');
+    is(await page.$eval('#wl-n-off', (e) => e.textContent), '1', 'one inactive');
+    is(await page.$$eval('#wl-body .wl-ic', (e) => e.length), WORKERS.length, 'every row carries an Edit');
+    yes(await page.isVisible('#wl-add'), 'there is an Add Worker');
+    yes(await page.isVisible('#wl-roles'), 'and a Manage Roles');
+
+    console.log('\n-- 2. Waiting to be allocated is the to-do, at the top --');
+    is(await page.$$eval('#wl-pending .wl-pend-row .wl-name > span:last-child', (e) => e.map((x) => x.textContent)),
+      ['New Signup'], 'the one signup with no section waits on top');
+    is(await page.$$eval('#wl-pending .wl-ic', (e) => e.length), 2, 'with an Edit and a cross');
+    is(await page.$$eval('#wl-body tr', (trs) => trs.filter((t) => t.textContent.includes('New Signup'))
+      .map((t) => t.querySelector('.wl-loc').textContent.trim())), ['Not allocated'], 'and the list says Not allocated');
+
+    console.log('\n-- 3. editing a pending signup keeps them unallocated until a location is picked --');
+    await page.evaluate(() => openWorker(11));
+    yes(await page.isVisible('#wf-section-row'), 'the form asks for the location');
+    is(await page.$eval('#wf-section', (e) => e.value), '', 'and it opens on Not allocated -- never on the first nursery by accident');
+    yes(await page.isVisible('#wf-save'), 'it can be saved');
+    await setSel(page, 'wf-section', 'UNN1');
+    await page.evaluate(() => saveWorker());
+    await page.waitForFunction(() => window.__WRITES.some((w) => w.verb === 'update'), null, { timeout: 4000 });
+    const up = await page.evaluate(() => window.__WRITES.find((w) => w.verb === 'update'));
+    is([up.eq.id, up.row.section, up.row.nursery], [11, 'UNN1', 'UNN1'], 'Save writes the location onto that worker');
+    await page.waitForFunction(() => !document.querySelector('#wl-pending .wl-pend-row'), null, { timeout: 4000 }).catch(() => {});
+    is(await shown(page, '#wl-pending .wl-pend-row'), 0, 'and they leave the queue');
+
+    console.log('\n-- 4. Add Worker files from the form --');
+    await page.evaluate(() => { window.__WRITES.length = 0; });
+    await page.click('#wl-add');
+    yes(await page.isVisible('#worker-modal.open'), 'Add Worker opens the form');
+    is(await page.$eval('#worker-modal-title', (e) => e.textContent), 'Add Worker — Not allocated yet', 'empty, headed Add Worker');
+    await page.fill('#wf-name', 'Brand New');
+    await setSel(page, 'wf-section', 'BNN');
+    await setSel(page, 'wf-role', 'Driver');
+    await page.evaluate(() => saveWorker());
+    await page.waitForFunction(() => window.__WRITES.some((w) => w.verb === 'insert'), null, { timeout: 4000 });
+    const ins = await page.evaluate(() => window.__WRITES.find((w) => w.verb === 'insert'));
+    is([ins.row.full_name, ins.row.section, ins.row.role], ['Brand New', 'BNN', 'Driver'], 'one INSERT, with the location and role picked');
+
+    console.log('\n-- 5. Manage Roles waits for Save, and Cancel throws it away --');
+    await page.evaluate(() => { window.__WRITES.length = 0; });
+    await page.click('#wl-roles');
+    await page.fill('#rf-name', 'Mata Malam');
+    await page.click('#role-modal .frow .btn');
+    is(await page.$$eval('#rf-list .rf-item > span', (e) => e.map((x) => x.textContent)), ['Mata Malam'], 'the role is in the window');
+    is(await page.evaluate(() => window.__WRITES.length), 0, 'and nothing is written yet');
+    await page.click('#role-modal .modal-foot .btn:not(.btn-primary)');
+    is(await page.evaluate(() => window.__WRITES.length), 0, 'Cancel writes nothing');
+    is(await page.evaluate(() => ROLES.includes('Mata Malam')), false, 'and the role is not on the list');
+    await page.click('#wl-roles');
+    is(await page.$$eval('#rf-list .rf-item', (e) => e.length), 0, 'reopened, the cancelled role is gone');
+    await page.fill('#rf-name', 'Mata Malam');
+    await page.click('#rf-save');
+    await page.waitForFunction(() => window.__WRITES.some((w) => w.verb === 'upsert'), null, { timeout: 4000 });
+    const ro = await page.evaluate(() => window.__WRITES.find((w) => w.verb === 'upsert'));
+    is([ro.table, ro.row.key, JSON.parse(ro.row.txt_value)], ['nops_maint_config', 'worker_roles', ['Mata Malam']],
+      'Save writes the role list, the typed name included');
+    is(await page.evaluate(() => ROLES.includes('Mata Malam')), true, 'and the form now offers it');
     await page.close();
-    const fs2 = require('fs');
-    const adm = fs2.readFileSync(path.join(ROOT, 'scan/scan_admin.html'), 'utf8');
-    yes(/id="tool-workers" href="scan_worker_list\.html"/.test(adm), 'the Worker Namelist tile opens the namelist first');
-  } finally { await browser.close(); server.close(); }
-  console.log(fails ? `\n${fails} FAILED` : '\nall passed');
+
+    console.log('\n-- 6. the chart only shows --');
+    page = await open(browser, port, { hash: '#chart' });
+    yes(await page.isVisible('#tab-workers'), 'the chart is drawn at #chart');
+    yes(!(await page.isVisible('#tab-list')), 'without the namelist');
+    is(await page.$eval('#page-back', (e) => e.getAttribute('href')), '#list', 'its back icon returns to the namelist');
+    is(await page.$$eval('#worker-board button', (e) => e.map((x) => x.textContent.trim())), [], 'no button anywhere on the chart -- no Edit, Save, Add or cross');
+    is(await page.$$eval('#worker-board [draggable]', (e) => e.length), 0, 'and nothing can be dragged');
+    yes(await page.$eval('#worker-board .bd-bar', (e) => e.textContent.includes('Worker Namelist')), 'the strip says where a worker is changed');
+    await page.evaluate(() => openWorker(4));
+    yes(!(await page.isVisible('#wf-save')), 'a name opens read-only');
+    yes(!(await page.isVisible('#wf-section-row')), 'with no location box');
+    yes(await page.$eval('#wf-name', (e) => e.disabled), 'and every box disabled');
+    await page.evaluate(() => { window.__WRITES.length = 0; window.__ALERTS.length = 0; saveWorker(); rejectWorker(11); openManageRoles(); });
+    await page.waitForTimeout(200);
+    is(await page.evaluate(() => window.__WRITES.length), 0, 'a save, a rejection or a role called from the console on the chart writes nothing');
+    await page.evaluate(() => closeModal('worker-modal'));
+    await page.click('#page-back');
+    await page.waitForTimeout(200);
+    yes(await page.isVisible('#tab-list'), 'back goes to the namelist');
+    await page.close();
+
+    console.log('\n-- 7. a plain user can only look --');
+    page = await open(browser, port, { manage: false });
+    is(await page.$$eval('#wl-body .wl-ic', (e) => e.length), 0, 'no Edit on any row');
+    yes(!(await page.isVisible('#wl-add')), 'no Add Worker');
+    yes(!(await page.isVisible('#wl-roles')), 'no Manage Roles');
+    await page.close();
+
+    if (process.env.SHOT) {
+      page = await open(browser, port);
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.screenshot({ path: process.env.SHOT + '/namelist.png', fullPage: true });
+      await page.close();
+      page = await open(browser, port, { hash: '#chart' });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.screenshot({ path: process.env.SHOT + '/chart.png', fullPage: true });
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+  console.log(fails ? '\n' + fails + ' FAILED' : '\nall good');
   process.exit(fails ? 1 : 0);
 })();

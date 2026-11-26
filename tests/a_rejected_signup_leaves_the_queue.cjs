@@ -1,4 +1,4 @@
-/* TURNING A SIGNUP DOWN, on the Worker System board.
+/* TURNING A SIGNUP DOWN, on the Worker Namelist (the chart only shows).
  *
  * Somebody signs themselves up and the office does not want them. The
  * Waiting to be allocated queue is everybody on the register with no
@@ -170,19 +170,10 @@ async function open(browser, port, opts) {
     window.alert = (m) => { window.__ALERTS.push(String(m)); };
     window.prompt = () => { throw new Error('nothing here may raise a prompt'); };
   }, { manage: o.manage !== false, cols: o.cols || BASE_COLS.concat(REJ_COLS), workers: o.workers || WORKERS });
-  await page.goto('http://localhost:' + port + '/scan/scan_workers.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#worker-board .bd', { timeout: 8000 });
-  /* THE BOARD IS A RECORD UNTIL EDIT IS PRESSED, and the cross is one of
-     the things it locks -- rejecting a signup is a write to the register
-     like any other. Every section below is about the cross, so the board is
-     unlocked here rather than in each of them; section 1 asks the locked
-     board about it first, and section 6 deliberately does not unlock,
-     because a plain user is offered neither the cross nor the Edit that
-     would draw it. See the_board_is_read_only_until_edit.cjs. */
-  if (o.manage !== false && o.edit !== false) {
-    await page.evaluate(() => boardEdit());
-    await page.waitForSelector('#bd-save', { timeout: 4000 });
-  }
+  /* The NAMELIST is where a signup is turned down; the chart (#chart)
+     only shows. `chart: true` opens the chart, to ask it about the cross. */
+  await page.goto('http://localhost:' + port + '/scan/scan_workers.html' + (o.chart ? '#chart' : ''), { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector(o.chart ? '#worker-board .bd' : '#wl-body tr', { timeout: 8000 });
   return page;
 }
 
@@ -192,10 +183,13 @@ const answerConfirm = (page, yes) => page.evaluate((y) => {
   window.confirm = (m) => { window.__CONFIRMS.push(String(m)); return y; };
 }, yes);
 
-const queue = (page) => page.$$eval('.pend-head ~ .pend-list .pend-item .wchip > span:last-child',
+const queue = (page) => page.$$eval('#wl-pending .wl-pend-row .wl-name > span:last-child',
   (els) => els.map((e) => e.textContent));
-const rejectedList = (page) => page.$$eval('.pend-rej .wchip > span:last-child',
-  (els) => els.map((e) => e.textContent));
+const pendCount = (page) => page.$eval('#wl-pending .wl-pend-head', (e) => (e.firstChild.textContent.match(/\d+/) || [''])[0]);
+/* A rejected signup is a row of the namelist reading Rejected. */
+const rejectedList = (page) => page.$$eval('#wl-body tr', (trs) => trs
+  .filter((tr) => /Rejected/.test(tr.textContent))
+  .map((tr) => tr.querySelector('.wl-name > span:last-child').textContent));
 
 (async () => {
   await new Promise((r) => server.listen(0, r));
@@ -203,29 +197,25 @@ const rejectedList = (page) => page.$$eval('.pend-rej .wchip > span:last-child',
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   try {
     // ── 1. the queue, and the cross on every name in it ──
-    /* Opened LOCKED first. The cross writes to the register, so it is not
-       offered until Edit is pressed -- and the queue itself is a reading
-       and is there either way. */
-    let page = await open(browser, port, { edit: false });
+    /* The CHART only shows: the queue is there and carries no cross. */
+    let page = await open(browser, port, { chart: true });
+    is(await page.$$eval('.pend-head ~ .pend-list .pend-item .wchip > span:last-child', (els) => els.map((e) => e.textContent)),
+      ['Florence Indun', 'Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
+      'the chart still draws the queue -- it is a reading');
+    is(await page.$$eval('.pend-x, .wl-ic.x', (e) => e.filter((x) => x.offsetParent).length), 0,
+      'and carries no cross: the chart writes nothing');
+    await page.close();
+    page = await open(browser, port);
     is(await queue(page), ['Florence Indun', 'Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
-      'the queue is drawn with the board locked -- it is a reading');
-    is(await page.$$eval('.pend-x', (e) => e.length), 0,
-      'and carries no cross until somebody presses Edit');
-    await page.evaluate(() => boardEdit());
-    is(await queue(page), ['Florence Indun', 'Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
-      'the four signups with no section are the queue');
-    is(await page.$eval('.pend-count', (e) => e.textContent), '4', 'and the count agrees with it');
-    is(await page.$$eval('.pend-head ~ .pend-list .pend-x', (e) => e.length), 4,
+      'the four signups with no section are the namelist queue');
+    is(await pendCount(page), '4', 'and the count agrees with it');
+    is(await page.$$eval('#wl-pending .wl-ic.x', (e) => e.length), 4,
       'every name in the queue carries a cross');
-    is(await page.$$eval('.wchip .pend-x', (e) => e.length), 0,
-      'and the cross is OUTSIDE the chip, never inside it -- the chip opens the worker and carries the drag');
-    is(await page.$eval('.pend-item', (el) => el.children[0].className.split(' ')[0] + '|' + el.children[1].className),
-      'wchip|pend-x', 'chip then cross, as siblings');
     is(await page.isVisible('#reject-setup'), false, 'the two columns are there, so no setup warning');
 
     // ── 2. cancelling writes nothing, and the confirm names the person ──
     await answerConfirm(page, false);
-    await page.click('.pend-head ~ .pend-list .pend-item:first-child .pend-x');
+    await page.click('#wl-pending .wl-pend-head + .wl-pend-row .wl-ic.x');
     is(await page.evaluate(() => window.__CONFIRMS.length), 1, 'the cross asks before it writes');
     is(await page.evaluate(() => window.__CONFIRMS[0].includes('Florence Indun')), true,
       'and the confirm NAMES the person -- the crosses are a row of identical targets');
@@ -245,7 +235,7 @@ const rejectedList = (page) => page.$$eval('.pend-rej .wchip > span:last-child',
     // ── 4. rejecting: one UPDATE, no DELETE, and off the queue ──
     const readsBefore = await page.evaluate(() => window.__READS.length);
     await answerConfirm(page, true);
-    await page.click('.pend-head ~ .pend-list .pend-item:first-child .pend-x');
+    await page.click('#wl-pending .wl-pend-head + .wl-pend-row .wl-ic.x');
     await page.waitForFunction(() => window.__WRITES.length > 0, null, { timeout: 4000 });
     await page.waitForFunction(() => !document.body.innerText.includes('Florence Indun'), null, { timeout: 4000 }).catch(() => {});
     const w = await page.evaluate(() => window.__WRITES);
@@ -262,30 +252,24 @@ const rejectedList = (page) => page.$$eval('.pend-rej .wchip > span:last-child',
     is(await page.evaluate(() => window.__ALERTS.length), 0, 'and nothing went wrong');
     is(await queue(page), ['Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
       'the rejected name is out of the queue');
-    is(await page.$eval('.pend-count', (e) => e.textContent), '3',
+    is(await pendCount(page), '3',
       'and the count is the work actually left to do');
     is(await page.evaluate((n) => window.__READS.length > n, readsBefore), true,
       'the board rebuilt from the DATABASE, not from the screen');
 
-    // ── 5. still on the register, under its own heading ──
-    await page.check('#w-show-inactive');
+    // ── 5. still on the register, marked Rejected ──
     is(await rejectedList(page), ['Florence Indun'],
-      'with Show inactive ticked the rejected signup is on the register under its own heading');
+      'the rejected signup is still on the namelist, reading Rejected');
     is(await queue(page), ['Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
       'and it does NOT come back into the queue');
-    is(await page.$eval('.pend-count', (e) => e.textContent), '3', 'so the count does not move either');
-    is(await page.$$eval('.pend-rej .pend-x', (e) => e.length), 0,
-      'a signup already rejected is offered no cross');
-    is((await page.$eval('.pend-rej .wchip', (e) => e.getAttribute('title'))).includes('registration rejected'), true,
-      'and the hover says what happened to them');
     await page.close();
 
     // ── 6. a plain user is offered no cross at all ──
     page = await open(browser, port, { manage: false });
     is(await queue(page), ['Florence Indun', 'Muhamad Azhar', 'ROUSELL WAYNE', 'Wirawijayadi'],
       'somebody who may not move a worker still sees the queue');
-    is(await page.$$eval('.pend-x', (e) => e.length), 0, 'and is offered no cross');
-    is((await page.$eval('.pend-why', (e) => e.textContent)).includes('reject'), false,
+    is(await page.$$eval('.wl-ic', (e) => e.length), 0, 'and is offered no cross and no Edit');
+    is((await page.$eval('#wl-pending .wl-pend-head', (e) => e.textContent)).includes('reject'), false,
       'nor told about one');
     await page.close();
 
@@ -295,7 +279,7 @@ const rejectedList = (page) => page.$$eval('.pend-rej .wchip > span:last-child',
     is((await page.$eval('#reject-setup', (e) => e.textContent)).includes('RUN_ME_worker_rejected.sql'), true,
       'and names it');
     await answerConfirm(page, true);
-    await page.click('.pend-head ~ .pend-list .pend-item:first-child .pend-x');
+    await page.click('#wl-pending .wl-pend-head + .wl-pend-row .wl-ic.x');
     await page.waitForFunction(() => window.__WRITES.length > 0, null, { timeout: 4000 });
     const w2 = await page.evaluate(() => window.__WRITES[0]);
     is(Object.keys(w2.row).sort(), ['active', 'updated_at', 'updated_by'],
@@ -309,7 +293,6 @@ const rejectedList = (page) => page.$$eval('.pend-rej .wchip > span:last-child',
     page = await open(browser, port, {
       workers: WORKERS.map((x) => x.id === 3
         ? { ...x, active: false, rejected_at: '2026-10-20T01:00:00Z', rejected_by: 'office@mjmnursery.com' } : x) });
-    await page.check('#w-show-inactive');
     is(await rejectedList(page), ['Florence Indun'], 'a rejected signup opens on the register');
     await page.evaluate(() => window.openWorker(3));
     // shared_cf_select.js hides the native select behind its own button, so
