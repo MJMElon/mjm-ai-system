@@ -151,14 +151,30 @@ const DATA = {
   await p2.close();
   ok(pageErrs === 0, 'no page errors on Life of Plot', errs.slice(0, pageErrs));
 
-  console.log('4. with a nursery map on screen, the map chooses: no Nursery or Plot chips below');
+  console.log('4. with a nursery map on screen, the tabs top right choose the nursery; the Plot row stays');
   const pm = await openPage(Object.assign({}, DATA, { operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }] }), []);
   await pm.goto(B + '/operation/operation_life_of_plot.html');
   await pm.waitForSelector('#lp-map-tabs button', { timeout: 8000 }).catch(() => {});
-  const nr = await pm.evaluate(() => ({ pick: getComputedStyle(document.getElementById('lp-pick')).display,
+  const nr = await pm.evaluate(() => ({ row: getComputedStyle(document.getElementById('lp-nursery-row')).display,
+    label: getComputedStyle(document.getElementById('lp-nursery-label')).display,
+    plots: [...document.querySelectorAll('#lp-plot-row button')].map(b => b.textContent.trim()),
+    plotRow: getComputedStyle(document.getElementById('lp-plot-row')).display,
     list: [...document.querySelectorAll('#lp-plots tr.plotrow')].map(r => r.dataset.plot) }));
-  ok(nr.pick === 'none', 'the Nursery and Plot chooser is not drawn; the map chooses both', nr);
+  ok(nr.row === 'none' && nr.label === 'none', 'the Nursery row below is not drawn; the tabs top right choose it', nr);
+  ok(nr.plotRow !== 'none' && nr.plots.join() === 'All plots,B11,B13', 'the Plot row stays, following the nursery', nr.plots);
   ok(nr.list.join() === 'B11,B13', 'the list follows the map nursery (BNN)', nr.list);
+  const tabsOf = () => pm.evaluate(() => ({ head: [...document.querySelectorAll('#lp-head-nur button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')),
+    inMap: [...document.querySelectorAll('#lp-map button[data-map]')].length }));
+  const t1 = await tabsOf();
+  ok(t1.head.join() === 'BNN*' && t1.inMap === 0, 'the nursery tabs are top right, once, and not on the map panel', t1);
+  await pm.click('#lp-side button[data-view="palms-board"]');
+  const t2 = await tabsOf();
+  ok(t2.head.join() === 'BNN*', 'PALMS keeps the same tabs top right', t2);
+  await pm.click('#lp-side button[data-view="record"]');
+  const t3 = await tabsOf();
+  ok(t3.head.length === 0, 'the year record (every nursery) shows none', t3);
+  const navSrc = fs.readFileSync(path.join(ROOT, 'shared', 'shared_palms_nav.js'), 'utf8');
+  ok(/EMBED_CSS[\s\S]{0,400}\.pm-tabs\{display:none/.test(navSrc), 'embedded, PALMS does not draw its own nursery tabs');
   await pm.close();
 
   await browser.close(); server.close();
