@@ -562,8 +562,9 @@ function labelOf(key, by) {
      Collection %   = Collection / plot capacity, rounded DOWN to a whole %
      Collection plan = 90% of what was transplanted into the plot 9 months
                       earlier (the sheet's  Sasaran = transplant x 0.9)
-     Transplanting  = the batch report's Transplanted rows into the plot
-                      (shared_inventory_logs), by the day keyed on Tab 3
+     Transplanting  = Life of Plot transplant record: the Transplanted rows
+                      by the day keyed on Tab 3, plus approved Transplanting
+                      calibration on the first day of its batch
      Transplanting plan = what was transplanted 10 months earlier
      Capacity       = the plot capacity keyed on Work Maintenance > Setting
                       (nops_maint_plot_qty), the sheet's  Kapasiti
@@ -576,10 +577,46 @@ const SA_RANGES = { BNN: ['B', 14], UNN1: ['U', 18], UNN2: ['N', 20] };
 const saNurKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const saKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/(^|[A-Z])0+(\d)/g, '$1$2');
 const saIsReplant = s => /-R\d*$/i.test(String(s || '').trim());
+/* THE TRANSPLANT FIGURES ARE LIFE OF PLOT OWN TRANSPLANT RECORD (the
+   office: "pusingan jualan and transplant 将会从这个record去pull"), which is
+   the batch report reading: the day is Tab 3 own (the Date: in the remark,
+   else transaction_date, else the day it was saved), and an APPROVED
+   Transplanting calibration corrects its batch on that plot, landing on the
+   first day that batch went in. SHARED RULE: lpTransplantDay,
+   lpIsApprovedTransplantCal and buildPlotHistory in
+   operation/operation_life_of_plot.html. Change one, change the other;
+   the_site_audit_dashboard.cjs compares the two month by month. */
 function saDay(r) {
-  if (r.transaction_date) return String(r.transaction_date).slice(0, 10);
   const m = String(r.remark || '').match(/Date:\s*(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : String(r.created_at || '').slice(0, 10);
+  if (m) return m[1];
+  const td = String(r.transaction_date || '').slice(0, 10);
+  return td || String(r.created_at || '').slice(0, 10);
+}
+function saIsApprovedTransplantCal(r) {
+  const rem = String(r.remark || '');
+  return r.transaction_type === 'Stock_Calibration' && /^Report:\s*Transplanting/i.test(rem) && /APPROVED/i.test(rem);
+}
+/* Ledger rows (Transplanted and Stock_Calibration) to [{plot, day, qty}]. */
+function saTransplants(rows) {
+  const by = new Map();
+  (rows || []).forEach(r => {
+    if (saIsReplant(r.plot_name)) return;
+    const t = r.transaction_type || 'Transplanted';
+    const cal = saIsApprovedTransplantCal(r);
+    if (t !== 'Transplanted' && !cal) return;
+    const id = saKey(r.plot_name) + '|' + String(r.batch_name || '—');
+    const g = by.get(id) || { plot: r.plot_name, tr: [], adj: 0 };
+    if (cal) g.adj += Number(r.quantity_change) || 0;
+    else { g.tr.push({ plot: r.plot_name, day: saDay(r), qty: Number(r.quantity_change) || 0 }); if (!by.has(id)) g.plot = r.plot_name; }
+    by.set(id, g);
+  });
+  const out = [];
+  by.forEach(g => {
+    g.tr.forEach(x => out.push(x));
+    const first = g.tr.map(x => x.day).filter(Boolean).sort()[0];
+    if (g.adj && first) out.push({ plot: g.tr[0].plot, day: first, qty: g.adj });
+  });
+  return out;
 }
 function saShift(ym, by) {
   const y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1 + by;
@@ -648,7 +685,7 @@ function buildHeights(records, nursery, year) {
 }
 
 if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, reportBlocks, labelOf, MAX_DAMAGE_PCT,
-  saKey, saNurKey, saDay, saShift, saPlotsOf, buildRotation, buildHeights, SA_SUITABLE_M };
+  saKey, saNurKey, saDay, saTransplants, saShift, saPlotsOf, buildRotation, buildHeights, SA_SUITABLE_M };
 </script>
 <script>
 (function () {
@@ -1280,15 +1317,15 @@ if (typeof module !== 'undefined') module.exports = { buildBatches, groupRows, r
     SA.missing = [];
     const [plots, logs, dos, caps, heights] = await Promise.all([
       soft(saAll(() => _supabase.from('shared_plots').select('plot_name, nursery_name').order('plot_name')), 'plot list'),
-      saAll(() => _supabase.from('shared_inventory_logs').select('id, plot_name, quantity_change, transaction_date, created_at, remark')
-        .eq('transaction_type', 'Transplanted').order('id', { ascending: true })),
+      saAll(() => _supabase.from('shared_inventory_logs').select('id, plot_name, batch_name, transaction_type, quantity_change, transaction_date, created_at, remark')
+        .in('transaction_type', ['Transplanted', 'Stock_Calibration']).order('id', { ascending: true })),
       soft(saAll(() => _supabase.from('shared_do_records').select('id, delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5')
         .order('id', { ascending: true })), 'delivery orders'),
       soft(saAll(() => _supabase.from('nops_maint_plot_qty').select('nursery, plot, qty').order('plot')), 'plot capacity'),
       soft(saAll(() => _supabase.from('audit_height_records').select('nursery, plot, avg_height, date').order('date')), 'height audits'),
     ]);
     SA.plots = plots;
-    SA.transplants = logs.map(r => ({ plot: r.plot_name, day: saDay(r), qty: Number(r.quantity_change) || 0 }));
+    SA.transplants = saTransplants(logs);
     SA.sales = [];
     dos.forEach(d => {
       if (d.status === 'Cancelled' || String(d.remark || '').includes('[CANCELLED]')) return;

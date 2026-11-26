@@ -12253,6 +12253,16 @@ and the B11 tab), checked figure for figure against B11:
 - **Left off, having no data in the system**: the sheet Nurseries, Plot, Drone
   Area (Ha) and SIN columns.
 
+**The Transplant record by year and the Site Audit Pusingan Jualan / Pusingan
+Transplant read the SAME record** (the office: "pusingan jualan and transplant
+将会从这个record去pull"). Per plot per month it is the census of the cycle
+cards: the Transplanted rows on the Tab 3 day, plus an approved Transplanting
+calibration on the first day of its batch. `saTransplants` / `saDay` in
+`reporting/nursery_dashboard.html` are the copy (another page, no shared file
+yet); `the_site_audit_dashboard.cjs` lifts Life of Plot builder and compares
+the two plot by plot and month by month. Before, the Site Audit dated a
+transplant by `transaction_date` first and left the calibration out.
+
 **PALMS and the cycles were merged into one Plot Map for a day and taken back
 out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cycle
 colour switch, labels carrying both, PALMS columns on the list and a stage
