@@ -12219,13 +12219,20 @@ the title and nothing else, and the nursery tabs sit BELOW it, right-aligned.
 **Life of Plot must not change the batch report** (the office, firmly): a
 Plot Cycle box on Tab 3 was built and taken back out unshipped.
 
-**The Plots & cycles map paints FOUR STAGES**, with the key standing beside
-the map (`LP_STAGES`, `mapStateOf`): Empty (no current cycle, or it is 3rd
-culled), Growing (under `LP_SOON_MONTHS`, 6, since the cycle first
-transplant), Ready soon (6 months or more, nothing of this cycle sold yet) and
-Selling (a batch of this cycle on a delivery order since it began, or its 3rd
-culling begun). The last two are called Collecting in 1 month and Collecting
-on screen. Each plot carries the office OWN MJM CATS, moving
+**The Plots & cycles map paints FOUR STAGES, and PALMS decides them** (the
+office: *empty就是PALMS那边是图一 / growing就是membesar / collecting in 1 month
+就是transplant后的第8个月 / Collecting就是PALMS的status变成collecting*). The
+furthest stage OPEN in PALMS for the plot (`ensurePalms`, read through
+`MJMPalms.loadLogs`, matched by NAME in `lpPalmsStage`): Membersih, Meracun
+secara selingan, Angkat tanah, Isi polibeg, Lining, Transplanting (and the
+three before them) are Empty; Membesar is Growing, and Collecting in 1 month
+from the 8th month after transplant (`LP_SOON_MONTHS` 7, off the ledger cycle
+start, else the Membesar start); Pengambilan is Collecting. A plot PALMS has
+nothing open for falls back to the ledger rule (`mapStateOf`): no current
+cycle or 3rd culled Empty, a batch of the cycle on a delivery order
+Collecting, else by age. Section 7 of `tests/life_of_plot_reads_by_cycle.cjs`.
+The labels are Empty, Growing, Collecting in 1 month, Collecting; the key
+carries no explanation lines. Each plot carries the office OWN MJM CATS, moving
 (`operation/lifeplot/cat_*.png`, cut out of the sheet they handed over).
 **The cats are part of the MAP, never of the label** (`lpCats` into
 `#lp-cats`, under the labels): sized off the plot and scattered over its

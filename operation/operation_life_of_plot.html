@@ -13,6 +13,7 @@
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_staff_gate.js"></script>
     <script src="../shared/shared_access.js"></script>
+    <script src="../shared/shared_palms.js?v=7"></script>
     <style>
         /* Batch Record's look, so the two read as one system. */
         body { background-color: #f8f4ec; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; }
@@ -565,33 +566,72 @@
        "empty, growing, 即将可以售卖, 售卖中"), each its own colour, with the key
        standing beside the map. `stage` is the key, `fill` / `stroke` the paint. */
     const LP_STAGES = [
-        { key: 'empty',   label: 'Empty',         note: 'nothing standing: never filled, or 3rd culled',       fill: 'rgba(148,163,184,.30)', stroke: '#94a3b8' },
-        { key: 'growing', label: 'Growing',       note: `under ${6} months since transplant`,                 fill: 'rgba(74,222,128,.45)',  stroke: '#16a34a' },
-        { key: 'soon',    label: 'Collecting in 1 month', note: '6 months or more, nothing collected yet',      fill: 'rgba(251,191,36,.50)',  stroke: '#d97706' },
-        { key: 'selling', label: 'Collecting',    note: 'this round is going out on delivery orders',         fill: 'rgba(96,165,250,.50)',  stroke: '#2563eb' },
+        { key: 'empty',   label: 'Empty',                 fill: 'rgba(148,163,184,.30)', stroke: '#94a3b8' },
+        { key: 'growing', label: 'Growing',               fill: 'rgba(74,222,128,.45)',  stroke: '#16a34a' },
+        { key: 'soon',    label: 'Collecting in 1 month', fill: 'rgba(251,191,36,.50)',  stroke: '#d97706' },
+        { key: 'selling', label: 'Collecting',            fill: 'rgba(96,165,250,.50)',  stroke: '#2563eb' },
     ];
-    const LP_SOON_MONTHS = 6;
+    /* The 8th month after transplant is Collecting in 1 month (the office:
+       "collecting in 1 month 就是transplant后的第8个月"), so 7 full months. */
+    const LP_SOON_MONTHS = 7;
     const MAP_FILL = {};
     LP_STAGES.forEach(x => { MAP_FILL[x.key] = [x.fill, x.stroke]; });
 
     // ── Map view ──────────────────────────────────────────────
-    // Colour is how far the plot has got through its 3rd cull, read off the
-    // same figures the list shows. The pct is 3rd culled over the adjusted
-    // transplant, so it is the same answer the table gives.
-    // Asked of the CURRENT cycle: a plot culled last year and filled again is in the field.
     function curCycle(p) { return p && p.cycles && p.cycles.length ? p.cycles[p.cycles.length - 1] : null; }
-    /* Empty: no current cycle, or it is finished (3rd culled). Selling: a
-       batch of the current cycle has been sold on a delivery order since the
-       cycle began (or its 3rd culling has begun). Ready soon: 6 months or more
-       since the cycle first transplant and nothing sold yet. Growing: younger.
-       Before the delivery orders are read, age alone decides. */
-    function mapStateOf(p) {
+    /* THE STAGE IS PALMS (the office): the stage a plot is on in PALMS decides,
+         Membersih, Meracun secara selingan, Angkat tanah, Isi polibeg, Lining,
+         Transplanting (and Saringan, Tunggu buat culling, Culling before them) -> Empty
+         Membesar -> Growing, or Collecting in 1 month from the 8th month after transplant
+         Pengambilan (collecting) -> Collecting
+       Matched by NAME, as PALMS anchors its round. A plot PALMS has nothing open
+       for falls back to the ledger: no current cycle or 3rd culled is Empty, a
+       batch of the cycle on a delivery order is Collecting, else by age. */
+    const lpStageName = s => String(s || '').trim().toLowerCase();
+    function lpPalmsStage(actName, months) {
+        const n = lpStageName(actName);
+        if (!n) return null;
+        if (n === 'pengambilan' || n.indexOf('collect') >= 0) return 'selling';
+        if (n === 'membesar') return months != null && months >= LP_SOON_MONTHS ? 'soon' : 'growing';
+        return 'empty';
+    }
+    let PALMS_NOW = null; // plot key -> { name, start } : the furthest stage open in PALMS
+    let PALMS_P = null;
+    function ensurePalms() {
+        if (PALMS_P) return PALMS_P;
+        PALMS_P = (async () => {
+            const P = window.MJMPalms;
+            if (!P) return;
+            await P.loadStages(_supabase);
+            const logs = await P.loadLogs(_supabase);
+            const now = {};
+            Object.keys(logs).forEach(unit => {
+                const open = P.openActivities(logs, unit);
+                if (!open.length) return;
+                const a = open[open.length - 1];
+                const k = lpPlotKey(P.plotOf(unit));
+                const e = (logs[unit] || []).find(x => x.end === null && x.actN === a.n);
+                if (!now[k] || a.n > now[k].n) now[k] = { name: a.name, n: a.n, start: e ? e.start : null };
+            });
+            PALMS_NOW = now;
+        })().catch(e => { console.warn('[life of plot] PALMS not read, the map reads the ledger:', (e && e.message) || e); });
+        return PALMS_P;
+    }
+    function mapStateOf(p, plotName) {
         const c = curCycle(p);
-        if (!c || c.tAdj <= 0 || c.end) return { key: 'empty', months: null };
-        const months = c.start ? (Date.now() - Date.parse(c.start + 'T00:00:00Z')) / 86400000 / 30.44 : 0;
-        const k = lpPlotKey(p.plot);
-        const mine = new Set(c.batches.map(b => lpBatchKey(b.batch)));
-        const sold = c.c3 > 0 || (ROT && ROT.sales.some(r => lpPlotKey(r.plot) === k && mine.has(lpBatchKey(r.batch)) && String(r.day) >= String(c.start)));
+        const k = lpPlotKey(plotName || (p && p.plot) || '');
+        const pal = PALMS_NOW && PALMS_NOW[k];
+        const since = d => d ? (Date.now() - Date.parse(String(d).slice(0, 10) + 'T00:00:00Z')) / 86400000 / 30.44 : null;
+        const liveC = c && c.tAdj > 0 && !c.end ? c : null;
+        if (pal) {
+            const months = since(liveC ? liveC.start : pal.start);
+            const key = lpPalmsStage(pal.name, months);
+            if (key) return { key, months, palms: pal.name };
+        }
+        if (!liveC) return { key: 'empty', months: null };
+        const months = since(liveC.start) || 0;
+        const mine = new Set(liveC.batches.map(b => lpBatchKey(b.batch)));
+        const sold = liveC.c3 > 0 || (ROT && ROT.sales.some(r => lpPlotKey(r.plot) === k && mine.has(lpBatchKey(r.batch)) && String(r.day) >= String(liveC.start)));
         if (sold) return { key: 'selling', months };
         return { key: months >= LP_SOON_MONTHS ? 'soon' : 'growing', months };
     }
@@ -713,7 +753,7 @@
 
         Object.values(PLOT_SHAPES).filter(s => s.nur === k).forEach(s => {
             const p = idx[lpPlotKey(s.name)];
-            const st = mapStateOf(p);
+            const st = mapStateOf(p, s.name);
             const stg = LP_STAGES.find(x => x.key === st.key);
             const [fill, stroke] = MAP_FILL[st.key];
             const ptsStr = s.pts.map(pt => pt.x + ',' + pt.y).join(' ');
@@ -722,7 +762,7 @@
             const cc = curCycle(p);
             const tip = cc ? `Cycle ${cc.n} of ${p.cycles.length} · transplanted ${fmtN(cc.tAdj)} · 2nd cull ${fmtN(cc.c2)} · 3rd cull ${fmtN(cc.c3)}` : 'Nothing recorded';
             svg.insertAdjacentHTML('beforeend',
-                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" data-stage="${st.key}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name} · ${stg.label}${st.months != null ? ' · ' + Math.floor(st.months) + ' months' : ''}: ${tip}</title></polygon>`);
+                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" data-stage="${st.key}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name} · ${stg.label}${st.palms ? ' (PALMS: ' + st.palms + ')' : ''}${st.months != null ? ' · ' + Math.floor(st.months) + ' months' : ''}: ${tip}</title></polygon>`);
             const line = !cc || cc.tAdj <= 0
                 ? '<div class="lp-line empty">No batch</div>'
                 : `<div class="lp-line" title="${tip}">Cycle ${cc.n} · ${fmtN(cc.tAdj)}</div>`;
@@ -1130,6 +1170,7 @@
             renderMap();
             // The delivery orders decide Selling; read them now and colour the map again.
             ensureRot().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); }).catch(() => {});
+            ensurePalms().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); });
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
             REC_YEAR = (location.hash.match(/year=(\d{4})/) || [])[1] || '';
             const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
