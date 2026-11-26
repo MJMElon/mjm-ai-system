@@ -152,6 +152,7 @@
         table.lp-x tbody tr:nth-child(even) td { background:rgba(61,38,16,.025); }
         table.lp-x tbody tr:hover td { background:rgba(106,168,60,.08); }
         table.lp-x td { border-bottom:1px solid #f1ead9; }
+        table.lp-x td.est { text-align:center; color:#a8957c; font-weight:600; font-style:italic; }
         table.lp-x .mute { color:#c9bba8; font-weight:400; }
         table.lp-x tfoot td { font-weight:800; color:#1a150d; background:#f6f0e4; }
         /* Transplant record: the office sheet, a column per month. */
@@ -914,6 +915,15 @@
        the Total row carries the plot culling rates. A drone count belongs to
        a Tab 3 card (one plot, one day), so batches that went in on the same
        first day share one drone cell. */
+    /* When a culling not yet keyed is due: the month that many months after the
+       batch went in (2nd: the 4th month, 3rd: the 9th). */
+    const LP_EST_C2 = 4, LP_EST_C3 = 9;
+    function lpEst(day, add) {
+        if (!day) return '';
+        const y = +day.slice(0, 4), m = +day.slice(5, 7) - 1 + add;
+        const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return 'Est. ' + M[m % 12] + ' ' + (y + Math.floor(m / 12));
+    }
     function cycleHtml(c, p) {
         const d = lpDays(c.start, c.end);
         const bs = c.batches;
@@ -958,11 +968,19 @@
             body += `<tr><td class="l batch">${b.batch}</td>`
                 // Transplanting: the day and how many went in (the office: only these two)
                 + `<td class="l s1">${b.tDate || '–'}</td><td>${nf(b.tAdj) || '0'}</td>`
-                // 2nd culling: alive, dead, culling rate
-                + `<td class="l s1">${b.c2Date || '–'}</td><td>${nf(alive) || '0'}</td><td class="cull">${b.c2Has ? nf(b.c2Qty) || '0' : '–'}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
-                // 3rd culling: pending culling, drone count, variance, culling rate
-                + `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
-                + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td></tr>`;
+                // 2nd culling: alive, dead, culling rate. Nothing keyed yet is one blank
+                // cell carrying when it is due: the 4th month after transplant (the office:
+                // transplanted Nov 2026, est. Mar 2027).
+                + (b.c2Has
+                    ? `<td class="l s1">${b.c2Date || '–'}</td><td>${nf(alive) || '0'}</td><td class="cull">${nf(b.c2Qty) || '0'}</td><td class="cull">${lpPct(c2, b.tAdj)}</td>`
+                    : `<td class="l s1 est" colspan="4">${lpEst(b.tDate, LP_EST_C2)}</td>`)
+                // 3rd culling: pending culling, drone count, variance, culling rate; nothing
+                // keyed yet is due the 9th month after transplant.
+                + (b.c3Has || b.c3Map != null
+                    ? `<td class="l s1">${b.c3Date || '–'}</td><td class="cull">${b.c3Has ? nf(b.c3Qty) || '0' : '–'}</td><td>${b.c3Map != null ? nf(b.c3Map) || '0' : '–'}</td>`
+                      + `<td>${lpVar(m3 - c3)}</td><td class="cull">${lpPct(c3, b.tAdj)}</td>`
+                    : `<td class="l s1 est" colspan="5">${lpEst(b.tDate, LP_EST_C3)}</td>`)
+                + `</tr>`;
         }));
         h += `<div class="lp-x-wrap"><table class="lp lp-x">`
            + `<colgroup><col><col span="2" class="c-t"><col span="4" class="c-2"><col span="5" class="c-3"></colgroup>`
@@ -974,8 +992,9 @@
            + `<tbody>${body}</tbody>`
            + `<tfoot><tr class="tot"><td class="l">Total · plot</td>`
            + `<td class="s1"></td><td>${dash(c.tAdj)}</td>`
-           + `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>`
-           + `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td></tr></tfoot>`
+           + (bs.some(b => b.c2Has) ? `<td class="s1"></td><td>${dash(alive2)}</td><td>${dash(c.c2)}</td><td>${lpPct(c.c2, c.tAdj)}</td>` : `<td class="s1" colspan="4"></td>`)
+           + (bs.some(b => b.c3Has || b.c3Map != null) ? `<td class="s1"></td><td>${dash(c.c3)}</td><td>${dash(map3)}</td><td>${lpVar(map3 - c.c3)}</td><td>${lpPct(c.c3, c.tAdj)}</td>` : `<td class="s1" colspan="5"></td>`)
+           + `</tr></tfoot>`
            + `</table></div>`;
         h = h.replace(/>–</g, '><span class="mute">–</span><');
         return h + '</div>';
