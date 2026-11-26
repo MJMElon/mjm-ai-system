@@ -12271,7 +12271,7 @@ The Plot chip row has no All plots chip (*all plot 不需要存在*), and the cy
 table is drawn calm (*看了眼睛很痛*): ordinary-case muted headings,
 regular-weight figures, a faint tint per section, a soft stripe, no colour under the pointer except in Edit cycles (*除非我按edit*), dashes
 greyed. The Transplant record by year is drawn as a clear GRID (*格子要分明一点*):
-every cell lined, the month row NOT pinned (it froze while scrolling), plot rows striped, the hovered row lit, the plot and Total
+every cell lined, the month row AND the plot column frozen (*freeze住*: the table scrolls in its own frame, `.lp-rec-wrap`), so a figure hover lists the batches only, no plot or month, plot rows striped, the hovered row lit, the plot and Total
 columns set apart; only the PLOT NAME opens the plot, a figure does nothing
 (*我按plot名字才带我去plot*). Hovering a figure floats the batches it is made of
 (`#lp-tip`, off `who` in `buildTransplantYear`). **There is no list of every plot**: the plots view opens straight on
