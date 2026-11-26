@@ -123,7 +123,9 @@ const DATA = {
   const b11_25 = await page.evaluate(() => { const tr = [...document.querySelectorAll('#lp-rec-table tbody tr')].find(r => r.firstElementChild.textContent.trim() === 'B11'); return [...tr.children].slice(1).map(td => td.textContent.trim()); });
   ok(b11_25[4] === '12,121', 'picking 2025 shows May 2025: 12,121', b11_25);
 
-  await page.click('#lp-rec-table tr.plotrow[data-plot="B11"]');
+  const before = await page.evaluate(() => { document.querySelector('#lp-rec-table tr.plotrow[data-plot="B11"] td:nth-child(5)').click(); return location.hash; });
+  ok(!/plot=/.test(before), 'clicking a figure in the row does not open the plot', before);
+  await page.click('#lp-rec-table tr.plotrow[data-plot="B11"] td.batch');
   await page.waitForTimeout(200);
   const back = await page.evaluate(() => !document.getElementById('lp-detail').classList.contains('hidden') && document.querySelectorAll('#lp-timeline-box .lp-cyc').length);
   ok(back === 2, 'a plot in the record opens its cycles', back);

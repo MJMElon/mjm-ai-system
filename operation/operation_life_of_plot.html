@@ -162,12 +162,15 @@
            the plot and Total columns set apart. */
         table.lp-rec { border-collapse:collapse; }
         table.lp-rec th, table.lp-rec td { padding:8px 10px; border:1px solid #e6dccb; }
-        table.lp-rec thead th { background:#f3ecdf; color:#5c3d1e; font-size:11px; text-transform:none; letter-spacing:.02em; font-weight:800; border-bottom:2px solid #d9cbb2; position:sticky; top:0; z-index:1; }
+        table.lp-rec thead th { background:#f3ecdf; color:#5c3d1e; font-size:11px; text-transform:none; letter-spacing:.02em; font-weight:800; border-bottom:2px solid #d9cbb2; }
         table.lp-rec td { font-weight:500; color:#3a3328; }
         table.lp-rec td:first-child, table.lp-rec th:first-child { border-right:2px solid #d9cbb2; }
         table.lp-rec tr.grp td { background:#efe5d2; color:#5c3d1e; border-top:2px solid #d9cbb2; }
         table.lp-rec tr.plotrow:nth-child(even) td { background:#faf6ee; }
         table.lp-rec tr.plotrow:hover td { background:#eaf3e0; }
+        table.lp-rec tbody tr.plotrow { cursor:default; }
+        table.lp-rec tr.plotrow td.batch { cursor:pointer; color:#2f6b1f; text-decoration:underline; text-decoration-color:rgba(47,107,31,.35); text-underline-offset:3px; }
+        table.lp-rec tr.plotrow td.batch:hover { text-decoration-color:#2f6b1f; }
         table.lp-rec td.sum { color:#5c3d1e; }
         table.lp-rec tr.sumrow td { background:#fbf6ec; }
         table.lp-rec tr.tot td { font-weight:900; color:#3d2610; border-top:2px solid #d9cbb2; background:#f4ecdc; }
@@ -1155,8 +1158,9 @@
         h += '</tbody>';
         const t = document.getElementById('lp-rec-table');
         t.innerHTML = h;
-        t.querySelectorAll('tr.plotrow').forEach(tr => tr.addEventListener('click', () => {
-            showPlot(tr.dataset.plot);
+        // Only the plot NAME opens the plot (the office: "我按plot名字才带我去plot").
+        t.querySelectorAll('tr.plotrow td.batch').forEach(td => td.addEventListener('click', () => {
+            showPlot(td.parentElement.dataset.plot);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }));
     }
