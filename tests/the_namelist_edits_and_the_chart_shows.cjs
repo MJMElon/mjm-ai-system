@@ -127,7 +127,7 @@ async function open(browser, port, opts) {
     if (!manage) perms.npayroll_actions = { workers: { view: true, manage: false } };
     window.__FAKE_PROFILE = { id: 'u1', email: user.email, user_type: 'system', permissions: perms };
     window.__COLS = cols;
-    if (cfgOn) window.__CFG = [{ key: 'worker_roles', txt_value: JSON.stringify(['Security']) }];
+    if (cfgOn) window.__CFG = [{ key: 'worker_roles', txt_value: JSON.stringify(cfgOn === true ? ['Security'] : cfgOn) }];
     window.__ROWS = {
       mjmnpayroll_workers: JSON.parse(JSON.stringify(workers)),
       operation_nurseries: [{ name: 'PN' }, { name: 'BNN' }, { name: 'Ulu Niah 1' }, { name: 'Ulu Niah 2' }],
@@ -138,7 +138,7 @@ async function open(browser, port, opts) {
     window.__ALERTS = [];
     window.alert = (m) => { window.__ALERTS.push(String(m)); };
     window.prompt = () => { throw new Error('nothing here may raise a prompt'); };
-  }, { cfgOn: !!o.cfg, manage: o.manage !== false, cols: o.cols || BASE_COLS.concat(REJ_COLS), workers: o.workers || WORKERS });
+  }, { cfgOn: o.cfg === true ? true : (o.cfg || false), manage: o.manage !== false, cols: o.cols || BASE_COLS.concat(REJ_COLS), workers: o.workers || WORKERS });
   await page.goto('http://localhost:' + port + '/scan/scan_workers.html' + (o.hash || ''), { waitUntil: 'domcontentloaded' });
   await page.waitForSelector(o.hash === '#chart' ? '#worker-board .bd' : '#wl-body tr', { timeout: 8000 });
   return page;
@@ -165,7 +165,7 @@ const WORKERS = [
 const BASE_COLS = ['id','full_name','section','role','nursery','job_title','active','remark','portal',
                    'pin','photo_url','maint_general','registered_on','last_day',
                    'created_at','created_by','updated_at','updated_by',
-                   'rejected_at','rejected_by'];
+                   'rejected_at','rejected_by','also_roles'];
 const REJ_COLS  = [];
 
 let fails = 0;
@@ -330,6 +330,33 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     is(await page.$$eval('#wl-body .wl-ic', (e) => e.length), 0, 'no Edit on any row');
     yes(!(await page.isVisible('#wl-add')), 'no Add Worker');
     yes(!(await page.isVisible('#wl-roles')), 'no Manage Roles');
+    await page.close();
+
+    console.log('\n-- 8. also works as --');
+    const ALSO = WORKERS.map((w) => w.id === 7 ? { ...w, also_roles: ['Night Watchman'] } : w);
+    page = await open(browser, port, { cfg: ['Night Watchman'], workers: ALSO });
+    yes(await page.$eval('#wl-body tr[data-id="7"]', (e) => e.textContent.includes('+ Night Watchman')), 'the namelist row names the other job under the role');
+    await page.evaluate(() => openWorker(7));
+    is(await page.$$eval('#wf-also input:checked', (e) => e.map((x) => x.value)), ['Night Watchman'], 'the record opens with Night Watchman ticked under Also works as');
+    yes(!(await page.isVisible('#wf-also label[data-role="General Worker"]')), 'the main role is not offered as another job');
+    if (process.env.SHOT) { await page.setViewportSize({ width: 1280, height: 1000 }); await page.screenshot({ path: process.env.SHOT + '/also_form.png' }); }
+    await page.evaluate(() => { window.__WRITES.length = 0; });
+    await page.click('#wf-save');
+    await page.waitForTimeout(300);
+    const aw = await page.evaluate(() => (window.__WRITES.find((x) => x.table === 'mjmnpayroll_workers') || {}).row);
+    is(aw && aw.also_roles, ['Night Watchman'], 'Save writes also_roles');
+    is(aw && aw.role, 'General Worker', 'and the role stays ONE');
+    await page.close();
+    page = await open(browser, port, { hash: '#chart', cfg: ['Night Watchman'], workers: ALSO });
+    const cellOf = (role) => page.$$eval('#worker-board tr', (trs, role) => {
+      const tr = trs.find((t) => (t.querySelector('.bd-role-name') || {}).textContent === role);
+      return tr ? [...tr.querySelectorAll('.wchip')].map((c) => [...c.children].filter((x) => x.tagName === 'SPAN').pop().textContent.trim() + (c.querySelector('.also-tag') ? ' also' : '')) : null;
+    }, role);
+    yes((await cellOf('Workers')).includes('Ahmad Bin Ali'), 'Ahmad is in the Workers row');
+    is(await cellOf('Night Watchman'), ['Ahmad Bin Ali also'], 'and in the Night Watchman row, marked also');
+    is(await page.$eval('#worker-board', (b) => [...b.querySelectorAll('tr')].find((t) => (t.querySelector('.bd-role-name') || {}).textContent === 'Night Watchman').querySelector('.bd-role-count').textContent), '0',
+      'the Night Watchman count is its own people only; the also is said beside it');
+    if (process.env.SHOT) { await page.setViewportSize({ width: 1280, height: 900 }); await page.screenshot({ path: process.env.SHOT + '/also_chart.png', fullPage: true }); }
     await page.close();
 
     if (process.env.SHOT) {

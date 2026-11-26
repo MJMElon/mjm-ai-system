@@ -251,6 +251,19 @@
   .rf-x { border:0; background:none; color:#b91c1c; cursor:pointer; font-size:13px; }
   .rf-none { font-size:12px; color:#94a3b8; }
   .wf-jobs { display:flex; flex-wrap:wrap; gap:6px 18px; }
+  /* ALSO WORKS AS: a second job, drawn on the chart in that row too. */
+  .wf-also { display:flex; flex-wrap:wrap; gap:6px; }
+  #wf-also label { margin:0; text-transform:none; letter-spacing:0; color:var(--text,#253247); width:auto; white-space:nowrap; line-height:1.2;
+                   display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px solid var(--border,#d8dee6);
+                   border-radius:999px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; }
+  #wf-also label:has(input:checked) { border-color:#0d9488; background:#e6f6f4; color:#0f5f58; }
+  #wf-also label.is-main { display:none; }
+  #wf-also input { margin:0; width:auto; }
+  .wchip.wchip-also { background:#f4f7f6; border-style:dashed; color:#4b5b57; text-transform:uppercase; }
+  .wchip-also .also-tag { font-size:9px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+                          color:#0d9488; margin-left:4px; flex:0 0 auto; }
+  .bd-role-also { display:block; font-size:9px; font-weight:600; color:var(--text-faint,#8a96a3); }
+  .wl-also { display:block; font-size:11px; color:#0d9488; font-weight:600; }
   .wf-job { font-size:12.5px !important; font-weight:600 !important; color:var(--text-head) !important; text-transform:none !important; letter-spacing:0 !important; }
   .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   .wl-name .wface { width:28px; height:28px; flex:0 0 28px; font-size:10px; }
@@ -426,6 +439,13 @@
              and sometimes years after, when an old register is typed up. -->
         <div class="frow"><label>Registered date</label>
           <input type="date" id="wf-registered"></div>
+      </div>
+      <!-- ALSO WORKS AS: other jobs this person does besides the Role.
+           The Role stays ONE (pay, sheets and Mata Malam read it); these only
+           put the person in those rows of the Worker System chart too. -->
+      <div class="frow" id="wf-also-row"><label>Also works as <span style="font-weight:500;color:var(--text-faint)">(optional)</span></label>
+        <div class="wf-also" id="wf-also"></div>
+        <div id="wf-also-why" style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:4px;"></div>
       </div>
       <div class="grid2">
         <div class="frow"><label>Status</label>
@@ -705,6 +725,7 @@ let _maintGeneralCol = true;
 let _pinCol = true;
 let _photoCol = true;
 let _portalCol = true;
+let _alsoCol = true;
 let _dateCols = true;   // registered_on / last_day
 let _rejectCols = true; // rejected_at / rejected_by
 
@@ -804,6 +825,8 @@ async function loadWorkers() {
   // And the portal column, where Siram Go and Mata Malam are ticked.
   const portalProbe = await _supabase.from('mjmnpayroll_workers').select('portal').limit(1);
   _portalCol = !portalProbe.error;
+  const alsoProbe = await _supabase.from('mjmnpayroll_workers').select('also_roles').limit(1);
+  _alsoCol = !alsoProbe.error;
   const ph = $('photo-setup');
   if (ph) ph.classList.toggle('hidden', _photoCol);
   // And the two dates — when they joined, and the last day of anybody who
@@ -1295,7 +1318,7 @@ function renderList() {
     if (stF === 'on' && !on) return false;
     if (stF === 'off' && on) return false;
     if (locF && locationOfW(sectionOf(w)).name !== locF) return false;
-    return !q || `${w.full_name || ''} ${w.role || ''}`.toLowerCase().includes(q);
+    return !q || `${w.full_name || ''} ${w.role || ''} ${alsoOf(w).join(" ")}`.toLowerCase().includes(q);
   });
   $('wl-body').innerHTML = rows.length ? rows.map((w, i) => {
     const on = isActiveW(w), loc = locationOfW(sectionOf(w));
@@ -1303,7 +1326,7 @@ function renderList() {
     return `<tr class="${on ? '' : 'is-off'}" data-id="${w.id}">
       <td class="c">${i + 1}</td>
       <td><span class="wl-name">${faceHtml(w)}<span>${esc(w.full_name)}</span></span></td>
-      <td>${esc(w.role || '—')}</td>
+      <td>${esc(w.role || '—')}${alsoOf(w).length ? `<span class="wl-also">+ ${esc(alsoOf(w).join(', '))}</span>` : ''}</td>
       <td class="wl-loc">${esc(loc.name)}${loc.code ? `<small>${esc(loc.code)}</small>` : ''}</td>
       <td><span class="wl-st ${on ? 'on' : 'off'}">${st}</span></td>
       <td class="r">${can ? editBtn(w) : ''}</td>
@@ -1327,6 +1350,11 @@ function renderWorkerBoard() {
     const p = boardPos(w);
     return (p.section || '') === sec && boardRoleOf(p) === role;
   });
+  /* ALSO: somebody whose Also works as names this row, drawn here too,
+     marked, and never counted in the row's own figure. */
+  const alsoAt = (sec, role) => role === BOARD_OTHER ? [] : onBoard.filter(w =>
+    (boardPos(w).section || '') === sec && boardRoleOf(w) !== role &&
+    alsoOf(w).some(a => a.toLowerCase() === role.toLowerCase()));
 
   /* AN ORPHAN COLUMN IS ITS PEOPLE, so it goes when they do. It is drawn
      for a section the nursery list does not hold — a nursery since renamed,
@@ -1361,17 +1389,23 @@ function renderWorkerBoard() {
 
   const body = rows.map(r => {
     const total = flat.reduce((n, c) => n + at(c, r.key).length, 0);
+    const alsoN = flat.reduce((n, c) => n + alsoAt(c, r.key).length, 0);
     const cells = flat.map(c => {
       const chips = at(c, r.key).map(w => `
         <span class="wchip ${w.active === false ? 'wchip-off' : ''}"
               onclick="openWorker(${w.id})"
               title="${esc(workerTitle(w))}"
-              >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>`).join('');
+              >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>`).join('') +
+        alsoAt(c, r.key).map(w => `
+        <span class="wchip wchip-also"
+              onclick="openWorker(${w.id})"
+              title="${esc(w.full_name)} — ${esc(w.role || '')}, also works as ${esc(r.label)}"
+              >${faceHtml(w)}<span>${esc(w.full_name)}</span><em class="also-tag">also</em></span>`).join('');
       return `<td class="bd-cell">
                 <div class="bd-cell-in">${chips}</div></td>`;
     }).join('');
     return `<tr><th class="bd-role"><span class="bd-role-name">${esc(r.label)}</span>
-                  <span class="bd-role-count">${total}</span></th>${cells}</tr>`;
+                  <span class="bd-role-count">${total}</span>${alsoN ? `<span class="bd-role-also">+${alsoN} also</span>` : ''}</th>${cells}</tr>`;
   }).join('');
 
   /* ── Waiting to be allocated ──────────────────────────────────────────
@@ -1613,6 +1647,22 @@ function fillRoleSelect(current) {
   $('wf-role').value = cur;
 }
 
+/* The other jobs: every role on the list, the Role itself hidden. */
+const alsoOf = w => (Array.isArray(w && w.also_roles) ? w.also_roles : [])
+  .map(r => String(r || '').trim()).filter(Boolean)
+  .filter(r => r.toLowerCase() !== String((w && w.role) || '').trim().toLowerCase());
+function fillAlsoBox(picked) {
+  const keep = new Set((picked || []).map(r => r.toLowerCase()));
+  const extra = (picked || []).filter(r => !ROLES.some(x => x.toLowerCase() === r.toLowerCase()));
+  $('wf-also').innerHTML = ROLES.concat(extra).map(r =>
+    `<label data-role="${esc(r)}"><input type="checkbox" value="${esc(r)}" ${keep.has(r.toLowerCase()) ? 'checked' : ''}
+       onchange="onWorkerRoleChange()"> ${esc(r)}</label>`).join('');
+  $('wf-also-why').textContent = _alsoCol ? ''
+    : 'Run shared/RUN_ME_worker_also_roles.sql to save other jobs.';
+}
+const alsoPicked = () => [...document.querySelectorAll('#wf-also input:checked')].map(i => i.value)
+  .filter(r => r.toLowerCase() !== $('wf-role').value.trim().toLowerCase());
+
 let editWorkerId = null;
 /* `section` is the section the button was pressed in. Every section heads its
    own Add Worker button, so the section is known before the form opens — there
@@ -1658,6 +1708,7 @@ function openWorker(id, section, role) {
   onWorkerSectionChange();               // titles the modal with that section
   $('wf-name').value   = w?.full_name || '';
   fillRoleSelect(w?.role || w?.job_title || role || '');
+  fillAlsoBox(w ? alsoOf(w) : []);
   $('wf-active').value = (w && w.active === false) ? '0' : '1';
   /* A new worker is registered today until somebody says otherwise — that is
      what adding them means, and it is the answer nine times in ten. An
@@ -1748,9 +1799,12 @@ let _jobsExplicit = false;
 
 function onWorkerRoleChange() {
   const r = $('wf-role').value.trim();
+  document.querySelectorAll('#wf-also label').forEach(l =>
+    l.classList.toggle('is-main', l.dataset.role.toLowerCase() === r.toLowerCase()));
+  const all = [r].concat(alsoPicked());
   if (!_jobsExplicit) {
-    $('wf-job-siram').checked = roleDoesSiram(r);
-    $('wf-job-mata').checked  = roleDoesMata(r);
+    $('wf-job-siram').checked = all.some(roleDoesSiram);
+    $('wf-job-mata').checked  = all.some(roleDoesMata);
   }
   const sec = $('wf-section').value;
   const nursery = MAINT_NURSERIES.includes(sec);
@@ -1823,6 +1877,7 @@ async function saveWorker() {
       { siram_go: $('wf-job-siram').checked, mata_malam: $('wf-job-mata').checked });
     row.portal = portal;
   }
+  if (_alsoCol) { const a = alsoPicked(); row.also_roles = a.length ? a : null; }
   if (_dateCols) {
     row.registered_on = $('wf-registered').value || null;
     // Only somebody who has left has a last day, and Active clears it —
