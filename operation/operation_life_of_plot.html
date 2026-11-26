@@ -127,7 +127,8 @@
         .lp-set-row input:disabled { background:#fbf7ef; color:#5c3d1e; }
         .lp-set-save:disabled { opacity:.5; cursor:default; }
         .lp-set-msg { font-size:12px; font-weight:700; color:#8a7a68; }
-        #lp-palms-frame { display:block; width:100%; height:calc(100vh - 190px); min-height:620px; border:0; border-radius:2rem; background:#fff; }
+        #lp-palms-frame, #lp-palms-frame-st { display:block; width:100%; height:calc(100vh - 190px); min-height:620px; border:0; border-radius:2rem; background:#fff; }
+        #lp-palms-frame.hidden, #lp-palms-frame-st.hidden { display:none; }
         @media (max-width: 900px) {
             .lp-shell { grid-template-columns:1fr; }
             .lp-side { position:static; flex-direction:row; flex-wrap:wrap; }
@@ -261,7 +262,7 @@
     <div id="lp-set" class="hidden"></div>
 
     <div id="lp-palms" class="hidden">
-        <div class="panel lp-palms-box"><iframe id="lp-palms-frame" title="PALMS" src="about:blank"></iframe></div>
+        <div class="panel lp-palms-box"><iframe id="lp-palms-frame" title="PALMS" src="about:blank"></iframe><iframe id="lp-palms-frame-st" class="hidden" title="PALMS stages" src="about:blank"></iframe></div>
     </div>
 
     <!-- Pusingan Jualan and Pusingan Transplant, off THIS page transplant
@@ -1387,7 +1388,12 @@
         if (MODEL) renderHeadTabs();
         if (PALMS_PAGES[VIEW]) {
             const pg = PALMS_PAGES[VIEW];
-            const fr = document.getElementById('lp-palms-frame');
+            /* One frame per PALMS page, each loaded once and kept: sharing one frame
+               replaced the board every time Settings was opened, so PALMS loaded again. */
+            const st = VIEW === 'palms-stages';
+            const fr = document.getElementById(st ? 'lp-palms-frame-st' : 'lp-palms-frame');
+            document.getElementById('lp-palms-frame').classList.toggle('hidden', st);
+            document.getElementById('lp-palms-frame-st').classList.toggle('hidden', !st);
             if (fr.getAttribute('src') !== pg.href) fr.setAttribute('src', pg.href);
             document.getElementById('lp-title').textContent = 'Life of Plot';
             document.getElementById('lp-sub').textContent = pg.title;
@@ -1620,6 +1626,12 @@
                 return;
             }
             await load();
+            // PALMS is loaded in the background once the page is up, so opening it shows it at once.
+            setTimeout(() => {
+                const fr = document.getElementById('lp-palms-frame');
+                const href = PALMS_PAGES['palms-board'].href;
+                if (fr.getAttribute('src') !== href) fr.setAttribute('src', href);
+            }, 1200);
         } catch (e) {
             document.getElementById('lp-status').textContent = 'Could not sign you in: ' + (e && e.message ? e.message : e);
         }
