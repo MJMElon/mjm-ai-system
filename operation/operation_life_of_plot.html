@@ -403,19 +403,26 @@
        然后drag来drag去"): `override` is the cycles as lists of batch keys. A batch
        it does not name (one transplanted since) goes into the latest cycle that
        had started by its transplant day. Without one, the rule below decides. */
+    /* The day a batch is placed in time by: its transplant day, else (a batch the
+       plot never had a transplant row for, one that came by transfer) the first
+       thing that happened to it there, its 2nd culling, then its 3rd. A batch with
+       no transplant day used to sort LAST, so a cycle made of one read as the
+       newest whatever its dates said (the office: "你应该auto区分哪一个才是最新的
+       cycle"). */
+    function lpBatchDay(b) { return (b && (b.tDate || b.c2Date || b.c3Sort || b.c3Date)) || null; }
     function lpCyclesByHand(batches, override) {
         const groups = override.map(() => []), at = {}, loose = [];
         override.forEach((list, i) => (list || []).forEach(k => { at[String(k)] = i; }));
         (batches || []).forEach(b => { const i = at[lpBatchKey(b.batch)]; if (i != null) groups[i].push(b); else loose.push(b); });
         loose.forEach(b => {
             let best = -1;
-            groups.forEach((g, i) => { const st = lpEarliest(g.map(x => x.tDate)); if (st && b.tDate && st <= b.tDate) best = i; });
+            groups.forEach((g, i) => { const st = lpEarliest(g.map(lpBatchDay)); if (st && lpBatchDay(b) && st <= lpBatchDay(b)) best = i; });
             if (best < 0) best = groups.findIndex(g => g.length);
             groups[best < 0 ? 0 : best].push(b);
         });
-        const byDay = (x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch);
+        const byDay = (x, y) => (lpBatchDay(x) || '9999').localeCompare(lpBatchDay(y) || '9999') || lpNatural(x.batch, y.batch);
         return groups.filter(g => g.length).map(g => g.slice().sort(byDay))
-            .sort((x, y) => (lpEarliest(x.map(b => b.tDate)) || '9999').localeCompare(lpEarliest(y.map(b => b.tDate)) || '9999'));
+            .sort((x, y) => (lpEarliest(x.map(lpBatchDay)) || '9999').localeCompare(lpEarliest(y.map(lpBatchDay)) || '9999'));
     }
     function lpCycles(batches, override) {
         const cycles = [];
@@ -439,7 +446,7 @@
             const done = bs.some(b => b.c3Sort) && (i < cycles.length - 1 || bs.every(b => b.c3Sort || !b.tAdj));
             return {
                 n: i + 1, batches: bs, current: i === cycles.length - 1,
-                start: lpEarliest(bs.map(b => b.tDate)),
+                start: lpEarliest(bs.map(b => b.tDate)) || lpEarliest(bs.map(lpBatchDay)),
                 end: done ? lpLatest(bs.map(b => b.c3Sort)) : null,
                 tQty: bs.reduce((a, b) => a + b.tQty, 0),
                 adj: bs.reduce((a, b) => a + b.adj, 0),
@@ -622,7 +629,7 @@
                         c2Date: c2.day, c2Qty: c2.qty, c2Alive: c2.alive, c2Has: c2.rows > 0,
                         c3Date: c3.day, c3Sort: c3.sortDay, c3Qty: c3.qty, c3Map: c3.map, c3Has: c3.rows > 0, c3Note: c3.note,
                     };
-                }).sort((x, y) => (x.tDate || '9999').localeCompare(y.tDate || '9999') || lpNatural(x.batch, y.batch));
+                }).sort((x, y) => (lpBatchDay(x) || '9999').localeCompare(lpBatchDay(y) || '9999') || lpNatural(x.batch, y.batch));
                 return {
                     plot: p.name, nursery: p.nursery, batches, cycles: lpCycles(batches), cards: p.cards || {},
                     tAdj: batches.reduce((a, b) => a + b.tAdj, 0),
