@@ -47,6 +47,42 @@
         .lp-head-tabs { min-width:90px; justify-content:flex-end; }
         .lp-head-tabs:empty { display:none; }
         .lp-tab.on { background:#4a7a2e; color:#fdfaf4; border-color:#3f6a26; }
+        /* The little scenes on the map, one per stage, moving (the office:
+           growing = people watering, feeding, weeding; empty = a person
+           wheeling soil; ready soon = big seedlings; selling = a lorry). They
+           sit under the plot label and keep their size at any zoom. */
+        .lp-scene { width:76px; height:43px; margin-top:2px; filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35)); }
+        .lp-scene svg { width:100%; height:100%; overflow:visible; }
+        .lp-scene .arm { transform-box:fill-box; transform-origin:0% 0%; animation:lp-swing 1.4s ease-in-out infinite; }
+        .lp-scene .throw { transform-box:fill-box; transform-origin:0% 100%; animation:lp-throw 1.2s ease-in-out infinite; }
+        .lp-scene .bend { transform-box:fill-box; transform-origin:50% 100%; animation:lp-bend 1.6s ease-in-out infinite; }
+        .lp-scene .drop { animation:lp-drop 0.9s linear infinite; }
+        .lp-scene .seed { animation:lp-seed 1.2s ease-out infinite; }
+        .lp-scene .walk { animation:lp-walk 6s ease-in-out infinite; }
+        .lp-scene .step { animation:lp-step .5s ease-in-out infinite; }
+        .lp-scene .sway { transform-box:fill-box; transform-origin:50% 100%; animation:lp-sway 2.6s ease-in-out infinite; }
+        .lp-scene .drive { animation:lp-drive 5s ease-in-out infinite; }
+        .lp-scene .spin { transform-box:fill-box; transform-origin:50% 50%; animation:lp-spin .6s linear infinite; }
+        @keyframes lp-swing { 0%,100% { transform:rotate(-8deg); } 50% { transform:rotate(22deg); } }
+        @keyframes lp-throw { 0%,100% { transform:rotate(30deg); } 50% { transform:rotate(-40deg); } }
+        @keyframes lp-bend  { 0%,100% { transform:rotate(0deg); } 50% { transform:rotate(28deg); } }
+        @keyframes lp-drop  { 0% { transform:translateY(0); opacity:1; } 100% { transform:translateY(7px); opacity:0; } }
+        @keyframes lp-seed  { 0% { transform:translate(0,0); opacity:1; } 100% { transform:translate(6px,8px); opacity:0; } }
+        @keyframes lp-walk  { 0%,100% { transform:translateX(0); } 50% { transform:translateX(30px); } }
+        @keyframes lp-step  { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-1px); } }
+        @keyframes lp-sway  { 0%,100% { transform:rotate(-5deg); } 50% { transform:rotate(5deg); } }
+        @keyframes lp-drive { 0% { transform:translateX(-6px); } 50% { transform:translateX(26px); } 100% { transform:translateX(-6px); } }
+        @keyframes lp-spin  { to { transform:rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .lp-scene * { animation:none !important; } }
+        .lp-map-row { display:flex; gap:16px; align-items:stretch; }
+        .lp-map-row .lp-viewport { flex:1 1 auto; min-width:0; }
+        .lp-key { flex:0 0 190px; display:flex; flex-direction:column; gap:10px; padding:14px; border:1px solid #e8dcc8; border-radius:16px; background:#fffdf8; }
+        .lp-key-h { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#8a7a68; }
+        .lp-key-r { display:flex; gap:10px; align-items:flex-start; }
+        .lp-key-r i { flex:0 0 26px; height:26px; border-radius:7px; border:2px solid; }
+        .lp-key-r b { display:block; font-size:13px; font-weight:900; color:#3d2610; }
+        .lp-key-r span { display:block; font-size:10px; font-weight:700; color:#8a7a68; line-height:1.3; }
+        @media (max-width: 900px) { .lp-map-row { flex-direction:column; } .lp-key { flex-basis:auto; flex-direction:row; flex-wrap:wrap; } }
         .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
         .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
         .lp-stage.drag { cursor:grabbing; }
@@ -201,12 +237,6 @@
     <div id="lp-map" class="panel p-6 mb-6 hidden">
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div class="lp-chip-label">Map · click a plot for its cycles</div>
-            <div class="lp-legend">
-                <span><i style="background:#f59e0b"></i>In the field</span>
-                <span><i style="background:#3b82f6"></i>Being culled</span>
-                <span><i style="background:#22c55e"></i>3rd culled</span>
-                <span><i style="background:#94a3b8"></i>No batch</span>
-            </div>
         </div>
         <div id="lp-map-tabs" class="hidden"></div>
         <div id="lp-map-body"></div>
@@ -539,12 +569,18 @@
     let PLOT_SHAPES = {}; // plot key -> { name, nur, pts } from shared_plots.map_top
     let MAP_NUR = '';
     const MAP_ZOOM = {};
-    const MAP_FILL = {
-        none:     ['rgba(148,163,184,.22)', '#94a3b8'],
-        field:    ['rgba(251,191,36,.40)',  '#f59e0b'],
-        culling:  ['rgba(96,165,250,.40)',  '#3b82f6'],
-        finished: ['rgba(74,222,128,.40)',  '#22c55e'],
-    };
+    /* THE MAP SAYS WHERE THE PLOT IS IN ITS ROUND, four stages (the office:
+       "empty, growing, 即将可以售卖, 售卖中"), each its own colour, with the key
+       standing beside the map. `stage` is the key, `fill` / `stroke` the paint. */
+    const LP_STAGES = [
+        { key: 'empty',   label: 'Empty',         note: 'nothing standing: never filled, or 3rd culled',       fill: 'rgba(148,163,184,.30)', stroke: '#94a3b8' },
+        { key: 'growing', label: 'Growing',       note: `under ${6} months since transplant`,                 fill: 'rgba(74,222,128,.45)',  stroke: '#16a34a' },
+        { key: 'soon',    label: 'Ready soon',    note: '6 months or more, nothing sold yet',                  fill: 'rgba(251,191,36,.50)',  stroke: '#d97706' },
+        { key: 'selling', label: 'Selling',       note: 'this round has started selling',                     fill: 'rgba(96,165,250,.50)',  stroke: '#2563eb' },
+    ];
+    const LP_SOON_MONTHS = 6;
+    const MAP_FILL = {};
+    LP_STAGES.forEach(x => { MAP_FILL[x.key] = [x.fill, x.stroke]; });
 
     // ── Map view ──────────────────────────────────────────────
     // Colour is how far the plot has got through its 3rd cull, read off the
@@ -552,13 +588,20 @@
     // transplant, so it is the same answer the table gives.
     // Asked of the CURRENT cycle: a plot culled last year and filled again is in the field.
     function curCycle(p) { return p && p.cycles && p.cycles.length ? p.cycles[p.cycles.length - 1] : null; }
+    /* Empty: no current cycle, or it is finished (3rd culled). Selling: a
+       batch of the current cycle has been sold on a delivery order since the
+       cycle began (or its 3rd culling has begun). Ready soon: 6 months or more
+       since the cycle first transplant and nothing sold yet. Growing: younger.
+       Before the delivery orders are read, age alone decides. */
     function mapStateOf(p) {
         const c = curCycle(p);
-        if (!c || c.tAdj <= 0) return { key: 'none', pct: 0 };
-        const pct = Math.round(Math.min(100, (c.c3 / c.tAdj) * 100));
-        if (c.c3 <= 0) return { key: 'field', pct };
-        if (c.end || c.c3 >= c.tAdj) return { key: 'finished', pct: Math.max(pct, c.end ? 100 : pct) };
-        return { key: 'culling', pct };
+        if (!c || c.tAdj <= 0 || c.end) return { key: 'empty', months: null };
+        const months = c.start ? (Date.now() - Date.parse(c.start + 'T00:00:00Z')) / 86400000 / 30.44 : 0;
+        const k = lpPlotKey(p.plot);
+        const mine = new Set(c.batches.map(b => lpBatchKey(b.batch)));
+        const sold = c.c3 > 0 || (ROT && ROT.sales.some(r => lpPlotKey(r.plot) === k && mine.has(lpBatchKey(r.batch)) && String(r.day) >= String(c.start)));
+        if (sold) return { key: 'selling', months };
+        return { key: months >= LP_SOON_MONTHS ? 'soon' : 'growing', months };
     }
     const fmtN = n => Number(n || 0).toLocaleString('en-MY');
     function mapPlotIndex() {
@@ -604,12 +647,58 @@
         showPlot(name);
         document.getElementById('lp-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    /* ── The scenes: small SVG drawings, moved by the stylesheet. ── */
+    const LP_SKIN = '#f2c79b', LP_INK = '#3d2610';
+    // A little person standing at x, feet on y 30; `arm` is what the right hand holds.
+    function lpMan(x, shirt, arm, body) {
+        return `<g transform="translate(${x},0)"><g class="${body || ''}">`
+            + `<line x1="0" y1="25" x2="-1.6" y2="30" stroke="${LP_INK}" stroke-width="1.3" stroke-linecap="round"/>`
+            + `<line x1="0" y1="25" x2="1.6" y2="30" stroke="${LP_INK}" stroke-width="1.3" stroke-linecap="round"/>`
+            + `<line x1="0" y1="19.6" x2="0" y2="25.2" stroke="${shirt}" stroke-width="2.6" stroke-linecap="round"/>`
+            + `<circle cx="0" cy="17" r="2.3" fill="${LP_SKIN}"/>`
+            + `<path d="M-3 16.2 L3 16.2 L1.6 14.4 L-1.6 14.4 Z" fill="#e9c46a"/>`
+            + (arm || '') + '</g></g>';
+    }
+    const LP_SPROUTS = [8, 18, 28, 38, 48, 56].map(x => `<path d="M${x} 30 q-1.5 -3 -3 -3 M${x} 30 q1.5 -3 3 -3 M${x} 30 v-3" stroke="#2f8f3e" stroke-width="1" fill="none"/>`).join('');
+    const LP_GROUND = '<rect x="0" y="30" width="60" height="2.4" rx="1.2" fill="#8b5e34" opacity=".85"/>';
+    const LP_SCENES = {
+        // Watering, feeding and weeding.
+        growing: () => LP_GROUND + LP_SPROUTS
+            + lpMan(10, '#2563eb', '<g class="arm"><line x1="0" y1="20.5" x2="4" y2="23" stroke="#2563eb" stroke-width="1.2"/><rect x="3.6" y="21.6" width="4" height="3" rx=".6" fill="#64748b"/><line x1="7.6" y1="22.4" x2="9.4" y2="23.8" stroke="#64748b" stroke-width=".8"/></g>')
+            + [0, .3, .6].map(d => `<circle class="drop" style="animation-delay:${d}s" cx="${19.8 + d * 2}" cy="24.2" r=".6" fill="#38bdf8"/>`).join('')
+            + lpMan(30, '#d97706', '<g class="throw"><line x1="0" y1="20.5" x2="3.6" y2="18" stroke="#d97706" stroke-width="1.2"/></g><rect x="-4.4" y="20.8" width="3" height="3.4" rx=".5" fill="#f5f5f4" stroke="#a8a29e" stroke-width=".4"/>')
+            + [0, .4, .8].map(d => `<circle class="seed" style="animation-delay:${d}s" cx="34" cy="18.4" r=".55" fill="#fafaf9" stroke="#a8a29e" stroke-width=".3"/>`).join('')
+            + lpMan(50, '#16a34a', '<line x1="0" y1="20.5" x2="2.6" y2="25" stroke="#16a34a" stroke-width="1.2"/>', 'bend')
+            + '<path class="bend" d="M53 30 q0 -2.5 1.2 -3.6 M53 30 q0 -2.5 -1.2 -3.6" stroke="#65a30d" stroke-width=".9" fill="none"/>',
+        // Wheeling soil in.
+        empty: () => LP_GROUND + '<ellipse cx="50" cy="30" rx="8" ry="3.2" fill="#9a6b3f"/><ellipse cx="47" cy="28.4" rx="4" ry="2" fill="#a97a4c"/>'
+            + '<g class="walk"><g class="step">'
+            + '<path d="M13 23 L22 23 L20 27 L14.6 27 Z" fill="#475569"/><path d="M13.4 23 q4.6 -3.2 8.6 0 Z" fill="#8b5e34"/>'
+            + '<circle cx="16.6" cy="28.4" r="1.7" fill="#1f2937"/><line x1="9" y1="22" x2="14.6" y2="24.6" stroke="#475569" stroke-width=".9"/>'
+            + lpMan(7.4, '#b45309', '<line x1="0" y1="20.5" x2="2.2" y2="22.2" stroke="#b45309" stroke-width="1.2"/>')
+            + '</g></g>',
+        // Big, healthy seedlings, swaying.
+        soon: () => LP_GROUND + [10, 30, 50].map((x, i) =>
+            `<g class="sway" style="animation-delay:${i * .4}s"><path d="M${x - 3.4} 30 L${x + 3.4} 30 L${x + 2.6} 25.6 L${x - 2.6} 25.6 Z" fill="#1f2937"/>`
+            + `<line x1="${x}" y1="25.8" x2="${x}" y2="15" stroke="#3f6212" stroke-width="1.3"/>`
+            + `<path d="M${x} 16 q-7 -2 -10 4 M${x} 16 q7 -2 10 4 M${x} 15 q-5 -6 -8 -5 M${x} 15 q5 -6 8 -5 M${x} 15 q0 -6 0 -8" stroke="#15803d" stroke-width="1.7" fill="none" stroke-linecap="round"/></g>`).join(''),
+        // A lorry carrying seedlings away.
+        selling: () => LP_GROUND + '<g class="drive">'
+            + '<rect x="4" y="19" width="22" height="9" rx="1.2" fill="#ea580c"/><path d="M26 22 L32 22 L34.5 25.5 L34.5 28 L26 28 Z" fill="#c2410c"/><rect x="27.4" y="23" width="3.6" height="2.4" fill="#bae6fd"/>'
+            + [7, 11, 15, 19, 23].map(x => `<path d="M${x} 19 q-1.6 -2.8 -3 -2.6 M${x} 19 q1.6 -2.8 3 -2.6 M${x} 19 v-3.4" stroke="#16a34a" stroke-width="1" fill="none"/>`).join('')
+            + '<g class="spin"><circle cx="10" cy="28.6" r="2" fill="#111827"/><rect x="9.6" y="27" width=".8" height="3.2" fill="#9ca3af"/></g>'
+            + '<g class="spin"><circle cx="30" cy="28.6" r="2" fill="#111827"/><rect x="29.6" y="27" width=".8" height="3.2" fill="#9ca3af"/></g>'
+            + '</g>',
+    };
+    const lpScene = key => LP_SCENES[key] ? `<div class="lp-scene" data-scene="${key}"><svg viewBox="0 0 60 34" aria-hidden="true">${LP_SCENES[key]()}</svg></div>` : '';
     function drawMap() {
         const k = MAP_NUR;
         const body = document.getElementById('lp-map-body');
         const idx = mapPlotIndex();
         const z = MAP_ZOOM[k] || (MAP_ZOOM[k] = { z: 1, x: 0, y: 0 });
-        body.innerHTML = `
+        const key = '<div class="lp-key"><div class="lp-key-h">Stage</div>' + LP_STAGES.map(x =>
+            `<div class="lp-key-r" data-stage="${x.key}"><i style="background:${x.fill};border-color:${x.stroke}"></i><div><b>${x.label}</b><span>${x.note}</span></div></div>`).join('') + '</div>';
+        body.innerHTML = `<div class="lp-map-row">
             <div class="lp-viewport" id="lp-viewport">
                 <div class="lp-stage" id="lp-stage">
                     <div class="relative inline-block">
@@ -624,7 +713,7 @@
                     <button type="button" class="lp-zbtn" data-z="-0.25" title="Zoom out">−</button>
                     <button type="button" class="lp-zbtn" data-z="reset" title="Reset zoom">↺</button>
                 </div>
-            </div>`;
+            </div>${key}</div>`;
         const svg = document.getElementById('lp-svg');
         const labels = document.getElementById('lp-labels');
         const vp = document.getElementById('lp-viewport');
@@ -633,6 +722,7 @@
         Object.values(PLOT_SHAPES).filter(s => s.nur === k).forEach(s => {
             const p = idx[lpPlotKey(s.name)];
             const st = mapStateOf(p);
+            const stg = LP_STAGES.find(x => x.key === st.key);
             const [fill, stroke] = MAP_FILL[st.key];
             const ptsStr = s.pts.map(pt => pt.x + ',' + pt.y).join(' ');
             const cx = s.pts.reduce((a, pt) => a + pt.x, 0) / s.pts.length;
@@ -640,12 +730,12 @@
             const cc = curCycle(p);
             const tip = cc ? `Cycle ${cc.n} of ${p.cycles.length} · transplanted ${fmtN(cc.tAdj)} · 2nd cull ${fmtN(cc.c2)} · 3rd cull ${fmtN(cc.c3)}` : 'Nothing recorded';
             svg.insertAdjacentHTML('beforeend',
-                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name}: ${tip}</title></polygon>`);
-            const line = st.key === 'none'
+                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" data-stage="${st.key}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name} · ${stg.label}${st.months != null ? ' · ' + Math.floor(st.months) + ' months' : ''}: ${tip}</title></polygon>`);
+            const line = !cc || cc.tAdj <= 0
                 ? '<div class="lp-line empty">No batch</div>'
                 : `<div class="lp-line" title="${tip}">Cycle ${cc.n} · ${fmtN(cc.tAdj)}</div>`;
             labels.insertAdjacentHTML('beforeend',
-                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}</div>`);
+                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div>${line}${lpScene(st.key)}</div>`);
         });
         svg.addEventListener('click', e => {
             const el = e.target.closest && e.target.closest('.lp-shape');
@@ -905,7 +995,9 @@
         }
     }
     // Delivery orders and plot capacity are read the first time this view opens.
-    let ROT = null, ROT_YEAR = '';
+    let ROT = null, ROT_YEAR = '', ROT_P = null;
+    // ONE read of the delivery orders, shared by the map and the rotation view.
+    const ensureRot = () => ROT_P || (ROT_P = loadRotation());
     async function loadRotation() {
         const soft = (pr, what) => pr.catch(e => { ROT.missing.push(what + ': ' + (e && e.message ? e.message : e)); return []; });
         ROT = { missing: [], sales: [], caps: {} };
@@ -919,12 +1011,13 @@
             for (let i = 1; i <= 5; i++) { const q = Math.abs(Number(d['qty_' + i]) || 0); if (q && d['plot_' + i]) ROT.sales.push({ plot: d['plot_' + i], batch: d['batch_' + i], day, qty: q }); }
         });
         (caps || []).forEach(r => { if (Number(r.qty) > 0) (ROT.caps[lpNurKey(r.nursery)] = ROT.caps[lpNurKey(r.nursery)] || {})[lpPlotKey(r.plot)] = Number(r.qty); });
+        ROT.done = true;
     }
     async function renderRotation() {
         if (!MODEL) return;
-        if (!ROT) {
+        if (!ROT_P || !ROT || !ROT.done) {
             document.getElementById('lp-rot-sales').innerHTML = '<div class="lp-rot-mh" style="grid-column:1/-1">Loading…</div>';
-            await loadRotation();
+            await ensureRot();
             if (VIEW !== 'rotation') return;
         }
         const keys = NURSERY_ORDER.filter(k => k !== 'OTHER' && MODEL.groups.some(g => g.key === k && g.plots.length));
@@ -1042,6 +1135,8 @@
             fillPlotSelect('');
             renderList();
             renderMap();
+            // The delivery orders decide Selling; read them now and colour the map again.
+            ensureRot().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); }).catch(() => {});
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
             REC_YEAR = (location.hash.match(/year=(\d{4})/) || [])[1] || '';
             const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';

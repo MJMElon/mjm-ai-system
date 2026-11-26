@@ -213,6 +213,38 @@ const DATA = {
   if (process.env.SHOT) await pr.screenshot({ path: path.join(process.env.SHOT, 'lop_rotation.png'), fullPage: true });
   await pr.close();
 
+  console.log('6. the map shows four stages, with the key beside it');
+  const SQ = (x, y) => JSON.stringify([{ x, y }, { x: x + 20, y }, { x: x + 20, y: y + 20 }, { x, y: y + 20 }]);
+  const ago = m => { const d = new Date(); d.setDate(d.getDate() - Math.round(m * 30.44)); return d.toISOString().slice(0, 10); };
+  const me = [];
+  const pm6 = await openPage(Object.assign({}, DATA, {
+    shared_plots: [{ plot_name: 'B11', nursery_name: 'BNN', map_top: SQ(5, 5) }, { plot_name: 'B13', nursery_name: 'BNN', map_top: SQ(30, 5) },
+                   { plot_name: 'B12', nursery_name: 'BNN', map_top: SQ(55, 5) }, { plot_name: 'B14', nursery_name: 'BNN', map_top: SQ(5, 40) }],
+    operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }],
+    shared_inventory_logs: DATA.shared_inventory_logs.concat([
+      { plot_name: 'B12', transaction_type: 'Transplanted', transaction_date: ago(8), quantity_change: 2000, batch_name: '250', remark: '', created_at: ago(8) + 'T00:00:00Z' },
+      { plot_name: 'B14', transaction_type: 'Transplanted', transaction_date: ago(10), quantity_change: 3000, batch_name: '248', remark: '', created_at: ago(10) + 'T00:00:00Z' } ]),
+    shared_do_records: [{ id: 1, delivery_date: ago(1), status: 'Completed', remark: '', plot_1: 'B14', qty_1: 500, batch_1: '248' }] }), me);
+  await pm6.goto(B + '/operation/operation_life_of_plot.html');
+  await pm6.waitForSelector('#lp-svg polygon', { timeout: 8000 }).catch(() => {});
+  await pm6.waitForTimeout(400);
+  const st6 = await pm6.evaluate(() => ({
+    n: document.querySelectorAll('#lp-svg polygon').length, html: document.getElementById('lp-status').textContent,
+    stage: Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])),
+    key: [...document.querySelectorAll('.lp-key .lp-key-r b')].map(b => b.textContent.trim()),
+    beside: (() => { const v = document.getElementById('lp-viewport').getBoundingClientRect(), k = document.querySelector('.lp-key').getBoundingClientRect(); return k.left >= v.right - 1; })() }));
+  ok(st6.key.join() === 'Empty,Growing,Ready soon,Selling', 'the key names the four stages', st6.key);
+  ok(st6.beside, 'the key stands beside the map', st6.beside);
+  ok(st6.stage.B13 === 'empty' && st6.stage.B11 === 'growing' && st6.stage.B12 === 'soon' && st6.stage.B14 === 'selling',
+     'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing sold: Ready soon · B14 sold on a DO: Selling', st6);
+  const sc = await pm6.evaluate(() => Object.fromEntries([...document.querySelectorAll('#lp-labels .lp-label')].map(l => [l.querySelector('.lp-tag').textContent, (l.querySelector('.lp-scene') || {}).dataset ? l.querySelector('.lp-scene').dataset.scene : null])));
+  ok(sc.B13 === 'empty' && sc.B11 === 'growing' && sc.B12 === 'soon' && sc.B14 === 'selling', 'each plot carries the moving scene of its stage', sc);
+  const moving = await pm6.evaluate(() => getComputedStyle(document.querySelector('.lp-scene[data-scene="selling"] .drive')).animationName);
+  ok(moving === 'lp-drive', 'the lorry drives', moving);
+  ok(me.length === 0, 'no page errors on the map', me);
+  if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages.png'), fullPage: true });
+  await pm6.close();
+
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
