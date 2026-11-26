@@ -12196,3 +12196,6 @@ tabs and the Nursery chip row is hidden while a map exists; the Plot chip row
 stays (the office asked for it back). Embedded PALMS hides its own `.pm-tabs`,
 and `syncPalmsNursery` presses the matching one inside the frame, retrying
 while the PALMS map loads.
+
+The P.A.L.M.S tile on the Nursery Operation dashboard was taken off for the
+same reason: PALMS is reached from Life of Plot now.
