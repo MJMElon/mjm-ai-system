@@ -268,6 +268,7 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     console.log('\n-- 5b. the Work Maintenance box is on Add as on Edit --');
     page = await open(browser, port);
     await page.click('#wl-add');
+    await setSel(page, 'wf-role', 'General Worker');
     yes(await page.isVisible('#wf-maint-row'), 'Add Worker carries the Work Maintenance box');
     yes(await page.$eval('#wf-maint', (e) => e.disabled), 'switched off while the worker is filed under no nursery');
     yes(!(await page.isVisible('#wf-hint-row')), 'and no Filed under line over an editable location box');
@@ -302,6 +303,27 @@ const setSel = (page, id, v) => page.evaluate(([i, val]) => {
     await setSel(page, 'wf-role', 'Water Pump Operator');
     is(await page.$eval('#wf-job-siram', (e) => e.checked), true, 'a new Water Pump Operator is ticked for Siram Go');
     if (process.env.SHOT) { await setSel(page, 'wf-section', 'UNN1'); await page.setViewportSize({ width: 1280, height: 1000 }); await page.screenshot({ path: process.env.SHOT + '/jobs_form.png' }); }
+    await page.close();
+
+    console.log('\n-- 5d. the Jobs row is only for a General Worker and a Water Pump Operator --');
+    page = await open(browser, port);
+    await page.evaluate(() => openWorker(9));
+    yes(!(await page.isVisible('#wf-maint-row')), 'a Driver has no Jobs row');
+    await setSel(page, 'wf-role', 'General Worker');
+    yes(await page.isVisible('#wf-maint-row'), 'turned General Worker, the row appears');
+    await setSel(page, 'wf-role', 'Water Pump Operator');
+    yes(await page.isVisible('#wf-maint-row'), 'and for a Water Pump Operator');
+    await setSel(page, 'wf-role', 'Gardener');
+    yes(!(await page.isVisible('#wf-maint-row')), 'and goes again for a Gardener');
+    await page.evaluate(() => { window.__WRITES.length = 0; });
+    await page.click('#wf-save');
+    await page.waitForTimeout(300);
+    const gw = await page.evaluate(() => (window.__WRITES.find((x) => x.table === 'mjmnpayroll_workers') || {}).row);
+    yes(gw && !('portal' in gw), 'saving a Gardener leaves Siram Go and Mata Malam as they are');
+    await page.close();
+    page = await open(browser, port);
+    await page.click('#wl-add');
+    yes(!(await page.isVisible('#wf-maint-row')), 'a new worker with no role yet has no Jobs row');
     await page.close();
 
     console.log('\n-- 6. the chart only shows --');

@@ -6078,6 +6078,11 @@ replaces it).
   showing that. A NEW worker is ticked from the role until somebody touches
   the boxes: Water Pump Operator does Siram Go, a Mata Malam / Night
   Watchman / Penjaga Malam role does Mata Malam.
+- **The Jobs row is drawn only for a General Worker or a Water Pump
+  Operator** (`roleHasJobs`), and before a role is chosen it is hidden. For
+  any other role Save writes `maint_general` NULL (the sheets follow the
+  role) and leaves `portal` alone, so Siram Go and Mata Malam stay as they
+  were.
 - **`shared/RUN_ME_worker_jobs.sql` is the gate**: `worker_portal` hands the
   two keys to the phone, `mata_malam_access` answers OFF for an untick (the
   app then says it is not open for the account), and `mata_malam_submit`
