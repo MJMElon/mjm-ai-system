@@ -126,6 +126,22 @@ const DATA = {
   ok(rec.sum26 && rec.sum26[0] === '6,872' && rec.sum25 && rec.sum25[4] === '12,121', 'summary on top: 2026 by month, and 2025 beside it', [rec.sum26, rec.sum25]);
   { const ny = new Date().getFullYear(); ok(rec.years[0] === String(ny + 1) && rec.years[1] === ny + '*' && rec.years.includes('2025'), 'the year chips: next year too, this year picked', rec.years); }
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_record.png'), fullPage: true });
+  const frz = await page.evaluate(() => {
+    const w = document.querySelector('#lp-record .lp-rec-wrap'); if (!w) return 'no frame';
+    w.style.maxHeight = '160px'; w.scrollTop = 120;
+    const th = w.querySelector('thead th'); if (!th) return 'no head';
+    return { scrolled: w.scrollTop, gap: Math.round(th.getBoundingClientRect().top - w.getBoundingClientRect().top) };
+  });
+  const frzL = await page.evaluate(() => {
+    const w = document.querySelector('#lp-record .lp-rec-wrap'); if (!w) return 'no frame';
+    w.style.maxWidth = '420px'; w.scrollLeft = 200;
+    const td = w.querySelector('tbody tr.plotrow td:first-child'); if (!td) return 'no plot cell';
+    const r = { scrolled: w.scrollLeft, gap: Math.round(td.getBoundingClientRect().left - w.getBoundingClientRect().left) };
+    w.style.maxWidth = ''; w.scrollLeft = 0; return r;
+  });
+  ok(frzL && frzL.scrolled > 0 && Math.abs(frzL.gap) <= 2, 'the plot column stays on the left while the record scrolls sideways', frzL);
+  ok(frz && frz.scrolled > 0 && Math.abs(frz.gap) <= 2, 'the month row stays at the top while the record scrolls', frz);
+  await page.evaluate(() => { const w = document.querySelector('#lp-record .lp-rec-wrap'); if (w) { w.style.maxHeight = ''; w.scrollTop = 0; } });
 
   await page.click('#lp-year-row button[data-year="2025"]');
   const b11_25 = await page.evaluate(() => { const tr = [...document.querySelectorAll('#lp-rec-table tbody tr')].find(r => r.firstElementChild.textContent.trim() === 'B11'); return [...tr.children].slice(1).map(td => td.textContent.trim()); });
@@ -133,9 +149,9 @@ const DATA = {
 
   const before = await page.evaluate(() => { document.querySelector('#lp-rec-table tr.plotrow[data-plot="B11"] td:nth-child(5)').click(); return location.hash; });
   ok(!/plot=/.test(before), 'clicking a figure in the row does not open the plot', before);
-  await page.hover('#lp-rec-table tr.plotrow[data-plot="B11"] td.has-tip[data-tip^="B11 · May 2025"]');
+  await page.hover('#lp-rec-table tr.plotrow[data-plot="B11"] td:nth-child(6)');
   const tip = await page.evaluate(() => { const e = document.getElementById('lp-tip'); return e && getComputedStyle(e).display !== 'none' ? e.textContent : ''; });
-  ok(/^B11 · May 2025\nBatch 228: 3,074\nBatch 229: 9,047$/.test(tip), 'hovering a figure floats the batches it is made of', tip);
+  ok(/^Batch 228: 3,074\nBatch 229: 9,047$/.test(tip), 'hovering a figure floats only the batches it is made of, no plot or month (both are frozen on screen)', tip);
   await page.click('#lp-rec-table tr.plotrow[data-plot="B11"] td.batch');
   await page.waitForTimeout(200);
   const back = await page.evaluate(() => !document.getElementById('lp-detail').classList.contains('hidden') && document.querySelectorAll('#lp-timeline-box .lp-cyc').length);
