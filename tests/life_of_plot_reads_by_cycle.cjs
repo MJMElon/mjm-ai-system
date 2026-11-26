@@ -257,6 +257,8 @@ const DATA = {
   const cnt = k => sc.filter(x => x === k).length;
   ok(cnt('growing') === 3 && cnt('empty') >= 2 && cnt('empty') <= 3 && cnt('soon') === 1 && cnt('selling') === 1, 'Membesar three cats (one per job), Empty two or three, one sitting, one lorry', sc);
   ok(await pm6.evaluate(() => !document.querySelector('#lp-labels .lp-cat, #lp-labels img')), 'the cats are on the map, not inside the labels', '');
+  const lab6 = await pm6.evaluate(() => [...document.querySelectorAll('#lp-labels .lp-label')].map(l => l.textContent.trim()));
+  ok(lab6.length > 0 && lab6.every(x => !/Cycle|No batch/.test(x)), 'a map label is the plot name only', lab6);
   const anim = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats img')].every(i => /\.webp$/.test(i.getAttribute('src'))));
   ok(anim, 'every cat on the map is the office animation (an animated picture)', anim);
   const cats = await pm6.evaluate(() => Promise.all([...document.querySelectorAll('#lp-cats img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false))));
