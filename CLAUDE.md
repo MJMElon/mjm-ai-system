@@ -12340,6 +12340,9 @@ and the B11 tab), checked figure for figure against B11:
   is left, so a row saved before any sale reads the whole balance (250 on U1:
   447) or nought (255): not a culling, so it shows the estimate. The plot redraws
   once the delivery orders are read; unreadable, it shows what was saved.
+- **A 3rd culling Variance that is not nought floats the batch report own
+  explanation** (Tab 6 `MismatchNote:`, dotted, `lpVarCell`), or says none was
+  written; the plot total lists every batch reason.
 - **Rows next to each other due in the same month share ONE estimate cell**
   (`rowspan`; the office: *一样的日期可以merge起来*).
 - **A culling not keyed yet is ONE blank cell saying when it is due**
