@@ -3613,7 +3613,7 @@ function renderSeedPlantingPayroll() {
           : `<span style="color:#b45309;font-weight:700;">${keyed.toLocaleString(USAGE_LOCALE)} · ${diff < 0 ? t('pay.spShort', { n: (-diff).toLocaleString(USAGE_LOCALE) }) : t('pay.spOver', { n: diff.toLocaleString(USAGE_LOCALE) })}</span>`;
         body += `<tr>
           <td style="font-weight:600;white-space:nowrap;">${esc(_spDay(r.date))}</td>
-          <td class="plot-td">${esc(r.batch)}</td>
+          <td class="sp-batch">${esc(r.batch)}</td>
           <td>${r.qty.toLocaleString(USAGE_LOCALE)}</td>
           ${wk.map((w, wi) => {
             const v = cells[w];

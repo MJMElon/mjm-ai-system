@@ -2191,7 +2191,21 @@ table.perf-table{border-collapse:collapse;width:100%;min-width:1240px;font-size:
 .jc-elsewhere.jc-cull th.jc-job{color:var(--green-dark,#1b4332);}
 .jc-elsewhere.jc-cull td{color:var(--text);font-size:13px;}
 
-/* Seed Planting & Hyplug: a job band taken off for the month. */
-tr.sp-job-row td.sp-job .sp-job-btn{float:right;margin:-3px 0;padding:2px 10px;font-size:11px;font-weight:700;background:#fff;color:var(--green-text);border:1px solid var(--border,#dce3e8);}
-tr.sp-job-off td.sp-job{opacity:.85;}
-tr.sp-job-off .sp-off-note{font-weight:500;font-size:11px;margin-left:8px;color:var(--text-faint);text-transform:none;}
+/* Seed Planting & Hyplug, ONE LOOK FOR BOTH BANDS. The office: "design很丑
+   而且planted date batch这些字眼都不在中间". The heading's .th-wrap is a
+   capped block and sat on the left of its cell; the second job band lost its
+   green to the zebra rule; the batch cell carried the Work Record plot
+   tint and a heavy rule beside it. */
+#payroll-table tr.sp-head th .th-wrap{margin:0 auto;text-align:center;}
+#payroll-table tbody tr.sp-job-row > td.sp-job{background:var(--green-mid) !important;color:var(--green-text) !important;
+  padding:9px 14px;vertical-align:middle;}
+#payroll-table tbody tr.sp-job-row:hover > td.sp-job{background:var(--green-mid) !important;}
+#payroll-table td.sp-batch{font-weight:700;text-align:center;}
+#payroll-table input.sp-in{text-align:center;}
+#payroll-table tbody tr:not(.sp-job-row):not(.sp-head):not(.sp-sub-row) > td{vertical-align:middle;}
+tr.sp-job-row td.sp-job .sp-job-name{display:inline-block;vertical-align:middle;}
+tr.sp-job-row td.sp-job .sp-job-btn{float:right;margin:0;padding:3px 10px;font-size:11px;font-weight:700;line-height:1.4;
+  background:rgba(255,255,255,.75);color:var(--green-text);border:1px solid rgba(0,0,0,.08);border-radius:6px;
+  text-transform:none;letter-spacing:0;}
+tr.sp-job-row td.sp-job .sp-job-btn:hover{background:#fff;}
+tr.sp-job-off .sp-off-note{font-weight:500;font-size:11px;margin-left:8px;color:var(--green-text);opacity:.7;text-transform:none;letter-spacing:0;}
