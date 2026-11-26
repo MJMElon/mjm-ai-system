@@ -83,7 +83,7 @@ const DATA = {
 
   console.log('2. the side bar opens the transplant record by year');
   const side = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-b')].map(b => b.lastChild.textContent.trim()));
-  ok(side.join('|') === 'Plots & cycles|Transplant record by year', 'the side bar has the two entries', side);
+  ok(side.join('|') === 'Plots & cycles|Transplant record by year|Plot Status Map|PALMS Settings', 'the side bar has the two entries and the two PALMS pages', side);
   await page.click('#lp-side button[data-view="record"]');
   await page.waitForTimeout(200);
   const rec = await page.evaluate(() => {
@@ -111,7 +111,39 @@ const DATA = {
   await page.waitForTimeout(200);
   const back = await page.evaluate(() => !document.getElementById('lp-detail').classList.contains('hidden') && document.querySelectorAll('#lp-timeline-box .lp-cyc').length);
   ok(back === 2, 'a plot in the record opens its cycles', back);
-  ok(!errs.length, 'no page errors', errs);
+
+  console.log('3. PALMS opens inside this page, under the same side bar');
+  const pageErrs = errs.length;
+  await page.click('#lp-side button[data-view="palms-board"]');
+  await page.waitForTimeout(300);
+  const pb = await page.evaluate(() => ({
+    shown: !document.getElementById('lp-palms').classList.contains('hidden'),
+    others: ['lp-record', 'lp-plots-view'].every(id => document.getElementById(id).classList.contains('hidden')),
+    src: document.getElementById('lp-palms-frame').getAttribute('src'),
+    on: [...document.querySelectorAll('#lp-side .lp-side-b.on')].map(b => b.dataset.view),
+    side: !!document.getElementById('lp-side').offsetParent,
+    hash: location.hash }));
+  ok(pb.shown && pb.others, 'the Plot Status Map replaces the plot list and the record', pb);
+  ok(pb.src === '../nursery_ops/nursery_ops_palms_board.html?embed=1', 'the frame opens the real PALMS board, embedded', pb.src);
+  ok(pb.on.join() === 'palms-board' && pb.side, 'the side bar stays, with Plot Status Map lit', pb.on);
+  ok(pb.hash === '#view=palms-board', 'the address says which, so a reload comes back to it', pb.hash);
+  await page.click('#lp-side button[data-view="palms-stages"]');
+  const ps = await page.evaluate(() => document.getElementById('lp-palms-frame').getAttribute('src'));
+  ok(ps === '../nursery_ops/nursery_ops_palms_stages.html?embed=1', 'PALMS Settings opens the stage list', ps);
+  await page.click('#lp-side button[data-view="plots"]');
+  const backToPlots = await page.evaluate(() => document.getElementById('lp-palms').classList.contains('hidden') && !document.getElementById('lp-plots-view').classList.contains('hidden'));
+  ok(backToPlots, 'and Plots & cycles comes back');
+
+  // The embedded PALMS page drops its own navigation, so there is ONE side bar.
+  const p2 = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+  await p2.route('**/*', r => { const u = r.request().url(); return u.startsWith(B) ? r.continue() : r.fulfill({ body: '', contentType: 'text/javascript' }); });
+  const look = async (q) => { await p2.goto(B + '/nursery_ops/nursery_ops_palms_board.html' + q); await p2.waitForTimeout(500);
+    return p2.evaluate(() => { const v = id => { const e = document.getElementById(id); return e ? getComputedStyle(e).display : 'absent'; }; return { nav: v('palms-nav'), ribbon: v('mjm-ribbon') }; }); };
+  const emb = await look('?embed=1'), alone = await look('');
+  ok(emb.nav === 'none' && emb.ribbon === 'none', 'embedded, the PALMS page hides its own side bar and ribbon', emb);
+  ok(alone.nav !== 'none' && alone.ribbon !== 'none', 'opened on its own it is exactly as before', alone);
+  await p2.close();
+  ok(pageErrs === 0, 'no page errors on Life of Plot', errs.slice(0, pageErrs));
 
   await browser.close(); server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
