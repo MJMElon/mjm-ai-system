@@ -12087,15 +12087,19 @@ Capacity Heatmap (the heatmap was on top; they asked for the two swapped).
 
 `tests/maturity_lock_waiting_list_and_height.cjs` drives all of it.
 
-- **The Inventory Map counts what STANDS in a field plot**: `Transplanted`
-  and `Cull3_Transfer` in (a -R plot is filled by nothing else), never the
-  holding trays (`invmapIsHoldingTray`: Premium Care, Double-Tone). A batch
-  leaves a plot once its 3rd Culling carries a drone map OR leaves nothing
-  standing (Remaining Balance less Culled); a row keyed with nothing culled
-  and no map is NOT done (`_invmapCull3Done`, N1 / 255 read No batch). A -R
-  plot has no boundary of its own, so it is shown on its parent's label and
-  in the parent's window (`invmapReplantsOf`). With no filter the side list
-  runs in plot sequence (`invmapPlotCmp`: nursery, letters, number, -R).
+- **The Inventory Map's batches ARE the Summary Report's**
+  (`shared_plot_batch_balance`, qty > 0): which batches stand in a plot and
+  how many is the report's answer, so the map cannot read "No batch" over a
+  plot the report has seedlings in. It was its own rule for two days and
+  broke twice -- N1 / 255 (a 3rd Culling row keyed with Culled 0) and then
+  N2 / 253 (Culled 4,952 keyed with NO drone map) -- and the sweep found 26
+  plot/batch pairs across every nursery hidden that way. An UNEVIDENCED 3rd
+  culling takes nothing off, here as in the report. If the view cannot be
+  read the map falls back to the ledger, where only a culling with `MapQty:`
+  takes a batch off. Holding trays (Premium Care, Double-Tone) are never on
+  it. A -R plot has no boundary of its own, so it is shown on its parent's
+  label and in the parent's window (`invmapReplantsOf`). With no filter the
+  side list runs in plot sequence (`invmapPlotCmp`).
   `tests/invmap_n1_and_replant.cjs`.
 
 
