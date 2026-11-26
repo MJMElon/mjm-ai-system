@@ -157,11 +157,21 @@
         table.lp-x tfoot td { font-weight:800; color:#1a150d; background:#f6f0e4; }
         /* Transplant record: the office sheet, a column per month. */
         table.lp tr.grp td { text-align:left; }
-        table.lp-rec th, table.lp-rec td { padding:9px 10px; }
+        /* The year record is a GRID (the office: "格子要分明一点"): every cell has
+           its line, a soft stripe on the plot rows, the row under the pointer lit,
+           the plot and Total columns set apart. */
+        table.lp-rec { border-collapse:collapse; }
+        table.lp-rec th, table.lp-rec td { padding:8px 10px; border:1px solid #e6dccb; }
+        table.lp-rec thead th { background:#f3ecdf; color:#5c3d1e; font-size:11px; text-transform:none; letter-spacing:.02em; font-weight:800; border-bottom:2px solid #d9cbb2; position:sticky; top:0; z-index:1; }
+        table.lp-rec td { font-weight:500; color:#3a3328; }
+        table.lp-rec td:first-child, table.lp-rec th:first-child { border-right:2px solid #d9cbb2; }
+        table.lp-rec tr.grp td { background:#efe5d2; color:#5c3d1e; border-top:2px solid #d9cbb2; }
+        table.lp-rec tr.plotrow:nth-child(even) td { background:#faf6ee; }
+        table.lp-rec tr.plotrow:hover td { background:#eaf3e0; }
         table.lp-rec td.sum { color:#5c3d1e; }
         table.lp-rec tr.sumrow td { background:#fbf6ec; }
-        table.lp-rec tr.tot td { font-weight:900; color:#3d2610; border-top:2px solid #e8dcc8; background:#f8f2e6; }
-        table.lp-rec td.yt { font-weight:900; background:#f8f2e6; }
+        table.lp-rec tr.tot td { font-weight:900; color:#3d2610; border-top:2px solid #d9cbb2; background:#f4ecdc; }
+        table.lp-rec td.yt, table.lp-rec th:last-child { font-weight:900; background:#f4ecdc; border-left:2px solid #d9cbb2; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
