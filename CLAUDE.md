@@ -12340,6 +12340,8 @@ and the B11 tab), checked figure for figure against B11:
   is left, so a row saved before any sale reads the whole balance (250 on U1:
   447) or nought (255): not a culling, so it shows the estimate. The plot redraws
   once the delivery orders are read; unreadable, it shows what was saved.
+- **Rows next to each other due in the same month share ONE estimate cell**
+  (`rowspan`; the office: *一样的日期可以merge起来*).
 - **A culling not keyed yet is ONE blank cell saying when it is due**
   (`lpEst`): the 2nd culling the 4th month after the batch transplant (the
   office: transplanted Nov 2026, Est. Mar 2027), the 3rd the 9th. Where no
