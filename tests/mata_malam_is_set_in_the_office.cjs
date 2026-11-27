@@ -190,7 +190,9 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
     await page.locator('#mm-pin-list .mm-pin-row').nth(1).locator('.mm-x').click(); await page.waitForTimeout(200);
     pins = await page.evaluate(() => mm.pins);
     check('a pin is renamed in the list, and one is removed by its own cross', pins.map(p => p.name), ['Main Gate', 'BNN Pin 3', 'UNN 1 Pin 1']);
-    check('the name on the map follows', await page.$$eval('#mm-map .mm-pin-mark span', e => e.map(x => x.textContent)), ['Main Gate', 'BNN Pin 3', 'UNN 1 Pin 1']);
+    check('the name on the map follows, as the hover of the pin', await page.$$eval('#mm-map .mm-pin-mark .mm-pin-ic', e => e.map(x => x.title)), ['Main Gate', 'BNN Pin 3', 'UNN 1 Pin 1']);
+    check('a pin on the map is an icon with its number in its own location, not its name', await page.$$eval('#mm-map .mm-pin-mark', e => e.map(x => x.textContent.trim())), ['1', '2', '1']);
+    check('and the list carries the same number', await page.$$eval('#mm-pin-list .mm-pin-go', e => e.map(x => x.textContent.trim())), ['1', '2']);
     await page.locator('#mm-locs').scrollIntoViewIfNeeded();
   } else {
     fail++; console.log('  FAIL the map checks were NOT ASKED: no leaflet/dist found (set LEAFLET_DIST)');
