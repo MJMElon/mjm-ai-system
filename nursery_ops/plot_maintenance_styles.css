@@ -2241,3 +2241,24 @@ tr.sp-job-off .sp-off-note{font-weight:500;font-size:11px;margin-left:8px;color:
 .cj-tbl tr.cj-checked td{background:#f6fbf7;}
 .cj-add{margin-top:8px;}
 .cj-warn{margin-bottom:8px;}
+
+/* Monthly Night Watchman Record (watchman_report.js): the Mata Malam report */
+.wm-wrap{background:#fff;border:1px solid var(--wr-line,#e6ebe8);border-radius:12px;padding:16px;}
+.wm-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.wm-title{font-size:16px;font-weight:800;color:var(--wr-text,#1f2a24);}
+.wm-sub{font-size:13px;color:var(--wr-muted,#6b7a72);margin-top:2px;}
+.wm-print{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--wr-line,#d9e0dc);background:#fff;font-weight:700;cursor:pointer;}
+.wm-print:hover{background:#f3f6f4;}
+.wm-sum{display:inline-block;margin:0 0 12px;padding:8px 12px;border:1px solid var(--wr-line,#e6ebe8);border-radius:10px;font-size:13px;}
+.wm-note{font-size:13px;color:var(--wr-muted,#6b7a72);padding:8px 0;}
+.wm-note.wm-bad{color:#b42318;}
+.wm-table td{vertical-align:top;}
+.wm-c{text-align:center;}
+.wm-date{white-space:nowrap;}
+.wm-times{display:flex;flex-wrap:wrap;gap:4px;}
+.wm-time{display:inline-block;padding:2px 7px;border-radius:999px;font-size:12px;white-space:nowrap;background:#f1f4f2;color:#55625b;}
+.wm-time.ok{background:#e7f4ec;color:#1b6b3a;}
+.wm-time.no{background:#fdecea;color:#b42318;}
+.wm-day{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:#f1f4f2;color:#55625b;}
+.wm-day.ok{background:#e7f4ec;color:#1b6b3a;}
+.wm-day.no{background:#fdecea;color:#b42318;}

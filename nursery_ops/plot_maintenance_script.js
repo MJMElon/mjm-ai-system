@@ -6596,6 +6596,8 @@ function renderAll() {
   // Re-render analytics when its sub-view inside Work Record is showing
   const chartView = document.getElementById('recview-chart');
   if (chartView && chartView.classList.contains('active')) renderPerformance();
+  // The night watchman record follows the nursery and the month picked at the top
+  if (typeof renderWatchman === 'function') renderWatchman();
   const payTab = document.getElementById('tab-payroll');
   if (payTab && payTab.classList.contains('active')) renderPayroll();
 }
@@ -8387,8 +8389,9 @@ function _syncSubNav(prefix, ids, activeKey) {
 
 /* Work Record sub-views: the maintenance list and the performance charts. */
 let _recordView = 'list';
-/* `watchman` and `watering` are ENTRIES ONLY for now: the office asked for
-   the two under Work Records and said what they hold comes later. They are
+/* `watering` is an ENTRY ONLY for now: the office asked for it under Work
+   Records and said what it holds comes later. `watchman` is the Mata Malam
+   report, drawn by watchman_report.js. They are
    in this list so the side bar lights the right one and un-lights the rest
    -- _syncSubNav only touches the ids it is handed, so a view missing from
    here stays lit for ever once pressed. Neither draws or reads anything. */
@@ -8402,6 +8405,7 @@ function switchRecordView(view) {
   if (el) el.classList.add('active');
   if (view === 'chart') renderPerformance();
   else if (view === 'list') renderRecords();
+  else if (view === 'watchman' && typeof renderWatchman === 'function') renderWatchman();
 }
 
 /* Inside the maintenance list: approved work, or what was sent back.

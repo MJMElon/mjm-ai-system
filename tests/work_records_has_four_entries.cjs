@@ -11,8 +11,9 @@
      - four entries under Work Records, in this order, under these names;
      - the two old ones kept their KEYS (list / chart) -- only the words
        moved, so every link, test and handler that names them still works;
-     - each new entry opens a view that SAYS it is not set up yet and draws
-       no table, no box and no button -- a sheet of invented columns is a
+     - the night watchman entry is the Mata Malam report, moved off the phone
+       (section 2b drives it off a night of check-ins); the watering entry
+       SAYS it is not set up yet and draws no table, no box and no button -- a sheet of invented columns is a
        record somebody would start keying into;
      - pressing one lights it and un-lights the other three, and coming back
        to the maintenance record brings the list back;
@@ -195,8 +196,48 @@ async function boot(browser) {
   check('its view is on screen', V.shown, true);
   check('and the maintenance list is not', (await view('list')).shown, false);
   check('it names itself', /Monthly Night Watchman Record/.test(V.text || ''), true);
-  check('and says it is not set up yet', /not set up yet/i.test(V.text || ''), true);
+  /* It is the Mata Malam report now (watchman_report.js). With nothing ever
+     checked in, it says so in words rather than drawing an empty table. */
+  check('with nothing recorded it says there is nothing to report', /No nights to report/i.test(V.text || ''), true);
   check('with no table and nothing to key into', [V.tables, V.controls], [0, 0]);
+
+  /* ── 2b. the report, off a night of check-ins ─────────────────── */
+  console.log('\nThe Mata Malam report');
+  const R = await page.evaluate(async () => {
+    // BNN: two times, two pins. The 20th has every pin at both times; the 21st
+    // misses one pin at 21:00, which is a time not done and a night not complete.
+    window.__DB.mata_malam_settings = [{ id: 1, settings: {
+      locations: { BNN: { active: true, slots: ['18:00', '21:00'] } },
+      timing: { opensBeforeMinutes: 15, windowMinutes: 60 },
+      pins: [{ name: 'Gate', location: 'BNN', lat: 1, lng: 1 }, { name: 'Store', location: 'BNN', lat: 1, lng: 1 }] } }];
+    const L = (d, slot, point, who) => ({ location: 'BNN', point, shift_date: d, slot, status: 'completed', worker_name: who });
+    window.__DB.mata_malam_logs = [
+      L('2026-11-20', '6pm', 'Gate', 'Siti'), L('2026-11-20', '6pm', 'Store', 'Siti'),
+      L('2026-11-20', '9pm', 'Gate', 'Ali'), L('2026-11-20', '9pm', 'Store', 'Ali'),
+      L('2026-11-21', '6pm', 'Gate', 'Siti'), L('2026-11-21', '6pm', 'Store', 'Siti'),
+      L('2026-11-21', '9pm', 'Gate', 'Siti'),
+      { location: 'UNN1', point: '', shift_date: '2026-11-21', slot: '6pm', status: 'completed', worker_name: 'Other' }
+    ];
+    document.getElementById('global-month').value = '2026-11';
+    await renderWatchman();
+    const rows = [...document.querySelectorAll('#recview-watchman tbody tr')];
+    const pick = (d) => { const r = rows.find((x) => x.cells[0].textContent.trim() === d);
+      return r ? [...r.cells].map((c) => c.textContent.replace(/\s+/g, ' ').trim()) : null; };
+    return { first: rows[0] && rows[0].cells[0].textContent.trim(), last: rows.length && rows[rows.length - 1].cells[0].textContent.trim(),
+             d20: pick('2026-11-20'), d21: pick('2026-11-21'),
+             sum: (document.querySelector('#recview-watchman .wm-sum') || {}).textContent,
+             print: !!document.querySelector('#recview-watchman .wm-print') };
+  });
+  check('it starts at the first night anybody checked in', R.last, '2026-11-20');
+  check('and opens on the newest night', R.first > '2026-11-21', true);
+  check('a night with every pin at every time is Completed',
+        R.d20 && [R.d20[2], R.d20[3], R.d20[4]], ['2 / 2', 'Completed', 'Siti, Ali']);
+  check('a pin missed at one time makes the night Not Completed',
+        R.d21 && [R.d21[1], R.d21[2], R.d21[3]], ['✓ 18:00✕ 21:00', '1 / 2', 'Not Completed']);
+  check('another location is not in this nursery report', R.d21 && /Other/.test(R.d21[4]), false);
+  check('the summary counts the nights that are over', /^BNN 1 \/ \d+ nights complete$/.test((R.sum || '').trim()), true);
+  check('and it can be printed', R.print, true);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'watchman_report.png') });
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'watchman.png') });
 
   /* ── 3. Watering ────────────────────────────────────────────────── */
@@ -211,7 +252,7 @@ async function boot(browser) {
   check('it names itself', /Monthly Watering Record/.test(V.text || ''), true);
   check('and says it is not set up yet', /not set up yet/i.test(V.text || ''), true);
   check('with no table and nothing to key into', [V.tables, V.controls], [0, 0]);
-  check('opening the two wrote nothing',
+  check('opening the two wrote nothing (the report only reads)',
         await page.evaluate(() => window.__WRITES.length), writesBefore);
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'watering.png') });
 

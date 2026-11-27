@@ -9265,8 +9265,10 @@ any check-in waits for the first one. The task stays in the To-Do List
 while its track is still recording, so Stop can always be reached.
 
 **What each person may USE is on Portal View & Function**, a Mata Malam
-row under Maintenance with five switches: `home` (main task), `photo`
-(capture photo), `gps` (GPS track record), `history`, `report`. It is ONE
+row under Maintenance with four switches: `home` (main task), `photo`
+(capture photo), `gps` (GPS track record), `history`. **The Report left the
+app** (see *Monthly Night Watchman Record* below), and a `report` key saved
+before is read by nothing. It is ONE
 app and two columns: a Field Conductor, Assistant Field Conductor, Admin or
 Estate Manager reads the FC Portal column, everybody else the Worker Portal
 column. `mata_malam_access(w)` in the SQL file decides which and
@@ -11391,6 +11393,22 @@ name.
 - **Both are in `RECORD_VIEW_KEYS`**, because `_syncSubNav` only touches the
   ids it is handed: a view missing from that list stays lit for ever once
   pressed.
+
+**AND MONTHLY NIGHT WATCHMAN RECORD IS THE MATA MALAM REPORT**, moved off
+the phone: *"把Mata Malam的report整个搬去 ... Monthly Night Watchman Record"*.
+`nursery_ops/watchman_report.js` draws it into `#recview-watchman` for the
+nursery circle and the month picked at the top: one row per night, each
+check-in time with a tick or a cross, done / total, Completed / Not
+Completed / In Progress, the guards, a summary and Print. **The rules are
+the app own, copied** (`dailyWork` in MataMalam app.js, now deleted there):
+the shift day runs past midnight, a time is done when every pin of the
+location was checked in, the times and pins are what System Setting > Mata
+Malam holds NOW, and nothing before the first check-in anybody made is a
+missed night. It READS `mata_malam_settings` and `mata_malam_logs` as the
+staff account and writes nothing; staff reading the logs needs
+`shared/RUN_ME_mata_malam_report_in_office.sql`, and until it is run the
+view says so. The app lost its Report button and page, and Portal View &
+Function lost its Report switch.
 
 `tests/work_records_has_four_entries.cjs` serves the repository itself;
 **18 of its 26 checks fail on the previous page**, each by name. Nothing to

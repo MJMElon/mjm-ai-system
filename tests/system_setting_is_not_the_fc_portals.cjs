@@ -213,9 +213,13 @@ console.log('\n── 5. The rows carry the office\'s own words ──');
     '— Capture photo',
     '— GPS track record',
     'History',
-    'Report',
+    /* No Report: it moved to the office, Work Records > Monthly Night
+       Watchman Record. */
+    'Siram Go',
     'PALMS',
     'Culling Calculator',
+    'NELOS',
+    'Pending Verification',
     /* Not on the outline, because that outline is the FC PORTAL column and
        this one is the Worker Portal's alone. Absent from one column is not
        the same as gone. */
@@ -238,7 +242,7 @@ console.log('\n── 5. The rows carry the office\'s own words ──');
         ['culling', 'do', 'maintenance', 'maintenance:batches', 'maintenance:gps',
          'maintenance:photos', 'maintenance:record', 'maintenance:remark',
          'maintenance:schedule', 'maintenance:workers',
-         'mata_malam', 'mata_malam:gps', 'mata_malam:history', 'mata_malam:home', 'mata_malam:photo', 'mata_malam:report', 'palms', 'scan', 'settings'].sort());
+         'mata_malam', 'mata_malam:gps', 'mata_malam:history', 'mata_malam:home', 'mata_malam:photo', 'nelos', 'palms', 'scan', 'settings', 'siram_go', 'verify'].sort());
 
   /* Mata Malam joined them when the night check-in app's own Settings moved
      here: a fourth card, after Portal View & Function, and the three of the
