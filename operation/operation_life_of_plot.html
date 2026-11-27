@@ -712,7 +712,7 @@
         const k = lpPlotKey(plotName || (p && p.plot) || '');
         const pal = PALMS_NOW && PALMS_NOW[k];
         const since = d => d ? (Date.now() - Date.parse(String(d).slice(0, 10) + 'T00:00:00Z')) / 86400000 / 30.44 : null;
-        const liveC = c && c.tAdj > 0 && !c.end ? c : null;
+        const liveC = c && c.tAdj > 0 && !lpCycleDone(c, p) ? c : null;
         if (pal) {
             const months = since(liveC ? liveC.start : pal.start);
             const key = lpPalmsStage(pal.name, months);
@@ -837,7 +837,7 @@
         const plot = unit.plot || unit.key || '';
         const p = MODEL ? mapPlotIndex()[lpPlotKey(plot)] : null;
         if (st && st.act) {
-            const c = curCycle(p), live = c && c.tAdj > 0 && !c.end ? c : null;
+            const c = curCycle(p), live = c && c.tAdj > 0 && !lpCycleDone(c, p) ? c : null;
             const from = live ? live.start : st.start;
             const months = from ? (Date.now() - Date.parse(String(from).slice(0, 10) + 'T00:00:00Z')) / 86400000 / 30.44 : null;
             const k = lpPalmsStage(st.act, months);
@@ -965,12 +965,26 @@
         } catch (e) {}
         return !!v;
     }
+    /* The 3rd culling of a batch is shown only once that batch has started
+       selling out of the plot (see cycleHtml). */
+    function lpC3On(b, p) {
+        const pk = lpPlotKey((p && p.plot) || '');
+        const salesKnown = !!(ROT && ROT.done && !ROT.missing.some(m => m.indexOf('delivery orders') === 0));
+        return (b.c3Has || b.c3Map != null) && (!salesKnown
+            || ROT.sales.some(r => lpPlotKey(r.plot) === pk && lpBatchKey(r.batch) === lpBatchKey(b.batch)));
+    }
+    /* Completed is what the card SHOWS: every batch of the cycle with its 3rd
+       culling open on the card. A Tab 6 row saved before any sale is not a
+       culling (255 on N1 read Completed over Est. Feb 2027). */
+    function lpCycleDone(c, p) {
+        return !!c.end && c.batches.every(b => !b.tAdj || lpC3On(b, p));
+    }
     function cycleHtml(c, p) {
         const bs = c.batches;
         const cards = (p && p.cards) || {};
         let h = `<div class="panel lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
-              + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Completed' : 'On going'}</span>`
+              + `<span class="lp-cyc-tag${lpCycleDone(c, p) ? '' : ' cur'}">${lpCycleDone(c, p) ? 'Completed' : 'On going'}</span>`
               + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
 
         // Drone groups: batches sharing their first transplant day.
@@ -1001,10 +1015,7 @@
            Tab 6 saves its 3rd Culled as 2nd culled + what is left, so a row saved
            before any sale reads the whole balance, or nought, and is not a
            culling. Sales not read yet: shown, and drawn again once they are. */
-        const pk = lpPlotKey((p && p.plot) || '');
-        const salesKnown = !!(ROT && ROT.done && !ROT.missing.some(m => m.indexOf('delivery orders') === 0));
-        const c3On = b => (b.c3Has || b.c3Map != null) && (!salesKnown
-            || ROT.sales.some(r => lpPlotKey(r.plot) === pk && lpBatchKey(r.batch) === lpBatchKey(b.batch)));
+        const c3On = b => lpC3On(b, p);
         let alive2 = 0;
         const map3 = bs.reduce((a, b) => a + (c3On(b) ? (b.c3Map || 0) : 0), 0);
         const c3Tot = bs.reduce((a, b) => a + (c3On(b) && b.c3Has ? b.c3Qty : 0), 0);
@@ -1079,7 +1090,7 @@
         const can = lpMayEditSettings();
         // Hide complete cycles: a per-device choice, kept in localStorage.
         const hide = lpHideDone();
-        const nDone = p.cycles.filter(c => c.end).length;
+        const nDone = p.cycles.filter(c => lpCycleDone(c, p)).length;
         document.getElementById('lp-cyc-bar').innerHTML =
             (nDone ? `<label class="lp-hide-done"><input type="checkbox" id="lp-hide-done"${hide ? ' checked' : ''}>Hide completed cycles (${nDone})</label>` : '')
             + (can && p.batches.length ? `<button type="button" class="lp-set-edit" id="lp-cyc-edit">Edit cycles</button>` : '');
@@ -1087,7 +1098,7 @@
         if (hd) hd.addEventListener('change', () => { lpHideDone(hd.checked); showPlot(p.plot); });
         const ce = document.getElementById('lp-cyc-edit');
         if (ce) ce.addEventListener('click', () => lpOpenCycleEditor(p));
-        const shown = hide ? p.cycles.filter(c => !c.end) : p.cycles;
+        const shown = hide ? p.cycles.filter(c => !lpCycleDone(c, p)) : p.cycles;
         document.getElementById('lp-timeline-box').innerHTML = shown.length
             ? shown.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : p.cycles.length

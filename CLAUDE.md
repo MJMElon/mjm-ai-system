@@ -12277,7 +12277,7 @@ the same way: 228 + 229 = 12,121, then 263 to 271 = 12,275. The map colours
 and the list read the CURRENT cycle. **A cycle is Complete when EVERY batch in it has its 3rd culling**,
 wherever it sits, (shown as **Completed**), else **On going**: two cycles can run at once, and a batch
 not yet 3rd culled moved by hand into an older cycle reopens it (B1: 261 into
-cycle 1). **Hide completed cycles** above the cards is a per-device tick
+cycle 1). **Completed is what the card SHOWS** (`lpCycleDone`): a batch whose 3rd culling still reads Est. (a Tab 6 row saved before any sale, 255 on N1) keeps its cycle On going. **Hide completed cycles** above the cards is a per-device tick
 (localStorage `lp_hide_done`).
 
 The side bar's **Transplant record by year** (`buildTransplantYear`) is the
