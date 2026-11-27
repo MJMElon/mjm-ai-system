@@ -183,7 +183,7 @@ th.p-th{background:#dcfce7 !important;color:#166534 !important;border-bottom:2px
 th.d-th{background:var(--gold-bg) !important;color:#92400e !important;border-bottom:2px solid var(--gold-border) !important;}
 th.f-th{background:var(--blue-bg) !important;color:#1e40af !important;border-bottom:2px solid var(--blue-border) !important;}
 td.chem-td{font-size:10px;color:var(--text-muted);background:#f7faf8;padding:5px 10px;font-weight:600;border-bottom:1px solid var(--border) !important;}
-td.plot-td{font-weight:700;font-size:14px;color:var(--green-text);text-align:center;vertical-align:middle;padding-left:16px;border-right:2px solid var(--border);background:#f7faf8;}
+td.plot-td{white-space:nowrap;font-weight:700;font-size:14px;color:var(--green-text);text-align:center;vertical-align:middle;padding-left:16px;border-right:2px solid var(--border);background:#f7faf8;}
 /* Real CSS-drawn 20px check box. The cell has no text — the box + tick are
    drawn entirely from the .ticked class, which every render/toggle sets. */
 td.check-td{position:relative;cursor:pointer;font-size:0;line-height:0;padding:9px 6px;text-align:center;vertical-align:middle;transition:background 0.12s;user-select:none;}
