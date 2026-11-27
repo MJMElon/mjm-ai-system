@@ -9251,6 +9251,13 @@ app obeys it. The keys are spelled in `MATA_MALAM_FUNCTIONS` here and
 keeps the last one it had. Photo off is a check-in with no picture; gps
 off is no road track, the check-in still records where it was made.
 
+**Two distances are on the card too**, under Task timing, stored in
+`timing`: **Capture photo within** (`pinRangeMeters`, 1 to 100, default 3) is
+how close a guard must stand to a pin before its camera opens, and **Shortest
+road track** (`minTrackMeters`, 0 = no minimum) is the shortest track that may
+be stopped or submitted. Absent is what the phones did before (3 m, no
+minimum); `getPinRangeMeters` / `getMinTrackMeters` in the app read them.
+
 **A worker sees only the location the Worker Namelist files them under.**
 `mata_malam_my_locations(w)` (`shared/RUN_ME_mata_malam_own_location.sql`)
 answers the worker `section` when it is a row of `operation_nurseries`
