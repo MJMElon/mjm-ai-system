@@ -635,8 +635,8 @@ async function boot(browser) {
   check('a Track Record of 1.63 km fits its cell', (await overflow()).bad.filter((b) => /rc-track/.test(b)).join(','), '');
 
   /* ── 10. THE ACTIONS HEADING FILTERS CHECKED / UNCHECKED ─────────── */
-  const pick = async (v) => { await page.evaluate((v) => { const s = document.getElementById('rf-filter-check');
-    s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }, v); await page.waitForTimeout(80); };
+  const pick = async (v) => { await page.click('#rec-chk-btn');
+    await page.click('#rec-chk-menu button[data-v="' + v + '"]'); await page.waitForTimeout(80); };
   const rowsNow = () => page.evaluate(() => [...document.querySelectorAll('#rec-body tr')]
     .filter((tr) => !tr.querySelector('.rec-group-cell') && tr.cells.length > 1)
     .map((tr) => !!tr.querySelector('.rec-checked-badge')));
@@ -653,8 +653,9 @@ async function boot(browser) {
   const chk = await rowsNow();
   await pick('unchecked');
   const unc = await rowsNow();
-  check('the Actions heading still reads Actions and carries the filter',
-    await page.evaluate(() => !!document.querySelector('.rec-act-th #rf-filter-check') && /Actions/.test(document.querySelector('.rec-act-th').textContent)), true);
+  check('the Actions heading carries a filter ICON, not a dropdown',
+    await page.evaluate(() => !!document.querySelector('.rec-act-th #rec-chk-btn svg') && !document.querySelector('.rec-act-th select, .rec-act-th .cf-wrap')), true);
+  check('the icon is filled while a filter is on', await page.evaluate(() => document.getElementById('rec-chk-btn').classList.contains('on')), true);
   check('Checked shows only checked rows', chk.length > 0 && chk.every(Boolean), true);
   check('Unchecked shows only unchecked rows', unc.length > 0 && unc.every((x) => !x), true);
   check('the two add up to All', chk.length + unc.length, allA.length);

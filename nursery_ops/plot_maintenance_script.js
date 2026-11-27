@@ -9931,6 +9931,28 @@ const _recApproved = (r) =>
   (Array.isArray(r._fieldIds) && r._fieldIds.length > 0) || !!r.gaia
   || !!r.checked;
 
+/* The Checked filter on the Actions heading: a funnel icon and a small menu,
+   "加这样的icon就可以了 不要drop down". The value lives in #rf-filter-check. */
+function toggleRecChkMenu(ev) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('rec-chk-menu');
+  if (!m) return;
+  const v = document.getElementById('rf-filter-check').value;
+  m.querySelectorAll('button').forEach((b) => b.classList.toggle('sel', b.dataset.v === v));
+  m.hidden = !m.hidden;
+}
+function setRecChk(v) {
+  const inp = document.getElementById('rf-filter-check');
+  inp.value = v;
+  document.getElementById('rec-chk-menu').hidden = true;
+  document.getElementById('rec-chk-btn').classList.toggle('on', !!v);
+  renderRecords();
+}
+document.addEventListener('click', (e) => {
+  const m = document.getElementById('rec-chk-menu');
+  if (m && !m.hidden && !e.target.closest('#rec-chk-menu')) m.hidden = true;
+});
+
 function renderRecords() {
   const jF   = document.getElementById('rf-filter-jenis').value;
   const pF   = document.getElementById('rf-filter-plot').value;

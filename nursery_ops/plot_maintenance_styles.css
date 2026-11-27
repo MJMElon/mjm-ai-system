@@ -2266,7 +2266,18 @@ tr.sp-job-off .sp-off-note{font-weight:500;font-size:11px;margin-left:8px;color:
 /* Pending shows no Track, Remark, Audit, Nelos or Repair (renderRecords). */
 .rec-table.rec-pending-view .rc-ph{display:none;}
 
-/* The Actions heading carries the Checked filter (rf-filter-check). */
-#recview-list .rec-act-th > span{display:block;margin-bottom:3px;}
-#recview-list .rec-act-th .cf-wrap{max-width:112px;margin:0 auto;}
-#recview-list .rec-act-th .cf-btn,#recview-list .rec-act-th select{height:26px;min-height:26px;font-size:11px;padding:0 8px;text-transform:none;letter-spacing:0;font-weight:600;}
+/* The Actions heading carries the Checked filter: a funnel icon, not a dropdown.
+   Outline while All, a filled green square while a filter is on. */
+#recview-list .rec-act-th{position:relative;white-space:nowrap;}
+#recview-list .rec-chk-btn{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;
+  vertical-align:middle;border:none;border-radius:4px;background:transparent;color:var(--wr-muted,#6b7a72);cursor:pointer;padding:0;}
+#recview-list .rec-chk-btn:hover{background:var(--wr-hover,#eef4f0);color:var(--green-text,#136c3a);}
+#recview-list .rec-chk-btn.on{background:#14532d;color:#fff;}
+#recview-list .rec-chk-menu{position:absolute;right:8px;top:100%;z-index:30;min-width:130px;background:#fff;border:1px solid var(--wr-line,#dde5df);
+  border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;text-align:left;}
+#recview-list .rec-chk-menu[hidden]{display:none;}
+#recview-list .rec-chk-menu button{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:6px;
+  font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:#1f2a24;cursor:pointer;}
+#recview-list .rec-chk-menu button:hover{background:var(--wr-hover,#eef4f0);}
+#recview-list .rec-chk-menu button.sel{color:var(--green-text,#136c3a);}
+#recview-list .rec-chk-menu button.sel::before{content:"\2713  ";}
