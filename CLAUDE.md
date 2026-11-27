@@ -11414,6 +11414,16 @@ Function lost its Report switch.
 **18 of its 26 checks fail on the previous page**, each by name. Nothing to
 run in the database.
 
+### Pending shows no Track, Remark, Audit or Nelos, and Done Repair is gone
+
+*"pending部分 图二都不需要"*, then *"done repair in approved也是removed"*.
+On Pending the four are only dashes (they are about approved, audited
+work), so the cells are drawn and hidden by `.rec-pending-view .rc-ph`,
+one renderer for both tabs; every colspan follows `recCols` (7 or 11).
+Done Repair is off both tabs; `r.repaired` is still stored and read by
+nothing on this table. Track Record is 136px so a picture and `1.63 km`
+fit. Section 9 of `the_records_list_is_three_parts.cjs`.
+
 ### The Records list is THREE parts, and one of them had no reader at all
 
 The office, over the *Approved | Rejected 1* tabs: *"我要把这一部分 分成3个
