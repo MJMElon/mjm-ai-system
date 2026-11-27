@@ -11262,6 +11262,18 @@ including a table added next month. It writes a `<colgroup data-sized>` and
   re-adding it is two mutations, and the observer that tidies a table on
   every mutation went round for ever on the first try.
 
+**The last column sits IN from the card edge** — *"this total too right"*:
+`.inset-last` gives it 34px of right padding, set by `_applyColumnWidths`
+only where the table has 20px or more to spare, so a table with no room
+(Work Maintenance on a laptop) keeps the ordinary padding instead of
+overflowing its card and putting the pinned Subtotal over the last Total.
+Two faults found doing it, both in the measuring: a heading's width is
+read off its CONTENTS (a Range), never the cell, which in a max-content
+table is as wide as the widest figure, so no text column could ever give
+room back; and **every sized table is measured again once the web fonts
+are in** (`document.fonts`), because one measured in the fallback font had
+every figure wider than its column once Plus Jakarta Sans arrived.
+
 **This is the Nursery Reporting System's payroll module only.** The other
 modules build their tables their own way and are not yet on this rule.
 

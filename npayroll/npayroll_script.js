@@ -4144,6 +4144,8 @@ const COL_TEXT_CAP = 240;
 const COL_GROWS = { text: 1, number: 1, status: 1, media: 1 };
 
 function _naturalWidths(tbl, n) {
+  // Measured without the last column's inset, which is decided after.
+  tbl.classList.remove('inset-last');
   const prev = { layout: tbl.style.tableLayout, width: tbl.style.width, minWidth: tbl.style.minWidth };
   tbl.style.tableLayout = 'auto'; tbl.style.width = 'max-content'; tbl.style.minWidth = '0';
   // The widths already set are taken off for the measurement, never the
@@ -4155,7 +4157,14 @@ function _naturalWidths(tbl, n) {
   const nat = new Array(n).fill(0), head = new Array(n).fill(0);
   if (tbl.tHead) _tableGrid(Array.from(tbl.tHead.rows)).forEach(row => (row || []).forEach((cell, c) => {
     if (!cell || (cell.colSpan || 1) > 1 || c >= n) return;
-    head[c] = Math.max(head[c], cell.getBoundingClientRect().width);
+    // The heading's OWN width, never the cell's: in a max-content table the
+    // cell is as wide as the widest figure under it, which made every text
+    // column look as if its heading needed all of it, and nothing could give.
+    const r = document.createRange(); r.selectNodeContents(cell);
+    const cs = getComputedStyle(cell);
+    const w = r.getBoundingClientRect().width + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+            + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    head[c] = Math.max(head[c], w);
   }));
   const rows = [];
   if (tbl.tHead) rows.push(...tbl.tHead.rows);
@@ -4200,6 +4209,10 @@ function _applyColumnWidths(tbl) {
   const W = Math.max(avail, floor);
   const growers = types.map((t, i) => (COL_GROWS[t] ? i : -1)).filter(i => i >= 0);
   const extra = W - floor;
+  // The last column sits in from the card edge only where there is room for
+  // it: the inset is 20px over the ordinary padding, so a table with less
+  // than that to spare keeps the ordinary padding rather than overflowing.
+  tbl.classList.toggle('inset-last', extra >= 20);
   const each = growers.length ? extra / growers.length : 0;
   const widths = mins.map((m, i) => m + (COL_GROWS[types[i]] ? each : 0));
   // The pixels rounding leaves over go one each to the growers in turn, so
@@ -4261,7 +4274,21 @@ function sizeColumns(tbl, types) {
   _watchColumnWrap(tbl);
 }
 
+// A web font that arrives after a table was measured makes every figure
+// wider than the column it was given (the Interrow Total under the pinned
+// Subtotal). So every sized table is measured again once the fonts are in.
+const _sizedTables = new Set();
+if (typeof document !== 'undefined' && document.fonts) {
+  const again = () => _sizedTables.forEach(t => {
+    if (!t.isConnected) { _sizedTables.delete(t); return; }
+    if (t._colTypes) sizeColumns(t, t._colTypes);
+  });
+  try { document.fonts.addEventListener('loadingdone', again); } catch (e) {}
+  try { document.fonts.ready.then(again); } catch (e) {}
+}
+
 function _watchColumnWrap(tbl) {
+  _sizedTables.add(tbl);
   if (tbl._colObserved || typeof ResizeObserver === 'undefined' || !tbl.parentElement) return;
   tbl._colObserved = true;
   let last = -1;

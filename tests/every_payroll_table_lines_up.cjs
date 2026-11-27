@@ -289,6 +289,18 @@ const SNAP = {
             const grow = w.map((x, i) => x - mins[i]).filter((_, i) => /^(text|number|status|media)$/.test(types[i]));
             if (grow.length > 1 && Math.max(...grow) - Math.min(...grow) > 2) issues.push('spare room not shared equally: ' + grow.map(Math.round).join(', '));
           }
+          // The last column sits IN from the card edge wherever there is room
+          // for it (the office: "this total too right"), and never at the cost
+          // of the table fitting its card.
+          const lastTd = t.querySelector('tbody tr:not(.wr-band) > td:last-child');
+          if (lastTd && floor + 20 <= wrapW && parseFloat(getComputedStyle(lastTd).paddingRight) < 30)
+            issues.push(`the last column sits ${getComputedStyle(lastTd).paddingRight} from the card edge`);
+          // A figure wider than its column is a figure cut off, or one the
+          // pinned Subtotal sits on top of.
+          t.querySelectorAll('tbody td, tfoot td').forEach(td => {
+            if ((td.colSpan || 1) === 1 && td.scrollWidth > td.clientWidth + 1 && getComputedStyle(td).overflow !== 'visible')
+              issues.push(`a cell "${td.textContent.trim().slice(0, 14)}" is cut off`);
+          });
           t.querySelectorAll('thead th').forEach(th => {
             if ((th.colSpan || 1) === 1 && getComputedStyle(th).whiteSpace === 'nowrap' && th.scrollWidth > th.clientWidth + 1)
               issues.push(`heading "${th.textContent.trim().slice(0, 20)}" is cut off`);
