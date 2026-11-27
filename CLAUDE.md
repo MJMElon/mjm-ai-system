@@ -12405,7 +12405,7 @@ percent carried the August CAL-BNN / CAL-UNN delivery orders of batches
 **Settings (the side bar foot) is where the office changes these rules
 themselves** (*下次我需要改东西我不要叫你了 我在setting里面改*), above the
 PALMS stage list: the 2nd and 3rd culling estimate months, the four map stage
-names and colours, Collecting in 1 month from which month, which map stage
+names and colours, Collecting in 1 month from which month (on that stage own row, *不要重复*), which map stage
 each PALMS stage is filed under, the collection plan (% and *based on planting age … months after planting*) and
 the transplanting plan (*based on planting age … months after planting*; every age reads in months). ONE row of `nops_maint_config`, key
 `life_of_plot_settings`, JSON (`lpApplySet`); absent or unreadable is the
