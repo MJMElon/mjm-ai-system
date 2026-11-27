@@ -393,6 +393,11 @@ const DATA = {
   const ed9 = await p9.evaluate(() => ({ est: document.getElementById('ls-est2').disabled, col: document.getElementById('ls-col-soon').disabled, saves: document.querySelectorAll('[data-ls-save]').length }));
   ok(!ed9.est && ed9.col && ed9.saves === 2, 'Edit opens that section only; the others stay locked', ed9);
   await p9.fill('#ls-est3', '12');
+  const words9 = await p9.evaluate(() => [...document.querySelectorAll('#lp-set .lp-set-row')].map(r => r.textContent.replace(/\s+/g, ' ').trim()));
+  ok(words9.some(w => w.startsWith('Collection plan based on planting age') && w.endsWith('months after planting'))
+     && words9.some(w => w.startsWith('Transplanting plan based on planting age') && w.endsWith('months after planting')),
+     'the plans read "based on planting age … months after planting"', words9);
+  ok(words9.filter(w => /after transplant$/.test(w)).every(w => /months after transplant$/.test(w)), 'every "after transplant" row says months', words9);
   await p9.fill('#ls-trm', '7');   // edited and NOT saved: another section
   await p9.click('[data-ls-save="cycles"]');
   await p9.waitForTimeout(300);

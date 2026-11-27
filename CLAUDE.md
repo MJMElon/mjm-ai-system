@@ -12406,8 +12406,8 @@ percent carried the August CAL-BNN / CAL-UNN delivery orders of batches
 themselves** (*下次我需要改东西我不要叫你了 我在setting里面改*), above the
 PALMS stage list: the 2nd and 3rd culling estimate months, the four map stage
 names and colours, Collecting in 1 month from which month, which map stage
-each PALMS stage is filed under, the collection plan (% and months back) and
-the transplanting plan (months back). ONE row of `nops_maint_config`, key
+each PALMS stage is filed under, the collection plan (% and *based on planting age … months after planting*) and
+the transplanting plan (*based on planting age … months after planting*; every age reads in months). ONE row of `nops_maint_config`, key
 `life_of_plot_settings`, JSON (`lpApplySet`); absent or unreadable is the
 built-in values. Edit and Save need Operation admin. EACH SECTION IS LOCKED until its Edit is
 pressed (*default是lock的 加一个edit 按钮*), then shows Cancel and a small Save, and
