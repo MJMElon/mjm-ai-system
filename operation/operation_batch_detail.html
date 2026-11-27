@@ -2674,6 +2674,7 @@
            maps the checker attached. It only ever ADDS: a row whose own remark
            carries a MapUrl answered yes before and still does. */
         let t3CardMaps = {};
+        let t3CardMapLists = {};   // card key -> [{ base64, name, note, isImg }]
         let trayUsageMap = {};  // { tray_name: 'MJN-2024-001' } — which batch is using each tray
         let trayVacantMap = {};   // { tray_name: 1234 } — holes free in each tray right now
         let trayCapMap = {};      // { tray_name: 2560 } — the tray's size when empty, from Settings
@@ -5430,11 +5431,13 @@
                                    a drone saw, not seedlings that moved. */
                                 const dqm = r.remark ? r.remark.match(/DroneQty:(\d+)/) : null;
                                 const cl  = r.remark ? r.remark.match(/CensusList:(\S+)/) : null;
+                                const ml  = r.remark ? r.remark.match(/MapList:(\S+)/) : null;
                                 t3CardData[`${String(r.plot_name || '').trim()}|${day}`] = {
                                     id: r.id,
                                     droneQty: dqm ? parseInt(dqm[1], 10) : null,
                                     droneBy: by ? by[1] : '', droneAt: at ? at[1] : '',
                                     mapUrl: mm ? mm[1] : '',
+                                    maps: ml ? t6DecodeDocs(ml[1]) : [],
                                     census: cl ? t6DecodeDocs(cl[1]) : []
                                 };
                             });
@@ -5480,6 +5483,13 @@
                             const saved   = t3CardData[c.key] || {};
                             const mapUrl  = saved.mapUrl || c.rowMapUrl || '';
                             t3CardMaps[c.key] = mapUrl;
+                            /* A CARD HAS AS MANY MAPS AS IT TOOK TO FLY IT, each with
+                               its own remark (the office: transplant map 我要可以upload
+                               多张 和 写remark). MapList: carries them all with tab 6
+                               own codec; a card from before has only MapUrl:, or a
+                               map on a tray row, and that stands in as a list of one. */
+                            const maps = _t3MapsOf(saved, c.rowMapUrl);
+                            t3CardMapLists[c.key] = maps;
                             /* ── A CARD FROM BEFORE THE RULE READS AS TALLYING ──
 
                                An old card has the drone PICTURE and no NUMBER:
@@ -5523,11 +5533,11 @@
                                            : tallies  ? 'bg-[#eef5e8] border-[#c3d9c0]'
                                                       : 'bg-[#fbeae7] border-[#ecc7c0]';
                             const mapCell = mapUrl
-                                ? `<button type="button" title="View drone map" onclick="_openDocViewer('${_escAttr(mapUrl)}', '${_escAttr('Drone Map — ' + (c.plot || ''))}')"
-                                        class="mjm-review-allow flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
+                                ? `<button type="button" title="Drone maps — open, add, remark" onclick="openT3CardMaps(${c.i})"
+                                        class="mjm-review-allow t3-cardmap-chip flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group" data-maps="${maps.length}">
                                        <span class="w-9 h-9 rounded-lg border border-[#e8dcc8] bg-cover bg-center shrink-0 flex items-center justify-center text-sm bg-white group-hover:border-[#c07820] transition-colors"
                                              ${/\.pdf(\?|$)/i.test(mapUrl) ? '' : `style="background-image:url('${mapUrl}')"`}>${/\.pdf(\?|$)/i.test(mapUrl) ? '📄' : ''}</span>
-                                       <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820]">Map</span>
+                                       <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820]">${maps.length > 1 ? `Maps · ${maps.length}` : 'Map'}</span>
                                    </button>`
                                 : `<button type="button" onclick="document.getElementById('t3-cardmap-${c.i}').click()"
                                         class="px-3 py-2 bg-white border border-[#e8dcc8] text-[#8a7a68] text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#f3efe6] transition-colors">+ Map</button>`;
@@ -5623,7 +5633,7 @@
                                                 ${mapCell}
                                             </div>
                                             <div>${verdict}</div>
-                                            <input type="file" id="t3-cardmap-${c.i}" class="hidden" accept="image/*,.pdf" onchange="uploadT3CardMap(${c.i}, this)">
+                                            <input type="file" id="t3-cardmap-${c.i}" class="hidden" multiple accept="image/*,.pdf" onchange="uploadT3CardMap(${c.i}, this)">
                                         </div>
                                     </div>
                                     <div class="hidden md:grid grid-cols-[1.5fr_0.9fr_0.9fr_0.9fr_90px] gap-2 px-4 pt-2 pb-1 bg-[#fffdf8] text-[8px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy">
@@ -6011,9 +6021,23 @@
                job is two things to get subtly different. */
             const curCensus = mine && mine.remark && mine.remark.match(/CensusList:(\S+)/)
                             ? t6DecodeDocs(mine.remark.match(/CensusList:(\S+)/)[1]) : [];
+            /* THE MAPS ARE A LIST, re-read here like the census. A card that
+               has only MapUrl: (or nothing, its map sitting on a tray row)
+               is seeded from what the panel showed (`mapSeed`) the first
+               time it is written, so the old picture is not dropped. */
+            const ml = mine && mine.remark && mine.remark.match(/MapList:(\S+)/);
+            let curMaps = ml ? t6DecodeDocs(ml[1])
+                        : (curMap ? [{ base64: curMap, name: 'Drone map', note: '' }] : (patch.mapSeed || []));
+            if (patch.mapsAdd) curMaps = curMaps.concat(patch.mapsAdd);
+            if (patch.mapDrop) curMaps = curMaps.filter(d => d && d.base64 !== patch.mapDrop);
+            if (patch.mapNotes) curMaps = curMaps.map(d => Object.prototype.hasOwnProperty.call(patch.mapNotes, d.base64)
+                                                          ? Object.assign({}, d, { note: patch.mapNotes[d.base64] }) : d);
+            const mapsTouched = !!(patch.mapsAdd || patch.mapDrop || patch.mapNotes);
             const next = {
                 droneQty: Object.prototype.hasOwnProperty.call(patch, 'droneQty') ? patch.droneQty : curQty,
-                mapUrl:   Object.prototype.hasOwnProperty.call(patch, 'mapUrl')   ? patch.mapUrl   : curMap,
+                mapUrl:   mapsTouched ? (curMaps[0] ? curMaps[0].base64 : '')
+                        : Object.prototype.hasOwnProperty.call(patch, 'mapUrl') ? patch.mapUrl : curMap,
+                maps:     mapsTouched || ml ? curMaps : [],
                 /* ADDED TO, NEVER REPLACED. A second day of keying against the
                    same plot brings its own census, and a list that replaced
                    would throw away the one the first person attached.
@@ -6031,6 +6055,7 @@
             const hasQty = next.droneQty !== null && next.droneQty !== undefined;
             const remark = `Transplant card. Date: ${day}`
                 + (next.mapUrl ? ` MapUrl:${next.mapUrl}` : '')
+                + (next.maps.length ? ` MapList:${t6EncodeDocs(next.maps)}` : '')
                 + (next.census.length ? ` CensusList:${t6EncodeDocs(next.census)}` : '')
                 + (hasQty ? ` DroneQty:${next.droneQty} DroneBy:${window.currentUserEmail || 'unknown'} DroneAt:${new Date().toISOString()}` : '');
             const row = withEditMeta({
@@ -6077,33 +6102,186 @@
             }
         }
 
-        /* The map goes with the count, on the card. A tray row that already
-           carries one from before keeps it — the card falls back to it — so
-           nothing has to be moved or re-uploaded. */
+        /* The maps of one card, as a list. MapList: wins; a card from before
+           has only MapUrl:, and one older still has its map on a tray row. */
+        function _t3MapsOf(saved, rowMapUrl) {
+            const isImg = (u) => !/\.pdf(\?|#|$)/i.test(String(u || ''));
+            if (saved && saved.maps && saved.maps.length) return saved.maps.map(d => Object.assign({}, d, { isImg: isImg(d.base64) }));
+            const one = (saved && saved.mapUrl) || rowMapUrl || '';
+            return one ? [{ base64: one, name: 'Drone map', note: '', isImg: isImg(one) }] : [];
+        }
+
+        /* MAPS ARE ADDED, NEVER REPLACED: a plot flown in two passes has two
+           pictures. Each file is uploaded on its own and only the ones that
+           reached storage are written, so one failure costs that picture and
+           not the rest. The panel then opens on the first new map with the
+           cursor in its remark, because that is when somebody knows what to
+           write (the tab 6 lesson: a box with no way in is a box nobody fills). */
         async function uploadT3CardMap(i, input) {
-            const card = _t3CardEl(i);
-            const file = input && input.files && input.files[0];
-            if (!card || !file) { if (input) input.value = ''; return; }
+            if (_t3CardLocked()) {
+                showToast('This report is signed off — unverify it first to change the drone maps.', 'error');
+                if (input) input.value = '';
+                return;
+            }
+            const card  = _t3CardEl(i);
+            const files = input && input.files ? Array.from(input.files) : [];
+            if (!card || !files.length) { if (input) input.value = ''; return; }
             const batchId = document.getElementById('f-batchno').value.trim();
             if (!batchId) { showToast('Nothing saved — no batch number on this report.', 'error'); input.value = ''; return; }
+            const key = `${card.dataset.cardPlot}|${card.dataset.cardDay}`;
+            const before = (t3CardMapLists[key] || []).length;
             try {
-                const dataUrl = await new Promise((res, rej) => {
-                    const fr = new FileReader();
-                    fr.onload = () => res(fr.result);
-                    fr.onerror = () => rej(new Error('the file could not be read'));
-                    fr.readAsDataURL(file);
-                });
-                const url = await _uploadBatchDoc('transplant_maps', batchId,
-                                                  `${card.dataset.cardPlot}-${card.dataset.cardDay}`, dataUrl);
-                if (!url) throw new Error(window._mjmLastUploadError || 'storage would not take the file');
-                await _t3WriteCard(batchId, card.dataset.cardPlot, card.dataset.cardDay, { mapUrl: url });
-                showToast('Drone map attached.', 'success');
+                const got = [];
+                let failed = 0;
+                for (let k = 0; k < files.length; k++) {
+                    try {
+                        const dataUrl = await _t3ReadFile(files[k]);
+                        const url = await _uploadBatchDoc('transplant_maps', batchId,
+                                        `${card.dataset.cardPlot}-${card.dataset.cardDay}-${Date.now()}-${k}`, dataUrl);
+                        if (!url) { failed++; continue; }
+                        got.push({ base64: url, name: files[k].name || `map-${k + 1}`, note: '' });
+                    } catch (e) { failed++; }
+                }
+                if (!got.length) throw new Error(window._mjmLastUploadError || 'storage would not take the file');
+                await _t3WriteCard(batchId, card.dataset.cardPlot, card.dataset.cardDay,
+                                   { mapsAdd: got, mapSeed: (t3CardMapLists[key] || []).map(d => ({ base64: d.base64, name: d.name, note: d.note })) });
+                if (failed) showToast(`${got.length} drone map(s) attached — ${failed} would not upload. Attach those again.`, 'warn');
+                else showToast(got.length > 1 ? `${got.length} drone maps attached.` : 'Drone map attached.', 'success');
                 await syncOnce(3, syncTab3);
+                openT3CardMaps(_t3CardIndexOfKey(key), before);
             } catch (e) {
                 showToast('Nothing saved — the drone map could not be attached: '
                           + (e && e.message ? e.message : e), 'error');
             } finally {
                 if (input) input.value = '';
+            }
+        }
+
+        function _t3CardIndexOfKey(key) {
+            const el = Array.from(document.querySelectorAll('.t3-saved-row'))
+                .find(e => `${e.dataset.cardPlot}|${e.dataset.cardDay}` === key);
+            return el ? parseInt(el.dataset.cardIndex, 10) : -1;
+        }
+
+        /* THE MAPS PANEL: every map of the card, each opening in the viewer,
+           each with its own remark and a cross. A signed-off report opens it
+           read-only (no Add, no cross, the remarks not editable). */
+        function openT3CardMaps(i, focusIdx) {
+            const card = _t3CardEl(i);
+            if (!card) return;
+            const key  = `${card.dataset.cardPlot}|${card.dataset.cardDay}`;
+            const maps = t3CardMapLists[key] || [];
+            const locked = _t3CardLocked();
+            let box = document.getElementById('t3-maps-modal');
+            if (!box) {
+                document.body.insertAdjacentHTML('beforeend', `
+                    <div id="t3-maps-modal" class="hidden fixed inset-0 z-[9000] bg-black/40 flex items-center justify-center p-4"
+                         onmousedown="if (event.target === this) this.dataset.down = '1'"
+                         onclick="if (event.target === this && this.dataset.down === '1') closeT3CardMaps(); this.dataset.down = ''">
+                        <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[86vh] flex flex-col">
+                            <div class="flex items-center justify-between px-5 py-3 border-b border-[#e8dcc8]">
+                                <div id="t3-maps-title" class="text-sm font-black text-[#3d2610] uppercase tracking-widest"></div>
+                                <button type="button" class="mjm-review-allow text-[#8a7a68] text-lg font-black px-2" onclick="closeT3CardMaps()">✕</button>
+                            </div>
+                            <div id="t3-maps-body" class="p-4 overflow-y-auto flex-1"></div>
+                            <div id="t3-maps-foot" class="flex items-center justify-between gap-2 px-5 py-3 border-t border-[#e8dcc8]"></div>
+                        </div>
+                    </div>`);
+                box = document.getElementById('t3-maps-modal');
+            }
+            box.dataset.card = String(i);
+            document.getElementById('t3-maps-title').textContent = `Drone Maps — ${card.dataset.cardPlot} · ${card.dataset.cardDay}`;
+            document.getElementById('t3-maps-body').innerHTML = maps.length
+                ? maps.map((d, k) => `
+                    <div class="t3-map-row flex gap-3 mb-3 p-2 border border-[#e8dcc8] rounded-xl" data-url="${_escAttr(d.base64)}">
+                        <button type="button" title="Open this map" onclick="_openDocViewer('${_escAttr(d.base64)}', '${_escAttr('Drone Map — ' + card.dataset.cardPlot + (maps.length > 1 ? ' (' + (k + 1) + ')' : ''))}')"
+                                class="mjm-review-allow t3-map-open w-20 h-20 shrink-0 rounded-lg border border-[#e8dcc8] bg-white bg-cover bg-center flex items-center justify-center text-xl cursor-pointer hover:border-[#c07820]"
+                                ${d.isImg ? `style="background-image:url('${d.base64}')"` : ''}>${d.isImg ? '' : '📄'}</button>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest truncate mb-1">${_escAttr(d.name || ('Map ' + (k + 1)))}</div>
+                            <textarea class="t3-map-note input-style w-full !py-1.5 text-xs" rows="2" placeholder="Remark, e.g. north half, flown 21 Feb"
+                                      data-orig="${_escAttr(d.note || '')}" ${locked ? 'readonly' : ''}
+                                      oninput="_t3MapsDirty()">${_escAttr(d.note || '')}</textarea>
+                        </div>
+                        ${locked ? '' : `<button type="button" title="Remove this map" onclick="removeT3CardMap('${_escAttr(d.base64)}', '${_escAttr(d.name || ('Map ' + (k + 1)))}')"
+                                class="t3-map-del w-7 h-7 shrink-0 rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center text-xs font-black hover:bg-[#f8d7da]">✕</button>`}
+                    </div>`).join('')
+                : `<div class="text-xs font-bold text-[#8a7a68]">No drone map on this record.</div>`;
+            document.getElementById('t3-maps-foot').innerHTML = locked
+                ? `<span class="text-[10px] font-bold text-[#8a7a68]">Signed off — read only.</span>`
+                : `<button type="button" onclick="document.getElementById('t3-cardmap-${i}').click()"
+                           class="t3-map-add px-3 py-2 bg-white border border-[#c07820] text-[#c07820] text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdf6ec]">+ Add Maps</button>
+                   <button type="button" id="t3-maps-save" disabled onclick="saveT3CardMapNotes()"
+                           class="t3-map-save px-4 py-2 bg-[#4a7a2e] text-white text-[9px] font-black uppercase tracking-widest rounded-lg disabled:opacity-40">Save Remarks</button>`;
+            box.classList.remove('hidden');
+            if (!locked && focusIdx != null) {
+                const notes = box.querySelectorAll('.t3-map-note');
+                const el = notes[Math.min(focusIdx, notes.length - 1)];
+                if (el) try { el.focus(); } catch (e) {}
+            }
+        }
+
+        function _t3MapsDirty() {
+            const box = document.getElementById('t3-maps-modal');
+            const btn = document.getElementById('t3-maps-save');
+            if (!box || !btn) return false;
+            const dirty = Array.from(box.querySelectorAll('.t3-map-note')).some(t => t.value !== (t.dataset.orig || ''));
+            btn.disabled = !dirty;
+            return dirty;
+        }
+
+        /* A remark typed and not saved is asked about, not thrown away. */
+        function closeT3CardMaps() {
+            const box = document.getElementById('t3-maps-modal');
+            if (!box) return;
+            if (_t3MapsDirty() && !confirm('The remarks you typed are not saved. Close without saving?')) return;
+            box.classList.add('hidden');
+        }
+
+        async function saveT3CardMapNotes() {
+            if (_t3CardLocked()) { showToast('This report is signed off — unverify it first to change the drone maps.', 'error'); return; }
+            const box  = document.getElementById('t3-maps-modal');
+            const card = box ? _t3CardEl(parseInt(box.dataset.card, 10)) : null;
+            if (!card) return;
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) { showToast('Nothing saved — no batch number on this report.', 'error'); return; }
+            const key = `${card.dataset.cardPlot}|${card.dataset.cardDay}`;
+            const notes = {};
+            box.querySelectorAll('.t3-map-row').forEach(r => {
+                const t = r.querySelector('.t3-map-note');
+                if (t && t.value !== (t.dataset.orig || '')) notes[r.dataset.url] = t.value.trim();
+            });
+            if (!Object.keys(notes).length) return;
+            try {
+                await _t3WriteCard(batchId, card.dataset.cardPlot, card.dataset.cardDay,
+                                   { mapNotes: notes, mapSeed: (t3CardMapLists[key] || []).map(d => ({ base64: d.base64, name: d.name, note: d.note })) });
+                showToast('Remarks saved.', 'success');
+                await syncOnce(3, syncTab3);
+                openT3CardMaps(_t3CardIndexOfKey(key));
+            } catch (e) {
+                showToast('Nothing saved — the remarks could not be written: ' + (e && e.message ? e.message : e), 'error');
+            }
+        }
+
+        /* THE FILE IS LEFT IN STORAGE, as with the census: this takes the map
+           off the RECORD. Removed by URL, never by position. */
+        async function removeT3CardMap(url, name) {
+            if (_t3CardLocked()) { showToast('This report is signed off — unverify it first to change the drone maps.', 'error'); return; }
+            const box  = document.getElementById('t3-maps-modal');
+            const card = box ? _t3CardEl(parseInt(box.dataset.card, 10)) : null;
+            if (!card || !url) return;
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) { showToast('Nothing saved — no batch number on this report.', 'error'); return; }
+            if (!confirm(`Remove "${name || 'this map'}" from ${card.dataset.cardPlot} on ${card.dataset.cardDay}?`)) return;
+            const key = `${card.dataset.cardPlot}|${card.dataset.cardDay}`;
+            try {
+                await _t3WriteCard(batchId, card.dataset.cardPlot, card.dataset.cardDay,
+                                   { mapDrop: url, mapSeed: (t3CardMapLists[key] || []).map(d => ({ base64: d.base64, name: d.name, note: d.note })) });
+                showToast('Drone map removed.', 'success');
+                await syncOnce(3, syncTab3);
+                openT3CardMaps(_t3CardIndexOfKey(key));
+            } catch (e) {
+                showToast('Nothing changed — the map could not be removed: ' + (e && e.message ? e.message : e), 'error');
             }
         }
 
