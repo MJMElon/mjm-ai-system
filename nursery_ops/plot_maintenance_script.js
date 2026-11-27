@@ -10008,7 +10008,7 @@ function renderRecords() {
      tab counts and the plot line still answer for the whole month. A loose
      submission is never checked, so Checked leaves them off as well. */
   const cSel = document.getElementById('rf-filter-check');
-  const cF = cSel ? cSel.value : '';
+  const cF = cSel && _recSection === 'approved' ? cSel.value : '';   // "这个选项只需要在approved tab出现"
   const sectioned = (_recSection === 'rejected' ? filtered
     : filtered.filter((r) => _recApproved(r) === (_recSection === 'approved')))
     .filter((r) => !cF || (cF === 'checked') === !!r.checked);

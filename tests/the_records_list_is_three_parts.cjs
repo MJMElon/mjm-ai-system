@@ -662,9 +662,11 @@ async function boot(browser) {
   const counts = await page.evaluate(() => document.getElementById('rec-count-approved').textContent.trim());
   await pick('');
   check('the tab count does not move with the filter', await page.evaluate(() => document.getElementById('rec-count-approved').textContent.trim()), counts);
-  await open('pending'); await pick('checked');
-  check('Checked on Pending leaves no loose row', await page.evaluate(() => document.querySelectorAll('#rec-body .rec-row-loose').length), 0);
-  await pick('');
+  await pick('checked');
+  await open('pending');
+  check('Pending carries no filter icon', await page.evaluate(() => document.getElementById('rec-chk-btn').offsetWidth), 0);
+  check('a filter left on Approved does not narrow Pending', await page.evaluate(() => /No checked row/.test(document.getElementById('rec-body').textContent)), false);
+  await open('approved'); await pick('');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   await browser.close();
