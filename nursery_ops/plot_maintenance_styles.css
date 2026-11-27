@@ -2265,3 +2265,8 @@ tr.sp-job-off .sp-off-note{font-weight:500;font-size:11px;margin-left:8px;color:
 
 /* Pending shows no Track, Remark, Audit, Nelos or Repair (renderRecords). */
 .rec-table.rec-pending-view .rc-ph{display:none;}
+
+/* The Actions heading carries the Checked filter (rf-filter-check). */
+#recview-list .rec-act-th > span{display:block;margin-bottom:3px;}
+#recview-list .rec-act-th .cf-wrap{max-width:112px;margin:0 auto;}
+#recview-list .rec-act-th .cf-btn,#recview-list .rec-act-th select{height:26px;min-height:26px;font-size:11px;padding:0 8px;text-transform:none;letter-spacing:0;font-weight:600;}

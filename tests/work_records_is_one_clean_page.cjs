@@ -224,7 +224,7 @@ async function boot(browser) {
     const heads = [...tbl.tHead.rows[0].cells].map(th => getComputedStyle(th).textAlign.replace('start', 'left'));
     const row = [...tbl.tBodies[0].rows].find(tr => !tr.classList.contains('plot-group-row'));
     const cells = [...row.cells].map(td => getComputedStyle(td).textAlign.replace('start', 'left'));
-    return { heads, cells, last: tbl.tHead.rows[0].cells[tbl.tHead.rows[0].cells.length-1].textContent.trim() };
+    return { heads, cells, last: (tbl.tHead.rows[0].cells[tbl.tHead.rows[0].cells.length-1].querySelector("[data-i18n]") || tbl.tHead.rows[0].cells[tbl.tHead.rows[0].cells.length-1]).textContent.trim() };
   });
   const WANT = ['left','left','left','center','left','right','center','left','center','center','center'];   // Done Repair came off
   check('the headings', align.heads, WANT);

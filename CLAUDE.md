@@ -11424,6 +11424,13 @@ Done Repair is off both tabs; `r.repaired` is still stored and read by
 nothing on this table. Track Record is 136px so a picture and `1.63 km`
 fit. Section 9 of `the_records_list_is_three_parts.cjs`.
 
+The Actions heading carries a Checked filter (`rf-filter-check`: All,
+Checked, Unchecked; *"action要可以filter check / uncheck"*). It is applied
+after the tab split, never to `filtered`, so the tab counts and the plot
+line still count the whole month; Checked leaves the loose rows off. The
+label sits in its own `<span data-i18n>`, or `applyI18n` would wipe the
+select. Section 10 of the same test.
+
 ### The Records list is THREE parts, and one of them had no reader at all
 
 The office, over the *Approved | Rejected 1* tabs: *"我要把这一部分 分成3个
