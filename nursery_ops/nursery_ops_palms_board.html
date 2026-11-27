@@ -30,7 +30,7 @@
 <script src="../shared/shared_staff_gate.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_palms.js?v=7"></script>
-<script src="../shared/shared_plot_map.js?v=2"></script>
+<script src="../shared/shared_plot_map.js?v=3"></script>
 <script src="../shared/shared_plot_draw.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -472,6 +472,10 @@ function mapStatusOf(plot) {
   return {
     tone: ln.state === 'overdue' ? 'over' : 'ok',
     key: act ? PAL.keyOf[act.name] : null,
+    // The stage by NAME and when it started, for a decorate layer that reads
+    // a stage its own way (Life of Plot's cats).
+    act: act ? act.name : null,
+    start: ln.start || null,
     late: ln.left < 0 ? (-ln.left) + 'd over' : '',
     // Kept for anything that still wants the whole sentence.
     line: (ln.status || '—') + ' · ' + (ln.left < 0 ? (-ln.left) + 'd over' : ln.left + 'd left'),
@@ -1193,6 +1197,9 @@ function render() {
       onNurseryChange: renderTable,
       onPlotClick: openPlot,
     });
+    /* The map, for the page this board is embedded in: Life of Plot draws its
+       cats on it (MAP.setDecorate). Opened on its own, nothing reads this. */
+    window.palmsMap = () => MAP;
     /* No -R plots on PALMS — see isReplantPlot in shared_palms.js.
 
        AND THE NURSERY LIST IS ALWAYS PASSED. The office: "PN UNE不需要出现

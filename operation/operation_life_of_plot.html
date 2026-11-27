@@ -48,39 +48,6 @@
         .lp-head-tabs { min-width:90px; justify-content:flex-end; }
         .lp-head-tabs:empty { display:none; }
         .lp-tab.on { background:#4a7a2e; color:#fdfaf4; border-color:#3f6a26; }
-        /* The cats on the map, one stage each. They are part of the MAP, not
-           of the label: sized off the plot and scattered over it, so they
-           shrink when the map is zoomed out and are big enough to see what
-           they are doing when it is zoomed in (the office asked for both). */
-        .lp-cats { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; }
-        .lp-cat { position:absolute; transform:translate(-50%,-100%); filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
-        .lp-cat img { display:block; height:100%; width:auto; transform-origin:50% 100%; }
-        .lp-cat picture { display:block; height:100%; }
-        .lp-cat.wide picture { height:auto; width:100%; }
-        .lp-cat.wide img { width:100%; height:auto; }
-        .lp-map-row { display:flex; gap:16px; align-items:stretch; }
-        .lp-map-row .lp-viewport { flex:1 1 auto; min-width:0; }
-        .lp-key { flex:0 0 auto; min-width:200px; display:flex; flex-direction:column; gap:10px; padding:14px; border:1px solid #e8dcc8; border-radius:16px; background:#fffdf8; }
-        .lp-key-h { font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#8a7a68; }
-        .lp-key-r { display:flex; gap:10px; align-items:center; }
-        .lp-key-r i { flex:0 0 26px; height:26px; border-radius:7px; border:2px solid; }
-        .lp-key-cat { flex:0 0 48px; width:48px; height:34px; object-fit:contain; }
-        .lp-key-r b { display:block; font-size:13px; font-weight:900; color:#3d2610; white-space:nowrap; }
-        @media (max-width: 900px) { .lp-map-row { flex-direction:column; } .lp-key { flex-basis:auto; flex-direction:row; flex-wrap:wrap; } }
-        .lp-viewport { position:relative; width:100%; height:min(70vh, 640px); min-height:380px; overflow:hidden; background:#efe8d8; border-radius:16px; touch-action:none; }
-        .lp-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:grab; transform-origin:center center; }
-        .lp-stage.drag { cursor:grabbing; }
-        .lp-map-img { max-height:calc(min(70vh, 640px) - 24px); width:auto; display:block; user-select:none; -webkit-user-drag:none; }
-        .lp-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-        .lp-shape { pointer-events:auto; cursor:pointer; transition:fill .2s, stroke-width .2s; }
-        .lp-shape:hover { stroke-width:.8; }
-        .lp-labels { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-        .lp-label { position:absolute; display:flex; flex-direction:column; align-items:center; text-align:center; transform:translate(-50%,-50%) scale(calc(1 / var(--lp-z, 1))); transform-origin:center center; max-width:140px; }
-        .lp-tag { font-size:10px; font-weight:900; background:#fff; padding:2px 7px; border-radius:6px; color:#3d2610; border:1px solid #e8dcc8; text-transform:uppercase; letter-spacing:.04em; box-shadow:0 2px 6px rgba(61,38,16,.15); }
-        .lp-zoom { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; gap:4px; z-index:5; background:#fff; border-radius:10px; padding:4px; border:1px solid #e8dcc8; box-shadow:0 4px 10px rgba(61,38,16,.12); }
-        .lp-zbtn { width:28px; height:28px; border:none; background:#fff; color:#5c3d1e; font-weight:900; font-size:14px; border-radius:6px; cursor:pointer; }
-        .lp-zbtn:hover { background:#f1ead9; }
-        .lp-zlvl { font-size:9px; font-weight:800; color:#8a7a68; text-align:center; padding:2px 0; border-top:1px solid #e8dcc8; border-bottom:1px solid #e8dcc8; }
         /* Side bar: the two ways into the plots. */
         .lp-shell { display:grid; grid-template-columns:230px minmax(0,1fr); gap:24px; align-items:start; }
         .lp-side { position:sticky; top:16px; padding:16px 12px; border-radius:1.5rem; display:flex; flex-direction:column; gap:4px; }
@@ -97,12 +64,8 @@
         .lp-set-h { font-size:13px; font-weight:900; color:#3d2610; margin-bottom:12px; }
         .lp-set-row { display:grid; grid-template-columns:230px auto 1fr; align-items:center; gap:12px; padding:6px 0; font-size:13px; font-weight:700; color:#5c3d1e; }
         @media (max-width: 640px) { .lp-set-row { grid-template-columns:1fr auto; } .lp-set-row > span:last-child { grid-column:1 / -1; } }
-        .lp-set-soon { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
         .lp-set-row input[type=number] { width:76px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:800; text-align:right; background:#fff; }
         .lp-set-row input[type=text] { width:220px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
-        .lp-set-row .lp-set-sw { position:relative; display:block; width:30px; height:30px; min-width:0; border-radius:8px; border:2px solid; cursor:pointer; }
-        .lp-set-row .lp-set-sw.ro { cursor:default; }
-        .lp-set-sw input[type=color] { position:absolute; inset:0; width:100%; height:100%; opacity:0; border:0; padding:0; cursor:inherit; }
         .lp-set-row select { padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
         .lp-set-row i { display:inline-block; width:22px; height:22px; border-radius:6px; border:2px solid; }
         .lp-set-foot { display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:6px; min-height:4px; }
@@ -298,14 +261,6 @@
     </div>
 
     <div id="lp-plots-view">
-    <div id="lp-map" class="panel p-6 mb-6 hidden">
-        <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
-            <div class="lp-chip-label">Map</div>
-        </div>
-        <div id="lp-map-tabs" class="hidden"></div>
-        <div id="lp-map-body"></div>
-    </div>
-
     <div class="panel p-6 mb-6 space-y-3" id="lp-pick">
         <div class="lp-chip-label" id="lp-nursery-label">Nursery</div>
         <div id="lp-nursery-row" class="lp-chips"></div>
@@ -668,24 +623,21 @@
     const dash = v => (v ? nf(v) : '–');
     let MODEL = null;
     let MAPS = {};        // nursery key -> map image url
-    let PLOT_SHAPES = {}; // plot key -> { name, nur, pts } from shared_plots.map_top
     let MAP_NUR = '';
-    const MAP_ZOOM = {};
     /* THE MAP SAYS WHERE THE PLOT IS IN ITS ROUND, four stages (the office:
        "empty, growing, 即将可以售卖, 售卖中"), each its own colour, with the key
        standing beside the map. `stage` is the key, `fill` / `stroke` the paint. */
     const LP_STAGES = [
-        { key: 'empty',   label: 'Empty',                 fill: 'rgba(148,163,184,.30)', stroke: '#94a3b8' },
-        { key: 'growing', label: 'Growing',               fill: 'rgba(74,222,128,.45)',  stroke: '#16a34a' },
-        { key: 'soon',    label: 'Collect soon',          fill: 'rgba(251,191,36,.50)',  stroke: '#d97706' },
-        { key: 'selling', label: 'Collecting',            fill: 'rgba(96,165,250,.50)',  stroke: '#2563eb' },
+        { key: 'empty', label: 'Empty' },
+        { key: 'growing', label: 'Growing' },
+        { key: 'soon', label: 'Collect soon' },
+        { key: 'selling', label: 'Collecting' },
     ];
     /* The 8th month after transplant is Collecting in 1 month (the office:
        "collecting in 1 month 就是transplant后的第8个月"), so 7 full months.
        Settings can move it (soonMonth). */
     let LP_SOON_MONTHS = 7;
     let LP_EST_C2 = 4, LP_EST_C3 = 9;   // the 2nd and 3rd culling estimates: months after transplant
-    const MAP_FILL = {};
     const LP_STAGES_BUILTIN = LP_STAGES.map(x => Object.assign({}, x));
     /* SETTINGS (the office: "下次我需要改东西我不要叫你了 我在setting里面改").
        One row of nops_maint_config, key life_of_plot_settings, JSON. Absent
@@ -694,7 +646,6 @@
     const LP_SET_KEY = 'life_of_plot_settings';
     const LP_SET_DEFAULT = { est2: 4, est3: 9, soonMonth: 8, colMonths: 9, colPct: 90, trMonths: 10, stages: {} };
     let LP_SET = JSON.parse(JSON.stringify(LP_SET_DEFAULT));
-    const lpHexA = (hex, a) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return null; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
     function lpApplySet(v) {
         const int = (x, d, lo, hi) => { const n = Math.round(Number(x)); return Number.isFinite(n) && n >= lo && n <= hi ? n : d; };
         const D = LP_SET_DEFAULT, o = v || {};
@@ -707,10 +658,7 @@
         LP_STAGES.forEach((x, i) => {
             const b = LP_STAGES_BUILTIN[i], st = LP_SET.stages[x.key] || {};
             x.label = String(st.label || '').trim() || b.label;
-            const f = lpHexA(st.color, .45);
-            x.fill = f || b.fill; x.stroke = f ? st.color : b.stroke;
         });
-        LP_STAGES.forEach(x => { MAP_FILL[x.key] = [x.fill, x.stroke]; });
     }
     lpApplySet(null);
 
@@ -778,14 +726,15 @@
         MODEL.groups.forEach(g => g.plots.forEach(p => { idx[lpPlotKey(p.plot)] = p; }));
         return idx;
     }
+    /* Plots & cycles draws NO map of its own any more (the office: "保留palms的map
+       remove cycle的map 但是在palms上面加上猫猫"): PALMS is the map, and the cats
+       below are drawn on it. This only chooses the nursery the tabs top right
+       show, which is a nursery with a map uploaded. */
     function renderMap() {
-        const box = document.getElementById('lp-map');
         const keys = NURSERY_ORDER.filter(k => MAPS[k]);
-        if (!keys.length) { box.classList.add('hidden'); return; }
-        box.classList.remove('hidden');
+        if (!keys.length) return;
         if (!keys.includes(MAP_NUR)) MAP_NUR = keys.includes(NUR) ? NUR : keys[0];
         renderHeadTabs();
-        drawMap();
     }
     /* The tabs top right. Shown on the views that are about one nursery (the
        plots and PALMS), not on the year record (every nursery) or Settings. */
@@ -812,10 +761,6 @@
         const n = tries == null ? 60 : tries;
         if (!done && n > 0) _palmsSyncT = setTimeout(() => syncPalmsNursery(n - 1), 300);
     }
-    function openPlotFromMap(name) {
-        showPlot(name);
-        document.getElementById('lp-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
     /* ── The scenes: the office own MJM cats, moved by the stylesheet. ──
        Growing is the three working cats taking turns (watering, fertiliser,
        weeding); Empty is the cat digging soil; Collecting in 1 month is the
@@ -825,8 +770,10 @@
     /* The office own animation (their Canva video, cut cat by cat): each cat is an
        animated picture that moves by itself. Under reduced motion the still first
        frame is shown instead. */
-    const LP_CAT = n => `lifeplot/cat_${n}.png`;
-    const LP_CAT_ANIM = n => `lifeplot/cat_${n}.webp`;
+    // Absolute, because the cats are drawn inside the PALMS frame, which lives in
+    // another folder (nursery_ops/) and would read a relative path against it.
+    const LP_CAT = n => new URL(`lifeplot/cat_${n}.png`, location.href).href;
+    const LP_CAT_ANIM = n => new URL(`lifeplot/cat_${n}.webp`, location.href).href;
     const lpCatImg = (n, cls) => `<picture><source media="(prefers-reduced-motion: reduce)" srcset="${LP_CAT(n)}"><img class="${cls || ''}" src="${LP_CAT_ANIM(n)}" alt=""></picture>`;
     // Where the cats stand in one plot: spread over the shape, the label
     // spot left clear. Points are in the map's own percent units.
@@ -864,105 +811,63 @@
         if (key === 'selling') return `<div class="lp-cat wide" data-scene="selling" style="left:${g.cx}%;top:${Math.min(g.y1 - g.h * 0.1, g.cy + g.h * 0.38)}%;width:${g.w * 0.6}%">${lpCatImg('collecting')}</div>`;
         return '';
     }
-    function drawMap() {
-        const k = MAP_NUR;
-        const body = document.getElementById('lp-map-body');
-        const idx = mapPlotIndex();
-        const z = MAP_ZOOM[k] || (MAP_ZOOM[k] = { z: 1, x: 0, y: 0 });
-        const key = '<div class="lp-key"><div class="lp-key-h">Stage</div>' + LP_STAGES.map(x =>
-            `<div class="lp-key-r" data-stage="${x.key}"><i style="background:${x.fill};border-color:${x.stroke}"></i>${lpCatImg({ empty: 'empty_dig', growing: 'grow_water', soon: 'ready', selling: 'collecting' }[x.key], 'lp-key-cat')}<div><b>${x.label}</b></div></div>`).join('') + '</div>';
-        body.innerHTML = `<div class="lp-map-row">
-            <div class="lp-viewport" id="lp-viewport">
-                <div class="lp-stage" id="lp-stage">
-                    <div class="relative inline-block">
-                        <img class="lp-map-img" src="${MAPS[k]}" alt="Map ${NURSERY_LABEL[k]}" draggable="false">
-                        <svg class="lp-svg" id="lp-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
-                        <div class="lp-cats" id="lp-cats"></div>
-                        <div class="lp-labels" id="lp-labels"></div>
-                    </div>
-                </div>
-                <div class="lp-zoom">
-                    <button type="button" class="lp-zbtn" data-z="0.25" title="Zoom in">+</button>
-                    <div class="lp-zlvl" id="lp-zlvl"></div>
-                    <button type="button" class="lp-zbtn" data-z="-0.25" title="Zoom out">−</button>
-                    <button type="button" class="lp-zbtn" data-z="reset" title="Reset zoom">↺</button>
-                </div>
-            </div>${key}</div>`;
-        const svg = document.getElementById('lp-svg');
-        const labels = document.getElementById('lp-labels');
-        const catsEl = document.getElementById('lp-cats');
-        const vp = document.getElementById('lp-viewport');
-        const stage = document.getElementById('lp-stage');
-
-        // a plot at or above the median size of this nursery is a big one
-        const lpArea = pts => { let a = 0; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j].x + pts[i].x) * (pts[j].y - pts[i].y); return Math.abs(a / 2); };
-        const areas = Object.values(PLOT_SHAPES).filter(s => s.nur === k).map(s => lpArea(s.pts)).sort((a, b) => a - b);
-        const bigArea = areas.length ? areas[Math.floor(areas.length / 2)] : 0;
-        Object.values(PLOT_SHAPES).filter(s => s.nur === k).forEach(s => {
-            const p = idx[lpPlotKey(s.name)];
-            const st = mapStateOf(p, s.name);
-            const stg = LP_STAGES.find(x => x.key === st.key);
-            const [fill, stroke] = MAP_FILL[st.key];
-            const ptsStr = s.pts.map(pt => pt.x + ',' + pt.y).join(' ');
-            const cx = s.pts.reduce((a, pt) => a + pt.x, 0) / s.pts.length;
-            const cy = s.pts.reduce((a, pt) => a + pt.y, 0) / s.pts.length;
-            const cc = curCycle(p);
-            const tip = cc ? `Cycle ${cc.n} of ${p.cycles.length} · transplanted ${fmtN(cc.tAdj)} · 2nd cull ${fmtN(cc.c2)} · 3rd cull ${fmtN(cc.c3)}` : 'Nothing recorded';
-            svg.insertAdjacentHTML('beforeend',
-                `<polygon class="lp-shape" data-plot="${s.name.replace(/"/g, '&quot;')}" data-stage="${st.key}" points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4"><title>${s.name} · ${stg.label}${st.palms ? ' (PALMS: ' + st.palms + ')' : ''}${st.months != null ? ' · ' + Math.floor(st.months) + ' months' : ''}: ${tip}</title></polygon>`);
-            // The label is the plot name and nothing else (the office: "cycle 2 xxx不用
-            // 只需要看plot名字"); the cycle is on the hover of the shape.
-            labels.insertAdjacentHTML('beforeend',
-                `<div class="lp-label" style="left:${cx}%; top:${cy}%"><div class="lp-tag">${s.name}</div></div>`);
-            catsEl.insertAdjacentHTML('beforeend', lpCats(st.key, s.pts, lpArea(s.pts) >= bigArea));
-        });
-        svg.addEventListener('click', e => {
-            const el = e.target.closest && e.target.closest('.lp-shape');
-            if (el) openPlotFromMap(el.dataset.plot);
-        });
-
-        const apply = () => {
-            stage.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.z})`;
-            labels.style.setProperty('--lp-z', z.z);
-            document.getElementById('lp-zlvl').textContent = Math.round(z.z * 100) + '%';
-        };
-        const zoomTo = (nz, cx = 0, cy = 0) => {
-            const old = z.z;
-            z.z = Math.max(0.6, Math.min(5, nz));
-            const f = z.z / old;
-            z.x = (z.x - cx) * f + cx;
-            z.y = (z.y - cy) * f + cy;
-            if (z.z <= 1.01) { z.z = 1; z.x = 0; z.y = 0; }
-            apply();
-        };
-        body.querySelectorAll('.lp-zbtn').forEach(b => b.addEventListener('click', () => {
-            if (b.dataset.z === 'reset') { z.z = 1; z.x = 0; z.y = 0; apply(); }
-            else zoomTo(z.z + Number(b.dataset.z));
-        }));
-        vp.addEventListener('wheel', e => {
-            e.preventDefault();
-            const r = vp.getBoundingClientRect();
-            zoomTo(z.z + (e.deltaY < 0 ? 0.15 : -0.15), e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2);
-        }, { passive: false });
-        let last = null;
-        vp.addEventListener('pointerdown', e => {
-            if (e.target.closest('.lp-zoom')) return;
-            last = { x: e.clientX, y: e.clientY };
-            stage.classList.add('drag');
-        });
-        vp.addEventListener('pointermove', e => {
-            if (!last) return;
-            z.x += e.clientX - last.x;
-            z.y += e.clientY - last.y;
-            last = { x: e.clientX, y: e.clientY };
-            apply();
-        });
-        const endDrag = () => { last = null; stage.classList.remove('drag'); };
-        vp.addEventListener('pointerup', endDrag);
-        vp.addEventListener('pointerleave', endDrag);
-        vp.addEventListener('pointercancel', endDrag);
-        apply();
+    /* ── The cats on the PALMS map ──
+       The office: "empty就是saringan到lining growing是membesar pengambilan是
+       collection 只有一个collection soon没有 所以我想要保留palms的map remove cycle
+       的map 但是在palms上面加上猫猫". So the colours are PALMS's own and the cats
+       are this page's: each shape on the PALMS map gets the cats of the stage
+       lpPalmsStage reads off its PALMS stage, Membesar turning Collect soon from
+       the month Settings says (off this page own ledger cycle, else the
+       Membesar start). A shape PALMS has nothing open for reads the ledger
+       (mapStateOf). Drawn through MJMPlotMap.setDecorate, into a layer under
+       the labels, so they zoom with the map and never take a click. */
+    const LP_CAT_CSS = `
+        .lp-cat { position:absolute; transform:translate(-50%,-100%); filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+        .lp-cat img { display:block; height:100%; width:auto; transform-origin:50% 100%; }
+        .lp-cat picture { display:block; height:100%; }
+        .lp-cat.wide picture { height:auto; width:100%; }
+        .lp-cat.wide img { width:100%; height:auto; }`;
+    const lpArea = pts => { let a = 0; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j].x + pts[i].x) * (pts[j].y - pts[i].y); return Math.abs(a / 2); };
+    function lpCatStage(unit, st) {
+        const plot = unit.plot || unit.key || '';
+        const p = MODEL ? mapPlotIndex()[lpPlotKey(plot)] : null;
+        if (st && st.act) {
+            const c = curCycle(p), live = c && c.tAdj > 0 && !c.end ? c : null;
+            const from = live ? live.start : st.start;
+            const months = from ? (Date.now() - Date.parse(String(from).slice(0, 10) + 'T00:00:00Z')) / 86400000 / 30.44 : null;
+            const k = lpPalmsStage(st.act, months);
+            if (k) return k;
+        }
+        return mapStateOf(p, plot).key;
     }
+    function lpDecorate(unit, pts, st, every) {
+        const areas = (every || []).map(lpArea).sort((a, b) => a - b);
+        const big = areas.length ? lpArea(pts) >= areas[Math.floor(areas.length / 2)] : false;
+        const key = lpCatStage(unit, st);
+        return `<div class="lp-cat-set" data-cat-plot="${String(unit.key || '').replace(/"/g, '&quot;')}" data-cat-stage="${key}">${lpCats(key, pts, big)}</div>`;
+    }
+    /* Put the layer on the PALMS map in the frame, once it is there. The map is
+       built after the PALMS page reads its data, so keep asking for a while. */
+    let _catsT = null, _catsMap = null;
+    function lpInstallCats(tries) {
+        clearTimeout(_catsT);
+        let map = null;
+        try {
+            const w = document.getElementById('lp-palms-frame').contentWindow;
+            map = w && typeof w.palmsMap === 'function' ? w.palmsMap() : null;
+            if (map && typeof map.setDecorate === 'function') {
+                const doc = map.doc();
+                if (!doc.getElementById('lp-cat-css')) doc.head.insertAdjacentHTML('beforeend', `<style id="lp-cat-css">${LP_CAT_CSS}</style>`);
+                _catsMap = map;
+                map.setDecorate(lpDecorate);
+                return;
+            }
+        } catch (e) { /* not loaded yet */ }
+        const n = tries == null ? 80 : tries;
+        if (n > 0) _catsT = setTimeout(() => lpInstallCats(n - 1), 300);
+    }
+    // The ledger, the delivery orders or PALMS arrived: draw the cats again.
+    function lpRedecorate() { try { if (_catsMap) _catsMap.refresh(); } catch (e) { /* frame gone */ } }
     function setNursery(k) {
         NUR = k;
         if (MAPS[k]) MAP_NUR = k;
@@ -1191,17 +1096,16 @@
         const can = lpMayEditSettings(), on = can && LP_SET_EDITING.has(sec), dis = on ? '' : ' disabled';
         const S = LP_SET, esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const num = (id, v, lo, hi) => `<input type="number" id="${id}" min="${lo}" max="${hi}" step="1" value="${v}"${dis}>`;
-        const toHex = x => { const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(x || ''); return /^#[0-9a-f]{6}$/i.test(x || '') ? x : m ? '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('') : '#94a3b8'; };
         const head = title => `<div class="lp-set-top"><div class="lp-set-h">${title}</div>${can && !on ? `<button type="button" class="lp-set-edit" data-ls-edit="${sec}">Edit</button>` : ''}</div>`;
         const foot = on ? `<div class="lp-set-foot"><span class="lp-set-msg" data-ls-msg="${sec}"></span><button type="button" class="lp-set-cancel" data-ls-cancel="${sec}">Cancel</button><button type="button" class="lp-set-save" data-ls-save="${sec}">Save</button></div>` : `<div class="lp-set-foot"><span class="lp-set-msg" data-ls-msg="${sec}"></span></div>`;
         let body = '';
         if (sec === 'cycles') body = head('Plots &amp; cycles')
             + `<div class="lp-set-row"><label for="ls-est2">2nd culling estimate</label>${num('ls-est2', S.est2, 1, 24)}<span>months after transplant</span></div>`
             + `<div class="lp-set-row"><label for="ls-est3">3rd culling estimate</label>${num('ls-est3', S.est3, 1, 36)}<span>months after transplant</span></div>`;
-        if (sec === 'map') body = head('Map stages')
-            + LP_STAGES.map(x => `<div class="lp-set-row"><div><label class="lp-set-sw${on ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label></div><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}>${x.key === LP_STAGES[2].key
-                ? `<span class="lp-set-soon"><label for="ls-soon">from</label> ${num('ls-soon', S.soonMonth, 1, 36)} months after transplant</span>`
-                : '<span></span>'}</div>`).join('');
+        // The PALMS map paints the colours now, so the only figure here is when
+        // Membesar turns Collect soon, which decides the cats drawn on it.
+        if (sec === 'map') body = head('Map')
+            + `<div class="lp-set-row"><label for="ls-soon">${esc(LP_STAGES[2].label)} from</label>${num('ls-soon', S.soonMonth, 1, 36)}<span>months after transplant</span></div>`;
         if (sec === 'plans') body = head('Pusingan Jualan &amp; Transplant')
             + `<div class="lp-set-row"><label for="ls-colpct">Collection plan</label>${num('ls-colpct', S.colPct, 1, 100)}<span>% of the transplant</span></div>`
             + `<div class="lp-set-row"><label for="ls-colm">Collection plan based on planting age</label>${num('ls-colm', S.colMonths, 1, 36)}<span>months after planting</span></div>`
@@ -1217,10 +1121,6 @@
         if (note) { const m = el.querySelector('[data-ls-msg]'); if (m) m.textContent = note; }
     }
     function lpSetBind(root) {
-        // The swatch IS the picker: pressing it opens the colour, and it repaints as one is chosen.
-        root.querySelectorAll('.lp-set-sw input[type=color]').forEach(inp => inp.addEventListener('input', () => {
-            const sw = inp.parentElement; sw.style.borderColor = inp.value; sw.style.background = lpHexA(inp.value, .45) || inp.value;
-        }));
         root.querySelectorAll('[data-ls-edit]').forEach(b => b.addEventListener('click', () => { if (!lpMayEditSettings()) return; LP_SET_EDITING.add(b.dataset.lsEdit); lpSetDrawSection(b.dataset.lsEdit); }));
         root.querySelectorAll('[data-ls-cancel]').forEach(b => b.addEventListener('click', () => { LP_SET_EDITING.delete(b.dataset.lsCancel); lpSetDrawSection(b.dataset.lsCancel); }));
         root.querySelectorAll('[data-ls-save]').forEach(b => b.addEventListener('click', () => saveSettings(b.dataset.lsSave)));
@@ -1246,15 +1146,6 @@
         if (sec === 'plans') { v.colPct = val('ls-colpct'); v.colMonths = val('ls-colm'); v.trMonths = val('ls-trm'); checks = [['colPct', 1, 100], ['colMonths', 1, 36], ['trMonths', 1, 36]]; }
         if (sec === 'map') {
             v.soonMonth = val('ls-soon'); checks = [['soonMonth', 1, 36]];
-            v.stages = {};
-            LP_STAGES.forEach((x, i) => {
-                const name = String((document.getElementById('ls-name-' + x.key) || {}).value || '').trim();
-                const col = String((document.getElementById('ls-col-' + x.key) || {}).value || '');
-                const b = LP_STAGES_BUILTIN[i], o = {};
-                if (name && name !== b.label) o.label = name;
-                if (/^#[0-9a-f]{6}$/i.test(col) && col.toLowerCase() !== String(b.stroke).toLowerCase()) o.color = col;
-                if (Object.keys(o).length) v.stages[x.key] = o;
-            });
         }
         if (checks.some(([k, lo, hi]) => !ok(v[k], lo, hi))) { say('Whole numbers only, in range.'); return; }
         if (btn) btn.disabled = true;
@@ -1264,6 +1155,7 @@
             const { error } = await _supabase.from('nops_maint_config').upsert({ key: LP_SET_KEY, txt_value: JSON.stringify(v), note: 'Life of Plot Settings', updated_by: who, updated_at: new Date().toISOString() }, { onConflict: 'key' });
             if (error) throw error;
             lpApplySet(v);
+            lpRedecorate();
             if (MODEL) renderHeadTabs();
             LP_SET_EDITING.delete(sec);
             lpSetDrawSection(sec, 'Saved.');
@@ -1365,7 +1257,7 @@
             lpApplyCycles();
             CYC_EDIT = null;
             showPlot(p.plot);
-            if (MAP_NUR) drawMap();
+            lpRedecorate();
         } catch (e) {
             if (msg) msg.textContent = 'Not saved: ' + ((e && e.message) || e);
         }
@@ -1545,14 +1437,6 @@
             ]);
             MAPS = {};
             (nurs || []).forEach(n => { if (n.map_image_url) MAPS[lpNurKey(n.name)] = n.map_image_url; });
-            PLOT_SHAPES = {};
-            (plots || []).forEach(p => {
-                if (lpIsReplant(p.plot_name) || !String(p.map_top || '').startsWith('[')) return;
-                try {
-                    const nk = lpNurKey(p.nursery_name);
-                    PLOT_SHAPES[lpPlotKey(p.plot_name)] = { name: p.plot_name, nur: NURSERY_ORDER.includes(nk) ? nk : 'OTHER', pts: JSON.parse(p.map_top) };
-                } catch (e) { /* a shape that will not parse is simply not drawn */ }
-            });
             MODEL = buildPlotHistory(plots, rows);
             await lpLoadCycles();
             lpApplyCycles();
@@ -1564,8 +1448,9 @@
             fillPlotSelect('');
                 renderMap();
             // The delivery orders decide Selling; read them now and colour the map again.
-            ensureRot().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); }).catch(() => {});
-            ensurePalms().then(() => { if (VIEW === 'plots' && MAP_NUR) drawMap(); });
+            ensureRot().then(lpRedecorate).catch(() => {});
+            ensurePalms().then(lpRedecorate);
+            lpRedecorate();
             const deep = decodeURIComponent((location.hash.match(/plot=([^&]+)/) || [])[1] || '');
             REC_YEAR = (location.hash.match(/year=(\d{4})/) || [])[1] || '';
             const viewIn = (location.hash.match(/view=([a-z-]+)/) || [])[1] || '';
@@ -1605,7 +1490,7 @@
             syncPalmsNursery();
         } else setNursery(b.dataset.map);
     });
-    document.getElementById('lp-palms-frame').addEventListener('load', () => syncPalmsNursery());
+    document.getElementById('lp-palms-frame').addEventListener('load', () => { syncPalmsNursery(); lpInstallCats(); });
     document.getElementById('lp-plot-row').addEventListener('click', e => {
         const b = e.target.closest('button[data-plot]');
         if (!b) return;
