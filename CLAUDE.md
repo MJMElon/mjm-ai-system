@@ -9268,6 +9268,20 @@ History and Report (`isMyLocation`), and `mata_malam_submit` refuses a
 check-in at any other location. A worker filed under UNE, which Mata Malam
 does not patrol, has nothing to do.
 
+**THE FC PORTAL OPENS IT AS THE STAFF ACCOUNT** (`shared/RUN_ME_mata_malam_staff.sql`).
+The office: *"不管是FC portal还是worker portal ... 只要能看到什么内容，是base on
+system setting"*. Most staff accounts have no Worker Namelist row and none has a
+PIN, so a name match was no answer. The FC Portal coin calls
+`mata_malam_staff_session()` signed in as the account (refused for a customer)
+and hands that token over in `#wt=`. Every `mata_malam_*` function asks
+`mata_malam_who(token)`: a worker PIN token is the worker, a staff token is the
+account shaped as a register row with a NEGATIVE id (`mata_malam_staff.id`), no
+section (every location), and it reads the **FC Portal column** whatever its
+job (`mata_malam_access`, `w.id < 0`). The app asks `mata_malam_whoami` and
+falls back to `worker_whoami` on an older database; a staff session's back
+arrow goes to the FC Portal. A worker PIN sign-in is untouched, and the Worker
+Portal coin still hands the worker token over.
+
 `tests/mata_malam_is_set_in_the_office.cjs` drives the card. It needs a
 `leaflet/dist` folder (`LEAFLET_DIST`) for the map half and says so rather
 than passing without it.
