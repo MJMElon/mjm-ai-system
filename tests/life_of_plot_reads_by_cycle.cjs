@@ -31,7 +31,9 @@ const DATA = {
     C('3rd_Culling', 'B11', '228', '2026-06-12', 178), C('3rd_Culling', 'B11', '229', '2026-06-12', 2884),
     T('B11', '263', '2026-07-22', 1646), T('B11', '265', '2026-07-24', 7453),
     { plot_name: 'B11', transaction_type: 'Stock_Calibration', transaction_date: '2026-08-26', quantity_change: -127, batch_name: '265', remark: 'Report: Transplanting. Plot: B11. [APPROVED by x]' },
-    C('2nd_Culling', 'B11', '263', '2026-11-12', 60), C('2nd_Culling', 'B11', '265', '2026-11-12', 41),
+    C('2nd_Culling', 'B11', '263', '2026-11-12', 60),
+    // 265 saved its Alive BEFORE the -127 calibration was approved: 7,453 - 41 = 7,412 (stale).
+    Object.assign(C('2nd_Culling', 'B11', '265', '2026-11-12', 41), { remark: '2nd Culling. Alive: 7412, Dead: 41. CullDate: 2026-11-12' }),
     T('B11', '269', '2026-09-10', 3168), T('B11', '271', '2026-10-24', 135),
     // the checker drone count on the 24 Oct card (keyed after the drone count existed)
     { plot_name: 'B11', transaction_type: 'Transplant_Card', transaction_date: '2026-10-24', quantity_change: 0, batch_name: '271', remark: 'Transplant card. Date: 2026-10-24 DroneQty:130 DroneBy:x', created_at: '2026-10-26T00:00:00Z' },
@@ -96,6 +98,9 @@ const DATA = {
   ok(cyc[1] && /Completed/.test(cyc[1].head) && /12,121/.test(cyc[1].head) && !/→|days/.test(cyc[1].head) && cyc[1].batches.join() === '228,229',
      'cycle 1 under it: 228 + 229, 12,121', cyc[1] && cyc[1].head);
   ok(cyc[0] && cyc[0].secs.join() === 'Batch,Transplanting,2nd Culling,3rd Culling' && cyc[0].heads === 'Date,Transplanted,Date,Alive,Dead,Culling rate (%),Date,Pending culling,Drone Count,Variance,Culling rate (%)', 'one table read across: Batch, then Transplanting, 7th Month 2nd Culling, 3rd Culling side by side', cyc[0] && cyc[0].secs);
+  const r265 = cyc[0] && cyc[0].rows.find(r => r.startsWith('265|'));
+  ok(r265 && r265.split('|')[2] === '7,326' && r265.split('|')[4] === '7,285' && r265.split('|')[5] === '41',
+     'Alive is worked out live: 7,326 transplanted (after the -127) less 41 dead is 7,285, never the stale 7,412 saved in the remark', r265);
   ok(cyc[1] && cyc[1].rows[0] === '228|2025-05-22|3,074|2025-09-14|2,979|95|3.09%|2026-06-12|178|178|0|5.79%',
      'batch 228 on one line: date and 3,074 transplanted; 2nd alive 2,979, dead 95, 3.09%; 3rd pending 178, drone 178, variance 0, 5.79%', cyc[1] && cyc[1].rows[0]);
   ok(cyc[1] && cyc[1].rows[1] === '229|2025-05-22|9,047|2025-09-14|8,978|69|0.76%|2026-06-12|2,884|2,884|0|31.88%', 'batch 229 below it', cyc[1] && cyc[1].rows[1]);

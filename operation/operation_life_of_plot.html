@@ -1021,7 +1021,11 @@
         const c3Tot = bs.reduce((a, b) => a + (c3On(b) && b.c3Has ? b.c3Qty : 0), 0);
         const rows = [];
         groups.forEach(g => g.batches.forEach(b => {
-            const alive = b.c2Has ? (b.c2Alive != null ? b.c2Alive : b.tAdj - b.c2Qty) : b.tAdj;
+            /* Alive is worked out LIVE, the way Tab 5 shows it (transplanted - dead
+               + adjustments), never the Alive: saved in the remark: that is the
+               figure on the day of the save and goes stale once a calibration is
+               approved, so a row read 2,285 alive + 17 dead over 2,296. */
+            const alive = b.c2Has ? Math.max(0, b.tAdj - b.c2Qty) : b.tAdj;
             alive2 += alive;
             const c2 = b.c2Has ? b.c2Qty : 0, c3 = c3On(b) && b.c3Has ? b.c3Qty : 0, m3 = b.c3Map || 0;
             rows.push({

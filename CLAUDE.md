@@ -12460,6 +12460,10 @@ Transplanting, 2nd Culling, 3rd Culling, each with its dates, quantities and %.
 - **Cull date is the `CullDate:` in the remark.** Tab 5 falls back to the
   save day; Tab 6 shows none, so neither does this page — `c3Sort` (last
   CullSessions day, else the save day) only splits the cycles.
+- **Alive is worked out live**, transplanted after calibration less dead, the
+  way Tab 5 shows it, never the `Alive:` saved in the remark: that is the day
+  of the save and goes stale once a calibration is approved (the office: a
+  row read 2,285 alive + 17 dead over 2,296, *2523不对吧*).
 - **2nd culled %** is over the transplant after approved calibration (Tab 5),
   **3rd culled %** over the transplant (Tab 6); totals are weighted.
 - **What it does NOT copy**: Tab 6 shows 3rd Culled LIVE (2nd culled +
