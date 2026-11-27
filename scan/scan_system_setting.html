@@ -1181,6 +1181,23 @@ function mmNextName(code) {
   for (let n = 1; ; n++) { const name = `${mmLocName(code)} Pin ${n}`; if (!used.has(name)) return name; }
 }
 
+/* A pin still wearing its automatic name (<location> Pin <n>, or none) is renumbered
+   1, 2, 3 in list order whenever a pin of that location is removed or added, so the
+   office never renames them by hand. A name somebody typed is left alone, and its
+   number is skipped so two pins never share a name. */
+function mmRenumber(code) {
+  const prefix = mmLocName(code) + ' Pin ';
+  const auto = (p) => { const n = String(p.name || '').trim();
+    return !n || (n.startsWith(prefix) && /^[0-9]+$/.test(n.slice(prefix.length))); };
+  const mine = mmPinsOf(code);
+  const taken = new Set(mine.filter(p => !auto(p)).map(p => String(p.name).trim()));
+  let n = 1;
+  mine.filter(auto).forEach(p => {
+    while (taken.has(prefix + n)) n++;
+    p.name = prefix + n; n++;
+  });
+}
+
 function mmRenderPins() {
   const act = mmActive();
   if (!act.some(l => l.code === mmSel)) mmSel = act.length ? act[0].code : null;
@@ -1263,7 +1280,9 @@ function mmRenamePin(i, name) {
 
 function mmRemovePin(i) {
   if (!mm.pins[i]) return;
+  const code = mm.pins[i].location;
   mm.pins.splice(i, 1);
+  mmRenumber(code);
   mmPinSel = -1;
   mmDirty(); mmRenderPins();
 }
@@ -1279,6 +1298,7 @@ function mmInitMap() {
     if (!mmCanSave || !mmSel) return;
     mm.pins.push({ name: mmNextName(mmSel), location: mmSel,
                    lat: Number(e.latlng.lat.toFixed(6)), lng: Number(e.latlng.lng.toFixed(6)) });
+    mmRenumber(mmSel);
     mmPinSel = mm.pins.length - 1;
     mmDirty(); mmRenderPins();
   });

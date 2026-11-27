@@ -9257,6 +9257,9 @@ no point, as before. A record with no point answers every pin of its
 location and time (`logCoversPoint`), so nothing old is marked missed. A pin
 is told apart by its NAME, so the card refuses two pins of one location
 sharing one, and a pin renamed is a new pin from that night on.
+**A pin still wearing its automatic name is renumbered** (`mmRenumber`): removing
+or adding a pin numbers that location automatic pins 1, 2, 3 in list order; a
+name somebody typed is left alone and its number skipped.
 
 **AND ONE ROAD TRACK FOR THE TASK**, started and stopped on that screen,
 running while every pin is checked in. It is stored on the task's first
