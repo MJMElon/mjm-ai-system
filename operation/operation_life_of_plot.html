@@ -73,6 +73,8 @@
         .lp-cyc-bar { display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; }
         .lp-cyc-bar:empty { display:none; }
         .lp-cyc-bar { align-items:center; }
+        .lp-hide-done { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#8a7a68; cursor:pointer; user-select:none; }
+        .lp-hide-done input { accent-color:#3f6a26; width:15px; height:15px; cursor:pointer; }
         .lp-ce-cyc { outline:2px dashed transparent; outline-offset:-2px; transition:outline-color .12s, background .12s; }
         .lp-ce-cyc.over { outline-color:#4a7a2e; background:#f3f7ec; }
         .lp-ce-row { cursor:grab; }
@@ -409,7 +411,10 @@
         });
         return cycles.map((c, i) => {
             const bs = c.batches;
-            const done = bs.some(b => b.c3Sort) && (i < cycles.length - 1 || bs.every(b => b.c3Sort || !b.tAdj));
+            /* A cycle is finished when EVERY batch in it has its 3rd culling,
+               wherever it sits: two cycles can run at once (a batch moved by
+               hand into an older cycle reopens it). */
+            const done = bs.some(b => b.c3Sort) && bs.every(b => b.c3Sort || !b.tAdj);
             return {
                 n: i + 1, batches: bs, current: i === cycles.length - 1,
                 start: lpEarliest(bs.map(b => b.tDate)) || lpEarliest(bs.map(lpBatchDay)),
@@ -953,12 +958,19 @@
         const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         return 'Est. ' + M[m % 12] + ' ' + (y + Math.floor(m / 12));
     }
+    function lpHideDone(v) {
+        try {
+            if (v === undefined) return localStorage.getItem('lp_hide_done') === '1';
+            localStorage.setItem('lp_hide_done', v ? '1' : '0');
+        } catch (e) {}
+        return !!v;
+    }
     function cycleHtml(c, p) {
         const bs = c.batches;
         const cards = (p && p.cards) || {};
         let h = `<div class="panel lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
-              + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Finished' : 'Current'}</span>`
+              + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Complete' : 'On going'}</span>`
               + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
 
         // Drone groups: batches sharing their first transplant day.
@@ -1065,13 +1077,22 @@
         if (CYC_EDIT && CYC_EDIT.plot === p.plot) { lpDrawCycleEditor(p); return; }
         CYC_EDIT = null;
         const can = lpMayEditSettings();
-        document.getElementById('lp-cyc-bar').innerHTML = can && p.batches.length
-            ? `<button type="button" class="lp-set-edit" id="lp-cyc-edit">Edit cycles</button>` : '';
+        // Hide complete cycles: a per-device choice, kept in localStorage.
+        const hide = lpHideDone();
+        const nDone = p.cycles.filter(c => c.end).length;
+        document.getElementById('lp-cyc-bar').innerHTML =
+            (nDone ? `<label class="lp-hide-done"><input type="checkbox" id="lp-hide-done"${hide ? ' checked' : ''}>Hide complete cycles (${nDone})</label>` : '')
+            + (can && p.batches.length ? `<button type="button" class="lp-set-edit" id="lp-cyc-edit">Edit cycles</button>` : '');
+        const hd = document.getElementById('lp-hide-done');
+        if (hd) hd.addEventListener('change', () => { lpHideDone(hd.checked); showPlot(p.plot); });
         const ce = document.getElementById('lp-cyc-edit');
         if (ce) ce.addEventListener('click', () => lpOpenCycleEditor(p));
-        document.getElementById('lp-timeline-box').innerHTML = p.cycles.length
-            ? p.cycles.slice().reverse().map(c => cycleHtml(c, p)).join('')
-            : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
+        const shown = hide ? p.cycles.filter(c => !c.end) : p.cycles;
+        document.getElementById('lp-timeline-box').innerHTML = shown.length
+            ? shown.slice().reverse().map(c => cycleHtml(c, p)).join('')
+            : p.cycles.length
+                ? '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Every cycle on this plot is complete.</div>'
+                : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
         document.getElementById('lp-note').textContent = '';
         lpBindTips(document.getElementById('lp-timeline-box'));
         // The 3rd culling waits on the sales; draw again once they are read.
