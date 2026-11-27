@@ -8267,6 +8267,31 @@ hold the ring under 100 for ever on everything keyed since, with the map on
 screen. `t3CardMaps` is rebuilt by every sync and only ever ADDS — a row
 carrying its own `MapUrl:` answered yes before and still does.
 
+### A card has as many drone maps as it took to fly it, each with a remark
+
+*"transplant map 我要可以upload多张 和 写remark"*. The card stored ONE map
+(`MapUrl:`), so a second picture replaced the first. It is a LIST now:
+`MapList:` on the `Transplant_Card` remark, written with tab 6 own codec
+(`t6EncodeDocs`), and `MapUrl:` stays the FIRST map, so the ring, Life of
+Plot and every older reader go on working. A card from before (a `MapUrl:`
+only, or a map on a tray row) reads as a list of one and is seeded into the
+list the first time it is written (`mapSeed`), so the old picture is kept.
+
+- **The chip opens a panel** (`openT3CardMaps`): every map, each opening in
+  the viewer, each with its own remark box and a cross beside it (a SIBLING,
+  never inside). The chip counts them, `Maps · 3`.
+- **Maps are ADDED, never replaced**, several at a time; each uploads on its
+  own and only those that reached storage are written. The panel then opens
+  with the cursor in the first new map remark.
+- **Remarks have their own Save** (`saveT3CardMapNotes`), lit only once one
+  is typed, and closing over an unsaved remark asks. The panel is outside
+  the tab, so it is not the tab dirty flag that guards it.
+- **Removed by URL, the file left in storage**, like the census.
+- **A signed-off report opens it read only** and every writer refuses in
+  code (`_t3CardLocked`).
+
+`tests/a_transplant_card_has_many_maps.cjs`. Nothing to run in the database.
+
 ### A heading that moved INTO the card left the foot wordless
 
 The office read the bottom of the tab and asked — *这三个是什么 - 1057 1057*.
