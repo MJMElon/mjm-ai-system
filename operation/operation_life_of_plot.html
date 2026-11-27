@@ -970,7 +970,7 @@
         const cards = (p && p.cards) || {};
         let h = `<div class="panel lp-cyc" data-cycle="${c.n}"><div class="lp-cyc-h">`
               + `<span class="lp-cyc-n">Cycle ${c.n}</span>`
-              + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Complete' : 'On going'}</span>`
+              + `<span class="lp-cyc-tag${c.end ? '' : ' cur'}">${c.end ? 'Completed' : 'On going'}</span>`
               + `<span class="lp-cyc-cap">Transplanted this cycle <b>${nf(c.tAdj) || '0'}</b></span></div>`;
 
         // Drone groups: batches sharing their first transplant day.
@@ -1081,7 +1081,7 @@
         const hide = lpHideDone();
         const nDone = p.cycles.filter(c => c.end).length;
         document.getElementById('lp-cyc-bar').innerHTML =
-            (nDone ? `<label class="lp-hide-done"><input type="checkbox" id="lp-hide-done"${hide ? ' checked' : ''}>Hide complete cycles (${nDone})</label>` : '')
+            (nDone ? `<label class="lp-hide-done"><input type="checkbox" id="lp-hide-done"${hide ? ' checked' : ''}>Hide completed cycles (${nDone})</label>` : '')
             + (can && p.batches.length ? `<button type="button" class="lp-set-edit" id="lp-cyc-edit">Edit cycles</button>` : '');
         const hd = document.getElementById('lp-hide-done');
         if (hd) hd.addEventListener('change', () => { lpHideDone(hd.checked); showPlot(p.plot); });
@@ -1091,7 +1091,7 @@
         document.getElementById('lp-timeline-box').innerHTML = shown.length
             ? shown.slice().reverse().map(c => cycleHtml(c, p)).join('')
             : p.cycles.length
-                ? '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Every cycle on this plot is complete.</div>'
+                ? '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Every cycle on this plot is completed.</div>'
                 : '<div class="panel p-8 text-center text-sm font-bold text-[#94a3b8]">Nothing recorded on this plot yet.</div>';
         document.getElementById('lp-note').textContent = '';
         lpBindTips(document.getElementById('lp-timeline-box'));
