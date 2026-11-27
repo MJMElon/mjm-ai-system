@@ -12207,7 +12207,11 @@ the cycle before it starts a new one. It was the LAST culling, and B1 read as
 one cycle: 234 culled 1 Jun 2026, 252 in on 14 Jun, 237 and 241 culled 2 Aug. A plot opens as one card per cycle, newest first, each card with its own
 dates, days and total. The office's Census & Drone Counting sheet lays B11 out
 the same way: 228 + 229 = 12,121, then 263 to 271 = 12,275. The map colours
-and the list read the CURRENT cycle.
+and the list read the CURRENT cycle. **A cycle is Complete when EVERY batch in it has its 3rd culling**,
+wherever it sits, else **On going**: two cycles can run at once, and a batch
+not yet 3rd culled moved by hand into an older cycle reopens it (B1: 261 into
+cycle 1). **Hide complete cycles** above the cards is a per-device tick
+(localStorage `lp_hide_done`).
 
 The side bar's **Transplant record by year** (`buildTransplantYear`) is the
 office's *Transplant Record 2026* sheet: a row for every plot Seedling Stock

@@ -146,6 +146,14 @@ console.log('4. a plot is read by CYCLE, never mixed (the office B11, from its o
   ok(hand3.map(c => c.batches.map(b => b.batch).join()).join('|') === '240|233|261,270' && hand3[2].current && !hand3[1].current,
      'a cycle of a batch with no transplant row is placed by its 2nd culling day, so the newest cycle is still the current one',
      hand3.map(c => c.batches.map(b => b.batch).join() + (c.current ? '*' : '')));
+  // The office own shape (B1): 261 moved by hand into cycle 1, not yet 3rd
+  // culled, so cycle 1 runs again beside cycle 2. Two cycles can run at once.
+  const b1h = [B('234', '2025-09-19', { tAdj: 137, c3Sort: '2026-06-01' }), B('237', '2025-09-19', { tAdj: 1182, c3Sort: '2026-08-02' }),
+               B('261', '2026-06-14', { tAdj: 191 }), B('252', '2026-06-14', { tAdj: 157 })];
+  const hand4 = lpCycles(b1h, [['234', '237', '261'], ['252']]);
+  ok(hand4.length === 2 && !hand4[0].end && !hand4[1].end, 'a batch not 3rd culled moved into cycle 1 reopens it: both cycles are on going', hand4.map(c => [c.batches.map(b => b.batch).join(), c.end]));
+  const hand5 = lpCycles(b1h, [['234', '237'], ['261', '252']]);
+  ok(hand5[0].end === '2026-08-02' && !hand5[1].end, 'with 261 back in cycle 2, cycle 1 is complete again', hand5.map(c => c.end));
   ok(hand3[1].start === '2026-05-14', 'and its start reads that day rather than a dash', hand3[1].start);
 }
 
