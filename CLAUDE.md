@@ -9284,6 +9284,9 @@ how close a guard must stand to a pin before its camera opens, and **Shortest
 road track** (`minTrackMeters`, 0 = no minimum) is the shortest track that may
 be stopped or submitted. Absent is what the phones did before (3 m, no
 minimum); `getPinRangeMeters` / `getMinTrackMeters` in the app read them.
+**History shows** (`historyDays`, 1 to 35, default 7) is how many nights the
+phone History lists; `getHistoryDays` in the app reads it. 35 is the most
+because `mata_malam_state` hands the phone 35 days of check-ins.
 
 **A worker sees only the location the Worker Namelist files them under.**
 `mata_malam_my_locations(w)` (`shared/RUN_ME_mata_malam_own_location.sql`)
