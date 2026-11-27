@@ -9278,7 +9278,7 @@ app obeys it. The keys are spelled in `MATA_MALAM_FUNCTIONS` here and
 keeps the last one it had. Photo off is a check-in with no picture; gps
 off is no road track, the check-in still records where it was made.
 
-**Two distances are on the card too**, under Task timing, stored in
+**Two distances are on the card too**, under General (the box was headed Task timing), stored in
 `timing`: **Capture photo within** (`pinRangeMeters`, 1 to 100, default 3) is
 how close a guard must stand to a pin before its camera opens, and **Shortest
 road track** (`minTrackMeters`, 0 = no minimum) is the shortest track that may
