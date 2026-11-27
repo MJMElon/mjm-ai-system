@@ -175,10 +175,16 @@
   .mm-pin small { display:block; font-size:10px; font-weight:600; opacity:.8; }
   #mm-map { height:380px; border:1px solid #ede9fe; border-radius:14px; background:#f8fafc;
             display:grid; place-items:center; font-size:12px; color:#94a3b8; z-index:0; }
-  .mm-pin-mark span { display:inline-block; transform:translate(-50%,-100%); background:#6d28d9;
-            color:white; font-size:11px; font-weight:900; padding:3px 8px; border-radius:8px;
-            white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.35); }
-  .mm-pin-mark.on span { background:#dc2626; }
+  /* A pin on the map is a small teardrop with its number, not its name: names ran into each
+     other where pins stand close. The name is the hover, and the list below says it in full. */
+  .mm-pin-ic { position:relative; display:inline-grid; place-items:center; width:24px; height:24px;
+            background:#6d28d9; border:2px solid white; border-radius:50% 50% 50% 0; transform:rotate(-45deg);
+            box-shadow:0 1px 4px rgba(0,0,0,.35); cursor:pointer; }
+  .mm-pin-ic b { transform:rotate(45deg); color:white; font-size:11px; font-weight:900; line-height:1; }
+  .mm-pin-mark .mm-pin-ic { position:absolute; left:-12px; top:-30px; }
+  .mm-pin-mark.on .mm-pin-ic, .mm-pin-row.on .mm-pin-ic { background:#dc2626; }
+  .mm-pin-go .mm-pin-ic { width:20px; height:20px; margin:2px 4px 0; }
+  .mm-pin-go .mm-pin-ic b { font-size:10px; }
   .mm-pin-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid #ede9fe;
                 border-radius:12px; margin-bottom:6px; }
   .mm-pin-row.on { border-color:#dc2626; background:#fef2f2; }
@@ -1197,6 +1203,15 @@ function mmRenderPins() {
   mmDrawMap();
 }
 
+/* A pin is numbered within its own location, in the order the list shows them: the same number on
+   the map and in the list is how one is found from the other. */
+function mmPinNo(p, i) {
+  return mm.pins.slice(0, i + 1).filter(q => q.location === p.location).length;
+}
+function mmPinIcon(p, i) {
+  return `<span class="mm-pin-ic" title="${esc(p.name || mmLocName(p.location))}"><b>${mmPinNo(p, i)}</b></span>`;
+}
+
 function mmRenderPinList() {
   /* Only the location picked above: every pin of every location in one list was long and hard to read.
      The map still shows them all, so a pin is never placed on top of another location's without seeing it. */
@@ -1204,7 +1219,7 @@ function mmRenderPinList() {
   $('mm-pin-list').innerHTML = rows.length ? rows.map(({ p, i }) => {
     const off = !(mm.locations[p.location] && mm.locations[p.location].active);
     return `<div class="mm-pin-row${i === mmPinSel ? ' on' : ''}${off ? ' off' : ''}" data-pin="${i}">
-      <button type="button" class="mm-pin-go" title="Show this pin on the map" onclick="mmShowPin(${i})">${esc(mmLocName(p.location))}</button>
+      <button type="button" class="mm-pin-go" title="Show this pin on the map" onclick="mmShowPin(${i})">${mmPinIcon(p, i)}</button>
       <input class="mm-in mm-pin-name" value="${esc(p.name)}" maxlength="40" aria-label="Pin name"
              oninput="mmRenamePin(${i}, this.value)" onfocus="mmSelectPin(${i})" ${mmCanSave ? '' : 'disabled'}>
       <span class="mm-pin-at">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}${off ? ' · location is off' : ''}</span>
@@ -1307,7 +1322,8 @@ function mmDrawMap() {
   mm.pins.forEach((p, i) => {
     const on = i === mmPinSel;
     const mk = L.marker([p.lat, p.lng], { draggable: mmCanSave, zIndexOffset: on ? 1000 : 0,
-      icon: L.divIcon({ className: 'mm-pin-mark' + (on ? ' on' : ''), html: `<span>${esc(p.name || mmLocName(p.location))}</span>`, iconSize: [0, 0] }) }).addTo(mmMap);
+      title: p.name || mmLocName(p.location),
+      icon: L.divIcon({ className: 'mm-pin-mark' + (on ? ' on' : ''), html: mmPinIcon(p, i), iconSize: [0, 0] }) }).addTo(mmMap);
     mk.on('click', () => { mmSel = p.location; mmPinSel = i; mmRenderPins(); });
     mk.on('dragend', () => { const q = mk.getLatLng(); p.lat = Number(q.lat.toFixed(6)); p.lng = Number(q.lng.toFixed(6)); mmPinSel = i; mmDirty(); mmRenderPins(); });
     mmLayers.push(mk);
