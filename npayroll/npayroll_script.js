@@ -4098,10 +4098,180 @@ function tidyTable(tbl) {
   } else {
     bands.push({ heads: tbl.tHead ? Array.from(tbl.tHead.rows) : [], rows: bodyRows.concat(footRows) });
   }
-  bands.forEach(b => _tidyBand(b.heads, b.rows, !!b.footOnly));
+  let widest = [];
+  bands.forEach(b => {
+    const ty = _tidyBand(b.heads, b.rows, !!b.footOnly) || [];
+    if (!b.footOnly && ty.length > widest.length) widest = ty;
+  });
 
   // 3. A heading that spans several columns is centred over them.
   tbl.querySelectorAll('th').forEach(th => { if ((th.colSpan || 1) > 1) th.classList.add('grp'); });
+
+  // 4. Every column a width of its own, by its type. See sizeColumns.
+  try { sizeColumns(tbl, widest); } catch (_) { /* a width is a nicety, never a reason to lose a table */ }
+}
+
+/* ── THE COLUMN WIDTHS ──────────────────────────────────────────────────
+   The office, over Loading Seedlings: one job, so four columns stretched
+   over a whole desk screen -- a Worker column half the table wide, No.
+   floating in the middle of a wide cell, Capacity and Total adrift on the
+   right. "Set fixed or proportionally consistent column widths instead of
+   allowing columns to resize based on content", across the system.
+
+   The rule, one for every table in the module:
+     1. Each column has a FLOOR by its type, raised to its own heading and
+        figures where those are wider (a heading cut off is worse than a
+        table that scrolls):
+           serial 56   number 104   status 110   media 100
+           text   140 to 240        action  as wide as its buttons
+           date   as wide as the date (a date is one length, so it never grows)
+     2. What the screen has left over is shared EQUALLY among the text,
+        number, status and media columns. Serial and action never grow.
+     3. table-layout:fixed on exactly those widths, so nothing moves with
+        the content -- and the same proportions at every screen size.
+        Narrower than the floors together, the table keeps the floors and
+        .tbl-wrap scrolls, so a phone sees the same table, not a squeezed
+        one.
+   Equal shares are what make a short table symmetrical: Loading Seedlings
+   reads No. | Worker | Capacity | Total with the three content columns
+   close to equal, where it was Worker at half the width.
+
+   It is measured, so a table drawn while its tab is hidden is measured
+   again when it is shown (the ResizeObserver on its wrapper). A table
+   whose author wrote its own <colgroup> is left alone. */
+const COL_FLOOR = { serial: 56, number: 104, status: 110, media: 100, text: 140, date: 96, action: 0 };
+const COL_TEXT_CAP = 240;
+const COL_GROWS = { text: 1, number: 1, status: 1, media: 1 };
+
+function _naturalWidths(tbl, n) {
+  const prev = { layout: tbl.style.tableLayout, width: tbl.style.width, minWidth: tbl.style.minWidth };
+  tbl.style.tableLayout = 'auto'; tbl.style.width = 'max-content'; tbl.style.minWidth = '0';
+  // The widths already set are taken off for the measurement, never the
+  // colgroup itself: a colgroup removed and put back is two mutations, and
+  // the observer that tidies a table on every mutation would go round for ever.
+  const own = tbl.querySelector(':scope > colgroup[data-sized]');
+  const was = own ? Array.from(own.children).map(c => c.style.width) : [];
+  if (own) Array.from(own.children).forEach(c => { c.style.width = ''; });
+  const nat = new Array(n).fill(0), head = new Array(n).fill(0);
+  if (tbl.tHead) _tableGrid(Array.from(tbl.tHead.rows)).forEach(row => (row || []).forEach((cell, c) => {
+    if (!cell || (cell.colSpan || 1) > 1 || c >= n) return;
+    head[c] = Math.max(head[c], cell.getBoundingClientRect().width);
+  }));
+  const rows = [];
+  if (tbl.tHead) rows.push(...tbl.tHead.rows);
+  Array.from(tbl.tBodies).forEach(b => rows.push(...b.rows));
+  if (tbl.tFoot) rows.push(...tbl.tFoot.rows);
+  _tableGrid(rows).forEach(row => (row || []).forEach((cell, c) => {
+    if (!cell || (cell.colSpan || 1) > 1 || c >= n) return;
+    const w = cell.getBoundingClientRect().width;
+    if (w > nat[c]) nat[c] = w;
+  }));
+  if (own) Array.from(own.children).forEach((c, i) => { c.style.width = was[i] || ''; });
+  tbl.style.tableLayout = prev.layout; tbl.style.width = prev.width; tbl.style.minWidth = prev.minWidth;
+  nat.head = head;
+  return nat;
+}
+
+function _applyColumnWidths(tbl) {
+  const types = tbl._colTypes;
+  let mins = (tbl._colMins || []).slice();
+  if (!mins.length || !types) return;
+  const wrap = tbl.parentElement;
+  const avail = wrap ? wrap.clientWidth : 0;
+  if (!avail) { tbl._colNeedsMeasure = true; return; }
+  if (tbl._colRaw && mins.reduce((a, b) => a + b, 0) > avail) mins = tbl._colRaw.slice();
+  // Short of room, a wide text column gives back what it took over its
+  // floor first, so a table a few pixels too wide fits rather than scrolls.
+  let floor = mins.reduce((a, b) => a + b, 0);
+  const hard = tbl._colHard || [];
+  const give = (m, i) => (types[i] === 'text' ? Math.max(0, m - (hard[i] || COL_FLOOR.text)) : 0);
+  const slack = mins.reduce((a, m, i) => a + give(m, i), 0);
+  // Only where giving it back makes the table FIT: on a phone it scrolls
+  // anyway, and squeezing the text there only cuts a heading in half.
+  if (floor > avail && floor - avail <= slack) {
+    let deficit = floor - avail;
+    mins.forEach((m, i) => {
+      if (deficit <= 0 || types[i] !== 'text') return;
+      const g = Math.min(deficit, give(m, i));
+      mins[i] = m - g; deficit -= g;
+    });
+    floor = mins.reduce((a, b) => a + b, 0);
+  }
+  const W = Math.max(avail, floor);
+  const growers = types.map((t, i) => (COL_GROWS[t] ? i : -1)).filter(i => i >= 0);
+  const extra = W - floor;
+  const each = growers.length ? extra / growers.length : 0;
+  const widths = mins.map((m, i) => m + (COL_GROWS[types[i]] ? each : 0));
+  // The pixels rounding leaves over go one each to the growers in turn, so
+  // the columns add up to W and no column is more than a pixel off another.
+  const px = widths.map(Math.floor);
+  let left = W - px.reduce((a, b) => a + b, 0);
+  for (let k = 0; left > 0 && growers.length; k = (k + 1) % growers.length, left--) px[growers[k]] += 1;
+  let cg = tbl.querySelector(':scope > colgroup[data-sized]');
+  if (!cg) {
+    cg = document.createElement('colgroup');
+    cg.setAttribute('data-sized', '');
+    tbl.insertBefore(cg, tbl.firstChild);
+  }
+  while (cg.children.length > px.length) cg.lastChild.remove();
+  while (cg.children.length < px.length) cg.appendChild(document.createElement('col'));
+  px.forEach((w, i) => {
+    const col = cg.children[i];
+    col.style.width = w + 'px';
+    col.className = 'col-type-' + types[i];
+  });
+  tbl.style.tableLayout = 'fixed';
+  tbl.style.width = W + 'px';
+  tbl.style.minWidth = W + 'px';
+}
+
+function sizeColumns(tbl, types) {
+  if (!tbl || !types || !types.length || tbl.classList.contains('bd')) return;
+  if (tbl.querySelector(':scope > colgroup:not([data-sized])')) return;
+  const wrap = tbl.parentElement;
+  if (!wrap || !wrap.clientWidth) {
+    // Hidden: measured when it is shown.
+    tbl._colTypes = types; tbl._colMins = null; tbl._colNeedsMeasure = true;
+    _watchColumnWrap(tbl);
+    return;
+  }
+  const nat = _naturalWidths(tbl, types.length);
+  tbl._colTypes = types.slice();
+  // The narrowest a text column may be squeezed to: its own heading.
+  tbl._colHard = types.map((t, i) => Math.max(COL_FLOOR.text, Math.ceil((nat.head && nat.head[i]) || 0)));
+  tbl._colMins = types.map((t, i) => {
+    const n = Math.ceil(nat[i] || 0);
+    if (t === 'text') return Math.max(COL_FLOOR.text, Math.min(n, COL_TEXT_CAP));
+    if (t === 'action') return Math.max(64, n);
+    return Math.max(COL_FLOOR[t] || COL_FLOOR.number, n);
+  });
+  // One width for every figure column of a table, and one for every status
+  // column: Capacity and Total side by side are the same width, so a pair
+  // reads as a pair and a row of them is symmetrical.
+  // Kept unequal where equal would not fit the screen (_colRaw): Work
+  // Maintenance's nine figure columns at the widest of them is wider than a
+  // laptop, and a table that scrolls is worse than a Subtotal a few pixels wider.
+  tbl._colRaw = tbl._colMins.slice();
+  ['number', 'status'].forEach(k => {
+    const top = Math.max(0, ...tbl._colMins.filter((_, i) => types[i] === k));
+    tbl._colMins = tbl._colMins.map((m, i) => (types[i] === k ? top : m));
+  });
+  tbl._colNeedsMeasure = false;
+  _applyColumnWidths(tbl);
+  _watchColumnWrap(tbl);
+}
+
+function _watchColumnWrap(tbl) {
+  if (tbl._colObserved || typeof ResizeObserver === 'undefined' || !tbl.parentElement) return;
+  tbl._colObserved = true;
+  let last = -1;
+  new ResizeObserver(() => {
+    const w = tbl.parentElement ? tbl.parentElement.clientWidth : 0;
+    if (w === last) return;
+    last = w;
+    if (tbl._colNeedsMeasure && w) { sizeColumns(tbl, tbl._colTypes); return; }
+    _applyColumnWidths(tbl);
+  }).observe(tbl.parentElement);
 }
 
 function _tidyBand(headRows, rows, footOnly) {
@@ -4129,10 +4299,11 @@ function _tidyBand(headRows, rows, footOnly) {
     cellsOf(c).forEach(td => { td.classList.remove('num', 'r', 'c'); cls.forEach(k => td.classList.add(k)); });
     if (th && !footOnly) { th.classList.remove('num', 'r', 'c'); cls.forEach(k => th.classList.add(k)); }
   };
+  const types = [];
   for (let c = 0; c < width; c++) {
     const th = leaf(c);
     const head = th ? th.textContent.trim() : '';
-    let figs = 0, other = 0, rm = 0, btns = 0, media = 0;
+    let figs = 0, other = 0, rm = 0, btns = 0, media = 0, dates = 0;
     cellsOf(c).forEach(td => {
       // A picture with a caption under it is still a picture.
       if (td.querySelector('img, .tp-maps')) { media++; return; }
@@ -4143,6 +4314,7 @@ function _tidyBand(headRows, rows, footOnly) {
         return;
       }
       if (_isFigure(v)) figs++;
+      else if (/^\d{1,2}[ /-](\d{1,2}|[A-Za-z]{3,9})([ /-]\d{2,4})?$|^\d{4}-\d{2}-\d{2}$/.test(v)) dates++;
       else if (v !== '—' && v !== '-') other++;
     });
     let type;
@@ -4150,7 +4322,12 @@ function _tidyBand(headRows, rows, footOnly) {
     else if (/\bstatus\b/i.test(head))           type = 'status';
     else if (!head && btns && !figs && !other)   type = 'action';
     else if (media && !figs && !other)           type = 'media';
-    else if (figs && !other)                     type = 'number';
+    else if (figs && !other && !dates)           type = 'number';
+    else if (dates && !figs && !other)           type = 'date';
+    // Nothing but dashes: figures not keyed yet (Loading Seedlings in a quiet
+    // month), unless the heading says it is words.
+    else if (!figs && !other && !btns && head
+             && !/remark|note|name|worker|plot|batch|date|day|by|who|section|nursery|job/i.test(head)) type = 'number';
     else                                         type = 'text';
     if (type === 'serial') set(c, ['c', 'col-ser'], th);
     else if (type === 'status') set(c, ['c', 'col-st'], th);
@@ -4161,7 +4338,9 @@ function _tidyBand(headRows, rows, footOnly) {
     if (type === 'number' && rm && th && !footOnly && !/RM/.test(th.textContent) && head) {
       th.appendChild(document.createTextNode(' (RM)'));
     }
+    types[c] = type;
   }
+  return types;
 }
 
 /* The claim forms laid out as a group of columns per job. `cats` is the
@@ -4231,6 +4410,10 @@ function decorateMaintTable(tbl) {
     if (!root) return;
     new MutationObserver(muts => {
       muts.forEach(m => {
+        // The widths tidyTable writes (a <colgroup> and its <col>s) are not
+        // new contents, and answering them would go round for ever.
+        const only = (list) => Array.from(list).every(nd => nd.nodeType === 1 && (nd.tagName === 'COLGROUP' || nd.tagName === 'COL'));
+        if ((m.addedNodes.length || m.removedNodes.length) && only(m.addedNodes) && only(m.removedNodes)) return;
         const t = m.target.closest ? m.target.closest('table') : null;
         if (t) pending.add(t);
         m.addedNodes.forEach(nd => {

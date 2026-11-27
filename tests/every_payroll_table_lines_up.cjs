@@ -265,6 +265,36 @@ const SNAP = {
       // 5. tabular figures
       const tn = getComputedStyle(t).fontVariantNumeric;
       if (!/tabular-nums/.test(tn)) issues.push('figures are not tabular (' + tn + ')');
+      // 7. THE WIDTHS. Fixed by type, never by the content: a colgroup and a
+      //    fixed layout; No. at 56; the table fills its card (or keeps its
+      //    floors and scrolls inside it); every figure column one width where
+      //    that fits; the room left over shared equally; no heading cut off.
+      if (!t.classList.contains('bd')) {
+        const cg = t.querySelector(':scope > colgroup[data-sized]');
+        if (!cg) issues.push('no column widths (colgroup) set');
+        else {
+          if (getComputedStyle(t).tableLayout !== 'fixed') issues.push('table layout is ' + getComputedStyle(t).tableLayout + ', not fixed');
+          const cols = [...cg.children], types = t._colTypes || [], mins = t._colMins || [];
+          const w = cols.map(c => parseFloat(c.style.width) || 0);
+          const wrapW = t.parentElement.clientWidth, tw = t.getBoundingClientRect().width;
+          types.forEach((ty, i) => { if (ty === 'serial' && Math.abs(w[i] - 56) > 1) issues.push('No. is ' + w[i] + 'px, not 56'); });
+          const floor = mins.reduce((a, b) => a + b, 0);
+          if (tw < wrapW - 1) issues.push(`table ${Math.round(tw)}px leaves ${Math.round(wrapW - tw)}px of its card empty`);
+          if (floor <= wrapW && tw > wrapW + 1) issues.push(`table ${Math.round(tw)}px is wider than its card ${wrapW}px though its floors fit`);
+          if (floor <= wrapW) {
+            ['number', 'status'].forEach(k => {
+              const ws = w.filter((_, i) => types[i] === k);
+              if (ws.length > 1 && Math.max(...ws) - Math.min(...ws) > 1) issues.push(`${k} columns differ in width: ${ws.join(', ')}`);
+            });
+            const grow = w.map((x, i) => x - mins[i]).filter((_, i) => /^(text|number|status|media)$/.test(types[i]));
+            if (grow.length > 1 && Math.max(...grow) - Math.min(...grow) > 2) issues.push('spare room not shared equally: ' + grow.map(Math.round).join(', '));
+          }
+          t.querySelectorAll('thead th').forEach(th => {
+            if ((th.colSpan || 1) === 1 && getComputedStyle(th).whiteSpace === 'nowrap' && th.scrollWidth > th.clientWidth + 1)
+              issues.push(`heading "${th.textContent.trim().slice(0, 20)}" is cut off`);
+          });
+        }
+      }
       out.push({ tab, name, cols: maxW, rows: bodyRows.length, issues,
                  heads: AUDIT ? hgAll.map(r => (r || []).map(x => x ? x.textContent.trim().slice(0, 14) + '|' + al(x)[0] : '?')) : undefined });
     });
@@ -307,6 +337,7 @@ const SNAP = {
         try { renderCullIncentive('UNN2'); } catch (e) { console.log(e); } }
       if (/Loading/.test(n)) { const s = document.getElementById('maint-nursery'); if (s) s.value = 'UNN2'; try { renderLoading(); } catch (_) {} } }, name);
     await page.waitForTimeout(700);
+    if (process.env.MINS) console.log(name, await page.evaluate(() => [...document.querySelectorAll('#main table')].filter(t => t.offsetParent).map(t => t.id + ' ' + JSON.stringify(t._colTypes) + ' ' + JSON.stringify(t._colMins) + ' wrap=' + (t.parentElement && t.parentElement.clientWidth) + ' W=' + t.style.width).join('\n')));
     if (process.env.DUMP) console.log(await page.evaluate(() => [...document.querySelectorAll('#main table')].filter(t => t.offsetParent).map(t => t.id + ': ' + t.outerHTML.replace(/\s+/g,' ').slice(0, 900)).join('\n')));
     const res = await audit(name);
     if (name !== 'Lock Controls') check('it draws at least one table', res.filter(r => r.name !== 'split').length > 0, true);
