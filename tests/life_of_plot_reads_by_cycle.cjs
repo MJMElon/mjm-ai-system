@@ -52,11 +52,11 @@ const DATA = {
     await page.route('**/@supabase/supabase-js**', r => r.fulfill({ contentType: 'text/javascript', body: 'window.supabase={createClient:()=>window.__stub};' }));
     await page.route('**/shared/shared_staff_gate.js', r => r.fulfill({ contentType: 'text/javascript', body: '' }));
     await page.route('**/shared/shared_access.js', r => r.fulfill({ contentType: 'text/javascript',
-      body: `window.MJMAccess={load:async()=>{},user:()=>({email:'t@t'}),canOpenOperationPage:()=>true,isAdminOf:()=>!window.__notAdmin};` }));
+      body: `window.MJMAccess={load:async()=>{},user:()=>({email:'t@t'}),canOpenOperationPage:()=>true,isAdminOf:()=>!window.__notAdmin,canAccess:()=>true,canOpenPage:()=>true,permissions:()=>({}),canDo:()=>true};` }));
     await page.addInitScript((data) => {
       const q = (table) => {
         let rows = (data[table] || []).slice();
-        const w = {
+        const base = {
           select: () => w, order: () => w,
           in: (col, vals) => { rows = rows.filter(r => vals.indexOf(r[col]) >= 0); return w; },
           eq: (col, v) => { rows = rows.filter(r => r[col] === v); return w; },
@@ -65,6 +65,8 @@ const DATA = {
           range: (a, b) => Promise.resolve({ data: rows.slice(a, b + 1), error: null }),
           then: (okf, no) => Promise.resolve({ data: rows, error: null }).then(okf, no),
         };
+        // any other chained call (the PALMS board in the frame asks for more) keeps the rows
+        const w = new Proxy(base, { get: (o, k) => (k in o ? o[k] : (k === 'single' ? () => Promise.resolve({ data: rows[0] || null, error: null }) : () => w)) });
         return w;
       };
       window.__stub = { from: q };
@@ -213,7 +215,7 @@ const DATA = {
   console.log('4. with a nursery map on screen, the tabs top right choose the nursery; the Plot row stays');
   const pm = await openPage(Object.assign({}, DATA, { operation_nurseries: [{ name: 'BNN', map_image_url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }] }), []);
   await pm.goto(B + '/operation/operation_life_of_plot.html');
-  await pm.waitForSelector('#lp-map-tabs button', { timeout: 8000 }).catch(() => {});
+  await pm.waitForSelector('#lp-head-nur button', { timeout: 8000 }).catch(() => {});
   const nr = await pm.evaluate(() => ({ row: getComputedStyle(document.getElementById('lp-nursery-row')).display,
     label: getComputedStyle(document.getElementById('lp-nursery-label')).display,
     plots: [...document.querySelectorAll('#lp-plot-row button')].map(b => b.textContent.trim()),
@@ -224,9 +226,9 @@ const DATA = {
   ok(nr.plotRow !== 'none' && nr.plots.join() === 'B11,B13', 'the Plot row stays, following the nursery, with no All plots chip', nr.plots);
   ok(nr.list === 'none' && /^B11 ·/.test(nr.opened), 'no list of every plot: it opens straight on the first plot of the nursery (B11)', nr);
   const tabsOf = () => pm.evaluate(() => ({ head: [...document.querySelectorAll('#lp-head-nur button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')),
-    inMap: [...document.querySelectorAll('#lp-map button[data-map]')].length }));
+    inMap: document.getElementById('lp-map') ? 'a map panel' : 0 }));
   const t1 = await tabsOf();
-  ok(t1.head.join() === 'BNN*' && t1.inMap === 0, 'the nursery tabs are top right, once, and not on the map panel', t1);
+  ok(t1.head.join() === 'BNN*' && t1.inMap === 0, 'the nursery tabs are top right, once, and Plots & cycles draws no map of its own', t1);
   await pm.click('#lp-side button[data-view="palms-board"]');
   const t2 = await tabsOf();
   ok(t2.head.join() === 'BNN*', 'PALMS keeps the same tabs top right', t2);
@@ -264,9 +266,23 @@ const DATA = {
   if (process.env.SHOT) await pr.screenshot({ path: path.join(process.env.SHOT, 'lop_rotation.png'), fullPage: true });
   await pr.close();
 
-  console.log('6. the map shows four stages, with the key beside it');
+  console.log('6. Plots & cycles draws no map; the cats are drawn on the PALMS map');
   const SQ = (x, y) => JSON.stringify([{ x, y }, { x: x + 20, y }, { x: x + 20, y: y + 20 }, { x, y: y + 20 }]);
   const ago = m => { const d = new Date(); d.setDate(d.getDate() - Math.round(m * 30.44)); return d.toISOString().slice(0, 10); };
+  const L = (plot, n, start, end) => ({ client_uid: plot + n + start, plot_name: plot, act_n: n, start_date: start, end_date: end || null, ideal_days: 1, recorded_by: 'x', seq_no: 0 });
+  const palmsFrame = pg => pg.frames().find(f => /nursery_ops_palms_board/.test(f.url()));
+  async function catsOn(pg) {
+    await pg.click('#lp-side button[data-view="palms-board"]');
+    for (let i = 0; i < 40; i++) {
+      const fr = palmsFrame(pg);
+      const n = fr ? await fr.evaluate(() => document.querySelectorAll('.pm-deco .lp-cat-set').length).catch(() => 0) : 0;
+      if (n) break;
+      await pg.waitForTimeout(250);
+    }
+    await pg.waitForTimeout(400);
+    const fr = palmsFrame(pg);
+    return fr ? fr.evaluate(() => Object.fromEntries([...document.querySelectorAll('.pm-deco .lp-cat-set')].map(s => [s.dataset.catPlot, s.dataset.catStage]))) : null;
+  }
   const me = [];
   const pm6 = await openPage(Object.assign({}, DATA, {
     shared_plots: [{ plot_name: 'B11', nursery_name: 'BNN', map_top: SQ(5, 5) }, { plot_name: 'B13', nursery_name: 'BNN', map_top: SQ(30, 5) },
@@ -276,41 +292,34 @@ const DATA = {
       { plot_name: 'B12', transaction_type: 'Transplanted', transaction_date: ago(8), quantity_change: 2000, batch_name: '250', remark: '', created_at: ago(8) + 'T00:00:00Z' },
       { plot_name: 'B14', transaction_type: 'Transplanted', transaction_date: ago(10), quantity_change: 3000, batch_name: '248', remark: '', created_at: ago(10) + 'T00:00:00Z' } ]),
     shared_do_records: [{ id: 1, delivery_date: ago(1), status: 'Completed', remark: '', plot_1: 'B14', qty_1: 500, batch_1: '248' }] }), me);
-  await pm6.goto(B + '/operation/operation_life_of_plot.html');
-  await pm6.waitForSelector('#lp-svg polygon', { timeout: 8000 }).catch(() => {});
-  await pm6.waitForTimeout(400);
-  const st6 = await pm6.evaluate(() => ({
-    n: document.querySelectorAll('#lp-svg polygon').length, html: document.getElementById('lp-status').textContent,
-    stage: Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])),
-    key: [...document.querySelectorAll('.lp-key .lp-key-r b')].map(b => b.textContent.trim()),
-    beside: (() => { const v = document.getElementById('lp-viewport').getBoundingClientRect(), k = document.querySelector('.lp-key').getBoundingClientRect(); return k.left >= v.right - 1; })() }));
-  ok(st6.key.join() === 'Empty,Growing,Collect soon,Collecting', 'the key names the four stages', st6.key);
-  ok(st6.beside, 'the key stands beside the map', st6.beside);
-  ok(await pm6.evaluate(() => !document.querySelector('.lp-key .lp-key-r span')), 'the key carries no explanation lines under the names', '');
-  ok(st6.stage.B13 === 'empty' && st6.stage.B11 === 'growing' && st6.stage.B12 === 'soon' && st6.stage.B14 === 'selling',
-     'B13 nothing standing: Empty · B11 4 months: Growing · B12 8 months, nothing collected: Collecting in 1 month · B14 on a DO: Collecting', st6);
-  const sc = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats .lp-cat')].map(c => c.dataset.scene));
+  await pm6.goto(B + '/operation/operation_life_of_plot.html#plot=B11');
+  await pm6.waitForSelector('#lp-timeline-box .lp-cyc', { timeout: 8000 }).catch(() => {});
+  const noMap6 = await pm6.evaluate(() => ({ panel: !!document.getElementById('lp-map'), svg: document.querySelectorAll('#lp-plots-view svg polygon').length, cats: document.querySelectorAll('#lp-plots-view .lp-cat').length }));
+  ok(!noMap6.panel && noMap6.svg === 0 && noMap6.cats === 0, 'Plots & cycles draws no map: the plot row and the cycles only', noMap6);
+  const st6 = await catsOn(pm6);
+  ok(st6 && st6.B13 === 'empty' && st6.B11 === 'growing' && st6.B12 === 'soon' && st6.B14 === 'selling',
+     'on the PALMS map, a plot PALMS has nothing open for reads the ledger: B13 Empty, B11 Growing, B12 8 months Collect soon, B14 on a DO Collecting', st6);
+  const fr6 = palmsFrame(pm6);
+  const sc = fr6 ? await fr6.evaluate(() => [...document.querySelectorAll('.pm-deco .lp-cat')].map(c => c.dataset.scene)) : [];
   const cnt = k => sc.filter(x => x === k).length;
   ok(cnt('growing') === 3 && cnt('empty') >= 2 && cnt('empty') <= 3 && cnt('soon') === 1 && cnt('selling') === 1, 'Membesar three cats (one per job), Empty two or three, one sitting, one lorry', sc);
-  ok(await pm6.evaluate(() => !document.querySelector('#lp-labels .lp-cat, #lp-labels img')), 'the cats are on the map, not inside the labels', '');
-  const lab6 = await pm6.evaluate(() => [...document.querySelectorAll('#lp-labels .lp-label')].map(l => l.textContent.trim()));
-  ok(lab6.length > 0 && lab6.every(x => !/Cycle|No batch/.test(x)), 'a map label is the plot name only', lab6);
-  const anim = await pm6.evaluate(() => [...document.querySelectorAll('#lp-cats img')].every(i => /\.webp$/.test(i.getAttribute('src'))));
-  ok(anim, 'every cat on the map is the office animation (an animated picture)', anim);
-  const cats = await pm6.evaluate(() => Promise.all([...document.querySelectorAll('#lp-cats img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false))));
+  const where6 = fr6 ? await fr6.evaluate(() => ({ inLabels: !!document.querySelector('.pm-labels .lp-cat'), under: (() => { const d = document.querySelector('.pm-deco'), l = document.querySelector('.pm-labels'); return !!(d && l && (d.compareDocumentPosition(l) & Node.DOCUMENT_POSITION_FOLLOWING)); })(),
+    clicks: getComputedStyle(document.querySelector('.pm-deco')).pointerEvents, css: !!document.getElementById('lp-cat-css') })) : null;
+  ok(where6 && !where6.inLabels && where6.under && where6.clicks === 'none' && where6.css, 'the cats are a layer on the map, under the labels, taking no click', where6);
+  const anim = fr6 ? await fr6.evaluate(() => [...document.querySelectorAll('.pm-deco img')].every(i => /\/operation\/lifeplot\/cat_\w+\.webp$/.test(i.getAttribute('src')))) : false;
+  ok(anim, 'every cat is the office animation, found from inside the PALMS frame', anim);
+  const cats = fr6 ? await fr6.evaluate(() => Promise.all([...document.querySelectorAll('.pm-deco img')].map(i => i.decode().then(() => i.naturalWidth > 0, () => false)))) : [];
   ok(cats.length >= 6 && cats.every(Boolean), 'every cat picture loads', cats);
-  // They zoom WITH the map: a cat is a bigger thing on screen at 300% than at 100%.
   if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages.png'), fullPage: true });
-  const h1 = await pm6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height);
-  await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]'); await pm6.click('.lp-zbtn[data-z="0.25"]');
-  const h2 = await pm6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height);
-  ok(h2 > h1 * 1.8, 'the cats grow when the map is zoomed in and shrink back out', { h1, h2 });
-  ok(me.length === 0, 'no page errors on the map', me);
+  const h1 = fr6 ? await fr6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height) : 0;
+  if (fr6) for (let i = 0; i < 4; i++) await fr6.click('.pm-in');
+  const h2 = fr6 ? await fr6.evaluate(() => document.querySelector('.lp-cat[data-scene="soon"]').getBoundingClientRect().height) : 0;
+  ok(h2 > h1 * 1.3, 'the cats grow when the PALMS map is zoomed in', { h1, h2 });
+  ok(me.length === 0, 'no page errors', me);
   if (process.env.SHOT) await pm6.screenshot({ path: path.join(process.env.SHOT, 'lop_stages_zoomed.png'), fullPage: true });
   await pm6.close();
 
-  console.log('7. the stage is PALMS: the lining stages Empty, Membesar Growing, the 8th month Collecting in 1 month, Pengambilan Collecting');
-  const L = (plot, n, start, end) => ({ client_uid: plot + n + start, plot_name: plot, act_n: n, start_date: start, end_date: end || null, ideal_days: 1, recorded_by: 'x', seq_no: 0 });
+  console.log('7. the cats follow PALMS: Saringan to Transplanting Empty, Membesar Growing, the 8th month Collect soon, Pengambilan Collecting');
   const me7 = [];
   const pm7 = await openPage(Object.assign({}, DATA, {
     shared_plots: ['B11', 'B12', 'B13', 'B14', 'B15', 'B16', 'B17'].map((p, i) => ({ plot_name: p, nursery_name: 'BNN', map_top: SQ(5 + (i % 4) * 24, 5 + Math.floor(i / 4) * 30) })),
@@ -329,17 +338,19 @@ const DATA = {
       L('B15', 8, ago(0.2)),                                        // Lining
       L('B16', 10, ago(6.5)),                                       // Membesar, 7th month
     ] }), me7);
-  await pm7.goto(B + '/operation/operation_life_of_plot.html');
-  await pm7.waitForSelector('#lp-svg polygon', { timeout: 8000 }).catch(() => {});
-  await pm7.waitForTimeout(600);
-  const st7 = await pm7.evaluate(() => Object.fromEntries([...document.querySelectorAll('#lp-svg polygon')].map(p => [p.dataset.plot, p.dataset.stage])));
+  await pm7.goto(B + '/operation/operation_life_of_plot.html#plot=B11');
+  await pm7.waitForSelector('#lp-timeline-box .lp-cyc', { timeout: 8000 }).catch(() => {});
+  const st7 = (await catsOn(pm7)) || {};
   ok(st7.B11 === 'selling', 'PALMS on Pengambilan is Collecting, whatever the ledger says', st7);
-  ok(st7.B12 === 'soon', 'Membesar in the 8th month after transplant is Collecting in 1 month', st7);
+  ok(st7.B12 === 'soon', 'Membesar in the 8th month after transplant is Collect soon', st7);
   ok(st7.B16 === 'growing', 'Membesar in the 7th month is still Growing', st7);
   ok(st7.B13 === 'growing', 'Membesar with no ledger cycle is Growing', st7);
   ok(st7.B14 === 'empty', 'back on Membersih is Empty, though the ledger still has a sale', st7);
   ok(st7.B15 === 'empty', 'Lining is Empty', st7);
-  ok(st7.B17 === 'soon', 'a plot PALMS has nothing open for reads the ledger: 8th month, Collecting in 1 month', st7);
+  ok(st7.B17 === 'soon', 'a plot PALMS has nothing open for reads the ledger: 8th month, Collect soon', st7);
+  const pal7 = palmsFrame(pm7) ? await palmsFrame(pm7).evaluate(() => [...document.querySelectorAll('.pm-shape')].length) : 0;
+  ok(pal7 === 7, 'the colours are PALMS own: every plot is a PALMS shape', pal7);
+  if (process.env.SHOT) await pm7.screenshot({ path: path.join(process.env.SHOT, 'lop_palms_cats.png'), fullPage: true });
   ok(me7.length === 0, 'no page errors with PALMS on the map', me7);
   await pm7.close();
 
@@ -388,25 +399,24 @@ const DATA = {
   if (process.env.SHOT) await p9.locator('#lp-set').screenshot({ path: path.join(process.env.SHOT, 'lop_settings.png') }).catch(() => {});
   const s9 = await p9.evaluate(() => ({
     shown: !document.getElementById('lp-set').classList.contains('hidden'),
-    est2: (document.getElementById('ls-est2') || {}).value, soon: (document.getElementById('ls-name-soon') || {}).value,
-    col: (document.getElementById('ls-col-soon') || {}).value,
+    est2: (document.getElementById('ls-est2') || {}).value, soon: (document.getElementById('ls-soon') || {}).value,
     selects: document.querySelectorAll('#lp-set select').length,
     save: document.querySelectorAll('[data-ls-save]').length, edit: document.querySelectorAll('[data-ls-edit]').length, locked: !!(document.getElementById('ls-est2') || {}).disabled }));
-  ok(s9.shown && s9.est2 === '5' && s9.soon === 'Ready soon' && s9.col === '#ff0000' && s9.save === 0 && s9.edit === 3 && s9.locked, 'Settings shows what is saved, LOCKED, with an Edit per section for an admin', s9);
+  ok(s9.shown && s9.est2 === '5' && s9.soon === '8' && s9.save === 0 && s9.edit === 3 && s9.locked, 'Settings shows what is saved, LOCKED, with an Edit per section for an admin', s9);
   const sw9 = await p9.evaluate(() => ({ swatch: document.querySelectorAll('#lp-set .lp-set-sw input[type=color]').length, loose: document.querySelectorAll('#lp-set input[type=color]').length }));
-  ok(sw9.swatch === 4 && sw9.loose === 4, 'the colour is picked by pressing the swatch on the left; no second box on the right', sw9);
+  ok(sw9.swatch === 0 && sw9.loose === 0, 'no stage colours or names to set: the PALMS map paints the colours', sw9);
   ok(s9.selects === 0, 'no PALMS stage dropdowns on Settings', s9.selects);
   await p9.click('[data-ls-edit="cycles"]');
   await p9.click('[data-ls-edit="plans"]');
-  const ed9 = await p9.evaluate(() => ({ est: document.getElementById('ls-est2').disabled, col: document.getElementById('ls-col-soon').disabled, saves: document.querySelectorAll('[data-ls-save]').length }));
+  const ed9 = await p9.evaluate(() => ({ est: document.getElementById('ls-est2').disabled, col: document.getElementById('ls-soon').disabled, saves: document.querySelectorAll('[data-ls-save]').length }));
   ok(!ed9.est && ed9.col && ed9.saves === 2, 'Edit opens that section only; the others stay locked', ed9);
   await p9.fill('#ls-est3', '12');
   const words9 = await p9.evaluate(() => [...document.querySelectorAll('#lp-set .lp-set-row')].map(r => r.textContent.replace(/\s+/g, ' ').trim()));
   ok(words9.some(w => w.startsWith('Collection plan based on planting age') && w.endsWith('months after planting'))
      && words9.some(w => w.startsWith('Transplanting plan based on planting age') && w.endsWith('months after planting')),
      'the plans read "based on planting age … months after planting"', words9);
-  const soon9 = await p9.evaluate(() => { const i = document.getElementById('ls-soon'); const row = i && i.closest('.lp-set-row'); return row ? { pink: !!row.querySelector('[id^="ls-name-"]'), text: row.textContent.replace(/\s+/g, ' ').trim(), rows: [...document.querySelectorAll('#lp-set .lp-set-row')].filter(r => /from month/.test(r.textContent)).length } : 'no box'; });
-  ok(soon9 && soon9.pink && /from months after transplant$/.test(soon9.text) && soon9.rows === 0, 'the Collect soon month sits on the pink stage row, not a row of its own', soon9);
+  const soon9 = await p9.evaluate(() => [...document.querySelectorAll('#lp-set [data-ls-sec="map"] .lp-set-row')].map(r => r.textContent.replace(/\s+/g, ' ').trim()));
+  ok(soon9.length === 1 && /^Ready soon from ?months after transplant$/.test(soon9[0]), 'the Map section is one row: Collect soon from N months after transplant', soon9);
   ok(words9.filter(w => /after transplant$/.test(w)).every(w => /months after transplant$/.test(w)), 'every "after transplant" row says months', words9);
   await p9.fill('#ls-trm', '7');   // edited and NOT saved: another section
   await p9.click('[data-ls-save="cycles"]');

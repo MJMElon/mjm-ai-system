@@ -12432,3 +12432,22 @@ out** (the office: "太乱了 我要之前的版本"). One map with a PALMS / cy
 colour switch, labels carrying both, PALMS columns on the list and a stage
 strip on every cycle card was too much on one screen. Plots & cycles and
 PALMS stay two entries; do not merge them again without being asked.
+
+**And then the cycle MAP went and its cats moved onto PALMS** (the office:
+*"empty就是saringan到lining growing是membesar pengambilan是collection 只有一个
+collection soon没有 所以我想要保留palms的map remove cycle的map 但是在palms上面
+加上猫猫"*). Plots & cycles draws no map now (the plot row and the cycle cards
+only); PALMS keeps its own map, colours and key, and Life of Plot draws its cats
+ON it: `MJMPlotMap` takes a `decorate(unit, pts, status, everyPts)` layer
+(`.pm-deco`, under the labels, no clicks) set with `setDecorate`, the board hands
+its map out as `window.palmsMap()` and adds the stage NAME and start to its
+status, and `lpInstallCats` in Life of Plot sets `lpDecorate` once the frame is
+up. The stage is `lpPalmsStage` off the PALMS stage (Membesar turns Collect soon
+from the month Settings says, off the ledger cycle start, else the Membesar
+start); a shape PALMS has nothing open for reads the ledger (`mapStateOf`). Cat
+pictures are absolute URLs and their CSS (`LP_CAT_CSS`) is put into the frame.
+Opened on its own, the PALMS board has no cats. Settings → Map is one row (Collect
+soon from N months); the stage colours and names went with the map. The
+paragraphs above about the four-stage map, its key and zoom describe what was.
+Sections 6 and 7 of `tests/life_of_plot_reads_by_cycle.cjs` read the cats off
+the real PALMS board in the frame.
