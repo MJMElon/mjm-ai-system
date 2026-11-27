@@ -305,7 +305,7 @@
     <div class="card-body">
       <div id="mm-note" class="muted" style="margin-bottom:10px;"></div>
 
-      <div class="mm-h">Task timing</div>
+      <div class="mm-h">General</div>
       <div class="mm-timing">
         <label>Appears early (minutes)
           <input class="mm-in" type="number" id="mm-opens" min="0" max="120" step="5" oninput="mmDirty()"></label>
@@ -313,13 +313,11 @@
           <input class="mm-in" type="number" id="mm-window" min="5" max="240" step="5" oninput="mmDirty()"></label>
         <label>Capture photo within (m)
           <input class="mm-in" type="number" id="mm-pin-range" min="1" max="100" step="1" oninput="mmDirty()"></label>
-        <label>Shortest road track (m)
+        <label>Shortest road track (m, 0 = none)
           <input class="mm-in" type="number" id="mm-min-track" min="0" max="5000" step="5" oninput="mmDirty()"></label>
         <label>History shows (days)
           <input class="mm-in" type="number" id="mm-history-days" min="1" max="35" step="1" oninput="mmDirty()"></label>
       </div>
-      <div class="muted" style="margin-top:6px;">Capture photo within: a pin opens its camera only when the guard is this close to it. Shortest road track: a road track shorter than this cannot be stopped or submitted (0 means no minimum). History shows: how many nights the History page on the phone lists, 1 to 35.</div>
-      <div id="mm-timing-eg" class="muted" style="margin-top:6px;"></div>
 
       <div class="mm-h">Location &amp; time</div>
       <div id="mm-locs"></div>
@@ -1097,17 +1095,8 @@ const mmSlotsOk = (a) => Array.isArray(a) && a.length > 0 && a.every(t => /^\d{2
 function mmDirty() {
   mmUnsaved = true;
   $('mm-status').textContent = 'Not saved yet.';
-  mmTimingExample();
 }
 
-function mmTimingExample() {
-  const o = Number($('mm-opens').value), w = Number($('mm-window').value);
-  const box = $('mm-timing-eg');
-  if (!Number.isFinite(o) || !Number.isFinite(w)) { box.textContent = ''; return; }
-  const at = (min) => { const t = ((18 * 60 + min) % 1440 + 1440) % 1440;
-                        return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
-  box.textContent = `Example: an 18:00 check-in appears at ${at(-o)} and must be submitted by ${at(-o + w)}.`;
-}
 
 function mmRenderLocs() {
   $('mm-locs').innerHTML = mmLocs.map((l, i) => {
@@ -1396,7 +1385,6 @@ async function loadMataMalam() {
       ? `Last saved ${String(set.data.updated_at).slice(0, 16).replace('T', ' ')}${set.data.updated_by ? ' by ' + set.data.updated_by : ''}.`
       : 'Nothing has been saved yet, so the phones are on the starting times shown here. Press Save Mata Malam to make them the company\'s.';
     $('mm-status').textContent = '';
-    mmTimingExample();
     mmRenderLocs();
     mmRenderPins();
   } catch (e) {
