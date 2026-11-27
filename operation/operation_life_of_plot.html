@@ -97,6 +97,7 @@
         .lp-set-h { font-size:13px; font-weight:900; color:#3d2610; margin-bottom:12px; }
         .lp-set-row { display:grid; grid-template-columns:230px auto 1fr; align-items:center; gap:12px; padding:6px 0; font-size:13px; font-weight:700; color:#5c3d1e; }
         @media (max-width: 640px) { .lp-set-row { grid-template-columns:1fr auto; } .lp-set-row > span:last-child { grid-column:1 / -1; } }
+        .lp-set-soon { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
         .lp-set-row input[type=number] { width:76px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:800; text-align:right; background:#fff; }
         .lp-set-row input[type=text] { width:220px; padding:6px 8px; border:1px solid #e8dcc8; border-radius:8px; font-weight:700; background:#fff; }
         .lp-set-row .lp-set-sw { position:relative; display:block; width:30px; height:30px; min-width:0; border-radius:8px; border:2px solid; cursor:pointer; }
@@ -1198,12 +1199,13 @@
             + `<div class="lp-set-row"><label for="ls-est2">2nd culling estimate</label>${num('ls-est2', S.est2, 1, 24)}<span>months after transplant</span></div>`
             + `<div class="lp-set-row"><label for="ls-est3">3rd culling estimate</label>${num('ls-est3', S.est3, 1, 36)}<span>months after transplant</span></div>`;
         if (sec === 'map') body = head('Map stages')
-            + LP_STAGES.map(x => `<div class="lp-set-row"><div><label class="lp-set-sw${on ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label></div><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}><span></span></div>`).join('')
-            + `<div class="lp-set-row"><label for="ls-soon">${esc(LP_STAGES[2].label)} from month</label>${num('ls-soon', S.soonMonth, 1, 36)}<span>after transplant</span></div>`;
+            + LP_STAGES.map(x => `<div class="lp-set-row"><div><label class="lp-set-sw${on ? '' : ' ro'}" style="background:${x.fill};border-color:${x.stroke}"><input type="color" id="ls-col-${x.key}" value="${toHex(x.stroke)}"${dis}></label></div><input type="text" id="ls-name-${x.key}" value="${esc(x.label)}" maxlength="40"${dis}>${x.key === LP_STAGES[2].key
+                ? `<span class="lp-set-soon"><label for="ls-soon">from</label> ${num('ls-soon', S.soonMonth, 1, 36)} months after transplant</span>`
+                : '<span></span>'}</div>`).join('');
         if (sec === 'plans') body = head('Pusingan Jualan &amp; Transplant')
             + `<div class="lp-set-row"><label for="ls-colpct">Collection plan</label>${num('ls-colpct', S.colPct, 1, 100)}<span>% of the transplant</span></div>`
-            + `<div class="lp-set-row"><label for="ls-colm">Collection plan from</label>${num('ls-colm', S.colMonths, 1, 36)}<span>months earlier</span></div>`
-            + `<div class="lp-set-row"><label for="ls-trm">Transplanting plan from</label>${num('ls-trm', S.trMonths, 1, 36)}<span>months earlier</span></div>`;
+            + `<div class="lp-set-row"><label for="ls-colm">Collection plan based on planting age</label>${num('ls-colm', S.colMonths, 1, 36)}<span>months after planting</span></div>`
+            + `<div class="lp-set-row"><label for="ls-trm">Transplanting plan based on planting age</label>${num('ls-trm', S.trMonths, 1, 36)}<span>months after planting</span></div>`;
         return `<div class="panel lp-set-sec" data-ls-sec="${sec}">${body}${foot}</div>`;
     }
     function lpSetDrawSection(sec, note) {

@@ -378,6 +378,7 @@ const DATA = {
   await p9.goto(B + '/operation/operation_life_of_plot.html#view=palms-stages');
   await p9.reload();
   await p9.waitForSelector('#lp-set .lp-set-sec', { timeout: 8000 }).catch(() => {});
+  if (process.env.SHOT) await p9.locator('#lp-set').screenshot({ path: path.join(process.env.SHOT, 'lop_settings.png') }).catch(() => {});
   const s9 = await p9.evaluate(() => ({
     shown: !document.getElementById('lp-set').classList.contains('hidden'),
     est2: (document.getElementById('ls-est2') || {}).value, soon: (document.getElementById('ls-name-soon') || {}).value,
@@ -393,6 +394,13 @@ const DATA = {
   const ed9 = await p9.evaluate(() => ({ est: document.getElementById('ls-est2').disabled, col: document.getElementById('ls-col-soon').disabled, saves: document.querySelectorAll('[data-ls-save]').length }));
   ok(!ed9.est && ed9.col && ed9.saves === 2, 'Edit opens that section only; the others stay locked', ed9);
   await p9.fill('#ls-est3', '12');
+  const words9 = await p9.evaluate(() => [...document.querySelectorAll('#lp-set .lp-set-row')].map(r => r.textContent.replace(/\s+/g, ' ').trim()));
+  ok(words9.some(w => w.startsWith('Collection plan based on planting age') && w.endsWith('months after planting'))
+     && words9.some(w => w.startsWith('Transplanting plan based on planting age') && w.endsWith('months after planting')),
+     'the plans read "based on planting age … months after planting"', words9);
+  const soon9 = await p9.evaluate(() => { const i = document.getElementById('ls-soon'); const row = i && i.closest('.lp-set-row'); return row ? { pink: !!row.querySelector('[id^="ls-name-"]'), text: row.textContent.replace(/\s+/g, ' ').trim(), rows: [...document.querySelectorAll('#lp-set .lp-set-row')].filter(r => /from month/.test(r.textContent)).length } : 'no box'; });
+  ok(soon9 && soon9.pink && /from months after transplant$/.test(soon9.text) && soon9.rows === 0, 'the Collect soon month sits on the pink stage row, not a row of its own', soon9);
+  ok(words9.filter(w => /after transplant$/.test(w)).every(w => /months after transplant$/.test(w)), 'every "after transplant" row says months', words9);
   await p9.fill('#ls-trm', '7');   // edited and NOT saved: another section
   await p9.click('[data-ls-save="cycles"]');
   await p9.waitForTimeout(300);
