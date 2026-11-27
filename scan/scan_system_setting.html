@@ -305,7 +305,12 @@
           <input class="mm-in" type="number" id="mm-opens" min="0" max="120" step="5" oninput="mmDirty()"></label>
         <label>Time limit (minutes)
           <input class="mm-in" type="number" id="mm-window" min="5" max="240" step="5" oninput="mmDirty()"></label>
+        <label>Capture photo within (m)
+          <input class="mm-in" type="number" id="mm-pin-range" min="1" max="100" step="1" oninput="mmDirty()"></label>
+        <label>Shortest road track (m)
+          <input class="mm-in" type="number" id="mm-min-track" min="0" max="5000" step="5" oninput="mmDirty()"></label>
       </div>
+      <div class="muted" style="margin-top:6px;">Capture photo within: a pin opens its camera only when the guard is this close to it. Shortest road track: a road track shorter than this cannot be stopped or submitted (0 means no minimum).</div>
       <div id="mm-timing-eg" class="muted" style="margin-top:6px;"></div>
 
       <div class="mm-h">Location &amp; time</div>
@@ -1050,7 +1055,7 @@ async function clearBoundary() {
    app is told:
 
      { locations: { BNN: { active, slots: ['18:00', …] }, … },
-       timing:    { opensBeforeMinutes, windowMinutes },
+       timing:    { opensBeforeMinutes, windowMinutes, pinRangeMeters, minTrackMeters },
        pins:      [ { name, location: 'BNN', lat, lng }, … ] }     any number per location
 
    It is the shape the app has read since it was linked to this database, so
@@ -1062,7 +1067,7 @@ async function clearBoundary() {
    card above lists. A location nobody has decided about follows the app's
    own default, which is the main nursery on and everything else off. */
 const MM_DEFAULT_SLOTS = ['18:00', '21:00', '00:00', '03:00', '06:00'];
-const MM_DEFAULT_TIMING = { opensBeforeMinutes: 15, windowMinutes: 60 };
+const MM_DEFAULT_TIMING = { opensBeforeMinutes: 15, windowMinutes: 60, pinRangeMeters: 3, minTrackMeters: 0 };
 const MM_MAX_SLOTS = 12;
 const MM_COLORS = ['#16a34a', '#d97706', '#7c3aed', '#db2777', '#2563eb'];
 let mm = null;            // the draft on screen
@@ -1340,7 +1345,10 @@ async function loadMataMalam() {
       };
     });
     const t = saved.timing || {};
-    if (Number.isFinite(t.opensBeforeMinutes) && Number.isFinite(t.windowMinutes)) mm.timing = { opensBeforeMinutes: t.opensBeforeMinutes, windowMinutes: t.windowMinutes };
+    if (Number.isFinite(t.opensBeforeMinutes) && Number.isFinite(t.windowMinutes)) mm.timing = { ...mm.timing, opensBeforeMinutes: t.opensBeforeMinutes, windowMinutes: t.windowMinutes };
+    /* The two distances: absent is what the phones did before they could be set (3 m, no minimum). */
+    if (Number.isFinite(t.pinRangeMeters) && t.pinRangeMeters > 0) mm.timing.pinRangeMeters = t.pinRangeMeters;
+    if (Number.isFinite(t.minTrackMeters) && t.minTrackMeters >= 0) mm.timing.minTrackMeters = t.minTrackMeters;
     /* A list now. The one-pin-per-location shape it had for a day, { BNN: [lat, lng] }, is still
        read, so a row saved in it opens with its pins rather than without them. */
     const known = new Set(mmLocs.map(l => l.code));
@@ -1357,6 +1365,8 @@ async function loadMataMalam() {
     }
     $('mm-opens').value = mm.timing.opensBeforeMinutes;
     $('mm-window').value = mm.timing.windowMinutes;
+    $('mm-pin-range').value = mm.timing.pinRangeMeters;
+    $('mm-min-track').value = mm.timing.minTrackMeters;
     mmCanSave = true;
     mmUnsaved = false;
     note.textContent = set.data && set.data.updated_at
@@ -1378,9 +1388,12 @@ async function mmSave() {
   if (!mm || !mmCanSave) return;
   const status = $('mm-status');
   const opens = Number($('mm-opens').value), win = Number($('mm-window').value);
+  const pinRange = Number($('mm-pin-range').value), minTrack = Number($('mm-min-track').value);
   let problem = '';
   if (!Number.isInteger(opens) || opens < 0 || opens > 120) problem = 'Appears early must be between 0 and 120 minutes.';
   else if (!Number.isInteger(win) || win < 5 || win > 240) problem = 'Time limit must be between 5 and 240 minutes.';
+  else if (!Number.isInteger(pinRange) || pinRange < 1 || pinRange > 100) problem = 'Capture photo within must be between 1 and 100 metres.';
+  else if (!Number.isInteger(minTrack) || minTrack < 0 || minTrack > 5000) problem = 'Shortest road track must be between 0 and 5000 metres (0 means no minimum).';
   else if (win <= opens) problem = 'Time limit must be longer than Appears early, so the deadline falls after the check-in time.';
   else if (!mmActive().length) problem = 'At least one location must be On.';
   else if (mmActive().some(l => mm.locations[l.code].slots.some(t => !mmTimeOk(t)))) {
@@ -1400,7 +1413,7 @@ async function mmSave() {
   }
   if (problem) { status.innerHTML = `<span style="color:#b91c1c">${esc(problem)}</span>`; return; }
 
-  const settings = { locations: {}, timing: { opensBeforeMinutes: opens, windowMinutes: win }, pins: [] };
+  const settings = { locations: {}, timing: { opensBeforeMinutes: opens, windowMinutes: win, pinRangeMeters: pinRange, minTrackMeters: minTrack }, pins: [] };
   mmLocs.forEach(l => {
     const d = mm.locations[l.code];
     settings.locations[l.code] = { active: d.active, slots: mmSort(d.slots) };

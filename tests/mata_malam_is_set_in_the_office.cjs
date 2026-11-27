@@ -197,6 +197,10 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
   }
 
   console.log('\n── 4. Save writes ONE row, in the shape the app reads ──');
+  check('the capture distance opens on 3 m and the shortest track on 0, what the phones did before',
+        [await page.inputValue('#mm-pin-range').catch(() => 'missing'), await page.inputValue('#mm-min-track').catch(() => 'missing')], ['3', '0']);
+  await page.fill('#mm-pin-range', '5').catch(() => {});
+  await page.fill('#mm-min-track', '20').catch(() => {});
   await page.click('#mm-save').catch(() => {}); await page.waitForTimeout(600);
   const w = await page.evaluate(() => window.__writes);
   check('one write, to mata_malam_settings row 1', w.map(x => [x.table, x.row.id]), [['mata_malam_settings', 1]]);
@@ -204,7 +208,7 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
   check('UNN1 carries its own time, BNN keeps five', [(st.locations || {}).UNN1, ((st.locations || {}).BNN || {}).slots],
         [{ active: true, slots: ['19:30'] }, ['18:00', '21:00', '00:00', '03:00', '06:00']]);
   check('every location is stored with its switch', Object.entries(st.locations || {}).map(([k, v]) => k + ':' + v.active), ['BNN:true', 'UNN1:true', 'UNN2:true', 'PN:false', 'UNE:true']);
-  check('the timing', st.timing, { opensBeforeMinutes: 10, windowMinutes: 60 });
+  check('the timing, with the capture distance and the shortest track', st.timing, { opensBeforeMinutes: 10, windowMinutes: 60, pinRangeMeters: 5, minTrackMeters: 20 });
   if (LEAFLET) check('and the pins as a list, each with its name and location', (st.pins || []).map(p => p.location + '|' + p.name + '|' + (Number.isFinite(p.lat) && Number.isFinite(p.lng))), ['BNN|Main Gate|true', 'BNN|BNN Pin 3|true', 'UNN1|UNN 1 Pin 1|true']);
   check('signed with who saved it', (w[0] || { row: {} }).row.updated_by, 'ruth@mjmnursery.com');
   checkTrue('the card says it is saved and the phones follow', /Saved\. The phones follow/.test(await page.textContent('#mm-status').catch(() => '')));
@@ -216,6 +220,10 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
   await page.click('#mm-save').catch(() => {}); await page.waitForTimeout(200);
   checkTrue('a time limit no longer than Appears early is refused', /longer than Appears early/.test(await page.textContent('#mm-status').catch(() => '')));
   await page.fill('#mm-window', '60').catch(() => {});
+  await page.fill('#mm-pin-range', '0').catch(() => {});
+  await page.click('#mm-save').catch(() => {}); await page.waitForTimeout(200);
+  checkTrue('a capture distance of 0 m is refused', /Capture photo within must be/.test(await page.textContent('#mm-status').catch(() => '')));
+  await page.fill('#mm-pin-range', '5').catch(() => {});
   await page.locator('#mm-locs .mm-loc').nth(0).locator('.mm-hh').nth(1).selectOption('18').catch(() => {});
   await page.click('#mm-save').catch(() => {}); await page.waitForTimeout(200);
   checkTrue('the same time twice on one location is refused, naming it', /BNN has the same time twice/.test(await page.textContent('#mm-status').catch(() => '')));
