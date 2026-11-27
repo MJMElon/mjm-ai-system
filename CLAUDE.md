@@ -11222,6 +11222,54 @@ heading is centred, and that figures are tabular. **11 of its tables fail
 on the previous code**, each by name. `AUDIT=1` prints every table's grid,
 `SHOT=/dir` draws each tab and `VW=400` draws them at phone width.
 
+### And every column is a WIDTH by its type, not by its content
+
+The office, over Loading Seedlings: one job, so four columns stretched over a
+desk screen, a Worker column half the table wide and the figures adrift. They
+asked for fixed, proportionally consistent widths, aligned and symmetrical, at
+every screen size, as a standard and not for one table.
+
+`sizeColumns()` in `npayroll_script.js` runs at the end of `tidyTable()`, so
+every table in the module gets it through the same MutationObserver,
+including a table added next month. It writes a `<colgroup data-sized>` and
+`table-layout:fixed`:
+
+- **Each column has a floor by its TYPE** (the type `tidyTable` already
+  decides for alignment): serial 56, number 104, status 110, media 100,
+  date as wide as the date, text 140 to 240, action as wide as its buttons.
+  A floor is raised to the column's own heading and figures, because a
+  heading cut off is worse than a table that scrolls.
+- **Every figure column of a table is ONE width**, and every status column
+  one, so Capacity and Total read as a pair. Where that would not fit the
+  card (Work Maintenance's nine figure columns at the widest of them), the
+  unequal floors are kept instead (`_colRaw`).
+- **The room left over is shared EQUALLY** among text, number, status and
+  media columns. Serial, action and date never grow: a date is one length,
+  and the office had already said a date must never be the widest column.
+- **A few pixels too wide, a text column gives back what it took over its
+  own heading** and the table fits. Further short than that (a phone), the
+  table keeps every floor and `.tbl-wrap` scrolls: the same table, never a
+  squeezed one.
+- **A column of nothing but dashes is figures** unless its heading names
+  words, so a quiet month's Capacity is still right-aligned and sized as a
+  figure.
+- **It is measured**, so a table drawn on a hidden tab is measured again
+  when shown (a `ResizeObserver` on its wrapper, which also re-spreads the
+  room on a resize). A table with an authored `<colgroup>` is left alone,
+  and so is the calendar board (`.bd`).
+- **The observer ignores `<colgroup>`/`<col>` mutations.** Measuring takes
+  the widths off the cols rather than removing the colgroup; removing and
+  re-adding it is two mutations, and the observer that tidies a table on
+  every mutation went round for ever on the first try.
+
+**This is the Nursery Reporting System's payroll module only.** The other
+modules build their tables their own way and are not yet on this rule.
+
+Section 7 of `tests/every_payroll_table_lines_up.cjs` asks it of every table
+on all ten tabs: run it with `VW=1500`, `1100`, `900` and `400`. 14 of its
+34 checks fail on the previous code. `MINS=1` prints each table's types and
+floors.
+
 ## Work Records is one clean page, and the dashboard is GONE
 
 The office asked for the Work Records page redesigned: *"MINIMIZE THE
