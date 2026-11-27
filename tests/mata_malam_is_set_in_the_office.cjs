@@ -203,6 +203,8 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
         [await page.inputValue('#mm-pin-range').catch(() => 'missing'), await page.inputValue('#mm-min-track').catch(() => 'missing')], ['3', '0']);
   await page.fill('#mm-pin-range', '5').catch(() => {});
   await page.fill('#mm-min-track', '20').catch(() => {});
+  check('History shows opens on 7 days, what the phones always showed', await page.inputValue('#mm-history-days').catch(() => 'missing'), '7');
+  await page.fill('#mm-history-days', '14').catch(() => {});
   await page.click('#mm-save').catch(() => {}); await page.waitForTimeout(600);
   const w = await page.evaluate(() => window.__writes);
   check('one write, to mata_malam_settings row 1', w.map(x => [x.table, x.row.id]), [['mata_malam_settings', 1]]);
@@ -210,7 +212,7 @@ console.log('\n── 1. Nothing saved yet: the card opens on the starting times
   check('UNN1 carries its own time, BNN keeps five', [(st.locations || {}).UNN1, ((st.locations || {}).BNN || {}).slots],
         [{ active: true, slots: ['19:30'] }, ['18:00', '21:00', '00:00', '03:00', '06:00']]);
   check('every location is stored with its switch', Object.entries(st.locations || {}).map(([k, v]) => k + ':' + v.active), ['BNN:true', 'UNN1:true', 'UNN2:true', 'PN:false', 'UNE:true']);
-  check('the timing, with the capture distance and the shortest track', st.timing, { opensBeforeMinutes: 10, windowMinutes: 60, pinRangeMeters: 5, minTrackMeters: 20 });
+  check('the timing, with the capture distance and the shortest track', st.timing, { opensBeforeMinutes: 10, windowMinutes: 60, pinRangeMeters: 5, minTrackMeters: 20, historyDays: 14 });
   if (LEAFLET) check('and the pins as a list, each with its name and location', (st.pins || []).map(p => p.location + '|' + p.name + '|' + (Number.isFinite(p.lat) && Number.isFinite(p.lng))), ['BNN|Main Gate|true', 'BNN|BNN Pin 3|true', 'UNN1|UNN 1 Pin 1|true']);
   check('signed with who saved it', (w[0] || { row: {} }).row.updated_by, 'ruth@mjmnursery.com');
   checkTrue('the card says it is saved and the phones follow', /Saved\. The phones follow/.test(await page.textContent('#mm-status').catch(() => '')));
