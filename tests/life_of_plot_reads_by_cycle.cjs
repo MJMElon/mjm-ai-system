@@ -106,8 +106,15 @@ const DATA = {
   if (process.env.SHOT) await page.screenshot({ path: path.join(process.env.SHOT, 'lop_cycles.png'), fullPage: true });
 
   console.log('2. the side bar opens the transplant record by year');
-  const side = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-b')].map(b => b.lastChild.textContent.trim()));
+  const side = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-b')].map(b => b.lastChild.textContent.replace(/\s+/g, ' ').trim()));
   ok(side.join('|') === 'Plots & cycles|Transplant record by year|Pusingan Jualan & Transplant|PALMS|Settings', 'the side bar: the two Life of Plot views, PALMS, and Settings at the foot', side);
+  const lines2 = await page.evaluate(() => [...document.querySelectorAll('#lp-side .lp-side-b')].filter(b => /record|Pusingan/.test(b.textContent)).map(b => {
+    const r = document.createRange(), node = b.lastChild, words = [], txt = node.textContent; let i = 0;
+    for (const w of txt.split(/[ \u00a0]/)) { const at = txt.indexOf(w, i); r.setStart(node, at); r.setEnd(node, at + w.length); words.push([w, Math.round(r.getBoundingClientRect().top)]); i = at + w.length; }
+    const byTop = {}; words.forEach(([w, top]) => (byTop[top] = byTop[top] || []).push(w));
+    return Object.keys(byTop).sort((a, b) => a - b).map(k => byTop[k].join(' ')); }));
+  ok(lines2[0] && lines2[0].length === 1 || (lines2[0] && lines2[0][1] === 'by year'), 'Transplant record / by year: the line breaks before "by", never between by and year', lines2[0]);
+  ok(lines2[1] && lines2[1].length === 1 || (lines2[1] && lines2[1][1] === '& Transplant'), 'Pusingan Jualan / & Transplant', lines2[1]);
   await page.click('#lp-side button[data-view="record"]');
   await page.waitForTimeout(200);
   const rec = await page.evaluate(() => {
