@@ -377,6 +377,8 @@ const DATA = {
     return o;
   });
   ok(r8['270'] && /^Est\. /.test(r8['270'][r8['270'].length - 1] || '') && !r8['270'].includes('4,877', 3), '270 saved a 3rd culling of 4,877 and nothing is sold: the cell is the estimate, not 4,877', r8['270']);
+  const tag8 = await p8.evaluate(() => [...document.querySelectorAll('.lp-cyc')].filter(c => [...c.querySelectorAll('td.batch')].some(td => td.textContent.trim() === '270')).map(c => c.querySelector('.lp-cyc-tag').textContent.trim()).join());
+  ok(tag8 === 'On going', 'a cycle whose 3rd culling still reads Est. is On going, not Completed (the office: 255 on N1)', tag8);
   ok(r8['275'] && !/Est\./.test((r8['275'] || []).slice(4).join('|')) && r8['275'][5] === '0', '275 has started selling, so its 3rd culling shows', r8['275']);
   ok(e8.length === 0, 'no page errors', e8);
   await p8.close();
