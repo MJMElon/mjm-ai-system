@@ -12529,3 +12529,18 @@ soon from N months); the stage colours and names went with the map. The
 paragraphs above about the four-stage map, its key and zoom describe what was.
 Sections 6 and 7 of `tests/life_of_plot_reads_by_cycle.cjs` read the cats off
 the real PALMS board in the frame.
+
+## Storage writes belong to the app that owns the bucket
+
+`shared/RUN_ME_security_before_handover.sql` (audit items C3, H11, H12, H9,
+H8, H10, M8, M10) closed the holes a shop customer could use: every bucket
+is written only by that app's people (`_mjm_ops_staff()`, `_watering_member()`,
+`nelos_has_access()`, Sales Web staff for product images), a customer writes
+only `payment-proofs/<own order id>/` in order-attachments, and the
+`documents` file list is no longer public. **The test is the app, never the
+account type**: watering workers and some auditors are `user_type =
+'customer'` logins, so `user_type` cannot tell a shop customer from staff.
+Viewing by public link is unchanged; making `documents` and
+`order-attachments` private is still owed and needs every reader switched to
+signed links first. The watering delete hook reads its key from Vault
+(`watering_photo_hook_key`), so a rotated service key goes there.
