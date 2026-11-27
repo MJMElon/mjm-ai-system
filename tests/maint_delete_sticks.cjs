@@ -358,7 +358,7 @@ const ticked = (page, plot) => page.evaluate((p) => {
     const btns = () => page.evaluate(() => {
       const r = [...document.querySelectorAll('#rec-body tr')]
         .find((tr) => tr.children.length > 3 && /Antracol/.test(tr.textContent));
-      return r ? [...r.children[11].querySelectorAll('.btn, .rec-checked-badge')]
+      return r ? [...r.lastElementChild.querySelectorAll('.btn, .rec-checked-badge')]
         .map((b) => b.textContent.replace(/\s+/g, ' ').trim()) : null;
     });
     const isChecked = () => page.evaluate(() =>

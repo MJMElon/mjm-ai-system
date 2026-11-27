@@ -23,7 +23,7 @@
        note in CLAUDE.md on the plate being the module. -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b4332'/%3E%3Cg transform='translate(9.6 9.6) scale(1.8667)' fill='%23ffffff'%3E%3Cpath d='M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z'/%3E%3C/g%3E%3C/svg%3E">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=150">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=151">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -319,20 +319,19 @@
             <colgroup>
               <col style="width:90px;" ><!-- Date     — "03 Sep 2026" over two lines is fine -->
               <col style="width:96px;" ><!-- Work Type -->
-              <col style="width:196px;"><!-- Chemical — the pill WRAPS inside this; see .rec-table .pill -->
+              <col style="width:156px;"><!-- Chemical — the pill WRAPS inside this; see .rec-table .pill -->
               <col style="width:52px;" ><!-- Plot     -->
               <col style="width:138px;"><!-- Batch    — three a line, so five wrap to two -->
               <col style="width:78px;" ><!-- Quantity -->
-              <col style="width:96px;" ><!-- Track Record -->
+              <col class="rc-ph" style="width:136px;"><!-- Track Record: picture + distance, e.g. 1.63 km -->
               <!-- Remark and Audit sat 125 and 105 apart in a table whose
                    spare width is shared out among the columns, so the wider
                    Remark took most of it and left a hand's breadth of nothing
                    between a dash and a verdict. Narrowed to what each holds:
                    Remark is usually empty, Audit is one word. -->
-              <col style="width:80px;" ><!-- Remark   -->
-              <col style="width:84px;" ><!-- Audit    -->
-              <col style="width:58px;" ><!-- Nelos Case  -->
-              <col style="width:58px;" ><!-- Done Repair -->
+              <col class="rc-ph" style="width:80px;" ><!-- Remark   -->
+              <col class="rc-ph" style="width:84px;" ><!-- Audit    -->
+              <col class="rc-ph" style="width:70px;" ><!-- Nelos Case  -->
               <col style="width:128px;"><!-- Check / Edit / Del — three icon buttons on one line -->
             </colgroup>
             <thead><tr>
@@ -346,19 +345,18 @@
                    records the Field Conductor has signed off. Only those: an
                    unverified record is not yet evidence of anything, and
                    loadFieldRecords never reads one. -->
-              <th class="th-c" data-i18n="rec.track">Track Record</th>
-              <th class="th-left"          data-i18n="rec.remark">Remark</th>
+              <th class="th-c rc-ph" data-i18n="rec.track">Track Record</th>
+              <th class="th-left rc-ph"   data-i18n="rec.remark">Remark</th>
               <!-- The Auditor Portal's verdict on this job. Read-only here:
                    the audit is conducted there, this list only shows how it
                    came out. -->
-              <th class="th-c" data-i18n="rec.audit">Audit</th>
+              <th class="th-c rc-ph" data-i18n="rec.audit">Audit</th>
               <!-- What happens AFTER an Unsatisfied verdict, and in order:
                    the auditor opens a case on Nelos, the conductor repairs
                    the work and closes it. Both are ticks kept here rather
                    than read from Nelos, because Nelos does not know which
                    maintenance row a case belongs to — see _nelosCell. -->
-              <th class="th-c" data-i18n="rec.nelos">Nelos Case</th>
-              <th class="th-c" data-i18n="rec.repaired">Done Repair</th>
+              <th class="th-c rc-ph" data-i18n="rec.nelos">Nelos Case</th>
               <th class="th-c" data-i18n="rec.actions">Actions</th>
             </tr></thead>
             <tbody id="rec-body"></tbody>
@@ -1137,7 +1135,7 @@
      page's own, and the office asked for it here; the rules are shared, so
      the file is shared. -->
 <script src="../shared/shared_npayroll_lock.js?v=3"></script>
-<script src="plot_maintenance_script.js?v=244"></script>
+<script src="plot_maintenance_script.js?v=246"></script>
 <script src="watchman_report.js?v=1"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to

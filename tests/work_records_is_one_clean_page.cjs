@@ -224,9 +224,9 @@ async function boot(browser) {
     const heads = [...tbl.tHead.rows[0].cells].map(th => getComputedStyle(th).textAlign.replace('start', 'left'));
     const row = [...tbl.tBodies[0].rows].find(tr => !tr.classList.contains('plot-group-row'));
     const cells = [...row.cells].map(td => getComputedStyle(td).textAlign.replace('start', 'left'));
-    return { heads, cells, last: tbl.tHead.rows[0].cells[11].textContent.trim() };
+    return { heads, cells, last: tbl.tHead.rows[0].cells[tbl.tHead.rows[0].cells.length-1].textContent.trim() };
   });
-  const WANT = ['left','left','left','center','left','right','center','left','center','center','center','center'];
+  const WANT = ['left','left','left','center','left','right','center','left','center','center','center'];   // Done Repair came off
   check('the headings', align.heads, WANT);
   check('the cells under them', align.cells, WANT);
   check('the last column is headed Actions', align.last, 'Actions');
@@ -254,12 +254,12 @@ async function boot(browser) {
   console.log('\n5. The actions are icons, and each one is the old button');
   const acts = await ev(() => {
     const rows = [...document.querySelectorAll('#rec-body tr')].filter(tr => !tr.classList.contains('plot-group-row'));
-    const of = (tr) => [...tr.cells[11].querySelectorAll('button')].map(b => ({
+    const of = (tr) => [...tr.cells[tr.cells.length-1].querySelectorAll('button')].map(b => ({
       label: b.getAttribute('aria-label'), title: !!b.title, svg: !!b.querySelector('svg'),
       click: b.getAttribute('onclick'), w: Math.round(b.getBoundingClientRect().width),
       colour: getComputedStyle(b).color }));
     return { open: of(rows[1]), checked: of(rows[0]),
-             oneLine: rows.every(tr => { const bs = [...tr.cells[11].querySelectorAll('button')];
+             oneLine: rows.every(tr => { const bs = [...tr.cells[tr.cells.length-1].querySelectorAll('button')];
                return bs.every(b => Math.abs(b.getBoundingClientRect().top - bs[0].getBoundingClientRect().top) < 2); }) };
   });
   check('an open row offers three icon buttons', acts.open.map(a => a.label), ['✓ Check', 'Edit', 'Del']);

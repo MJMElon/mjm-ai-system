@@ -10083,6 +10083,14 @@ function renderRecords() {
   }
 
   const tbody = document.getElementById('rec-body');
+  /* PENDING SHOWS NO TRACK, REMARK, AUDIT, NELOS OR REPAIR. The office:
+     "pending部分 图二都不需要". Those five are about work that has been
+     approved and audited, so on a row still waiting they are only dashes.
+     The cells are drawn and hidden (.rc-ph), so the row stays one renderer;
+     every colspan follows the count. */
+  const _pend = _recSection === 'pending';
+  tbody.closest('table').classList.toggle('rec-pending-view', _pend);
+  const recCols = _pend ? 7 : 11;   // Done Repair came off both tabs: "done repair in approved也是removed"
   /* WHAT WILL ACTUALLY BE DRAWN, never what was collected. The loose rows
      are PENDING ONLY, so on Approved a month whose every row is unapproved
      answered this guard with waitingLoose.length and then drew a table with
@@ -10097,7 +10105,7 @@ function renderRecords() {
     const why = filtered.length
       ? (_recSection === 'approved' ? 'rec.noneApproved' : 'rec.nonePending')
       : 'rec.none';
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${esc(t(why))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${recCols}" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${esc(t(why))}</td></tr>`;
     _recTabCounts(filtered, waitingLoose);
     return;
   }
@@ -10195,9 +10203,9 @@ function renderRecords() {
       <td class="rc-plot">${esc(f.plot_name || '—')}</td>
       <td class="rc-batch">${esc(f.batch_name || '—')}</td>
       <td class="rc-qty">${f.qty == null || f.qty === '' ? '—' : numMY(Number(f.qty))}</td>
-      <td class="rc-track">—</td>
-      <td class="rc-remark">${esc(_rejWorkedBy(f) || '—')}</td>
-      <td class="rc-c" colspan="4">
+      <td class="rc-track rc-ph">—</td>
+      <td class="rc-remark rc-ph">${esc(_rejWorkedBy(f) || '—')}</td>
+      <td class="rc-c" colspan="${_pend ? 1 : 3}">
         <span class="rec-loose-tag" title="${esc(tagTip)}">${esc(t('rec.looseTag'))}</span>
       </td>
     </tr>`;
@@ -10235,7 +10243,7 @@ function renderRecords() {
       ? `Task : ${plotDone[plot] || 0}/${plotAll[plot] || 0}`
       : t('rec.looseOnly');
     html += `<tr class="plot-group-row">
-      <td colspan="12" class="rec-group-cell">
+      <td colspan="${recCols}" class="rec-group-cell">
         <span class="rec-group-plot">Plot ${plot}</span>
         <span class="rec-group-sub">${esc(sub)}</span>
       </td>
@@ -10260,11 +10268,10 @@ function renderRecords() {
         <td class="rc-plot">${r.plot}</td>
         <td class="rc-batch">${_batchCell(r)}</td>
         <td class="rc-qty">${_qtyCell(r)}</td>
-        <td class="rc-track">${_trackCell(r)}</td>
-        <td class="rc-remark">${r.remark||'—'}</td>
-        <td class="rc-c">${_auditCell(r)}</td>
-        <td class="rc-c">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
-        <td class="rc-c">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
+        <td class="rc-track rc-ph">${_trackCell(r)}</td>
+        <td class="rc-remark rc-ph">${r.remark||'—'}</td>
+        <td class="rc-c rc-ph">${_auditCell(r)}</td>
+        <td class="rc-c rc-ph">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
         <td class="rc-act">
           ${r.checked
             /* UNCHECK IS OFFERED TO WHOEVER COULD CHECK. A one-way button is

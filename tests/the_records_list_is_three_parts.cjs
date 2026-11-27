@@ -607,6 +607,33 @@ async function boot(browser) {
     console.log('\n  drew ' + SHOT + '/records-{pending,approved,rejected}.png');
   }
 
+  /* ── 9. WHICH COLUMNS EACH TAB DRAWS ─────────────────────────────────
+     "pending部分 图二都不需要": Pending shows no Track Record, Remark, Audit
+     or Nelos Case. "done repair in approved也是removed": Done Repair is on
+     neither. And Track Record must hold its picture and distance in full. */
+  const heads = () => page.evaluate(() => [...document.querySelectorAll('#recview-list .rec-table:not(.rej-table) thead th')]
+    .filter((th) => th.offsetWidth > 0).map((th) => th.textContent.trim()));
+  const overflow = () => page.evaluate(() => {
+    const t = document.querySelector('#recview-list .rec-table:not(.rej-table)');
+    const bad = [...t.querySelectorAll('tbody td')].filter((td) => td.offsetWidth > 0 && td.scrollWidth > td.clientWidth + 1)
+      .map((td) => td.className + ':' + td.textContent.trim().slice(0, 20));
+    const rows = [...t.querySelectorAll('tbody tr')].filter((tr) => tr.offsetWidth > 0)
+      .map((tr) => [...tr.cells].filter((c) => c.offsetWidth > 0).reduce((n, c) => n + c.colSpan, 0));
+    return { bad, spans: [...new Set(rows)] };
+  });
+  await open('pending');
+  check('Pending draws seven columns, none of the five', (await heads()).length + ' ' + (await heads()).some((h) => /Track|Remark|Audit|Nelos|Repair/i.test(h)), '7 false');
+  check('every Pending row spans exactly those seven', JSON.stringify((await overflow()).spans), '[7]');
+  await open('approved');
+  const ah = await heads();
+  check('Approved draws eleven columns and no Done Repair', ah.length + ' ' + ah.some((h) => /Repair/i.test(h)), '11 false');
+  check('every Approved row spans those eleven', JSON.stringify((await overflow()).spans), '[11]');
+  await page.evaluate(() => {
+    const td = document.querySelector('#recview-list .rec-table:not(.rej-table) tbody td.rc-track');
+    if (td) td.innerHTML = '<button type="button" class="trk-btn"><svg class="trk-mini" viewBox="0 0 92 52"></svg><span class="trk-far">1.63 km</span></button>';
+  });
+  check('a Track Record of 1.63 km fits its cell', (await overflow()).bad.filter((b) => /rc-track/.test(b)).join(','), '');
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   await browser.close();
   process.exit(fail ? 1 : 0);
