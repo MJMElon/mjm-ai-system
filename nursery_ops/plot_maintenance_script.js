@@ -5700,6 +5700,8 @@ const I18N = {
     'rec.looseSub':'Work that reached the office and matched no round this month — add the round on the schedule, or approve it and check where it lands',
     'rec.nonePending':'Nothing is waiting — every row here has been approved',
     'rec.noneApproved':'Nothing approved yet — it is all still in Pending',
+    'rec.noneChecked':'No checked row matches','rec.noneUnchecked':'No unchecked row matches',
+    'rec.chkAll':'All','rec.chkChecked':'Checked','rec.chkUnchecked':'Unchecked',
     'rec.partRejected':'Rejected',
     'rec.partRejectedSub':'Records a Field Conductor refused — approve one and it flows back into the approved section',
     'rej.workedBy':'Worked By', 'rej.reportedBy':'Reported By',
@@ -5898,6 +5900,8 @@ const I18N = {
     'rec.looseSub':'Kerja yang sampai ke pejabat tetapi tidak sepadan dengan mana-mana pusingan bulan ini',
     'rec.nonePending':'Tiada yang menunggu — semua baris di sini sudah diluluskan',
     'rec.noneApproved':'Belum ada yang diluluskan — semuanya masih di Belum Lulus',
+    'rec.noneChecked':'Tiada baris disemak','rec.noneUnchecked':'Tiada baris belum disemak',
+    'rec.chkAll':'Semua','rec.chkChecked':'Disemak','rec.chkUnchecked':'Belum disemak',
     'rec.partRejected':'Ditolak',
     'rec.partRejectedSub':'Rekod yang ditolak Field Conductor — luluskan dan ia kembali ke bahagian diluluskan',
     'rej.workedBy':'Dibuat Oleh', 'rej.reportedBy':'Dilapor Oleh',
@@ -9977,8 +9981,15 @@ function renderRecords() {
      Rejected keeps a pane of its own, so this table is HIDDEN while that
      tab is open and what it holds is not on screen; `filtered` is simply
      the least surprising thing to leave in it. */
-  const sectioned = _recSection === 'rejected' ? filtered
-    : filtered.filter((r) => _recApproved(r) === (_recSection === 'approved'));
+  /* THE ACTIONS HEADING FILTERS ON CHECKED. "action要可以filter check /
+     uncheck". Applied after the tab split and never to `filtered`, so the
+     tab counts and the plot line still answer for the whole month. A loose
+     submission is never checked, so Checked leaves them off as well. */
+  const cSel = document.getElementById('rf-filter-check');
+  const cF = cSel ? cSel.value : '';
+  const sectioned = (_recSection === 'rejected' ? filtered
+    : filtered.filter((r) => _recApproved(r) === (_recSection === 'approved')))
+    .filter((r) => !cF || (cF === 'checked') === !!r.checked);
 
   /* THE PLOT LINE COUNTS THE MONTH, NEVER THE TAB.
      "Task : 2/3" is how far through a plot the work is, which is a fact
@@ -10096,13 +10107,14 @@ function renderRecords() {
      answered this guard with waitingLoose.length and then drew a table with
      nothing in it and no sentence — an empty screen saying nothing, which
      is the one thing the three messages below exist to stop. */
-  const drawLoose = _recSection === 'pending' && waitingLoose.length > 0;
+  const drawLoose = _recSection === 'pending' && waitingLoose.length > 0 && cF !== 'checked';
   if (!sectioned.length && !drawLoose) {
     /* WHICH tab is empty, because the three mean different things and the
        one sentence read as all of them. "Nothing matches" over Approved on
        a month of finished work is the office hunting for a fault; what it
        means is that everything is still waiting. */
-    const why = filtered.length
+    const why = cF ? (cF === 'checked' ? 'rec.noneChecked' : 'rec.noneUnchecked')
+      : filtered.length
       ? (_recSection === 'approved' ? 'rec.noneApproved' : 'rec.nonePending')
       : 'rec.none';
     tbody.innerHTML = `<tr><td colspan="${recCols}" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${esc(t(why))}</td></tr>`;

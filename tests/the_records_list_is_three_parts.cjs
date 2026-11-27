@@ -634,6 +634,37 @@ async function boot(browser) {
   });
   check('a Track Record of 1.63 km fits its cell', (await overflow()).bad.filter((b) => /rc-track/.test(b)).join(','), '');
 
+  /* ── 10. THE ACTIONS HEADING FILTERS CHECKED / UNCHECKED ─────────── */
+  const pick = async (v) => { await page.evaluate((v) => { const s = document.getElementById('rf-filter-check');
+    s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }, v); await page.waitForTimeout(80); };
+  const rowsNow = () => page.evaluate(() => [...document.querySelectorAll('#rec-body tr')]
+    .filter((tr) => !tr.querySelector('.rec-group-cell') && tr.cells.length > 1)
+    .map((tr) => !!tr.querySelector('.rec-checked-badge')));
+  await open('approved');
+  await page.evaluate(() => {
+    /* One row of the month checked and one approved by Gaia and not checked,
+       so both answers have something to show. */
+    const mine = records.filter((x) => NURSERY_PLOTS[getNursery()].includes(x.plot) && _recInMonth(x, getMonth()));
+    if (mine[0]) mine[0].checked = true;
+    if (mine[0]) records.push(Object.assign({}, mine[0], { id: 990001, checked: false, gaia: 1 }));
+    renderRecords(); });
+  const allA = await rowsNow();
+  await pick('checked');
+  const chk = await rowsNow();
+  await pick('unchecked');
+  const unc = await rowsNow();
+  check('the Actions heading still reads Actions and carries the filter',
+    await page.evaluate(() => !!document.querySelector('.rec-act-th #rf-filter-check') && /Actions/.test(document.querySelector('.rec-act-th').textContent)), true);
+  check('Checked shows only checked rows', chk.length > 0 && chk.every(Boolean), true);
+  check('Unchecked shows only unchecked rows', unc.length > 0 && unc.every((x) => !x), true);
+  check('the two add up to All', chk.length + unc.length, allA.length);
+  const counts = await page.evaluate(() => document.getElementById('rec-count-approved').textContent.trim());
+  await pick('');
+  check('the tab count does not move with the filter', await page.evaluate(() => document.getElementById('rec-count-approved').textContent.trim()), counts);
+  await open('pending'); await pick('checked');
+  check('Checked on Pending leaves no loose row', await page.evaluate(() => document.querySelectorAll('#rec-body .rec-row-loose').length), 0);
+  await pick('');
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   await browser.close();
   process.exit(fail ? 1 : 0);
